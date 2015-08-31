@@ -1,0 +1,33 @@
+CREATE TABLE fixed_decimal(a FIXEDDECIMAL NOT NULL);
+INSERT INTO fixed_decimal VALUES('92233720368547758.07'),('0.01'),('-92233720368547758.08'),('-0.01');
+SELECT SUM(a) FROM fixed_decimal WHERE a > 0;
+ERROR:  fixeddecimal out of range
+SELECT SUM(a) FROM fixed_decimal WHERE a < 0;
+ERROR:  fixeddecimal out of range
+TRUNCATE TABLE fixed_decimal;
+INSERT INTO fixed_decimal VALUES('11.11'),('22.22'),('33.33');
+SELECT SUM(a) FROM fixed_decimal;
+  sum  
+-------
+ 66.66
+(1 row)
+
+SELECT MAX(a) FROM fixed_decimal;
+  max  
+-------
+ 33.33
+(1 row)
+
+SELECT MIN(a) FROM fixed_decimal;
+  min  
+-------
+ 11.11
+(1 row)
+
+SELECT AVG(a) FROM fixed_decimal;
+  avg  
+-------
+ 22.22
+(1 row)
+
+DROP TABLE fixed_decimal;
