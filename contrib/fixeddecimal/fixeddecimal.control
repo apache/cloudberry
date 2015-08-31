@@ -1,0 +1,4 @@
+comment = 'fixeddecimal'
+default_version = '1.0.0'
+relocatable = false
+module_pathname = '$libdir/fixeddecimal'

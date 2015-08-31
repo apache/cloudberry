@@ -1,0 +1,67 @@
+-- Ensure the expected extreme values can be represented
+SELECT '-92233720368547758.08'::fixeddecimal as minvalue,'92233720368547758.07'::fixeddecimal as maxvalue;
+       minvalue        |       maxvalue       
+-----------------------+----------------------
+ -92233720368547758.08 | 92233720368547758.07
+(1 row)
+
+
+SELECT '-92233720368547758.09'::fixeddecimal;
+     fixeddecimal     
+----------------------
+ 92233720368547758.07
+(1 row)
+
+
+SELECT '92233720368547758.08'::fixeddecimal;
+     fixeddecimal      
+-----------------------
+ -92233720368547758.08
+(1 row)
+
+
+SELECT '-92233720368547758.08'::fixeddecimal - '0.01'::fixeddecimal;
+ERROR:  fixeddecimal out of range
+
+SELECT '92233720368547758.07'::fixeddecimal + '0.01'::fixeddecimal;
+ERROR:  fixeddecimal out of range
+
+-- Ensure limits of int2 can be represented
+SELECT '32767'::fixeddecimal::int2,'-32768'::fixeddecimal::int2;
+ int2  |  int2  
+-------+--------
+ 32767 | -32768
+(1 row)
+
+
+-- Ensure overflow of int2 is detected
+SELECT '32768'::fixeddecimal::int2;
+ERROR:  smallint out of range
+
+-- Ensure underflow of int2 is detected
+SELECT '-32769'::fixeddecimal::int2;
+ERROR:  smallint out of range
+
+-- Ensure limits of int4 can be represented
+SELECT '2147483647'::fixeddecimal::int4,'-2147483648'::fixeddecimal::int4;
+    int4    |    int4     
+------------+-------------
+ 2147483647 | -2147483648
+(1 row)
+
+
+-- Ensure overflow of int4 is detected
+SELECT '2147483648'::fixeddecimal::int4;
+ERROR:  integer out of range
+
+-- Ensure underflow of int4 is detected
+SELECT '-2147483649'::fixeddecimal::int4;
+ERROR:  integer out of range
+
+-- Ensure overflow is detected
+SELECT SUM(a) FROM (VALUES('92233720368547758.07'::fixeddecimal),('0.01'::fixeddecimal)) a(a);
+ERROR:  fixeddecimal out of range
+
+-- Ensure underflow is detected
+SELECT SUM(a) FROM (VALUES('-92233720368547758.08'::fixeddecimal),('-0.01'::fixeddecimal)) a(a);
+ERROR:  fixeddecimal out of range
