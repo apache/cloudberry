@@ -5,6 +5,20 @@ SELECT '-92233720368547758.09'::fixeddecimal;
 
 SELECT '92233720368547758.08'::fixeddecimal;
 
+-- Ensure casts from numeric to fixeddecimal work
+SELECT '92233720368547758.07'::numeric::fixeddecimal;
+
+-- The literal below must be quoted as the parser seems to read the literal as
+-- a positive number first and then us the - unary operator to make it negaive.
+-- This would overflow without the quotes as this number cannot be represented
+-- in a positive fixeddecimal.
+SELECT '-92233720368547758.08'::numeric::fixeddecimal;
+
+-- Ensure casts from numeric to fixed decimal detect overflow
+SELECT '92233720368547758.08'::numeric::fixeddecimal;
+
+SELECT '-92233720368547758.09'::numeric::fixeddecimal;
+
 SELECT '-92233720368547758.08'::fixeddecimal - '0.01'::fixeddecimal;
 
 SELECT '92233720368547758.07'::fixeddecimal + '0.01'::fixeddecimal;

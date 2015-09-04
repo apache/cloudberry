@@ -13,6 +13,28 @@ SELECT '92233720368547758.08'::fixeddecimal;
 ERROR:  value "92233720368547758.08" is out of range for type fixeddecimal
 LINE 1: SELECT '92233720368547758.08'::fixeddecimal;
                ^
+-- Ensure casts from numeric to fixeddecimal work
+SELECT '92233720368547758.07'::numeric::fixeddecimal;
+     fixeddecimal     
+----------------------
+ 92233720368547758.07
+(1 row)
+
+-- The literal below must be quoted as the parser seems to read the literal as
+-- a positive number first and then us the - unary operator to make it negaive.
+-- This would overflow without the quotes as this number cannot be represented
+-- in a positive fixeddecimal.
+SELECT '-92233720368547758.08'::numeric::fixeddecimal;
+     fixeddecimal      
+-----------------------
+ -92233720368547758.08
+(1 row)
+
+-- Ensure casts from numeric to fixed decimal detect overflow
+SELECT '92233720368547758.08'::numeric::fixeddecimal;
+ERROR:  value "92233720368547758.08" is out of range for type fixeddecimal
+SELECT '-92233720368547758.09'::numeric::fixeddecimal;
+ERROR:  value "-92233720368547758.09" is out of range for type fixeddecimal
 SELECT '-92233720368547758.08'::fixeddecimal - '0.01'::fixeddecimal;
 ERROR:  fixeddecimal out of range
 SELECT '92233720368547758.07'::fixeddecimal + '0.01'::fixeddecimal;

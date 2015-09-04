@@ -8,7 +8,7 @@
 #include "funcapi.h"
 #include "libpq/pqformat.h"
 #include "utils/builtins.h"
-
+#include "utils/numeric.h"
 
 #define MAXINT8LEN		25
 
@@ -86,6 +86,8 @@ PG_FUNCTION_INFO_V1(fixeddecimaltod);
 PG_FUNCTION_INFO_V1(dtofixeddecimal);
 PG_FUNCTION_INFO_V1(fixeddecimaltof);
 PG_FUNCTION_INFO_V1(ftofixeddecimal);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg_accum);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg);
 PG_FUNCTION_INFO_V1(fixeddecimal_sum);
@@ -421,6 +423,7 @@ fixeddecimalout(PG_FUNCTION_ARGS)
 	char	   *ptr = &buf[0];
 	int64		integralpart = val / FIXEDDECIMAL_MULTIPLIER;
 	int64		fractionalpart = val % FIXEDDECIMAL_MULTIPLIER;
+
 
 	if (val < 0)
 	{
@@ -1125,7 +1128,6 @@ fixeddecimalint2div(PG_FUNCTION_ARGS)
 	}
 
 	/* No overflow is possible */
-
 	result = arg1 / arg2;
 
 	PG_RETURN_INT64(result);
@@ -1365,6 +1367,47 @@ ftofixeddecimal(PG_FUNCTION_ARGS)
 
 	PG_RETURN_INT64(result);
 }
+
+
+Datum
+fixeddecimal_numeric(PG_FUNCTION_ARGS)
+{
+	int64		num = PG_GETARG_INT64(0);
+	char	   *tmp;
+	Datum		result;
+
+	tmp = DatumGetCString(DirectFunctionCall1(fixeddecimalout,
+											  Int64GetDatum(num)));
+
+	result = DirectFunctionCall3(numeric_in, CStringGetDatum(tmp), 0, -1);
+
+	pfree(tmp);
+
+	PG_RETURN_DATUM(result);
+}
+
+Datum
+numeric_fixeddecimal(PG_FUNCTION_ARGS)
+{
+	Numeric		num = PG_GETARG_NUMERIC(0);
+	char	   *tmp;
+	Datum		result;
+
+	if (numeric_is_nan(num))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot convert NaN to fixeddecimal")));
+
+	tmp = DatumGetCString(DirectFunctionCall1(numeric_out,
+											  NumericGetDatum(num)));
+
+	result = DirectFunctionCall1(fixeddecimalin, CStringGetDatum(tmp));
+
+	pfree(tmp);
+
+	PG_RETURN_DATUM(result);
+}
+
 
 /* Aggregate Support */
 
