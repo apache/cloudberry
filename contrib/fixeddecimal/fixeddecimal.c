@@ -27,11 +27,16 @@
 #define FIXEDDECIMAL_PRECISION 2
 
 /* Define this if your compiler has _builtin_add_overflow() */
-#define HAVE_BUILTIN_OVERFLOW
+/* #define HAVE_BUILTIN_OVERFLOW */
 
 #ifndef HAVE_BUILTIN_OVERFLOW
 #define SAMESIGN(a,b)	(((a) < 0) == ((b) < 0))
 #endif /* HAVE_BUILTIN_OVERFLOW */
+
+/* 128bit int is required for multiply and divide */
+#ifndef HAVE_INT128
+#error "A working 128bit int type is required for fixed decimal"
+#endif /* HAVE_INT128 */
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -632,12 +637,23 @@ fixeddecimalmi(PG_FUNCTION_ARGS)
 Datum
 fixeddecimalmul(PG_FUNCTION_ARGS)
 {
-	float8		arg1 = PG_GETARG_INT64(0) / (float8) FIXEDDECIMAL_MULTIPLIER;
-	float8		arg2 = PG_GETARG_INT64(1) / (float8) FIXEDDECIMAL_MULTIPLIER;
-	float8		result;
+	int64		arg1 = PG_GETARG_INT64(0);
+	int64		arg2 = PG_GETARG_INT64(1);
+	int128		result;
 	
-	result = arg1 * arg2;
-	PG_RETURN_FLOAT8(result);
+	/* We need to promote this to 128bit as we may overflow int64 here.
+	 * Remember that arg2 is the number multiplied by
+	 * FIXEDDECIMAL_MULTIPLIER, we must divide the result by this to get
+	 * the correct result.
+	 */
+	result = (int128) arg1 * arg2 / FIXEDDECIMAL_MULTIPLIER;
+
+	if (result != ((int64) result))
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("fixeddecimal out of range")));
+
+	PG_RETURN_INT64((int64) result);
 }
 
 Datum
@@ -645,7 +661,7 @@ fixeddecimaldiv(PG_FUNCTION_ARGS)
 {
 	int64		dividend = PG_GETARG_INT64(0);
 	int64		divisor = PG_GETARG_INT64(1);
-	float8		quotient;
+	int128		result;
 
 	if (divisor == 0)
 	{
@@ -661,8 +677,18 @@ fixeddecimaldiv(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_DIVISION_BY_ZERO),
 				 errmsg("division by zero")));
 
-	quotient = (float8) dividend / (float8) divisor;
-	PG_RETURN_FLOAT8(quotient);
+	/*
+	 * this can't overflow, but we can end up with a number that's too big for
+	 * int64
+	 */
+	result = (int128) dividend * FIXEDDECIMAL_MULTIPLIER / divisor;
+
+	if (result != ((int64) result))
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("fixeddecimal out of range")));
+
+	PG_RETURN_INT64((int64) result);
 }
 
 /* fixeddecimalabs()

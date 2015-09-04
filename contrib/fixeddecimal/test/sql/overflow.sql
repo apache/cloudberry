@@ -9,6 +9,18 @@ SELECT '-92233720368547758.08'::fixeddecimal - '0.01'::fixeddecimal;
 
 SELECT '92233720368547758.07'::fixeddecimal + '0.01'::fixeddecimal;
 
+-- Should not overflow
+SELECT '46116860184273879.03'::fixeddecimal * '2.00'::fixeddecimal;
+
+-- Ensure this overflows
+SELECT '46116860184273879.04'::fixeddecimal * '2.00'::fixeddecimal;
+
+-- Should not overflow
+SELECT '46116860184273879.03'::fixeddecimal / '0.50'::fixeddecimal;
+
+-- Ensure this overflows
+SELECT '46116860184273879.04'::fixeddecimal / '0.50'::fixeddecimal;
+
 -- Ensure limits of int2 can be represented
 SELECT '32767'::fixeddecimal::int2,'-32768'::fixeddecimal::int2;
 

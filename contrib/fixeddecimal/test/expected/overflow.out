@@ -17,6 +17,26 @@ SELECT '-92233720368547758.08'::fixeddecimal - '0.01'::fixeddecimal;
 ERROR:  fixeddecimal out of range
 SELECT '92233720368547758.07'::fixeddecimal + '0.01'::fixeddecimal;
 ERROR:  fixeddecimal out of range
+-- Should not overflow
+SELECT '46116860184273879.03'::fixeddecimal * '2.00'::fixeddecimal;
+       ?column?       
+----------------------
+ 92233720368547758.06
+(1 row)
+
+-- Ensure this overflows
+SELECT '46116860184273879.04'::fixeddecimal * '2.00'::fixeddecimal;
+ERROR:  fixeddecimal out of range
+-- Should not overflow
+SELECT '46116860184273879.03'::fixeddecimal / '0.50'::fixeddecimal;
+       ?column?       
+----------------------
+ 92233720368547758.06
+(1 row)
+
+-- Ensure this overflows
+SELECT '46116860184273879.04'::fixeddecimal / '0.50'::fixeddecimal;
+ERROR:  fixeddecimal out of range
 -- Ensure limits of int2 can be represented
 SELECT '32767'::fixeddecimal::int2,'-32768'::fixeddecimal::int2;
  int2  |  int2  
