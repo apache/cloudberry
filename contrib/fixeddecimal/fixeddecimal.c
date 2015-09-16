@@ -1434,8 +1434,12 @@ fixeddecimal(PG_FUNCTION_ARGS)
 	int32		typmod = PG_GETARG_INT32(1);
 	Datum		result;
 
-	result = DirectFunctionCall1(fixeddecimalout, num);
-	result = DirectFunctionCall3(fixeddecimalin, result, 0, typmod);
+	/* no need to check typmod if it's -1 */
+	if (typmod != -1)
+	{
+		result = DirectFunctionCall1(fixeddecimalout, num);
+		result = DirectFunctionCall3(fixeddecimalin, result, 0, typmod);
+	}
 	PG_RETURN_INT64(num);
 }
 
