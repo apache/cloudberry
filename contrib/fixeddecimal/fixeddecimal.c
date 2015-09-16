@@ -1,4 +1,18 @@
-
+/*-------------------------------------------------------------------------
+ *
+ * fixeddecimal.c
+ *		  Fixed Decimal numeric type extension
+ *
+ * Copyright (c) 2015, PostgreSQL Global Development Group
+ *
+ * IDENTIFICATION
+ *		  fixeddecimal.c
+ *
+ * The research leading to these results has received funding from the European
+ * Union’s Seventh Framework Programme (FP7/2007-2015) under grant agreement
+ * n° 318633
+ *-------------------------------------------------------------------------
+ */
 #include "postgres.h"
 
 #include <ctype.h>
@@ -7,6 +21,7 @@
 
 #include "funcapi.h"
 #include "libpq/pqformat.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/numeric.h"
 
@@ -16,7 +31,7 @@
  * The scale which the number is actually stored.
  * For example: 100 will allow 2 decimal places of precision
  * This must always be a '1' followed by a number of '0's.
- */ 
+ */
 #define FIXEDDECIMAL_MULTIPLIER 100LL
 
 /*
@@ -24,7 +39,15 @@
  * This number should be the number of decimal digits that it takes to
  * represent FIXEDDECIMAL_MULTIPLIER - 1
  */
-#define FIXEDDECIMAL_PRECISION 2
+#define FIXEDDECIMAL_SCALE 2
+
+/*
+ * This is bounded by the maximum and minimum values of int64.
+ * 9223372036854775807 is 19 decimal digits long, but we we can only represent
+ * this number / FIXEDDECIMAL_MULTIPLIER, so we must subtract
+ * FIXEDDECIMAL_SCALE
+ */
+#define FIXEDDECIMAL_MAX_PRECISION 19 - FIXEDDECIMAL_SCALE
 
 /* Define this if your compiler has _builtin_add_overflow() */
 /* #define HAVE_BUILTIN_OVERFLOW */
@@ -43,6 +66,8 @@ PG_MODULE_MAGIC;
 #endif
 
 PG_FUNCTION_INFO_V1(fixeddecimalin);
+PG_FUNCTION_INFO_V1(fixeddecimaltypmodin);
+PG_FUNCTION_INFO_V1(fixeddecimaltypmodout);
 PG_FUNCTION_INFO_V1(fixeddecimalout);
 PG_FUNCTION_INFO_V1(fixeddecimalrecv);
 PG_FUNCTION_INFO_V1(fixeddecimalsend);
@@ -53,6 +78,7 @@ PG_FUNCTION_INFO_V1(fixeddecimalgt);
 PG_FUNCTION_INFO_V1(fixeddecimalle);
 PG_FUNCTION_INFO_V1(fixeddecimalge);
 PG_FUNCTION_INFO_V1(fixeddecimal_cmp);
+PG_FUNCTION_INFO_V1(fixeddecimal_hash);
 PG_FUNCTION_INFO_V1(fixeddecimalum);
 PG_FUNCTION_INFO_V1(fixeddecimalup);
 PG_FUNCTION_INFO_V1(fixeddecimalpl);
@@ -66,6 +92,7 @@ PG_FUNCTION_INFO_V1(fixeddecimalint4pl);
 PG_FUNCTION_INFO_V1(fixeddecimalint4mi);
 PG_FUNCTION_INFO_V1(fixeddecimalint4mul);
 PG_FUNCTION_INFO_V1(fixeddecimalint4div);
+PG_FUNCTION_INFO_V1(fixeddecimal);
 PG_FUNCTION_INFO_V1(int4fixeddecimalpl);
 PG_FUNCTION_INFO_V1(int4fixeddecimalmi);
 PG_FUNCTION_INFO_V1(int4fixeddecimalmul);
@@ -91,6 +118,21 @@ PG_FUNCTION_INFO_V1(fixeddecimal_numeric);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg_accum);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg);
 PG_FUNCTION_INFO_V1(fixeddecimal_sum);
+
+/* Aggregate Internal State */
+typedef struct FixedDecimalAggState
+{
+	MemoryContext agg_context;	/* context we're calculating in */
+	int64		N;				/* count of processed numbers */
+	int64		sumX;			/* sum of processed numbers */
+} FixedDecimalAggState;
+
+static char *pg_int64tostr(char *str, int64 value);
+static char *pg_int64tostr_zeropad(char *str, int64 value, int64 padding);
+static void apply_typmod(int64 value, int32 typmod, int precision, int scale);
+static int64 scanfixeddecimal(const char *str, int *precision, int *scale);
+static FixedDecimalAggState *makeFixedDecimalAggState(FunctionCallInfo fcinfo);
+static void fixeddecimal_accum(FixedDecimalAggState *state, int64 newval);
 
 /***********************************************************************
  **
@@ -249,12 +291,15 @@ pg_int64tostr_zeropad(char *str, int64 value, int64 padding)
  * scanfixeddecimal --- try to parse a string into a fixeddecimal.
  */
 static int64
-scanfixeddecimal(const char *str)
+scanfixeddecimal(const char *str, int *precision, int *scale)
 {
 	const char *ptr = str;
 	int64		integralpart = 0;
 	int64		fractionalpart = 0;
 	bool		negative;
+	int			vprecision = 0;
+	int			vscale = 0;
+
 	/*
 	 * Do our own scan, rather than relying on sscanf which might be broken
 	 * for long long.
@@ -274,6 +319,7 @@ scanfixeddecimal(const char *str)
 		{
 			int64		tmp = integralpart * 10 - (*ptr++ - '0');
 
+			vprecision++;
 			if ((tmp / 10) != integralpart)		/* underflow? */
 			{
 				ereport(ERROR,
@@ -287,7 +333,7 @@ scanfixeddecimal(const char *str)
 	else
 	{
 		negative = false;
-		
+
 		if (*ptr == '+')
 			ptr++;
 
@@ -295,6 +341,7 @@ scanfixeddecimal(const char *str)
 		{
 			int64		tmp = integralpart * 10 + (*ptr++ - '0');
 
+			vprecision++;
 			if ((tmp / 10) != integralpart)		/* overflow? */
 			{
 				ereport(ERROR,
@@ -311,11 +358,12 @@ scanfixeddecimal(const char *str)
 	{
 		int64 multiplier = FIXEDDECIMAL_MULTIPLIER;
 		ptr++;
-		
+
 		while (isdigit((unsigned char) *ptr) && multiplier > 1)
 		{
 			multiplier /= 10;
 			fractionalpart += (*ptr++ - '0') * multiplier;
+			vscale++;
 		}
 
 		/*
@@ -323,7 +371,7 @@ scanfixeddecimal(const char *str)
 		 * XXX These are ignored, should we error instead?
 		 */
 		while (isdigit((unsigned char) *ptr))
-			ptr++;
+			ptr++, vscale++;
 	}
 
 	/* consume any remaining space chars */
@@ -334,6 +382,9 @@ scanfixeddecimal(const char *str)
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 			   errmsg("value \"%s\" is out of range for type fixeddecimal", str)));
+
+	*precision = vprecision;
+	*scale = vscale;
 
 	if (negative)
 	{
@@ -402,18 +453,131 @@ scanfixeddecimal(const char *str)
 	}
 }
 
-/* fixeddecimalin()
+/*
+ * fixeddecimalin()
  */
 Datum
 fixeddecimalin(PG_FUNCTION_ARGS)
 {
 	char	   *str = PG_GETARG_CSTRING(0);
-	int64		result = scanfixeddecimal(str);
+	int32		typmod = PG_GETARG_INT32(2);
+	int			precision;
+	int			scale;
+	int64		result = scanfixeddecimal(str, &precision, &scale);
+
+	apply_typmod(result, typmod, precision, scale);
+
 	PG_RETURN_INT64(result);
 }
 
+static void
+apply_typmod(int64 value, int32 typmod, int precision, int scale)
+{
+	int			precisionlimit;
+	int			scalelimit;
+	int			maxdigits;
 
-/* fixeddecimalout()
+	/* Do nothing if we have a default typmod (-1) */
+	if (typmod < (int32) (VARHDRSZ))
+		return;
+
+	typmod -= VARHDRSZ;
+	precisionlimit = (typmod >> 16) & 0xffff;
+	scalelimit = typmod & 0xffff;
+	maxdigits = precisionlimit - scalelimit;
+
+	if (scale > scalelimit)
+
+	if (scale != FIXEDDECIMAL_SCALE)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("FIXEDDECIMAL scale must be %d",
+						FIXEDDECIMAL_SCALE)));
+
+	if (precision > maxdigits)
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("FIXEDDECIMAL field overflow"),
+				 errdetail("A field with precision %d, scale %d must round to an absolute value less than %s%d.",
+						   precision, scale,
+						   /* Display 10^0 as 1 */
+						   maxdigits ? "10^" : "",
+						   maxdigits ? maxdigits : 1
+						   )));
+
+}
+
+Datum
+fixeddecimaltypmodin(PG_FUNCTION_ARGS)
+{
+	ArrayType  *ta = PG_GETARG_ARRAYTYPE_P(0);
+	int32	   *tl;
+	int			n;
+	int32		typmod;
+
+	tl = ArrayGetIntegerTypmods(ta, &n);
+
+	if (n == 2)
+	{
+		/*
+		 * we demand that the precision is at least the scale, since later we
+		 * enforce that the scale is exactly FIXEDDECIMAL_SCALE
+		 */
+		if (tl[0] < FIXEDDECIMAL_SCALE || tl[0] > FIXEDDECIMAL_MAX_PRECISION)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("FIXEDDECIMAL precision %d must be between %d and %d",
+							tl[0], FIXEDDECIMAL_SCALE, FIXEDDECIMAL_MAX_PRECISION)));
+
+		if (tl[1] != FIXEDDECIMAL_SCALE)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("FIXEDDECIMAL scale must be %d",
+							FIXEDDECIMAL_SCALE)));
+
+		typmod = ((tl[0] << 16) | tl[1]) + VARHDRSZ;
+	}
+	else if (n == 1)
+	{
+		if (tl[0] < FIXEDDECIMAL_SCALE || tl[0] > FIXEDDECIMAL_MAX_PRECISION)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("FIXEDDECIMAL precision %d must be between %d and %d",
+							tl[0], FIXEDDECIMAL_SCALE, FIXEDDECIMAL_MAX_PRECISION)));
+
+		/* scale defaults to FIXEDDECIMAL_SCALE */
+		typmod = ((tl[0] << 16) | FIXEDDECIMAL_SCALE) + VARHDRSZ;
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid FIXEDDECIMAL type modifier")));
+		typmod = 0;				/* keep compiler quiet */
+	}
+
+	PG_RETURN_INT32(typmod);
+}
+
+Datum
+fixeddecimaltypmodout(PG_FUNCTION_ARGS)
+{
+	int32		typmod = PG_GETARG_INT32(0);
+	char	   *res = (char *) palloc(64);
+
+	if (typmod >= 0)
+		snprintf(res, 64, "(%d,%d)",
+				 ((typmod - VARHDRSZ) >> 16) & 0xffff,
+				 (typmod - VARHDRSZ) & 0xffff);
+	else
+		*res = '\0';
+
+	PG_RETURN_CSTRING(res);
+}
+
+
+/*
+ * fixeddecimalout()
  */
 Datum
 fixeddecimalout(PG_FUNCTION_ARGS)
@@ -428,7 +592,7 @@ fixeddecimalout(PG_FUNCTION_ARGS)
 	if (val < 0)
 	{
 		fractionalpart = -fractionalpart;
-		
+
 		/*
 		 * Handle special case for negative numbers where the intergral part
 		 * is zero. pg_int64tostr() won't prefix with "-0" in this case, so
@@ -439,7 +603,7 @@ fixeddecimalout(PG_FUNCTION_ARGS)
 	}
 	ptr = pg_int64tostr(ptr, integralpart);
 	*ptr++ = '.';
-	ptr = pg_int64tostr_zeropad(ptr, fractionalpart, FIXEDDECIMAL_PRECISION);
+	ptr = pg_int64tostr_zeropad(ptr, fractionalpart, FIXEDDECIMAL_SCALE);
 
 	PG_RETURN_CSTRING(pnstrdup(buf, ptr - &buf[0]));
 }
@@ -533,7 +697,7 @@ fixeddecimal_cmp(PG_FUNCTION_ARGS)
 {
 	int64		val1 = PG_GETARG_INT64(0);
 	int64		val2 = PG_GETARG_INT64(1);
-	
+
 	if (val1 == val2)
 		PG_RETURN_INT32(0);
 	else if (val1 < val2)
@@ -542,6 +706,15 @@ fixeddecimal_cmp(PG_FUNCTION_ARGS)
 		PG_RETURN_INT32(1);
 }
 
+Datum
+fixeddecimal_hash(PG_FUNCTION_ARGS)
+{
+	int64		val = PG_GETARG_INT64(0);
+	Datum		result;
+
+	result = hash_any(&val, sizeof(int64));
+	PG_RETURN_DATUM(result);
+}
 
 /*----------------------------------------------------------
  *	Arithmetic operators on fixeddecimal.
@@ -555,7 +728,7 @@ fixeddecimalum(PG_FUNCTION_ARGS)
 
 #ifdef HAVE_BUILTIN_OVERFLOW
 	int64 zero = 0;
-	
+
  	if (__builtin_sub_overflow(zero, arg, &result))
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
@@ -643,7 +816,7 @@ fixeddecimalmul(PG_FUNCTION_ARGS)
 	int64		arg1 = PG_GETARG_INT64(0);
 	int64		arg2 = PG_GETARG_INT64(1);
 	int128		result;
-	
+
 	/* We need to promote this to 128bit as we may overflow int64 here.
 	 * Remember that arg2 is the number multiplied by
 	 * FIXEDDECIMAL_MULTIPLIER, we must divide the result by this to get
@@ -1249,6 +1422,23 @@ int2fixeddecimaldiv(PG_FUNCTION_ARGS)
  *	Conversion operators.
  *---------------------------------------------------------*/
 
+/*
+ * fixeddecimal serves as casting function for fixeddecimal to fixeddecimal.
+ * The only serves to generate an error if the fixedecimal is too big for the
+ * specified typmod.
+ */
+Datum
+fixeddecimal(PG_FUNCTION_ARGS)
+{
+	int64		num = PG_GETARG_INT64(0);
+	int32		typmod = PG_GETARG_INT32(1);
+	Datum		result;
+
+	result = DirectFunctionCall1(fixeddecimalout, num);
+	result = DirectFunctionCall3(fixeddecimalin, result, 0, typmod);
+	PG_RETURN_INT64(num);
+}
+
 Datum
 int4fixeddecimal(PG_FUNCTION_ARGS)
 {
@@ -1401,7 +1591,7 @@ numeric_fixeddecimal(PG_FUNCTION_ARGS)
 	tmp = DatumGetCString(DirectFunctionCall1(numeric_out,
 											  NumericGetDatum(num)));
 
-	result = DirectFunctionCall1(fixeddecimalin, CStringGetDatum(tmp));
+	result = DirectFunctionCall3(fixeddecimalin, CStringGetDatum(tmp), 0, -1);
 
 	pfree(tmp);
 
@@ -1410,13 +1600,6 @@ numeric_fixeddecimal(PG_FUNCTION_ARGS)
 
 
 /* Aggregate Support */
-
-typedef struct FixedDecimalAggState
-{
-	MemoryContext agg_context;	/* context we're calculating in */
-	int64		N;				/* count of processed numbers */
-	int64		sumX;			/* sum of processed numbers */
-} FixedDecimalAggState;
 
 static FixedDecimalAggState *
 makeFixedDecimalAggState(FunctionCallInfo fcinfo)

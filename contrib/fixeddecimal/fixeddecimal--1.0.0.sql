@@ -5,7 +5,7 @@
 
 CREATE TYPE FIXEDDECIMAL;
 
-CREATE FUNCTION fixeddecimalin(cstring)
+CREATE FUNCTION fixeddecimalin(cstring, oid, int4)
 RETURNS FIXEDDECIMAL
 AS 'fixeddecimal', 'fixeddecimalin'
 LANGUAGE C IMMUTABLE STRICT;
@@ -18,18 +18,31 @@ LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION fixeddecimalrecv(internal)
 RETURNS FIXEDDECIMAL
 AS 'fixeddecimal', 'fixeddecimalrecv'
-LANGUAGE C STABLE STRICT;
+LANGUAGE C IMMUTABLE STRICT;
 
 CREATE FUNCTION fixeddecimalsend(FIXEDDECIMAL)
 RETURNS bytea
 AS 'fixeddecimal', 'fixeddecimalsend'
-LANGUAGE C STABLE STRICT;
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION fixeddecimaltypmodin(_cstring)
+RETURNS INT4
+AS 'fixeddecimal', 'fixeddecimaltypmodin'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION fixeddecimaltypmodout(INT4)
+RETURNS cstring
+AS 'fixeddecimal', 'fixeddecimaltypmodout'
+LANGUAGE C IMMUTABLE STRICT;
+
 
 CREATE TYPE FIXEDDECIMAL (
     INPUT          = fixeddecimalin,
     OUTPUT         = fixeddecimalout,
     RECEIVE        = fixeddecimalrecv,
     SEND           = fixeddecimalsend,
+	TYPMOD_IN      = fixeddecimaltypmodin,
+	TYPMOD_OUT     = fixeddecimaltypmodout,
     INTERNALLENGTH = 8,
 	ALIGNMENT      = 'double',
     STORAGE        = plain,
@@ -112,6 +125,11 @@ LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION fixeddecimal_cmp(FIXEDDECIMAL, FIXEDDECIMAL)
 RETURNS INT4
 AS 'fixeddecimal', 'fixeddecimal_cmp'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION fixeddecimal_hash(FIXEDDECIMAL)
+RETURNS INT4
+AS 'fixeddecimal', 'fixeddecimal_hash'
 LANGUAGE C IMMUTABLE STRICT;
 
 --
@@ -218,6 +236,11 @@ DEFAULT FOR TYPE FIXEDDECIMAL USING btree AS
     OPERATOR    4   >= (FIXEDDECIMAL, FIXEDDECIMAL),
     OPERATOR    5   >  (FIXEDDECIMAL, FIXEDDECIMAL),
     FUNCTION    1   fixeddecimal_cmp(FIXEDDECIMAL, FIXEDDECIMAL);
+
+CREATE OPERATOR CLASS fixeddecimal_ops
+DEFAULT FOR TYPE FIXEDDECIMAL USING hash AS
+    OPERATOR    1   =  (FIXEDDECIMAL, FIXEDDECIMAL),
+    FUNCTION    1   fixeddecimal_hash(FIXEDDECIMAL);
 
 --
 -- Cross type operators with int4
@@ -416,6 +439,11 @@ CREATE OPERATOR / (
 -- Casts
 --
 
+CREATE FUNCTION fixeddecimal(FIXEDDECIMAL, INT4)
+RETURNS FIXEDDECIMAL
+AS 'fixeddecimal', 'fixeddecimal'
+LANGUAGE C IMMUTABLE STRICT;
+
 CREATE FUNCTION int4fixeddecimal(INT4)
 RETURNS FIXEDDECIMAL
 AS 'fixeddecimal', 'int4fixeddecimal'
@@ -466,6 +494,8 @@ RETURNS FIXEDDECIMAL
 AS 'fixeddecimal', 'numeric_fixeddecimal'
 LANGUAGE C IMMUTABLE STRICT;
 
+CREATE CAST (FIXEDDECIMAL AS FIXEDDECIMAL)
+	WITH FUNCTION fixeddecimal (FIXEDDECIMAL, INT4) AS ASSIGNMENT;
 
 CREATE CAST (INT4 AS FIXEDDECIMAL)
 	WITH FUNCTION int4fixeddecimal (INT4) AS IMPLICIT;
@@ -478,7 +508,7 @@ CREATE CAST (INT2 AS FIXEDDECIMAL)
 
 CREATE CAST (FIXEDDECIMAL AS INT2)
 	WITH FUNCTION fixeddecimalint2 (FIXEDDECIMAL) AS ASSIGNMENT;
-	
+
 CREATE CAST (FIXEDDECIMAL AS DOUBLE PRECISION)
 	WITH FUNCTION fixeddecimaltod (FIXEDDECIMAL) AS IMPLICIT;
 
