@@ -77,38 +77,46 @@ suit a limited set numerical data storage and retreaval needs. Complex
 artimetic could be said to be one of fixeddecimal's limits. As stated above
 division always rounds towards zero. Please observe the following example:
 
-> test=# select '2.00'::fixeddecimal / '3.00'::fixeddecimal;
->  ?column?
-> ----------
->  0.66
-> (1 row)
+```
+test=# select '2.00'::fixeddecimal / '3.00'::fixeddecimal;
+ ?column?
+----------
+ 0.66
+(1 row)
+```
 
 A workaround of this would be to perform all calculations in NUMERIC, and
 ROUND() the result into the maximum scale of FIXEDDECIMAL:
 
-> test=# select round('2.00'::numeric / '3.00'::numeric, 2)::fixeddecimal;
->  ?column?
-> ----------
->  0.67
-> (1 row)
+```
+test=# select round('2.00'::numeric / '3.00'::numeric, 2)::fixeddecimal;
+ ?column?
+----------
+ 0.67
+(1 row)
+```
 
 It should also be noted that excess precision is ignored by fixeddecimal.
 With a FIXEDDECIMAL_PRECISION of 2, any value after the 2nd digit following
 the decimal point is completely ignored rather than rounded. The following
 example demonstrates this:
 
-> test=# select '1.239'::fixeddecimal;
->  fixeddecimal
-> --------------
->  1.23
-> (1 row)
+```
+test=# select '1.239'::fixeddecimal;
+ fixeddecimal
+--------------
+ 1.23
+(1 row)
+```
 
 It is especially important to remember that this truncation also occurs during
 arithmetic. Notice in the following example the result is 1120 rather than
 1129:
 
-> test=# select '1000'::fixeddecimal * '1.129'::fixeddecimal;
->  ?column?
-> ----------
->  1120.00
-> (1 row)
+```
+test=# select '1000'::fixeddecimal * '1.129'::fixeddecimal;
+ ?column?
+----------
+ 1120.00
+(1 row)
+```
