@@ -21,6 +21,7 @@
 
 #include "funcapi.h"
 #include "libpq/pqformat.h"
+#include "access/hash.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/numeric.h"
@@ -712,7 +713,7 @@ fixeddecimal_hash(PG_FUNCTION_ARGS)
 	int64		val = PG_GETARG_INT64(0);
 	Datum		result;
 
-	result = hash_any(&val, sizeof(int64));
+	result = hash_any((unsigned char *) &val, sizeof(int64));
 	PG_RETURN_DATUM(result);
 }
 
