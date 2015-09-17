@@ -11,12 +11,12 @@ are a critical.
 
 Often there are data storage requirements where the built in REAL and
 DOUBLE PRECISION types cannot be used due to the non-exact representation of
-numbers, e.g where monetary values need to be stored. In many of these cases
-NUMERIC is an almost perfect type, although with NUMERIC performance is no
-match for the performance of REAL or DOUBLE PRCISION, as these use CPU native
-processor types. FixedDecimal aims to offer performance advantages over NUMERIC
-without the inprecise prepresentations that are apparent in REAL and DOUBLE
-PRECISION, but it comes with some caveats...
+numbers using these types, e.g. where monetary values need to be stored. In many
+of these cases NUMERIC is an almost perfect type, although with NUMERIC
+performance is no match for the performance of REAL or DOUBLE PRCISION, as
+these use CPU native processor types. FixedDecimal aims to offer performance
+advantages over NUMERIC without the imprecise representations that are
+apparent in REAL and DOUBLE PRECISION, but it comes with some caveats...
 
 Behavioural differences between FIXEDDECIMAL and NUMERIC
 --------------------------------------------------------
@@ -34,7 +34,7 @@ from NUMERIC.
 3.	FIXEDDECIMAL does not support NaN.
 
 4.	Any attempt to use a numerical scale other than the default fixed scale
-	will result in an error. e.g SELECT '123.223'::FIXEDDECIMAL(4,1) will fail
+	will result in an error. e.g. SELECT '123.223'::FIXEDDECIMAL(4,1) will fail
 	by default, as the default scale is 2, not 1.
 
 Internals
@@ -46,16 +46,16 @@ calculations are performed as native processor operations rather than software
 implementations as in the case with NUMERIC.
 
 FIXEDDECIMAL has a fixed scale value, which by default is 2. Internally numbers
-are stores as the actual value multiplied by 100. e.g 50 would be stored as
+are stores as the actual value multiplied by 100. e.g. 50 would be stored as
 5000, and 1.23 would be stored as 123. This internal representation allows very
 fast addition and subtraction between two fixeddecimal types. Multiplication
-between two fixeddecimal types is slighty more complex.  If we wanted to
+between two fixeddecimal types is slightly more complex.  If we wanted to
 perform 2.00 * 3.00 in fixeddecimal, internally these numbers would be 200 and
 300 respectively, so internally 200 * 300 becomes 60000, which must be divided
 by 100 in order to obtain the correct internal result of 600, which of course
 externally is 6.00. This method of multiplication is hazard to overflowing the
 internal 64bit integer type, for this reason all multiplication and division is
-performed using 128bit interger types.
+performed using 128bit integer types.
 
 Internally, by default, FIXEDDECIMAL is limited to a maximum value of
 92233720368547758.07 and a minimum value of -92233720368547758.08. If any of
@@ -73,8 +73,8 @@ Caution
 -------
 
 FIXEDDECIMAL is mainly intended as a fast and efficient data type which will
-suit a limited set numerical data storage and retreaval needs. Complex
-artimetic could be said to be one of fixeddecimal's limits. As stated above
+suit a limited set numerical data storage and retrieval needs. Complex
+arithmetic could be said to be one of fixeddecimal's limits. As stated above
 division always rounds towards zero. Please observe the following example:
 
 ```
