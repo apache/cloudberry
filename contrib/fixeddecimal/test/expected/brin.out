@@ -1,0 +1,22 @@
+-- Test BRIN indexes
+SET enable_seqscan = off;
+CREATE TABLE fixdec (d FIXEDDECIMAL, txt TEXT);
+INSERT INTO fixdec SELECT s.i,REPEAT('0',64) FROM generate_series(1,10000) s(i);
+CREATE INDEX fixdec_d_idx ON fixdec USING BRIN (d);
+EXPLAIN (COSTS OFF) SELECT * FROM fixdec WHERE d > '9999'::FIXEDDECIMAL;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Bitmap Heap Scan on fixdec
+   Recheck Cond: (d > '9999.00'::fixeddecimal)
+   ->  Bitmap Index Scan on fixdec_d_idx
+         Index Cond: (d > '9999.00'::fixeddecimal)
+(4 rows)
+
+SELECT * FROM fixdec WHERE d > '9999'::FIXEDDECIMAL;
+    d     |                               txt                                
+----------+------------------------------------------------------------------
+ 10000.00 | 0000000000000000000000000000000000000000000000000000000000000000
+(1 row)
+
+DROP TABLE fixdec;
+RESET enable_seqscan;

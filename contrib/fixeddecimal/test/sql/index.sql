@@ -1,4 +1,4 @@
-CREATE TABLE fixdec (id INT PRIMARY KEY, d FIXEDDECIMAL(5,2));
+CREATE TABLE fixdec (id INT, d FIXEDDECIMAL(5,2));
 
 INSERT INTO fixdec (id,d) VALUES(1,-123.45);
 INSERT INTO fixdec (id,d) VALUES(2,-123);
@@ -33,7 +33,9 @@ SELECT * FROM fixdec WHERE d = '123.45'::FIXEDDECIMAL;
 
 DROP INDEX fixdec_d_idx;
 
+SET client_min_messages = ERROR;
 CREATE INDEX fixdec_d_idx ON fixdec USING hash (d);
+RESET client_min_messages;
 
 EXPLAIN (COSTS OFF) SELECT * FROM fixdec WHERE d = '12.34'::FIXEDDECIMAL;
 
@@ -42,19 +44,6 @@ SELECT * FROM fixdec WHERE d = '12.34'::FIXEDDECIMAL;
 SELECT * FROM fixdec WHERE d = '-12.34'::FIXEDDECIMAL;
 
 SELECT * FROM fixdec WHERE d = '123.45'::FIXEDDECIMAL;
-
-DROP TABLE fixdec;
-
--- Test BRIN indexes
-
-CREATE TABLE fixdec (d FIXEDDECIMAL, txt TEXT);
-INSERT INTO fixdec SELECT s.i,REPEAT('0',64) FROM generate_series(1,10000) s(i);
-
-CREATE INDEX fixdec_d_idx ON fixdec USING BRIN (d);
-
-EXPLAIN (COSTS OFF) SELECT * FROM fixdec WHERE d > '9999'::FIXEDDECIMAL;
-
-SELECT * FROM fixdec WHERE d > '9999'::FIXEDDECIMAL;
 
 DROP TABLE fixdec;
 

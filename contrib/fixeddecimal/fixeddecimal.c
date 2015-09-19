@@ -57,10 +57,8 @@
 #define SAMESIGN(a,b)	(((a) < 0) == ((b) < 0))
 #endif /* HAVE_BUILTIN_OVERFLOW */
 
-/* 128bit int is required for multiply and divide */
-#ifndef HAVE_INT128
-#error "A working 128bit int type is required for fixed decimal"
-#endif /* HAVE_INT128 */
+/* Compiler must have a working 128 int type */
+typedef __int128 int128;
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
