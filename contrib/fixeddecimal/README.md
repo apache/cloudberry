@@ -120,3 +120,26 @@ test=# select '1000'::fixeddecimal * '1.129'::fixeddecimal;
  1120.00
 (1 row)
 ```
+
+Installation
+------------
+
+To install fixeddecimal you must build the extension from source code.
+
+First ensure that your PATH environment variable is setup to find the correct
+PostgreSQL installation first. You can check this by typing running the
+pg_config command and checking the paths listed.
+
+Once you are confident your PATH variable is set correctly
+
+```
+make
+make install
+make installcheck
+```
+
+From psql, in order to create the extension you must type:
+
+```
+CREATE EXTENSION fixeddecimal;
+```
