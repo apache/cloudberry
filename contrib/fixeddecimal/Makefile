@@ -5,11 +5,15 @@ OBJS = fixeddecimal.o
 
 EXTENSION = fixeddecimal
 DATA = $(shell $(PG_CONFIG) --version | grep -qE " 9\.[5-9]| 10\.0" && \
-		cat fixeddecimal--1.0.0_base.sql fixeddecimal--brin.sql > fixeddecimal--1.0.0.sql | echo fixeddecimal--1.0.0.sql || \
-		cat fixeddecimal--1.0.0_base.sql > fixeddecimal--1.0.0.sql | echo fixeddecimal--1.0.0.sql)
+		cat fixeddecimal--1.0.0_base.sql fixeddecimal--brin.sql > fixeddecimal--1.0.0.tmp | echo fixeddecimal--1.0.0.tmp || \
+		cat fixeddecimal--1.0.0_base.sql > fixeddecimal--1.0.0.tmp | echo fixeddecimal--1.0.0.tmp) \
+       $(shell $(PG_CONFIG) --version | grep -qE "XL" && \
+		cat fixeddecimalaggstate.sql fixeddecimal--1.0.0.tmp fixeddecimal--xlaggs.sql > fixeddecimal--1.0.0.sql | echo fixeddecimal--1.0.0.sql || \
+		cat fixeddecimal--1.0.0.tmp > fixeddecimal--1.0.0.sql fixeddecimal--aggs.sql | echo fixeddecimal--1.0.0.sql)
+
 MODULES = fixeddecimal
 
-CFLAGS=`pg_config --includedir-server`
+CFLAGS=`pg_config --includedir-server -UXCP`
 
 TESTS        = $(wildcard test/sql/*.sql)
 REGRESS      = $(shell $(PG_CONFIG) --version | grep -qE " 9\.[5-9]| 10\.0" && \

@@ -24,6 +24,11 @@
 #include "access/hash.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+
+#ifdef PGXC
+#include "utils/int8.h"
+#endif /* PGXC */
+
 #include "utils/numeric.h"
 
 #define MAXINT8LEN		25
@@ -41,6 +46,15 @@
  * represent FIXEDDECIMAL_MULTIPLIER - 1
  */
 #define FIXEDDECIMAL_SCALE 2
+
+/* Sanity checks */
+#if FIXEDDECIMAL_SCALE == 0
+#error "FIXEDDECIMAL_SCALE cannot be zero. Just use a BIGINT if that's what you really want"
+#endif
+
+#if FIXEDDECIMAL_SCALE > 19
+#error "FIXEDDECIMAL_SCALE cannot be greater than 19"
+#endif
 
 /*
  * This is bounded by the maximum and minimum values of int64.
@@ -117,6 +131,14 @@ PG_FUNCTION_INFO_V1(fixeddecimal_numeric);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg_accum);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg);
 PG_FUNCTION_INFO_V1(fixeddecimal_sum);
+
+#ifdef PGXC
+PG_FUNCTION_INFO_V1(fixeddecimalaggstatein);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstateout);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstatesend);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstaterecv);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstatecombine);
+#endif /* PGXC */
 
 /* Aggregate Internal State */
 typedef struct FixedDecimalAggState
@@ -284,6 +306,36 @@ pg_int64tostr_zeropad(char *str, int64 value, int64 padding)
 
 	*end = '\0';
 	return end;
+}
+
+/*
+ * fixeddecimal2str
+ *		Prints the fixeddecimal 'val' to buffer as a string.
+ *		Returns a pointer to the end of the written string.
+ */
+static char *
+fixeddecimal2str(int64 val, char *buffer)
+{
+	char	   *ptr = buffer;
+	int64		integralpart = val / FIXEDDECIMAL_MULTIPLIER;
+	int64		fractionalpart = val % FIXEDDECIMAL_MULTIPLIER;
+
+	if (val < 0)
+	{
+		fractionalpart = -fractionalpart;
+
+		/*
+		 * Handle special case for negative numbers where the intergral part
+		 * is zero. pg_int64tostr() won't prefix with "-0" in this case, so
+		 * we'll do it manually
+		 */
+		if (integralpart == 0)
+			*ptr++ = '-';
+	}
+	ptr = pg_int64tostr(ptr, integralpart);
+	*ptr++ = '.';
+	ptr = pg_int64tostr_zeropad(ptr, fractionalpart, FIXEDDECIMAL_SCALE);
+	return ptr;
 }
 
 /*
@@ -583,28 +635,8 @@ fixeddecimalout(PG_FUNCTION_ARGS)
 {
 	int64		val = PG_GETARG_INT64(0);
 	char		buf[MAXINT8LEN + 1];
-	char	   *ptr = &buf[0];
-	int64		integralpart = val / FIXEDDECIMAL_MULTIPLIER;
-	int64		fractionalpart = val % FIXEDDECIMAL_MULTIPLIER;
-
-
-	if (val < 0)
-	{
-		fractionalpart = -fractionalpart;
-
-		/*
-		 * Handle special case for negative numbers where the intergral part
-		 * is zero. pg_int64tostr() won't prefix with "-0" in this case, so
-		 * we'll do it manually
-		 */
-		if (integralpart == 0)
-			*ptr++ = '-';
-	}
-	ptr = pg_int64tostr(ptr, integralpart);
-	*ptr++ = '.';
-	ptr = pg_int64tostr_zeropad(ptr, fractionalpart, FIXEDDECIMAL_SCALE);
-
-	PG_RETURN_CSTRING(pnstrdup(buf, ptr - &buf[0]));
+	char	   *end = fixeddecimal2str(val, buf);
+	PG_RETURN_CSTRING(pnstrdup(buf, end - buf));
 }
 
 /*
@@ -1684,6 +1716,7 @@ fixeddecimal_avg(PG_FUNCTION_ARGS)
 	PG_RETURN_INT64(state->sumX / state->N);
 }
 
+
 Datum
 fixeddecimal_sum(PG_FUNCTION_ARGS)
 {
@@ -1697,3 +1730,94 @@ fixeddecimal_sum(PG_FUNCTION_ARGS)
 
 	PG_RETURN_INT64(state->sumX);
 }
+
+
+#ifdef PGXC
+
+/*
+ * Input / Output / Send / Receive functions for aggrgate states
+ * Currently for XL only
+ */
+
+Datum
+fixeddecimalaggstatein(PG_FUNCTION_ARGS)
+{
+	char   				   *str = pstrdup(PG_GETARG_CSTRING(0));
+	FixedDecimalAggState   *state;
+	char				   *token;
+
+	state = (FixedDecimalAggState *) palloc0(sizeof(FixedDecimalAggState));
+
+	token = strtok(str, ":");
+	state->sumX = DatumGetInt64(DirectFunctionCall3(fixeddecimalin, CStringGetDatum(token), 0, -1));
+	token = strtok(NULL, ":");
+	state->N = DatumGetInt64(DirectFunctionCall1(int8in, CStringGetDatum(token)));
+	pfree(str);
+
+	PG_RETURN_POINTER(state);
+}
+
+
+/*
+ * fixeddecimalaggstateout()
+ */
+Datum
+fixeddecimalaggstateout(PG_FUNCTION_ARGS)
+{
+	FixedDecimalAggState *state = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
+	char		buf[MAXINT8LEN + 1 + MAXINT8LEN + 1];
+	char	   *p;
+
+	p = fixeddecimal2str(state->sumX, buf);
+	*p++ = ':';
+	p = pg_int64tostr(p, state->N);
+	PG_RETURN_CSTRING(pnstrdup(buf, p - buf));
+}
+
+/*
+ *		fixeddecimalaggstaterecv
+ */
+Datum
+fixeddecimalaggstaterecv(PG_FUNCTION_ARGS)
+{
+	StringInfo      		buf = (StringInfo) PG_GETARG_POINTER(0);
+	FixedDecimalAggState   *state;
+	state = (FixedDecimalAggState *) palloc(sizeof(FixedDecimalAggState));
+
+	state->sumX = pq_getmsgint(buf, sizeof(int64));
+	state->N = pq_getmsgint(buf, sizeof(int64));
+
+	PG_RETURN_POINTER(state);
+}
+
+/*
+ *		fixeddecimalaggstatesend
+ */
+Datum
+fixeddecimalaggstatesend(PG_FUNCTION_ARGS)
+{
+	FixedDecimalAggState   *state = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
+	StringInfoData 			buf;
+
+	pq_begintypsend(&buf);
+
+	pq_sendint(&buf, state->sumX, sizeof (int64));
+	pq_sendint(&buf, state->N, sizeof (int64));
+
+	PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
+}
+
+Datum
+fixeddecimalaggstatecombine(PG_FUNCTION_ARGS)
+{
+	FixedDecimalAggState *state1 = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
+	FixedDecimalAggState *state2 = (FixedDecimalAggState *) PG_GETARG_POINTER(1);
+	FixedDecimalAggState *newstate = palloc(sizeof(FixedDecimalAggState));
+
+	newstate->sumX = DatumGetInt64(DirectFunctionCall2(fixeddecimalpl, Int64GetDatum(state1->sumX), Int64GetDatum(state2->sumX)));
+	newstate->N = DatumGetInt64(DirectFunctionCall2(int8pl, Int64GetDatum(state1->N), Int64GetDatum(state2->N)));
+
+	PG_RETURN_POINTER(newstate);
+}
+
+#endif /* PGXC */
