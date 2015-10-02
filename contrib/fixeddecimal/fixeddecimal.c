@@ -1746,7 +1746,7 @@ fixeddecimalaggstatein(PG_FUNCTION_ARGS)
 	FixedDecimalAggState   *state;
 	char				   *token;
 
-	state = (FixedDecimalAggState *) palloc0(sizeof(FixedDecimalAggState));
+	state = (FixedDecimalAggState *) palloc(sizeof(FixedDecimalAggState));
 
 	token = strtok(str, ":");
 	state->sumX = DatumGetInt64(DirectFunctionCall3(fixeddecimalin, CStringGetDatum(token), 0, -1));
@@ -1771,6 +1771,7 @@ fixeddecimalaggstateout(PG_FUNCTION_ARGS)
 	p = fixeddecimal2str(state->sumX, buf);
 	*p++ = ':';
 	p = pg_int64tostr(p, state->N);
+
 	PG_RETURN_CSTRING(pnstrdup(buf, p - buf));
 }
 
@@ -1810,14 +1811,41 @@ fixeddecimalaggstatesend(PG_FUNCTION_ARGS)
 Datum
 fixeddecimalaggstatecombine(PG_FUNCTION_ARGS)
 {
-	FixedDecimalAggState *state1 = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
-	FixedDecimalAggState *state2 = (FixedDecimalAggState *) PG_GETARG_POINTER(1);
-	FixedDecimalAggState *newstate = palloc(sizeof(FixedDecimalAggState));
+	FixedDecimalAggState *collectstate;
+	FixedDecimalAggState *transstate;
+	MemoryContext agg_context;
+	MemoryContext old_context;
 
-	newstate->sumX = DatumGetInt64(DirectFunctionCall2(fixeddecimalpl, Int64GetDatum(state1->sumX), Int64GetDatum(state2->sumX)));
-	newstate->N = DatumGetInt64(DirectFunctionCall2(int8pl, Int64GetDatum(state1->N), Int64GetDatum(state2->N)));
+	if (!AggCheckCallContext(fcinfo, &agg_context))
+		elog(ERROR, "aggregate function called in non-aggregate context");
 
-	PG_RETURN_POINTER(newstate);
+	old_context = MemoryContextSwitchTo(agg_context);
+
+	collectstate = PG_ARGISNULL(0) ? NULL : (FixedDecimalAggState *)
+		PG_GETARG_POINTER(0);
+
+	if (collectstate == NULL)
+	{
+		collectstate = (FixedDecimalAggState *) palloc(sizeof
+				(FixedDecimalAggState));
+		collectstate->sumX = 0;
+		collectstate->N = 0;
+	}
+
+	transstate = PG_ARGISNULL(1) ? NULL : (FixedDecimalAggState *)
+		PG_GETARG_POINTER(1);
+
+	if (transstate == NULL)
+		PG_RETURN_POINTER(collectstate);
+
+	collectstate->sumX = DatumGetInt64(DirectFunctionCall2(fixeddecimalpl,
+				Int64GetDatum(collectstate->sumX), Int64GetDatum(transstate->sumX)));
+	collectstate->N = DatumGetInt64(DirectFunctionCall2(int8pl,
+				Int64GetDatum(collectstate->N), Int64GetDatum(transstate->N)));
+
+	MemoryContextSwitchTo(old_context);
+
+	PG_RETURN_POINTER(collectstate);
 }
 
 #endif /* PGXC */

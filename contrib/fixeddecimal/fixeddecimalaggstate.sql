@@ -35,6 +35,7 @@ CREATE TYPE FIXEDDECIMALAGGSTATE (
     STORAGE        = plain,
     CATEGORY       = 'N',
     PREFERRED      = false,
-    COLLATABLE     = false
+    COLLATABLE     = false,
+    PASSEDBYVALUE
 );
 
