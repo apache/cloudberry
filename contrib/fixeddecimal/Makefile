@@ -11,6 +11,8 @@ DATA = fixeddecimal--1.0.0.sql
 
 MODULES = fixeddecimal
 
+CFLAGS =`pg_config --includedir-server`
+
 TESTS = $(wildcard test/sql/*.sql)
 
 REGRESS_BRIN := $(shell pg_config --version | grep -qE "XL 9\.[5-9]| 10\.0" && echo brin-xl)
