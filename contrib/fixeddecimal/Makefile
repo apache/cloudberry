@@ -3,11 +3,18 @@ OBJS = fixeddecimal.o
 
 EXTENSION = fixeddecimal
 AGGSTATESQL := $(shell pg_config --version | grep -qE "XL" && echo fixeddecimalaggstate.sql)
-AGGFUNCSSQL := $(shell pg_config --version | grep -qE "XL" && echo fixeddecimal--xlaggs.sql || echo fixeddecimal--aggs.sql)
-BRINSQL := $(shell pg_config --version | grep -qE "9\.[5-9]| 10\.0" && echo fixeddecimal--brin.sql)
-SQLFILES := $(shell cat $(AGGSTATESQL) fixeddecimal--1.0.0_base.sql $(AGGFUNCSSQL) $(BRINSQL) > fixeddecimal--1.0.0.sql)
+AGGFUNCSSQL := $(shell pg_config --version | grep -qE "XL" && echo fixeddecimal--xlaggs.sql)
 
-DATA = fixeddecimal--1.0.0.sql
+AGGFUNCSSQL := $(shell pg_config --version | grep -qE "9\.[6-9]| 10\.[0-9]" && echo fixeddecimal--parallelaggs.sql || echo fixeddecimal--aggs.sql)
+
+BRINSQL := $(shell pg_config --version | grep -qE "9\.[5-9]| 10\.[0-9]" && echo fixeddecimal--brin.sql)
+
+# 9.6 was the dawn of parallel query, so we'll use the parallel enabled .sql file from then on.
+BASESQL := $(shell pg_config --version | grep -qE "9\.[6-9]| 10\.[0-9]" && echo fixeddecimal--1.1.0_base_parallel.sql || echo fixeddecimal--1.1.0_base.sql)
+
+SQLFILES := $(shell cat $(AGGSTATESQL) $(BASESQL) $(AGGFUNCSSQL) $(BRINSQL) > fixeddecimal--1.1.0.sql)
+
+DATA = fixeddecimal--1.1.0.sql fixeddecimal--1.0.0--1.1.0.sql
 
 MODULES = fixeddecimal
 

@@ -25,9 +25,7 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 
-#ifdef PGXC
 #include "utils/int8.h"
-#endif /* PGXC */
 
 #include "utils/numeric.h"
 
@@ -84,6 +82,7 @@ PG_FUNCTION_INFO_V1(fixeddecimaltypmodout);
 PG_FUNCTION_INFO_V1(fixeddecimalout);
 PG_FUNCTION_INFO_V1(fixeddecimalrecv);
 PG_FUNCTION_INFO_V1(fixeddecimalsend);
+
 PG_FUNCTION_INFO_V1(fixeddecimaleq);
 PG_FUNCTION_INFO_V1(fixeddecimalne);
 PG_FUNCTION_INFO_V1(fixeddecimallt);
@@ -91,6 +90,53 @@ PG_FUNCTION_INFO_V1(fixeddecimalgt);
 PG_FUNCTION_INFO_V1(fixeddecimalle);
 PG_FUNCTION_INFO_V1(fixeddecimalge);
 PG_FUNCTION_INFO_V1(fixeddecimal_cmp);
+
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_eq);
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_ne);
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_lt);
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_gt);
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_le);
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_ge);
+PG_FUNCTION_INFO_V1(fixeddecimal_int2_cmp);
+
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_eq);
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_ne);
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_lt);
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_gt);
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_le);
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_ge);
+PG_FUNCTION_INFO_V1(int2_fixeddecimal_cmp);
+
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_eq);
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_ne);
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_lt);
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_gt);
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_le);
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_ge);
+PG_FUNCTION_INFO_V1(fixeddecimal_int4_cmp);
+
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_eq);
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_ne);
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_lt);
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_gt);
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_le);
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_ge);
+PG_FUNCTION_INFO_V1(int4_fixeddecimal_cmp);
+
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_cmp);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_eq);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_ne);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_lt);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_gt);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_le);
+PG_FUNCTION_INFO_V1(fixeddecimal_numeric_ge);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_cmp);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_eq);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_ne);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_lt);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_gt);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_le);
+PG_FUNCTION_INFO_V1(numeric_fixeddecimal_ge);
 PG_FUNCTION_INFO_V1(fixeddecimal_hash);
 PG_FUNCTION_INFO_V1(fixeddecimalum);
 PG_FUNCTION_INFO_V1(fixeddecimalup);
@@ -131,14 +177,15 @@ PG_FUNCTION_INFO_V1(fixeddecimal_numeric);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg_accum);
 PG_FUNCTION_INFO_V1(fixeddecimal_avg);
 PG_FUNCTION_INFO_V1(fixeddecimal_sum);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstatecombine);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstateserialize);
+PG_FUNCTION_INFO_V1(fixeddecimalaggstatedeserialize);
 
-#ifdef PGXC
 PG_FUNCTION_INFO_V1(fixeddecimalaggstatein);
 PG_FUNCTION_INFO_V1(fixeddecimalaggstateout);
 PG_FUNCTION_INFO_V1(fixeddecimalaggstatesend);
 PG_FUNCTION_INFO_V1(fixeddecimalaggstaterecv);
-PG_FUNCTION_INFO_V1(fixeddecimalaggstatecombine);
-#endif /* PGXC */
+
 
 /* Aggregate Internal State */
 typedef struct FixedDecimalAggState
@@ -735,6 +782,460 @@ fixeddecimal_cmp(PG_FUNCTION_ARGS)
 		PG_RETURN_INT32(-1);
 	else
 		PG_RETURN_INT32(1);
+}
+
+/* int2, fixeddecimal */
+Datum
+fixeddecimal_int2_eq(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 == val2);
+}
+
+Datum
+fixeddecimal_int2_ne(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 != val2);
+}
+
+Datum
+fixeddecimal_int2_lt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 < val2);
+}
+
+Datum
+fixeddecimal_int2_gt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 > val2);
+}
+
+Datum
+fixeddecimal_int2_le(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 <= val2);
+}
+
+Datum
+fixeddecimal_int2_ge(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 >= val2);
+}
+
+Datum
+fixeddecimal_int2_cmp(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT16(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	if (val1 == val2)
+		PG_RETURN_INT32(0);
+	else if (val1 < val2)
+		PG_RETURN_INT32(-1);
+	else
+		PG_RETURN_INT32(1);
+}
+
+Datum
+int2_fixeddecimal_eq(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 == val2);
+}
+
+Datum
+int2_fixeddecimal_ne(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 != val2);
+}
+
+Datum
+int2_fixeddecimal_lt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 < val2);
+}
+
+Datum
+int2_fixeddecimal_gt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 > val2);
+}
+
+Datum
+int2_fixeddecimal_le(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 <= val2);
+}
+
+Datum
+int2_fixeddecimal_ge(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 >= val2);
+}
+
+Datum
+int2_fixeddecimal_cmp(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT16(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	if (val1 == val2)
+		PG_RETURN_INT32(0);
+	else if (val1 < val2)
+		PG_RETURN_INT32(-1);
+	else
+		PG_RETURN_INT32(1);
+}
+
+/* fixeddecimal, int4 */
+Datum
+fixeddecimal_int4_eq(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 == val2);
+}
+
+Datum
+fixeddecimal_int4_ne(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 != val2);
+}
+
+Datum
+fixeddecimal_int4_lt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 < val2);
+}
+
+Datum
+fixeddecimal_int4_gt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 > val2);
+}
+
+Datum
+fixeddecimal_int4_le(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 <= val2);
+}
+
+Datum
+fixeddecimal_int4_ge(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	PG_RETURN_BOOL(val1 >= val2);
+}
+
+Datum
+fixeddecimal_int4_cmp(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT64(0);
+	int64		val2 = PG_GETARG_INT32(1) * FIXEDDECIMAL_MULTIPLIER;
+
+	if (val1 == val2)
+		PG_RETURN_INT32(0);
+	else if (val1 < val2)
+		PG_RETURN_INT32(-1);
+	else
+		PG_RETURN_INT32(1);
+}
+
+Datum
+int4_fixeddecimal_eq(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 == val2);
+}
+
+Datum
+int4_fixeddecimal_ne(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 != val2);
+}
+
+Datum
+int4_fixeddecimal_lt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 < val2);
+}
+
+Datum
+int4_fixeddecimal_gt(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 > val2);
+}
+
+Datum
+int4_fixeddecimal_le(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 <= val2);
+}
+
+Datum
+int4_fixeddecimal_ge(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	PG_RETURN_BOOL(val1 >= val2);
+}
+
+Datum
+int4_fixeddecimal_cmp(PG_FUNCTION_ARGS)
+{
+	int64		val1 = PG_GETARG_INT32(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		val2 = PG_GETARG_INT64(1);
+
+	if (val1 == val2)
+		PG_RETURN_INT32(0);
+	else if (val1 < val2)
+		PG_RETURN_INT32(-1);
+	else
+		PG_RETURN_INT32(1);
+}
+
+Datum
+fixeddecimal_numeric_cmp(PG_FUNCTION_ARGS)
+{
+	int64		arg1 = PG_GETARG_INT64(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	Datum		val1;
+
+	val1 = DirectFunctionCall1(fixeddecimal_numeric, Int64GetDatum(arg1));
+
+	PG_RETURN_INT32(DirectFunctionCall2(numeric_cmp, val1, val2));
+}
+
+Datum
+fixeddecimal_numeric_eq(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(fixeddecimal_numeric_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result == 0);
+}
+
+Datum
+fixeddecimal_numeric_ne(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(fixeddecimal_numeric_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result != 0);
+}
+
+Datum
+fixeddecimal_numeric_lt(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(fixeddecimal_numeric_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result < 0);
+}
+
+Datum
+fixeddecimal_numeric_gt(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(fixeddecimal_numeric_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result > 0);
+}
+
+Datum
+fixeddecimal_numeric_le(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(fixeddecimal_numeric_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result <= 0);
+}
+
+Datum
+fixeddecimal_numeric_ge(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(fixeddecimal_numeric_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result >= 0);
+}
+
+Datum
+numeric_fixeddecimal_cmp(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	int64		arg2 = PG_GETARG_INT64(1);
+	Datum		val2;
+
+	val2 = DirectFunctionCall1(fixeddecimal_numeric, Int64GetDatum(arg2));
+
+	PG_RETURN_INT32(DirectFunctionCall2(numeric_cmp, val1, val2));
+}
+
+Datum
+numeric_fixeddecimal_eq(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(numeric_fixeddecimal_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result == 0);
+}
+
+Datum
+numeric_fixeddecimal_ne(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(numeric_fixeddecimal_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result != 0);
+}
+
+Datum
+numeric_fixeddecimal_lt(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(numeric_fixeddecimal_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result < 0);
+}
+
+Datum
+numeric_fixeddecimal_gt(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(numeric_fixeddecimal_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result > 0);
+}
+
+Datum
+numeric_fixeddecimal_le(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(numeric_fixeddecimal_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result <= 0);
+}
+
+Datum
+numeric_fixeddecimal_ge(PG_FUNCTION_ARGS)
+{
+	Datum		val1 = PG_GETARG_DATUM(0);
+	Datum		val2 = PG_GETARG_DATUM(1);
+	int32		result;
+
+	result = DatumGetInt32(DirectFunctionCall2(numeric_fixeddecimal_cmp, val1,
+											   val2));
+
+	PG_RETURN_BOOL(result >= 0);
 }
 
 Datum
@@ -1732,8 +2233,6 @@ fixeddecimal_sum(PG_FUNCTION_ARGS)
 }
 
 
-#ifdef PGXC
-
 /*
  * Input / Output / Send / Receive functions for aggrgate states
  * Currently for XL only
@@ -1809,6 +2308,66 @@ fixeddecimalaggstatesend(PG_FUNCTION_ARGS)
 }
 
 Datum
+fixeddecimalaggstateserialize(PG_FUNCTION_ARGS)
+{
+	FixedDecimalAggState *state;
+	StringInfoData buf;
+	bytea	   *result;
+
+	/* Ensure we disallow calling when not in aggregate context */
+	if (!AggCheckCallContext(fcinfo, NULL))
+		elog(ERROR, "aggregate function called in non-aggregate context");
+
+	state = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
+
+	pq_begintypsend(&buf);
+
+	/* N */
+	pq_sendint64(&buf, state->N);
+
+	/* sumX */
+	pq_sendint64(&buf, state->sumX);
+
+	result = pq_endtypsend(&buf);
+
+	PG_RETURN_BYTEA_P(result);
+}
+
+Datum
+fixeddecimalaggstatedeserialize(PG_FUNCTION_ARGS)
+{
+	bytea	   *sstate;
+	FixedDecimalAggState *result;
+	StringInfoData buf;
+
+	if (!AggCheckCallContext(fcinfo, NULL))
+		elog(ERROR, "aggregate function called in non-aggregate context");
+
+	sstate = PG_GETARG_BYTEA_P(0);
+
+	/*
+	 * Copy the bytea into a StringInfo so that we can "receive" it using the
+	 * standard recv-function infrastructure.
+	 */
+	initStringInfo(&buf);
+	appendBinaryStringInfo(&buf, VARDATA(sstate), VARSIZE(sstate) - VARHDRSZ);
+
+	result = (FixedDecimalAggState *) palloc(sizeof(FixedDecimalAggState));
+
+	/* N */
+	result->N = pq_getmsgint64(&buf);
+
+	/* sumX */
+	result->sumX = pq_getmsgint64(&buf);
+
+	pq_getmsgend(&buf);
+	pfree(buf.data);
+
+	PG_RETURN_POINTER(result);
+}
+
+
+Datum
 fixeddecimalaggstatecombine(PG_FUNCTION_ARGS)
 {
 	FixedDecimalAggState *collectstate;
@@ -1847,5 +2406,3 @@ fixeddecimalaggstatecombine(PG_FUNCTION_ARGS)
 
 	PG_RETURN_POINTER(collectstate);
 }
-
-#endif /* PGXC */
