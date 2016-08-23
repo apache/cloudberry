@@ -1055,8 +1055,8 @@ dsm_impl_mmap(dsm_op op, dsm_handle handle, Size request_size,
 #endif
 
 /*
- * Implementation-specific actions that must be performed when a segment
- * is to be preserved until postmaster shutdown.
+ * Implementation-specific actions that must be performed when a segment is to
+ * be preserved even when no backend has it attached.
  *
  * Except on Windows, we don't need to do anything at all.  But since Windows
  * cleans up segments automatically when no references remain, we duplicate
