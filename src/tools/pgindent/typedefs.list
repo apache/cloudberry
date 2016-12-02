@@ -637,6 +637,13 @@ Form_pg_ts_template
 Form_pg_type
 Form_pg_user_mapping
 FormatNode
+FreePageBtree
+FreePageBtreeHeader
+FreePageBtreeInternalKey
+FreePageBtreeLeafKey
+FreePageBtreeSearchResult
+FreePageManager
+FreePageSpanLeader
 FromCharDateMode
 FromExpr
 FuncCall
