@@ -1,0 +1,6 @@
+test: prepare
+test: test_role test_schema test_drop_table test_column test_copy test_update test_toast test_truncate test_reschema test_temp_role test_rename
+test: test_partition
+test: test_vacuum
+test: clean
+
