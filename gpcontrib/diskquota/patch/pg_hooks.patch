@@ -1,0 +1,141 @@
+From ff8686c23badd5602bfb997c4fe761c19fa66f9e Mon Sep 17 00:00:00 2001
+From: Hubert Zhang <hubertzhang@apache.org>
+Date: Tue, 6 Nov 2018 06:51:22 +0000
+Subject: [PATCH] Add hooks for diskquota extension.
+
+Add BufferExtendCheckPerms_hook to support quota enforcement
+Add SmgrStat_hook to detect active relfilenodes.
+
+Co-authored-by: Haozhou Wang <hawang@pivotal.io>
+Co-authored-by: Hubert Zhang <hzhang@pivotal.io>
+Co-authored-by: Hao Wu <gfphoenix78@gmail.com>
+---
+ src/backend/storage/buffer/bufmgr.c | 14 ++++++++++++++
+ src/backend/storage/smgr/smgr.c     | 21 ++++++++++++++++++++-
+ src/include/storage/bufmgr.h        |  8 ++++++++
+ src/include/storage/smgr.h          |  6 ++++++
+ 4 files changed, 48 insertions(+), 1 deletion(-)
+
+diff --git a/src/backend/storage/buffer/bufmgr.c b/src/backend/storage/buffer/bufmgr.c
+index 01eabe5..d977350 100644
+--- a/src/backend/storage/buffer/bufmgr.c
++++ b/src/backend/storage/buffer/bufmgr.c
+@@ -104,6 +104,13 @@ typedef struct CkptTsStatus
+ 	int			index;
+ } CkptTsStatus;
+ 
++/*
++ * Hook for plugins to check permissions when doing a buffer extend.
++ * One example is to check whether there is additional disk quota for
++ * the table to be inserted.
++ */
++BufferExtendCheckPerms_hook_type BufferExtendCheckPerms_hook = NULL;
++
+ /* GUC variables */
+ bool		zero_damaged_pages = false;
+ int			bgwriter_lru_maxpages = 100;
+@@ -661,6 +668,13 @@ ReadBufferExtended(Relation reln, ForkNumber forkNum, BlockNumber blockNum,
+ 	 * miss.
+ 	 */
+ 	pgstat_count_buffer_read(reln);
++
++	/* check permissions when doing a buffer extend */
++	if (blockNum == P_NEW && BufferExtendCheckPerms_hook)
++	{
++		(*BufferExtendCheckPerms_hook)(reln->rd_id, blockNum);
++	}
++
+ 	buf = ReadBuffer_common(reln->rd_smgr, reln->rd_rel->relpersistence,
+ 							forkNum, blockNum, mode, strategy, &hit);
+ 	if (hit)
+diff --git a/src/backend/storage/smgr/smgr.c b/src/backend/storage/smgr/smgr.c
+index 189342e..c5b218e 100644
+--- a/src/backend/storage/smgr/smgr.c
++++ b/src/backend/storage/smgr/smgr.c
+@@ -90,7 +90,11 @@ static const f_smgr smgrsw[] = {
+ 
+ static const int NSmgr = lengthof(smgrsw);
+ 
+-
++/*
++ * Hook for plugins to collect statistics from smgr functions
++ * One example is to record the active relfilenode information.
++ */
++SmgrStat_hook_type SmgrStat_hook = NULL;
+ /*
+  * Each backend has a hashtable that stores all extant SMgrRelation objects.
+  * In addition, "unowned" SMgrRelation objects are chained together in a list.
+@@ -411,6 +415,11 @@ smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
+ 							isRedo);
+ 
+ 	smgrsw[reln->smgr_which].smgr_create(reln, forknum, isRedo);
++
++	if (SmgrStat_hook)
++	{
++		(*SmgrStat_hook)(reln);
++	}
+ }
+ 
+ /*
+@@ -617,6 +626,11 @@ smgrextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
+ {
+ 	smgrsw[reln->smgr_which].smgr_extend(reln, forknum, blocknum,
+ 										 buffer, skipFsync);
++
++	if (SmgrStat_hook)
++	{
++		(*SmgrStat_hook)(reln);
++	}
+ }
+ 
+ /*
+@@ -720,6 +734,11 @@ smgrtruncate(SMgrRelation reln, ForkNumber forknum, BlockNumber nblocks)
+ 	 * Do the truncation.
+ 	 */
+ 	smgrsw[reln->smgr_which].smgr_truncate(reln, forknum, nblocks);
++
++	if (SmgrStat_hook)
++	{
++		(*SmgrStat_hook)(reln);
++	}
+ }
+ 
+ /*
+diff --git a/src/include/storage/bufmgr.h b/src/include/storage/bufmgr.h
+index 3cce390..153a7d3 100644
+--- a/src/include/storage/bufmgr.h
++++ b/src/include/storage/bufmgr.h
+@@ -160,6 +160,14 @@ extern PGDLLIMPORT int32 *LocalRefCount;
+ #define BufferGetPage(buffer) ((Page)BufferGetBlock(buffer))
+ 
+ /*
++ * Hook for plugins to check permissions when doing a buffer extend.
++ * One example is to check whether there is additional disk quota for
++ * the table to be inserted.
++ */
++typedef bool (*BufferExtendCheckPerms_hook_type) (Oid, BlockNumber);
++extern PGDLLIMPORT BufferExtendCheckPerms_hook_type BufferExtendCheckPerms_hook;
++
++/*
+  * prototypes for functions in bufmgr.c
+  */
+ extern bool ComputeIoConcurrency(int io_concurrency, double *target);
+diff --git a/src/include/storage/smgr.h b/src/include/storage/smgr.h
+index c843bbc..918e590 100644
+--- a/src/include/storage/smgr.h
++++ b/src/include/storage/smgr.h
+@@ -144,5 +144,11 @@ extern void RememberFsyncRequest(RelFileNode rnode, ForkNumber forknum,
+ extern void ForgetRelationFsyncRequests(RelFileNode rnode, ForkNumber forknum);
+ extern void ForgetDatabaseFsyncRequests(Oid dbid);
+ extern void DropRelationFiles(RelFileNode *delrels, int ndelrels, bool isRedo);
++/*
++ * Hook for plugins to collect statistics from smgr functions
++ * One example is to record the active relfilenode information.
++ */
++typedef void (*SmgrStat_hook_type)(SMgrRelation sreln);
++extern PGDLLIMPORT SmgrStat_hook_type SmgrStat_hook;
+ 
+ #endif							/* SMGR_H */
+-- 
+1.8.3.1
+
