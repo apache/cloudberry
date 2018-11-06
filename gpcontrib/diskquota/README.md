@@ -32,27 +32,37 @@ The 'during query' one is implemented at BufferExtendCheckPerms_hook in function
 Quota limit of a schema or a role is stored in table 'quota_config' in 'diskquota' schema in monitored database. So each database stores and manages its own disk quota configuration. Note that although role is a db object in cluster level, we limit the diskquota of a role to be database specific. That is to say, a role may has different quota limit on different databases and their disk usage is isolated between databases.
 
 # Install
-1. Compile and install disk quota.
+1. Add hook functions to Postgres by applying patch. It's required
+since disk quota need to add some new hook functions in postgres core.
+This step would be skipped after patch is merged into postgres in future.
 ```
-cd contrib/diskquota; 
+# install patch into postgres_src and rebuild postgres.
+cd postgres_src;
+git apply $diskquota_src/patch/pg_hooks.patch;
+make;
+make install;
+```
+2. Compile and install disk quota.
+```
+cd $diskquota_src; 
 make; 
 make install;
 ```
-2. Config postgresql.conf
+3. Config postgresql.conf
 ```
 # enable diskquota in preload library.
 shared_preload_libraries = 'diskquota'
 # set monitored databases
 diskquota.monitor_databases = 'postgres'
-# set naptime (second) to refresh the disk quota stats periodically
+# set naptime (second) to refresh the disk quota stats periodically
 diskquota.naptime = 2
 ```
-3. Create diskquota extension in monitored database.
+4. Create diskquota extension in monitored database.
 ```
 create extension diskquota;
 ```
 
-4. Reload database configuraion
+5. Reload database configuraion
 ```
 # reset monitored database list in postgresql.conf
 diskquota.monitor_databases = 'postgres, postgres2'
