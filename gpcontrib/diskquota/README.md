@@ -56,6 +56,8 @@ shared_preload_libraries = 'diskquota'
 diskquota.monitor_databases = 'postgres'
 # set naptime (second) to refresh the disk quota stats periodically
 diskquota.naptime = 2
+# restart database to load preload library.
+pg_ctl restart
 ```
 4. Create diskquota extension in monitored database.
 ```
