@@ -7,8 +7,6 @@
  *
  * Copyright (C) 2013, PostgreSQL Global Development Group
  *
- * IDENTIFICATION
- *		contrib/diskquota/quotamodel.c
  *
  * -------------------------------------------------------------------------
  */
@@ -124,7 +122,6 @@ static void calculate_table_disk_usage(bool force);
 static void calculate_schema_disk_usage(void);
 static void calculate_role_disk_usage(void);
 static void flush_local_black_map(void);
-static void reset_local_black_map(void);
 static void check_disk_quota_by_oid(Oid targetOid, int64 current_usage, QuotaType type);
 static void update_namespace_map(Oid namespaceoid, int64 updatesize);
 static void update_role_map(Oid owneroid, int64 updatesize);
@@ -231,7 +228,7 @@ init_disk_quota_model(void)
 	hash_ctl.hash = oid_hash;
 
 	table_size_map = hash_create("TableSizeEntry map",
-								1024,
+								1024 * 8,
 								&hash_ctl,
 								HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
@@ -283,7 +280,6 @@ init_disk_quota_model(void)
 									MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES,
 									&hash_ctl,
 									HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	init_relfilenode_key();
 }
 
 /*
@@ -316,8 +312,6 @@ refresh_disk_quota_model(bool force)
 static void
 refresh_disk_quota_usage(bool force)
 {
-	/* copy shared black map to local black map */
-	reset_local_black_map();
 	/* recalculate the disk usage of table, schema and role */
 	calculate_table_disk_usage(force);
 	calculate_schema_disk_usage();
@@ -363,6 +357,7 @@ flush_local_black_map(void)
 					blackentry->targettype = localblackentry->keyitem.targettype;
 				}
 			}
+			localblackentry->isexceeded = false;
 		}
 		else
 		{
@@ -370,48 +365,12 @@ flush_local_black_map(void)
 			(void) hash_search(disk_quota_black_map,
 							   (void *) &localblackentry->keyitem,
 							   HASH_REMOVE, NULL);
+			(void) hash_search(local_disk_quota_black_map,
+							   (void *) &localblackentry->keyitem,
+							   HASH_REMOVE, NULL);
 		}
 	}
 	LWLockRelease(black_map_shm_lock->lock);
-}
-
-/* Fetch the new blacklist from shared blacklist at each refresh iteration. */
-static void
-reset_local_black_map(void)
-{
-	HASH_SEQ_STATUS iter;
-	LocalBlackMapEntry* localblackentry;
-	BlackMapEntry* blackentry;
-	bool found;
-	/* clear entries in local black map*/
-	hash_seq_init(&iter, local_disk_quota_black_map);
-
-	while ((localblackentry = hash_seq_search(&iter)) != NULL)
-	{
-		(void) hash_search(local_disk_quota_black_map,
-				(void *) &localblackentry->keyitem,
-				HASH_REMOVE, NULL);
-	}
-
-	/* get black map copy from shared black map */
-	LWLockAcquire(black_map_shm_lock->lock, LW_SHARED);
-	hash_seq_init(&iter, disk_quota_black_map);
-	while ((blackentry = hash_seq_search(&iter)) != NULL)
-	{
-		/* only reset entries for current db */
-		if (blackentry->databaseoid == MyDatabaseId)
-		{
-			localblackentry = (LocalBlackMapEntry*) hash_search(local_disk_quota_black_map,
-								(void *) blackentry,
-								HASH_ENTER, &found);
-			if (!found)
-			{
-				localblackentry->isexceeded = false;
-			}
-		}
-	}
-	LWLockRelease(black_map_shm_lock->lock);
-
 }
 
 /*
@@ -549,11 +508,11 @@ static void
 calculate_table_disk_usage(bool force)
 {
 	bool found;
-	bool active_tbl_found;
+	bool active_tbl_found = false;
 	Relation	classRel;
 	HeapTuple	tuple;
 	HeapScanDesc relScan;
-	TableSizeEntry *tsentry;
+	TableSizeEntry *tsentry = NULL;
 	Oid			relOid;
 	HASH_SEQ_STATUS iter;
 	HTAB *local_active_table_stat_map;
@@ -562,7 +521,7 @@ calculate_table_disk_usage(bool force)
 	classRel = heap_open(RelationRelationId, AccessShareLock);
 	relScan = heap_beginscan_catalog(classRel, 0, NULL);
 
-	local_active_table_stat_map = get_active_tables();
+	local_active_table_stat_map = pg_fetch_active_tables(force);
 
 	/* unset is_exist flag for tsentry in table_size_map*/
 	hash_seq_init(&iter, table_size_map);
@@ -599,7 +558,7 @@ calculate_table_disk_usage(bool force)
 		active_table_entry = (DiskQuotaActiveTableEntry *) hash_search(local_active_table_stat_map, &relOid, HASH_FIND, &active_tbl_found);
 
 		/* skip to recalculate the tables which are not in active list and not at initializatio stage*/
-		if(active_tbl_found || force)
+		if(active_tbl_found)
 		{
 
 			/* namespace and owner may be changed since last check*/
@@ -609,28 +568,17 @@ calculate_table_disk_usage(bool force)
 				tsentry->reloid = relOid;
 				tsentry->namespaceoid = classForm->relnamespace;
 				tsentry->owneroid = classForm->relowner;
-				if (!force)
-				{
-					tsentry->totalsize = (int64) active_table_entry->tablesize;
-				}
-				else
-				{
-					tsentry->totalsize =  DatumGetInt64(DirectFunctionCall1(pg_total_relation_size,
-														ObjectIdGetDatum(relOid)));
-				}
+				tsentry->totalsize = (int64) active_table_entry->tablesize;
 				update_namespace_map(tsentry->namespaceoid, tsentry->totalsize);
 				update_role_map(tsentry->owneroid, tsentry->totalsize);
 			}
 			else
 			{
 				/* if not new table in table_size_map, it must be in active table list */
-				if (active_tbl_found)
-				{
-					int64 oldtotalsize = tsentry->totalsize;
-					tsentry->totalsize = (int64) active_table_entry->tablesize;
-					update_namespace_map(tsentry->namespaceoid, tsentry->totalsize - oldtotalsize);
-					update_role_map(tsentry->owneroid, tsentry->totalsize - oldtotalsize);
-				}
+				int64 oldtotalsize = tsentry->totalsize;
+				tsentry->totalsize = (int64) active_table_entry->tablesize;
+				update_namespace_map(tsentry->namespaceoid, tsentry->totalsize - oldtotalsize);
+				update_role_map(tsentry->owneroid, tsentry->totalsize - oldtotalsize);
 			}
 		}
 
@@ -896,4 +844,3 @@ quota_check_common(Oid reloid)
 	LWLockRelease(black_map_shm_lock->lock);
 	return true;
 }
-
