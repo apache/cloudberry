@@ -1,0 +1,29 @@
+-- Test Drop table
+create schema sdrtbl;
+select diskquota.set_schema_quota('sdrtbl', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+set search_path to sdrtbl;
+create table a(i int);
+create table a2(i int);
+insert into a select generate_series(1,100);
+-- expect insert fail
+insert into a select generate_series(1,100000000);
+ERROR:  schema's disk space quota exceeded with name:sdrtbl
+-- expect insert fail
+insert into a2 select generate_series(1,100);
+ERROR:  schema's disk space quota exceeded with name:sdrtbl
+drop table a;
+select pg_sleep(5);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+insert into a2 select generate_series(1,100);
+drop table a2;
+reset search_path;
+drop schema sdrtbl;

@@ -9,8 +9,6 @@
  *
  * Copyright (C) 2013, PostgreSQL Global Development Group
  *
- * IDENTIFICATION
- *		contrib/diskquota/diskquota.c
  *
  * -------------------------------------------------------------------------
  */
@@ -266,9 +264,6 @@ disk_quota_launcher_main(Datum main_arg)
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();
 
-	/* Connect to our database */
-	//BackgroundWorkerInitializeConnection("postgres", NULL, 0);
-
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = NAMEDATALEN;
 	hash_ctl.entrysize = sizeof(DiskQuotaWorkerEntry);
@@ -279,7 +274,7 @@ disk_quota_launcher_main(Datum main_arg)
 										  HASH_ELEM);
 
 	dblist = get_database_list();
-
+	elog(LOG,"diskquota launcher started");
 	foreach(cell, dblist)
 	{
 		char *db_name;
@@ -468,6 +463,7 @@ start_worker(char* dbname)
 	bool found;
 	DiskQuotaWorkerEntry* workerentry;
 
+	memset(&worker, 0, sizeof(BackgroundWorker));
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS |
 		BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
@@ -477,6 +473,7 @@ start_worker(char* dbname)
 	snprintf(worker.bgw_name, BGW_MAXLEN, "%s", dbname);
 	/* set bgw_notify_pid so that we can use WaitForBackgroundWorkerStartup */
 	worker.bgw_notify_pid = MyProcPid;
+	worker.bgw_main_arg = (Datum) 0;
 
 	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
 		return -1;
