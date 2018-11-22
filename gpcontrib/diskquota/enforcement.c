@@ -7,8 +7,6 @@
  *
  * Copyright (C) 2013, PostgreSQL Global Development Group
  *
- * IDENTIFICATION
- *		contrib/diskquota/enforcement.c
  *
  * -------------------------------------------------------------------------
  */
