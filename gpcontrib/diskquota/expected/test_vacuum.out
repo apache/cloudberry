@@ -1,0 +1,38 @@
+-- Test vacuum full
+create schema s6;
+select diskquota.set_schema_quota('s6', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+set search_path to s6;
+create table a (i int);
+create table b (i int);
+insert into a select generate_series(1,50000);
+select pg_sleep(5);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+-- expect insert fail
+insert into a select generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name:s6
+-- expect insert fail
+insert into b select generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name:s6
+delete from a where i > 10;
+vacuum full a;
+select pg_sleep(5);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+-- expect insert succeed
+insert into a select generate_series(1,10);
+insert into b select generate_series(1,10);
+drop table a, b;
+reset search_path;
+drop schema s6;
