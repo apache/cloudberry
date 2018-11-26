@@ -542,7 +542,7 @@ calculate_table_disk_usage(bool force)
 		if (classForm->relkind != RELKIND_RELATION &&
 			classForm->relkind != RELKIND_MATVIEW)
 			continue;
-		relOid = HeapTupleGetOid(tuple);
+		relOid = classForm->oid;
 
 		/* ignore system table*/
 		if(relOid < FirstNormalObjectId)
