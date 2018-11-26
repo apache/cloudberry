@@ -14,14 +14,17 @@
 
 #include "executor/executor.h"
 #include "storage/bufmgr.h"
+#include "utils/rel.h"
 
 #include "diskquota.h"
 
 static bool quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation);
-static bool quota_check_ReadBufferExtendCheckPerms(Oid reloid, BlockNumber blockNum);
+static bool quota_check_ReadBufferExtendCheckPerms(Relation reln, ForkNumber forkNum,
+									   BlockNumber blockNum, ReadBufferMode mode,
+									   BufferAccessStrategy strategy);
 
 static ExecutorCheckPerms_hook_type prev_ExecutorCheckPerms_hook;
-static BufferExtendCheckPerms_hook_type prev_BufferExtendCheckPerms_hook;
+static ReadBufferExtended_hook_type prev_ReadBufferExtended_hook;
 
 /*
  * Initialize enforcement hooks.
@@ -34,8 +37,8 @@ init_disk_quota_enforcement(void)
 	ExecutorCheckPerms_hook = quota_check_ExecCheckRTPerms;
 
 	/* enforcement hook during query is loading data*/
-	prev_BufferExtendCheckPerms_hook = BufferExtendCheckPerms_hook;
-	BufferExtendCheckPerms_hook = quota_check_ReadBufferExtendCheckPerms;
+	prev_ReadBufferExtended_hook = ReadBufferExtended_hook;
+	ReadBufferExtended_hook = quota_check_ReadBufferExtendCheckPerms;
 }
 
 /*
@@ -75,19 +78,14 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
  * you try to extend a buffer page, and the quota has been exceeded.
  */
 static bool
-quota_check_ReadBufferExtendCheckPerms(Oid reloid, BlockNumber blockNum)
+quota_check_ReadBufferExtendCheckPerms(Relation reln, pg_attribute_unused() ForkNumber forkNum,
+							pg_attribute_unused() BlockNumber blockNum,
+							pg_attribute_unused() ReadBufferMode mode,
+							pg_attribute_unused() BufferAccessStrategy strategy)
 {
-	bool isExtend;
-
-	isExtend = (blockNum == P_NEW);
-	/* if not buffer extend, we could skip quota limit check*/
-	if (!isExtend)
-	{
-		return true;
-	}
 
 	/* Perform the check as the relation's owner and namespace */
-	quota_check_common(reloid);
+	quota_check_common(reln->rd_id);
 	return true;
 }
 
