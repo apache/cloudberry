@@ -34,4 +34,10 @@ FROM pg_roles, pg_class, diskquota.quota_config as quota
 WHERE pg_class.relowner = quota.targetoid and pg_class.relowner = pg_roles.oid and quota.quotatype=1
 GROUP BY pg_class.relowner, pg_roles.rolname, quota.quotalimitMB;
 
+CREATE TYPE diskquota_active_table_type AS ("TABLE_OID" oid,  "TABLE_SIZE" int8);
+
+CREATE OR REPLACE FUNCTION diskquota_fetch_table_stat(int4, oid[]) RETURNS setof diskquota_active_table_type
+AS 'MODULE_PATHNAME', 'diskquota_fetch_table_stat'
+LANGUAGE C VOLATILE;
+
 reset search_path;

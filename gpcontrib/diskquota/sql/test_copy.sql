@@ -1,17 +1,16 @@
 -- Test copy
-create schema s3;
-select diskquota.set_schema_quota('s3', '1 MB');
-set search_path to s3;
+CREATE SCHEMA s3;
+SELECT diskquota.set_schema_quota('s3', '1 MB');
+SET search_path TO s3;
 
-create table c (i int);
-copy c from '/tmp/csmall.txt';
+CREATE TABLE c (i int);
+COPY c FROM '/tmp/csmall.txt';
 -- expect failed 
-insert into c select generate_series(1,100000000);
-select pg_sleep(5);
--- select pg_total_table_size('c');
+INSERT INTO c SELECT generate_series(1,100000000);
+SELECT pg_sleep(5);
 -- expect copy fail
-copy c from '/tmp/csmall.txt';
+COPY c FROM '/tmp/csmall.txt';
 
-drop table c;
-reset search_path;
-drop schema s3;
+DROP TABLE c;
+RESET search_path;
+DROP SCHEMA s3;
