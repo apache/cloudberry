@@ -1,34 +1,35 @@
 -- Test partition table
-create schema s8;
-select diskquota.set_schema_quota('s8', '1 MB');
-set search_path to s8;
+CREATE SCHEMA s8;
+SELECT diskquota.SET_schema_quota('s8', '1 MB');
+SET search_path TO s8;
 CREATE TABLE measurement (
     city_id         int not null,
     logdate         date not null,
     peaktemp        int,
     unitsales       int
-)PARTITION BY RANGE (logdate);
-CREATE TABLE measurement_y2006m02 PARTITION OF measurement
-    FOR VALUES FROM ('2006-02-01') TO ('2006-03-01');
+)PARTITION BY RANGE (logdate)
+(
+	PARTITION Feb06 START (date '2006-02-01') INCLUSIVE,
+	PARTITION Mar06 START (date '2006-03-01') INCLUSIVE
+    END (date '2016-04-01') EXCLUSIVE
+);
 
-CREATE TABLE measurement_y2006m03 PARTITION OF measurement
-    FOR VALUES FROM ('2006-03-01') TO ('2006-04-01');
-insert into measurement select generate_series(1,15000), '2006-02-01' ,1,1;
-select pg_sleep(5);
-insert into measurement select 1, '2006-02-01' ,1,1;
+INSERT INTO measurement SELECT generate_series(1,100), '2006-02-02' ,1,1;
+SELECT pg_sleep(5);
+INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
-insert into measurement select generate_series(1,100000000), '2006-03-02' ,1,1;
+INSERT INTO measurement SELECT generate_series(1,100000000), '2006-03-02' ,1,1;
 -- expect insert fail
-insert into measurement select 1, '2006-02-01' ,1,1;
+INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
-insert into measurement select 1, '2006-03-03' ,1,1;
-delete from measurement where logdate='2006-03-02';
-vacuum full measurement;
-select pg_sleep(5);
-insert into measurement select 1, '2006-02-01' ,1,1;
-insert into measurement select 1, '2006-03-03' ,1,1;
+INSERT INTO measurement SELECT 1, '2006-03-03' ,1,1;
+DELETE FROM measurement WHERE logdate='2006-03-02';
+VACUUM FULL measurement;
+SELECT pg_sleep(5);
+INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
+INSERT INTO measurement SELECT 1, '2006-03-03' ,1,1;
 
-drop table measurement;
-reset search_path;
-drop schema s8;
+DROP TABLE measurement;
+RESET search_path;
+DROP SCHEMA s8;
 

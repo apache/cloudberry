@@ -1,0 +1,8 @@
+-- to make sure that the schema 'notfoundns' is really not found
+select nspname from pg_namespace where nspname = 'notfoundns';
+ nspname 
+---------
+(0 rows)
+
+select diskquota.set_schema_quota('notfoundns', '1 MB');
+ERROR:  schema "notfoundns" does not exist

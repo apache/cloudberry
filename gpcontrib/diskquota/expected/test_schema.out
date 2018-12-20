@@ -8,6 +8,8 @@ select diskquota.set_schema_quota('s1', '1 MB');
 
 set search_path to s1;
 create table a(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into a select generate_series(1,100);
 -- expect insert fail
 insert into a select generate_series(1,100000000);
@@ -16,6 +18,8 @@ ERROR:  schema's disk space quota exceeded with name:s1
 insert into a select generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name:s1
 create table a2(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- expect insert fail
 insert into a2 select generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name:s1
@@ -29,13 +33,19 @@ select pg_sleep(5);
 (1 row)
 
 -- expect insert succeed
-insert into a2 select generate_series(1,20000);
+insert into a2 select generate_series(1,200);
 -- expect insert succeed
-insert into s2.a select generate_series(1,20000);
+insert into s2.a select generate_series(1,200);
 alter table s2.a set schema badquota;
 -- expect failed
 insert into badquota.a select generate_series(0, 100);
 ERROR:  schema's disk space quota exceeded with name:badquota
+select schema_name, quota_in_mb from diskquota.show_schema_quota_view where schema_name = 's1';
+ schema_name | quota_in_mb 
+-------------+-------------
+ s1          |           1
+(1 row)
+
 reset search_path;
 drop table s1.a2, badquota.a;
 drop schema s1, s2;
