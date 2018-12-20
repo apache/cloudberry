@@ -1,0 +1,9 @@
+\! gpconfig -c diskquota.monitor_databases -v postgres > /dev/null
+\! echo $?
+0
+-- start_ignore
+\! gpstop -u > /dev/null
+\! echo $?
+0
+-- end_ignore
+\! sleep 2

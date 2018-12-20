@@ -1,15 +1,18 @@
-create extension diskquota;
-select pg_sleep(1);
-\! pg_ctl -D /tmp/pg_diskquota_test/data reload
+CREATE EXTENSION diskquota;
+-- start_ignore
+\! gpstop -u
+-- end_ignore
+SELECT pg_sleep(1);
 \! cp data/csmall.txt /tmp/csmall.txt
-select pg_sleep(5);
+SELECT pg_sleep(15);
 
 -- prepare a schema that has reached quota limit
-create schema badquota;
-select diskquota.set_schema_quota('badquota', '1 MB');
-create role testbody;
-create table badquota.t1(i int);
-alter table badquota.t1 owner to testbody;
-insert into badquota.t1 select generate_series(0, 50000);
-select pg_sleep(5);
-insert into badquota.t1 select generate_series(0, 10);
+CREATE SCHEMA badquota;
+SELECT diskquota.set_schema_quota('badquota', '1 MB');
+CREATE ROLE testbody;
+CREATE TABLE badquota.t1(i INT);
+ALTER TABLE badquota.t1 OWNER TO testbody;
+INSERT INTO badquota.t1 SELECT generate_series(0, 100000000);
+SELECT pg_sleep(5);
+-- expect fail
+INSERT INTO badquota.t1 SELECT generate_series(0, 10);

@@ -1,19 +1,21 @@
 -- Test alter table add column
-create schema scolumn;
-select diskquota.set_schema_quota('scolumn', '1 MB');
-set search_path to scolumn;
-select pg_sleep(5);
+CREATE SCHEMA scolumn;
+SELECT diskquota.set_schema_quota('scolumn', '1 MB');
+SET search_path TO scolumn;
+SELECT pg_sleep(5);
 
-create table a2(i int);
-insert into a2 select generate_series(1,20000);
-insert into a2 select generate_series(1,10);
-ALTER TABLE a2 ADD COLUMN j varchar(50);
-update a2 set j = 'add value for column j';
-select pg_sleep(5);
+CREATE TABLE a2(i INT);
+-- expect fail
+INSERT INTO a2 SELECT generate_series(1,100000000);
+-- expect fail
+INSERT INTO a2 SELECT generate_series(1,10);
+ALTER TABLE a2 ADD COLUMN j VARCHAR(50);
+UPDATE a2 SET j = 'add value for column j';
+SELECT pg_sleep(5);
 -- expect insert failed after add column
-insert into a2 select generate_series(1,10);
+INSERT INTO a2 SELECT generate_series(1,10);
 
-drop table a2;
-reset search_path;
-drop schema scolumn;
+DROP TABLE a2;
+RESET search_path;
+DROP SCHEMA scolumn;
 
