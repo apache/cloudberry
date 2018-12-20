@@ -1,22 +1,23 @@
 -- Test temp table restrained by role id
-create schema strole;
-create role u3temp nologin;
-set search_path to strole;
+CREATE SCHEMA strole;
+CREATE ROLE u3temp NOLOGIN;
+SET search_path TO strole;
 
-select diskquota.set_role_quota('u3temp', '1MB');
-create table a(i int);
-alter table a owner to u3temp;
-create temp table ta(i int);
-alter table ta owner to u3temp;
+SELECT diskquota.set_role_quota('u3temp', '1MB');
+CREATE TABLE a(i int);
+ALTER TABLE a OWNER TO u3temp;
+CREATE TEMP TABLE ta(i int);
+ALTER TABLE ta OWNER TO u3temp;
 
 -- expected failed: fill temp table
-insert into ta select generate_series(1,100000000);
+INSERT INTO ta SELECT generate_series(1,100000000);
 -- expected failed: 
-insert into a select generate_series(1,100);
-drop table ta;
-select pg_sleep(5);
-insert into a select generate_series(1,100);
+INSERT INTO a SELECT generate_series(1,100);
+DROP TABLE ta;
+SELECT pg_sleep(5);
+INSERT INTO a SELECT generate_series(1,100);
 
-drop table a;
-reset search_path;
-drop schema strole;
+DROP TABLE a;
+DROP ROLE u3temp;
+RESET search_path;
+DROP SCHEMA strole;
