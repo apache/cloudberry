@@ -1,5 +1,5 @@
-drop table badquota.t1;
-drop role testbody;
-drop schema badquota;
+DROP TABLE badquota.t1;
+DROP ROLE testbody;
+DROP SCHEMA badquota;
 
-drop extension diskquota;
+DROP EXTENSION diskquota;
