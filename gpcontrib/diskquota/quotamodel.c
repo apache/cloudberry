@@ -70,6 +70,7 @@ struct TableSizeEntry
 	int64		totalsize;
 	bool		is_exist;		/* flag used to check whether table is already
 								 * dropped */
+	bool		need_flush;		/* whether need to flush to table table_size */
 };
 
 /* local cache of namespace disk size */
@@ -122,10 +123,11 @@ static HTAB *local_disk_quota_black_map = NULL;
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 /* functions to refresh disk quota model*/
-static void refresh_disk_quota_usage(bool force);
-static void calculate_table_disk_usage(bool force);
+static void refresh_disk_quota_usage(bool is_init);
+static void calculate_table_disk_usage(bool is_init);
 static void calculate_schema_disk_usage(void);
 static void calculate_role_disk_usage(void);
+static void flush_to_table_size(void);
 static void flush_local_black_map(void);
 static void check_disk_quota_by_oid(Oid targetOid, int64 current_usage, QuotaType type);
 static void update_namespace_map(Oid namespaceoid, int64 updatesize);
@@ -133,9 +135,11 @@ static void update_role_map(Oid owneroid, int64 updatesize);
 static void remove_namespace_map(Oid namespaceoid);
 static void remove_role_map(Oid owneroid);
 static bool load_quotas(void);
+static bool do_check_diskquota_state_is_ready(void);
 
 static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
+
 
 /*
  * DiskQuotaShmemSize
@@ -159,6 +163,7 @@ init_lwlocks(void)
 	diskquota_locks.black_map_lock = LWLockAssign();
 	diskquota_locks.message_box_lock = LWLockAssign();
 }
+
 /*
  * DiskQuotaShmemInit
  *		Allocate and initialize diskquota-related shared memory
@@ -178,10 +183,10 @@ disk_quota_shmem_startup(void)
 
 	init_lwlocks();
 	message_box = ShmemInitStruct("disk_quota_message_box",
-								sizeof(MessageBox),
-								&found);
+								  sizeof(MessageBox),
+								  &found);
 	if (!found)
-		memset((void*)message_box, 0, sizeof(MessageBox));
+		memset((void *) message_box, 0, sizeof(MessageBox));
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(BlackMapEntry);
@@ -288,12 +293,96 @@ init_disk_quota_model(void)
 }
 
 /*
+ * Check whether the diskquota state is ready
+ */
+static bool
+do_check_diskquota_state_is_ready(void)
+{
+	int			ret;
+	TupleDesc	tupdesc;
+	int			i;
+
+	RangeVar   *rv;
+	Relation	rel;
+
+	/* check table diskquota.state exists */
+	rv = makeRangeVar("diskquota", "state", -1);
+	rel = heap_openrv_extended(rv, AccessShareLock, true);
+	if (!rel)
+	{
+		/* configuration table is missing. */
+		elog(ERROR, "table \"diskquota.state\" is missing in database \"%s\","
+			 " please recreate diskquota extension",
+			 get_database_name(MyDatabaseId));
+		return false;
+	}
+	heap_close(rel, NoLock);
+
+	/* check diskquota state from table diskquota.state */
+	ret = SPI_execute("select state from diskquota.state", true, 0);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "SPI_execute failed: error code %d", ret);
+
+	tupdesc = SPI_tuptable->tupdesc;
+	if (tupdesc->natts != 1 ||
+		((tupdesc)->attrs[0])->atttypid != INT4OID)
+	{
+		elog(ERROR, "table \"state\" is corrupted in database \"%s\","
+			 " please recreate diskquota extension",
+			 get_database_name(MyDatabaseId));
+		return false;
+	}
+
+	for (i = 0; i < SPI_processed; i++)
+	{
+		HeapTuple	tup = SPI_tuptable->vals[i];
+		Datum		dat;
+		int			state;
+		bool		isnull;
+
+		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
+		if (isnull)
+			continue;
+		state = DatumGetInt64(dat);
+
+		if (state == DISKQUOTA_READY_STATE)
+		{
+			return true;
+		}
+	}
+	ereport(LOG, (errmsg("Diskquota is not in ready state. "
+						 "please run UDF init_table_size_table()")));
+	return false;
+}
+
+/*
+ * Check whether the diskquota state is ready
+*/
+bool
+check_diskquota_state_is_ready(void)
+{
+	bool		ret;
+
+	StartTransactionCommand();
+	SPI_connect();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	ret = do_check_diskquota_state_is_ready();
+
+	SPI_finish();
+	PopActiveSnapshot();
+	CommitTransactionCommand();
+
+	return ret;
+}
+
+/*
  * diskquota worker will refresh disk quota model
  * periodically. It will reload quota setting and
  * recalculate the changed disk usage.
  */
 void
-refresh_disk_quota_model(bool force)
+refresh_disk_quota_model(bool is_init)
 {
 	elog(DEBUG1, "check disk quota begin");
 	StartTransactionCommand();
@@ -302,7 +391,7 @@ refresh_disk_quota_model(bool force)
 	/* skip refresh model when load_quotas failed */
 	if (load_quotas())
 	{
-		refresh_disk_quota_usage(force);
+		refresh_disk_quota_usage(is_init);
 	}
 	SPI_finish();
 	PopActiveSnapshot();
@@ -321,6 +410,8 @@ refresh_disk_quota_usage(bool force)
 	calculate_table_disk_usage(force);
 	calculate_schema_disk_usage();
 	calculate_role_disk_usage();
+	/* flush local table_size_map to user table table_size */
+	flush_to_table_size();
 	/* copy local black map back to shared black map */
 	flush_local_black_map();
 }
@@ -518,7 +609,7 @@ update_role_map(Oid owneroid, int64 updatesize)
  *
  */
 static void
-calculate_table_disk_usage(bool force)
+calculate_table_disk_usage(bool is_init)
 {
 	bool		found;
 	bool		active_tbl_found = false;
@@ -534,7 +625,7 @@ calculate_table_disk_usage(bool force)
 	classRel = heap_open(RelationRelationId, AccessShareLock);
 	relScan = heap_beginscan_catalog(classRel, 0, NULL);
 
-	local_active_table_stat_map = gp_fetch_active_tables(force);
+	local_active_table_stat_map = gp_fetch_active_tables(is_init);
 
 	/* unset is_exist flag for tsentry in table_size_map */
 	hash_seq_init(&iter, table_size_map);
@@ -571,7 +662,7 @@ calculate_table_disk_usage(bool force)
 			tsentry->totalsize = 0;
 			tsentry->owneroid = 0;
 			tsentry->namespaceoid = 0;
-			tsentry->reloid = 0;
+			tsentry->need_flush = true;
 		}
 
 		/* mark tsentry is_exist */
@@ -595,6 +686,7 @@ calculate_table_disk_usage(bool force)
 				tsentry->namespaceoid = classForm->relnamespace;
 				tsentry->owneroid = classForm->relowner;
 				tsentry->totalsize = (int64) active_table_entry->tablesize;
+				tsentry->need_flush = true;
 				update_namespace_map(tsentry->namespaceoid, tsentry->totalsize);
 				update_role_map(tsentry->owneroid, tsentry->totalsize);
 			}
@@ -607,9 +699,16 @@ calculate_table_disk_usage(bool force)
 				int64		oldtotalsize = tsentry->totalsize;
 
 				tsentry->totalsize = (int64) active_table_entry->tablesize;
+				tsentry->need_flush = true;
 				update_namespace_map(tsentry->namespaceoid, tsentry->totalsize - oldtotalsize);
 				update_role_map(tsentry->owneroid, tsentry->totalsize - oldtotalsize);
 			}
+		}
+
+		/* table size info doesn't need to flush at init quota model stage */
+		if (is_init)
+		{
+			tsentry->need_flush = false;
 		}
 
 		/* if schema change, transfer the file size */
@@ -632,7 +731,10 @@ calculate_table_disk_usage(bool force)
 	heap_close(classRel, AccessShareLock);
 	hash_destroy(local_active_table_stat_map);
 
-	/* process removed tables */
+	/*
+	 * Process removed tables. Reduce schema and role size firstly. Remove
+	 * table from table_size_map in flush_to_table_size() function later.
+	 */
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
@@ -640,11 +742,6 @@ calculate_table_disk_usage(bool force)
 		{
 			update_role_map(tsentry->owneroid, -1 * tsentry->totalsize);
 			update_namespace_map(tsentry->namespaceoid, -1 * tsentry->totalsize);
-
-			hash_search(table_size_map,
-						&tsentry->reloid,
-						HASH_REMOVE, NULL);
-			continue;
 		}
 	}
 }
@@ -704,6 +801,75 @@ calculate_role_disk_usage(void)
 }
 
 /*
+ * Flush the table_size_map to user table diskquota.table_size
+ * To improve update performance, we first delete all the need_to_flush
+ * entries in table table_size. And then insert new table size entries into
+ * table table_size.
+ */
+static
+void
+flush_to_table_size(void)
+{
+	HASH_SEQ_STATUS iter;
+	TableSizeEntry *tsentry = NULL;
+	StringInfoData delete_statement;
+	StringInfoData insert_statement;
+	bool		delete_statement_flag = false;
+	bool		insert_statement_flag = false;
+	int			ret;
+
+	/* TODO: Add flush_size_interval to avoid flushing size info in every loop */
+
+	/* concatenate all the need_to_flush table to SQL string */
+	initStringInfo(&delete_statement);
+	appendStringInfo(&delete_statement, "delete from diskquota.table_size where tableid in (");
+	initStringInfo(&insert_statement);
+	appendStringInfo(&insert_statement, "insert into diskquota.table_size values ");
+	hash_seq_init(&iter, table_size_map);
+	while ((tsentry = hash_seq_search(&iter)) != NULL)
+	{
+		/* delete dropped table from both table_size_map and table table_size */
+		if (tsentry->is_exist == false)
+		{
+			appendStringInfo(&delete_statement, "%u, ", tsentry->reloid);
+			delete_statement_flag = true;
+
+			hash_search(table_size_map,
+						&tsentry->reloid,
+						HASH_REMOVE, NULL);
+		}
+		/* update the table size by delete+insert in table table_size */
+		else if (tsentry->need_flush == true)
+		{
+			tsentry->need_flush = false;
+			appendStringInfo(&delete_statement, "%u, ", tsentry->reloid);
+			appendStringInfo(&insert_statement, "(%u,%ld), ", tsentry->reloid, tsentry->totalsize);
+			delete_statement_flag = true;
+			insert_statement_flag = true;
+		}
+	}
+	truncateStringInfo(&delete_statement, delete_statement.len - strlen(", "));
+	truncateStringInfo(&insert_statement, insert_statement.len - strlen(", "));
+	appendStringInfo(&delete_statement, ");");
+	appendStringInfo(&insert_statement, ";");
+
+	if (delete_statement_flag)
+	{
+		elog(DEBUG1, "[diskquota] table_size delete_statement: %s", delete_statement.data);
+		ret = SPI_execute(delete_statement.data, false, 0);
+		if (ret != SPI_OK_DELETE)
+			elog(ERROR, "SPI_execute failed: error code %d", ret);
+	}
+	if (insert_statement_flag)
+	{
+		elog(DEBUG1, "[diskquota] table_size insert_statement: %s", insert_statement.data);
+		ret = SPI_execute(insert_statement.data, false, 0);
+		if (ret != SPI_OK_INSERT)
+			elog(ERROR, "SPI_execute failed: error code %d", ret);
+	}
+}
+
+/*
  * Load quotas from diskquota configuration table(quota_config).
 */
 static bool
@@ -755,7 +921,7 @@ load_quotas(void)
 
 	ret = SPI_execute("select targetoid, quotatype, quotalimitMB from diskquota.quota_config", true, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(FATAL, "SPI_execute failed: error code %d", ret);
+		elog(ERROR, "SPI_execute failed: error code %d", ret);
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 3 ||
@@ -892,8 +1058,9 @@ quota_check_common(Oid reloid)
 void
 diskquota_invalidate_db(Oid dbid)
 {
-	BlackMapEntry * entry;
+	BlackMapEntry *entry;
 	HASH_SEQ_STATUS iter;
+
 	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
 	hash_seq_init(&iter, disk_quota_black_map);
 	while ((entry = hash_seq_search(&iter)) != NULL)
