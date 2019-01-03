@@ -83,15 +83,19 @@ That is to say, a role may have different quota limit on different databases
 and their disk usage is isolated between databases.
 
 # Install
-1. Compile gpdb and disk quota is enabled by default.
+1. Compile disk quota with pgxs.
 ```
-cd $gpdb_src; 
+cd $diskquota_src; 
 make; 
 make install;
 ```
 
-2. Enable diskquota as preload library (in future, we may set diskquota in 
-shared_preload_libraries by default).
+2. Create database to store global information.
+```
+create database diskquota;
+```
+
+3. Enable diskquota as preload library 
 ```
 # enable diskquota in preload library.
 gpconfig -c shared_preload_libraries -v 'diskquota'
@@ -99,25 +103,20 @@ gpconfig -c shared_preload_libraries -v 'diskquota'
 gpstop -ar
 ```
 
-3. Config GUC of diskquota.
+4. Config GUC of diskquota.
 ```
-# set monitored databases
-gpconfig -c diskquota.monitor_databases -v 'postgres'
 # set naptime ( second ) to refresh the disk quota stats periodically
 gpconfig -c diskquota.naptime -v 2
 ```
 
-4. Create diskquota extension in monitored database.
+5. Create diskquota extension in monitored database.
 ```
 create extension diskquota;
 ```
 
-5. Reload database configuraion
+6. Initialize existing table size information is needed if `create extension` is not executed in a new created database.
 ```
-# reset monitored database list
-gpconfig -c diskquota.monitor_databases -v 'postgres, postgres2'
-# reload configuration
-gpstop -u
+select diskquota.init_table_size_table();
 ```
 
 # Usage
@@ -174,7 +173,7 @@ select * from diskquota.show_schema_quota_view;
 # Test
 Run regression tests.
 ```
-cd gpcontrib/gp_diskquota;
+cd diskquota_src;
 make installcheck
 ```
 
@@ -192,10 +191,9 @@ To be added.
 # Notes
 1. Drop database with diskquota enabled.
 
-If DBA enable monitoring diskquota on a database, there will be a connection
-to this database from diskquota worker process. DBA need to first remove this
-database from GUC diskquota.monitor_databases , and reload 
-configuration by call `gpstop -u`. Then database could be dropped successfully.
+If DBA created diskquota extension in a database, there will be a connection
+to this database from diskquota worker process. DBA need to firstly the drop diskquota
+extension in this database, and then database could be dropped successfully.
 
 2. Temp table.
 

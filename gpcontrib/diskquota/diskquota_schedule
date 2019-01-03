@@ -4,5 +4,6 @@ test: test_role test_schema test_drop_table test_column test_copy test_update te
 test: test_partition
 test: test_vacuum
 test: test_extension
+test: test_fast_disk_check
 test: clean
 test: test_insert_after_drop

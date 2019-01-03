@@ -16,11 +16,17 @@ typedef enum
 	FETCH_ACTIVE_SIZE			/* fetch size for active tables */
 }			FetchTableStatType;
 
+typedef enum
+{
+	DISKQUOTA_UNKNOWN_STATE,
+	DISKQUOTA_READY_STATE
+}			DiskQuotaState;
+
 struct DiskQuotaLocks
 {
-	LWLock *active_table_lock;
-	LWLock *black_map_lock;
-	LWLock *message_box_lock;
+	LWLock	   *active_table_lock;
+	LWLock	   *black_map_lock;
+	LWLock	   *message_box_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 
@@ -36,11 +42,13 @@ typedef struct DiskQuotaLocks DiskQuotaLocks;
  */
 struct MessageBox
 {
-	int launcher_pid;
-	int req_pid;		/* pid of the request process */
-	int cmd;			/* message command type, see MessageCommand */
-	int result;			/* message result writen by launcher, see MessageResult */
-	int data[4];		/* for create/drop extension diskquota, data[0] is dbid */
+	int			launcher_pid;
+	int			req_pid;		/* pid of the request process */
+	int			cmd;			/* message command type, see MessageCommand */
+	int			result;			/* message result writen by launcher, see
+								 * MessageResult */
+	int			data[4];		/* for create/drop extension diskquota,
+								 * data[0] is dbid */
 };
 
 enum MessageCommand
@@ -79,13 +87,14 @@ extern void diskquota_invalidate_db(Oid dbid);
 extern void init_disk_quota_shmem(void);
 extern void init_disk_quota_model(void);
 extern void refresh_disk_quota_model(bool force);
+extern bool check_diskquota_state_is_ready(void);
 extern bool quota_check_common(Oid reloid);
 
 /* quotaspi interface */
 extern void init_disk_quota_hook(void);
 
 extern Datum diskquota_fetch_table_stat(PG_FUNCTION_ARGS);
-extern int   diskquota_naptime;
-extern int   diskquota_max_active_tables;
+extern int	diskquota_naptime;
+extern int	diskquota_max_active_tables;
 
 #endif
