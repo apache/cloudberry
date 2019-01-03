@@ -1,6 +1,7 @@
 CREATE EXTENSION diskquota;
 -- start_ignore
 \! gpstop -u
+SELECT diskquota.init_table_size_table();
 -- end_ignore
 SELECT pg_sleep(1);
 \! cp data/csmall.txt /tmp/csmall.txt
