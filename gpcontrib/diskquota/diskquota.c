@@ -57,6 +57,7 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(set_schema_quota);
 PG_FUNCTION_INFO_V1(set_role_quota);
 PG_FUNCTION_INFO_V1(diskquota_start_worker);
+PG_FUNCTION_INFO_V1(init_table_size_table);
 
 /* timeout count to wait response from launcher process, in 1/10 sec */
 #define WAIT_TIME_COUNT  120
@@ -70,25 +71,26 @@ static volatile sig_atomic_t got_sigterm = false;
 static volatile sig_atomic_t got_sigusr1 = false;
 
 /* GUC variables */
-int	diskquota_naptime = 0;
-int diskquota_max_active_tables = 0;
+int			diskquota_naptime = 0;
+int			diskquota_max_active_tables = 0;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 
 /* disk quota worker info used by launcher to manage the worker processes. */
 struct DiskQuotaWorkerEntry
 {
-	Oid dbid;
-	pid_t pid; /* worker pid */
+	Oid			dbid;
+	pid_t		pid;			/* worker pid */
 	BackgroundWorkerHandle *handle;
 };
 
 DiskQuotaLocks diskquota_locks;
-volatile MessageBox * message_box = NULL;
+volatile	MessageBox *message_box = NULL;
+
 /* using hash table to support incremental update the table size entry.*/
 static HTAB *disk_quota_worker_map = NULL;
 static object_access_hook_type next_object_access_hook;
-static int num_db = 0;
+static int	num_db = 0;
 
 /* functions of disk quota*/
 void		_PG_init(void);
@@ -100,16 +102,16 @@ static void disk_quota_sigterm(SIGNAL_ARGS);
 static void disk_quota_sighup(SIGNAL_ARGS);
 static int64 get_size_in_mb(char *str);
 static void set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
-static int start_worker_by_dboid(Oid dbid);
+static int	start_worker_by_dboid(Oid dbid);
 static void create_monitor_db_table();
 static inline void exec_simple_utility(const char *sql);
 static void exec_simple_spi(const char *sql, int expected_code);
 static bool add_db_to_config(Oid dbid);
 static void del_db_from_config(Oid dbid);
 static void process_message_box(void);
-static void process_message_box_internal(MessageResult *code);
+static void process_message_box_internal(MessageResult * code);
 static void dq_object_access_hook(ObjectAccessType access, Oid classId,
-				Oid objectId, int subId, void *arg);
+					  Oid objectId, int subId, void *arg);
 static const char *err_code_to_err_message(MessageResult code);
 extern void diskquota_invalidate_db(Oid dbid);
 
@@ -165,7 +167,7 @@ _PG_init(void)
 	{
 		return;
 	}
-	/* Add dq_object_access_hook to handle drop extension event.*/
+	/* Add dq_object_access_hook to handle drop extension event. */
 	next_object_access_hook = object_access_hook;
 	object_access_hook = dq_object_access_hook;
 
@@ -229,7 +231,8 @@ disk_quota_sighup(SIGNAL_ARGS)
 static void
 disk_quota_sigusr1(SIGNAL_ARGS)
 {
-	int save_errno = errno;
+	int			save_errno = errno;
+
 	got_sigusr1 = true;
 
 	if (MyProc)
@@ -269,15 +272,37 @@ disk_quota_worker_main(Datum main_arg)
 	 * immediately
 	 */
 	init_disk_quota_model();
+	/* sleep 2 seconds to wait create extension statement finished */
+	sleep(2);
+	while (!got_sigterm)
+	{
+		int			rc;
+
+		/*
+		 * Check whether the state is in ready mode. The state would be
+		 * unknown, when you `create extension diskquota` at the first time.
+		 * After running UDF init_table_size_table() The state will changed to
+		 * be ready.
+		 */
+		if (check_diskquota_state_is_ready())
+		{
+			break;
+		}
+		rc = WaitLatch(&MyProc->procLatch,
+					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					   diskquota_naptime * 1000L);
+		ResetLatch(&MyProc->procLatch);
+	}
 	refresh_disk_quota_model(true);
 
 	/*
-	 * Set ps display name of the worker process of diskquota,
-	 * so we can distinguish them quickly.
-	 * Note: never mind parameter name of the function `init_ps_display`,
-	 * we only want the ps name looks like 'bgworker: [diskquota] <dbname> ...'
+	 * Set ps display name of the worker process of diskquota, so we can
+	 * distinguish them quickly. Note: never mind parameter name of the
+	 * function `init_ps_display`, we only want the ps name looks like
+	 * 'bgworker: [diskquota] <dbname> ...'
 	 */
 	init_ps_display("bgworker:", "[diskquota]", dbname, "");
+
 	/*
 	 * Main loop: do this until the SIGTERM handler tells us to terminate
 	 */
@@ -329,6 +354,7 @@ static void
 create_monitor_db_table()
 {
 	const char *sql;
+
 	sql = "create schema if not exists diskquota_namespace;"
 		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);";
 	exec_simple_utility(sql);
@@ -347,7 +373,7 @@ exec_simple_utility(const char *sql)
 static void
 exec_simple_spi(const char *sql, int expected_code)
 {
-	int ret;
+	int			ret;
 
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
@@ -363,16 +389,17 @@ exec_simple_spi(const char *sql, int expected_code)
 static bool
 is_valid_dbid(Oid dbid)
 {
-    HeapTuple       tuple;
+	HeapTuple	tuple;
 
-    if (dbid == InvalidOid)
-            return false;
-    tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(dbid));
-    if (!HeapTupleIsValid(tuple))
-            return false;
-    ReleaseSysCache(tuple);
-    return true;
+	if (dbid == InvalidOid)
+		return false;
+	tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(dbid));
+	if (!HeapTupleIsValid(tuple))
+		return false;
+	ReleaseSysCache(tuple);
+	return true;
 }
+
 /*
  * in early stage, start all worker processes of diskquota-enabled databases
  * from diskquota_namespace.database_list
@@ -380,12 +407,13 @@ is_valid_dbid(Oid dbid)
 static void
 start_workers_from_dblist()
 {
-	TupleDesc tupdesc;
-	Oid fake_dbid[128];
-	int fake_count = 0;
-	int num = 0;
-	int ret;
-	int i;
+	TupleDesc	tupdesc;
+	Oid			fake_dbid[128];
+	int			fake_count = 0;
+	int			num = 0;
+	int			ret;
+	int			i;
+
 	StartTransactionCommand();
 	PushActiveSnapshot(GetTransactionSnapshot());
 	ret = SPI_connect();
@@ -400,12 +428,12 @@ start_workers_from_dblist()
 
 	for (i = 0; num < SPI_processed; i++)
 	{
-		HeapTuple tup;
-		Oid dbid;
-		Datum dat;
-		bool isnull;
+		HeapTuple	tup;
+		Oid			dbid;
+		Datum		dat;
+		bool		isnull;
 
-	    tup	= SPI_tuptable->vals[i];
+		tup = SPI_tuptable->vals[i];
 		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
 		if (isnull)
 		{
@@ -428,7 +456,7 @@ start_workers_from_dblist()
 	PopActiveSnapshot();
 	CommitTransactionCommand();
 
-	/*  TODO: clean invalid database */
+	/* TODO: clean invalid database */
 
 }
 
@@ -455,19 +483,21 @@ del_db_from_config(Oid dbid)
 
 /*
  * When drop exention database, diskquota laucher will receive a message
- * to kill the diskquota worker process which monitoring the target database. 
+ * to kill the diskquota worker process which monitoring the target database.
  */
 static void
 try_kill_db_worker(Oid dbid)
 {
 	DiskQuotaWorkerEntry *hash_entry;
-	bool found;
-	hash_entry = (DiskQuotaWorkerEntry *)hash_search(disk_quota_worker_map,
-											(void *)&dbid,
-											HASH_REMOVE, &found);
+	bool		found;
+
+	hash_entry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
+													  (void *) &dbid,
+													  HASH_REMOVE, &found);
 	if (found)
 	{
 		BackgroundWorkerHandle *handle;
+
 		handle = hash_entry->handle;
 		TerminateBackgroundWorker(handle);
 		pfree(handle);
@@ -480,7 +510,7 @@ try_kill_db_worker(Oid dbid)
  * we set it, and error out
  */
 static void
-on_add_db(Oid dbid, MessageResult *code)
+on_add_db(Oid dbid, MessageResult * code)
 {
 	if (num_db >= MAX_NUM_MONITORED_DB)
 	{
@@ -494,8 +524,8 @@ on_add_db(Oid dbid, MessageResult *code)
 	}
 
 	/*
-	 * add dbid to diskquota_namespace.database_list
-	 * set *code to ERR_ADD_TO_DB if any error occurs
+	 * add dbid to diskquota_namespace.database_list set *code to
+	 * ERR_ADD_TO_DB if any error occurs
 	 */
 	PG_TRY();
 	{
@@ -560,11 +590,12 @@ disk_quota_launcher_main(Datum main_arg)
 	hash_ctl.hash = oid_hash;
 
 	disk_quota_worker_map = hash_create("disk quota worker map",
-						  1024,
-						  &hash_ctl,
-						  HASH_ELEM | HASH_FUNCTION);
+										1024,
+										&hash_ctl,
+										HASH_ELEM | HASH_FUNCTION);
 
 	start_workers_from_dblist();
+
 	/*
 	 * Main loop: do this until the SIGTERM handler tells us to terminate
 	 */
@@ -592,6 +623,7 @@ disk_quota_launcher_main(Datum main_arg)
 			got_sigusr1 = false;
 			process_message_box();
 		}
+
 		/*
 		 * In case of a SIGHUP, just reload the configuration.
 		 */
@@ -616,11 +648,11 @@ start_worker_by_dboid(Oid dbid)
 	BackgroundWorkerHandle *handle;
 	BgwHandleStatus status;
 	MemoryContext old_ctx;
-	char *dbname;
-	pid_t pid;
-	bool found;
-	bool ok;
-	DiskQuotaWorkerEntry* workerentry;
+	char	   *dbname;
+	pid_t		pid;
+	bool		found;
+	bool		ok;
+	DiskQuotaWorkerEntry *workerentry;
 
 	memset(&worker, 0, sizeof(BackgroundWorker));
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS |
@@ -658,9 +690,9 @@ start_worker_by_dboid(Oid dbid)
 	Assert(status == BGWH_STARTED);
 
 	/* put the worker handle into the worker map */
-	workerentry = (DiskQuotaWorkerEntry *)hash_search(disk_quota_worker_map,
-														(void *)&dbid,
-														HASH_ENTER, &found);
+	workerentry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
+													   (void *) &dbid,
+													   HASH_ENTER, &found);
 	if (!found)
 	{
 		workerentry->handle = handle;
@@ -698,6 +730,64 @@ set_role_quota(PG_FUNCTION_ARGS)
 	quota_limit_mb = get_size_in_mb(sizestr);
 
 	set_quota_internal(roleoid, quota_limit_mb, ROLE_QUOTA);
+	PG_RETURN_VOID();
+}
+
+/*
+ * init table diskquota.table_size.
+ * calculate table size by UDF pg_total_relation_size
+ */
+Datum
+init_table_size_table(PG_FUNCTION_ARGS)
+{
+	int			ret;
+	StringInfoData buf;
+
+	RangeVar   *rv;
+	Relation	rel;
+
+	/* ensure table diskquota.state exists */
+	rv = makeRangeVar("diskquota", "state", -1);
+	rel = heap_openrv_extended(rv, AccessShareLock, true);
+	if (!rel)
+	{
+		/* configuration table is missing. */
+		elog(ERROR, "table \"diskquota.state\" is missing in database \"%s\","
+			 " please recreate diskquota extension",
+			 get_database_name(MyDatabaseId));
+	}
+	heap_close(rel, NoLock);
+
+	SPI_connect();
+
+	/* delete all the table size info in table_size if exist. */
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "delete from diskquota.table_size;");
+	ret = SPI_execute(buf.data, false, 0);
+	if (ret != SPI_OK_DELETE)
+		elog(ERROR, "cannot delete table_size table: error code %d", ret);
+
+	/* fill table_size table with table oid and size info. */
+	resetStringInfo(&buf);
+	appendStringInfo(&buf,
+					 "insert into diskquota.table_size "
+					 "select oid, pg_total_relation_size(oid) from pg_class "
+					 "where oid> %u and (relkind='r' or relkind='m');",
+					 FirstNormalObjectId);
+	ret = SPI_execute(buf.data, false, 0);
+	if (ret != SPI_OK_INSERT)
+		elog(ERROR, "cannot insert table_size table: error code %d", ret);
+
+	/* set diskquota state to ready. */
+	resetStringInfo(&buf);
+	appendStringInfo(&buf,
+					 "update diskquota.state set state = %u;",
+					 DISKQUOTA_READY_STATE);
+	ret = SPI_execute(buf.data, false, 0);
+	if (ret != SPI_OK_UPDATE)
+		elog(ERROR, "cannot update state table: error code %d", ret);
+
+	SPI_finish();
 	PG_RETURN_VOID();
 }
 
@@ -757,7 +847,6 @@ set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 	if (SPI_processed == 0 && quota_limit_mb > 0)
 	{
 		resetStringInfo(&buf);
-		initStringInfo(&buf);
 		appendStringInfo(&buf,
 						 "insert into diskquota.quota_config values(%u,%d,%ld);",
 						 targetoid, type, quota_limit_mb);
@@ -768,7 +857,6 @@ set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 	else if (SPI_processed > 0 && quota_limit_mb <= 0)
 	{
 		resetStringInfo(&buf);
-		initStringInfo(&buf);
 		appendStringInfo(&buf,
 						 "delete from diskquota.quota_config where targetoid=%u"
 						 " and quotatype=%d;",
@@ -780,7 +868,6 @@ set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 	else if (SPI_processed > 0 && quota_limit_mb > 0)
 	{
 		resetStringInfo(&buf);
-		initStringInfo(&buf);
 		appendStringInfo(&buf,
 						 "update diskquota.quota_config set quotalimitMB = %ld where targetoid=%u"
 						 " and quotatype=%d;",
@@ -938,14 +1025,15 @@ get_size_in_mb(char *str)
 
 /*
  * trigger start diskquota worker when create extension diskquota
- * This function is called at backend side, and will send message to 
+ * This function is called at backend side, and will send message to
  * diskquota launcher. Luacher process is responsible for starting the real
  * diskquota worker process.
  */
 Datum
 diskquota_start_worker(PG_FUNCTION_ARGS)
 {
-	int rc;
+	int			rc;
+
 	elog(LOG, "[diskquota]:DB = %d, MyProc=%p launcher pid=%d", MyDatabaseId, MyProc, message_box->launcher_pid);
 	LWLockAcquire(diskquota_locks.message_box_lock, LW_EXCLUSIVE);
 	message_box->req_pid = MyProcPid;
@@ -956,8 +1044,9 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	rc = kill(message_box->launcher_pid, SIGUSR1);
 	if (rc == 0)
 	{
-		int count = WAIT_TIME_COUNT;
-		while(count-- > 0)
+		int			count = WAIT_TIME_COUNT;
+
+		while (count-- > 0)
 		{
 			rc = WaitLatch(&MyProc->procLatch,
 						   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
@@ -972,12 +1061,12 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	message_box->req_pid = 0;
 	LWLockRelease(diskquota_locks.message_box_lock);
 	if (message_box->result != ERR_OK)
-		elog(ERROR, "%s", err_code_to_err_message((MessageResult)message_box->result));
+		elog(ERROR, "%s", err_code_to_err_message((MessageResult) message_box->result));
 	PG_RETURN_VOID();
 }
 
 static void
-process_message_box_internal(MessageResult *code)
+process_message_box_internal(MessageResult * code)
 {
 	Assert(message_box->launcher_pid == MyProcPid);
 	switch (message_box->cmd)
@@ -998,7 +1087,7 @@ process_message_box_internal(MessageResult *code)
 }
 
 /*
- * this function is called by launcher process to handle message from other backend 
+ * this function is called by launcher process to handle message from other backend
  * processes which call CREATE/DROP EXTENSION diskquota; It must be able to catch errors,
  * and return an error code back to the backend process.
  */
@@ -1006,7 +1095,8 @@ static void
 process_message_box()
 {
 	MessageResult code = ERR_UNKNOWN;
-	int old_num_db = num_db;
+	int			old_num_db = num_db;
+
 	if (message_box->req_pid == 0)
 		return;
 	elog(LOG, "[launcher]: received message");
@@ -1028,7 +1118,7 @@ process_message_box()
 	}
 	PG_END_TRY();
 
-	message_box->result = (int)code;
+	message_box->result = (int) code;
 }
 
 /*
@@ -1039,19 +1129,20 @@ process_message_box()
  */
 static void
 dq_object_access_hook(ObjectAccessType access, Oid classId,
-			Oid objectId, int subId, void *arg)
+					  Oid objectId, int subId, void *arg)
 {
-	Oid oid;
-	int rc;
+	Oid			oid;
+	int			rc;
+
 	if (access != OAT_DROP || classId != ExtensionRelationId)
 		goto out;
 	oid = get_extension_oid("diskquota", true);
 	if (oid != objectId)
 		goto out;
+
 	/*
-	 * invoke drop extension diskquota
-	 * 1. stop bgworker for MyDatabaseId
-	 * 2. remove dbid from diskquota_namespace.database_list in postgres
+	 * invoke drop extension diskquota 1. stop bgworker for MyDatabaseId 2.
+	 * remove dbid from diskquota_namespace.database_list in postgres
 	 */
 	LWLockAcquire(diskquota_locks.message_box_lock, LW_EXCLUSIVE);
 	message_box->req_pid = MyProcPid;
@@ -1061,8 +1152,9 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	rc = kill(message_box->launcher_pid, SIGUSR1);
 	if (rc == 0)
 	{
-		int count = WAIT_TIME_COUNT;
-		while(count-- >0)
+		int			count = WAIT_TIME_COUNT;
+
+		while (count-- > 0)
 		{
 			rc = WaitLatch(&MyProc->procLatch,
 						   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
@@ -1077,25 +1169,33 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	message_box->req_pid = 0;
 	LWLockRelease(diskquota_locks.message_box_lock);
 	if (message_box->result != ERR_OK)
-		elog(ERROR, "[diskquota] %s", err_code_to_err_message((MessageResult)message_box->result));
+		elog(ERROR, "[diskquota] %s", err_code_to_err_message((MessageResult) message_box->result));
 	elog(LOG, "[diskquota] DROP EXTENTION diskquota; OK");
 
 out:
 	if (next_object_access_hook)
-		(*next_object_access_hook)(access, classId, objectId,
-				subId, arg);
+		(*next_object_access_hook) (access, classId, objectId,
+									subId, arg);
 }
 
-static const char *err_code_to_err_message(MessageResult code)
+static const char *
+err_code_to_err_message(MessageResult code)
 {
 	switch (code)
 	{
-		case ERR_PENDING: return "no response from launcher, or timeout";
-		case ERR_OK: return "NO ERROR";
-		case ERR_EXCEED: return "too many database to monitor";
-		case ERR_ADD_TO_DB: return "add dbid to database_list failed";
-		case ERR_START_WORKER: return "start worker failed";
-		case ERR_INVALID_DBID: return "invalid dbid";
-		default: return "unknown error";
+		case ERR_PENDING:
+			return "no response from launcher, or timeout";
+		case ERR_OK:
+			return "NO ERROR";
+		case ERR_EXCEED:
+			return "too many database to monitor";
+		case ERR_ADD_TO_DB:
+			return "add dbid to database_list failed";
+		case ERR_START_WORKER:
+			return "start worker failed";
+		case ERR_INVALID_DBID:
+			return "invalid dbid";
+		default:
+			return "unknown error";
 	}
 }

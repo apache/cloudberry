@@ -30,13 +30,14 @@ INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
 \c dbx1
-CREATE EXTENSION diskquota;
-\! sleep 2
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
+INSERT INTO SX.a values(generate_series(0, 100000));
+CREATE EXTENSION diskquota;
+SELECT diskquota.init_table_size_table();
 SELECT diskquota.set_schema_quota('SX', '1MB');
-INSERT INTO SX.a values(generate_series(0, 100000000));
+\! sleep 5
+\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -121,12 +122,6 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
-SELECT diskquota.set_schema_quota('SX', '1MB');
-INSERT INTO SX.a values(generate_series(0, 10000000));
-INSERT INTO SX.a values(generate_series(0, 10));
-DROP TABLE SX.a;
 
 \c dbx10
 CREATE EXTENSION diskquota;
