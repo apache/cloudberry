@@ -119,9 +119,6 @@ static HTAB *role_quota_limit_map = NULL;
 static HTAB *disk_quota_black_map = NULL;
 static HTAB *local_disk_quota_black_map = NULL;
 
-static disk_quota_shared_state * black_map_shm_lock;
-disk_quota_shared_state *active_table_shm_lock = NULL;
-
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 /* functions to refresh disk quota model*/
@@ -149,13 +146,19 @@ DiskQuotaShmemSize(void)
 {
 	Size		size;
 
-	size = MAXALIGN(sizeof(disk_quota_shared_state));
-	size = add_size(size, size);	/* two locks */
+	size = sizeof(MessageBox);
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(BlackMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
 	return size;
 }
 
+static void
+init_lwlocks(void)
+{
+	diskquota_locks.active_table_lock = LWLockAssign();
+	diskquota_locks.black_map_lock = LWLockAssign();
+	diskquota_locks.message_box_lock = LWLockAssign();
+}
 /*
  * DiskQuotaShmemInit
  *		Allocate and initialize diskquota-related shared memory
@@ -169,21 +172,16 @@ disk_quota_shmem_startup(void)
 	if (prev_shmem_startup_hook)
 		(*prev_shmem_startup_hook) ();
 
-	black_map_shm_lock = NULL;
 	disk_quota_black_map = NULL;
 
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
-	black_map_shm_lock = ShmemInitStruct("disk_quota_black_map_shm_lock",
-										 sizeof(disk_quota_shared_state),
-										 &found);
-
+	init_lwlocks();
+	message_box = ShmemInitStruct("disk_quota_message_box",
+								sizeof(MessageBox),
+								&found);
 	if (!found)
-	{
-		black_map_shm_lock->lock = LWLockAssign();
-	}
-
-	init_lock_active_tables();
+		memset((void*)message_box, 0, sizeof(MessageBox));
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(BlackMapEntry);
@@ -210,6 +208,7 @@ init_disk_quota_shmem(void)
 	 * resources in pgss_shmem_startup().
 	 */
 	RequestAddinShmemSpace(DiskQuotaShmemSize());
+	RequestAddinLWLocks(3);
 
 	/*
 	 * Install startup hook to initialize our shared memory.
@@ -339,7 +338,8 @@ flush_local_black_map(void)
 	BlackMapEntry *blackentry;
 	bool		found;
 
-	LWLockAcquire(black_map_shm_lock->lock, LW_EXCLUSIVE);
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+
 	hash_seq_init(&iter, local_disk_quota_black_map);
 	while ((localblackentry = hash_seq_search(&iter)) != NULL)
 	{
@@ -377,7 +377,7 @@ flush_local_black_map(void)
 							   HASH_REMOVE, NULL);
 		}
 	}
-	LWLockRelease(black_map_shm_lock->lock);
+	LWLockRelease(diskquota_locks.black_map_lock);
 }
 
 /*
@@ -846,7 +846,7 @@ quota_check_common(Oid reloid)
 
 	memset(&keyitem, 0, sizeof(BlackMapEntry));
 	get_rel_owner_schema(reloid, &ownerOid, &nsOid);
-	LWLockAcquire(black_map_shm_lock->lock, LW_SHARED);
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
 
 	if (nsOid != InvalidOid)
 	{
@@ -882,6 +882,26 @@ quota_check_common(Oid reloid)
 			return false;
 		}
 	}
-	LWLockRelease(black_map_shm_lock->lock);
+	LWLockRelease(diskquota_locks.black_map_lock);
 	return true;
+}
+
+/*
+ * invalidate all black entry with a specific dbid in SHM
+ */
+void
+diskquota_invalidate_db(Oid dbid)
+{
+	BlackMapEntry * entry;
+	HASH_SEQ_STATUS iter;
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+	hash_seq_init(&iter, disk_quota_black_map);
+	while ((entry = hash_seq_search(&iter)) != NULL)
+	{
+		if (entry->databaseoid == dbid)
+		{
+			hash_search(disk_quota_black_map, entry, HASH_REMOVE, NULL);
+		}
+	}
+	LWLockRelease(diskquota_locks.black_map_lock);
 }
