@@ -7,7 +7,7 @@ SELECT diskquota.set_schema_quota('scolumn', '1 MB');
 (1 row)
 
 SET search_path TO scolumn;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  
@@ -25,7 +25,7 @@ ERROR:  schema's disk space quota exceeded with name:scolumn
 ALTER TABLE a2 ADD COLUMN j VARCHAR(50);
 UPDATE a2 SET j = 'add value for column j';
 ERROR:  schema's disk space quota exceeded with name:scolumn
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  

@@ -1,0 +1,177 @@
+## ======================================================================
+## Pipeline for GPDB PL/R GPPKG
+## ======================================================================
+
+groups:
+- name: GPDB6
+  jobs:
+    - diskquota_centos6_build
+    - diskquota_centos7_build
+    - diskquota_centos6_test
+    - diskquota_centos7_test
+
+resources:
+
+# Image Resources
+
+- name: centos-gpdb-dev-6
+  type: docker-image
+  source:
+    repository: pivotaldata/centos-gpdb-dev
+    tag: '6-gcc6.2-llvm3.7'
+
+- name: centos-gpdb-dev-7
+  type: docker-image
+  source:
+    repository: pivotaldata/centos-gpdb-dev
+    tag: '7-gcc6.2-llvm3.7'
+
+# Github Source Codes
+
+- name: gpdb_src
+  type: git
+  source:
+    branch: {{gpdb-git-branch}}
+    uri: {{gpdb-git-remote}}
+
+- name: diskquota_src
+  type: git
+  source:
+    branch: gpdbpipeline
+    uri: https://github.com/zhangh43/diskquota.git
+
+# centos 7
+
+- name: bin_diskquota_centos7
+  type: s3
+  source:
+    bucket: {{pl-bucket-name}}
+    region_name: {{aws-region}}
+    access_key_id: {{bucket-access-key-id}}
+    secret_access_key: {{bucket-secret-access-key}}
+    versioned_file: build/gpdb6/diskquota/component_diskquota.tar.gz
+
+
+- name: bin_gpdb_centos7
+  type: s3
+  source:
+    bucket: {{bucket-name}}
+    region_name: {{aws-region}}
+    access_key_id: {{bucket-access-key-id}}
+    secret_access_key: {{bucket-secret-access-key}}
+    versioned_file: bin_gpdb_centos7/bin_gpdb.tar.gz
+
+- name: bin_diskquota_centos6
+  type: s3
+  source:
+    bucket: {{pl-bucket-name}}
+    region_name: {{aws-region}}
+    access_key_id: {{bucket-access-key-id}}
+    secret_access_key: {{bucket-secret-access-key}}
+    versioned_file: build/gpdb6/diskquota/component_diskquota.tar.gz
+
+- name: bin_gpdb_centos6
+  type: s3
+  source:
+    bucket: {{bucket-name}}
+    region_name: {{aws-region}}
+    access_key_id: {{bucket-access-key-id}}
+    secret_access_key: {{bucket-secret-access-key}}
+    versioned_file: bin_gpdb_centos/bin_gpdb.tar.gz
+
+## jobs
+## ======================================================================
+
+jobs:
+# Build PLR GPPKG
+
+- name: diskquota_centos7_build
+  max_in_flight: 3
+  plan:
+  - aggregate:
+    - get: centos-gpdb-dev-7
+    - get: diskquota_src
+      trigger: true
+    - get: bin_gpdb_centos7
+    - get: gpdb_src
+  - aggregate:
+    - task: build_diskquota
+      file: diskquota_src/concourse/tasks/build_diskquota.yml
+      image: centos-gpdb-dev-7
+      input_mapping:
+        bin_gpdb: bin_gpdb_centos7
+      output_mapping:
+        bin_diskquota: bin_diskquota_centos7
+      params:
+        OSVER: centos7
+        GPDBVER: gp6
+  - aggregate:
+    - put: bin_diskquota_centos7
+      params:
+        file: diskquota_artifacts/component_diskquota.tar.gz
+
+- name: diskquota_centos6_build
+  max_in_flight: 3
+  plan:
+  - aggregate:
+    - get: centos-gpdb-dev-6
+    - get: diskquota_src
+      trigger: true
+    - get: bin_gpdb_centos6
+    - get: gpdb_src
+  - aggregate:
+    - task: build_diskquota
+      file: diskquota_src/concourse/tasks/build_diskquota.yml
+      image: centos-gpdb-dev-6
+      input_mapping:
+        bin_gpdb: bin_gpdb_centos6
+      output_mapping:
+        bin_diskquota: bin_diskquota_centos6
+      params:
+        OSVER: centos6
+        GPDBVER: gp6
+  - aggregate:
+    - put: bin_diskquota_centos6
+      params:
+        file: diskquota_artifacts/component_diskquota.tar.gz
+
+
+- name: diskquota_centos6_test
+  plan:
+  - aggregate:
+    - get: centos-gpdb-dev-6
+    - get: diskquota_src
+    - get: bin_diskquota_centos6
+      passed: [diskquota_centos6_build]
+      trigger: true
+    - get: bin_gpdb_centos6
+    - get: gpdb_src
+  - task: test_diskquota
+    file: diskquota_src/concourse/tasks/test_diskquota.yml
+    image: centos-gpdb-dev-6
+    input_mapping:
+      bin_gpdb: bin_gpdb_centos6
+      bin_diskquota: bin_diskquota_centos6
+    params:
+      OSVER: centos6
+      GPDBVER: gp6
+
+- name: diskquota_centos7_test
+  plan:
+  - aggregate:
+    - get: centos-gpdb-dev-7
+    - get: diskquota_src
+    - get: bin_diskquota_centos7
+      passed: [diskquota_centos7_build]
+      trigger: true
+    - get: bin_gpdb_centos7
+    - get: gpdb_src
+  - task: test_diskquota
+    file: diskquota_src/concourse/tasks/test_diskquota.yml
+    image: centos-gpdb-dev-7
+    input_mapping:
+      bin_gpdb: bin_gpdb_centos7
+      bin_diskquota: bin_diskquota_centos7
+    params:
+      OSVER: centos7
+      GPDBVER: gp6

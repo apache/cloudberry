@@ -7,7 +7,7 @@ CREATE TABLE c (i int);
 COPY c FROM '/tmp/csmall.txt';
 -- expect failed 
 INSERT INTO c SELECT generate_series(1,100000000);
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 -- expect copy fail
 COPY c FROM '/tmp/csmall.txt';
 

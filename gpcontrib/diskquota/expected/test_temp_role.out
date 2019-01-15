@@ -24,7 +24,7 @@ ERROR:  role's disk space quota exceeded with name:u3temp
 INSERT INTO a SELECT generate_series(1,100);
 ERROR:  role's disk space quota exceeded with name:u3temp
 DROP TABLE ta;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  

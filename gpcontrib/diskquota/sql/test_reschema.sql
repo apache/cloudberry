@@ -9,7 +9,7 @@ INSERT INTO a SELECT generate_series(1,1000000000);
 INSERT INTO a SELECT generate_series(1,1000);
 -- set schema quota larger
 SELECT diskquota.set_schema_quota('srE', '1 GB');
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,1000);
 

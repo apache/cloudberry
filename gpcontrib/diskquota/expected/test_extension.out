@@ -208,13 +208,13 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx9
 CREATE EXTENSION diskquota;
-ERROR:  too many database to monitor (diskquota.c:1056)
+ERROR:  [diskquota] failed to create diskquota extension: too many database to monitor (diskquota.c:1056)
 \! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
 \c dbx10
 CREATE EXTENSION diskquota;
-ERROR:  too many database to monitor (diskquota.c:1056)
+ERROR:  [diskquota] failed to create diskquota extension: too many database to monitor (diskquota.c:1056)
 \! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11

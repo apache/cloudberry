@@ -21,7 +21,7 @@ ERROR:  schema's disk space quota exceeded with name:sdrtbl
 INSERT INTO a2 SELECT generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name:sdrtbl
 DROP TABLE a;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  

@@ -10,7 +10,7 @@ INSERT INTO a SELECT generate_series(1,100000000);
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,100);
 DROP TABLE a;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 INSERT INTO a2 SELECT generate_series(1,100);
 
 DROP TABLE a2;
