@@ -135,11 +135,13 @@ static void update_role_map(Oid owneroid, int64 updatesize);
 static void remove_namespace_map(Oid namespaceoid);
 static void remove_role_map(Oid owneroid);
 static bool load_quotas(void);
+static bool do_load_quotas(void);
 static bool do_check_diskquota_state_is_ready(void);
 
 static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
 
+static void truncateStringInfo(StringInfo str, int nchars);
 
 /*
  * DiskQuotaShmemSize
@@ -162,6 +164,7 @@ init_lwlocks(void)
 	diskquota_locks.active_table_lock = LWLockAssign();
 	diskquota_locks.black_map_lock = LWLockAssign();
 	diskquota_locks.message_box_lock = LWLockAssign();
+	diskquota_locks.extension_lock = LWLockAssign();
 }
 
 /*
@@ -213,7 +216,7 @@ init_disk_quota_shmem(void)
 	 * resources in pgss_shmem_startup().
 	 */
 	RequestAddinShmemSpace(DiskQuotaShmemSize());
-	RequestAddinLWLocks(3);
+	RequestAddinLWLocks(4);
 
 	/*
 	 * Install startup hook to initialize our shared memory.
@@ -310,24 +313,20 @@ do_check_diskquota_state_is_ready(void)
 	rel = heap_openrv_extended(rv, AccessShareLock, true);
 	if (!rel)
 	{
-		/* configuration table is missing. */
-		elog(ERROR, "table \"diskquota.state\" is missing in database \"%s\","
-			 " please recreate diskquota extension",
-			 get_database_name(MyDatabaseId));
 		return false;
 	}
-	heap_close(rel, NoLock);
+	heap_close(rel, AccessShareLock);
 
 	/* check diskquota state from table diskquota.state */
 	ret = SPI_execute("select state from diskquota.state", true, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_execute failed: error code %d", ret);
+		elog(ERROR, "[diskquota] check diskquota state SPI_execute failed: error code %d", ret);
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 1 ||
 		((tupdesc)->attrs[0])->atttypid != INT4OID)
 	{
-		elog(ERROR, "table \"state\" is corrupted in database \"%s\","
+		elog(ERROR, "[diskquota] table \"state\" is corrupted in database \"%s\","
 			 " please recreate diskquota extension",
 			 get_database_name(MyDatabaseId));
 		return false;
@@ -384,19 +383,12 @@ check_diskquota_state_is_ready(void)
 void
 refresh_disk_quota_model(bool is_init)
 {
-	elog(DEBUG1, "check disk quota begin");
-	StartTransactionCommand();
-	SPI_connect();
-	PushActiveSnapshot(GetTransactionSnapshot());
+	elog(LOG,"[diskquota] start refresh_disk_quota_model");
 	/* skip refresh model when load_quotas failed */
 	if (load_quotas())
 	{
 		refresh_disk_quota_usage(is_init);
 	}
-	SPI_finish();
-	PopActiveSnapshot();
-	CommitTransactionCommand();
-	elog(DEBUG1, "check disk quota end");
 }
 
 /*
@@ -406,6 +398,10 @@ refresh_disk_quota_model(bool is_init)
 static void
 refresh_disk_quota_usage(bool force)
 {
+	StartTransactionCommand();
+	SPI_connect();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
 	/* recalculate the disk usage of table, schema and role */
 	calculate_table_disk_usage(force);
 	calculate_schema_disk_usage();
@@ -414,6 +410,10 @@ refresh_disk_quota_usage(bool force)
 	flush_to_table_size();
 	/* copy local black map back to shared black map */
 	flush_local_black_map();
+
+	SPI_finish();
+	PopActiveSnapshot();
+	CommitTransactionCommand();
 }
 
 /*
@@ -801,6 +801,22 @@ calculate_role_disk_usage(void)
 }
 
 /*
+ * Make sure a StringInfo's string is no longer than 'nchars' characters.
+ */
+static void 
+truncateStringInfo(StringInfo str, int nchars)
+{
+    if (str &&
+        str->len > nchars)
+    {
+        Assert(str->data != NULL && 
+               str->len <= str->maxlen);
+        str->len = nchars;
+        str->data[nchars] = '\0';
+    }
+}
+
+/*
  * Flush the table_size_map to user table diskquota.table_size
  * To improve update performance, we first delete all the need_to_flush
  * entries in table table_size. And then insert new table size entries into
@@ -858,22 +874,41 @@ flush_to_table_size(void)
 		elog(DEBUG1, "[diskquota] table_size delete_statement: %s", delete_statement.data);
 		ret = SPI_execute(delete_statement.data, false, 0);
 		if (ret != SPI_OK_DELETE)
-			elog(ERROR, "SPI_execute failed: error code %d", ret);
+			elog(ERROR, "[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret);
 	}
 	if (insert_statement_flag)
 	{
 		elog(DEBUG1, "[diskquota] table_size insert_statement: %s", insert_statement.data);
 		ret = SPI_execute(insert_statement.data, false, 0);
 		if (ret != SPI_OK_INSERT)
-			elog(ERROR, "SPI_execute failed: error code %d", ret);
+			elog(ERROR, "[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret);
 	}
+}
+
+/*
+ * Interface to load quotas from diskquota configuration table(quota_config).
+ */
+static bool
+load_quotas(void)
+{
+	bool ret;
+	StartTransactionCommand();
+	SPI_connect();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	ret = do_load_quotas();
+
+	SPI_finish();
+	PopActiveSnapshot();
+	CommitTransactionCommand();
+	return ret;
 }
 
 /*
  * Load quotas from diskquota configuration table(quota_config).
 */
 static bool
-load_quotas(void)
+do_load_quotas(void)
 {
 	int			ret;
 	TupleDesc	tupdesc;
@@ -890,13 +925,12 @@ load_quotas(void)
 	if (!rel)
 	{
 		/* configuration table is missing. */
-		elog(LOG, "configuration table \"quota_config\" is missing in database \"%s\","
+		elog(LOG, "[diskquota] configuration table \"quota_config\" is missing in database \"%s\","
 			 " please recreate diskquota extension",
 			 get_database_name(MyDatabaseId));
 		return false;
 	}
-	heap_close(rel, NoLock);
-
+	heap_close(rel, AccessShareLock);
 	/*
 	 * TODO: we should skip to reload quota config when there is no change in
 	 * quota.config. A flag in shared memory could be used to detect the quota
@@ -921,7 +955,7 @@ load_quotas(void)
 
 	ret = SPI_execute("select targetoid, quotatype, quotalimitMB from diskquota.quota_config", true, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_execute failed: error code %d", ret);
+		elog(ERROR, "[diskquota] load_quotas SPI_execute failed: error code %d", ret);
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 3 ||
@@ -929,7 +963,7 @@ load_quotas(void)
 		((tupdesc)->attrs[1])->atttypid != INT4OID ||
 		((tupdesc)->attrs[2])->atttypid != INT8OID)
 	{
-		elog(LOG, "configuration table \"quota_config\" is corrupted in database \"%s\","
+		elog(LOG, "[diskquota] configuration table \"quota_config\" is corrupted in database \"%s\","
 			 " please recreate diskquota extension",
 			 get_database_name(MyDatabaseId));
 		return false;
@@ -1010,6 +1044,10 @@ quota_check_common(Oid reloid)
 	bool		found;
 	BlackMapEntry keyitem;
 
+	if (!IsTransactionState())
+	{
+		return true;
+	}
 	memset(&keyitem, 0, sizeof(BlackMapEntry));
 	get_rel_owner_schema(reloid, &ownerOid, &nsOid);
 	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);

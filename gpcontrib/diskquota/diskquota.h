@@ -27,6 +27,7 @@ struct DiskQuotaLocks
 	LWLock	   *active_table_lock;
 	LWLock	   *black_map_lock;
 	LWLock	   *message_box_lock;
+	LWLock	   *extension_lock; /* ensure create diskquota extension serially */
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 
@@ -42,13 +43,12 @@ typedef struct DiskQuotaLocks DiskQuotaLocks;
  */
 struct MessageBox
 {
-	int			launcher_pid;
-	int			req_pid;		/* pid of the request process */
+	int			launcher_pid;	/* diskquota launcher pid */
+	int			req_pid;		/* pid of the QD process which create/drop diskquota extension */
 	int			cmd;			/* message command type, see MessageCommand */
 	int			result;			/* message result writen by launcher, see
 								 * MessageResult */
-	int			data[4];		/* for create/drop extension diskquota,
-								 * data[0] is dbid */
+	int			dbid;		/* dbid of create/drop diskquota extensionstatement */
 };
 
 enum MessageCommand
@@ -77,7 +77,7 @@ typedef enum MessageCommand MessageCommand;
 typedef enum MessageResult MessageResult;
 
 extern DiskQuotaLocks diskquota_locks;
-extern volatile MessageBox *message_box;
+extern MessageBox *message_box;
 
 /* enforcement interface*/
 extern void init_disk_quota_enforcement(void);

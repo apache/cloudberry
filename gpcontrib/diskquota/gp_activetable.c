@@ -563,15 +563,32 @@ get_active_tables(void)
 		bool		found;
 
 		relOid = RelidByRelfilenode(active_table_file_entry->tablespaceoid, active_table_file_entry->relfilenode);
-
-		active_table_entry = hash_search(local_active_table_stats_map, &relOid, HASH_ENTER, &found);
-		if (active_table_entry)
+		if (relOid != InvalidOid)
 		{
-			active_table_entry->tableoid = relOid;
-			active_table_entry->tablesize = 0;
+			active_table_entry = hash_search(local_active_table_stats_map, &relOid, HASH_ENTER, &found);
+			if (active_table_entry)
+			{
+				active_table_entry->tableoid = relOid;
+				active_table_entry->tablesize = 0;
+			}
+			hash_search(local_active_table_file_map, &active_table_file_entry, HASH_REMOVE, NULL);
 		}
 	}
-	elog(DEBUG1, "active table number is:%ld", hash_get_num_entries(local_active_table_file_map));
+	/* If cannot convert relfilenode to relOid, put them back and wait for the next check. */
+	if (hash_get_num_entries(local_active_table_file_map) > 0)
+	{
+		bool  found;
+		DiskQuotaActiveTableFileEntry *entry;
+		hash_seq_init(&iter, local_active_table_file_map);
+		LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
+		while ((active_table_file_entry = (DiskQuotaActiveTableFileEntry *) hash_seq_search(&iter)) != NULL)
+		{
+			entry = hash_search(active_tables_map, &active_table_file_entry, HASH_ENTER_NULL, &found);
+			if (entry)
+				*entry = *active_table_file_entry;
+		}
+		LWLockRelease(diskquota_locks.active_table_lock);
+	}
 	hash_destroy(local_active_table_file_map);
 	return local_active_table_stats_map;
 }
@@ -596,24 +613,24 @@ load_table_size(HTAB *local_table_stats_map)
 	if (!rel)
 	{
 		/* configuration table is missing. */
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("table \"table_size\" is missing in database \"%s\", please recreate diskquota extension", get_database_name(MyDatabaseId))));
+		elog(ERROR, "[diskquota] table \"table_size\" is missing in database \"%s\","
+			 " please recreate diskquota extension",
+			 get_database_name(MyDatabaseId));
 	}
-	heap_close(rel, NoLock);
-
-
+	heap_close(rel, AccessShareLock);
 
 	ret = SPI_execute("select tableid, size from diskquota.table_size", true, 0);
 	if (ret != SPI_OK_SELECT)
-		ereport(ERROR, (errmsg("SPI_execute failed: error code %d", ret)));
+		elog(ERROR, "[diskquota] load_table_size SPI_execute failed: error code %d", ret);
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 2 ||
 		((tupdesc)->attrs[0])->atttypid != OIDOID ||
 		((tupdesc)->attrs[1])->atttypid != INT8OID)
 	{
-		ereport(ERROR, (errmsg("table \"table_size\" is corrupted in database \"%s\","
-							   " please recreate diskquota extension",
-							   get_database_name(MyDatabaseId))));
+		elog(ERROR, "[diskquota] table \"table_size\" is corrupted in database \"%s\","
+			 " please recreate diskquota extension",
+			 get_database_name(MyDatabaseId));
 	}
 
 	for (i = 0; i < SPI_processed; i++)
@@ -690,8 +707,6 @@ gp_fetch_active_tables(bool is_init)
 						 map_string.data);
 		sql = buffer.data;
 
-		elog(DEBUG1, "CHECK SPI QUERY is %s", sql);
-
 		CdbDispatchCommand(sql, DF_NONE, &cdb_pgresults);
 
 		/* collect data from each segment */
@@ -755,7 +770,6 @@ convert_map_to_string(HTAB *active_list)
 
 	initStringInfo(&buffer);
 	appendStringInfo(&buffer, "{");
-	elog(DEBUG1, "Try to convert size of active table is %ld", hash_get_num_entries(active_list));
 
 	hash_seq_init(&iter, active_list);
 
@@ -845,6 +859,5 @@ pull_active_list_from_seg(void)
 	}
 	cdbdisp_clearCdbPgResults(&cdb_pgresults);
 
-	elog(DEBUG1, "The number of active table is %ld", hash_get_num_entries(local_table_stats_map));
 	return local_table_stats_map;
 }

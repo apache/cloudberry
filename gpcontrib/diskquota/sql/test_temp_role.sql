@@ -14,7 +14,7 @@ INSERT INTO ta SELECT generate_series(1,100000000);
 -- expected failed: 
 INSERT INTO a SELECT generate_series(1,100);
 DROP TABLE ta;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 INSERT INTO a SELECT generate_series(1,100);
 
 DROP TABLE a;
