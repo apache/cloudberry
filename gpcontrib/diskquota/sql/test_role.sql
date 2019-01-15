@@ -20,7 +20,7 @@ INSERT INTO b SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO b2 SELECT generate_series(1,100);
 ALTER TABLE b OWNER TO u2;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 -- expect insert succeed
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert succeed

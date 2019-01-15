@@ -30,7 +30,7 @@ ERROR:  role's disk space quota exceeded with name:u1
 INSERT INTO b2 SELECT generate_series(1,100);
 ERROR:  role's disk space quota exceeded with name:u1
 ALTER TABLE b OWNER TO u2;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  

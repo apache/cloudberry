@@ -14,6 +14,6 @@ CREATE ROLE testbody;
 CREATE TABLE badquota.t1(i INT);
 ALTER TABLE badquota.t1 OWNER TO testbody;
 INSERT INTO badquota.t1 SELECT generate_series(0, 100000000);
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 -- expect fail
 INSERT INTO badquota.t1 SELECT generate_series(0, 10);
