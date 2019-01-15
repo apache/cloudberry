@@ -9,7 +9,7 @@ CREATE TABLE a(i int);
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000000);
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 INSERT INTO a SELECT generate_series(1,100);
 DROP EXTENSION diskquota;
 -- no sleep, it will take effect immediately

@@ -16,7 +16,7 @@ INSERT INTO a2 SELECT generate_series(1,100);
 -- Test alter table set schema
 CREATE SCHEMA s2;
 ALTER TABLE s1.a SET SCHEMA s2;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 -- expect insert succeed
 INSERT INTO a2 SELECT generate_series(1,200);
 -- expect insert succeed

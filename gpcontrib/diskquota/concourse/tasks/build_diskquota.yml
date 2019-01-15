@@ -1,0 +1,16 @@
+platform: linux
+image_resource:
+  type: docker-image
+inputs:
+  - name: bin_gpdb
+  - name: diskquota_src
+  - name: gpdb_src
+
+outputs:
+  - name: diskquota_artifacts
+
+run:
+  path: diskquota_src/concourse/scripts/build_diskquota.sh
+params:
+  OSVER:
+  GPDBVER:

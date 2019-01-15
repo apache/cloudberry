@@ -12,7 +12,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO a SELECT generate_series(1,100000000);
 ERROR:  schema's disk space quota exceeded with name:s4
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  
