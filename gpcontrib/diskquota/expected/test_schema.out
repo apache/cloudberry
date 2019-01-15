@@ -26,7 +26,7 @@ ERROR:  schema's disk space quota exceeded with name:s1
 -- Test alter table set schema
 CREATE SCHEMA s2;
 ALTER TABLE s1.a SET SCHEMA s2;
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  

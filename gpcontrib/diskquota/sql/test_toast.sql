@@ -9,7 +9,7 @@ SELECT (SELECT
         FROM generate_series(1,10000)) 
 FROM generate_series(1,10);
 
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
 -- expect insert toast fail
 INSERT INTO a5
 SELECT (SELECT 

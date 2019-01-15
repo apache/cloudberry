@@ -15,7 +15,7 @@ SELECT (SELECT
         string_agg(chr(floor(random() * 26)::int + 65), '')
         FROM generate_series(1,10000)) 
 FROM generate_series(1,10);
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  

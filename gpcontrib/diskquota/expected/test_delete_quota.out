@@ -13,7 +13,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 -- expect failed 
 INSERT INTO c SELECT generate_series(1,100000000);
 ERROR:  schema's disk space quota exceeded with name:deleteschema
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  
@@ -28,7 +28,7 @@ SELECT diskquota.set_schema_quota('deleteschema', '-1 MB');
  
 (1 row)
 
-SELECT pg_sleep(5);
+SELECT pg_sleep(20);
  pg_sleep 
 ----------
  
