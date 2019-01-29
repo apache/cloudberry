@@ -7,15 +7,15 @@ INSERT INTO a5
 SELECT (SELECT 
         string_agg(chr(floor(random() * 26)::int + 65), '')
         FROM generate_series(1,10000)) 
-FROM generate_series(1,10);
+FROM generate_series(1,10000);
 
 SELECT pg_sleep(20);
 -- expect insert toast fail
 INSERT INTO a5
 SELECT (SELECT 
         string_agg(chr(floor(random() * 26)::int + 65), '')
-        FROM generate_series(1,100000)) 
-FROM generate_series(1,1000000);
+        FROM generate_series(1,1000)) 
+FROM generate_series(1,1000);
 
 DROP TABLE a5;
 RESET search_path;

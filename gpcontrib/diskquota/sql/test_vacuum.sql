@@ -4,8 +4,8 @@ SELECT diskquota.set_schema_quota('s6', '1 MB');
 SET search_path TO s6;
 CREATE TABLE a (i int);
 CREATE TABLE b (i int);
-INSERT INTO a SELECT generate_series(1,100000000);
-SELECT pg_sleep(20);
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT pg_sleep(10);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
 -- expect insert fail

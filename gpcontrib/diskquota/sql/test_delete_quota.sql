@@ -5,8 +5,8 @@ SET search_path TO deleteschema;
 
 CREATE TABLE c (i INT);
 -- expect failed 
-INSERT INTO c SELECT generate_series(1,100000000);
-SELECT pg_sleep(20);
+INSERT INTO c SELECT generate_series(1,100000);
+SELECT pg_sleep(10);
 -- expect fail
 INSERT INTO c SELECT generate_series(1,100);
 SELECT diskquota.set_schema_quota('deleteschema', '-1 MB');

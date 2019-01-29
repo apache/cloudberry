@@ -10,7 +10,8 @@ CREATE TEMP TABLE ta(i int);
 ALTER TABLE ta OWNER TO u3temp;
 
 -- expected failed: fill temp table
-INSERT INTO ta SELECT generate_series(1,100000000);
+INSERT INTO ta SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
 -- expected failed: 
 INSERT INTO a SELECT generate_series(1,100);
 DROP TABLE ta;
