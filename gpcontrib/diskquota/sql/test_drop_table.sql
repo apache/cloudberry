@@ -6,7 +6,8 @@ CREATE TABLE a(i INT);
 CREATE TABLE a2(i INT);
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100000000);
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,100);
 DROP TABLE a;

@@ -18,7 +18,8 @@ INSERT INTO measurement SELECT generate_series(1,100), '2006-02-02' ,1,1;
 SELECT pg_sleep(20);
 INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
-INSERT INTO measurement SELECT generate_series(1,100000000), '2006-03-02' ,1,1;
+INSERT INTO measurement SELECT generate_series(1,100000), '2006-03-02' ,1,1;
+SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
