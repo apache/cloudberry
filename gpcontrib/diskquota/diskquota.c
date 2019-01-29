@@ -71,8 +71,9 @@ static volatile sig_atomic_t got_sigterm = false;
 static volatile sig_atomic_t got_sigusr1 = false;
 
 /* GUC variables */
-int			diskquota_naptime = 0;
-int			diskquota_max_active_tables = 0;
+int				diskquota_naptime = 0;
+int				diskquota_max_active_tables = 0;
+static bool		diskquota_enable_hardlimit = false;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 
@@ -156,6 +157,17 @@ _PG_init(void)
 							1 * 1024 * 1024,
 							1,
 							INT_MAX,
+							PGC_SIGHUP,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomBoolVariable("diskquota.enable_hardlimit",
+							"Use in-query diskquota enforcement",
+							NULL,
+							&diskquota_enable_hardlimit,
+							false,
 							PGC_SIGHUP,
 							0,
 							NULL,
@@ -323,6 +335,11 @@ disk_quota_worker_main(Datum main_arg)
 
 		/* Do the work */
 		refresh_disk_quota_model(false);
+
+		if (diskquota_enable_hardlimit)
+		{
+			/* TODO: Add hard limit function here */
+		}
 
 		/* emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
