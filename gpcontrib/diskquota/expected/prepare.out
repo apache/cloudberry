@@ -1,13 +1,18 @@
 CREATE EXTENSION diskquota;
 -- start_ignore
 \! gpstop -u
-20181119:10:38:22:019976 gpstop:instance-1:huanzhang-[INFO]:-Starting gpstop with args: -u
-20181119:10:38:22:019976 gpstop:instance-1:huanzhang-[INFO]:-Gathering information and validating the environment...
-20181119:10:38:22:019976 gpstop:instance-1:huanzhang-[INFO]:-Obtaining Greenplum Master catalog information
-20181119:10:38:22:019976 gpstop:instance-1:huanzhang-[INFO]:-Obtaining Segment details from master...
-20181119:10:38:23:019976 gpstop:instance-1:huanzhang-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.13149.g1ff3481 build dev-oss'
-20181119:10:38:23:019976 gpstop:instance-1:huanzhang-[INFO]:-Signalling all postmaster processes to reload
-. 
+20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Starting gpstop with args: -u
+20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Gathering information and validating the environment...
+20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Obtaining Segment details from master...
+20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.16105.gdfbfc2b build dev'
+20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+SELECT diskquota.init_table_size_table();
+ init_table_size_table 
+-----------------------
+ 
+(1 row)
+
 -- end_ignore
 SELECT pg_sleep(1);
  pg_sleep 
@@ -36,9 +41,8 @@ CREATE TABLE badquota.t1(i INT);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE badquota.t1 OWNER TO testbody;
-INSERT INTO badquota.t1 SELECT generate_series(0, 100000000);
-ERROR:  schema's disk space quota exceeded with name:badquota
-SELECT pg_sleep(20);
+INSERT INTO badquota.t1 SELECT generate_series(0, 100000);
+SELECT pg_sleep(10);
  pg_sleep 
 ----------
  

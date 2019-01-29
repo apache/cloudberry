@@ -13,7 +13,7 @@ SELECT diskquota.set_schema_quota('badquota', '1 MB');
 CREATE ROLE testbody;
 CREATE TABLE badquota.t1(i INT);
 ALTER TABLE badquota.t1 OWNER TO testbody;
-INSERT INTO badquota.t1 SELECT generate_series(0, 100000000);
-SELECT pg_sleep(20);
+INSERT INTO badquota.t1 SELECT generate_series(0, 100000);
+SELECT pg_sleep(10);
 -- expect fail
 INSERT INTO badquota.t1 SELECT generate_series(0, 10);
