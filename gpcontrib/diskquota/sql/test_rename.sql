@@ -4,7 +4,8 @@ SELECT diskquota.set_schema_quota('srs1', '1 MB');
 set search_path to srs1;
 CREATE TABLE a(i int);
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100000000);
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
 ALTER SCHEMA srs1 RENAME TO srs2;
@@ -30,7 +31,8 @@ CREATE TABLE a(i int);
 ALTER TABLE a OWNER TO srerole;
 
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100000000);
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
 ALTER ROLE srerole RENAME TO srerole2;

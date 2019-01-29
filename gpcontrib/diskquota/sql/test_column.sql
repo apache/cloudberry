@@ -6,7 +6,8 @@ SELECT pg_sleep(20);
 
 CREATE TABLE a2(i INT);
 -- expect fail
-INSERT INTO a2 SELECT generate_series(1,100000000);
+INSERT INTO a2 SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
 -- expect fail
 INSERT INTO a2 SELECT generate_series(1,10);
 ALTER TABLE a2 ADD COLUMN j VARCHAR(50);
