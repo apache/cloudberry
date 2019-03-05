@@ -50,21 +50,13 @@ typedef struct DiskQuotaSetOFCache
 HTAB	   *active_tables_map = NULL;
 
 /* active table hooks*/
-static BufferedAppendWrite_hook_type prev_BufferedAppendWrite_hook = NULL;
-static smgrcreate_hook_type prev_smgrcreate_hook = NULL;
-static smgrextend_hook_type prev_smgrextend_hook = NULL;
-static smgrtruncate_hook_type prev_smgrtruncate_hook = NULL;
-static void active_table_hook_smgrcreate(SMgrRelation reln,
-							 ForkNumber forknum,
-							 bool isRedo);
-static void active_table_hook_smgrextend(SMgrRelation reln,
-							 ForkNumber forknum,
-							 BlockNumber blocknum,
-							 char *buffer,
-							 bool skipFsync);
-static void active_table_hook_smgrtruncate(SMgrRelation reln,
-							   ForkNumber forknum,
-							   BlockNumber blocknum);
+static file_create_hook_type prev_file_create_hook = NULL;
+static file_extend_hook_type prev_file_extend_hook = NULL;
+static file_truncate_hook_type prev_file_truncate_hook = NULL;
+
+static void active_table_hook_smgrcreate(RelFileNodeBackend rnode);
+static void active_table_hook_smgrextend(RelFileNodeBackend rnode);
+static void active_table_hook_smgrtruncate(RelFileNodeBackend rnode);
 
 PG_FUNCTION_INFO_V1(diskquota_fetch_table_stat);
 
@@ -73,9 +65,8 @@ static HTAB *get_all_tables_size(void);
 static HTAB *get_active_tables(void);
 static StringInfoData convert_map_to_string(HTAB *active_list);
 static HTAB *pull_active_list_from_seg(void);
-static void report_active_table_SmgrStat(SMgrRelation reln);
-static void report_active_table_AO(BufferedAppend * bufferedAppend);
 static void load_table_size(HTAB *local_table_stats_map);
+static void report_active_table_helper(const RelFileNodeBackend *relFileNode);
 
 void		init_active_table_hook(void);
 void		init_shm_worker_active_tables(void);
@@ -88,52 +79,41 @@ HTAB	   *gp_fetch_active_tables(bool is_init);
 void
 init_active_table_hook(void)
 {
-	prev_smgrcreate_hook = smgrcreate_hook;
-	smgrcreate_hook = active_table_hook_smgrcreate;
+	prev_file_create_hook = file_create_hook;
+	file_create_hook = active_table_hook_smgrcreate;
 
-	prev_smgrextend_hook = smgrextend_hook;
-	smgrextend_hook = active_table_hook_smgrextend;
+	prev_file_extend_hook = file_extend_hook;
+	file_extend_hook = active_table_hook_smgrextend;
 
-	prev_smgrtruncate_hook = smgrtruncate_hook;
-	smgrtruncate_hook = active_table_hook_smgrtruncate;
-
-	prev_BufferedAppendWrite_hook = BufferedAppendWrite_hook;
-	BufferedAppendWrite_hook = report_active_table_AO;
+	prev_file_truncate_hook = file_truncate_hook;
+	file_truncate_hook = active_table_hook_smgrtruncate;
 }
 
 static void
-active_table_hook_smgrcreate(SMgrRelation reln,
-							 ForkNumber forknum,
-							 bool isRedo)
+active_table_hook_smgrcreate(RelFileNodeBackend rnode)
 {
-	if (prev_smgrcreate_hook)
-		(*prev_smgrcreate_hook) (reln, forknum, isRedo);
+	if (prev_file_create_hook)
+		(*prev_file_create_hook) (rnode);
 
-	report_active_table_SmgrStat(reln);
+	report_active_table_helper(&rnode);
 }
 
 static void
-active_table_hook_smgrextend(SMgrRelation reln,
-							 ForkNumber forknum,
-							 BlockNumber blocknum,
-							 char *buffer,
-							 bool skipFsync)
+active_table_hook_smgrextend(RelFileNodeBackend rnode)
 {
-	if (prev_smgrextend_hook)
-		(*prev_smgrextend_hook) (reln, forknum, blocknum, buffer, skipFsync);
+	if (prev_file_extend_hook)
+		(*prev_file_extend_hook) (rnode);
 
-	report_active_table_SmgrStat(reln);
+	report_active_table_helper(&rnode);
 }
 
 static void
-active_table_hook_smgrtruncate(SMgrRelation reln,
-							   ForkNumber forknum,
-							   BlockNumber blocknum)
+active_table_hook_smgrtruncate(RelFileNodeBackend rnode)
 {
-	if (prev_smgrtruncate_hook)
-		(*prev_smgrtruncate_hook) (reln, forknum, blocknum);
+	if (prev_file_truncate_hook)
+		(*prev_file_truncate_hook) (rnode);
 
-	report_active_table_SmgrStat(reln);
+	report_active_table_helper(&rnode);
 }
 
 /*
@@ -187,30 +167,6 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 		 */
 		ereport(WARNING, (errmsg("Share memory is not enough for active tables.")));
 	}
-}
-
-/*
- *  Hook function in smgr to report the active table
- *  information and store them in active table shared memory
- *  diskquota worker will consuming these active tables and
- *  recalculate their file size to update diskquota model.
- */
-static void
-report_active_table_SmgrStat(SMgrRelation reln)
-{
-	report_active_table_helper(&reln->smgr_rnode);
-}
-
-/*
- * Hook function in BufferedAppendWrite to report the active table, used by
- * diskquota
- */
-static void
-report_active_table_AO(BufferedAppend * bufferedAppend)
-{
-	if (prev_BufferedAppendWrite_hook)
-		(*prev_BufferedAppendWrite_hook) (bufferedAppend);
-	report_active_table_helper(&bufferedAppend->relFileNode);
 }
 
 /*
