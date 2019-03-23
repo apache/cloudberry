@@ -126,8 +126,8 @@ init_shm_worker_active_tables(void)
 
 	memset(&ctl, 0, sizeof(ctl));
 
-	ctl.keysize = sizeof(DiskQuotaActiveTableEntry);
-	ctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
+	ctl.keysize = sizeof(DiskQuotaActiveTableFileEntry);
+	ctl.entrysize = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.hash = tag_hash;
 
 	active_tables_map = ShmemInitHash("active_tables",
@@ -527,7 +527,7 @@ get_active_tables(void)
 				active_table_entry->tableoid = relOid;
 				active_table_entry->tablesize = 0;
 			}
-			hash_search(local_active_table_file_map, &active_table_file_entry, HASH_REMOVE, NULL);
+			hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
 		}
 	}
 	/* If cannot convert relfilenode to relOid, put them back and wait for the next check. */
@@ -539,7 +539,7 @@ get_active_tables(void)
 		LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
 		while ((active_table_file_entry = (DiskQuotaActiveTableFileEntry *) hash_seq_search(&iter)) != NULL)
 		{
-			entry = hash_search(active_tables_map, &active_table_file_entry, HASH_ENTER_NULL, &found);
+			entry = hash_search(active_tables_map, active_table_file_entry, HASH_ENTER_NULL, &found);
 			if (entry)
 				*entry = *active_table_file_entry;
 		}
