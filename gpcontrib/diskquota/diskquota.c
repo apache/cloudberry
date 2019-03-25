@@ -128,6 +128,8 @@ _PG_init(void)
 {
 	BackgroundWorker worker;
 
+	memset(&worker, 0, sizeof(BackgroundWorker));
+
 	/* diskquota.so must be in shared_preload_libraries to init SHM. */
 	if (!process_shared_preload_libraries_in_progress)
 		elog(ERROR, "diskquota.so not in shared_preload_libraries.");
