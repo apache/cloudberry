@@ -469,7 +469,7 @@ start_workers_from_dblist()
 		}
 		if (start_worker_by_dboid(dbid) < 1)
 		{
-			elog(WARNING, "[diskquota]: start worker process of database(%d) failed", dbid);
+			elog(WARNING, "[diskquota]: start worker process of database(%u) failed", dbid);
 		}
 		num++;
 	}
@@ -488,7 +488,7 @@ add_db_to_config(Oid dbid)
 	StringInfoData str;
 
 	initStringInfo(&str);
-	appendStringInfo(&str, "insert into diskquota_namespace.database_list values(%d);", dbid);
+	appendStringInfo(&str, "insert into diskquota_namespace.database_list values(%u);", dbid);
 	exec_simple_spi(str.data, SPI_OK_INSERT);
 	return true;
 }
@@ -499,7 +499,7 @@ del_db_from_config(Oid dbid)
 	StringInfoData str;
 
 	initStringInfo(&str);
-	appendStringInfo(&str, "delete from diskquota_namespace.database_list where dbid=%d;", dbid);
+	appendStringInfo(&str, "delete from diskquota_namespace.database_list where dbid=%u;", dbid);
 	exec_simple_spi(str.data, SPI_OK_DELETE);
 }
 
@@ -563,7 +563,7 @@ on_add_db(Oid dbid, MessageResult * code)
 	if (start_worker_by_dboid(dbid) < 1)
 	{
 		*code = ERR_START_WORKER;
-		elog(ERROR, "[diskquota] failed to start worker - dbid=%d", dbid);
+		elog(ERROR, "[diskquota] failed to start worker - dbid=%u", dbid);
 	}
 }
 
@@ -797,7 +797,7 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	appendStringInfo(&buf,
 					 "insert into diskquota.table_size "
 					 "select oid, pg_total_relation_size(oid) from pg_class "
-					 "where oid> %u and (relkind='r' or relkind='m');",
+					 "where oid>= %u and (relkind='r' or relkind='m');",
 					 FirstNormalObjectId);
 	ret = SPI_execute(buf.data, false, 0);
 	if (ret != SPI_OK_INSERT)
