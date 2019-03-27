@@ -24,6 +24,11 @@ function test(){
 		pushd diskquota_src
 		[ -s regression.diffs ] && cat regression.diffs && exit 1
 		make installcheck
+		ps -ef | grep postgres| grep qddir| cut -d ' ' -f 6 | xargs kill -9
+		export PGPORT=16432
+		rm /tmp/.s.PGSQL.15432*
+		gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
+		make installcheck
 		popd
 	EOF
 	export MASTER_DATA_DIRECTORY=${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
