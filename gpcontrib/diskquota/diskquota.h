@@ -44,11 +44,13 @@ typedef struct DiskQuotaLocks DiskQuotaLocks;
 struct MessageBox
 {
 	int			launcher_pid;	/* diskquota launcher pid */
-	int			req_pid;		/* pid of the QD process which create/drop diskquota extension */
+	int			req_pid;		/* pid of the QD process which create/drop
+								 * diskquota extension */
 	int			cmd;			/* message command type, see MessageCommand */
 	int			result;			/* message result writen by launcher, see
 								 * MessageResult */
-	int			dbid;		/* dbid of create/drop diskquota extensionstatement */
+	int			dbid;			/* dbid of create/drop diskquota
+								 * extensionstatement */
 };
 
 enum MessageCommand

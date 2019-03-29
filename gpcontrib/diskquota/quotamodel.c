@@ -135,7 +135,7 @@ static void update_role_map(Oid owneroid, int64 updatesize);
 static void remove_namespace_map(Oid namespaceoid);
 static void remove_role_map(Oid owneroid);
 static bool load_quotas(void);
-static bool do_load_quotas(void);
+static void do_load_quotas(void);
 static bool do_check_diskquota_state_is_ready(void);
 
 static Size DiskQuotaShmemSize(void);
@@ -360,19 +360,52 @@ do_check_diskquota_state_is_ready(void)
 bool
 check_diskquota_state_is_ready(void)
 {
-	bool		ret;
+	bool		is_ready = false;
+	bool		connected = false;
+	bool		pushed_active_snap = false;
+	bool		error_happens = false;
 
 	StartTransactionCommand();
-	SPI_connect();
-	PushActiveSnapshot(GetTransactionSnapshot());
 
-	ret = do_check_diskquota_state_is_ready();
+	/*
+	 * Cache Errors during SPI functions, for example a segment may be down
+	 * and current SPI execute will fail. diskquota worker process should
+	 * tolerate this kind of errors and continue to check at the next loop.
+	 */
+	PG_TRY();
+	{
+		if (SPI_OK_CONNECT != SPI_connect())
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unable to connect to execute internal query")));
+		}
+		connected = true;
+		PushActiveSnapshot(GetTransactionSnapshot());
+		pushed_active_snap = true;
+		is_ready = do_check_diskquota_state_is_ready();
+	}
+	PG_CATCH();
+	{
+		/* Prevents interrupts while cleaning up */
+		HOLD_INTERRUPTS();
+		EmitErrorReport();
+		FlushErrorState();
+		error_happens = true;
+		/* Now we can allow interrupts again */
+		RESUME_INTERRUPTS();
+	}
+	PG_END_TRY();
+	if (connected)
+		SPI_finish();
+	if (pushed_active_snap)
+		PopActiveSnapshot();
+	if (error_happens)
+		CommitTransactionCommand();
+	else
+		AbortCurrentTransaction();
 
-	SPI_finish();
-	PopActiveSnapshot();
-	CommitTransactionCommand();
-
-	return ret;
+	return is_ready;
 }
 
 /*
@@ -383,7 +416,7 @@ check_diskquota_state_is_ready(void)
 void
 refresh_disk_quota_model(bool is_init)
 {
-	elog(LOG,"[diskquota] start refresh_disk_quota_model");
+	elog(LOG, "[diskquota] start refresh_disk_quota_model");
 	/* skip refresh model when load_quotas failed */
 	if (load_quotas())
 	{
@@ -398,22 +431,58 @@ refresh_disk_quota_model(bool is_init)
 static void
 refresh_disk_quota_usage(bool force)
 {
+	bool		connected = false;
+	bool		pushed_active_snap = false;
+	bool		ret = true;
+
 	StartTransactionCommand();
-	SPI_connect();
-	PushActiveSnapshot(GetTransactionSnapshot());
 
-	/* recalculate the disk usage of table, schema and role */
-	calculate_table_disk_usage(force);
-	calculate_schema_disk_usage();
-	calculate_role_disk_usage();
-	/* flush local table_size_map to user table table_size */
-	flush_to_table_size();
-	/* copy local black map back to shared black map */
-	flush_local_black_map();
+	/*
+	 * Cache Errors during SPI functions, for example a segment may be down
+	 * and current SPI execute will fail. diskquota worker process should
+	 * tolerate this kind of errors and continue to check at the next loop.
+	 */
+	PG_TRY();
+	{
+		if (SPI_OK_CONNECT != SPI_connect())
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unable to connect to execute internal query")));
+		}
+		connected = true;
+		PushActiveSnapshot(GetTransactionSnapshot());
+		pushed_active_snap = true;
+		/* recalculate the disk usage of table, schema and role */
+		calculate_table_disk_usage(force);
+		calculate_schema_disk_usage();
+		calculate_role_disk_usage();
+		/* flush local table_size_map to user table table_size */
+		flush_to_table_size();
+		/* copy local black map back to shared black map */
+		flush_local_black_map();
+	}
+	PG_CATCH();
+	{
+		/* Prevents interrupts while cleaning up */
+		HOLD_INTERRUPTS();
+		EmitErrorReport();
+		FlushErrorState();
+		ret = false;
+		/* Now we can allow interrupts again */
+		RESUME_INTERRUPTS();
+	}
+	PG_END_TRY();
+	if (connected)
+		SPI_finish();
+	if (pushed_active_snap)
+		PopActiveSnapshot();
+	if (ret)
+		CommitTransactionCommand();
+	else
+		AbortCurrentTransaction();
 
-	SPI_finish();
-	PopActiveSnapshot();
-	CommitTransactionCommand();
+	return;
 }
 
 /*
@@ -803,17 +872,17 @@ calculate_role_disk_usage(void)
 /*
  * Make sure a StringInfo's string is no longer than 'nchars' characters.
  */
-static void 
+static void
 truncateStringInfo(StringInfo str, int nchars)
 {
-    if (str &&
-        str->len > nchars)
-    {
-        Assert(str->data != NULL && 
-               str->len <= str->maxlen);
-        str->len = nchars;
-        str->data[nchars] = '\0';
-    }
+	if (str &&
+		str->len > nchars)
+	{
+		Assert(str->data != NULL &&
+			   str->len <= str->maxlen);
+		str->len = nchars;
+		str->data[nchars] = '\0';
+	}
 }
 
 /*
@@ -891,23 +960,57 @@ flush_to_table_size(void)
 static bool
 load_quotas(void)
 {
-	bool ret;
+	bool		connected = false;
+	bool		pushed_active_snap = false;
+	bool		ret = true;
+
 	StartTransactionCommand();
-	SPI_connect();
-	PushActiveSnapshot(GetTransactionSnapshot());
 
-	ret = do_load_quotas();
+	/*
+	 * Cache Errors during SPI functions, for example a segment may be down
+	 * and current SPI execute will fail. diskquota worker process should
+	 * tolerate this kind of errors and continue to check at the next loop.
+	 */
+	PG_TRY();
+	{
+		if (SPI_OK_CONNECT != SPI_connect())
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unable to connect to execute internal query")));
+		}
+		connected = true;
+		PushActiveSnapshot(GetTransactionSnapshot());
+		pushed_active_snap = true;
+		do_load_quotas();
+	}
+	PG_CATCH();
+	{
+		/* Prevents interrupts while cleaning up */
+		HOLD_INTERRUPTS();
+		EmitErrorReport();
+		FlushErrorState();
+		ret = false;
+		/* Now we can allow interrupts again */
+		RESUME_INTERRUPTS();
+	}
+	PG_END_TRY();
+	if (connected)
+		SPI_finish();
+	if (pushed_active_snap)
+		PopActiveSnapshot();
+	if (ret)
+		CommitTransactionCommand();
+	else
+		AbortCurrentTransaction();
 
-	SPI_finish();
-	PopActiveSnapshot();
-	CommitTransactionCommand();
 	return ret;
 }
 
 /*
  * Load quotas from diskquota configuration table(quota_config).
 */
-static bool
+static void
 do_load_quotas(void)
 {
 	int			ret;
@@ -925,12 +1028,12 @@ do_load_quotas(void)
 	if (!rel)
 	{
 		/* configuration table is missing. */
-		elog(LOG, "[diskquota] configuration table \"quota_config\" is missing in database \"%s\","
+		elog(ERROR, "[diskquota] configuration table \"quota_config\" is missing in database \"%s\","
 			 " please recreate diskquota extension",
 			 get_database_name(MyDatabaseId));
-		return false;
 	}
 	heap_close(rel, AccessShareLock);
+
 	/*
 	 * TODO: we should skip to reload quota config when there is no change in
 	 * quota.config. A flag in shared memory could be used to detect the quota
@@ -963,10 +1066,9 @@ do_load_quotas(void)
 		((tupdesc)->attrs[1])->atttypid != INT4OID ||
 		((tupdesc)->attrs[2])->atttypid != INT8OID)
 	{
-		elog(LOG, "[diskquota] configuration table \"quota_config\" is corrupted in database \"%s\","
+		elog(ERROR, "[diskquota] configuration table \"quota_config\" is corrupted in database \"%s\","
 			 " please recreate diskquota extension",
 			 get_database_name(MyDatabaseId));
-		return false;
 	}
 
 	for (i = 0; i < SPI_processed; i++)
@@ -1008,7 +1110,7 @@ do_load_quotas(void)
 			quota_entry->limitsize = quota_limit_mb;
 		}
 	}
-	return true;
+	return;
 }
 
 /*
