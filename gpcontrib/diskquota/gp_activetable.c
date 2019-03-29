@@ -530,11 +530,16 @@ get_active_tables(void)
 			hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
 		}
 	}
-	/* If cannot convert relfilenode to relOid, put them back and wait for the next check. */
+
+	/*
+	 * If cannot convert relfilenode to relOid, put them back and wait for the
+	 * next check.
+	 */
 	if (hash_get_num_entries(local_active_table_file_map) > 0)
 	{
-		bool  found;
+		bool		found;
 		DiskQuotaActiveTableFileEntry *entry;
+
 		hash_seq_init(&iter, local_active_table_file_map);
 		LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
 		while ((active_table_file_entry = (DiskQuotaActiveTableFileEntry *) hash_seq_search(&iter)) != NULL)
