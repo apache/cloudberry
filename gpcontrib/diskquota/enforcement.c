@@ -71,4 +71,3 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 	}
 	return true;
 }
-

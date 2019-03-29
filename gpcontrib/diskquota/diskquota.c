@@ -71,9 +71,9 @@ static volatile sig_atomic_t got_sigterm = false;
 static volatile sig_atomic_t got_sigusr1 = false;
 
 /* GUC variables */
-int				diskquota_naptime = 0;
-int				diskquota_max_active_tables = 0;
-static bool		diskquota_enable_hardlimit = false;
+int			diskquota_naptime = 0;
+int			diskquota_max_active_tables = 0;
+static bool diskquota_enable_hardlimit = false;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 
@@ -166,18 +166,18 @@ _PG_init(void)
 							NULL);
 
 	DefineCustomBoolVariable("diskquota.enable_hardlimit",
-							"Use in-query diskquota enforcement",
-							NULL,
-							&diskquota_enable_hardlimit,
-							false,
-							PGC_SIGHUP,
-							0,
-							NULL,
-							NULL,
-							NULL);
+							 "Use in-query diskquota enforcement",
+							 NULL,
+							 &diskquota_enable_hardlimit,
+							 false,
+							 PGC_SIGHUP,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
 
 	/* start disk quota launcher only on master */
-	if (Gp_role != GP_ROLE_DISPATCH)
+	if (!IS_QUERY_DISPATCHER())
 	{
 		return;
 	}
@@ -206,8 +206,8 @@ _PG_fini(void)
 
 /*
  * Signal handler for SIGTERM
- *		Set a flag to let the main loop to terminate, and set our latch to wake
- *		it up.
+ * Set a flag to let the main loop to terminate, and set our latch to wake
+ * it up.
  */
 static void
 disk_quota_sigterm(SIGNAL_ARGS)
@@ -223,8 +223,8 @@ disk_quota_sigterm(SIGNAL_ARGS)
 
 /*
  * Signal handler for SIGHUP
- *		Set a flag to tell the main loop to reread the config file, and set
- *		our latch to wake it up.
+ * Set a flag to tell the main loop to reread the config file, and set
+ * our latch to wake it up.
  */
 static void
 disk_quota_sighup(SIGNAL_ARGS)
@@ -240,7 +240,7 @@ disk_quota_sighup(SIGNAL_ARGS)
 
 /*
  * Signal handler for SIGUSR1
- * 		Set a flag to tell the launcher to handle message box
+ * Set a flag to tell the launcher to handle message box
  */
 static void
 disk_quota_sigusr1(SIGNAL_ARGS)
@@ -297,8 +297,9 @@ disk_quota_worker_main(Datum main_arg)
 	while (!got_sigterm)
 	{
 		int			rc;
-		
+
 		CHECK_FOR_INTERRUPTS();
+
 		/*
 		 * Check whether the state is in ready mode. The state would be
 		 * unknown, when you `create extension diskquota` at the first time.
@@ -324,6 +325,7 @@ disk_quota_worker_main(Datum main_arg)
 		int			rc;
 
 		CHECK_FOR_INTERRUPTS();
+
 		/*
 		 * Background workers mustn't call usleep() or any direct equivalent:
 		 * instead, they may wait on their process latch, which sleeps as
@@ -438,17 +440,22 @@ start_workers_from_dblist()
 	int			ret;
 	int			i;
 
+	/*
+	 * Don't catch errors in start_workers_from_dblist. Since this is the
+	 * startup worker for diskquota launcher. If error happens, we just let
+	 * launcher exits.
+	 */
 	StartTransactionCommand();
 	PushActiveSnapshot(GetTransactionSnapshot());
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
-		elog(ERROR, "connect error, code=%d", ret);
-	ret = SPI_execute("select dbid from diskquota_namespace.database_list;", true, 0);
+		elog(ERROR, "[diskquota launcher] SPI connect error, code=%d", ret);
+	ret = SPI_execute("[diskquota launcher] select dbid from diskquota_namespace.database_list;", true, 0);
 	if (ret != SPI_OK_SELECT)
 		elog(ERROR, "select diskquota_namespace.database_list");
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 1 || tupdesc->attrs[0]->atttypid != OIDOID)
-		elog(ERROR, "[diskquota] table database_list corrupt, laucher will exit");
+		elog(ERROR, "[diskquota launcher] table database_list corrupt, laucher will exit");
 
 	for (i = 0; num < SPI_processed; i++)
 	{
@@ -460,9 +467,7 @@ start_workers_from_dblist()
 		tup = SPI_tuptable->vals[i];
 		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
 		if (isnull)
-		{
-			elog(ERROR, "dbid cann't be null");
-		}
+			elog(ERROR, "[diskquota launcher] dbid cann't be null in table database_list");
 		dbid = DatumGetObjectId(dat);
 		if (!is_valid_dbid(dbid))
 		{
@@ -470,9 +475,7 @@ start_workers_from_dblist()
 			continue;
 		}
 		if (start_worker_by_dboid(dbid) < 1)
-		{
-			elog(WARNING, "[diskquota]: start worker process of database(%u) failed", dbid);
-		}
+			elog(ERROR, "[diskquota launcher] start worker process of database(%u) failed", dbid);
 		num++;
 	}
 	num_db = num;
@@ -608,7 +611,7 @@ disk_quota_launcher_main(Datum main_arg)
 	LWLockRelease(diskquota_locks.message_box_lock);
 	/* Connect to our database */
 	BackgroundWorkerInitializeConnection("diskquota", NULL);
-	
+
 	create_monitor_db_table();
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
@@ -631,6 +634,7 @@ disk_quota_launcher_main(Datum main_arg)
 		int			rc;
 
 		CHECK_FOR_INTERRUPTS();
+
 		/*
 		 * Background workers mustn't call usleep() or any direct equivalent:
 		 * instead, they may wait on their process latch, which sleeps as
@@ -773,6 +777,11 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	RangeVar   *rv;
 	Relation	rel;
 
+	/*
+	 * If error happens in init_table_size_table, just return error messages
+	 * to the client side. So there is no need to catch the error.
+	 */
+
 	/* ensure table diskquota.state exists */
 	rv = makeRangeVar("diskquota", "state", -1);
 	rel = heap_openrv_extended(rv, AccessShareLock, true);
@@ -864,6 +873,10 @@ set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 					 " and quotatype =%d",
 					 targetoid, type);
 
+	/*
+	 * If error happens in set_quota_internal, just return error messages to
+	 * the client side. So there is no need to catch the error.
+	 */
 	SPI_connect();
 
 	ret = SPI_execute(buf.data, true, 0);
@@ -1061,7 +1074,7 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 {
 	int			rc;
 
-	/* 
+	/*
 	 * Lock on extension_lock to avoid multiple backend create diskquota
 	 * extension at the same time.
 	 */
@@ -1098,7 +1111,7 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	}
 	LWLockAcquire(diskquota_locks.message_box_lock, LW_SHARED);
 	if (message_box->result != ERR_OK)
-	{	
+	{
 		LWLockRelease(diskquota_locks.message_box_lock);
 		LWLockRelease(diskquota_locks.extension_lock);
 		elog(ERROR, "[diskquota] failed to create diskquota extension: %s", err_code_to_err_message((MessageResult) message_box->result));
@@ -1112,6 +1125,7 @@ static void
 process_message_box_internal(MessageResult * code, MessageBox local_message_box)
 {
 	int			old_num_db = num_db;
+
 	PG_TRY();
 	{
 		switch (local_message_box.cmd)
@@ -1153,12 +1167,12 @@ static void
 process_message_box()
 {
 	MessageResult code = ERR_UNKNOWN;
-	MessageBox local_message_box;
+	MessageBox	local_message_box;
 
 	LWLockAcquire(diskquota_locks.message_box_lock, LW_SHARED);
 	memcpy(&local_message_box, message_box, sizeof(MessageBox));
 	LWLockRelease(diskquota_locks.message_box_lock);
-	
+
 	/* create/drop extension message must be valid */
 	if (local_message_box.req_pid == 0 || local_message_box.launcher_pid != MyProcPid)
 	{
