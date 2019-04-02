@@ -6,6 +6,7 @@ test: test_truncate
 test: test_delete_quota
 test: test_partition
 test: test_vacuum
+test: test_primary_failure
 test: test_extension
 test: clean
 test: test_insert_after_drop

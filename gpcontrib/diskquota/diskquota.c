@@ -450,7 +450,7 @@ start_workers_from_dblist()
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
 		elog(ERROR, "[diskquota launcher] SPI connect error, code=%d", ret);
-	ret = SPI_execute("[diskquota launcher] select dbid from diskquota_namespace.database_list;", true, 0);
+	ret = SPI_execute("select dbid from diskquota_namespace.database_list;", true, 0);
 	if (ret != SPI_OK_SELECT)
 		elog(ERROR, "select diskquota_namespace.database_list");
 	tupdesc = SPI_tuptable->tupdesc;
