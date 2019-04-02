@@ -12,7 +12,8 @@ INSERT INTO a SELECT generate_series(1,100000);
 SELECT pg_sleep(10);
 INSERT INTO a SELECT generate_series(1,100);
 DROP EXTENSION diskquota;
--- no sleep, it will take effect immediately
+-- sleep 1 second in case of system slow
+SELECT pg_sleep(1);
 INSERT INTO a SELECT generate_series(1,100);
 
 DROP TABLE a;
