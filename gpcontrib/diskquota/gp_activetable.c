@@ -7,7 +7,7 @@
  * Copyright (c) 2018-Present Pivotal Software, Inc.
  *
  * IDENTIFICATION
- *		gpcontrib/gp_diskquota/gp_activetable.c
+ *		diskquota/gp_activetable.c
  *
  * -------------------------------------------------------------------------
  */
