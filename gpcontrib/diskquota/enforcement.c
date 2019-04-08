@@ -8,7 +8,7 @@
  * Copyright (c) 2018-Present Pivotal Software, Inc.
  *
  * IDENTIFICATION
- *		gpcontrib/gp_diskquota/enforcement.c
+ *		diskquota/enforcement.c
  *
  * -------------------------------------------------------------------------
  */
