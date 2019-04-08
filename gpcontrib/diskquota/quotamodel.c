@@ -8,7 +8,7 @@
  * Copyright (c) 2018-Present Pivotal Software, Inc.
  *
  * IDENTIFICATION
- *		gpcontrib/gp_diskquota/quotamodel.c
+ *		diskquota/quotamodel.c
  *
  * -------------------------------------------------------------------------
  */
@@ -152,7 +152,7 @@ DiskQuotaShmemSize(void)
 {
 	Size		size;
 
-	size = sizeof(MessageBox);
+	size = sizeof(ExtensionDDLMessage);
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(BlackMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
 	return size;
@@ -163,7 +163,7 @@ init_lwlocks(void)
 {
 	diskquota_locks.active_table_lock = LWLockAssign();
 	diskquota_locks.black_map_lock = LWLockAssign();
-	diskquota_locks.message_box_lock = LWLockAssign();
+	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
 	diskquota_locks.extension_lock = LWLockAssign();
 }
 
@@ -185,11 +185,11 @@ disk_quota_shmem_startup(void)
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 	init_lwlocks();
-	message_box = ShmemInitStruct("disk_quota_message_box",
-								  sizeof(MessageBox),
-								  &found);
+	extension_ddl_message = ShmemInitStruct("disk_quota_extension_ddl_message",
+											sizeof(ExtensionDDLMessage),
+											&found);
 	if (!found)
-		memset((void *) message_box, 0, sizeof(MessageBox));
+		memset((void *) extension_ddl_message, 0, sizeof(ExtensionDDLMessage));
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(BlackMapEntry);
@@ -363,7 +363,7 @@ check_diskquota_state_is_ready(void)
 	bool		is_ready = false;
 	bool		connected = false;
 	bool		pushed_active_snap = false;
-	bool		error_happens = false;
+	bool		ret = true;
 
 	StartTransactionCommand();
 
@@ -391,7 +391,7 @@ check_diskquota_state_is_ready(void)
 		HOLD_INTERRUPTS();
 		EmitErrorReport();
 		FlushErrorState();
-		error_happens = true;
+		ret = false;
 		/* Now we can allow interrupts again */
 		RESUME_INTERRUPTS();
 	}
@@ -400,7 +400,7 @@ check_diskquota_state_is_ready(void)
 		SPI_finish();
 	if (pushed_active_snap)
 		PopActiveSnapshot();
-	if (error_happens)
+	if (ret)
 		CommitTransactionCommand();
 	else
 		AbortCurrentTransaction();
@@ -1020,20 +1020,6 @@ do_load_quotas(void)
 	QuotaLimitEntry *quota_entry;
 	HASH_SEQ_STATUS iter;
 
-	RangeVar   *rv;
-	Relation	rel;
-
-	rv = makeRangeVar("diskquota", "quota_config", -1);
-	rel = heap_openrv_extended(rv, AccessShareLock, true);
-	if (!rel)
-	{
-		/* configuration table is missing. */
-		elog(ERROR, "[diskquota] configuration table \"quota_config\" is missing in database \"%s\","
-			 " please recreate diskquota extension",
-			 get_database_name(MyDatabaseId));
-	}
-	heap_close(rel, AccessShareLock);
-
 	/*
 	 * TODO: we should skip to reload quota config when there is no change in
 	 * quota.config. A flag in shared memory could be used to detect the quota
@@ -1196,7 +1182,7 @@ quota_check_common(Oid reloid)
  * invalidate all black entry with a specific dbid in SHM
  */
 void
-diskquota_invalidate_db(Oid dbid)
+invalidate_database_blackmap(Oid dbid)
 {
 	BlackMapEntry *entry;
 	HASH_SEQ_STATUS iter;

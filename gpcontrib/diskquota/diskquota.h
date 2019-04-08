@@ -26,7 +26,7 @@ struct DiskQuotaLocks
 {
 	LWLock	   *active_table_lock;
 	LWLock	   *black_map_lock;
-	LWLock	   *message_box_lock;
+	LWLock	   *extension_ddl_message_lock;
 	LWLock	   *extension_lock; /* ensure create diskquota extension serially */
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
@@ -41,7 +41,7 @@ typedef struct DiskQuotaLocks DiskQuotaLocks;
  * to stop the diskquota worker process and remove the dbOid from diskquota
  * database_list table as well.
  */
-struct MessageBox
+struct ExtensionDDLMessage
 {
 	int			launcher_pid;	/* diskquota launcher pid */
 	int			req_pid;		/* pid of the QD process which create/drop
@@ -67,6 +67,8 @@ enum MessageResult
 	ERR_EXCEED,
 	/* add the dbid to diskquota_namespace.database_list failed */
 	ERR_ADD_TO_DB,
+	/* delete dbid from diskquota_namespace.database_list failed */
+	ERR_DEL_FROM_DB,
 	/* cann't start worker process */
 	ERR_START_WORKER,
 	/* invalid dbid */
@@ -74,16 +76,19 @@ enum MessageResult
 	ERR_UNKNOWN,
 };
 
-typedef struct MessageBox MessageBox;
+typedef struct ExtensionDDLMessage ExtensionDDLMessage;
 typedef enum MessageCommand MessageCommand;
 typedef enum MessageResult MessageResult;
 
 extern DiskQuotaLocks diskquota_locks;
-extern MessageBox *message_box;
+extern ExtensionDDLMessage *extension_ddl_message;
+
+/* drop extension hook */
+extern void register_diskquota_object_access_hook(void);
 
 /* enforcement interface*/
 extern void init_disk_quota_enforcement(void);
-extern void diskquota_invalidate_db(Oid dbid);
+extern void invalidate_database_blackmap(Oid dbid);
 
 /* quota model interface*/
 extern void init_disk_quota_shmem(void);
