@@ -4,31 +4,31 @@ set -exo pipefail
 
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TOP_DIR=${CWDIR}/../../../
-if [ "$GPDBVER" == "GPDB4.3" ]; then
-    GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/ci/concourse/scripts
-else
-    GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
-fi
+GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
 source "${GPDB_CONCOURSE_DIR}/common.bash"
 function test(){	
 	sudo chown -R gpadmin:gpadmin ${TOP_DIR};
 	cat > /home/gpadmin/test.sh <<-EOF
 		set -exo pipefail
+		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
+		echo "export MASTER_DATA_DIRECTORY=\$MASTER_DATA_DIRECTORY" >> /usr/local/greenplum-db-devel/greenplum_path.sh
 		source /usr/local/greenplum-db-devel/greenplum_path.sh
-		export PGPORT=15432
 		createdb diskquota
 		gpconfig -c shared_preload_libraries -v 'diskquota'
 		gpstop -arf
 		gpconfig -c diskquota.naptime -v 2
 		gpstop -arf
 		pushd diskquota_src
-		[ -s regression.diffs ] && cat regression.diffs && exit 1
 		make installcheck
+		[ -s regression.diffs ] && cat regression.diffs && exit 1
 		ps -ef | grep postgres| grep qddir| cut -d ' ' -f 6 | xargs kill -9
 		export PGPORT=16432
+		echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
+		source /usr/local/greenplum-db-devel/greenplum_path.sh
 		rm /tmp/.s.PGSQL.15432*
 		gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
 		make installcheck
+		[ -s regression.diffs ] && cat regression.diffs && exit 1
 		popd
 	EOF
 	export MASTER_DATA_DIRECTORY=${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1

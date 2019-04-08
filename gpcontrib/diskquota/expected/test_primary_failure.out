@@ -27,7 +27,7 @@ $$ language plpythonu;
 create or replace function pg_recoverseg(datadir text, command text)
 returns text as $$
     import subprocess
-    cmd = 'gprecoverseg -%s -d %s ' % (command, datadir)
+    cmd = 'gprecoverseg -%s -d %s; exit 0; ' % (command, datadir)
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
 $$ language plpythonu;
 CREATE TABLE a(i int);
