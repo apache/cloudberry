@@ -23,7 +23,7 @@ $$ language plpythonu;
 create or replace function pg_recoverseg(datadir text, command text)
 returns text as $$
     import subprocess
-    cmd = 'gprecoverseg -%s -d %s ' % (command, datadir)
+    cmd = 'gprecoverseg -%s -d %s; exit 0; ' % (command, datadir)
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
 $$ language plpythonu;
 
@@ -52,6 +52,11 @@ SELECT diskquota.set_schema_quota('ftsr', '200 MB');
 -- pull up failed primary
 -- start_ignore
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
+select pg_sleep(10);
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
+select pg_sleep(15);
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
+select pg_sleep(10);
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
 -- end_ignore
 
