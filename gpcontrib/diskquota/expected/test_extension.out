@@ -53,6 +53,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO SX.a values(generate_series(0, 100000));
 CREATE EXTENSION diskquota;
+WARNING:  database is not empty, please run `select diskquota.init_table_size_table()` to initialize table_size information for diskquota extension. Note that for large database, this function may take a long time.
 SELECT diskquota.init_table_size_table();
  init_table_size_table 
 -----------------------
@@ -248,13 +249,13 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx9
 CREATE EXTENSION diskquota;
-ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:175)
+ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:179)
 \! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
 \c dbx10
 CREATE EXTENSION diskquota;
-ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:175)
+ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:179)
 \! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
