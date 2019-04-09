@@ -52,7 +52,7 @@ PG_FUNCTION_INFO_V1(set_role_quota);
 #define WAIT_TIME_COUNT  1200
 
 static object_access_hook_type next_object_access_hook;
-
+static bool is_database_empty(void);
 static void dq_object_access_hook(ObjectAccessType access, Oid classId,
 					  Oid objectId, int subId, void *arg);
 static const char *ddl_err_code_to_err_message(MessageResult code);
@@ -180,7 +180,60 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	LWLockRelease(diskquota_locks.extension_lock);
+
+	/* notify DBA to run init_table_size_table() when db is not empty */
+	if (!is_database_empty())
+	{
+		ereport(WARNING, (errmsg("database is not empty, please run `select diskquota.init_table_size_table()` to initialize table_size information for diskquota extension. Note that for large database, this function may take a long time.")));
+	}
 	PG_RETURN_VOID();
+}
+
+/*
+ * Check whether database is empty (no user table created)
+ */
+static bool
+is_database_empty(void)
+{
+	int			ret;
+	StringInfoData buf;
+	TupleDesc	tupdesc;
+	bool		is_empty = false;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf,
+					 "SELECT (count(relname) = 0)  FROM pg_class AS c, pg_namespace AS n WHERE c.oid > 16384 and relnamespace = n.oid and nspname != 'diskquota'");
+
+	/*
+	 * If error happens in is_database_empty, just return error messages to
+	 * the client side. So there is no need to catch the error.
+	 */
+	SPI_connect();
+
+	ret = SPI_execute(buf.data, true, 0);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot select pg_class and pg_namespace table: error code %d", errno);
+	tupdesc = SPI_tuptable->tupdesc;
+	/* check sql return value whether database is empty */
+	if (SPI_processed > 0)
+	{
+		HeapTuple	tup = SPI_tuptable->vals[0];
+		Datum		dat;
+		bool		isnull;
+
+		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
+		if (!isnull)
+		{
+			/* check whether condition `count(relname) = 0` is true */
+			is_empty = DatumGetBool(dat);
+		}
+	}
+
+	/*
+	 * And finish our transaction.
+	 */
+	SPI_finish();
+	return is_empty;
 }
 
 /*
