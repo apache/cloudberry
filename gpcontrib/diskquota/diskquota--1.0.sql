@@ -6,7 +6,7 @@
 CREATE SCHEMA diskquota;
 
 -- Configuration table
-create table diskquota.quota_config (targetOid oid, quotatype int, quotalimitMB int8, PRIMARY KEY(targetOid, quotatype));
+CREATE TABLE diskquota.quota_config (targetOid oid, quotatype int, quotalimitMB int8, PRIMARY KEY(targetOid, quotatype));
 
 SELECT pg_catalog.pg_extension_config_dump('diskquota.quota_config', '');
 
@@ -20,7 +20,7 @@ RETURNS void STRICT
 AS 'MODULE_PATHNAME'
 LANGUAGE C;
 
-CREATE TABLE diskquota.table_size (tableid oid, size int8, PRIMARY KEY(tableid));
+CREATE TABLE diskquota.table_size (tableid oid, size bigint, PRIMARY KEY(tableid));
 
 CREATE TABLE diskquota.state (state int, PRIMARY KEY(state));
 
