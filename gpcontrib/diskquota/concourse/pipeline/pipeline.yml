@@ -10,6 +10,12 @@ groups:
     - diskquota_centos6_test
     - diskquota_centos7_test
 
+resource_types:
+- name: gcs
+  type: docker-image
+  source:
+    repository: frodenas/gcs-resource
+
 resources:
 
 # Image Resources
@@ -37,47 +43,38 @@ resources:
 - name: diskquota_src
   type: git
   source:
-    branch: gpdbpipeline
-    uri: https://github.com/zhangh43/diskquota.git
+    branch: gpdb
+    uri: https://github.com/greenplum-db/diskquota.git
 
-# centos 7
-
-- name: bin_diskquota_centos7
-  type: s3
+# gpdb binary on gcs is located as different folder for different version
+# use gcs_gpdb_binary_folder to specify them.
+- name: bin_gpdb_centos6
+  type: gcs
   source:
-    bucket: {{pl-bucket-name}}
-    region_name: {{aws-region}}
-    access_key_id: {{bucket-access-key-id}}
-    secret_access_key: {{bucket-secret-access-key}}
-    versioned_file: build/gpdb6/diskquota/component_diskquota.tar.gz
-
+    bucket: {{gcs-bucket-intermediates}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    versioned_file: ((gcs_gpdb_binary_folder))/bin_gpdb_centos6/bin_gpdb.tar.gz
 
 - name: bin_gpdb_centos7
-  type: s3
+  type: gcs
   source:
-    bucket: {{bucket-name}}
-    region_name: {{aws-region}}
-    access_key_id: {{bucket-access-key-id}}
-    secret_access_key: {{bucket-secret-access-key}}
-    versioned_file: bin_gpdb_centos7/bin_gpdb.tar.gz
+    bucket: {{gcs-bucket-intermediates}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    versioned_file: ((gcs_gpdb_binary_folder))/bin_gpdb_centos7/bin_gpdb.tar.gz
+
+- name: bin_diskquota_centos7
+  type: gcs
+  source:
+    bucket: {{gcs-bucket-intermediates}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    versioned_file: diskquota/published/((gcs_diskquota_binary_folder))/rhel7/component_diskquota.tar.gz
 
 - name: bin_diskquota_centos6
-  type: s3
+  type: gcs
   source:
-    bucket: {{pl-bucket-name}}
-    region_name: {{aws-region}}
-    access_key_id: {{bucket-access-key-id}}
-    secret_access_key: {{bucket-secret-access-key}}
-    versioned_file: build/gpdb6/diskquota/component_diskquota.tar.gz
-
-- name: bin_gpdb_centos6
-  type: s3
-  source:
-    bucket: {{bucket-name}}
-    region_name: {{aws-region}}
-    access_key_id: {{bucket-access-key-id}}
-    secret_access_key: {{bucket-secret-access-key}}
-    versioned_file: bin_gpdb_centos/bin_gpdb.tar.gz
+    bucket: {{gcs-bucket-intermediates}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    versioned_file: diskquota/published/((gcs_diskquota_binary_folder))/rhel6/component_diskquota.tar.gz
 
 ## jobs
 ## ======================================================================
