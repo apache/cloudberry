@@ -3,7 +3,8 @@
  * quotamodel.c
  *
  * This code is responsible for init disk quota model and refresh disk quota
- * model.
+ * model. Disk quota related Shared memory initialization is also implemented
+ * in this file.
  *
  * Copyright (c) 2018-Present Pivotal Software, Inc.
  *
@@ -67,7 +68,8 @@ struct TableSizeEntry
 	Oid			reloid;
 	Oid			namespaceoid;
 	Oid			owneroid;
-	int64		totalsize;
+	int64		totalsize;		/* table size including fsm, visibility map
+								 * etc. */
 	bool		is_exist;		/* flag used to check whether table is already
 								 * dropped */
 	bool		need_flush;		/* whether need to flush to table table_size */
@@ -140,38 +142,38 @@ static bool do_check_diskquota_state_is_ready(void);
 
 static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
+static void init_lwlocks(void);
 
 static void truncateStringInfo(StringInfo str, int nchars);
 
-/*
- * DiskQuotaShmemSize
- * Compute space needed for diskquota-related shared memory
- */
-Size
-DiskQuotaShmemSize(void)
-{
-	Size		size;
-
-	size = sizeof(ExtensionDDLMessage);
-	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(BlackMapEntry)));
-	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
-	return size;
-}
-
-static void
-init_lwlocks(void)
-{
-	diskquota_locks.active_table_lock = LWLockAssign();
-	diskquota_locks.black_map_lock = LWLockAssign();
-	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
-	diskquota_locks.extension_lock = LWLockAssign();
-}
-
+/* ---- Functions for disk quota shared memory ---- */
 /*
  * DiskQuotaShmemInit
  *		Allocate and initialize diskquota-related shared memory
+ *		This function is called in _PG_init().
  */
 void
+init_disk_quota_shmem(void)
+{
+	/*
+	 * Request additional shared resources.  (These are no-ops if we're not in
+	 * the postmaster process.)  We'll allocate or attach to the shared
+	 * resources in pgss_shmem_startup().
+	 */
+	RequestAddinShmemSpace(DiskQuotaShmemSize());
+	/* 4 locks for diskquota refer to init_lwlocks() for details */
+	RequestAddinLWLocks(4);
+
+	/* Install startup hook to initialize our shared memory. */
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = disk_quota_shmem_startup;
+}
+
+/*
+ * DiskQuotaShmemInit hooks.
+ * Initialize shared memory data and locks.
+ */
+static void
 disk_quota_shmem_startup(void)
 {
 	bool		found;
@@ -180,11 +182,16 @@ disk_quota_shmem_startup(void)
 	if (prev_shmem_startup_hook)
 		(*prev_shmem_startup_hook) ();
 
-	disk_quota_black_map = NULL;
-
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 	init_lwlocks();
+
+	/*
+	 * Three shared memory data. extension_ddl_message is used to handle
+	 * diskquota extension create/drop command. disk_quota_black_map is used
+	 * to store out-of-quota blacklist. active_tables_map is used to store
+	 * active tables whose disk usage is changed.
+	 */
 	extension_ddl_message = ShmemInitStruct("disk_quota_extension_ddl_message",
 											sizeof(ExtensionDDLMessage),
 											&found);
@@ -207,24 +214,41 @@ disk_quota_shmem_startup(void)
 	LWLockRelease(AddinShmemInitLock);
 }
 
-void
-init_disk_quota_shmem(void)
+/*
+ * Initialize four shared memory locks.
+ * active_table_lock is used to access active table map.
+ * black_map_lock is used to access out-of-quota blacklist.
+ * extension_ddl_message_lock is used to access content of
+ * extension_ddl_message.
+ * extension_ddl_lock is used to avoid concurrent diskquota
+ * extension ddl(create/drop) command.
+ */
+static void
+init_lwlocks(void)
 {
-	/*
-	 * Request additional shared resources.  (These are no-ops if we're not in
-	 * the postmaster process.)  We'll allocate or attach to the shared
-	 * resources in pgss_shmem_startup().
-	 */
-	RequestAddinShmemSpace(DiskQuotaShmemSize());
-	RequestAddinLWLocks(4);
-
-	/*
-	 * Install startup hook to initialize our shared memory.
-	 */
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = disk_quota_shmem_startup;
+	diskquota_locks.active_table_lock = LWLockAssign();
+	diskquota_locks.black_map_lock = LWLockAssign();
+	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
+	diskquota_locks.extension_ddl_lock = LWLockAssign();
 }
 
+/*
+ * DiskQuotaShmemSize
+ * Compute space needed for diskquota-related shared memory
+ */
+static Size
+DiskQuotaShmemSize(void)
+{
+	Size		size;
+
+	size = sizeof(ExtensionDDLMessage);
+	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(BlackMapEntry)));
+	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
+	return size;
+}
+
+
+/* ---- Functions for disk quota model ---- */
 /*
  * Init disk quota model when the worker process firstly started.
  */
@@ -233,7 +257,7 @@ init_disk_quota_model(void)
 {
 	HASHCTL		hash_ctl;
 
-	/* init hash table for table/schema/role etc. */
+	/* initialize hash table for table/schema/role etc. */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(TableSizeEntry);
@@ -267,6 +291,7 @@ init_disk_quota_model(void)
 								&hash_ctl,
 								HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
+	/* initialize hash table for quota limit */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(QuotaLimitEntry);
@@ -283,6 +308,10 @@ init_disk_quota_model(void)
 									   &hash_ctl,
 									   HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
+	/*
+	 * local diskquota black map is used to reduce the lock hold time of
+	 * blackmap in shared memory
+	 */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(BlackMapEntry);
 	hash_ctl.entrysize = sizeof(LocalBlackMapEntry);
@@ -293,65 +322,6 @@ init_disk_quota_model(void)
 											 MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES,
 											 &hash_ctl,
 											 HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-}
-
-/*
- * Check whether the diskquota state is ready
- */
-static bool
-do_check_diskquota_state_is_ready(void)
-{
-	int			ret;
-	TupleDesc	tupdesc;
-	int			i;
-
-	RangeVar   *rv;
-	Relation	rel;
-
-	/* check table diskquota.state exists */
-	rv = makeRangeVar("diskquota", "state", -1);
-	rel = heap_openrv_extended(rv, AccessShareLock, true);
-	if (!rel)
-	{
-		return false;
-	}
-	heap_close(rel, AccessShareLock);
-
-	/* check diskquota state from table diskquota.state */
-	ret = SPI_execute("select state from diskquota.state", true, 0);
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "[diskquota] check diskquota state SPI_execute failed: error code %d", ret);
-
-	tupdesc = SPI_tuptable->tupdesc;
-	if (tupdesc->natts != 1 ||
-		((tupdesc)->attrs[0])->atttypid != INT4OID)
-	{
-		elog(ERROR, "[diskquota] table \"state\" is corrupted in database \"%s\","
-			 " please recreate diskquota extension",
-			 get_database_name(MyDatabaseId));
-		return false;
-	}
-
-	for (i = 0; i < SPI_processed; i++)
-	{
-		HeapTuple	tup = SPI_tuptable->vals[i];
-		Datum		dat;
-		int			state;
-		bool		isnull;
-
-		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
-		if (isnull)
-			continue;
-		state = DatumGetInt64(dat);
-
-		if (state == DISKQUOTA_READY_STATE)
-		{
-			return true;
-		}
-	}
-	ereport(LOG, (errmsg("Diskquota is not in ready state. "
-						 "please run UDF init_table_size_table()")));
-	return false;
 }
 
 /*
@@ -378,7 +348,7 @@ check_diskquota_state_is_ready(void)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("unable to connect to execute internal query")));
+					 errmsg("[diskquota] unable to connect to execute SPI query")));
 		}
 		connected = true;
 		PushActiveSnapshot(GetTransactionSnapshot());
@@ -409,27 +379,89 @@ check_diskquota_state_is_ready(void)
 }
 
 /*
- * diskquota worker will refresh disk quota model
+ * Check whether the diskquota state is ready
+ * For empty database, the diskquota state would
+ * be ready after 'create extension diskquota' and
+ * it's ready to use. But for non-empty database,
+ * user need to run UDF diskquota.init_table_size_table()
+ * manually to get all the table size information and
+ * store them into table diskquota.table_size
+ */
+static bool
+do_check_diskquota_state_is_ready(void)
+{
+	int			ret;
+	TupleDesc	tupdesc;
+	int			i;
+
+	/*
+	 * check diskquota state from table diskquota.state errors will be catch
+	 * at upper level function.
+	 */
+	ret = SPI_execute("select state from diskquota.state", true, 0);
+	if (ret != SPI_OK_SELECT)
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+
+	tupdesc = SPI_tuptable->tupdesc;
+	if (tupdesc->natts != 1 ||
+		((tupdesc)->attrs[0])->atttypid != INT4OID)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] table \"state\" is corrupted in database \"%s\","
+							   " please recreate diskquota extension",
+							   get_database_name(MyDatabaseId))));
+	}
+
+	for (i = 0; i < SPI_processed; i++)
+	{
+		HeapTuple	tup = SPI_tuptable->vals[i];
+		Datum		dat;
+		int			state;
+		bool		isnull;
+
+		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
+		if (isnull)
+			continue;
+		state = DatumGetInt64(dat);
+
+		if (state == DISKQUOTA_READY_STATE)
+		{
+			return true;
+		}
+	}
+	ereport(WARNING, (errmsg("Diskquota is not in ready state. "
+							 "please run UDF init_table_size_table()")));
+	return false;
+}
+
+/*
+ * Diskquota worker will refresh disk quota model
  * periodically. It will reload quota setting and
  * recalculate the changed disk usage.
  */
 void
 refresh_disk_quota_model(bool is_init)
 {
-	elog(LOG, "[diskquota] start refresh_disk_quota_model");
+	if (is_init)
+		ereport(LOG, (errmsg("[diskquota] initialize quota model started")));
 	/* skip refresh model when load_quotas failed */
 	if (load_quotas())
 	{
 		refresh_disk_quota_usage(is_init);
 	}
+	if (is_init)
+		ereport(LOG, (errmsg("[diskquota] initialize quota model finished")));
 }
 
 /*
  * Update the disk usage of namespace and role.
  * Put the exceeded namespace and role into shared black map.
+ * Parameter 'is_init' is true when it's the first time that worker
+ * process is constructing quota model.
  */
 static void
-refresh_disk_quota_usage(bool force)
+refresh_disk_quota_usage(bool is_init)
 {
 	bool		connected = false;
 	bool		pushed_active_snap = false;
@@ -448,13 +480,13 @@ refresh_disk_quota_usage(bool force)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("unable to connect to execute internal query")));
+					 errmsg("[diskquota] unable to connect to execute SPI query")));
 		}
 		connected = true;
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pushed_active_snap = true;
 		/* recalculate the disk usage of table, schema and role */
-		calculate_table_disk_usage(force);
+		calculate_table_disk_usage(is_init);
 		calculate_schema_disk_usage();
 		calculate_role_disk_usage();
 		/* flush local table_size_map to user table table_size */
@@ -486,202 +518,20 @@ refresh_disk_quota_usage(bool force)
 }
 
 /*
- * Generate the new shared blacklist from the local_black_list which
- * exceed the quota limit.
- * local_black_list is used to reduce the lock race.
- */
-static void
-flush_local_black_map(void)
-{
-	HASH_SEQ_STATUS iter;
-	LocalBlackMapEntry *localblackentry;
-	BlackMapEntry *blackentry;
-	bool		found;
-
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
-
-	hash_seq_init(&iter, local_disk_quota_black_map);
-	while ((localblackentry = hash_seq_search(&iter)) != NULL)
-	{
-		if (localblackentry->isexceeded)
-		{
-			blackentry = (BlackMapEntry *) hash_search(disk_quota_black_map,
-													   (void *) &localblackentry->keyitem,
-													   HASH_ENTER_NULL, &found);
-			if (blackentry == NULL)
-			{
-				elog(WARNING, "Shared disk quota black map size limit reached."
-					 "Some out-of-limit schemas or roles will be lost"
-					 "in blacklist.");
-			}
-			else
-			{
-				/* new db objects which exceed quota limit */
-				if (!found)
-				{
-					blackentry->targetoid = localblackentry->keyitem.targetoid;
-					blackentry->databaseoid = MyDatabaseId;
-					blackentry->targettype = localblackentry->keyitem.targettype;
-				}
-			}
-			localblackentry->isexceeded = false;
-		}
-		else
-		{
-			/* db objects are removed or under quota limit in the new loop */
-			(void) hash_search(disk_quota_black_map,
-							   (void *) &localblackentry->keyitem,
-							   HASH_REMOVE, NULL);
-			(void) hash_search(local_disk_quota_black_map,
-							   (void *) &localblackentry->keyitem,
-							   HASH_REMOVE, NULL);
-		}
-	}
-	LWLockRelease(diskquota_locks.black_map_lock);
-}
-
-/*
- * Compare the disk quota limit and current usage of a database object.
- * Put them into local blacklist if quota limit is exceeded.
- */
-static void
-check_disk_quota_by_oid(Oid targetOid, int64 current_usage, QuotaType type)
-{
-	bool		found;
-	int32		quota_limit_mb;
-	int32		current_usage_mb;
-	LocalBlackMapEntry *localblackentry;
-	BlackMapEntry keyitem;
-
-	QuotaLimitEntry *quota_entry;
-
-	if (type == NAMESPACE_QUOTA)
-	{
-		quota_entry = (QuotaLimitEntry *) hash_search(namespace_quota_limit_map,
-													  &targetOid,
-													  HASH_FIND, &found);
-	}
-	else if (type == ROLE_QUOTA)
-	{
-		quota_entry = (QuotaLimitEntry *) hash_search(role_quota_limit_map,
-													  &targetOid,
-													  HASH_FIND, &found);
-	}
-	else
-	{
-		/* skip check if not namespace or role quota */
-		return;
-	}
-
-	if (!found)
-	{
-		/* default no limit */
-		return;
-	}
-
-	quota_limit_mb = quota_entry->limitsize;
-	current_usage_mb = current_usage / (1024 * 1024);
-	if (current_usage_mb >= quota_limit_mb)
-	{
-		memset(&keyitem, 0, sizeof(BlackMapEntry));
-		keyitem.targetoid = targetOid;
-		keyitem.databaseoid = MyDatabaseId;
-		keyitem.targettype = (uint32) type;
-		elog(DEBUG1, "Put object %u to blacklist with quota limit:%d, current usage:%d",
-			 targetOid, quota_limit_mb, current_usage_mb);
-		localblackentry = (LocalBlackMapEntry *) hash_search(local_disk_quota_black_map,
-															 &keyitem,
-															 HASH_ENTER, &found);
-		localblackentry->isexceeded = true;
-	}
-
-}
-
-/*
- *  Remove a namespace from local namespace_size_map
- */
-static void
-remove_namespace_map(Oid namespaceoid)
-{
-	hash_search(namespace_size_map,
-				&namespaceoid,
-				HASH_REMOVE, NULL);
-}
-
-/*
- * Update the current disk usage of a namespace in namespace_size_map.
- */
-static void
-update_namespace_map(Oid namespaceoid, int64 updatesize)
-{
-	bool		found;
-	NamespaceSizeEntry *nsentry;
-
-	nsentry = (NamespaceSizeEntry *) hash_search(namespace_size_map,
-												 &namespaceoid,
-												 HASH_ENTER, &found);
-	if (!found)
-	{
-		nsentry->namespaceoid = namespaceoid;
-		nsentry->totalsize = updatesize;
-	}
-	else
-	{
-		nsentry->totalsize += updatesize;
-	}
-
-}
-
-/*
- *  Remove a namespace from local role_size_map
- */
-static void
-remove_role_map(Oid owneroid)
-{
-	hash_search(role_size_map,
-				&owneroid,
-				HASH_REMOVE, NULL);
-}
-
-/*
- * Update the current disk usage of a namespace in role_size_map.
- */
-static void
-update_role_map(Oid owneroid, int64 updatesize)
-{
-	bool		found;
-	RoleSizeEntry *rolentry;
-
-	rolentry = (RoleSizeEntry *) hash_search(role_size_map,
-											 &owneroid,
-											 HASH_ENTER, &found);
-	if (!found)
-	{
-		rolentry->owneroid = owneroid;
-		rolentry->totalsize = updatesize;
-	}
-	else
-	{
-		rolentry->totalsize += updatesize;
-	}
-
-}
-
-/*
  *  Incremental way to update the disk quota of every database objects
  *  Recalculate the table's disk usage when it's a new table or active table.
  *  Detect the removed table if it's no longer in pg_class.
  *  If change happens, no matter size change or owner change,
  *  update namespace_size_map and role_size_map correspondingly.
- *  Parameter 'force' set to true at initialization stage to recalculate
- *  the file size of all the tables.
- *
+ *  Parameter 'is_init' set to true at initialization stage to fetch tables
+ *  size from table table_size
  */
 static void
 calculate_table_disk_usage(bool is_init)
 {
-	bool		found;
-	bool		active_tbl_found = false;
+	bool		table_size_map_found;
+	bool		active_tbl_found;
+	int64		updated_total_size;
 	Relation	classRel;
 	HeapTuple	tuple;
 	HeapScanDesc relScan;
@@ -694,9 +544,16 @@ calculate_table_disk_usage(bool is_init)
 	classRel = heap_open(RelationRelationId, AccessShareLock);
 	relScan = heap_beginscan_catalog(classRel, 0, NULL);
 
+	/*
+	 * initialization stage all the tables are active. later loop, only the
+	 * tables whose disk size changed will be treated as active
+	 */
 	local_active_table_stat_map = gp_fetch_active_tables(is_init);
 
-	/* unset is_exist flag for tsentry in table_size_map */
+	/*
+	 * unset is_exist flag for tsentry in table_size_map this is used to
+	 * detect tables which have been dropped.
+	 */
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
@@ -712,7 +569,6 @@ calculate_table_disk_usage(bool is_init)
 	{
 		Form_pg_class classForm = (Form_pg_class) GETSTRUCT(tuple);
 
-		found = false;
 		if (classForm->relkind != RELKIND_RELATION &&
 			classForm->relkind != RELKIND_MATVIEW)
 			continue;
@@ -724,10 +580,11 @@ calculate_table_disk_usage(bool is_init)
 
 		tsentry = (TableSizeEntry *) hash_search(table_size_map,
 												 &relOid,
-												 HASH_ENTER, &found);
+												 HASH_ENTER, &table_size_map_found);
 
-		if (!found)
+		if (!table_size_map_found)
 		{
+			tsentry->reloid = relOid;
 			tsentry->totalsize = 0;
 			tsentry->owneroid = 0;
 			tsentry->namespaceoid = 0;
@@ -740,38 +597,19 @@ calculate_table_disk_usage(bool is_init)
 
 		active_table_entry = (DiskQuotaActiveTableEntry *) hash_search(local_active_table_stat_map, &relOid, HASH_FIND, &active_tbl_found);
 
-		/*
-		 * skip to recalculate the tables which are not in active list and not
-		 * at initializatio stage
-		 */
+		/* skip to recalculate the tables which are not in active list */
 		if (active_tbl_found)
 		{
+			/* firstly calculate the updated total size of a table */
+			updated_total_size = active_table_entry->tablesize - tsentry->totalsize;
 
-			/* namespace and owner may be changed since last check */
-			if (!found)
-			{
-				/* if it's a new table */
-				tsentry->reloid = relOid;
-				tsentry->namespaceoid = classForm->relnamespace;
-				tsentry->owneroid = classForm->relowner;
-				tsentry->totalsize = (int64) active_table_entry->tablesize;
-				tsentry->need_flush = true;
-				update_namespace_map(tsentry->namespaceoid, tsentry->totalsize);
-				update_role_map(tsentry->owneroid, tsentry->totalsize);
-			}
-			else
-			{
-				/*
-				 * if not new table in table_size_map, it must be in active
-				 * table list
-				 */
-				int64		oldtotalsize = tsentry->totalsize;
+			/* update the table_size entry */
+			tsentry->totalsize = (int64) active_table_entry->tablesize;
+			tsentry->need_flush = true;
 
-				tsentry->totalsize = (int64) active_table_entry->tablesize;
-				tsentry->need_flush = true;
-				update_namespace_map(tsentry->namespaceoid, tsentry->totalsize - oldtotalsize);
-				update_role_map(tsentry->owneroid, tsentry->totalsize - oldtotalsize);
-			}
+			/* update the disk usage of namespace and owner */
+			update_namespace_map(tsentry->namespaceoid, updated_total_size);
+			update_role_map(tsentry->owneroid, updated_total_size);
 		}
 
 		/* table size info doesn't need to flush at init quota model stage */
@@ -870,29 +708,12 @@ calculate_role_disk_usage(void)
 }
 
 /*
- * Make sure a StringInfo's string is no longer than 'nchars' characters.
- */
-static void
-truncateStringInfo(StringInfo str, int nchars)
-{
-	if (str &&
-		str->len > nchars)
-	{
-		Assert(str->data != NULL &&
-			   str->len <= str->maxlen);
-		str->len = nchars;
-		str->data[nchars] = '\0';
-	}
-}
-
-/*
  * Flush the table_size_map to user table diskquota.table_size
  * To improve update performance, we first delete all the need_to_flush
  * entries in table table_size. And then insert new table size entries into
  * table table_size.
  */
-static
-void
+static void
 flush_to_table_size(void)
 {
 	HASH_SEQ_STATUS iter;
@@ -940,17 +761,210 @@ flush_to_table_size(void)
 
 	if (delete_statement_flag)
 	{
-		elog(DEBUG1, "[diskquota] table_size delete_statement: %s", delete_statement.data);
 		ret = SPI_execute(delete_statement.data, false, 0);
 		if (ret != SPI_OK_DELETE)
-			elog(ERROR, "[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret);
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret)));
 	}
 	if (insert_statement_flag)
 	{
-		elog(DEBUG1, "[diskquota] table_size insert_statement: %s", insert_statement.data);
 		ret = SPI_execute(insert_statement.data, false, 0);
 		if (ret != SPI_OK_INSERT)
-			elog(ERROR, "[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret);
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret)));
+	}
+}
+
+/*
+ * Generate the new shared blacklist from the local_black_list which
+ * exceed the quota limit.
+ * local_black_list is used to reduce the lock race.
+ */
+static void
+flush_local_black_map(void)
+{
+	HASH_SEQ_STATUS iter;
+	LocalBlackMapEntry *localblackentry;
+	BlackMapEntry *blackentry;
+	bool		found;
+
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+
+	hash_seq_init(&iter, local_disk_quota_black_map);
+	while ((localblackentry = hash_seq_search(&iter)) != NULL)
+	{
+		if (localblackentry->isexceeded)
+		{
+			blackentry = (BlackMapEntry *) hash_search(disk_quota_black_map,
+													   (void *) &localblackentry->keyitem,
+													   HASH_ENTER_NULL, &found);
+			if (blackentry == NULL)
+			{
+				ereport(WARNING, (errmsg("[diskquota] Shared disk quota black map size limit reached."
+										 "Some out-of-limit schemas or roles will be lost"
+										 "in blacklist.")));
+			}
+			else
+			{
+				/* new db objects which exceed quota limit */
+				if (!found)
+				{
+					blackentry->targetoid = localblackentry->keyitem.targetoid;
+					blackentry->databaseoid = MyDatabaseId;
+					blackentry->targettype = localblackentry->keyitem.targettype;
+				}
+			}
+			localblackentry->isexceeded = false;
+		}
+		else
+		{
+			/* db objects are removed or under quota limit in the new loop */
+			(void) hash_search(disk_quota_black_map,
+							   (void *) &localblackentry->keyitem,
+							   HASH_REMOVE, NULL);
+			(void) hash_search(local_disk_quota_black_map,
+							   (void *) &localblackentry->keyitem,
+							   HASH_REMOVE, NULL);
+		}
+	}
+	LWLockRelease(diskquota_locks.black_map_lock);
+}
+
+/*
+ * Compare the disk quota limit and current usage of a database object.
+ * Put them into local blacklist if quota limit is exceeded.
+ */
+static void
+check_disk_quota_by_oid(Oid targetOid, int64 current_usage, QuotaType type)
+{
+	bool		found;
+	int32		quota_limit_mb;
+	int32		current_usage_mb;
+	LocalBlackMapEntry *localblackentry;
+	BlackMapEntry keyitem;
+
+	QuotaLimitEntry *quota_entry;
+
+	if (type == NAMESPACE_QUOTA)
+	{
+		quota_entry = (QuotaLimitEntry *) hash_search(namespace_quota_limit_map,
+													  &targetOid,
+													  HASH_FIND, &found);
+	}
+	else if (type == ROLE_QUOTA)
+	{
+		quota_entry = (QuotaLimitEntry *) hash_search(role_quota_limit_map,
+													  &targetOid,
+													  HASH_FIND, &found);
+	}
+	else
+		return;					/* skip check if not namespace or role quota */
+
+	/* default no limit */
+	if (!found)
+		return;
+
+	quota_limit_mb = quota_entry->limitsize;
+	current_usage_mb = current_usage / (1024 * 1024);
+	if (current_usage_mb >= quota_limit_mb)
+	{
+		memset(&keyitem, 0, sizeof(BlackMapEntry));
+		keyitem.targetoid = targetOid;
+		keyitem.databaseoid = MyDatabaseId;
+		keyitem.targettype = (uint32) type;
+		ereport(DEBUG1, (errmsg("[diskquota] Put object %u to blacklist with quota limit:%d, current usage:%d",
+								targetOid, quota_limit_mb, current_usage_mb)));
+		localblackentry = (LocalBlackMapEntry *) hash_search(local_disk_quota_black_map,
+															 &keyitem,
+															 HASH_ENTER, &found);
+		localblackentry->isexceeded = true;
+	}
+
+}
+
+/*
+ *  Remove a namespace from local namespace_size_map
+ */
+static void
+remove_namespace_map(Oid namespaceoid)
+{
+	hash_search(namespace_size_map,
+				&namespaceoid,
+				HASH_REMOVE, NULL);
+}
+
+/*
+ * Update the current disk usage of a namespace in namespace_size_map.
+ */
+static void
+update_namespace_map(Oid namespaceoid, int64 updatesize)
+{
+	bool		found;
+	NamespaceSizeEntry *nsentry;
+
+	nsentry = (NamespaceSizeEntry *) hash_search(namespace_size_map,
+												 &namespaceoid,
+												 HASH_ENTER, &found);
+	if (!found)
+	{
+		nsentry->namespaceoid = namespaceoid;
+		nsentry->totalsize = updatesize;
+	}
+	else
+	{
+		nsentry->totalsize += updatesize;
+	}
+
+}
+
+/*
+ *  Remove a namespace from local role_size_map
+ */
+static void
+remove_role_map(Oid owneroid)
+{
+	hash_search(role_size_map,
+				&owneroid,
+				HASH_REMOVE, NULL);
+}
+
+/*
+ * Update the current disk usage of a namespace in role_size_map.
+ */
+static void
+update_role_map(Oid owneroid, int64 updatesize)
+{
+	bool		found;
+	RoleSizeEntry *rolentry;
+
+	rolentry = (RoleSizeEntry *) hash_search(role_size_map,
+											 &owneroid,
+											 HASH_ENTER, &found);
+	if (!found)
+	{
+		rolentry->owneroid = owneroid;
+		rolentry->totalsize = updatesize;
+	}
+	else
+	{
+		rolentry->totalsize += updatesize;
+	}
+
+}
+
+/*
+ * Make sure a StringInfo's string is no longer than 'nchars' characters.
+ */
+static void
+truncateStringInfo(StringInfo str, int nchars)
+{
+	if (str &&
+		str->len > nchars)
+	{
+		Assert(str->data != NULL &&
+			   str->len <= str->maxlen);
+		str->len = nchars;
+		str->data[nchars] = '\0';
 	}
 }
 
@@ -977,7 +991,7 @@ load_quotas(void)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("unable to connect to execute internal query")));
+					 errmsg("[diskquota] unable to connect to execute SPI query")));
 		}
 		connected = true;
 		PushActiveSnapshot(GetTransactionSnapshot());
@@ -1042,9 +1056,13 @@ do_load_quotas(void)
 						   HASH_REMOVE, NULL);
 	}
 
+	/*
+	 * read quotas from diskquota.quota_config
+	 */
 	ret = SPI_execute("select targetoid, quotatype, quotalimitMB from diskquota.quota_config", true, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "[diskquota] load_quotas SPI_execute failed: error code %d", ret);
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] load_quotas SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 3 ||
@@ -1052,9 +1070,10 @@ do_load_quotas(void)
 		((tupdesc)->attrs[1])->atttypid != INT4OID ||
 		((tupdesc)->attrs[2])->atttypid != INT8OID)
 	{
-		elog(ERROR, "[diskquota] configuration table \"quota_config\" is corrupted in database \"%s\","
-			 " please recreate diskquota extension",
-			 get_database_name(MyDatabaseId));
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] configuration table \"quota_config\" is corrupted in database \"%s\","
+							   " please recreate diskquota extension",
+							   get_database_name(MyDatabaseId))));
 	}
 
 	for (i = 0; i < SPI_processed; i++)
@@ -1122,7 +1141,7 @@ get_rel_owner_schema(Oid relid, Oid *ownerOid, Oid *nsOid)
 /*
  * Given table oid, check whether quota limit
  * of table's schema or table's owner are reached.
- * Do enforcemet if quota exceeds.
+ * Do enforcement if quota exceeds.
  */
 bool
 quota_check_common(Oid reloid)
@@ -1140,6 +1159,7 @@ quota_check_common(Oid reloid)
 	get_rel_owner_schema(reloid, &ownerOid, &nsOid);
 	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
 
+	/* check schema quota */
 	if (nsOid != InvalidOid)
 	{
 		keyitem.targetoid = nsOid;
@@ -1150,6 +1170,7 @@ quota_check_common(Oid reloid)
 					HASH_FIND, &found);
 		if (found)
 		{
+			LWLockRelease(diskquota_locks.black_map_lock);
 			ereport(ERROR,
 					(errcode(ERRCODE_DISK_FULL),
 					 errmsg("schema's disk space quota exceeded with name:%s", get_namespace_name(nsOid))));
@@ -1158,6 +1179,7 @@ quota_check_common(Oid reloid)
 
 	}
 
+	/* check role quota */
 	if (ownerOid != InvalidOid)
 	{
 		keyitem.targetoid = ownerOid;
@@ -1168,6 +1190,7 @@ quota_check_common(Oid reloid)
 					HASH_FIND, &found);
 		if (found)
 		{
+			LWLockRelease(diskquota_locks.black_map_lock);
 			ereport(ERROR,
 					(errcode(ERRCODE_DISK_FULL),
 					 errmsg("role's disk space quota exceeded with name:%s", GetUserNameFromId(ownerOid))));
