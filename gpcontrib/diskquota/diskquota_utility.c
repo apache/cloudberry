@@ -105,8 +105,8 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	resetStringInfo(&buf);
 	appendStringInfo(&buf,
 					 "insert into diskquota.table_size "
-					 "select oid, pg_total_relation_size(oid) from pg_class "
-					 "where oid>= %u and (relkind='r' or relkind='m');",
+					 "select oid, sum(pg_total_relation_size(oid)) from gp_dist_random('pg_class') "
+					 "where oid>= %u and (relkind='r' or relkind='m') group by oid;",
 					 FirstNormalObjectId);
 	ret = SPI_execute(buf.data, false, 0);
 	if (ret != SPI_OK_INSERT)
