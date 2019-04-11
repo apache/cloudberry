@@ -166,7 +166,7 @@ reset search_path;
 
 3. Show schema quota limit and current usage
 ```
-select * from diskquota.show_schema_quota_view;
+select * from diskquota.show_fast_schema_quota_view;
 ```
 
 
@@ -235,10 +235,10 @@ AccessShareLock to relation (And worker process don't even know this reloid exis
 we need to skip it, and call stat() directly with tolerant to file unlink.
 Skip lock is dangerous and we plan to leave it as known issue at current stage.
 
-2. Missing empty schema or role in show_schema_quota_view and show_role_quota_view
+2. Missing empty schema or role in show_fast_schema_quota_view and show_fast_role_quota_view
 Currently, if there is no table in a specific schema or no table's owner is a
 specific role, these schemas or roles will not be listed in 
-show_schema_quota_view and show_role_quota_view.
+show_fast_schema_quota_view and show_fast_role_quota_view.
 
 3. Out of shared memory
 

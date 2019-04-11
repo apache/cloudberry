@@ -45,7 +45,13 @@ ALTER TABLE s2.a SET SCHEMA badquota;
 -- expect failed
 INSERT INTO badquota.a SELECT generate_series(0, 100);
 ERROR:  schema's disk space quota exceeded with name:badquota
-SELECT schema_name, quota_in_mb FROM diskquota.show_schema_quota_view WHERE schema_name = 's1';
+SELECT pg_sleep(10);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT schema_name, quota_in_mb FROM diskquota.show_fast_schema_quota_view WHERE schema_name = 's1';
  schema_name | quota_in_mb 
 -------------+-------------
  s1          |           1
