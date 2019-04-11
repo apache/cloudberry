@@ -27,7 +27,7 @@ struct DiskQuotaLocks
 	LWLock	   *active_table_lock;
 	LWLock	   *black_map_lock;
 	LWLock	   *extension_ddl_message_lock;
-	LWLock	   *extension_lock; /* ensure create diskquota extension serially */
+	LWLock	   *extension_ddl_lock; /* ensure create diskquota extension serially */
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 

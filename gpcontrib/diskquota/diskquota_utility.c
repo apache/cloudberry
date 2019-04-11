@@ -137,10 +137,10 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	int			rc;
 
 	/*
-	 * Lock on extension_lock to avoid multiple backend create diskquota
+	 * Lock on extension_ddl_lock to avoid multiple backend create diskquota
 	 * extension at the same time.
 	 */
-	LWLockAcquire(diskquota_locks.extension_lock, LW_EXCLUSIVE);
+	LWLockAcquire(diskquota_locks.extension_ddl_lock, LW_EXCLUSIVE);
 	LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_EXCLUSIVE);
 	extension_ddl_message->req_pid = MyProcPid;
 	extension_ddl_message->cmd = CMD_CREATE_EXTENSION;
@@ -175,11 +175,11 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	if (extension_ddl_message->result != ERR_OK)
 	{
 		LWLockRelease(diskquota_locks.extension_ddl_message_lock);
-		LWLockRelease(diskquota_locks.extension_lock);
+		LWLockRelease(diskquota_locks.extension_ddl_lock);
 		elog(ERROR, "[diskquota] failed to create diskquota extension: %s", ddl_err_code_to_err_message((MessageResult) extension_ddl_message->result));
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
-	LWLockRelease(diskquota_locks.extension_lock);
+	LWLockRelease(diskquota_locks.extension_ddl_lock);
 
 	/* notify DBA to run init_table_size_table() when db is not empty */
 	if (!is_database_empty())
@@ -266,10 +266,10 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 		goto out;
 
 	/*
-	 * Lock on extension_lock to avoid multiple backend create diskquota
+	 * Lock on extension_ddl_lock to avoid multiple backend create diskquota
 	 * extension at the same time.
 	 */
-	LWLockAcquire(diskquota_locks.extension_lock, LW_EXCLUSIVE);
+	LWLockAcquire(diskquota_locks.extension_ddl_lock, LW_EXCLUSIVE);
 	LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_EXCLUSIVE);
 	extension_ddl_message->req_pid = MyProcPid;
 	extension_ddl_message->cmd = CMD_DROP_EXTENSION;
@@ -303,11 +303,11 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	if (extension_ddl_message->result != ERR_OK)
 	{
 		LWLockRelease(diskquota_locks.extension_ddl_message_lock);
-		LWLockRelease(diskquota_locks.extension_lock);
+		LWLockRelease(diskquota_locks.extension_ddl_lock);
 		elog(ERROR, "[diskquota launcher] failed to drop diskquota extension: %s", ddl_err_code_to_err_message((MessageResult) extension_ddl_message->result));
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
-	LWLockRelease(diskquota_locks.extension_lock);
+	LWLockRelease(diskquota_locks.extension_ddl_lock);
 out:
 	if (next_object_access_hook)
 		(*next_object_access_hook) (access, classId, objectId,
