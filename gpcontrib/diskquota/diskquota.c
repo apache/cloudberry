@@ -17,6 +17,7 @@
 #include "postgres.h"
 
 #include <unistd.h>
+#include <utils/timeout.h>
 
 #include "access/tupdesc.h"
 #include "access/xact.h"
@@ -37,6 +38,7 @@
 #include "postmaster/bgworker.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
+#include "tcop/idle_resource_cleaner.h"
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
@@ -432,6 +434,8 @@ disk_quota_launcher_main(Datum main_arg)
 	start_workers_from_dblist();
 
 	/* main loop: do this until the SIGTERM handler tells us to terminate. */
+	EnableClientWaitTimeoutInterrupt();
+	StartIdleResourceCleanupTimers();
 	while (!got_sigterm)
 	{
 		int			rc;
@@ -457,14 +461,18 @@ disk_quota_launcher_main(Datum main_arg)
 		if (got_sigusr1)
 		{
 			got_sigusr1 = false;
+			CancelIdleResourceCleanupTimers();
 			process_extension_ddl_message();
+			StartIdleResourceCleanupTimers();
 		}
 
 		/* in case of a SIGHUP, just reload the configuration. */
 		if (got_sighup)
 		{
 			got_sighup = false;
+			CancelIdleResourceCleanupTimers();
 			ProcessConfigFile(PGC_SIGHUP);
+			StartIdleResourceCleanupTimers();
 		}
 	}
 
