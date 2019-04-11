@@ -27,7 +27,8 @@ ALTER TABLE s2.a SET SCHEMA badquota;
 -- expect failed
 INSERT INTO badquota.a SELECT generate_series(0, 100);
 
-SELECT schema_name, quota_in_mb FROM diskquota.show_schema_quota_view WHERE schema_name = 's1';
+SELECT pg_sleep(10);
+SELECT schema_name, quota_in_mb FROM diskquota.show_fast_schema_quota_view WHERE schema_name = 's1';
 
 RESET search_path;
 DROP TABLE s1.a2, badquota.a;
