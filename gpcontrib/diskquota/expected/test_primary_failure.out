@@ -91,10 +91,16 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 (2 rows)
 
 -- no sleep, it will take effect immediately
-SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_schema_quota_view where schema_name='ftsr';
+SELECT pg_sleep(10);
+ pg_sleep
+----------
+
+(1 row)
+
+SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
  quota_in_mb | nspsize_in_bytes 
 -------------+------------------
-         200 |          1310720
+         200 |          3833856
 (1 row)
 
 INSERT INTO a SELECT generate_series(1,100);
