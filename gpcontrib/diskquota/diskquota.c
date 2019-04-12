@@ -125,7 +125,7 @@ _PG_init(void)
 
 	/* diskquota.so must be in shared_preload_libraries to init SHM. */
 	if (!process_shared_preload_libraries_in_progress)
-		elog(ERROR, "diskquota.so not in shared_preload_libraries.");
+		ereport(ERROR, (errmsg("diskquota.so not in shared_preload_libraries.")));
 
 	init_disk_quota_shmem();
 	init_disk_quota_enforcement();
@@ -525,7 +525,7 @@ create_monitor_db_table(void)
 
 		if (SPI_execute(sql, false, 0) != SPI_OK_UTILITY)
 		{
-			elog(ERROR, "[diskquota launcher] SPI_execute error, sql:'%s', errno:%d", sql, errno);
+			ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute error, sql:'%s', errno:%d", sql, errno)));
 		}
 	}
 	PG_CATCH();
@@ -572,13 +572,13 @@ start_workers_from_dblist(void)
 	PushActiveSnapshot(GetTransactionSnapshot());
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
-		elog(ERROR, "[diskquota launcher] SPI connect error, errno:%d", errno);
+		ereport(ERROR, (errmsg("[diskquota launcher] SPI connect error, errno:%d", errno)));
 	ret = SPI_execute("select dbid from diskquota_namespace.database_list;", true, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "select diskquota_namespace.database_list");
+		ereport(ERROR, (errmsg("select diskquota_namespace.database_list")));
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 1 || tupdesc->attrs[0]->atttypid != OIDOID)
-		elog(ERROR, "[diskquota launcher] table database_list corrupt, laucher will exit");
+		ereport(ERROR, (errmsg("[diskquota launcher] table database_list corrupt, laucher will exit")));
 
 	for (i = 0; num < SPI_processed; i++)
 	{
@@ -590,15 +590,15 @@ start_workers_from_dblist(void)
 		tup = SPI_tuptable->vals[i];
 		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
 		if (isnull)
-			elog(ERROR, "[diskquota launcher] dbid cann't be null in table database_list");
+			ereport(ERROR, (errmsg("[diskquota launcher] dbid cann't be null in table database_list")));
 		dbid = DatumGetObjectId(dat);
 		if (!is_valid_dbid(dbid))
 		{
-			elog(LOG, "[diskquota launcher] database(oid:%u) in table database_list is not a valid database", dbid);
+			ereport(LOG, (errmsg("[diskquota launcher] database(oid:%u) in table database_list is not a valid database", dbid)));
 			continue;
 		}
 		if (!start_worker_by_dboid(dbid))
-			elog(ERROR, "[diskquota launcher] start worker process of database(oid:%u) failed", dbid);
+			ereport(ERROR, (errmsg("[diskquota launcher] start worker process of database(oid:%u) failed", dbid)));
 		num++;
 
 		/*
@@ -607,7 +607,7 @@ start_workers_from_dblist(void)
 		 */
 		if (num >= MAX_NUM_MONITORED_DB)
 		{
-			elog(LOG, "[diskquota launcher] diskquota monitored database limit is reached, database(oid:%u) will not enable diskquota", dbid);
+			ereport(LOG, (errmsg("[diskquota launcher] diskquota monitored database limit is reached, database(oid:%u) will not enable diskquota", dbid)));
 			break;
 		}
 	}
@@ -638,7 +638,7 @@ process_extension_ddl_message()
 	if (local_extension_ddl_message.req_pid == 0 || local_extension_ddl_message.launcher_pid != MyProcPid)
 		return;
 
-	elog(LOG, "[diskquota launcher]: received create/drop extension diskquota message");
+	ereport(LOG, (errmsg("[diskquota launcher]: received create/drop extension diskquota message")));
 
 	do_process_extension_ddl_message(&code, local_extension_ddl_message);
 
@@ -698,7 +698,7 @@ do_process_extension_ddl_message(MessageResult * code, ExtensionDDLMessage local
 				*code = ERR_OK;
 				break;
 			default:
-				elog(LOG, "[diskquota launcher]:received unsupported message cmd=%d", local_extension_ddl_message.cmd);
+				ereport(LOG, (errmsg("[diskquota launcher]:received unsupported message cmd=%d", local_extension_ddl_message.cmd)));
 				*code = ERR_UNKNOWN;
 				break;
 		}
@@ -736,12 +736,12 @@ on_add_db(Oid dbid, MessageResult * code)
 	if (num_db >= MAX_NUM_MONITORED_DB)
 	{
 		*code = ERR_EXCEED;
-		elog(ERROR, "[diskquota launcher] too many databases to monitor");
+		ereport(ERROR, (errmsg("[diskquota launcher] too many databases to monitor")));
 	}
 	if (!is_valid_dbid(dbid))
 	{
 		*code = ERR_INVALID_DBID;
-		elog(ERROR, "[diskquota launcher] invalid database oid");
+		ereport(ERROR, (errmsg("[diskquota launcher] invalid database oid")));
 	}
 
 	/*
@@ -762,7 +762,7 @@ on_add_db(Oid dbid, MessageResult * code)
 	if (!start_worker_by_dboid(dbid))
 	{
 		*code = ERR_START_WORKER;
-		elog(ERROR, "[diskquota launcher] failed to start worker - dbid=%u", dbid);
+		ereport(ERROR, (errmsg("[diskquota launcher] failed to start worker - dbid=%u", dbid)));
 	}
 }
 
@@ -779,7 +779,7 @@ on_del_db(Oid dbid, MessageResult * code)
 	if (!is_valid_dbid(dbid))
 	{
 		*code = ERR_INVALID_DBID;
-		elog(ERROR, "[diskquota launcher] invalid database oid");
+		ereport(ERROR, (errmsg("[diskquota launcher] invalid database oid")));
 	}
 
 	/* tell postmaster to stop this bgworker */
@@ -820,7 +820,7 @@ add_dbid_to_database_list(Oid dbid)
 	ret = SPI_execute(str.data, false, 0);
 	if (ret != SPI_OK_INSERT)
 	{
-		elog(ERROR, "[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno);
+		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
 	}
 	return;
 }
@@ -842,7 +842,7 @@ del_dbid_from_database_list(Oid dbid)
 	ret = SPI_execute(str.data, false, 0);
 	if (ret != SPI_OK_DELETE)
 	{
-		elog(ERROR, "[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno);
+		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
 	}
 }
 
