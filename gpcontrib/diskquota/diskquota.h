@@ -11,7 +11,6 @@ typedef enum
 
 typedef enum
 {
-	FETCH_ALL_SIZE,				/* fetch size for all the tables */
 	FETCH_ACTIVE_OID,			/* fetch active table list */
 	FETCH_ACTIVE_SIZE			/* fetch size for active tables */
 }			FetchTableStatType;
