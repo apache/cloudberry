@@ -55,7 +55,7 @@ from diskquota.table_size as ts,
 WHERE pgc.relowner = qc.targetoid and pgc.relowner = pgr.oid and ts.tableid = pgc.oid
 GROUP BY pgc.relowner, pgr.rolname, qc.quotalimitMB;
 
-CREATE VIEW diskquota.database_size_view AS
+CREATE VIEW diskquota.show_fast_database_size_view AS
 SELECT ((SELECT SUM(pg_relation_size(oid)) FROM pg_class WHERE oid <= 16384)+ (SELECT SUM(size) FROM diskquota.table_size)) AS dbsize;
 
 CREATE TYPE diskquota.diskquota_active_table_type AS ("TABLE_OID" oid,  "TABLE_SIZE" int8);
