@@ -14,3 +14,4 @@ run:
 params:
   OSVER:
   GPDBVER:
+  DEV_RELEASE: devel

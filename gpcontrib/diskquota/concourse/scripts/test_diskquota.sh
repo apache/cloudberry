@@ -51,7 +51,11 @@ function setup_gpadmin_user() {
 }
 
 function install_diskquota() {
-	tar -xzf bin_diskquota/component_diskquota.tar.gz -C /usr/local/greenplum-db-devel
+    if [ "${DEV_RELEASE}" == "release" ]; then
+        tar -xzf bin_diskquota/diskquota*.tar.gz -C /usr/local/greenplum-db-devel
+    else
+        tar -xzf bin_diskquota/component_diskquota.tar.gz -C /usr/local/greenplum-db-devel
+    fi
 }
 function _main() {
 	time install_gpdb
