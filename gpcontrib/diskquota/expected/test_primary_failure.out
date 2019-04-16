@@ -246,7 +246,12 @@ select pg_recoverseg((select datadir from gp_segment_configuration c where c.rol
  
 (1 row)
 
--- end_ignore
+select pg_sleep(10);
+ pg_sleep 
+----------
+ 
+(1 row)
+
 -- check GPDB status
 select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
  content | preferred_role | role | status | mode 
@@ -262,6 +267,7 @@ SELECT pg_sleep(10);
  
 (1 row)
 
+-- end_ignore
 SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
  quota_in_mb | nspsize_in_bytes 
 -------------+------------------

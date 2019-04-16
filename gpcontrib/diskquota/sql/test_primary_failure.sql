@@ -58,12 +58,12 @@ select pg_sleep(15);
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
 select pg_sleep(10);
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
--- end_ignore
-
+select pg_sleep(10);
 -- check GPDB status
 select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
--- no sleep, it will take effect immediately
 SELECT pg_sleep(10);
+-- end_ignore
+
 SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
 INSERT INTO a SELECT generate_series(1,100);
 
