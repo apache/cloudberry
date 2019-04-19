@@ -101,13 +101,39 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	if (ret != SPI_OK_DELETE)
 		elog(ERROR, "cannot delete table_size table: error code %d", ret);
 
+	/* fetch table size */
+	resetStringInfo(&buf);
+	appendStringInfo(&buf,
+					 "select oid, pg_total_relation_size(oid)"
+					 " from pg_class"
+					 " where oid >= %u and (relkind='r' or relkind='m')",
+					 FirstNormalObjectId);
+	ret = SPI_execute(buf.data, false, 0);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot fetch in pg_total_relation_size. error code %d", ret);
+
 	/* fill table_size table with table oid and size info. */
 	resetStringInfo(&buf);
 	appendStringInfo(&buf,
-					 "insert into diskquota.table_size "
-					 "select oid, sum(pg_total_relation_size(oid)) from gp_dist_random('pg_class') "
-					 "where oid>= %u and (relkind='r' or relkind='m') group by oid;",
-					 FirstNormalObjectId);
+	                 "insert into diskquota.table_size values");
+	TupleDesc tupdesc = SPI_tuptable->tupdesc;
+	for(int i = 0; i < SPI_processed; i++)
+	{
+		HeapTuple   tup;
+		bool        isnull;
+		Oid         oid;
+		int64       sz;
+
+		tup = SPI_tuptable->vals[i];
+		oid = SPI_getbinval(tup,tupdesc, 1, &isnull);
+		sz = SPI_getbinval(tup,tupdesc, 2, &isnull);
+
+		appendStringInfo(&buf, " ( %u, %ld)", oid, sz);
+		if(i + 1 < SPI_processed)
+			appendStringInfoChar(&buf, ',');
+	}
+	appendStringInfo(&buf, ";");
+
 	ret = SPI_execute(buf.data, false, 0);
 	if (ret != SPI_OK_INSERT)
 		elog(ERROR, "cannot insert table_size table: error code %d", ret);
