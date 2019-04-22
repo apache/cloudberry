@@ -45,7 +45,7 @@ resources:
   source:
     branch: gpdb
     uri: https://github.com/greenplum-db/diskquota.git
-    tag_filter: 1.*
+    tag_filter: 0.*
 
 # gpdb binary on gcs is located as different folder for different version
 # use gcs_gpdb_binary_folder to specify them.
@@ -68,14 +68,14 @@ resources:
   source:
     bucket: {{gcs-bucket}}
     json_key: {{concourse-gcs-resources-service-account-key}}
-    regexp: diskquota/released/gpdb6/diskquota-(.*)-rhel7-x86_64.tar.gz
+    regexp: diskquota/released/gpdb6/rhel7/diskquota-(.*).tar.gz
 
 - name: bin_diskquota_centos6
   type: gcs
   source:
     bucket: {{gcs-bucket}}
     json_key: {{concourse-gcs-resources-service-account-key}}
-    regexp: diskquota/released/gpdb6/diskquota-(.*)-rhel6-x86_64.tar.gz
+    regexp: diskquota/released/gpdb6/rhel6/diskquota-(.*).tar.gz
 
 ## jobs
 ## ======================================================================

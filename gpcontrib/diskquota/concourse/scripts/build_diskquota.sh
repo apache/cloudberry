@@ -33,11 +33,8 @@ function pkg() {
 	popd
     if [ "${DEV_RELEASE}" == "release" ]; then
         case "$OSVER" in
-        centos6)
-            cp $TOP_DIR/diskquota_artifacts/component_diskquota.tar.gz $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel6-x86_64.tar.gz
-            ;;
-        centos7)
-            cp $TOP_DIR/diskquota_artifacts/component_diskquota.tar.gz $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel7-x86_64.tar.gz
+        centos6|centos7)
+            cp $TOP_DIR/diskquota_artifacts/component_diskquota.tar.gz $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}.tar.gz
             ;;
         *) echo "Unknown OS: $OSVER"; exit 1 ;;
         esac
