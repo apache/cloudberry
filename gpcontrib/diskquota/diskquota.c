@@ -283,6 +283,9 @@ disk_quota_worker_main(Datum main_arg)
 	 */
 	init_ps_display("bgworker:", "[diskquota]", dbname, "");
 
+	/* diskquota worker should has Gp_role as dispatcher */
+	Gp_role = GP_ROLE_DISPATCH;
+
 	/*
 	 * Initialize diskquota related local hash map and refresh model
 	 * immediately
@@ -410,6 +413,9 @@ disk_quota_launcher_main(Datum main_arg)
 	 */
 	BackgroundWorkerInitializeConnection(DISKQUOTA_DB, NULL);
 
+	/* diskquota launcher should has Gp_role as dispatcher */
+	Gp_role = GP_ROLE_DISPATCH;
+	
 	/*
 	 * use table diskquota_namespace.database_list to store diskquota enabled
 	 * database.
