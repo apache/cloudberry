@@ -602,10 +602,23 @@ calculate_table_disk_usage(bool is_init)
 		if (active_tbl_found)
 		{
 			/* pretend process as utility mode, and append the table size on master */
-			GpRoleValue Gp_role_backup = Gp_role;
 			Gp_role = GP_ROLE_UTILITY;
-			active_table_entry->tablesize += (Size) DatumGetInt64(DirectFunctionCall1(pg_total_relation_size, ObjectIdGetDatum(relOid)));
-			Gp_role = Gp_role_backup;
+
+			/* DirectFunctionCall1 may fail, since table maybe dropped by other backend */
+			PG_TRY();
+			{
+				/* call pg_total_relation_size to get the active table size */
+				active_table_entry->tablesize += (Size) DatumGetInt64(DirectFunctionCall1(pg_total_relation_size, ObjectIdGetDatum(relOid)));
+			}
+			PG_CATCH();
+			{
+				HOLD_INTERRUPTS();
+				FlushErrorState();
+				RESUME_INTERRUPTS();
+			}
+			PG_END_TRY();
+
+			Gp_role = GP_ROLE_DISPATCH;
 
 			/* firstly calculate the updated total size of a table */
 			updated_total_size = active_table_entry->tablesize - tsentry->totalsize;
