@@ -58,6 +58,7 @@ PG_MODULE_MAGIC;
 #define MAX_NUM_MONITORED_DB 10
 
 #define DISKQUOTA_DB	"diskquota"
+#define DISKQUOTA_APPLICATION_NAME  "gp_reserved_gpdiskquota"
 
 /* flags set by signal handlers */
 static volatile sig_atomic_t got_sighup = false;
@@ -275,6 +276,10 @@ disk_quota_worker_main(Datum main_arg)
 	/* Connect to our database */
 	BackgroundWorkerInitializeConnection(dbname, NULL);
 
+	set_config_option("application_name", DISKQUOTA_APPLICATION_NAME,
+	                  PGC_USERSET,PGC_S_SESSION,
+	                  GUC_ACTION_SAVE, true, 0);
+
 	/*
 	 * Set ps display name of the worker process of diskquota, so we can
 	 * distinguish them quickly. Note: never mind parameter name of the
@@ -412,6 +417,10 @@ disk_quota_launcher_main(Datum main_arg)
 	 * 'diskquota' database is not existed.
 	 */
 	BackgroundWorkerInitializeConnection(DISKQUOTA_DB, NULL);
+
+	set_config_option("application_name", DISKQUOTA_APPLICATION_NAME,
+	                  PGC_USERSET,PGC_S_SESSION,
+	                  GUC_ACTION_SAVE, true, 0);
 
 	/* diskquota launcher should has Gp_role as dispatcher */
 	Gp_role = GP_ROLE_DISPATCH;
