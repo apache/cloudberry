@@ -11,7 +11,10 @@ PG_CPPFLAGS = -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 
 REGRESS = dummy
+ifeq ("$(INTEGRATION_TEST)","y")
+REGRESS_OPTS = --schedule=diskquota_schedule_int --init-file=init_file
+else
 REGRESS_OPTS = --schedule=diskquota_schedule --init-file=init_file
-
+endif
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
