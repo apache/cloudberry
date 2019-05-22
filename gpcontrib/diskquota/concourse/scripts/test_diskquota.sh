@@ -19,6 +19,7 @@ function test(){
 		gpconfig -c diskquota.naptime -v 2
 		gpstop -arf
 		pushd diskquota_src
+		trap "[ -s regression.diffs ] && cat regression.diffs" EXIT
 		make installcheck
 		[ -s regression.diffs ] && cat regression.diffs && exit 1
 		ps -ef | grep postgres| grep qddir| cut -d ' ' -f 6 | xargs kill -9
@@ -51,11 +52,7 @@ function setup_gpadmin_user() {
 }
 
 function install_diskquota() {
-    if [ "${DEV_RELEASE}" == "release" ]; then
-        tar -xzf bin_diskquota/diskquota*.tar.gz -C /usr/local/greenplum-db-devel
-    else
-        tar -xzf bin_diskquota/component_diskquota.tar.gz -C /usr/local/greenplum-db-devel
-    fi
+  tar -xzf bin_diskquota/*.tar.gz -C /usr/local/greenplum-db-devel
 }
 function _main() {
 	time install_gpdb
