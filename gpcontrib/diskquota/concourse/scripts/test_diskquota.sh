@@ -19,9 +19,9 @@ function test(){
 		gpconfig -c diskquota.naptime -v 2
 		gpstop -arf
 		pushd diskquota_src
-		trap "[ -s regression.diffs ] && cat regression.diffs" EXIT
+		trap "[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs" EXIT
 		make installcheck
-		[ -s regression.diffs ] && cat regression.diffs && exit 1
+		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
 		ps -ef | grep postgres| grep qddir| cut -d ' ' -f 6 | xargs kill -9
 		export PGPORT=16432
 		echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
@@ -29,7 +29,7 @@ function test(){
 		rm /tmp/.s.PGSQL.15432*
 		gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
 		make installcheck
-		[ -s regression.diffs ] && cat regression.diffs && exit 1
+		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
 		popd
 	EOF
 	export MASTER_DATA_DIRECTORY=${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
