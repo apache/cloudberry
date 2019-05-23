@@ -388,7 +388,11 @@ disk_quota_worker_main(Datum main_arg)
 	proc_exit(0);
 }
 
-
+inline bool isAbnormalLoopTime(int diff_sec)
+{
+	int max_time = diskquota_naptime + 6;
+	return diff_sec > max_time;
+}
 
 /* ---- Functions for launcher process ---- */
 /*
@@ -399,6 +403,7 @@ void
 disk_quota_launcher_main(Datum main_arg)
 {
 	HASHCTL		hash_ctl;
+	time_t loop_begin, loop_end;
 
 	/* establish signal handlers before unblocking signals. */
 	pqsignal(SIGHUP, disk_quota_sighup);
@@ -451,6 +456,7 @@ disk_quota_launcher_main(Datum main_arg)
 	/* main loop: do this until the SIGTERM handler tells us to terminate. */
 	EnableClientWaitTimeoutInterrupt();
 	StartIdleResourceCleanupTimers();
+	loop_end = time(NULL);
 	while (!got_sigterm)
 	{
 		int			rc;
@@ -488,6 +494,13 @@ disk_quota_launcher_main(Datum main_arg)
 			CancelIdleResourceCleanupTimers();
 			ProcessConfigFile(PGC_SIGHUP);
 			StartIdleResourceCleanupTimers();
+		}
+		loop_begin = loop_end;
+		loop_end = time(NULL);
+		if (isAbnormalLoopTime(loop_end - loop_begin))
+		{
+			ereport(WARNING, (errmsg("[diskquota-loop] loop takes too much time %d/%d",
+				(int)(loop_end - loop_begin), diskquota_naptime)));
 		}
 	}
 
@@ -595,7 +608,7 @@ start_workers_from_dblist(void)
 	if (tupdesc->natts != 1 || tupdesc->attrs[0]->atttypid != OIDOID)
 		ereport(ERROR, (errmsg("[diskquota launcher] table database_list corrupt, laucher will exit")));
 
-	for (i = 0; num < SPI_processed; i++)
+	for (i = 0; i < SPI_processed; i++)
 	{
 		HeapTuple	tup;
 		Oid			dbid;
