@@ -7,7 +7,7 @@ TOP_DIR=${CWDIR}/../../../
 GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
 source "${GPDB_CONCOURSE_DIR}/common.bash"
 function test(){	
-	sudo chown -R gpadmin:gpadmin ${TOP_DIR};
+	chown -R gpadmin:gpadmin ${TOP_DIR};
 	cat > /home/gpadmin/test.sh <<-EOF
 		set -exo pipefail
 		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
@@ -45,6 +45,9 @@ function setup_gpadmin_user() {
         ;;
         centos*)
         ${GPDB_CONCOURSE_DIR}/setup_gpadmin_user.bash "centos"
+        ;;
+        ubuntu*)
+        ${GPDB_CONCOURSE_DIR}/setup_gpadmin_user.bash "ubuntu"
         ;;
         *) echo "Unknown OS: $OSVER"; exit 1 ;;
     esac

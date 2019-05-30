@@ -7,7 +7,7 @@ TOP_DIR=${CWDIR}/../../../
 
 source "${TOP_DIR}/gpdb_src/concourse/scripts/common.bash"
 function pkg() {
-    source /opt/gcc_env.sh
+    [ -f /opt/gcc_env.sh ] && source /opt/gcc_env.sh
     source /usr/local/greenplum-db-devel/greenplum_path.sh
 
     export USE_PGXS=1
@@ -33,7 +33,7 @@ function pkg() {
 	popd
     if [ "${DEV_RELEASE}" == "release" ]; then
         case "$OSVER" in
-        centos6|centos7)
+        centos6|centos7|ubuntu18)
             cp $TOP_DIR/diskquota_artifacts/component_diskquota.tar.gz $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}.tar.gz
             ;;
         *) echo "Unknown OS: $OSVER"; exit 1 ;;
