@@ -37,8 +37,14 @@ resources:
 - name: ubuntu18-image
   type: docker-image
   source:
-    repository: pivotaldata/ubuntu-gpdb-dev
-    tag: '16.04'
+    repository: pivotaldata/gpdb6-ubuntu18.04-build
+    tag: latest
+
+- name: ubuntu18-image-test
+  type: docker-image
+  source:
+    repository: pivotaldata/gpdb6-ubuntu18.04-test
+    tag: latest
 
 # Github Source Codes
 
@@ -71,13 +77,11 @@ resources:
     versioned_file: ((gcs_gpdb_binary_folder))/bin_gpdb_centos7/bin_gpdb.tar.gz
 
 - name: bin_gpdb_ubuntu18
-  type: s3
+  type: gcs
   source:
-    access_key_id: {{bucket-access-key-id}}
-    bucket: procedural-languages-concourse-gpdb-5x-stable
-    region_name: {{aws-region}}
-    secret_access_key: {{bucket-secret-access-key}}
-    versioned_file: build/gpdb_6x/bin_gpdb_ubuntu16/bin_gpdb.tar.gz
+    bucket: {{gcs-bucket-intermediates}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    versioned_file: ((gcs_gpdb_binary_folder))/bin_gpdb_ubuntu18.04/bin_gpdb.tar.gz
 
 - name: bin_diskquota_centos7
   type: gcs
@@ -224,7 +228,7 @@ jobs:
 - name: diskquota_ubuntu18_test
   plan:
   - aggregate:
-    - get: ubuntu18-image
+    - get: ubuntu18-image-test
     - get: diskquota_src
     - get: bin_diskquota_ubuntu18
       passed: [diskquota_ubuntu18_build]
@@ -233,7 +237,7 @@ jobs:
     - get: gpdb_src
   - task: test_diskquota
     file: diskquota_src/concourse/tasks/test_diskquota.yml
-    image: ubuntu18-image
+    image: ubuntu18-image-test
     input_mapping:
       bin_gpdb: bin_gpdb_ubuntu18
       bin_diskquota: bin_diskquota_ubuntu18
