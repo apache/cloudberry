@@ -12,6 +12,3 @@ outputs:
 run:
   path: diskquota_src/concourse/scripts/build_diskquota.sh
 params:
-  OSVER:
-  GPDBVER:
-  DEV_RELEASE: devel
