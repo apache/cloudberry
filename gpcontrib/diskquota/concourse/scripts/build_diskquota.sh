@@ -12,38 +12,25 @@ function pkg() {
 
     export USE_PGXS=1
     pushd diskquota_src/
-    if [ "${DEV_RELEASE}" == "release" ]; then
-        if git describe --tags >/dev/null 2>&1 ; then
-            echo "git describe failed" || exit 1
-        fi
-        DISKQUOTA_VERSION=$(git describe --tags)
-    fi
+    DISKQUOTA_VERSION=$(git describe --tags)
     make clean
     make install
     popd
 
-	pushd /usr/local/greenplum-db-devel/
-	echo 'cp -r lib share $GPHOME || exit 1'> install_gpdb_component
-	chmod a+x install_gpdb_component
-	tar -czf $TOP_DIR/diskquota_artifacts/component_diskquota.tar.gz \
-		lib/postgresql/diskquota.so \
-		share/postgresql/extension/diskquota.control \
-		share/postgresql/extension/diskquota--1.0.sql \
-		install_gpdb_component
-	popd
-    if [ "${DEV_RELEASE}" == "release" ]; then
-        case "$OSVER" in
-        centos6|centos7|ubuntu18)
-            cp $TOP_DIR/diskquota_artifacts/component_diskquota.tar.gz $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}.tar.gz
-            ;;
-        *) echo "Unknown OS: $OSVER"; exit 1 ;;
-        esac
-    fi
+    pushd /usr/local/greenplum-db-devel/
+    echo 'cp -r lib share $GPHOME || exit 1'> install_gpdb_component
+    chmod a+x install_gpdb_component
+    tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}.tar.gz \
+        lib/postgresql/diskquota.so \
+        share/postgresql/extension/diskquota.control \
+        share/postgresql/extension/diskquota--1.0.sql \
+        install_gpdb_component
+    popd
 }
 
 function _main() {	
-	time install_gpdb
-	time pkg
+    time install_gpdb
+    time pkg
 }
 
 _main "$@"
