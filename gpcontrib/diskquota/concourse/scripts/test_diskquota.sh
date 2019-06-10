@@ -39,19 +39,7 @@ function test(){
 }	
 
 function setup_gpadmin_user() {
-    case "$OSVER" in
-        suse*)
-        ${GPDB_CONCOURSE_DIR}/setup_gpadmin_user.bash "sles"
-        ;;
-        centos*)
-        ${GPDB_CONCOURSE_DIR}/setup_gpadmin_user.bash "centos"
-        ;;
-        ubuntu*)
-        ${GPDB_CONCOURSE_DIR}/setup_gpadmin_user.bash "ubuntu"
-        ;;
-        *) echo "Unknown OS: $OSVER"; exit 1 ;;
-    esac
-	
+    ${GPDB_CONCOURSE_DIR}/setup_gpadmin_user.bash
 }
 
 function install_diskquota() {

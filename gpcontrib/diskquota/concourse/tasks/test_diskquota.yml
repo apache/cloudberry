@@ -10,6 +10,3 @@ inputs:
 run:
   path: diskquota_src/concourse/scripts/test_diskquota.sh
 params:
-  OSVER:
-  GPDBVER:
-  DEV_RELEASE: devel
