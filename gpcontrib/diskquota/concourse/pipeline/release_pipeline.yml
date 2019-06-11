@@ -60,7 +60,7 @@ resources:
   source:
     branch: gpdb
     uri: https://github.com/greenplum-db/diskquota.git
-    tag_filter: 0.*
+    tag_filter: 1.*
 
 # gpdb binary on gcs is located as different folder for different version
 # use gcs_gpdb_binary_folder to specify them.
