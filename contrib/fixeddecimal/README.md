@@ -1,7 +1,8 @@
 FIXEDDECIMAL
 ============
 
-Works with PostgreSQL 9.5 and Postgres-XL 9.5
+Works with PostgreSQL 9.5 or higher.
+The latest test was executed on version 12.
 
 Overview
 --------
