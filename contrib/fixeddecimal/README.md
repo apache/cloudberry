@@ -15,7 +15,7 @@ Often there are data storage requirements where the built in REAL and
 DOUBLE PRECISION types cannot be used due to the non-exact representation of
 numbers using these types, e.g. where monetary values need to be stored. In many
 of these cases NUMERIC is an almost perfect type, although with NUMERIC
-performance is no match for the performance of REAL or DOUBLE PRCISION, as
+performance is no match for the performance of REAL or DOUBLE PRECISION, as
 these use CPU native processor types. FixedDecimal aims to offer performance
 advantages over NUMERIC without the imprecise representations that are
 apparent in REAL and DOUBLE PRECISION, but it comes with some caveats...
