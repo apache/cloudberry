@@ -533,9 +533,6 @@ create_monitor_db_table(void)
 	sql = "create schema if not exists diskquota_namespace;"
 		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);";
 
-	/* debug_query_string need to be set for SPI_execute utility functions. */
-	debug_query_string = sql;
-
 	StartTransactionCommand();
 
 	/*
