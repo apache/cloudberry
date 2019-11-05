@@ -552,6 +552,9 @@ create_monitor_db_table(void)
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pushed_active_snap = true;
 
+		/* debug_query_string need to be set for SPI_execute utility functions. */
+		debug_query_string = sql;
+
 		if (SPI_execute(sql, false, 0) != SPI_OK_UTILITY)
 		{
 			ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute error, sql:'%s', errno:%d", sql, errno)));
@@ -564,6 +567,7 @@ create_monitor_db_table(void)
 		EmitErrorReport();
 		FlushErrorState();
 		ret = false;
+		debug_query_string = NULL;
 		/* Now we can allow interrupts again */
 		RESUME_INTERRUPTS();
 	}
