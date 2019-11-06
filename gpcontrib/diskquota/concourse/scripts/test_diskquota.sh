@@ -16,17 +16,17 @@ function test(){
 		createdb diskquota
 		gpconfig -c shared_preload_libraries -v 'diskquota'
 		gpstop -arf
-		gpconfig -c diskquota.naptime -v 2
+		gpconfig -c diskquota.naptime -v 1
 		gpstop -arf
 		pushd diskquota_src
 		trap "[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs" EXIT
 		make installcheck
 		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
 		ps -ef | grep postgres| grep qddir| cut -d ' ' -f 6 | xargs kill -9
-		export PGPORT=16432
+		export PGPORT=6001
 		echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
 		source /usr/local/greenplum-db-devel/greenplum_path.sh
-		rm /tmp/.s.PGSQL.15432*
+		rm /tmp/.s.PGSQL.6000*
 		gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
 		make installcheck
 		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
