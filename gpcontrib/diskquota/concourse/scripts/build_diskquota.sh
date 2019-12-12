@@ -20,11 +20,30 @@ function pkg() {
     pushd /usr/local/greenplum-db-devel/
     echo 'cp -r lib share $GPHOME || exit 1'> install_gpdb_component
     chmod a+x install_gpdb_component
-    tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-${DISKQUOTA_OS}_x86_64.tar.gz \
+    case "$DISKQUOTA_OS" in
+    rhel6)
+        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel6_x86_64.tar.gz \
         lib/postgresql/diskquota.so \
         share/postgresql/extension/diskquota.control \
         share/postgresql/extension/diskquota--1.0.sql \
         install_gpdb_component
+      ;;
+    rhel7)
+        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel7_x86_64.tar.gz \
+        lib/postgresql/diskquota.so \
+        share/postgresql/extension/diskquota.control \
+        share/postgresql/extension/diskquota--1.0.sql \
+        install_gpdb_component
+      ;;
+    ubuntu18.04)
+        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-ubuntu18.04_x86_64.tar.gz \
+        lib/postgresql/diskquota.so \
+        share/postgresql/extension/diskquota.control \
+        share/postgresql/extension/diskquota--1.0.sql \
+        install_gpdb_component
+      ;;
+    *) echo "Unknown OS: $OSVER"; exit 1 ;;
+    esac
     popd
 }
 
