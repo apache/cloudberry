@@ -12,3 +12,4 @@ outputs:
 run:
   path: diskquota_src/concourse/scripts/build_diskquota.sh
 params:
+  DISKQUOTA_OS:
