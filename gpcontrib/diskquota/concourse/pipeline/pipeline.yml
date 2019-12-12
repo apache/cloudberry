@@ -96,6 +96,8 @@ jobs:
   - task: build_diskquota
     file: diskquota_src/concourse/tasks/build_diskquota.yml
     image: centos-gpdb-dev-7
+    params:
+      DISKQUOTA_OS: rhel7
   - task: test_diskquota
     file: diskquota_src/concourse/tasks/test_diskquota.yml
     image: centos-gpdb-dev-7
@@ -115,6 +117,8 @@ jobs:
   - task: build_diskquota
     file: diskquota_src/concourse/tasks/build_diskquota.yml
     image: centos-gpdb-dev-6
+    params:
+      DISKQUOTA_OS: rhel6
   - task: test_diskquota
     file: diskquota_src/concourse/tasks/test_diskquota.yml
     image: centos-gpdb-dev-6
@@ -135,6 +139,8 @@ jobs:
   - task: build_diskquota
     file: diskquota_src/concourse/tasks/build_diskquota.yml
     image: ubuntu18-image-build
+    params:
+      DISKQUOTA_OS: ubuntu18.04
   - task: test_diskquota
     file: diskquota_src/concourse/tasks/test_diskquota.yml
     image: ubuntu18-image-test

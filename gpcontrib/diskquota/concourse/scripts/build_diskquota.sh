@@ -20,7 +20,7 @@ function pkg() {
     pushd /usr/local/greenplum-db-devel/
     echo 'cp -r lib share $GPHOME || exit 1'> install_gpdb_component
     chmod a+x install_gpdb_component
-    tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}.tar.gz \
+    tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-${DISKQUOTA_OS}_x86_64.tar.gz \
         lib/postgresql/diskquota.so \
         share/postgresql/extension/diskquota.control \
         share/postgresql/extension/diskquota--1.0.sql \
