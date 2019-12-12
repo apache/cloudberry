@@ -90,21 +90,21 @@ resources:
   source:
     bucket: {{gcs-bucket}}
     json_key: {{concourse-gcs-resources-service-account-key}}
-    regexp: diskquota/released/gpdb6/rhel7/diskquota-(.*).tar.gz
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
 
 - name: bin_diskquota_centos6
   type: gcs
   source:
     bucket: {{gcs-bucket}}
     json_key: {{concourse-gcs-resources-service-account-key}}
-    regexp: diskquota/released/gpdb6/rhel6/diskquota-(.*).tar.gz
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
 
 - name: bin_diskquota_ubuntu18
   type: gcs
   source:
     bucket: {{gcs-bucket}}
     json_key: {{concourse-gcs-resources-service-account-key}}
-    regexp: diskquota/released/gpdb6/ubuntu18/diskquota-(.*).tar.gz
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
 
 ## jobs
 ## ======================================================================
@@ -131,6 +131,8 @@ jobs:
       image: centos-gpdb-dev-7
       input_mapping:
         bin_diskquota: diskquota_artifacts
+      params:
+        DISKQUOTA_OS: rhel7
   - aggregate:
     - put: bin_diskquota_centos7
       params:
@@ -156,6 +158,8 @@ jobs:
       image: centos-gpdb-dev-6
       input_mapping:
         bin_diskquota: diskquota_artifacts
+      params:
+        DISKQUOTA_OS: rhel6
   - aggregate:
     - put: bin_diskquota_centos6
       params:
@@ -182,6 +186,8 @@ jobs:
       image: ubuntu18-image-test
       input_mapping:
         bin_diskquota: diskquota_artifacts
+      params:
+        DISKQUOTA_OS: ubuntu18.04
   - aggregate:
     - put: bin_diskquota_ubuntu18
       params:
