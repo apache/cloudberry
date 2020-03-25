@@ -623,7 +623,7 @@ extern Relation ExecGetRangeTableRelation(EState *estate, Index rti);
 extern void ExecInitResultRelation(EState *estate, ResultRelInfo *resultRelInfo,
 								   Index rti);
 
-extern int executor_errposition(EState *estate, int location);
+extern int	executor_errposition(EState *estate, int location);
 
 extern void RegisterExprContextCallback(ExprContext *econtext,
 										ExprContextCallbackFunction function,
