@@ -70,11 +70,9 @@ extern Node *coerce_to_specific_type_typmod(ParseState *pstate, Node *node,
 extern Node *coerce_null_to_domain(Oid typid, int32 typmod, Oid collation,
 								   int typlen, bool typbyval);
 
-extern void parser_coercion_errposition(ParseState *pstate,
+extern int	parser_coercion_errposition(ParseState *pstate,
 										int coerce_location,
 										Node *input_expr);
-extern Node *coerce_null_to_domain(Oid typid, int32 typmod, Oid collation,
-								   int typlen, bool typbyval);
 
 
 extern Oid	select_common_type(ParseState *pstate, List *exprs,

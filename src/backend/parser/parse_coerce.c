@@ -1358,15 +1358,15 @@ coerce_null_to_domain(Oid typid, int32 typmod, Oid collation,
  * XXX possibly this is more generally useful than coercion errors;
  * if so, should rename and place with parser_errposition.
  */
-void
+int
 parser_coercion_errposition(ParseState *pstate,
 							int coerce_location,
 							Node *input_expr)
 {
 	if (coerce_location >= 0)
-		parser_errposition(pstate, coerce_location);
+		return parser_errposition(pstate, coerce_location);
 	else
-		parser_errposition(pstate, exprLocation(input_expr));
+		return parser_errposition(pstate, exprLocation(input_expr));
 }
 
 
