@@ -661,3 +661,73 @@ RESET search_path;
 SET statement_mem = '4000MB';
 ERROR:  Invalid input for statement_mem, must be less than max_statement_mem (2048000 kB)
 RESET statement_mem;
+CREATE TABLE guc_gp_t1(i int) DISTRIBUTED BY (i);
+INSERT INTO guc_gp_t1 VALUES(1),(2);
+-- generate an idle redaer gang by the following query
+SELECT count(*) FROM guc_gp_t1, guc_gp_t1 t;
+ count 
+-------
+     4
+(1 row)
+
+-- test create role and set role in the same transaction
+BEGIN;
+DROP ROLE IF EXISTS guc_gp_test_role1;
+NOTICE:  role "guc_gp_test_role1" does not exist, skipping
+CREATE ROLE guc_gp_test_role1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SET ROLE guc_gp_test_role1;
+RESET ROLE;
+END;
+-- generate an idle redaer gang by the following query
+SELECT count(*) FROM guc_gp_t1, guc_gp_t1 t;
+ count 
+-------
+     4
+(1 row)
+
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+DROP ROLE IF EXISTS guc_gp_test_role2;
+NOTICE:  role "guc_gp_test_role2" does not exist, skipping
+CREATE ROLE guc_gp_test_role2;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SET ROLE guc_gp_test_role2;
+RESET ROLE;
+END;
+-- test cursor case
+-- cursors are also reader gangs, but they are not idle, thus will not be
+-- destroyed by utility statement.
+BEGIN;
+DECLARE c1 CURSOR FOR SELECT * FROM guc_gp_t1 a, guc_gp_t1 b order by a.i, b.i;
+DECLARE c2 CURSOR FOR SELECT * FROM guc_gp_t1 a, guc_gp_t1 b order by a.i, b.i;
+FETCH c1;
+ i | i 
+---+---
+ 1 | 1
+(1 row)
+
+DROP ROLE IF EXISTS guc_gp_test_role1;
+CREATE ROLE guc_gp_test_role1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SET ROLE guc_gp_test_role1;
+RESET ROLE;
+FETCH c2;
+ i | i 
+---+---
+ 1 | 1
+(1 row)
+
+FETCH c1;
+ i | i 
+---+---
+ 1 | 2
+(1 row)
+
+FETCH c2;
+ i | i 
+---+---
+ 1 | 2
+(1 row)
+
+END;
+DROP TABLE guc_gp_t1;
