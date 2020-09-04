@@ -95,6 +95,7 @@ void		disk_quota_launcher_main(Datum);
 
 static void disk_quota_sigterm(SIGNAL_ARGS);
 static void disk_quota_sighup(SIGNAL_ARGS);
+static void define_guc_variables(void);
 static bool start_worker_by_dboid(Oid dbid);
 static void start_workers_from_dblist(void);
 static void create_monitor_db_table(void);
@@ -128,47 +129,12 @@ _PG_init(void)
 	if (!process_shared_preload_libraries_in_progress)
 		ereport(ERROR, (errmsg("diskquota.so not in shared_preload_libraries.")));
 
+	/* values are used in later calls */
+	define_guc_variables();
+
 	init_disk_quota_shmem();
 	init_disk_quota_enforcement();
 	init_active_table_hook();
-
-	/* get the configuration */
-	DefineCustomIntVariable("diskquota.naptime",
-							"Duration between each check (in seconds).",
-							NULL,
-							&diskquota_naptime,
-							2,
-							1,
-							INT_MAX,
-							PGC_SIGHUP,
-							0,
-							NULL,
-							NULL,
-							NULL);
-
-	DefineCustomIntVariable("diskquota.max_active_tables",
-							"max number of active tables monitored by disk-quota",
-							NULL,
-							&diskquota_max_active_tables,
-							1 * 1024 * 1024,
-							1,
-							INT_MAX,
-							PGC_SIGHUP,
-							0,
-							NULL,
-							NULL,
-							NULL);
-
-	DefineCustomBoolVariable("diskquota.enable_hardlimit",
-							 "Use in-query diskquota enforcement",
-							 NULL,
-							 &diskquota_enable_hardlimit,
-							 false,
-							 PGC_SIGHUP,
-							 0,
-							 NULL,
-							 NULL,
-							 NULL);
 
 	/* start disk quota launcher only on master */
 	if (!IS_QUERY_DISPATCHER())
@@ -248,6 +214,50 @@ disk_quota_sigusr1(SIGNAL_ARGS)
 		SetLatch(&MyProc->procLatch);
 
 	errno = save_errno;
+}
+
+/*
+ * Define GUC variables used by diskquota
+ */
+static void
+define_guc_variables(void)
+{
+	DefineCustomIntVariable("diskquota.naptime",
+							"Duration between each check (in seconds).",
+							NULL,
+							&diskquota_naptime,
+							2,
+							1,
+							INT_MAX,
+							PGC_SIGHUP,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("diskquota.max_active_tables",
+							"max number of active tables monitored by disk-quota",
+							NULL,
+							&diskquota_max_active_tables,
+							1 * 1024 * 1024,
+							1,
+							INT_MAX,
+							PGC_SIGHUP,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomBoolVariable("diskquota.enable_hardlimit",
+							 "Use in-query diskquota enforcement",
+							 NULL,
+							 &diskquota_enable_hardlimit,
+							 false,
+							 PGC_SIGHUP,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
