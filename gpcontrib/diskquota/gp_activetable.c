@@ -162,6 +162,13 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 	DiskQuotaActiveTableFileEntry item;
 	bool		found = false;
 
+	
+	/* We do not collect the active table in either master or mirror segments  */
+	if (IS_QUERY_DISPATCHER() || IsRoleMirror())
+	{
+		return;
+	}
+	
 	MemSet(&item, 0, sizeof(DiskQuotaActiveTableFileEntry));
 	item.dbid = relFileNode->node.dbNode;
 	item.relfilenode = relFileNode->node.relNode;
