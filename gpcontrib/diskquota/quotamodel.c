@@ -162,8 +162,8 @@ init_disk_quota_shmem(void)
 	 * resources in pgss_shmem_startup().
 	 */
 	RequestAddinShmemSpace(DiskQuotaShmemSize());
-	/* 4 locks for diskquota refer to init_lwlocks() for details */
-	RequestAddinLWLocks(4);
+	/* locks for diskquota refer to init_lwlocks() for details */
+	RequestAddinLWLocks(DiskQuotaLocksItemNumber);
 
 	/* Install startup hook to initialize our shared memory. */
 	prev_shmem_startup_hook = shmem_startup_hook;
@@ -212,6 +212,17 @@ disk_quota_shmem_startup(void)
 
 	init_shm_worker_active_tables();
 
+	memset(&hash_ctl, 0, sizeof(hash_ctl));
+	hash_ctl.keysize = sizeof(Oid);
+	hash_ctl.entrysize = sizeof(Oid);
+	hash_ctl.hash = oid_hash;
+
+	monitoring_dbid_cache = ShmemInitHash("table oid cache which shoud tracking",
+			MAX_NUM_MONITORED_DB,
+			MAX_NUM_MONITORED_DB,
+			&hash_ctl,
+			HASH_ELEM | HASH_FUNCTION);
+
 	LWLockRelease(AddinShmemInitLock);
 }
 
@@ -223,6 +234,7 @@ disk_quota_shmem_startup(void)
  * extension_ddl_message.
  * extension_ddl_lock is used to avoid concurrent diskquota
  * extension ddl(create/drop) command.
+ * monitoring_dbid_cache_lock is used to shared `monitoring_dbid_cache` on segment process.
  */
 static void
 init_lwlocks(void)
@@ -231,6 +243,7 @@ init_lwlocks(void)
 	diskquota_locks.black_map_lock = LWLockAssign();
 	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
 	diskquota_locks.extension_ddl_lock = LWLockAssign();
+	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
 }
 
 /*
@@ -245,6 +258,7 @@ DiskQuotaShmemSize(void)
 	size = sizeof(ExtensionDDLMessage);
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(BlackMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
+	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(Oid)));
 	return size;
 }
 

@@ -3,6 +3,9 @@
 
 #include "storage/lwlock.h"
 
+/* max number of monitored database with diskquota enabled */
+#define MAX_NUM_MONITORED_DB 10
+
 typedef enum
 {
 	NAMESPACE_QUOTA,
@@ -21,12 +24,14 @@ typedef enum
 	DISKQUOTA_READY_STATE
 }			DiskQuotaState;
 
+#define DiskQuotaLocksItemNumber (5)
 struct DiskQuotaLocks
 {
 	LWLock	   *active_table_lock;
 	LWLock	   *black_map_lock;
 	LWLock	   *extension_ddl_message_lock;
 	LWLock	   *extension_ddl_lock; /* ensure create diskquota extension serially */
+	LWLock	   *monitoring_dbid_cache_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 
