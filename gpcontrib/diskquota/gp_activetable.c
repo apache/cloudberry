@@ -51,6 +51,7 @@ typedef struct DiskQuotaSetOFCache
 }			DiskQuotaSetOFCache;
 
 HTAB	   *active_tables_map = NULL;
+HTAB	   *monitoring_dbid_cache = NULL;
 
 /* active table hooks which detect the disk file size change. */
 static file_create_hook_type prev_file_create_hook = NULL;
@@ -168,7 +169,18 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 	{
 		return;
 	}
-	
+
+	/* do not collect active table info when the database is not under monitoring.
+	 * this operation is read-only and does not require absolutely exact.
+	 * read the cache with out shared lock */
+	hash_search(monitoring_dbid_cache, &relFileNode->node.dbNode, HASH_FIND, &found);
+
+	if (!found)
+	{
+		return;
+	}
+	found = false;
+
 	MemSet(&item, 0, sizeof(DiskQuotaActiveTableFileEntry));
 	item.dbid = relFileNode->node.dbNode;
 	item.relfilenode = relFileNode->node.relNode;
