@@ -9,5 +9,6 @@ test: test_partition
 test: test_vacuum
 test: test_primary_failure
 test: test_extension
+test: test_manytable
 test: clean
 test: test_insert_after_drop

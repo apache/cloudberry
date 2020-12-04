@@ -54,9 +54,6 @@
 #include "diskquota.h"
 PG_MODULE_MAGIC;
 
-/* max number of monitored database with diskquota enabled */
-#define MAX_NUM_MONITORED_DB 10
-
 #define DISKQUOTA_DB	"diskquota"
 #define DISKQUOTA_APPLICATION_NAME  "gp_reserved_gpdiskquota"
 
@@ -653,6 +650,13 @@ start_workers_from_dblist(void)
 			ereport(LOG, (errmsg("[diskquota launcher] diskquota monitored database limit is reached, database(oid:%u) will not enable diskquota", dbid)));
 			break;
 		}
+
+		/* put the dbid to monitoring database cache to filter out table not under
+		 * monitoring. here is no need to consider alloc failure, checked before */
+		LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
+		hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER, NULL);
+		LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
+
 	}
 	num_db = num;
 	SPI_finish();
@@ -776,6 +780,9 @@ do_process_extension_ddl_message(MessageResult * code, ExtensionDDLMessage local
 static void
 on_add_db(Oid dbid, MessageResult * code)
 {
+	bool found = false;
+	void *enrty = NULL;
+
 	if (num_db >= MAX_NUM_MONITORED_DB)
 	{
 		*code = ERR_EXCEED;
@@ -807,6 +814,16 @@ on_add_db(Oid dbid, MessageResult * code)
 		*code = ERR_START_WORKER;
 		ereport(ERROR, (errmsg("[diskquota launcher] failed to start worker - dbid=%u", dbid)));
 	}
+
+	LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
+	enrty = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER, &found);
+	if (!found && enrty == NULL)
+	{
+		*code = ERR_EXCEED;
+		ereport(WARNING,
+				(errmsg("can't alloc memory on dbid cache, there ary too many databases to monitor")));
+	}
+	LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
 }
 
 /*
@@ -814,7 +831,7 @@ on_add_db(Oid dbid, MessageResult * code)
  * do our best to:
  * 1. kill the associated worker process
  * 2. delete dbid from diskquota_namespace.database_list
- * 3. invalidate black-map entries from shared memory
+ * 3. invalidate black-map entries and monitoring_dbid_cache from shared memory
  */
 static void
 on_del_db(Oid dbid, MessageResult * code)
@@ -835,6 +852,10 @@ on_del_db(Oid dbid, MessageResult * code)
 	PG_TRY();
 	{
 		del_dbid_from_database_list(dbid);
+
+		LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
+		hash_search(monitoring_dbid_cache, &dbid, HASH_REMOVE, NULL);
+		LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
 	}
 	PG_CATCH();
 	{
@@ -929,7 +950,7 @@ terminate_all_workers(void)
 
 	/*
 	 * terminate the worker processes. since launcher will exit immediately,
-	 * we skip to clear the disk_quota_worker_map
+	 * we skip to clear the disk_quota_worker_map and monitoring_dbid_cache
 	 */
 	while ((hash_entry = hash_seq_search(&iter)) != NULL)
 	{
