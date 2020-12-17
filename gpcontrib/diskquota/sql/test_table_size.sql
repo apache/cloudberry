@@ -7,7 +7,7 @@ insert into a select * from generate_series(1,10000);
 select pg_sleep(2);
 create table buffer(oid oid, relname name, size bigint);
 
-insert in buffer select oid, relname, pg_total_relation_size(oid) from pg_class, diskquota.table_size as dt where dt.size = oid and relname = 'a';
+insert into buffer select oid, relname, pg_total_relation_size(oid) from pg_class, diskquota.table_size as dt where dt.size = oid and relname = 'a';
 
 insert into buffer select oid, relname, sum(pg_total_relation_size(oid)) from gp_dist_random('pg_class') where oid > 16384 and (relkind='r' or relkind='m') and relname = 'a' group by oid, relname;
 
