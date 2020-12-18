@@ -39,7 +39,10 @@
 #include "utils/memutils.h"
 #include "utils/numeric.h"
 
+#include <cdb/cdbvars.h>
+
 #include "diskquota.h"
+#include "gp_activetable.h"
 
 /* disk quota helper function */
 
@@ -47,6 +50,7 @@ PG_FUNCTION_INFO_V1(init_table_size_table);
 PG_FUNCTION_INFO_V1(diskquota_start_worker);
 PG_FUNCTION_INFO_V1(set_schema_quota);
 PG_FUNCTION_INFO_V1(set_role_quota);
+PG_FUNCTION_INFO_V1(update_diskquota_db_list);
 
 /* timeout count to wait response from launcher process, in 1/10 sec */
 #define WAIT_TIME_COUNT  1200
@@ -634,4 +638,52 @@ get_size_in_mb(char *str)
 											   NumericGetDatum(num)));
 
 	return result;
+}
+
+/*
+ * Function to update the db list on each segment
+ */
+Datum
+update_diskquota_db_list(PG_FUNCTION_ARGS)
+{
+	Oid	dbid = PG_GETARG_OID(0);
+	int	mode = PG_GETARG_INT32(1);
+	bool	found = false;
+
+	if (!superuser())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to update db list")));
+	}
+
+	/* add/remove the dbid to monitoring database cache to filter out table not under
+	* monitoring in hook functions
+	*/
+
+	LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
+	if (mode == 0)
+	{	
+		Oid *entry = NULL;
+		entry = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER, &found);
+		elog(WARNING, "add dbid %u into SHM", dbid);
+		if (!found && entry == NULL)
+		{
+			ereport(WARNING,
+				(errmsg("can't alloc memory on dbid cache, there ary too many databases to monitor")));
+		}
+	}
+	else if (mode == 1)
+	{
+		hash_search(monitoring_dbid_cache, &dbid, HASH_REMOVE, &found);
+		if (!found)
+		{
+			ereport(WARNING,
+				(errmsg("cannot remove the database from db list, dbid not found")));
+		}
+	}
+	LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
+
+	PG_RETURN_VOID();
+
 }

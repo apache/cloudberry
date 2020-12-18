@@ -42,7 +42,9 @@
 #include "utils/syscache.h"
 
 #include <stdlib.h>
-#include <cdb/cdbvars.h>
+#include "cdb/cdbvars.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbdispatchresult.h"
 
 #include "gp_activetable.h"
 #include "diskquota.h"
@@ -408,7 +410,17 @@ do_check_diskquota_state_is_ready(void)
 	int			ret;
 	TupleDesc	tupdesc;
 	int			i;
+	StringInfoData sql_command;
 
+	/* Add the dbid to watching list, so the hook can catch the table change*/
+	initStringInfo(&sql_command);
+	appendStringInfo(&sql_command, "select gp_segment_id, diskquota.update_diskquota_db_list(%u, 0) from gp_dist_random('gp_id');",
+				MyDatabaseId);
+	ret = SPI_execute(sql_command.data, true, 0);
+        if (ret != SPI_OK_SELECT)
+                ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+                                                errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+	pfree(sql_command.data);
 	/*
 	 * check diskquota state from table diskquota.state errors will be catch
 	 * at upper level function.
@@ -447,6 +459,7 @@ do_check_diskquota_state_is_ready(void)
 	}
 	ereport(WARNING, (errmsg("Diskquota is not in ready state. "
 							 "please run UDF init_table_size_table()")));
+
 	return false;
 }
 
