@@ -539,6 +539,7 @@ create_monitor_db_table(void)
 
 	sql = "create schema if not exists diskquota_namespace;"
 		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);"
+		"create schema if not exists diskquota;"
 		"create or replace function diskquota.update_diskquota_db_list(oid, int4) returns void "
 		"strict as '$libdir/diskquota' language C;";
 
