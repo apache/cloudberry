@@ -538,7 +538,9 @@ create_monitor_db_table(void)
 	bool		ret = true;
 
 	sql = "create schema if not exists diskquota_namespace;"
-		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);";
+		"create table if not exists diskquota_namespace.database_list(dbid oid not null unique);"
+		"create or replace function diskquota.update_diskquota_db_list(oid, int4) returns void "
+		"strict as '$libdir/diskquota' language C;";
 
 	StartTransactionCommand();
 
@@ -637,6 +639,7 @@ start_workers_from_dblist(void)
 			ereport(LOG, (errmsg("[diskquota launcher] database(oid:%u) in table database_list is not a valid database", dbid)));
 			continue;
 		}
+		elog(WARNING, "start workers");
 		if (!start_worker_by_dboid(dbid))
 			ereport(ERROR, (errmsg("[diskquota launcher] start worker process of database(oid:%u) failed", dbid)));
 		num++;
@@ -650,13 +653,6 @@ start_workers_from_dblist(void)
 			ereport(LOG, (errmsg("[diskquota launcher] diskquota monitored database limit is reached, database(oid:%u) will not enable diskquota", dbid)));
 			break;
 		}
-
-		/* put the dbid to monitoring database cache to filter out table not under
-		 * monitoring. here is no need to consider alloc failure, checked before */
-		LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
-		hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER, NULL);
-		LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
-
 	}
 	num_db = num;
 	SPI_finish();
@@ -780,9 +776,6 @@ do_process_extension_ddl_message(MessageResult * code, ExtensionDDLMessage local
 static void
 on_add_db(Oid dbid, MessageResult * code)
 {
-	bool found = false;
-	void *enrty = NULL;
-
 	if (num_db >= MAX_NUM_MONITORED_DB)
 	{
 		*code = ERR_EXCEED;
@@ -815,15 +808,6 @@ on_add_db(Oid dbid, MessageResult * code)
 		ereport(ERROR, (errmsg("[diskquota launcher] failed to start worker - dbid=%u", dbid)));
 	}
 
-	LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
-	enrty = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER, &found);
-	if (!found && enrty == NULL)
-	{
-		*code = ERR_EXCEED;
-		ereport(WARNING,
-				(errmsg("can't alloc memory on dbid cache, there ary too many databases to monitor")));
-	}
-	LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
 }
 
 /*
@@ -852,10 +836,6 @@ on_del_db(Oid dbid, MessageResult * code)
 	PG_TRY();
 	{
 		del_dbid_from_database_list(dbid);
-
-		LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
-		hash_search(monitoring_dbid_cache, &dbid, HASH_REMOVE, NULL);
-		LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
 	}
 	PG_CATCH();
 	{
@@ -908,6 +888,16 @@ del_dbid_from_database_list(Oid dbid)
 	{
 		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
 	}
+	pfree(str.data);
+
+	/* clean the dbid from shared memory*/
+	initStringInfo(&str);
+	appendStringInfo(&str, "select gp_segment_id, diskquota.update_diskquota_db_list(%u, 1)"
+			" from gp_dist_random('gp_id');", dbid);
+	ret = SPI_execute(str.data, true, 0);
+	if (ret != SPI_OK_SELECT)
+		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
+	pfree(str.data);
 }
 
 /*

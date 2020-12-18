@@ -162,6 +162,7 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 	DiskQuotaActiveTableFileEntry *entry;
 	DiskQuotaActiveTableFileEntry item;
 	bool		found = false;
+	Oid dbid = relFileNode->node.dbNode;
 
 	
 	/* We do not collect the active table in either master or mirror segments  */
@@ -173,7 +174,7 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 	/* do not collect active table info when the database is not under monitoring.
 	 * this operation is read-only and does not require absolutely exact.
 	 * read the cache with out shared lock */
-	hash_search(monitoring_dbid_cache, &relFileNode->node.dbNode, HASH_FIND, &found);
+	hash_search(monitoring_dbid_cache, &dbid, HASH_FIND, &found);
 
 	if (!found)
 	{
