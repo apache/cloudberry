@@ -5,6 +5,8 @@ set -exo pipefail
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TOP_DIR=${CWDIR}/../../../
 GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
+CUT_NUMBER=6
+
 source "${GPDB_CONCOURSE_DIR}/common.bash"
 function test(){	
 	chown -R gpadmin:gpadmin ${TOP_DIR};
@@ -22,7 +24,7 @@ function test(){
 		trap "[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs" EXIT
 		make installcheck
 		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
-		ps -ef | grep postgres| grep qddir| cut -d ' ' -f 6 | xargs kill -9
+		ps -ef | grep postgres| grep qddir| cut -d ' ' -f ${CUT_NUMBER} | xargs kill -9
 		export PGPORT=6001
 		echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
 		source /usr/local/greenplum-db-devel/greenplum_path.sh
@@ -51,6 +53,9 @@ function _main() {
 
 	time make_cluster
 	time install_diskquota
+	if [ "${DISKQUOTA_OS}" == "rhel7" ]; then
+		CUT_NUMBER=5
+	fi
 
 	time test
 }
