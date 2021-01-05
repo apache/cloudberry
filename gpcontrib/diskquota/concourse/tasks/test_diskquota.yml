@@ -10,3 +10,4 @@ inputs:
 run:
   path: diskquota_src/concourse/scripts/test_diskquota.sh
 params:
+  DISKQUOTA_OS:
