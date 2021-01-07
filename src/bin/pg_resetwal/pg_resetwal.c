@@ -564,6 +564,9 @@ main(int argc, char *argv[])
 			FullTransactionIdFromEpochAndXid(EpochFromFullTransactionId(ControlFile.checkPointCopy.nextXid),
 											 set_xid);
 
+	if (set_gxid != 0)
+		ControlFile.checkPointCopy.nextGxid = set_gxid;
+
 	if (set_oldest_commit_ts_xid != 0)
 		ControlFile.checkPointCopy.oldestCommitTsXid = set_oldest_commit_ts_xid;
 	if (set_newest_commit_ts_xid != 0)
@@ -1542,12 +1545,10 @@ usage(void)
 	printf(_("  -O, --multixact-offset=OFFSET    set next multitransaction offset\n"));
 	printf(_("  -r RELFILENODE                 set next RELFILENODE\n"));
 	printf(_("      --system-identifier=ID     set database system identifier\n"));
-	printf(_("  -u, --oldest-transaction-id=XID  set oldest transaction ID\n"));
-	printf(_("  -V, --version                    output version information, then exit\n"));
-	printf(_("  -x, --next-transaction-id=XID    set next transaction ID\n"));
+	printf(_("  -V, --version                  output version information, then exit\n"));
+	printf(_("  -x, --next-transaction-id=XID  set next transaction ID\n"));
 	printf(_("      --next-gxid=GXID           set next distributed transaction ID\n"));
-	printf(_("      --wal-segsize=SIZE           size of WAL segments, in megabytes\n"));
-	printf(_("  -?, --help                       show this help, then exit\n"));
-	printf(_("\nReport bugs to <%s>.\n"), PACKAGE_BUGREPORT);
-	printf(_("%s home page: <%s>\n"), PACKAGE_NAME, PACKAGE_URL);
+	printf(_("      --wal-segsize=SIZE         size of WAL segments, in megabytes\n"));
+	printf(_("  -?, --help                     show this help, then exit\n"));
+	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
 }
