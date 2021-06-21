@@ -102,12 +102,14 @@ CreateResourceGroup(CreateResourceGroupStmt *stmt)
 	ResGroupCaps caps;
 	int			nResGroups;
 	MemoryContext oldContext;
+	Oid			role;
 
-	/* Permission check - only superuser can create groups. */
-	if (!superuser())
+	/* Permission check - only superuser or mdb_admin can create groups. */
+	role = get_role_oid("mdb_admin", true);
+	if (!is_member_of_role(GetUserId(), role))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to create resource groups")));
+				 errmsg("must be mdb_admin to create resource groups")));
 
 	/*
 	 * Check for an illegal name ('none' is used to signify no group in ALTER ROLE).
@@ -268,12 +270,20 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	SysScanDesc	 sscan;
 	Oid			 groupid;
 	ResourceGroupCallbackContext	*callbackCtx;
+	Oid			 role;
 
-	/* Permission check - only superuser can drop resource groups. */
-	if (!superuser())
+	/* Permission check - only superuser or mdb_admin can drop resource groups. */
+	role = get_role_oid("mdb_admin", true);
+	if (!is_member_of_role(GetUserId(), role))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to drop resource groups")));
+				 errmsg("must be mdb_admin to drop resource groups")));
+
+	/* Permission check - only superuser can drop resource group admin_group. */
+	if (!superuser() && (strcmp(stmt->name, "admin_group") == 0))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to drop resource group admin_group")));
 
 	/*
 	 * Check the pg_resgroup relation to be certain the resource group already
@@ -374,12 +384,20 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	char *io_limit = NULL;
 	ResourceGroupCallbackContext	*callbackCtx;
 	MemoryContext oldContext;
+	Oid					role;
 
-	/* Permission check - only superuser can alter resource groups. */
-	if (!superuser())
+	/* Permission check - only mdb_admin can alter resource groups. */
+	role = get_role_oid("mdb_admin", true);
+	if (!is_member_of_role(GetUserId(), role))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to alter resource groups")));
+				 errmsg("must be mdb_admin to alter resource groups")));
+
+	/* Permission check - only superuser can alter admin_group. */
+	if (!superuser() && (strcmp(stmt->name, "admin_group") == 0))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to alter resource group admin_group")));
 
 	/* Currently we only support to ALTER one limit at one time */
 	Assert(list_length(stmt->options) == 1);

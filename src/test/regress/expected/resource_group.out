@@ -9,17 +9,11 @@
 -- drop them.
 -- start_ignore
 DROP ROLE IF EXISTS role_dump_test1;
-NOTICE:  role "role_dump_test1" does not exist, skipping
 DROP ROLE IF EXISTS role_dump_test2;
-NOTICE:  role "role_dump_test2" does not exist, skipping
 DROP ROLE IF EXISTS role_dump_test3;
-NOTICE:  role "role_dump_test3" does not exist, skipping
 DROP RESOURCE GROUP rg_dump_test1;
-ERROR:  resource group "rg_dump_test1" does not exist
 DROP RESOURCE GROUP rg_dump_test2;
-ERROR:  resource group "rg_dump_test2" does not exist
 DROP RESOURCE GROUP rg_dump_test3;
-ERROR:  resource group "rg_dump_test3" does not exist
 -- end_ignore
 CREATE RESOURCE GROUP rg_dump_test1 WITH (concurrency=2, cpu_max_percent=5);
 WARNING:  resource group is disabled
@@ -42,3 +36,37 @@ CREATE ROLE role_dump_test3 RESOURCE GROUP rg_dump_test3;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 WARNING:  resource group is disabled
 HINT:  To enable set gp_resource_manager=group
+CREATE ROLE mdb_admin RESOURCE GROUP rg_dump_test1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+WARNING:  resource group is disabled
+HINT:  To enable set gp_resource_manager=group
+CREATE ROLE not_mdb_admin RESOURCE GROUP rg_dump_test1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+WARNING:  resource group is disabled
+HINT:  To enable set gp_resource_manager=group
+SET ROLE mdb_admin;
+CREATE RESOURCE GROUP mdb_admin_test1 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+WARNING:  resource group is disabled
+HINT:  To enable set gp_resource_manager=group
+CREATE RESOURCE GROUP mdb_admin_test2 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+WARNING:  resource group is disabled
+HINT:  To enable set gp_resource_manager=group
+ALTER RESOURCE GROUP mdb_admin_test1 SET cpu_max_percent 2;
+DROP RESOURCE GROUP mdb_admin_test1;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 2;
+ERROR:  must be superuser to alter resource group admin_group
+DROP RESOURCE GROUP admin_group;
+ERROR:  must be superuser to drop resource group admin_group
+SET ROLE not_mdb_admin;
+CREATE RESOURCE GROUP mdb_admin_test1 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+ERROR:  must be mdb_admin to create resource groups
+ALTER RESOURCE GROUP mdb_admin_test2 SET cpu_max_percent 2;
+ERROR:  must be mdb_admin to alter resource groups
+DROP RESOURCE GROUP mdb_admin_test2;
+ERROR:  must be mdb_admin to drop resource groups
+DROP RESOURCE GROUP admin_group;
+ERROR:  must be mdb_admin to drop resource groups
+RESET ROLE;
+DROP RESOURCE GROUP mdb_admin_test2;
+DROP ROLE mdb_admin;
+DROP ROLE not_mdb_admin;
