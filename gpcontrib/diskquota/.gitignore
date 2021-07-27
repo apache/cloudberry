@@ -4,3 +4,6 @@
 regression.out
 regression.diffs
 /results/
+upgrade_test/regression.out
+upgrade_test/regression.diffs
+upgrade_test/results
