@@ -3,11 +3,20 @@
 ## ======================================================================
 
 groups:
+- name: ALL
+  jobs:
+    - diskquota_centos6_build_test
+    - diskquota_centos7_build_test
+    - diskquota_ubuntu18_build_test
+    - diskquota_centos7_extension_upgrade_1.0_2.0
 - name: GPDB6
   jobs:
     - diskquota_centos6_build_test
     - diskquota_centos7_build_test
     - diskquota_ubuntu18_build_test
+- name: GPDB6_UPGRADE
+  jobs:
+    - diskquota_centos7_extension_upgrade_1.0_2.0
 
 resource_types:
 - name: gcs
@@ -42,6 +51,20 @@ resources:
   source:
     repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
     tag: latest
+
+- name: bin_diskquota_centos7_1.0
+  type: gcs
+  source:
+    bucket: {{gcs-bucket}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    regexp: diskquota/released/gpdb6/diskquota-(1.*)-rhel7_x86_64.tar.gz
+
+- name: bin_diskquota_centos7
+  type: gcs
+  source:
+    bucket: {{gcs-bucket-dev}}
+    json_key: {{concourse-gcs-resources-service-account-key}}
+    versioned_file: diskquota/intermediates/gpdb6/diskquota-master-rhel7_x86_64.tar.gz
 
 # Github Source Codes
 
@@ -105,6 +128,10 @@ jobs:
       bin_diskquota: diskquota_artifacts
     params:
       DISKQUOTA_OS: rhel7
+  - aggregate:
+    - put: bin_diskquota_centos7
+      params:
+        file: diskquota_artifacts/diskquota*.tar.gz
 
 - name: diskquota_centos6_build_test
   max_in_flight: 3
@@ -152,3 +179,26 @@ jobs:
       bin_diskquota: diskquota_artifacts
     params:
       DISKQUOTA_OS: ubuntu18.04
+
+- name: diskquota_centos7_extension_upgrade_1.0_2.0
+  max_in_flight: 3
+  plan:
+  - aggregate:
+    - get: centos-gpdb-dev-7
+    - get: bin_diskquota_old
+      resource: bin_diskquota_centos7_1.0
+    - get: bin_diskquota_centos7
+      trigger: true
+    - get: bin_gpdb
+      resource: bin_gpdb_centos7
+    - get: gpdb_src
+    - get: diskquota_src
+  - task: upgrade_extension
+    file: diskquota_src/concourse/tasks/upgrade_extension.yml
+    input_mapping:
+      bin_diskquota_new: bin_diskquota_centos7
+    image: centos-gpdb-dev-7
+    params:
+      DISKQUOTA_OS: rhel7
+      OLD_VERSION: "1.0"
+      NEW_VERSION: "2.0"
