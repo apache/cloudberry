@@ -34,7 +34,7 @@ function _main() {
 	# export install_new_version_diskquota function, becuase it will
 	# be called by upgrade_test/sql/upgrade_extension.sql
 	export -f install_new_version_diskquota
-	time test  ${TOP_DIR}/diskquota_src/upgrade_test
+	time test  ${TOP_DIR}/diskquota_src/upgrade_test false
 }
 
 _main "$@"
