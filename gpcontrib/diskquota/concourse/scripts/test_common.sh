@@ -1,4 +1,6 @@
-# the directory to run the "make install" as the param
+# the directory to run the "make install" as the first param
+# the second param is a bool var, used to judge if need to active the standby
+# and run the regress test again
 function test(){
 	chown -R gpadmin:gpadmin ${TOP_DIR};
 	cat > /home/gpadmin/test.sh <<-EOF
@@ -16,14 +18,16 @@ function test(){
 		trap "[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs" EXIT
 		make installcheck
 		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
-		ps -ef | grep postgres| grep qddir| cut -d ' ' -f ${CUT_NUMBER} | xargs kill -9
-		export PGPORT=6001
-		echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
-		rm /tmp/.s.PGSQL.6000*
-		gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
-		make installcheck
-		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
+		if $2 ; then
+			ps -ef | grep postgres| grep qddir| cut -d ' ' -f ${CUT_NUMBER} | xargs kill -9
+			export PGPORT=6001
+			echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
+			source /usr/local/greenplum-db-devel/greenplum_path.sh
+			rm /tmp/.s.PGSQL.6000*
+			gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
+			make installcheck
+			[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
+		fi
 		popd
 	EOF
 	export MASTER_DATA_DIRECTORY=${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1

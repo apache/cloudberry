@@ -19,7 +19,7 @@ function _main() {
 		CUT_NUMBER=6
 	fi
 
-	time test ${TOP_DIR}/diskquota_src/
+	time test ${TOP_DIR}/diskquota_src/ true
 }
 
 _main "$@"
