@@ -11,7 +11,7 @@ groups:
 
 resource_types:
 - name: gcs
-  type: docker-image
+  type: registry-image
   source:
     repository: frodenas/gcs-resource
 
@@ -20,27 +20,27 @@ resources:
 # Image Resources
 
 - name: centos-gpdb-dev-6
-  type: docker-image
+  type: registry-image
   source:
-    repository: pivotaldata/centos-gpdb-dev
-    tag: '6-gcc6.2-llvm3.7'
+    repository: gcr.io/data-gpdb-public-images/gpdb5-centos6-build-test
+    tag: latest
 
 - name: centos-gpdb-dev-7
-  type: docker-image
+  type: registry-image
   source:
-    repository: pivotaldata/centos-gpdb-dev
-    tag: '7-gcc6.2-llvm3.7'
+    repository: gcr.io/data-gpdb-public-images/gpdb5-centos7-build-test
+    tag: latest
 
 - name: ubuntu18-image-build
-  type: docker-image
+  type: registry-image
   source:
-    repository: pivotaldata/gpdb6-ubuntu18.04-build
+    repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-build
     tag: latest
 
 - name: ubuntu18-image-test
-  type: docker-image
+  type: registry-image
   source:
-    repository: pivotaldata/gpdb6-ubuntu18.04-test
+    repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
     tag: latest
 
 # Github Source Codes
@@ -103,6 +103,8 @@ jobs:
     image: centos-gpdb-dev-7
     input_mapping:
       bin_diskquota: diskquota_artifacts
+    params:
+      DISKQUOTA_OS: rhel7
 
 - name: diskquota_centos6_build_test
   max_in_flight: 3
@@ -124,6 +126,8 @@ jobs:
     image: centos-gpdb-dev-6
     input_mapping:
       bin_diskquota: diskquota_artifacts
+    params:
+      DISKQUOTA_OS: rhel6
 
 - name: diskquota_ubuntu18_build_test
   max_in_flight: 3
@@ -146,4 +150,5 @@ jobs:
     image: ubuntu18-image-test
     input_mapping:
       bin_diskquota: diskquota_artifacts
-
+    params:
+      DISKQUOTA_OS: ubuntu18.04
