@@ -5,7 +5,7 @@ set -exo pipefail
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TOP_DIR=${CWDIR}/../../../
 GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
-CUT_NUMBER=6
+CUT_NUMBER=5
 
 source "${GPDB_CONCOURSE_DIR}/common.bash"
 function test(){	
@@ -53,8 +53,8 @@ function _main() {
 
 	time make_cluster
 	time install_diskquota
-	if [ "${DISKQUOTA_OS}" == "rhel7" ]; then
-		CUT_NUMBER=5
+	if [ "${DISKQUOTA_OS}" == "ubuntu18.04" ]; then
+		CUT_NUMBER=6
 	fi
 
 	time test
