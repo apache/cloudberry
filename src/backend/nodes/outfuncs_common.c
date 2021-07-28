@@ -781,6 +781,7 @@ _outAlteredTableInfo(StringInfo str, const AlteredTableInfo *node)
 	WRITE_NODE_FIELD(afterStmts);
 	WRITE_BOOL_FIELD(verify_new_notnull);
 	WRITE_INT_FIELD(rewrite);
+	WRITE_OID_FIELD(newAccessMethod);
 	WRITE_BOOL_FIELD(dist_opfamily_changed);
 	WRITE_OID_FIELD(new_opclass);
 	/*
