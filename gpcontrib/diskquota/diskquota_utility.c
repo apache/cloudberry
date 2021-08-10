@@ -28,6 +28,7 @@
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
+#include "commands/tablespace.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "storage/proc.h"
@@ -50,6 +51,8 @@ PG_FUNCTION_INFO_V1(init_table_size_table);
 PG_FUNCTION_INFO_V1(diskquota_start_worker);
 PG_FUNCTION_INFO_V1(set_schema_quota);
 PG_FUNCTION_INFO_V1(set_role_quota);
+PG_FUNCTION_INFO_V1(set_schema_tablespace_quota);
+PG_FUNCTION_INFO_V1(set_role_tablespace_quota);
 PG_FUNCTION_INFO_V1(update_diskquota_db_list);
 
 /* timeout count to wait response from launcher process, in 1/10 sec */
@@ -61,7 +64,8 @@ static void dq_object_access_hook(ObjectAccessType access, Oid classId,
 					  Oid objectId, int subId, void *arg);
 static const char *ddl_err_code_to_err_message(MessageResult code);
 static int64 get_size_in_mb(char *str);
-static void set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
+static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
+static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 
 /* ---- Help Functions to set quota limit. ---- */
 /*
@@ -400,7 +404,7 @@ set_role_quota(PG_FUNCTION_ARGS)
 	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
 
-	set_quota_internal(roleoid, quota_limit_mb, ROLE_QUOTA);
+	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_QUOTA);
 	PG_RETURN_VOID();
 }
 
@@ -430,16 +434,96 @@ set_schema_quota(PG_FUNCTION_ARGS)
 	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
 
-	set_quota_internal(namespaceoid, quota_limit_mb, NAMESPACE_QUOTA);
+	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_QUOTA);
 	PG_RETURN_VOID();
 }
 
 /*
- * Write the quota limit info into quota_config table under
+ * Set disk quota limit for tablepace role.
+ */
+Datum
+set_role_tablespace_quota(PG_FUNCTION_ARGS)
+{
+/*
+ * Write the quota limit info into target and quota_config table under
  * 'diskquota' schema of the current database.
  */
+	Oid	spcoid;
+	char	*spcname;
+	Oid	roleoid;
+	char   	*rolname;
+	char   	*sizestr;
+	int64	quota_limit_mb;
+	
+	if (!superuser())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to set disk quota limit")));
+	}
+
+	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	rolname = str_tolower(rolname, strlen(rolname), DEFAULT_COLLATION_OID);
+	roleoid = get_role_oid(rolname, false);
+
+	spcname = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
+	spcoid = get_tablespace_oid(spcname, false);
+
+
+	sizestr = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
+	quota_limit_mb = get_size_in_mb(sizestr);
+
+	set_target_internal(roleoid, spcoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
+	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
+	PG_RETURN_VOID();
+}
+
+/*
+ * Set disk quota limit for tablepace schema.
+ */
+Datum
+set_schema_tablespace_quota(PG_FUNCTION_ARGS)
+{
+/*
+ * Write the quota limit info into target and quota_config table under
+ * 'diskquota' schema of the current database.
+ */
+	Oid	spcoid;
+	char	*spcname;
+	Oid	namespaceoid;
+	char 	*nspname;
+	char   	*sizestr;
+	int64	quota_limit_mb;
+	
+	if (!superuser())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to set disk quota limit")));
+	}
+
+	nspname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	nspname = str_tolower(nspname, strlen(nspname), DEFAULT_COLLATION_OID);
+	namespaceoid = get_namespace_oid(nspname, false);
+
+	spcname = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
+	spcoid = get_tablespace_oid(spcname, false);
+
+
+	sizestr = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
+	quota_limit_mb = get_size_in_mb(sizestr);
+
+	set_target_internal(namespaceoid, spcoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
+	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
+	PG_RETURN_VOID();
+}
+
 static void
-set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
+set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 {
 	int			ret;
 	StringInfoData buf;
@@ -451,7 +535,7 @@ set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 					 targetoid, type);
 
 	/*
-	 * If error happens in set_quota_internal, just return error messages to
+	 * If error happens in set_quota_config_internal, just return error messages to
 	 * the client side. So there is no need to catch the error.
 	 */
 	SPI_connect();
@@ -492,6 +576,62 @@ set_quota_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 		ret = SPI_execute(buf.data, false, 0);
 		if (ret != SPI_OK_UPDATE)
 			elog(ERROR, "cannot update quota setting table, error code %d", ret);
+	}
+
+	/*
+	 * And finish our transaction.
+	 */
+	SPI_finish();
+	return;
+}
+
+static void
+set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type)
+{
+	int			ret;
+	StringInfoData buf;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf,
+					 "select true from diskquota.quota_config as q, diskquota.target as t"
+					 " where t.primaryOid = %u"
+					 " and t.tablespaceOid=%u"
+					 " and t.quotaType=%d"
+					 " and t.quotaType=q.quotaType"
+					 " and t.primaryOid=q.targetOid;",
+					 primaryoid, spcoid, type);
+
+	/*
+	 * If error happens in set_quota_config_internal, just return error messages to
+	 * the client side. So there is no need to catch the error.
+	 */
+	SPI_connect();
+
+	ret = SPI_execute(buf.data, true, 0);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot select target setting table: error code %d", ret);
+
+	/* if the schema or role's quota has been set before */
+	if (SPI_processed == 0 && quota_limit_mb > 0)
+	{
+		resetStringInfo(&buf);
+		appendStringInfo(&buf,
+						 "insert into diskquota.target values(%d,%u,%u)",
+						  type, primaryoid, spcoid);
+		ret = SPI_execute(buf.data, false, 0);
+		if (ret != SPI_OK_INSERT)
+			elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
+	}
+	else if (SPI_processed > 0 && quota_limit_mb <= 0)
+	{
+		resetStringInfo(&buf);
+		appendStringInfo(&buf,
+						 "delete from diskquota.target where primaryOid=%u"
+						 " and tablespaceOid=%u;",
+						 primaryoid, spcoid);
+		ret = SPI_execute(buf.data, false, 0);
+		if (ret != SPI_OK_DELETE)
+			elog(ERROR, "cannot delete item from target setting table, error code %d", ret);
 	}
 
 	/*

@@ -26,6 +26,8 @@ function pkg() {
         lib/postgresql/diskquota.so \
         share/postgresql/extension/diskquota.control \
         share/postgresql/extension/diskquota--1.0.sql \
+        share/postgresql/extension/diskquota--2.0.sql \
+        share/postgresql/extension/diskquota--1.0--2.0.sql \
         install_gpdb_component
       ;;
     rhel7)
@@ -33,6 +35,8 @@ function pkg() {
         lib/postgresql/diskquota.so \
         share/postgresql/extension/diskquota.control \
         share/postgresql/extension/diskquota--1.0.sql \
+        share/postgresql/extension/diskquota--2.0.sql \
+        share/postgresql/extension/diskquota--1.0--2.0.sql \
         install_gpdb_component
       ;;
     ubuntu18.04)
@@ -40,6 +44,8 @@ function pkg() {
         lib/postgresql/diskquota.so \
         share/postgresql/extension/diskquota.control \
         share/postgresql/extension/diskquota--1.0.sql \
+        share/postgresql/extension/diskquota--2.0.sql \
+        share/postgresql/extension/diskquota--1.0--2.0.sql \
         install_gpdb_component
       ;;
     *) echo "Unknown OS: $OSVER"; exit 1 ;;
