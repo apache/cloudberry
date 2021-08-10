@@ -10,6 +10,7 @@ SELECT pg_sleep(15);
 -- prepare a schema that has reached quota limit
 CREATE SCHEMA badquota;
 SELECT diskquota.set_schema_quota('badquota', '1 MB');
+DROP ROLE IF EXISTS testbody;
 CREATE ROLE testbody;
 CREATE TABLE badquota.t1(i INT);
 ALTER TABLE badquota.t1 OWNER TO testbody;
