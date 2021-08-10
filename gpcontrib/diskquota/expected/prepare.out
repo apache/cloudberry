@@ -35,6 +35,8 @@ SELECT diskquota.set_schema_quota('badquota', '1 MB');
  
 (1 row)
 
+DROP ROLE IF EXISTS testbody;
+NOTICE:  role "testbody" does not exist, skipping
 CREATE ROLE testbody;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE badquota.t1(i INT);
