@@ -15,7 +15,7 @@ function _main() {
 
 	time make_cluster
 	time install_diskquota
-	if [ "${DISKQUOTA_OS}" == "ubuntu18.04" ]; then
+	if [ "${DISKQUOTA_OS}" == "ubuntu18.04" -o "${DISKQUOTA_OS}" == "rhel6" ]; then
 		CUT_NUMBER=6
 	fi
 

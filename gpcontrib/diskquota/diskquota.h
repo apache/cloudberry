@@ -112,4 +112,7 @@ extern Datum diskquota_fetch_table_stat(PG_FUNCTION_ARGS);
 extern int	diskquota_naptime;
 extern int	diskquota_max_active_tables;
 
+extern int 	SEGCOUNT;
+extern int  get_ext_major_version(void);
+extern void truncateStringInfo(StringInfo str, int nchars);
 #endif

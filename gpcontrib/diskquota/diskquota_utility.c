@@ -39,8 +39,10 @@
 #include "utils/formatting.h"
 #include "utils/memutils.h"
 #include "utils/numeric.h"
+#include "utils/snapmgr.h"
 
 #include <cdb/cdbvars.h>
+#include <cdb/cdbutil.h>
 
 #include "diskquota.h"
 #include "gp_activetable.h"
@@ -54,6 +56,7 @@ PG_FUNCTION_INFO_V1(set_role_quota);
 PG_FUNCTION_INFO_V1(set_schema_tablespace_quota);
 PG_FUNCTION_INFO_V1(set_role_tablespace_quota);
 PG_FUNCTION_INFO_V1(update_diskquota_db_list);
+PG_FUNCTION_INFO_V1(set_per_segment_quota);
 
 /* timeout count to wait response from launcher process, in 1/10 sec */
 #define WAIT_TIME_COUNT  1200
@@ -66,6 +69,9 @@ static const char *ddl_err_code_to_err_message(MessageResult code);
 static int64 get_size_in_mb(char *str);
 static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
 static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
+static bool generate_insert_table_size_sql(StringInfoData *buf, int extMajorVersion);
+
+int get_ext_major_version(void);
 
 /* ---- Help Functions to set quota limit. ---- */
 /*
@@ -77,12 +83,14 @@ static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb
 Datum
 init_table_size_table(PG_FUNCTION_ARGS)
 {
-	int			ret;
-	StringInfoData buf;
+	int		ret;
+	StringInfoData	buf;
+	StringInfoData	insert_buf;
 
-	RangeVar   *rv;
+	RangeVar   	*rv;
 	Relation	rel;
-
+	int 		extMajorVersion;
+	bool		insert_flag;
 	/*
 	 * If error happens in init_table_size_table, just return error messages
 	 * to the client side. So there is no need to catch the error.
@@ -100,19 +108,33 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	}
 	heap_close(rel, NoLock);
 
+	/*
+	 * Why don't use insert into diskquota.table_size select from pg_total_relation_size here?
+	 *
+	 * insert into foo select oid, pg_total_relation_size(oid), -1 from pg_class where
+	 * oid >= 16384 and (relkind='r' or relkind='m');
+	 * ERROR:  This query is not currently supported by GPDB.  (entry db 127.0.0.1:6000 pid=61114)
+	 *
+	 * Some functions are peculiar in that they do their own dispatching.
+	 * Such as pg_total_relation_size.
+	 * They do not work on entry db since we do not support dispatching
+	 * from entry-db currently.
+	 */
 	SPI_connect();
+	extMajorVersion = get_ext_major_version();
 
 	/* delete all the table size info in table_size if exist. */
 	initStringInfo(&buf);
+	initStringInfo(&insert_buf);
 	appendStringInfo(&buf, "delete from diskquota.table_size;");
 	ret = SPI_execute(buf.data, false, 0);
 	if (ret != SPI_OK_DELETE)
 		elog(ERROR, "cannot delete table_size table: error code %d", ret);
 
-	/* fetch table size */
+	/* fetch table size for master*/
 	resetStringInfo(&buf);
 	appendStringInfo(&buf,
-					 "select oid, pg_total_relation_size(oid)"
+					 "select oid, pg_total_relation_size(oid), -1"
 					 " from pg_class"
 					 " where oid >= %u and (relkind='r' or relkind='m')",
 					 FirstNormalObjectId);
@@ -120,31 +142,31 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	if (ret != SPI_OK_SELECT)
 		elog(ERROR, "cannot fetch in pg_total_relation_size. error code %d", ret);
 
-	/* fill table_size table with table oid and size info. */
+	/* fill table_size table with table oid and size info for master. */
+	appendStringInfo(&insert_buf,
+	                 "insert into diskquota.table_size values");
+	insert_flag = generate_insert_table_size_sql(&insert_buf, extMajorVersion);
+	/* fetch table size on segments*/
 	resetStringInfo(&buf);
 	appendStringInfo(&buf,
-	                 "insert into diskquota.table_size values");
-	TupleDesc tupdesc = SPI_tuptable->tupdesc;
-	for(int i = 0; i < SPI_processed; i++)
-	{
-		HeapTuple   tup;
-		bool        isnull;
-		Oid         oid;
-		int64       sz;
-
-		tup = SPI_tuptable->vals[i];
-		oid = SPI_getbinval(tup,tupdesc, 1, &isnull);
-		sz = SPI_getbinval(tup,tupdesc, 2, &isnull);
-
-		appendStringInfo(&buf, " ( %u, %ld)", oid, sz);
-		if(i + 1 < SPI_processed)
-			appendStringInfoChar(&buf, ',');
-	}
-	appendStringInfo(&buf, ";");
-
+			"select oid, pg_total_relation_size(oid), gp_segment_id"
+			" from gp_dist_random('pg_class')"
+			" where oid >= %u and (relkind='r' or relkind='m')",
+			FirstNormalObjectId);
 	ret = SPI_execute(buf.data, false, 0);
-	if (ret != SPI_OK_INSERT)
-		elog(ERROR, "cannot insert table_size table: error code %d", ret);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot fetch in pg_total_relation_size. error code %d", ret);
+
+	/* fill table_size table with table oid and size info for segments. */
+	insert_flag = insert_flag | generate_insert_table_size_sql(&insert_buf, extMajorVersion);
+	if (insert_flag)
+	{
+		truncateStringInfo(&insert_buf, insert_buf.len - strlen(","));
+		appendStringInfo(&insert_buf, ";");
+		ret = SPI_execute(insert_buf.data, false, 0);
+		if (ret != SPI_OK_INSERT)
+			elog(ERROR, "cannot insert table_size_per_segment table: error code %d", ret);
+	}
 
 	/* set diskquota state to ready. */
 	resetStringInfo(&buf);
@@ -159,6 +181,47 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+/* last_part is true means there is no other set of values to be inserted to table_size */
+static bool
+generate_insert_table_size_sql(StringInfoData *insert_buf, int extMajorVersion)
+{
+	TupleDesc tupdesc = SPI_tuptable->tupdesc;
+	bool insert_flag = false;
+	for(int i = 0; i < SPI_processed; i++)
+	{
+		HeapTuple	tup;
+		bool        	isnull;
+		Oid         	oid;
+		int64       	sz;
+		int16		segid;
+
+		tup = SPI_tuptable->vals[i];
+		oid = SPI_getbinval(tup,tupdesc, 1, &isnull);
+		sz = SPI_getbinval(tup,tupdesc, 2, &isnull);
+		segid = SPI_getbinval(tup,tupdesc, 3, &isnull);
+		switch (extMajorVersion)
+		{
+			case 1:
+				/* for version 1.0, only insert the values from master */
+				if (segid == -1)
+				{
+					appendStringInfo(insert_buf, " ( %u, %ld),", oid, sz);
+					insert_flag = true;
+				}
+				break;
+			case 2:
+				appendStringInfo(insert_buf, " ( %u, %ld, %d),", oid, sz, segid);
+				insert_flag = true;
+				break;
+			default:
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
+
+		}
+	}
+	return insert_flag;
+}
 /*
  * Trigger to start diskquota worker when create extension diskquota.
  * This function is called at backend side, and will send message to
@@ -404,6 +467,12 @@ set_role_quota(PG_FUNCTION_ARGS)
 	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
 
+	if (quota_limit_mb == 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("disk quota can not be set to 0 MB")));
+	}
 	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_QUOTA);
 	PG_RETURN_VOID();
 }
@@ -434,6 +503,12 @@ set_schema_quota(PG_FUNCTION_ARGS)
 	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
 
+	if (quota_limit_mb == 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("disk quota can not be set to 0 MB")));
+	}
 	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_QUOTA);
 	PG_RETURN_VOID();
 }
@@ -474,6 +549,12 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 	sizestr = text_to_cstring(PG_GETARG_TEXT_PP(2));
 	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
+	if (quota_limit_mb == 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("disk quota can not be set to 0 MB")));
+	}
 
 	set_target_internal(roleoid, spcoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
 	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
@@ -516,6 +597,12 @@ set_schema_tablespace_quota(PG_FUNCTION_ARGS)
 	sizestr = text_to_cstring(PG_GETARG_TEXT_PP(2));
 	sizestr = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
+	if (quota_limit_mb == 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("disk quota can not be set to 0 MB")));
+	}
 
 	set_target_internal(namespaceoid, spcoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
 	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
@@ -555,7 +642,7 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 		if (ret != SPI_OK_INSERT)
 			elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
 	}
-	else if (SPI_processed > 0 && quota_limit_mb <= 0)
+	else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
 		resetStringInfo(&buf);
 		appendStringInfo(&buf,
@@ -622,7 +709,7 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 		if (ret != SPI_OK_INSERT)
 			elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
 	}
-	else if (SPI_processed > 0 && quota_limit_mb <= 0)
+	else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
 		resetStringInfo(&buf);
 		appendStringInfo(&buf,
@@ -826,4 +913,114 @@ update_diskquota_db_list(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 
+}
+
+/*
+ * Function to set disk quota ratio for per-segment
+ */
+Datum
+set_per_segment_quota(PG_FUNCTION_ARGS)
+{
+	int		ret;
+	Oid		spcoid;
+	char	   	*spcname;
+	float4		ratio;
+	if (!superuser())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to set disk quota limit")));
+	}
+
+	spcname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
+	spcoid = get_tablespace_oid(spcname, false);
+
+	ratio = PG_GETARG_FLOAT4(1);
+
+	if (ratio == 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("per segment quota ratio can not be set to 0")));
+	}
+	StringInfoData buf;
+
+	if (SPI_OK_CONNECT != SPI_connect())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("unable to connect to execute internal query")));
+	}
+
+	/* Get all targetOid which are related to this tablespace, and saved into rowIds */
+	initStringInfo(&buf);
+	appendStringInfo(&buf,
+			"SELECT true FROM diskquota.target as t, diskquota.quota_config as q WHERE tablespaceOid = %u AND (t.quotaType = %d OR t.quotaType = %d) AND t.primaryOid = q.targetOid AND t.quotaType = q.quotaType", spcoid, NAMESPACE_TABLESPACE_QUOTA, ROLE_TABLESPACE_QUOTA);
+
+	ret = SPI_execute(buf.data, true, 0);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot select target and quota setting table: error code %d", ret);
+	if (SPI_processed <= 0)
+	{
+		ereport(ERROR,
+				(errmsg("there are no roles or schema quota configed for this tablespace: %s, can't config per segment ratio for it", spcname)));
+	}
+	resetStringInfo(&buf);
+	appendStringInfo(&buf,
+			"UPDATE diskquota.quota_config AS q set segratio = %f FROM diskquota.target AS t WHERE q.targetOid = t.primaryOid AND (t.quotaType = %d OR t.quotaType = %d) AND t.quotaType = q.quotaType And t.tablespaceOid = %d", ratio, NAMESPACE_TABLESPACE_QUOTA, ROLE_TABLESPACE_QUOTA, spcoid);
+	/*
+	 * UPDATEA NAMESPACE_TABLESPACE_PERSEG_QUOTA AND ROLE_TABLESPACE_PERSEG_QUOTA config for this tablespace
+	 */
+	ret = SPI_execute(buf.data, false, 0);
+	if (ret != SPI_OK_UPDATE)
+		elog(ERROR, "cannot update item from quota setting table, error code %d", ret);
+	/*
+	 * And finish our transaction.
+	 */
+	SPI_finish();
+	PG_RETURN_VOID();
+}
+
+/*
+ * Get major version from extversion, and convert it to int
+ * 0 means an invalid major version.
+ */
+int
+get_ext_major_version(void)
+{
+	int		ret;
+	TupleDesc	tupdesc;
+	HeapTuple	tup;
+	Datum		dat;
+	bool		isnull;
+	char		*extversion;
+
+	ret = SPI_execute("select COALESCE(extversion,'') from pg_extension where extname = 'diskquota'", true, 0);
+	if (ret != SPI_OK_SELECT)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+
+	tupdesc = SPI_tuptable->tupdesc;
+	if (tupdesc->natts != 1 ||
+		((tupdesc)->attrs[0])->atttypid != TEXTOID || SPI_processed != 1)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				errmsg("[diskquota] can not get diskquota extesion version")));
+	}
+
+	tup = SPI_tuptable->vals[0];
+	dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
+	if (isnull)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				errmsg("[diskquota] can not get diskquota extesion version")));
+	extversion =  TextDatumGetCString(dat);
+	if (extversion)
+	{
+		return (int)strtol(extversion, (char **) NULL, 10);
+	}
+	return 0;
 }

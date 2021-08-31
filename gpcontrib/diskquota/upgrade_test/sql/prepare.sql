@@ -16,3 +16,16 @@ INSERT INTO badquota.t1 SELECT generate_series(0, 100000);
 SELECT pg_sleep(10);
 -- expect fail
 INSERT INTO badquota.t1 SELECT generate_series(0, 10);
+
+-- prepare a role that has reached quota limit
+DROP SCHEMA IF EXISTS badbody_schema;
+CREATE SCHEMA badbody_schema;
+DROP ROLE IF EXISTS badbody;
+CREATE ROLE badbody;
+SELECT diskquota.set_role_quota('badbody', '2 MB');
+CREATE TABLE badbody_schema.t2(i INT);
+ALTER TABLE badbody_schema.t2 OWNER TO badbody;
+INSERT INTO badbody_schema.t2 SELECT generate_series(0, 100000);
+SELECT pg_sleep(10);
+-- expect fail
+INSERT INTO badbody_schema.t2 SELECT generate_series(0, 10);

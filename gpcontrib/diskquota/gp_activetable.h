@@ -12,9 +12,16 @@ typedef struct DiskQuotaActiveTableFileEntry
 	Oid			tablespaceoid;
 }			DiskQuotaActiveTableFileEntry;
 
+typedef struct TableEntryKey
+{
+	Oid		reloid;
+	int		segid;
+}			TableEntryKey;
+
 typedef struct DiskQuotaActiveTableEntry
 {
-	Oid			tableoid;
+	Oid		reloid;
+	int		segid;
 	Size		tablesize;
 }			DiskQuotaActiveTableEntry;
 

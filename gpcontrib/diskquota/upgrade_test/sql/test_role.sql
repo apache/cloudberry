@@ -27,6 +27,10 @@ INSERT INTO b SELECT generate_series(1,100);
 -- expect insert succeed
 INSERT INTO b2 SELECT generate_series(1,100);
 
+ALTER TABLE b OWNER TO badbody;
+-- expect insert fail
+INSERT INTO b SELECT generate_series(1,100);
+
 DROP TABLE b, b2;
 DROP ROLE u1, u2;
 RESET search_path;
