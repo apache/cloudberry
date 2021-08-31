@@ -9,4 +9,6 @@ m/diskquota.c:\d+\)/
 s/diskquota.c:\d+\)/diskquota.c:xxx/
 m/diskquota_utility.c:\d+\)/
 s/diskquota_utility.c:\d+\)/diskquota_utility.c:xxx/
+m/^CONTEXT:*/
+s/^CONTEXT:/DETAIL:/
 -- end_matchsubs
