@@ -173,7 +173,6 @@ static void remove_quota(QuotaType type, Oid* keys, int16 segid);
 static void add_quota_to_blacklist(QuotaType type, Oid targetOid, Oid tablespaceoid, bool segexceeded);
 static void check_quota_map(QuotaType type);
 static void clear_all_quota_maps(void);
-static void vacuum_all_quota_maps(void);
 static void transfer_table_for_quota(int64 totalsize, QuotaType type, Oid* old_keys, Oid* new_keys, int16 segid);
 
 /* functions to refresh disk quota model*/
@@ -223,15 +222,12 @@ update_size_for_quota(int64 size, QuotaType type, Oid* keys, int16 segid)
 		quota_info[type].map, &key, HASH_ENTER, &found);
 	if (!found)
 	{
-		entry->size = size;
+		entry->size = 0;
 		entry->limit = -1;
 		memcpy(entry->keys, keys, quota_info[type].num_keys * sizeof(Oid));
 		entry->segid = key.segid;
 	}
-	else
-	{
-		entry->size += size;
-	}
+	entry->size += size;
 }
 
 /* add a new entry quota or update the old entry limit */
@@ -365,24 +361,6 @@ clear_all_quota_maps(void)
 	}
 }
 
-static void
-vacuum_all_quota_maps(void) {
-	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
-	{
-		HASH_SEQ_STATUS iter = {0};
-		hash_seq_init(&iter, quota_info[type].map);
-		struct QuotaMapEntry *entry = NULL;
-		while ((entry = hash_seq_search(&iter)) != NULL)
-		{
-			if (entry->limit == -1)
-			{
-				remove_quota(type, entry->keys, entry->segid);
-			}
-		}
-
-	}
-
-}
 /* ---- Functions for disk quota shared memory ---- */
 /*
  * DiskQuotaShmemInit
@@ -668,6 +646,13 @@ do_check_diskquota_state_is_ready(void)
 void
 refresh_disk_quota_model(bool is_init)
 {
+	SEGCOUNT = getgpsegmentCount();
+	if (SEGCOUNT <= 0 )
+	{
+		ereport(ERROR,
+				(errmsg("[diskquota] there is no active segment, SEGCOUNT is %d", SEGCOUNT)));
+	}
+
 	if (is_init)
 		ereport(LOG, (errmsg("[diskquota] initialize quota model started")));
 	/* skip refresh model when load_quotas failed */
@@ -1306,7 +1291,6 @@ do_load_quotas(void)
 		}
 	}
 
-	vacuum_all_quota_maps();
 	return;
 }
 
