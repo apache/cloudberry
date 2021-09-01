@@ -5,13 +5,14 @@
 CREATE SCHEMA spcs1;
 DROP TABLESPACE  IF EXISTS schemaspc;
 CREATE TABLESPACE schemaspc LOCATION '/tmp/schemaspc';
-SELECT diskquota.set_schema_tablespace_quota('spcs1', 'schemaspc','1 MB');
 SET search_path TO spcs1;
 
 CREATE TABLE a(i int) TABLESPACE schemaspc;
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
+SELECT diskquota.set_schema_tablespace_quota('spcs1', 'schemaspc','1 MB');
 SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
