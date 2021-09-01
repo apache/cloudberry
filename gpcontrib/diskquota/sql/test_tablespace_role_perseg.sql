@@ -78,6 +78,10 @@ SELECT diskquota.set_per_segment_quota('rolespc_perseg', -1);
 SELECT pg_sleep(5);
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
+SELECT diskquota.set_per_segment_quota('rolespc_perseg', 0.11);
+SELECT pg_sleep(5);
+-- expect insert fail
+INSERT INTO b SELECT generate_series(1,100);
 
 -- Test delete quota config
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '-1 MB');
