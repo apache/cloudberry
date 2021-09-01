@@ -12,15 +12,18 @@ DROP ROLE IF EXISTS rolespcu2;
 CREATE ROLE rolespcu1 NOLOGIN;
 CREATE ROLE rolespcu2 NOLOGIN;
 CREATE TABLE b (t TEXT) TABLESPACE rolespc;
-ALTER TABLE b OWNER TO rolespcu1;
 CREATE TABLE b2 (t TEXT) TABLESPACE rolespc;
 ALTER TABLE b2 OWNER TO rolespcu1;
-
-SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '1 MB');
 
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
+SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '1 MB');
+SELECT pg_sleep(5);
+-- expect insert success
+INSERT INTO b SELECT generate_series(1,100);
+ALTER TABLE b OWNER TO rolespcu1;
 SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);

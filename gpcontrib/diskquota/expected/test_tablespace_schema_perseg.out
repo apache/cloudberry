@@ -163,6 +163,21 @@ SELECT pg_sleep(5);
 
 -- expect insert success
 INSERT INTO a SELECT generate_series(1,100);
+SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 0.123);
+ set_per_segment_quota 
+-----------------------
+ 
+(1 row)
+
+SELECT pg_sleep(5);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+---- expect insert fail
+INSERT INTO a SELECT generate_series(1,100);
+ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per segment quota
 -- Test delete tablespace schema quota
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 2);
  set_per_segment_quota 

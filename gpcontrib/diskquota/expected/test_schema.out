@@ -1,11 +1,5 @@
 -- Test schema
 CREATE SCHEMA s1;
-SELECT diskquota.set_schema_quota('s1', '1 MB');
- set_schema_quota 
-------------------
- 
-(1 row)
-
 SET search_path TO s1;
 CREATE TABLE a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -13,6 +7,18 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000);
+SELECT pg_sleep(5);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT diskquota.set_schema_quota('s1', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
 SELECT pg_sleep(5);
  pg_sleep 
 ----------
