@@ -395,7 +395,7 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 }
 
 /*
- * Call pg_total_relation_size to calcualte the
+ * Call pg_table_size to calcualte the
  * active table size on each segments.
  */
 static HTAB *
@@ -468,8 +468,8 @@ get_active_tables_stats(ArrayType *array)
 			 */
 			PG_TRY();
 			{
-				/* call pg_total_relation_size to get the active table size */
-				entry->tablesize = (Size) DatumGetInt64(DirectFunctionCall1(pg_total_relation_size,
+				/* call pg_table_size to get the active table size */
+				entry->tablesize = (Size) DatumGetInt64(DirectFunctionCall1(pg_table_size,
 																			ObjectIdGetDatum(relOid)));
 			}
 			PG_CATCH();

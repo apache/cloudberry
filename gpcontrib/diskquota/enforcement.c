@@ -45,10 +45,13 @@ init_disk_quota_enforcement(void)
 static bool
 quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 {
-	ListCell   *l;
+	ListCell	*l;
 
 	foreach(l, rangeTable)
 	{
+		List	   	*indexIds;
+		ListCell	*oid;
+		Relation	relation;
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(l);
 
 		/* see ExecCheckRTEPerms() */
@@ -68,6 +71,31 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 		 * quota limit exceeded.
 		 */
 		quota_check_common(rte->relid);
+		/* Check the indexes of the this relation */
+		relation = try_relation_open(rte->relid, AccessShareLock, false);
+		if (!relation)
+			continue;
+
+		indexIds = RelationGetIndexList(relation);
+		PG_TRY();
+		{
+			if (indexIds != NIL )
+			{
+				foreach(oid, indexIds)
+				{
+					quota_check_common(lfirst_oid(oid));
+				}
+			}
+		}
+		PG_CATCH();
+		{
+			relation_close(relation, AccessShareLock);
+			list_free(indexIds);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+		relation_close(relation, AccessShareLock);
+		list_free(indexIds);
 	}
 	return true;
 }
