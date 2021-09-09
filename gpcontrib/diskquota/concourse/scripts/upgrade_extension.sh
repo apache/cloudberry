@@ -5,7 +5,7 @@ set -exo pipefail
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TOP_DIR=${CWDIR}/../../../
 GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
-CUT_NUMBER=5
+CUT_NUMBER=6
 
 source "${GPDB_CONCOURSE_DIR}/common.bash"
 source "${TOP_DIR}/diskquota_src/concourse/scripts/test_common.sh"

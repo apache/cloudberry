@@ -745,18 +745,15 @@ calculate_table_disk_usage(bool is_init)
 	bool		table_size_map_found;
 	bool		active_tbl_found;
 	int64		updated_total_size;
-	Relation	classRel;
-	HeapTuple	tuple;
-	HeapScanDesc relScan;
 	TableSizeEntry *tsentry = NULL;
 	Oid			relOid;
 	HASH_SEQ_STATUS iter;
 	HTAB	   *local_active_table_stat_map;
 	DiskQuotaActiveTableEntry *active_table_entry;
 	TableEntryKey	key;
+	List		*oidlist;
+	ListCell        *l;
 
-	classRel = heap_open(RelationRelationId, AccessShareLock);
-	relScan = heap_beginscan_catalog(classRel, 0, NULL);
 
 	/*
 	 * initialization stage all the tables are active. later loop, only the
@@ -779,18 +776,20 @@ calculate_table_disk_usage(bool is_init)
 	 * calculate the file size for active table and update namespace_size_map
 	 * and role_size_map
 	 */
-	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
+	oidlist = get_rel_oid_list();
+	foreach(l, oidlist)
 	{
-		Form_pg_class classForm = (Form_pg_class) GETSTRUCT(tuple);
+		HeapTuple	classTup;
+		Form_pg_class classForm;
+		relOid = lfirst_oid(l);
 
-		if (classForm->relkind != RELKIND_RELATION &&
-			classForm->relkind != RELKIND_MATVIEW)
+		classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relOid));
+		if (!HeapTupleIsValid(classTup))
+		{
+			elog(WARNING, "cache lookup failed for relation %u", relOid);
 			continue;
-		relOid = HeapTupleGetOid(tuple);
-
-		/* ignore system table */
-		if (relOid < FirstNormalObjectId)
-			continue;
+		}
+		classForm = (Form_pg_class) GETSTRUCT(classTup);
 
 		/*
 		 * The segid is the same as the content id in gp_segment_configuration
@@ -832,8 +831,8 @@ calculate_table_disk_usage(bool is_init)
 					/* DirectFunctionCall1 may fail, since table maybe dropped by other backend */
 					PG_TRY();
 					{
-						/* call pg_total_relation_size to get the active table size */
-						active_table_entry->tablesize += (Size) DatumGetInt64(DirectFunctionCall1(pg_total_relation_size, ObjectIdGetDatum(relOid)));
+						/* call pg_table_size to get the active table size */
+						active_table_entry->tablesize += (Size) DatumGetInt64(DirectFunctionCall1(pg_table_size, ObjectIdGetDatum(relOid)));
 					}
 					PG_CATCH();
 					{
@@ -922,10 +921,9 @@ calculate_table_disk_usage(bool is_init)
 				tsentry->tablespaceoid = classForm->reltablespace;
 			}
 		}
+		heap_freetuple(classTup);
 	}
 
-	heap_endscan(relScan);
-	heap_close(classRel, AccessShareLock);
 	hash_destroy(local_active_table_stat_map);
 
 	/*
