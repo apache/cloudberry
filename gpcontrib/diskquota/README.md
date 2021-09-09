@@ -59,9 +59,9 @@ check interval. Active tables are detected at Segment QE side: hooks in
 smgecreate(), smgrextend() and smgrtruncate() are used to detect active tables
 and store them (currently relfilenode) in the shared memory. Diskquota worker
 process will periodically call dispatch queries to all the segments and 
-consume active tables in shared memories, convert relfilenode to relaton oid, 
-and calcualte table size by calling pg_total_relation_size(), which will sum 
-the size of table (including: base, vm, fsm, toast and index) in each segment.
+consume active tables in shared memories, convert relfilenode to relaton oid,
+and calcualte table size by calling pg_table_size(), which will sum
+the size of table (including: base, vm, fsm, toast) in each segment.
 
 ## Enforcement
 Enforcement is implemented as hooks. There are two kinds of enforcement hooks:
@@ -230,7 +230,7 @@ END;
 'Create Table As' command has the similar problem.
 
 One solution direction is that we calculate the additional 'uncommited data size'
-for schema and role in worker process. Since pg_total_relation_size need to hold
+for schema and role in worker process. Since pg_table_size need to hold
 AccessShareLock to relation (And worker process don't even know this reloid exists),
 we need to skip it, and call stat() directly with tolerant to file unlink.
 Skip lock is dangerous and we plan to leave it as known issue at current stage.

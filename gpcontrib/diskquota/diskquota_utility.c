@@ -70,13 +70,15 @@ static int64 get_size_in_mb(char *str);
 static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
 static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static bool generate_insert_table_size_sql(StringInfoData *buf, int extMajorVersion);
+static char *convert_oidlist_to_string(List *oidlist);
 
 int get_ext_major_version(void);
+List *get_rel_oid_list(void);
 
 /* ---- Help Functions to set quota limit. ---- */
 /*
  * Initialize table diskquota.table_size.
- * calculate table size by UDF pg_total_relation_size
+ * calculate table size by UDF pg_table_size
  * This function is called by user, errors should not
  * be catch, and should be sent back to user
  */
@@ -109,19 +111,20 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	heap_close(rel, NoLock);
 
 	/*
-	 * Why don't use insert into diskquota.table_size select from pg_total_relation_size here?
+	 * Why don't use insert into diskquota.table_size select from pg_table_size here?
 	 *
-	 * insert into foo select oid, pg_total_relation_size(oid), -1 from pg_class where
+	 * insert into foo select oid, pg_table_size(oid), -1 from pg_class where
 	 * oid >= 16384 and (relkind='r' or relkind='m');
 	 * ERROR:  This query is not currently supported by GPDB.  (entry db 127.0.0.1:6000 pid=61114)
 	 *
 	 * Some functions are peculiar in that they do their own dispatching.
-	 * Such as pg_total_relation_size.
+	 * Such as pg_table_size.
 	 * They do not work on entry db since we do not support dispatching
 	 * from entry-db currently.
 	 */
 	SPI_connect();
 	extMajorVersion = get_ext_major_version();
+	char *oids = convert_oidlist_to_string(get_rel_oid_list());
 
 	/* delete all the table size info in table_size if exist. */
 	initStringInfo(&buf);
@@ -134,13 +137,13 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	/* fetch table size for master*/
 	resetStringInfo(&buf);
 	appendStringInfo(&buf,
-					 "select oid, pg_total_relation_size(oid), -1"
+					 "select oid, pg_table_size(oid), -1"
 					 " from pg_class"
-					 " where oid >= %u and (relkind='r' or relkind='m')",
-					 FirstNormalObjectId);
+					 " where oid in (%s);",
+					 oids);
 	ret = SPI_execute(buf.data, false, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "cannot fetch in pg_total_relation_size. error code %d", ret);
+		elog(ERROR, "cannot fetch in pg_table_size. error code %d", ret);
 
 	/* fill table_size table with table oid and size info for master. */
 	appendStringInfo(&insert_buf,
@@ -149,13 +152,13 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	/* fetch table size on segments*/
 	resetStringInfo(&buf);
 	appendStringInfo(&buf,
-			"select oid, pg_total_relation_size(oid), gp_segment_id"
+			"select oid, pg_table_size(oid), gp_segment_id"
 			" from gp_dist_random('pg_class')"
-			" where oid >= %u and (relkind='r' or relkind='m')",
-			FirstNormalObjectId);
+			" where oid in (%s);",
+			oids);
 	ret = SPI_execute(buf.data, false, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "cannot fetch in pg_total_relation_size. error code %d", ret);
+		elog(ERROR, "cannot fetch in pg_table_size. error code %d", ret);
 
 	/* fill table_size table with table oid and size info for segments. */
 	insert_flag = insert_flag | generate_insert_table_size_sql(&insert_buf, extMajorVersion);
@@ -1023,4 +1026,82 @@ get_ext_major_version(void)
 		return (int)strtol(extversion, (char **) NULL, 10);
 	}
 	return 0;
+}
+
+static char *
+convert_oidlist_to_string(List *oidlist)
+{
+	StringInfoData 	buf;
+	bool		hasOid = false;
+	ListCell   *l;
+	initStringInfo(&buf);
+
+	foreach(l, oidlist)
+	{
+		Oid	oid = lfirst_oid(l);
+		appendStringInfo(&buf, "%u, ", oid);
+		hasOid = true;
+	}
+	if (hasOid)
+		truncateStringInfo(&buf, buf.len - strlen(", "));
+	return buf.data;
+}
+
+/*
+ * Get the list of oids of the tables which diskquota
+ * needs to care about in the database.
+ * Firstly the all the table oids which relkind is 'r'
+ * or 'm' and not system table.
+ * Then, fetch the indexes of those tables.
+ */
+
+List *
+get_rel_oid_list(void)
+{
+	List   		*oidlist = NIL;
+	StringInfoData	buf;
+	int             ret;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf,
+			"select oid "
+			" from pg_class"
+			" where oid >= %u and (relkind='r' or relkind='m')",
+			FirstNormalObjectId);
+
+	ret = SPI_execute(buf.data, false, 0);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot fetch in pg_class. error code %d", ret);
+	TupleDesc tupdesc = SPI_tuptable->tupdesc;
+	for(int i = 0; i < SPI_processed; i++)
+	{
+		HeapTuple	tup;
+		bool        	isnull;
+		Oid         	oid;
+		ListCell   	*l;
+
+		tup = SPI_tuptable->vals[i];
+		oid = DatumGetObjectId(SPI_getbinval(tup,tupdesc, 1, &isnull));
+		if (!isnull)
+		{
+			Relation	relation;
+			List	   	*indexIds;
+			relation = try_relation_open(oid, AccessShareLock, false);
+			if (!relation)
+				continue;
+
+			oidlist = lappend_oid(oidlist, oid);
+			indexIds = RelationGetIndexList(relation);
+			if (indexIds != NIL )
+			{
+				foreach(l, indexIds)
+				{
+					oidlist = lappend_oid(oidlist, lfirst_oid(l));
+				}
+			}
+		        relation_close(relation, NoLock);
+			list_free(indexIds);
+		}
+	}
+	return oidlist;
 }
