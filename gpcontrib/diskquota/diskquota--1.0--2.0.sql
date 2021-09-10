@@ -71,4 +71,10 @@ GROUP BY pgc.relowner, reltablespace, pgr.rolname, pgsp.spcname, qc.quotalimitMB
 CREATE OR REPLACE VIEW diskquota.show_fast_database_size_view AS
 SELECT ((SELECT SUM(pg_relation_size(oid)) FROM pg_class WHERE oid <= 16384)+ (SELECT SUM(size) FROM diskquota.table_size WHERE segid = -1)) AS dbsize;
 
-ALTER TYPE diskquota.diskquota_active_table_type ADD ATTRIBUTE "GP_SEGMENT_ID" smallint;
+-- Need to drop the old type and functions, then recreate them to make the gpdb to reload the new functions
+DROP FUNCTION diskquota.diskquota_fetch_table_stat(int4, oid[]);
+DROP TYPE diskquota.diskquota_active_table_type;
+CREATE TYPE diskquota.diskquota_active_table_type AS ("TABLE_OID" oid,  "TABLE_SIZE" int8, "GP_SEGMENT_ID" smallint);
+CREATE OR REPLACE FUNCTION diskquota.diskquota_fetch_table_stat(int4, oid[]) RETURNS setof diskquota.diskquota_active_table_type
+AS 'MODULE_PATHNAME', 'diskquota_fetch_table_stat'
+LANGUAGE C VOLATILE;
