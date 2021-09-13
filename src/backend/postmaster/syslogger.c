@@ -138,8 +138,7 @@ ignore_returned_result(long long int result)
 static bool chunk_is_postgres_chunk(PipeProtoHeader *hdr)
 {
     return hdr->zero == 0 && hdr->pid != 0 && hdr->thid != 0 &&
-		(hdr->log_format == 't' || hdr->log_format == 'c') &&
-		(hdr->is_last == 't' || hdr->is_last == 'f');
+		pg_popcount((char *) &dest_flags, 1) == 1;
 }
 
 /*
@@ -1012,7 +1011,7 @@ int syslogger_write_str(const char *data, int len, bool amsyslogger, bool csv)
 			else
 				ignore_returned_result(write(fileno(stderr), "\"", 1));
 		}
-		
+
 		if (amsyslogger)
 			write_syslogger_file_binary(data+cnt, 1, LOG_DESTINATION_STDERR);
 		else
@@ -1060,7 +1059,7 @@ fillinErrorDataFromSegvChunk(GpErrorData *errorData, PipeProtoChunk *chunk)
 		   chunk->hdr.is_last == 't');
 
 	GpSegvErrorData *segvData = (GpSegvErrorData *)chunk->data;
-	
+
 	errorData->fix_fields.session_start_time = segvData->session_start_time;
 	errorData->fix_fields.omit_location = 'f';
 
@@ -1092,7 +1091,7 @@ fillinErrorDataFromSegvChunk(GpErrorData *errorData, PipeProtoChunk *chunk)
 			 "Unexpected internal error: %s received signal %s",
 			 Gp_role == GP_ROLE_DISPATCH ? "Master process" : "Segment process",
 			 signalName);
-	
+
 	errorData->error_detail = NULL;
 	errorData->error_hint = NULL;
 	errorData->internal_query = NULL;
@@ -1101,7 +1100,7 @@ fillinErrorDataFromSegvChunk(GpErrorData *errorData, PipeProtoChunk *chunk)
 	errorData->error_func_name = NULL;
 	errorData->error_filename = NULL;
 	errorData->stacktrace = NULL;
-	
+
 	if (segvData->frame_depth > 0)
 	{
 		void *stackAddressArray = (chunk->data + MAXALIGN(sizeof(GpSegvErrorData)));
@@ -1121,7 +1120,7 @@ static void
 freeErrorDataFields(GpErrorData *errorData)
 {
 	pfree(errorData->error_message);
-	
+
 	if (errorData->stacktrace != NULL)
 	{
 		pfree(errorData->stacktrace);
@@ -1152,7 +1151,7 @@ syslogger_write_str_with_comma(const char *data, bool amsyslogger, bool csv, boo
 			write_syslogger_file_binary("\"", 1, LOG_DESTINATION_STDERR);
 		}
 	}
-	
+
 	write_syslogger_file_binary(",", 1, LOG_DESTINATION_STDERR);
 }
 
@@ -1190,38 +1189,38 @@ static void
 syslogger_write_errordata(PipeProtoHeader *chunkHeader, GpErrorData *errorData, bool csv)
 {
 	syslogger_append_current_timestamp(true);
-	
+
 	/* username */
 	syslogger_write_str_with_comma(errorData->username, true, csv, true);
-	
+
 	/* databasename */
 	syslogger_write_str_with_comma(errorData->databasename, true, csv, true);
-	
+
 	/* Process id, thread id */
 	syslogger_write_int32(false, "p", chunkHeader->pid, true, true);
 	syslogger_write_int32(false, "th", chunkHeader->thid, true, true);
-	
+
 	/* Remote host */
 	syslogger_write_str_with_comma(errorData->remote_host, true, csv, true);
 	/* Remote port */
 	syslogger_write_str_with_comma(errorData->remote_port, true, csv, true);
-	
+
 	/* session start timestamp */
 	syslogger_append_timestamp(errorData->fix_fields.session_start_time, true, true);
-	
+
 	/* Transaction id */
 	syslogger_write_int32(false, "", errorData->fix_fields.top_trans_id, true, true);
-	
+
 	/* GPDB specific options. */
-	syslogger_write_int32(true, "con", errorData->fix_fields.gp_session_id, true, true); 
-	syslogger_write_int32(true, "cmd", errorData->fix_fields.gp_command_count, true, true); 
+	syslogger_write_int32(true, "con", errorData->fix_fields.gp_session_id, true, true);
+	syslogger_write_int32(true, "cmd", errorData->fix_fields.gp_command_count, true, true);
 	syslogger_write_int32(false, errorData->fix_fields.gp_is_primary == 't'? "seg" : "mir", errorData->fix_fields.gp_segment_id,
-						  true, true); 
-	syslogger_write_int32(true, "slice", errorData->fix_fields.slice_id, true, true); 
+						  true, true);
+	syslogger_write_int32(true, "slice", errorData->fix_fields.slice_id, true, true);
 	syslogger_write_int32(true, "dx", errorData->fix_fields.dist_trans_id, true, true);
-	syslogger_write_int32(true, "x", errorData->fix_fields.local_trans_id, true, true); 
-	syslogger_write_int32(true, "sx", errorData->fix_fields.subtrans_id, true, true); 
-	
+	syslogger_write_int32(true, "x", errorData->fix_fields.local_trans_id, true, true);
+	syslogger_write_int32(true, "sx", errorData->fix_fields.subtrans_id, true, true);
+
 	/* error severity */
 	syslogger_write_str_with_comma(errorData->error_severity, true, csv, true);
 	/* sql state code */
@@ -1241,7 +1240,7 @@ syslogger_write_errordata(PipeProtoHeader *chunkHeader, GpErrorData *errorData, 
 	/* user query */
 	syslogger_write_str_with_comma(errorData->debug_query_string, true, csv, true);
 	/* cursor pos */
-	syslogger_write_int32(false, "", errorData->fix_fields.error_cursor_pos, true, true); 
+	syslogger_write_int32(false, "", errorData->fix_fields.error_cursor_pos, true, true);
 	/* func name */
 	syslogger_write_str_with_comma(errorData->error_func_name, true, csv, true);
 	/* file name */
@@ -1255,7 +1254,7 @@ syslogger_write_errordata(PipeProtoHeader *chunkHeader, GpErrorData *errorData, 
 		{
 			write_syslogger_file_binary("\"", 1, LOG_DESTINATION_STDERR);
 		}
-		
+
 		syslogger_write_str(errorData->stacktrace, strlen(errorData->stacktrace), true, csv);
 
 		if (csv)
@@ -1263,7 +1262,7 @@ syslogger_write_errordata(PipeProtoHeader *chunkHeader, GpErrorData *errorData, 
 			write_syslogger_file_binary("\"", 1, LOG_DESTINATION_STDERR);
 		}
 	}
-	
+
 	/* EOL */
 	write_syslogger_file_binary(LOG_EOL, strlen(LOG_EOL), LOG_DESTINATION_STDERR);
 }
@@ -1280,7 +1279,7 @@ syslogger_log_segv_chunk(PipeProtoChunk *chunk)
 
 	GpErrorData errorData;
 	fillinErrorDataFromSegvChunk(&errorData, chunk);
-	syslogger_write_errordata(&chunk->hdr, &errorData, chunk->hdr.log_format == 'c');
+	syslogger_write_errordata(&chunk->hdr, &errorData, chunk->hdr.flags & LOG_DESTINATION_CSVLOG);
 	freeErrorDataFields(&errorData);
 }
 
@@ -1329,7 +1328,7 @@ void syslogger_log_chunk_data(PipeProtoHeader* p, char *data, int len)
 		/* text format chunk data always ended with '\0' */
 		write_syslogger_file(data, len, LOG_DESTINATION_STDERR);
 	}
-	else 
+	else
 	{
 		GpErrorData errorData;
 		memset(&errorData, 0, sizeof(errorData));
@@ -1354,7 +1353,7 @@ void syslogger_log_chunk_data(PipeProtoHeader* p, char *data, int len)
 		errorData.stacktrace = get_str_from_chunk_data(data, &cur, len);
 
 		/*
-		* timestamp_with_milliseconds 
+		* timestamp_with_milliseconds
 		*/
 		syslogger_append_current_timestamp(true);
 
@@ -1478,7 +1477,8 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 	while (count >= sizeof(PipeProtoHeader))
 	{
 		PipeProtoHeader p;
-		int chunklen;
+		int	chunklen;
+		bits8		dest_flags;
 
 		/* Do we have a valid header? */
 		memcpy(&p, cursor, PIPE_HEADER_SIZE);
@@ -1496,8 +1496,15 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 			if (count < chunklen)
 				break;
 
-			dest = (p.log_format == 'c' || p.log_format == 'f') ?
-				LOG_DESTINATION_CSVLOG : LOG_DESTINATION_STDERR;
+			if ((p.flags & PIPE_PROTO_DEST_STDERR) != 0)
+				dest = LOG_DESTINATION_STDERR;
+			else if ((p.flags & PIPE_PROTO_DEST_CSVLOG) != 0)
+				dest = LOG_DESTINATION_CSVLOG;
+			else
+			{
+				/* this should never happen as of the header validation */
+				Assert(false);
+			}
 
 			/* Locate any existing buffer for this source pid */
 			buffer_list = buffer_lists[p.pid % NBUFFER_LISTS];
@@ -1519,7 +1526,7 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 					free_slot = buf;
 			}
 
-			if (p.is_last == 'f' || p.is_last == 'F')
+			if ((p.flags & PIPE_PROTO_IS_LAST) == 0)
 			{
 				/*
 				 * Save a complete non-final chunk in a per-pid buffer
@@ -1916,8 +1923,8 @@ logfile_open(const char *filename, const char *mode, bool allow_errors)
 static bool
 logfile_rotate(bool time_based_rotation, bool size_based_rotation,
 			   const char *suffix,
-               const char *log_directory, 
-               const char *log_filename, 
+               const char *log_directory,
+               const char *log_filename,
                FILE **fh_p,
                char **last_log_file_name)
 {
@@ -1987,7 +1994,7 @@ logfile_rotate(bool time_based_rotation, bool size_based_rotation,
 		filename = NULL;
 	}
 
-/* 
+/*
  * In gpdb, `logfile_rotate` will be called separately for both csv and std log destination.
  * We keep the code below in order to make code merging easier.
  * Note the API for this function is different. PG upstream has size_rotation_for however gpdb

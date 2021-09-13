@@ -3822,7 +3822,7 @@ append_stacktrace(PipeProtoChunk *buffer, StringInfo append, void *const *stacka
 		{
 			cmdresult[stack_no][0] = '\0';   /* clear this array for later */
 			snprintf(addrtxt, sizeof(addrtxt),"%p ",stackarray[stack_no]);
-			
+
 			Assert(sizeof(cmd) > strlen(cmd));
 			strncat(cmd, addrtxt, sizeof(cmd) - strlen(cmd) - 1);
 		}
@@ -4186,7 +4186,7 @@ write_message_to_server_log(int elevel,
 	buffer.hdr.main_thid = mainthread();
 	buffer.hdr.chunk_no = 0;
 	buffer.hdr.is_last = 'f';
-	buffer.hdr.log_format = 'c';
+	buffer.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 	buffer.hdr.log_line_number = log_line_number++;
 	buffer.hdr.is_segv_msg = 'f';
 	buffer.hdr.next = -1;
@@ -4655,14 +4655,17 @@ write_pipe_chunks(char *data, int len, int dest)
 	p.hdr.thid = mythread();
 	p.hdr.main_thid = mainthread();
 	p.hdr.chunk_no = 0;
-	p.hdr.log_format = (dest == LOG_DESTINATION_CSVLOG ? 'c' : 't');
 	p.hdr.is_segv_msg = 'f';
 	p.hdr.next = -1;
+	p.hdr.flags = 0;
+	if (dest == LOG_DESTINATION_STDERR)
+		p.hdr.flags |= PIPE_PROTO_DEST_STDERR;
+	else if (dest == LOG_DESTINATION_CSVLOG)
+		p.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 
 	/* write all but the last chunk */
 	while (len > PIPE_MAX_PAYLOAD)
 	{
-		p.hdr.is_last = 'f';
 		p.hdr.len = PIPE_MAX_PAYLOAD;
 		memcpy(p.data, data, PIPE_MAX_PAYLOAD);
 
@@ -4679,7 +4682,7 @@ write_pipe_chunks(char *data, int len, int dest)
 	}
 
 	/* write the last chunk */
-	p.hdr.is_last = 't';
+	p.hdr.flags |= PIPE_PROTO_IS_LAST;
 	p.hdr.len = len;
 
 #ifdef USE_ASSERT_CHECKING
@@ -5251,7 +5254,7 @@ SegvBusIllName(int signal)
 	Assert(signal == SIGILL ||
 		   signal == SIGSEGV ||
 		   signal == SIGBUS);
-	
+
 	switch (signal)
 	{
 #ifdef SIGILL
@@ -5309,7 +5312,7 @@ StandardHandlerForSigillSigsegvSigbus_OnMainThread(char *processName, SIGNAL_ARG
 	buffer.hdr.main_thid = mainthread();
 	buffer.hdr.chunk_no = 0;
 	buffer.hdr.is_last = 't';
-	buffer.hdr.log_format = 'c';
+	buffer.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 	buffer.hdr.is_segv_msg = 't';
 	buffer.hdr.log_line_number = 0;
 	buffer.hdr.next = -1;

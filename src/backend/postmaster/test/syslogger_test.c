@@ -25,12 +25,16 @@ static void mock_chunk(PipeProtoChunk* p, int dest)
 	p->hdr.thid = mythread();
 	p->hdr.main_thid = mainthread();
 	p->hdr.chunk_no = 0;
-	p->hdr.log_format = (dest == LOG_DESTINATION_CSVLOG ? 'c' : 't');
 	p->hdr.is_segv_msg = 'f';
 	p->hdr.next = -1;
 	p->hdr.is_last = 'f';
 	p->hdr.len = MOCK_PIPE_CHUNK_PAYLOAD_SIZE;
 	p->hdr.pid = 10000;
+
+	if (dest == LOG_DESTINATION_STDERR)
+		p->hdr.flags |= PIPE_PROTO_DEST_STDERR;
+	else if (dest == LOG_DESTINATION_CSVLOG)
+		p->hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 }
 
 static int
