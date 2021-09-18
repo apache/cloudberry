@@ -4,7 +4,6 @@
 regression.out
 regression.diffs
 /results/
-<<<<<<< HEAD
 
 .vscode
 upgrade_test/regression.out
