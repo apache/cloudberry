@@ -772,7 +772,7 @@ calculate_table_disk_usage(bool is_init)
 	}
 
 	/*
-	 * scan pg_class to detect table event: drop, reset schema, reset owenr.
+	 * scan pg_class to detect table event: drop, reset schema, reset owner.
 	 * calculate the file size for active table and update namespace_size_map
 	 * and role_size_map
 	 */
