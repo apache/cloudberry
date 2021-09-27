@@ -22,6 +22,16 @@ RETURNS void STRICT
 AS 'MODULE_PATHNAME'
 LANGUAGE C;
 
+CREATE OR REPLACE FUNCTION diskquota.pause()
+RETURNS void STRICT
+AS 'MODULE_PATHNAME', 'diskquota_pause'
+LANGUAGE C;
+
+CREATE OR REPLACE FUNCTION diskquota.resume()
+RETURNS void STRICT
+AS 'MODULE_PATHNAME', 'diskquota_resume'
+LANGUAGE C;
+
 ALTER TABLE diskquota.table_size ADD COLUMN segid smallint DEFAULT -1;
 ALTER TABLE diskquota.table_size DROP CONSTRAINT table_size_pkey;
 ALTER TABLE diskquota.table_size ADD PRIMARY KEY (tableid,segid);

@@ -4,6 +4,9 @@ DROP FUNCTION IF EXISTS diskquota.set_role_tablespace_quota(text, text, text);
 
 DROP FUNCTION IF EXISTS diskquota.set_per_segment_quota(text, float4);
 
+DROP FUNCTION IF EXISTS diskquota.pause();
+
+DROP FUNCTION IF EXISTS diskquota.resume();
 
 CREATE OR REPLACE VIEW diskquota.show_fast_schema_quota_view AS
 select pgns.nspname as schema_name, pgc.relnamespace as schema_oid, qc.quotalimitMB as quota_in_mb, sum(ts.size) as nspsize_in_bytes

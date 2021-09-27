@@ -40,9 +40,12 @@
 #include "utils/memutils.h"
 #include "utils/numeric.h"
 #include "utils/snapmgr.h"
+#include "libpq-fe.h"
 
 #include <cdb/cdbvars.h>
 #include <cdb/cdbutil.h>
+#include <cdb/cdbdisp_query.h>
+#include <cdb/cdbdispatchresult.h>
 
 #include "diskquota.h"
 #include "gp_activetable.h"
@@ -51,6 +54,8 @@
 
 PG_FUNCTION_INFO_V1(init_table_size_table);
 PG_FUNCTION_INFO_V1(diskquota_start_worker);
+PG_FUNCTION_INFO_V1(diskquota_pause);
+PG_FUNCTION_INFO_V1(diskquota_resume);
 PG_FUNCTION_INFO_V1(set_schema_quota);
 PG_FUNCTION_INFO_V1(set_role_quota);
 PG_FUNCTION_INFO_V1(set_schema_tablespace_quota);
@@ -286,6 +291,86 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	{
 		ereport(WARNING, (errmsg("database is not empty, please run `select diskquota.init_table_size_table()` to initialize table_size information for diskquota extension. Note that for large database, this function may take a long time.")));
 	}
+	PG_RETURN_VOID();
+}
+
+/*
+ * Dispatch pausing/resuming command to segments.
+ */
+static void
+dispatch_pause_or_resume_command(bool pause_extension)
+{
+	CdbPgResults cdb_pgresults = {NULL, 0};
+	int			i;
+	StringInfoData sql;
+
+	initStringInfo(&sql);
+	appendStringInfo(&sql, "SELECT diskquota.%s", pause_extension ? "pause()" : "resume()");
+	CdbDispatchCommand(sql.data, DF_NONE, &cdb_pgresults);
+
+	for (i = 0; i < cdb_pgresults.numResults; ++i)
+	{
+		PGresult *pgresult = cdb_pgresults.pg_results[i];
+		if (PQresultStatus(pgresult) != PGRES_TUPLES_OK)
+		{
+			cdbdisp_clearCdbPgResults(&cdb_pgresults);
+			ereport(ERROR,
+				(errmsg("[diskquota] %s extension on segments, encounter unexpected result from segment: %d",
+						pause_extension ? "pausing" : "resuming",
+						PQresultStatus(pgresult))));
+		}
+	}
+	cdbdisp_clearCdbPgResults(&cdb_pgresults);
+}
+
+/*
+ * Set diskquota_paused to true.
+ * This function is called by user. After this function being called, diskquota
+ * keeps counting the disk usage but doesn't emit an error when the disk usage
+ * limit is exceeded.
+ */
+Datum
+diskquota_pause(PG_FUNCTION_ARGS)
+{
+	if (!superuser())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to pause diskquota")));
+	}
+
+	LWLockAcquire(diskquota_locks.paused_lock, LW_EXCLUSIVE);
+	*diskquota_paused = true;
+	LWLockRelease(diskquota_locks.paused_lock);
+
+	if (IS_QUERY_DISPATCHER())
+		dispatch_pause_or_resume_command(true /* pause_extension */);
+
+	PG_RETURN_VOID();
+}
+
+/*
+ * Set diskquota_paused to false.
+ * This function is called by user. After this function being called, diskquota
+ * resume to emit an error when the disk usage limit is exceeded.
+ */
+Datum
+diskquota_resume(PG_FUNCTION_ARGS)
+{
+	if (!superuser())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to resume diskquota")));
+	}
+
+	LWLockAcquire(diskquota_locks.paused_lock, LW_EXCLUSIVE);
+	*diskquota_paused = false;
+	LWLockRelease(diskquota_locks.paused_lock);
+
+	if (IS_QUERY_DISPATCHER())
+		dispatch_pause_or_resume_command(false /* pause_extension */);
+
 	PG_RETURN_VOID();
 }
 

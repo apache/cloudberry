@@ -12,4 +12,5 @@ test: test_vacuum
 test: test_primary_failure
 test: test_extension
 test: test_manytable
+test: test_pause_and_resume
 test: clean
