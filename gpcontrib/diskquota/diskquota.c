@@ -84,6 +84,13 @@ ExtensionDDLMessage *extension_ddl_message = NULL;
 static HTAB *disk_quota_worker_map = NULL;
 static int	num_db = 0;
 
+/*
+ * diskquota_paused is a flag used to pause the extension (when the flag is
+ * enabled, the extension keeps counting the disk usage but doesn't emit an
+ * error when the disk usage limit is exceeded).
+ */
+bool *diskquota_paused = NULL;
+
 /* functions of disk quota*/
 void		_PG_init(void);
 void		_PG_fini(void);
