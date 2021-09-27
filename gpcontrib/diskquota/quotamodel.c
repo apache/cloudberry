@@ -402,10 +402,11 @@ disk_quota_shmem_startup(void)
 	init_lwlocks();
 
 	/*
-	 * Three shared memory data. extension_ddl_message is used to handle
+	 * Four shared memory data. extension_ddl_message is used to handle
 	 * diskquota extension create/drop command. disk_quota_black_map is used
 	 * to store out-of-quota blacklist. active_tables_map is used to store
-	 * active tables whose disk usage is changed.
+	 * active tables whose disk usage is changed. diskquota_paused is a flag
+	 * used to pause the extension.
 	 */
 	extension_ddl_message = ShmemInitStruct("disk_quota_extension_ddl_message",
 											sizeof(ExtensionDDLMessage),
@@ -437,6 +438,12 @@ disk_quota_shmem_startup(void)
 			&hash_ctl,
 			HASH_ELEM | HASH_FUNCTION);
 
+	diskquota_paused = ShmemInitStruct("diskquota_paused",
+											sizeof(bool),
+											&found);
+	if (!found)
+		memset((void *) diskquota_paused, 0, sizeof(bool));
+
 	LWLockRelease(AddinShmemInitLock);
 }
 
@@ -458,6 +465,7 @@ init_lwlocks(void)
 	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
 	diskquota_locks.extension_ddl_lock = LWLockAssign();
 	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
+	diskquota_locks.paused_lock = LWLockAssign();
 }
 
 /*
@@ -473,6 +481,7 @@ DiskQuotaShmemSize(void)
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(GlobalBlackMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(Oid)));
+	size += sizeof(bool); /* sizeof(*diskquota_paused) */
 	return size;
 }
 
@@ -1326,6 +1335,7 @@ quota_check_common(Oid reloid)
 	Oid			nsOid = InvalidOid;
 	Oid 		tablespaceoid = InvalidOid;
 	bool		found;
+	bool		paused;
 	BlackMapEntry keyitem;
 	GlobalBlackMapEntry *entry;
 
@@ -1339,6 +1349,14 @@ quota_check_common(Oid reloid)
 	{
 		return true;
 	}
+
+	LWLockAcquire(diskquota_locks.paused_lock, LW_SHARED);
+	paused = *diskquota_paused;
+	LWLockRelease(diskquota_locks.paused_lock);
+
+	if (paused)
+		return true;
+
 	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
 	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 	{
