@@ -28,7 +28,6 @@ typedef enum
 	DISKQUOTA_READY_STATE
 }			DiskQuotaState;
 
-#define DiskQuotaLocksItemNumber (5)
 struct DiskQuotaLocks
 {
 	LWLock	   *active_table_lock;
@@ -39,6 +38,7 @@ struct DiskQuotaLocks
 	LWLock	   *paused_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
+#define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))
 
 /*
  * MessageBox is used to store a message for communication between
