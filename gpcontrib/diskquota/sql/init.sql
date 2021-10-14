@@ -1,4 +1,8 @@
 -- start_ignore
+CREATE DATABASE diskquota;
+-- end_ignore
+
+-- start_ignore
 \! gpconfig -c shared_preload_libraries -v diskquota > /dev/null
 -- end_ignore
 \! echo $?
