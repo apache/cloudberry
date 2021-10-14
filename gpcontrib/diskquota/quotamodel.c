@@ -59,6 +59,8 @@
 /* per database level max size of black list */
 #define MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES 8192
 #define MAX_NUM_KEYS_QUOTA_MAP 8
+/* Number of attributes in quota configuration records. */
+#define NUM_QUOTA_CONFIG_ATTRS 5
 
 typedef struct TableSizeEntry TableSizeEntry;
 typedef struct NamespaceSizeEntry NamespaceSizeEntry;
@@ -1209,7 +1211,6 @@ do_load_quotas(void)
 	 * config change.
 	 */
 	clear_all_quota_maps();
-	const unsigned int NUM_ATTRIBUTES = 5;
 	extMajorVersion = get_ext_major_version();
 
 	/*
@@ -1249,7 +1250,7 @@ do_load_quotas(void)
 				errmsg("[diskquota] load_quotas SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
-	if (tupdesc->natts != NUM_ATTRIBUTES ||
+	if (tupdesc->natts != NUM_QUOTA_CONFIG_ATTRS ||
 			((tupdesc)->attrs[0])->atttypid != OIDOID ||
 			((tupdesc)->attrs[1])->atttypid != INT4OID ||
 			((tupdesc)->attrs[2])->atttypid != INT8OID)
@@ -1264,10 +1265,10 @@ do_load_quotas(void)
 	for (i = 0; i < SPI_processed; i++)
 	{
 		HeapTuple	tup = SPI_tuptable->vals[i];
-		Datum		vals[NUM_ATTRIBUTES];
-		bool		isnull[NUM_ATTRIBUTES];
+		Datum		vals[NUM_QUOTA_CONFIG_ATTRS];
+		bool		isnull[NUM_QUOTA_CONFIG_ATTRS];
 
-		for (int i = 0; i < NUM_ATTRIBUTES; ++i)
+		for (int i = 0; i < NUM_QUOTA_CONFIG_ATTRS; ++i)
 		{
 			vals[i] = SPI_getbinval(tup, tupdesc, i + 1, &(isnull[i]));
 			if (i <= 2 && isnull[i])
