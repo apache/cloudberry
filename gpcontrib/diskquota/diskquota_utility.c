@@ -1184,7 +1184,7 @@ get_rel_oid_list(void)
 					oidlist = lappend_oid(oidlist, lfirst_oid(l));
 				}
 			}
-		        relation_close(relation, NoLock);
+		    relation_close(relation, AccessShareLock);
 			list_free(indexIds);
 		}
 	}

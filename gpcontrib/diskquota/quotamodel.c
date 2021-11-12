@@ -37,6 +37,7 @@
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
@@ -688,7 +689,6 @@ refresh_disk_quota_usage(bool is_init)
 	bool		pushed_active_snap = false;
 	bool		ret = true;
 
-	elog(LOG, "refresh diskquota usage...");
 	StartTransactionCommand();
 
 	/*
@@ -967,6 +967,7 @@ flush_to_table_size(void)
 	TableSizeEntry *tsentry = NULL;
 	StringInfoData delete_statement;
 	StringInfoData insert_statement;
+	StringInfoData deleted_table_expr;
 	bool		delete_statement_flag = false;
 	bool		insert_statement_flag = false;
 	int		ret;
@@ -974,21 +975,12 @@ flush_to_table_size(void)
 
 	/* TODO: Add flush_size_interval to avoid flushing size info in every loop */
 
-	/* concatenate all the need_to_flush table to SQL string */
-	initStringInfo(&delete_statement);
-	switch (extMajorVersion)
-	{
-		case 1:
-			appendStringInfo(&delete_statement, "delete from diskquota.table_size where tableid in ( ");
-			break;
-		case 2:
-			appendStringInfo(&delete_statement, "delete from diskquota.table_size where (tableid, segid) in ( ");
-			break;
-		default:
-			ereport(ERROR,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
-	}
+	/* Disable ORCA since it does not support non-scalar subqueries. */
+	bool old_optimizer = optimizer;
+	optimizer = false;
+
+	initStringInfo(&deleted_table_expr);
+	appendStringInfo(&deleted_table_expr, "WITH deleted_table AS ( VALUES ");
 
 	initStringInfo(&insert_statement);
 	appendStringInfo(&insert_statement, "insert into diskquota.table_size values ");
@@ -1001,10 +993,10 @@ flush_to_table_size(void)
 			switch (extMajorVersion)
 			{
 				case 1:
-					appendStringInfo(&delete_statement, "%u, ", tsentry->reloid);
+					appendStringInfo(&deleted_table_expr, "%u, ", tsentry->reloid);
 					break;
 				case 2:
-					appendStringInfo(&delete_statement, "(%u,%d), ", tsentry->reloid, tsentry->segid);
+					appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
 					break;
 				default:
 					ereport(ERROR,
@@ -1026,14 +1018,14 @@ flush_to_table_size(void)
 				case 1:
 					if (tsentry->segid == -1)
 					{
-						appendStringInfo(&delete_statement, "%u, ", tsentry->reloid);
+						appendStringInfo(&deleted_table_expr, "%u, ", tsentry->reloid);
 						appendStringInfo(&insert_statement, "(%u,%ld), ", tsentry->reloid, tsentry->totalsize);
 						delete_statement_flag = true;
 						insert_statement_flag = true;
 					}
 					break;
 				case 2:
-					appendStringInfo(&delete_statement, "(%u,%d), ", tsentry->reloid, tsentry->segid);
+					appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
 					appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->reloid, tsentry->totalsize, tsentry->segid);
 					delete_statement_flag = true;
 					insert_statement_flag = true;
@@ -1045,13 +1037,29 @@ flush_to_table_size(void)
 			}
 		}
 	}
-	truncateStringInfo(&delete_statement, delete_statement.len - strlen(", "));
+	truncateStringInfo(&deleted_table_expr, deleted_table_expr.len - strlen(", "));
 	truncateStringInfo(&insert_statement, insert_statement.len - strlen(", "));
-	appendStringInfo(&delete_statement, ");");
+	appendStringInfo(&deleted_table_expr, ")");
 	appendStringInfo(&insert_statement, ";");
 
 	if (delete_statement_flag)
 	{
+		/* concatenate all the need_to_flush table to SQL string */
+		initStringInfo(&delete_statement);
+		appendStringInfoString(&delete_statement, (const char *) deleted_table_expr.data);
+		switch (extMajorVersion)
+		{
+			case 1:
+				appendStringInfo(&delete_statement, "delete from diskquota.table_size where tableid in ( SELECT * FROM deleted_table );");
+				break;
+			case 2:
+				appendStringInfo(&delete_statement, "delete from diskquota.table_size where (tableid, segid) in ( SELECT * FROM deleted_table );");
+				break;
+			default:
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
+		}
 		ret = SPI_execute(delete_statement.data, false, 0);
 		if (ret != SPI_OK_DELETE)
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
@@ -1064,6 +1072,8 @@ flush_to_table_size(void)
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 							errmsg("[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret)));
 	}
+
+	optimizer = old_optimizer;
 }
 
 /*
