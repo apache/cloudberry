@@ -16,6 +16,7 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
@@ -34,6 +35,7 @@
 #include "storage/smgr.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/relfilenodemap.h"
@@ -453,6 +455,9 @@ get_active_tables_stats(ArrayType *array)
 		}
 		else
 		{
+			MemoryContext			oldcontext;
+			ResourceOwner			oldowner;
+
 			relOid = DatumGetObjectId(fetch_att(ptr, typbyval, typlen));
 			segId = GpIdentity.segindex;
 			key.reloid = relOid;
@@ -463,18 +468,52 @@ get_active_tables_stats(ArrayType *array)
 			entry->segid = segId;
 
 			/*
-			 * avoid to generate ERROR if relOid is not existed (i.e. table
-			 * has been droped)
+			 * pg_table_size() may throw exceptions, in order not to abort the top level
+			 * transaction, we start a subtransaction for it. This operation is expensive,
+			 * but there're good reasons. E.g.,
+			 * When the subtransaction is aborted, the resources (e.g., locks) acquired
+			 * in pg_table_size() are released in time. We can avoid potential deadlock
+			 * risks by doing this.
 			 */
+			oldcontext = CurrentMemoryContext;
+			oldowner = CurrentResourceOwner;
+
+			BeginInternalSubTransaction(NULL /* save point name */);
+			/* Run inside the function's memory context. */
+			MemoryContextSwitchTo(oldcontext);
 			PG_TRY();
 			{
 				/* call pg_table_size to get the active table size */
 				entry->tablesize = (Size) DatumGetInt64(DirectFunctionCall1(pg_table_size,
 																			ObjectIdGetDatum(relOid)));
+
+#ifdef FAULT_INJECTOR
+				SIMPLE_FAULT_INJECTOR("diskquota_fetch_table_stat");
+#endif
+				/* Commit the subtransaction. */
+				ReleaseCurrentSubTransaction();
+				MemoryContextSwitchTo(oldcontext);
+				CurrentResourceOwner = oldowner;
 			}
 			PG_CATCH();
 			{
+				ErrorData		   *edata;
+
+				/*
+				 * Save the error information, or we have no idea what is causing the
+				 * exception.
+				 */
+				MemoryContextSwitchTo(oldcontext);
+				edata = CopyErrorData();
 				FlushErrorState();
+
+				/* Abort the subtransaction and rollback. */
+				RollbackAndReleaseCurrentSubTransaction();
+				MemoryContextSwitchTo(oldcontext);
+				CurrentResourceOwner = oldowner;
+				elog(WARNING, "%s", edata->message);
+				FreeErrorData(edata);
+
 				entry->tablesize = 0;
 			}
 			PG_END_TRY();
