@@ -11,4 +11,9 @@ m/diskquota_utility.c:\d+\)/
 s/diskquota_utility.c:\d+\)/diskquota_utility.c:xxx/
 m/^CONTEXT:*/
 s/^CONTEXT:/DETAIL:/
+
+# Remove segment identifiers from error message.
+# E.g., (slice1 XXX.XXX.XXX.XXX:XXXX pid=XXXX)
+m/(slice\d+ [0-9.]+:\d+ pid=\d+)/
+s/(slice\d+ [0-9.]+:\d+ pid=\d+)//
 -- end_matchsubs
