@@ -127,3 +127,26 @@ LANGUAGE C VOLATILE;
 
 SELECT diskquota.diskquota_start_worker();
 DROP FUNCTION diskquota.diskquota_start_worker();
+
+-- TODO: support upgrade/downgrade
+CREATE OR REPLACE FUNCTION diskquota.relation_size_local(
+        reltablespace oid, 
+        relfilenode oid, 
+        is_temp boolean)
+RETURNS bigint STRICT
+AS 'MODULE_PATHNAME', 'relation_size_local'
+LANGUAGE C;
+
+CREATE OR REPLACE FUNCTION diskquota.relation_size(
+        relation regclass,
+        is_temp boolean) 
+RETURNS bigint STRICT 
+AS $$
+SELECT sum(size)::bigint FROM (
+        SELECT diskquota.relation_size_local(reltablespace, relfilenode, is_temp) AS size 
+        FROM gp_dist_random('pg_class') WHERE oid = relation
+        UNION ALL 
+        SELECT diskquota.relation_size_local(reltablespace, relfilenode, is_temp) AS size 
+        FROM pg_class WHERE oid = relation
+) AS t
+$$ LANGUAGE SQL;
