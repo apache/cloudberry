@@ -1,5 +1,6 @@
 test: init
 test: prepare
+test: test_relation_size
 # disable this tese due to GPDB behavior change
 # test: test_table_size
 test: test_fast_disk_check
