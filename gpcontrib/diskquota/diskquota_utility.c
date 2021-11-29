@@ -37,6 +37,7 @@
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/formatting.h"
 #include "utils/memutils.h"
@@ -1229,6 +1230,7 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode)
 					snprintf(pathname, MAXPGPATH, "%s.%u",
 							 relationpath, segcount);
 
+				SIMPLE_FAULT_INJECTOR("diskquota_before_stat_relfilenode");
 				if (stat(pathname, &fst) < 0)
 				{
 					if (errno == ENOENT)
