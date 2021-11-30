@@ -132,21 +132,21 @@ DROP FUNCTION diskquota.diskquota_start_worker();
 CREATE OR REPLACE FUNCTION diskquota.relation_size_local(
         reltablespace oid, 
         relfilenode oid, 
-        is_temp boolean)
+        relpersistence "char",
+        relstorage "char")
 RETURNS bigint STRICT
 AS 'MODULE_PATHNAME', 'relation_size_local'
 LANGUAGE C;
 
 CREATE OR REPLACE FUNCTION diskquota.relation_size(
-        relation regclass,
-        is_temp boolean) 
+        relation regclass) 
 RETURNS bigint STRICT 
 AS $$
 SELECT sum(size)::bigint FROM (
-        SELECT diskquota.relation_size_local(reltablespace, relfilenode, is_temp) AS size 
+        SELECT diskquota.relation_size_local(reltablespace, relfilenode, relpersistence, relstorage) AS size 
         FROM gp_dist_random('pg_class') WHERE oid = relation
         UNION ALL 
-        SELECT diskquota.relation_size_local(reltablespace, relfilenode, is_temp) AS size 
+        SELECT diskquota.relation_size_local(reltablespace, relfilenode, relpersistence, relstorage) AS size 
         FROM pg_class WHERE oid = relation
 ) AS t
 $$ LANGUAGE SQL;
