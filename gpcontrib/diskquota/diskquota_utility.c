@@ -29,6 +29,7 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
+#include "catalog/indexing.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/tablespace.h"
@@ -1285,4 +1286,27 @@ relation_size_local(PG_FUNCTION_ARGS)
 	size = calculate_relation_size_all_forks(&rnode, relstorage);
 
 	PG_RETURN_INT64(size);
+}
+
+Relation
+diskquota_relation_open(Oid relid, LOCKMODE mode)
+{
+	Relation rel;
+	bool success_open = false;
+    int32 SavedInterruptHoldoffCount = InterruptHoldoffCount;
+
+	PG_TRY();
+	{
+		rel = relation_open(relid, mode);
+		success_open = true;
+	}
+	PG_CATCH();
+	{
+        InterruptHoldoffCount = SavedInterruptHoldoffCount;
+		HOLD_INTERRUPTS();
+		FlushErrorState();
+		RESUME_INTERRUPTS();
+	}
+	PG_END_TRY();
+	return success_open ? rel : NULL;
 }
