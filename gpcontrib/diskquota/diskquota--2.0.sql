@@ -150,3 +150,22 @@ SELECT sum(size)::bigint FROM (
         FROM pg_class WHERE oid = relation
 ) AS t
 $$ LANGUAGE SQL;
+
+CREATE TYPE diskquota.relation_cache_detail AS
+  (RELID oid, PRIMARY_TABLE_OID oid, AUXREL_NUM int,
+   OWNEROID oid, NAMESPACEOID oid, BACKENDID int, SPCNODE oid, DBNODE oid, RELNODE oid, RELSTORAGE "char", AUXREL_OID oid[]);
+
+CREATE OR REPLACE FUNCTION diskquota.show_relation_cache()
+RETURNS setof diskquota.relation_cache_detail
+AS 'MODULE_PATHNAME', 'show_relation_cache'
+LANGUAGE C;
+
+CREATE OR REPLACE FUNCTION diskquota.show_relation_cache_all_seg()
+RETURNS setof diskquota.relation_cache_detail 
+as $$
+WITH relation_cache AS (
+    SELECT diskquota.show_relation_cache() AS a
+    FROM  gp_dist_random('gp_id')
+)
+SELECT (a).* FROM relation_cache;
+$$ LANGUAGE SQL;
