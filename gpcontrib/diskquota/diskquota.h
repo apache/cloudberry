@@ -36,6 +36,7 @@ struct DiskQuotaLocks
 	LWLock	   *extension_ddl_lock; /* ensure create diskquota extension serially */
 	LWLock	   *monitoring_dbid_cache_lock;
 	LWLock	   *paused_lock;
+	LWLock	   *relation_cache_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 #define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))
@@ -118,4 +119,6 @@ extern int 	SEGCOUNT;
 extern int  get_ext_major_version(void);
 extern void truncateStringInfo(StringInfo str, int nchars);
 extern List *get_rel_oid_list(void);
+extern int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode);
+extern Relation diskquota_relation_open(Oid relid, LOCKMODE mode);
 #endif

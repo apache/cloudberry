@@ -52,6 +52,7 @@
 
 #include "gp_activetable.h"
 #include "diskquota.h"
+#include "relation_cache.h"
 
 /* cluster level max size of black list */
 #define MAX_DISK_QUOTA_BLACK_ENTRIES (1024 * 1024)
@@ -430,6 +431,8 @@ disk_quota_shmem_startup(void)
 
 	init_shm_worker_active_tables();
 
+	init_shm_worker_relation_cache();
+
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(Oid);
@@ -469,6 +472,7 @@ init_lwlocks(void)
 	diskquota_locks.extension_ddl_lock = LWLockAssign();
 	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
 	diskquota_locks.paused_lock = LWLockAssign();
+	diskquota_locks.relation_cache_lock = LWLockAssign();
 }
 
 /*
@@ -483,6 +487,8 @@ DiskQuotaShmemSize(void)
 	size = sizeof(ExtensionDDLMessage);
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(GlobalBlackMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
+	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelationCacheEntry)));
+	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelidCacheEntry)));
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(Oid)));
 	size += sizeof(bool); /* sizeof(*diskquota_paused) */
 	return size;
