@@ -82,7 +82,6 @@ static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, Quota
 static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static bool generate_insert_table_size_sql(StringInfoData *buf, int extMajorVersion);
 static char *convert_oidlist_to_string(List *oidlist);
-static int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage);
 
 int get_ext_major_version(void);
 List *get_rel_oid_list(void);
@@ -1231,7 +1230,7 @@ relation_file_stat(int segno, void *ctx)
  * calculate size of (all forks of) a relation in transaction
  * This function is following calculate_relation_size()
  */
-static int64
+int64
 calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 {
 	int64		totalsize = 0;

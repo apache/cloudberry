@@ -260,16 +260,40 @@ void
 remove_committed_relation_from_cache(void)
 {
 	HASH_SEQ_STATUS iter = {0};
-	hash_seq_init(&iter, relation_cache);
-
 	DiskQuotaRelationCacheEntry *entry = NULL;
+	DiskQuotaRelationCacheEntry *local_entry = NULL;
+	HTAB *local_relation_cache;
+	HASHCTL	ctl;
+
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.keysize = sizeof(Oid);
+	ctl.entrysize = sizeof(DiskQuotaRelationCacheEntry);
+	ctl.hcxt = CurrentMemoryContext;
+	ctl.hash = oid_hash;
+
+	local_relation_cache = hash_create("local relation cache",
+											 1024,
+											 &ctl,
+											 HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+
+	LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+	hash_seq_init(&iter, relation_cache);
 	while ((entry = hash_seq_search(&iter)) != NULL)
-
 	{
-		if (SearchSysCacheExists1(RELOID, entry->relid))
-			remove_cache_entry(entry->relid, InvalidOid);
+		local_entry = hash_search(local_relation_cache, &entry->relid, HASH_ENTER, NULL);
+		memcpy(local_entry, entry, sizeof(DiskQuotaRelationCacheEntry));
 	}
-
+	LWLockRelease(diskquota_locks.relation_cache_lock);
+	
+	hash_seq_init(&iter, local_relation_cache);
+	while ((local_entry = hash_seq_search(&iter)) != NULL)
+	{
+		if (SearchSysCacheExists1(RELOID, local_entry->relid))
+		{
+			remove_cache_entry(local_entry->relid, InvalidOid);
+		}
+	}
+	hash_destroy(local_relation_cache);
 }
 
 Datum
