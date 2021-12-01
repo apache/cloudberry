@@ -32,6 +32,7 @@ CREATE TABLE ao (i int) WITH (appendonly=true);
 INSERT INTO ao SELECT generate_series(1, 10000);
 SELECT diskquota.relation_size('ao');
 SELECT pg_relation_size('ao');
+DROP TABLE ao;
 
 CREATE TABLE aocs (i int, t text) WITH (appendonly=true,  orientation=column);
 INSERT INTO aocs SELECT i, repeat('a', 1000) FROM generate_series(1, 10000) AS i;
