@@ -19,7 +19,9 @@
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
+#include "catalog/objectaccess.h"
 #include "cdb/cdbbufferedappend.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
@@ -39,9 +41,11 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/relfilenodemap.h"
+#include "utils/syscache.h"
 
 #include "gp_activetable.h"
 #include "diskquota.h"
+#include "relation_cache.h"
 
 PG_FUNCTION_INFO_V1(diskquota_fetch_table_stat);
 
@@ -59,10 +63,14 @@ HTAB	   *monitoring_dbid_cache = NULL;
 static file_create_hook_type prev_file_create_hook = NULL;
 static file_extend_hook_type prev_file_extend_hook = NULL;
 static file_truncate_hook_type prev_file_truncate_hook = NULL;
+static file_unlink_hook_type prev_file_unlink_hook = NULL;
+static object_access_hook_type prev_object_access_hook = NULL;
 
 static void active_table_hook_smgrcreate(RelFileNodeBackend rnode);
 static void active_table_hook_smgrextend(RelFileNodeBackend rnode);
 static void active_table_hook_smgrtruncate(RelFileNodeBackend rnode);
+static void active_table_hook_smgrunlink(RelFileNodeBackend rnode);
+static void object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
 
 static HTAB *get_active_tables_stats(ArrayType *array);
 static HTAB *get_active_tables_oid(void);
@@ -71,6 +79,7 @@ static void pull_active_table_size_from_seg(HTAB *local_table_stats_map, char *a
 static StringInfoData convert_map_to_string(HTAB *active_list);
 static void load_table_size(HTAB *local_table_stats_map);
 static void report_active_table_helper(const RelFileNodeBackend *relFileNode);
+static void report_relation_cache_helper(Oid relid);
 
 void		init_active_table_hook(void);
 void		init_shm_worker_active_tables(void);
@@ -112,6 +121,12 @@ init_active_table_hook(void)
 
 	prev_file_truncate_hook = file_truncate_hook;
 	file_truncate_hook = active_table_hook_smgrtruncate;
+
+	prev_file_unlink_hook = file_unlink_hook;
+	file_unlink_hook = active_table_hook_smgrunlink;
+
+	prev_object_access_hook = object_access_hook;
+	object_access_hook = object_access_hook_QuotaStmt;
 }
 
 /*
@@ -150,6 +165,65 @@ active_table_hook_smgrtruncate(RelFileNodeBackend rnode)
 		(*prev_file_truncate_hook) (rnode);
 
 	report_active_table_helper(&rnode);
+}
+
+static void 
+active_table_hook_smgrunlink(RelFileNodeBackend rnode)
+{
+	if (prev_file_unlink_hook)
+		(*prev_file_unlink_hook) (rnode);
+
+	remove_cache_entry(InvalidOid, rnode.node.relNode);
+}
+
+static void
+object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg)
+{
+	if (prev_object_access_hook)
+		(*prev_object_access_hook)(access, classId, objectId, subId, arg);
+
+	/* TODO: do we need to use "&&" instead of "||"? */
+	if (classId != RelationRelationId || subId != 0)
+	{
+		return;
+	}
+
+	if (objectId < FirstNormalObjectId)
+	{
+		return;
+	}
+
+	if (access != OAT_POST_CREATE)
+	{
+		return;
+	}
+
+	report_relation_cache_helper(objectId);
+}
+
+static void
+report_relation_cache_helper(Oid relid)
+{
+	bool found;
+	
+	/* We do not collect the active table in either master or mirror segments  */
+	if (IS_QUERY_DISPATCHER() || IsRoleMirror())
+	{
+		return;
+	}
+
+	/*
+	 * Do not collect active table info when the database is not under monitoring.
+	 * this operation is read-only and does not require absolutely exact.
+	 * read the cache with out shared lock.
+	 */
+	hash_search(monitoring_dbid_cache, &MyDatabaseId, HASH_FIND, &found);
+	if (!found)
+	{
+		return;
+	}
+
+	update_relation_cache(relid);
 }
 
 /*
@@ -604,6 +678,8 @@ get_active_tables_oid(void)
 											   &ctl,
 											   HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
+	remove_committed_relation_from_cache();
+
 	/*
 	 * scan whole local map, get the oid of each table and calculate the size
 	 * of them
@@ -613,14 +689,21 @@ get_active_tables_oid(void)
 	while ((active_table_file_entry = (DiskQuotaActiveTableFileEntry *) hash_seq_search(&iter)) != NULL)
 	{
 		bool		found;
+		RelFileNode rnode;
+		Oid			prelid;
 
-		relOid = RelidByRelfilenode(active_table_file_entry->tablespaceoid, active_table_file_entry->relfilenode);
+		rnode.dbNode = active_table_file_entry->dbid;
+		rnode.relNode = active_table_file_entry->relfilenode;
+		rnode.spcNode = active_table_file_entry->tablespaceoid;
+		relOid = get_relid_by_relfilenode(rnode);
+		
 		if (relOid != InvalidOid)
 		{
-			active_table_entry = hash_search(local_active_table_stats_map, &relOid, HASH_ENTER, &found);
-			if (active_table_entry)
+			prelid = get_primary_table_oid(relOid);
+			active_table_entry = hash_search(local_active_table_stats_map, &prelid, HASH_ENTER, &found);
+			if (active_table_entry && !found)
 			{
-				active_table_entry->reloid = relOid;
+				active_table_entry->reloid = prelid;
 				/* we don't care segid and tablesize here */
 				active_table_entry->tablesize = 0;
 				active_table_entry->segid = -1;
