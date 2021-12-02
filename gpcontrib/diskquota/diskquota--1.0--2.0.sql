@@ -32,6 +32,25 @@ RETURNS void STRICT
 AS 'MODULE_PATHNAME', 'diskquota_resume'
 LANGUAGE C;
 
+CREATE TYPE diskquota.blackmap_entry AS
+  (target_oid oid, database_oid oid, tablespace_oid oid, target_type integer, seg_exceeded boolean);
+CREATE FUNCTION diskquota.refresh_blackmap(diskquota.blackmap_entry[], oid[])
+RETURNS void STRICT
+AS 'MODULE_PATHNAME'
+LANGUAGE C;
+
+CREATE TYPE diskquota.blackmap_entry_detail AS
+  (target_type text, target_oid oid, database_oid oid,
+   tablespace_oid oid, seg_exceeded boolean, dbnode oid, spcnode oid, relnode oid, segid int);
+
+CREATE FUNCTION diskquota.show_blackmap()
+RETURNS setof diskquota.blackmap_entry_detail
+AS 'MODULE_PATHNAME', 'show_blackmap'
+LANGUAGE C;
+
+CREATE VIEW diskquota.blackmap AS
+  SELECT * FROM diskquota.show_blackmap() AS BM;
+
 ALTER TABLE diskquota.table_size ADD COLUMN segid smallint DEFAULT -1;
 ALTER TABLE diskquota.table_size DROP CONSTRAINT table_size_pkey;
 ALTER TABLE diskquota.table_size ADD PRIMARY KEY (tableid,segid);
