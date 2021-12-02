@@ -153,6 +153,7 @@ active_table_hook_smgrextend(RelFileNodeBackend rnode)
 		(*prev_file_extend_hook) (rnode);
 
 	report_active_table_helper(&rnode);
+	quota_check_common(InvalidOid /*reloid*/, &rnode.node);
 }
 
 /*
