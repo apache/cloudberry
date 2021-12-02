@@ -1,4 +1,5 @@
 test: init
 test: prepare
 test: test_relation_size
+test: test_blackmap
 test: cleanup
