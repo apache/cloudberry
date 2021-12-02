@@ -8,6 +8,16 @@ DROP FUNCTION IF EXISTS diskquota.pause();
 
 DROP FUNCTION IF EXISTS diskquota.resume();
 
+DROP FUNCTION IF EXISTS diskquota.refresh_blackmap(diskquota.blackmap_entry[], oid[]);
+
+DROP TYPE IF EXISTS diskquota.blackmap_entry;
+
+DROP VIEW IF EXISTS diskquota.blackmap;
+
+DROP FUNCTION IF EXISTS diskquota.show_blackmap();
+
+DROP TYPE IF EXISTS diskquota.blackmap_entry_detail;
+
 CREATE OR REPLACE VIEW diskquota.show_fast_schema_quota_view AS
 select pgns.nspname as schema_name, pgc.relnamespace as schema_oid, qc.quotalimitMB as quota_in_mb, sum(ts.size) as nspsize_in_bytes
 from diskquota.table_size as ts,

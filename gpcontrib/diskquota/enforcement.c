@@ -70,7 +70,7 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 		 * table's owner are reached. This function will ereport(ERROR) when
 		 * quota limit exceeded.
 		 */
-		quota_check_common(rte->relid);
+		quota_check_common(rte->relid, NULL /*relfilenode*/);
 		/* Check the indexes of the this relation */
 		relation = try_relation_open(rte->relid, AccessShareLock, false);
 		if (!relation)
@@ -83,7 +83,7 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 			{
 				foreach(oid, indexIds)
 				{
-					quota_check_common(lfirst_oid(oid));
+					quota_check_common(lfirst_oid(oid), NULL /*relfilenode*/);
 				}
 			}
 		}

@@ -18,12 +18,15 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/reloptions.h"
+#include "access/skey.h"
 #include "access/transam.h"
 #include "access/tupdesc.h"
 #include "access/xact.h"
+#include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_database.h"
+#include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/tablespace.h"
@@ -35,9 +38,11 @@
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "storage/lwlock.h"
+#include "storage/relfilenode.h"
 #include "storage/shmem.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
@@ -144,12 +149,25 @@ struct BlackMapEntry
 	Oid		databaseoid;
 	Oid 		tablespaceoid;
 	uint32		targettype;
+	/*
+	 * QD index the blackmap by (targetoid, databaseoid, tablespaceoid, targettype).
+	 * QE index the blackmap by (relfilenode).
+	 */
+	RelFileNode		relfilenode;
 };
 
 struct GlobalBlackMapEntry
 {
 	BlackMapEntry 	keyitem;
 	bool            segexceeded;
+	/*
+	 * When the quota limit is exceeded on segment servers,
+	 * we need an extra auxiliary field to preserve the quota
+	 * limitation information for error message on segment
+	 * servers, e.g., targettype, targetoid. This field is
+	 * useful on segment servers.
+	 */
+	BlackMapEntry	auxblockinfo;
 };
 
 /* local blacklist for which exceed their quota limit */
@@ -192,7 +210,7 @@ static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
 static void init_lwlocks(void);
 
-static void export_exceeded_error(GlobalBlackMapEntry *entry);
+static void export_exceeded_error(GlobalBlackMapEntry *entry, bool skip_name);
 void truncateStringInfo(StringInfo str, int nchars);
 
 static void
@@ -1340,39 +1358,56 @@ get_rel_owner_schema_tablespace(Oid relid, Oid *ownerOid, Oid *nsOid, Oid *table
 	return found;
 }
 
+static bool
+check_blackmap_by_relfilenode(RelFileNode relfilenode)
+{
+	bool					found;
+	BlackMapEntry			keyitem;
+	GlobalBlackMapEntry	   *entry;
+
+	SIMPLE_FAULT_INJECTOR("check_blackmap_by_relfilenode");
+
+	memset(&keyitem, 0, sizeof(keyitem));
+	memcpy(&keyitem.relfilenode, &relfilenode, sizeof(RelFileNode));
+
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
+	entry = hash_search(disk_quota_black_map,
+						&keyitem, HASH_FIND, &found);
+
+	if (found && entry)
+	{
+		GlobalBlackMapEntry segblackentry;
+		memcpy(&segblackentry.keyitem, &entry->auxblockinfo, sizeof(BlackMapEntry));
+		segblackentry.segexceeded = entry->segexceeded;
+		LWLockRelease(diskquota_locks.black_map_lock);
+
+		export_exceeded_error(&segblackentry, true /*skip_name*/);
+		return false;
+	}
+	LWLockRelease(diskquota_locks.black_map_lock);
+	return true;
+}
+
 /*
  * Given table oid, check whether quota limit
  * of table's schema or table's owner are reached.
  * Do enforcement if quota exceeds.
  */
-bool
-quota_check_common(Oid reloid)
+static bool
+check_blackmap_by_reloid(Oid reloid)
 {
 	Oid			ownerOid = InvalidOid;
 	Oid			nsOid = InvalidOid;
 	Oid 		tablespaceoid = InvalidOid;
 	bool		found;
-	bool		paused;
 	BlackMapEntry keyitem;
 	GlobalBlackMapEntry *entry;
 
-	if (!IsTransactionState())
-	{
-		return true;
-	}
-	
 	bool found_rel = get_rel_owner_schema_tablespace(reloid, &ownerOid, &nsOid, &tablespaceoid);
 	if (!found_rel)
 	{
 		return true;
 	}
-
-	LWLockAcquire(diskquota_locks.paused_lock, LW_SHARED);
-	paused = *diskquota_paused;
-	LWLockRelease(diskquota_locks.paused_lock);
-
-	if (paused)
-		return true;
 
 	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
 	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
@@ -1402,17 +1437,47 @@ quota_check_common(Oid reloid)
 		}
 		keyitem.databaseoid = MyDatabaseId;
 		keyitem.targettype = type;
+		memset(&keyitem.relfilenode, 0, sizeof(RelFileNode));
 		entry = hash_search(disk_quota_black_map,
 					&keyitem,
 					HASH_FIND, &found);
 		if (found)
 		{
 			LWLockRelease(diskquota_locks.black_map_lock);
-			export_exceeded_error(entry);
+			export_exceeded_error(entry, false /*skip_name*/);
 			return false;
 		}
 	}
 	LWLockRelease(diskquota_locks.black_map_lock);
+	return true;
+}
+
+/*
+ * Given relation's oid or relfilenode, check whether the
+ * quota limits of schema or owner are reached. Do enforcement
+ * if the quota exceeds.
+ */
+bool
+quota_check_common(Oid reloid, RelFileNode *relfilenode)
+{
+	bool	paused;
+
+	if (!IsTransactionState())
+		return true;
+
+	LWLockAcquire(diskquota_locks.paused_lock, LW_SHARED);
+	paused = *diskquota_paused;
+	LWLockRelease(diskquota_locks.paused_lock);
+
+	if (paused)
+		return true;
+
+	if (OidIsValid(reloid))
+		return check_blackmap_by_reloid(reloid);
+
+	if (relfilenode)
+		return check_blackmap_by_relfilenode(*relfilenode);
+
 	return true;
 }
 
@@ -1437,8 +1502,44 @@ invalidate_database_blackmap(Oid dbid)
 	LWLockRelease(diskquota_locks.black_map_lock);
 }
 
+static char *
+GetNamespaceName(Oid spcid, bool skip_name)
+{
+	if (skip_name)
+	{
+		NameData	spcstr;
+		pg_ltoa(spcid, spcstr.data);
+		return pstrdup(spcstr.data);
+	}
+	return get_namespace_name(spcid);
+}
+
+static char *
+GetTablespaceName(Oid spcid, bool skip_name)
+{
+	if (skip_name)
+	{
+		NameData	spcstr;
+		pg_ltoa(spcid, spcstr.data);
+		return pstrdup(spcstr.data);
+	}
+	return get_tablespace_name(spcid);
+}
+
+static char *
+GetUserName(Oid relowner, bool skip_name)
+{
+	if (skip_name)
+	{
+		NameData	namestr;
+		pg_ltoa(relowner, namestr.data);
+		return pstrdup(namestr.data);
+	}
+	return GetUserNameFromId(relowner);
+}
+
 static void
-export_exceeded_error(GlobalBlackMapEntry *entry)
+export_exceeded_error(GlobalBlackMapEntry *entry, bool skip_name)
 {
 	BlackMapEntry *blackentry = &entry->keyitem;
 	switch(blackentry->targettype)
@@ -1446,39 +1547,509 @@ export_exceeded_error(GlobalBlackMapEntry *entry)
 		case NAMESPACE_QUOTA:
 			ereport(ERROR,
 					(errcode(ERRCODE_DISK_FULL),
-					 errmsg("schema's disk space quota exceeded with name:%s", get_namespace_name(blackentry->targetoid))));
+					 errmsg("schema's disk space quota exceeded with name:%s", GetNamespaceName(blackentry->targetoid, skip_name))));
 			break;
 		case ROLE_QUOTA:
 			ereport(ERROR,
 					(errcode(ERRCODE_DISK_FULL),
-					 errmsg("role's disk space quota exceeded with name:%s", GetUserNameFromId(blackentry->targetoid))));
+					 errmsg("role's disk space quota exceeded with name:%s", GetUserName(blackentry->targetoid, skip_name))));
 			break;
 		case NAMESPACE_TABLESPACE_QUOTA:
 			if (entry->segexceeded)
 				ereport(ERROR,
 						(errcode(ERRCODE_DISK_FULL),
-						 errmsg("tablespace:%s schema:%s diskquota exceeded per segment quota", get_tablespace_name(blackentry->tablespaceoid), get_namespace_name(blackentry->targetoid))));
+						 errmsg("tablespace:%s schema:%s diskquota exceeded per segment quota", GetTablespaceName(blackentry->tablespaceoid, skip_name), GetNamespaceName(blackentry->targetoid, skip_name))));
 			else
-
 				ereport(ERROR,
 						(errcode(ERRCODE_DISK_FULL),
-						 errmsg("tablespace:%s schema:%s diskquota exceeded", get_tablespace_name(blackentry->tablespaceoid), get_namespace_name(blackentry->targetoid))));
+						 errmsg("tablespace:%s schema:%s diskquota exceeded", GetTablespaceName(blackentry->tablespaceoid, skip_name), GetNamespaceName(blackentry->targetoid, skip_name))));
 			break;
 		case ROLE_TABLESPACE_QUOTA:
 			if (entry->segexceeded)
 				ereport(ERROR,
 						(errcode(ERRCODE_DISK_FULL),
-						 errmsg("tablespace: %s role: %s diskquota exceeded per segment quota", get_tablespace_name(blackentry->tablespaceoid), GetUserNameFromId(blackentry->targetoid))));
+						 errmsg("tablespace: %s role: %s diskquota exceeded per segment quota", GetTablespaceName(blackentry->tablespaceoid, skip_name), GetUserName(blackentry->targetoid, skip_name))));
 			else
-
 				ereport(ERROR,
 						(errcode(ERRCODE_DISK_FULL),
-						 errmsg("tablespace: %s role: %s diskquota exceeded", get_tablespace_name(blackentry->tablespaceoid), GetUserNameFromId(blackentry->targetoid))));
+						 errmsg("tablespace: %s role: %s diskquota exceeded", GetTablespaceName(blackentry->tablespaceoid, skip_name), GetUserName(blackentry->targetoid, skip_name))));
 			break;
 		default :
 			ereport(ERROR,
 					(errcode(ERRCODE_DISK_FULL),
 					 errmsg("diskquota exceeded, unknown quota type")));
 	}
+}
 
+/*
+ * The order of the returned index list is not guaranteed, Don't
+ * apply the relation_open() to the returned list, or deadlock
+ * may happen.
+ */
+static List*
+GetIndexOidListByRelid(Oid reloid)
+{
+	List		   *result = NIL;
+	ScanKeyData		skey;
+	SysScanDesc		indscan;
+	Relation		indrel;
+	HeapTuple		htup;
+
+	ScanKeyInit(&skey, Anum_pg_index_indrelid,
+				BTEqualStrategyNumber, F_OIDEQ, reloid);
+	indrel = heap_open(IndexRelationId, AccessShareLock);
+	indscan = systable_beginscan(indrel, IndexIndrelidIndexId,
+								 true /*indexOk*/, NULL /*snapshot*/,
+								 1 /*nkeys*/, &skey);
+	while (HeapTupleIsValid(htup = systable_getnext(indscan)))
+	{
+		Form_pg_index	index = (Form_pg_index) GETSTRUCT(htup);
+
+		if (!IndexIsLive(index))
+			continue;
+
+		result = lappend_oid(result, index->indexrelid);
+	}
+	systable_endscan(indscan);
+	heap_close(indrel, AccessShareLock);
+
+	return result;
+}
+
+/*
+ * Get auxiliary relations oid by searching the pg_appendonly table.
+ */
+static void
+GetAppendOnlyEntryAuxOidListByRelid(Oid reloid, Oid *segrelid,
+									Oid *blkdirrelid, Oid *visimaprelid)
+{
+	ScanKeyData			skey;
+	SysScanDesc			scan;
+	TupleDesc			tupDesc;
+	Relation			aorel;
+	HeapTuple			htup;
+	Datum  				auxoid;
+	bool				isnull;
+
+	ScanKeyInit(&skey, Anum_pg_appendonly_relid,
+				BTEqualStrategyNumber, F_OIDEQ, reloid);
+	aorel = heap_open(AppendOnlyRelationId, AccessShareLock);
+	tupDesc = RelationGetDescr(aorel);
+	scan = systable_beginscan(aorel, AppendOnlyRelidIndexId,
+							  true /*indexOk*/, NULL /*snapshot*/,
+							  1 /*nkeys*/, &skey);
+	while (HeapTupleIsValid(htup = systable_getnext(scan)))
+	{
+		if (segrelid)
+		{
+			auxoid = heap_getattr(htup,
+								  Anum_pg_appendonly_segrelid,
+								  tupDesc, &isnull);
+			if (!isnull)
+				*segrelid = DatumGetObjectId(auxoid);
+		}
+
+		if (blkdirrelid)
+		{
+			auxoid = heap_getattr(htup,
+								  Anum_pg_appendonly_blkdirrelid,
+								  tupDesc, &isnull);
+			if (!isnull)
+				*blkdirrelid = DatumGetObjectId(auxoid);
+		}
+
+		if (visimaprelid)
+		{
+			auxoid = heap_getattr(htup,
+								  Anum_pg_appendonly_visimaprelid,
+								  tupDesc, &isnull);
+			if (!isnull)
+				*visimaprelid = DatumGetObjectId(auxoid);
+		}
+	}
+
+	systable_endscan(scan);
+	heap_close(aorel, AccessShareLock);
+}
+
+/*
+ * refresh_blackmap() takes two arguments.
+ * The first argument is an array of blackmap entries on QD.
+ * The second argument is an array of active relations' oid.
+ *
+ * The basic idea is that, we iterate over the active relations' oid, check that
+ * whether the relation's owner/tablespace/namespace is in one of the blackmap
+ * entries dispatched from diskquota worker from QD. If the relation should be
+ * blocked, we then add its relfilenode together with the toast, toast index,
+ * appendonly, appendonly index relations' relfilenodes to the global blackmap.
+ * Note that, this UDF is called on segment servers by diskquota worker on QD and
+ * the global blackmap on segment servers is indexed by relfilenode.
+ */
+PG_FUNCTION_INFO_V1(refresh_blackmap);
+Datum
+refresh_blackmap(PG_FUNCTION_ARGS)
+{
+	ArrayType			   *blackmap_array_type = PG_GETARG_ARRAYTYPE_P(0);
+	ArrayType			   *active_oid_array_type = PG_GETARG_ARRAYTYPE_P(1);
+	Oid						blackmap_elem_type = ARR_ELEMTYPE(blackmap_array_type);
+	Oid						active_oid_elem_type = ARR_ELEMTYPE(active_oid_array_type);
+	Datum				   *datums;
+	bool				   *nulls;
+	int16					elem_width;
+	bool					elem_type_by_val;
+	char					elem_alignment_code;
+	int						count;
+	HeapTupleHeader			lt;
+	bool					segexceeded;
+	GlobalBlackMapEntry	   *blackmapentry;
+	HASH_SEQ_STATUS			hash_seq;
+	HTAB				   *local_blackmap;
+	HASHCTL					hashctl;
+
+	if (!superuser())
+		errmsg("must be superuser to update blackmap");
+
+	if (ARR_NDIM(blackmap_array_type) > 1 || ARR_NDIM(active_oid_array_type) > 1)
+		ereport(ERROR, (errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR), errmsg("1-dimensional array needed")));
+
+	/* Firstly, clear the blackmap entries. */
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+	hash_seq_init(&hash_seq, disk_quota_black_map);
+	while ((blackmapentry = hash_seq_search(&hash_seq)) != NULL)
+		hash_search(disk_quota_black_map, &blackmapentry->keyitem, HASH_REMOVE, NULL);
+	LWLockRelease(diskquota_locks.black_map_lock);
+
+	if (SPI_connect() != SPI_OK_CONNECT)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("unable to connect to execute internal query")));
+
+	/*
+	 * Secondly, iterate over blackmap entries and add these entries to the local black map
+	 * on segment servers so that we are able to check whether the given relation (by oid)
+	 * should be blacked in O(1) time complexity in third step.
+	 */
+	memset(&hashctl, 0, sizeof(hashctl));
+	hashctl.keysize = sizeof(BlackMapEntry);
+	hashctl.entrysize = sizeof(GlobalBlackMapEntry);
+	hashctl.hcxt = CurrentMemoryContext;
+	hashctl.hash = tag_hash;
+
+	local_blackmap = hash_create("local_blackmap",
+								 1024, &hashctl,
+								 HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	get_typlenbyvalalign(blackmap_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
+	deconstruct_array(blackmap_array_type, blackmap_elem_type, elem_width,
+					  elem_type_by_val, elem_alignment_code, &datums, &nulls, &count);
+	for (int i = 0; i < count; ++i)
+	{
+		BlackMapEntry			keyitem;
+		bool					isnull;
+
+		if (nulls[i])
+			continue;
+
+		memset(&keyitem, 0, sizeof(BlackMapEntry));
+		lt = DatumGetHeapTupleHeader(datums[i]);
+		keyitem.targetoid     = DatumGetObjectId(GetAttributeByNum(lt, 1, &isnull));
+		keyitem.databaseoid   = DatumGetObjectId(GetAttributeByNum(lt, 2, &isnull));
+		keyitem.tablespaceoid = DatumGetObjectId(GetAttributeByNum(lt, 3, &isnull));
+		keyitem.targettype    = DatumGetInt32(GetAttributeByNum(lt, 4, &isnull));
+		/*
+		 * If the current quota limit type is NAMESPACE_TABLESPACE_QUOTA or
+		 * ROLE_TABLESPACE_QUOTA, we should explicitly set DEFAULTTABLESPACE_OID
+		 * for relations whose reltablespace is InvalidOid.
+		 */
+		if ((keyitem.targettype == NAMESPACE_TABLESPACE_QUOTA ||
+			 keyitem.targettype == ROLE_TABLESPACE_QUOTA) &&
+			!OidIsValid(keyitem.tablespaceoid))
+			keyitem.tablespaceoid = DEFAULTTABLESPACE_OID;
+		segexceeded           = DatumGetBool(GetAttributeByNum(lt, 5, &isnull));
+
+		blackmapentry = hash_search(local_blackmap, &keyitem, HASH_ENTER_NULL, NULL);
+		if (blackmapentry)
+			blackmapentry->segexceeded = segexceeded;
+	}
+
+	/*
+	 * Thirdly, iterate over the active oid list. Check that if the relation should be blocked.
+	 * If the relation should be blocked, we insert the toast, toast index, appendonly, appendonly
+	 * index relations to the global black map.
+	 */
+	get_typlenbyvalalign(active_oid_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
+	deconstruct_array(active_oid_array_type, active_oid_elem_type, elem_width,
+					  elem_type_by_val, elem_alignment_code, &datums, &nulls, &count);
+	for (int i = 0; i < count; ++i)
+	{
+		Oid				active_oid = InvalidOid;
+		HeapTuple		tuple;
+		if (nulls[i])
+			continue;
+
+		active_oid = DatumGetObjectId(datums[i]);
+		if (!OidIsValid(active_oid))
+			continue;
+
+		tuple = SearchSysCacheCopy1(RELOID, active_oid);
+		if (HeapTupleIsValid(tuple))
+		{
+			Form_pg_class	form = (Form_pg_class) GETSTRUCT(tuple);
+			Oid				relnamespace = form->relnamespace;
+			Oid				reltablespace = OidIsValid(form->reltablespace) ?
+												form->reltablespace : DEFAULTTABLESPACE_OID;
+			Oid				relowner = form->relowner;
+			BlackMapEntry	keyitem;
+			bool			found;
+
+			for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
+			{
+				/*
+				 * Check that if the current relation should be blocked.
+				 * FIXME: The logic of preparing the blackmap searching
+				 * key is identical to check_blackmap_by_reloid(), we can
+				 * make it into a static helper function.
+				 */
+				memset(&keyitem, 0, sizeof(BlackMapEntry));
+				if (type == ROLE_QUOTA || type == ROLE_TABLESPACE_QUOTA)
+					keyitem.targetoid = relowner;
+				else if (type == NAMESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
+					keyitem.targetoid = relnamespace;
+				if (type == ROLE_TABLESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
+					keyitem.tablespaceoid = reltablespace;
+				keyitem.databaseoid = MyDatabaseId;
+				keyitem.targettype = type;
+
+				blackmapentry = hash_search(local_blackmap,
+											&keyitem, HASH_FIND, &found);
+				if (found && blackmapentry)
+				{
+					/*
+					 * If the current relation is blocked, we should add the relfilenode
+					 * of itself together with the relfilenodes of its toast relation and
+					 * appendonly relations to the global black map.
+					 */
+					List	   *oid_list = NIL;
+					ListCell   *cell = NULL;
+					Oid			toastrelid = form->reltoastrelid;
+					Oid			aosegrelid = InvalidOid;
+					Oid			aoblkdirrelid = InvalidOid;
+					Oid			aovisimaprelid = InvalidOid;
+					oid_list = lappend_oid(oid_list, active_oid);
+
+					/* Append toast relation and toast index to the oid_list if any. */
+					if (OidIsValid(toastrelid))
+					{
+						oid_list = lappend_oid(oid_list, toastrelid);
+						oid_list = list_concat(oid_list, GetIndexOidListByRelid(toastrelid));
+					}
+
+					/* Append ao auxiliary relations and their indexes to the oid_list if any. */
+					GetAppendOnlyEntryAuxOidListByRelid(active_oid, &aosegrelid,
+														&aoblkdirrelid, &aovisimaprelid);
+					if (OidIsValid(aosegrelid))
+					{
+						oid_list = lappend_oid(oid_list, aosegrelid);
+						oid_list = list_concat(oid_list, GetIndexOidListByRelid(aosegrelid));
+					}
+					if (OidIsValid(aoblkdirrelid))
+					{
+						oid_list = lappend_oid(oid_list, aoblkdirrelid);
+						oid_list = list_concat(oid_list, GetIndexOidListByRelid(aoblkdirrelid));
+					}
+					if (OidIsValid(aovisimaprelid))
+					{
+						oid_list = lappend_oid(oid_list, aovisimaprelid);
+						oid_list = list_concat(oid_list, GetIndexOidListByRelid(aovisimaprelid));
+					}
+
+					/* Iterate over the oid_list and add their relfilenodes to the blackmap. */
+					foreach(cell, oid_list)
+					{
+						Oid		curr_oid = lfirst_oid(cell);
+						HeapTuple curr_tuple = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(curr_oid));
+						if (HeapTupleIsValid(curr_tuple))
+						{
+							Form_pg_class				curr_form = (Form_pg_class) GETSTRUCT(curr_tuple);
+							Oid							curr_reltablespace =
+								OidIsValid(curr_form->reltablespace) ?
+								curr_form->reltablespace : DEFAULTTABLESPACE_OID;
+							RelFileNode					relfilenode =
+								{ .dbNode = MyDatabaseId,
+								  .relNode = curr_form->relfilenode,
+								  .spcNode = curr_reltablespace };
+							bool						found;
+							GlobalBlackMapEntry		   *blocked_filenode_entry;
+							BlackMapEntry				blocked_filenode_keyitem;
+
+							memset(&blocked_filenode_keyitem, 0, sizeof(BlackMapEntry));
+							memcpy(&blocked_filenode_keyitem.relfilenode, &relfilenode, sizeof(RelFileNode));
+
+							LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+							blocked_filenode_entry = hash_search(disk_quota_black_map,
+																 &blocked_filenode_keyitem,
+																 HASH_ENTER_NULL, &found);
+							if (!found && blocked_filenode_entry)
+							{
+								memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(BlackMapEntry));
+								blocked_filenode_entry->segexceeded = blackmapentry->segexceeded;
+							}
+							LWLockRelease(diskquota_locks.black_map_lock);
+						}
+					}
+					/*
+					 * The current relation may satisfy multiple blocking conditions,
+					 * we only add it once.
+					 */
+					break;
+				}
+			}
+		}
+	}
+
+	SPI_finish();
+	PG_RETURN_VOID();
+}
+
+/*
+ * show_blackmap() provides developers or users to dump the blackmap in shared
+ * memory on a single server. If you want to query blackmap on segment servers,
+ * you should dispatch this query to segments.
+ */
+PG_FUNCTION_INFO_V1(show_blackmap);
+Datum
+show_blackmap(PG_FUNCTION_ARGS)
+{
+	FuncCallContext			   *funcctx;
+	GlobalBlackMapEntry		   *blackmap_entry;
+	struct BlackMapCtx {
+		HASH_SEQ_STATUS			blackmap_seq;
+		HTAB				   *blackmap;
+	} *blackmap_ctx;
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		TupleDesc					tupdesc;
+		MemoryContext				oldcontext;
+		HASHCTL						hashctl;
+		HASH_SEQ_STATUS				hash_seq;
+
+		/* Create a function context for cross-call persistence. */
+		funcctx = SRF_FIRSTCALL_INIT();
+
+		/* Switch to memory context appropriate for multiple function calls */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		tupdesc = CreateTemplateTupleDesc(9, false /*hasoid*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "target_type", TEXTOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "target_oid", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "database_oid", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "tablespace_oid", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "seg_exceeded", BOOLOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "dbnode", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "spcnode", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "relnode", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "segid", INT4OID, -1 /*typmod*/, 0 /*attdim*/);
+
+		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+
+		/* Create a local hash table and fill it with entries from shared memory. */
+		memset(&hashctl, 0, sizeof(hashctl));
+		hashctl.keysize = sizeof(BlackMapEntry);
+		hashctl.entrysize = sizeof(GlobalBlackMapEntry);
+		hashctl.hcxt = CurrentMemoryContext;
+		hashctl.hash = tag_hash;
+
+		blackmap_ctx = (struct BlackMapCtx *) palloc(sizeof(struct BlackMapCtx));
+		blackmap_ctx->blackmap = hash_create("blackmap_ctx blackmap",
+											 1024, &hashctl,
+											 HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+
+		LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
+		hash_seq_init(&hash_seq, disk_quota_black_map);
+		while ((blackmap_entry = hash_seq_search(&hash_seq)) != NULL)
+		{
+			GlobalBlackMapEntry		   *local_blackmap_entry = NULL;
+			local_blackmap_entry = hash_search(blackmap_ctx->blackmap,
+											   &blackmap_entry->keyitem,
+											   HASH_ENTER_NULL, NULL);
+			if (local_blackmap_entry)
+			{
+				memcpy(&local_blackmap_entry->keyitem,
+					   &blackmap_entry->keyitem, sizeof(BlackMapEntry));
+				local_blackmap_entry->segexceeded = blackmap_entry->segexceeded;
+				memcpy(&local_blackmap_entry->auxblockinfo,
+					   &blackmap_entry->auxblockinfo, sizeof(BlackMapEntry));
+			}
+		}
+		LWLockRelease(diskquota_locks.black_map_lock);
+
+		/* Setup first calling context. */
+		hash_seq_init(&(blackmap_ctx->blackmap_seq),
+					  blackmap_ctx->blackmap);
+		funcctx->user_fctx = (void *) blackmap_ctx;
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+	blackmap_ctx = (struct BlackMapCtx *) funcctx->user_fctx;
+
+	while ((blackmap_entry = hash_seq_search(&(blackmap_ctx->blackmap_seq))) != NULL)
+	{
+		Datum			result;
+		Datum			values[9];
+		bool			nulls[9];
+		HeapTuple		tuple;
+		BlackMapEntry	keyitem;
+		char			targettype_str[32];
+		RelFileNode		blocked_relfilenode;
+
+		memcpy(&blocked_relfilenode,
+			   &blackmap_entry->keyitem.relfilenode, sizeof(RelFileNode));
+		/*
+		 * If the blackmap entry is indexed by relfilenode, we dump the blocking
+		 * condition from auxblockinfo.
+		 */
+		if (!OidIsValid(blocked_relfilenode.relNode))
+			memcpy(&keyitem, &blackmap_entry->keyitem, sizeof(keyitem));
+		else
+			memcpy(&keyitem, &blackmap_entry->auxblockinfo, sizeof(keyitem));
+		memset(targettype_str, 0, sizeof(targettype_str));
+
+		switch ((QuotaType) keyitem.targettype)
+		{
+		case ROLE_QUOTA:
+			strncpy(targettype_str, "ROLE_QUOTA", 10);
+			break;
+		case NAMESPACE_QUOTA:
+			strncpy(targettype_str, "NAMESPACE_QUOTA", 15);
+			break;
+		case ROLE_TABLESPACE_QUOTA:
+			strncpy(targettype_str, "ROLE_TABLESPACE_QUOTA", 21);
+			break;
+		case NAMESPACE_TABLESPACE_QUOTA:
+			strncpy(targettype_str, "NAMESPACE_TABLESPACE_QUOTA", 26);
+			break;
+		default:
+			strncpy(targettype_str, "UNKNOWN", 7);
+			break;
+		}
+
+		values[0] = CStringGetTextDatum(targettype_str);
+		values[1] = ObjectIdGetDatum(keyitem.targetoid);
+		values[2] = ObjectIdGetDatum(keyitem.databaseoid);
+		values[3] = ObjectIdGetDatum(keyitem.tablespaceoid);
+		values[4] = BoolGetDatum(blackmap_entry->segexceeded);
+		values[5] = ObjectIdGetDatum(blocked_relfilenode.dbNode);
+		values[6] = ObjectIdGetDatum(blocked_relfilenode.spcNode);
+		values[7] = ObjectIdGetDatum(blocked_relfilenode.relNode);
+		values[8] = Int32GetDatum(GpIdentity.segindex);
+
+		memset(nulls, false, sizeof(nulls));
+		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+	}
+
+	SRF_RETURN_DONE(funcctx);
 }
