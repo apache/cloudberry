@@ -69,7 +69,7 @@ SELECT block_relation_on_seg0('blocked_t1'::regclass, 'NAMESPACE'::text);
 SELECT rel.relname, be.target_type, (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0;
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
 
 -- Insert an entry for blocked_t1 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'ROLE'::text);
@@ -78,7 +78,7 @@ SELECT block_relation_on_seg0('blocked_t1'::regclass, 'ROLE'::text);
 SELECT rel.relname, be.target_type, (be.target_oid=rel.relowner) AS owner_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0;
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
 
 -- Create a tablespace to test the rest of blocking types.
 \! mkdir /tmp/blocked_space
@@ -94,7 +94,7 @@ SELECT rel.relname, be.target_type,
                     (be.tablespace_oid=rel.reltablespace) AS tablespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0;
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
 
 -- Insert an entry for blocked_t1 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'ROLE_TABLESPACE'::text);
@@ -105,7 +105,7 @@ SELECT rel.relname, be.target_type,
                     (be.tablespace_oid=rel.reltablespace) AS tablespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0;
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
 
 --
 -- 2. Test that the relfilenodes of toast relation together with its
@@ -122,7 +122,7 @@ SELECT replace_oid_with_relname(rel.relname),
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
 
 --
@@ -141,7 +141,7 @@ SELECT replace_oid_with_relname(rel.relname),
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
 
 --
@@ -160,7 +160,7 @@ SELECT replace_oid_with_relname(rel.relname),
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
 
 --
@@ -179,7 +179,7 @@ SELECT replace_oid_with_relname(rel.relname),
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
        gp_dist_random('diskquota.blackmap') AS be
-  WHERE rel.relfilenode=be.relnode AND be.relnode<>0
+  WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
 
 -- Do some clean-ups.
