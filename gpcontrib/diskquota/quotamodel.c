@@ -625,8 +625,8 @@ do_check_diskquota_state_is_ready(void)
 
 	/* Add the dbid to watching list, so the hook can catch the table change*/
 	initStringInfo(&sql_command);
-	appendStringInfo(&sql_command, "select gp_segment_id, diskquota.update_diskquota_db_list(%u, 0) from gp_dist_random('gp_id');",
-				MyDatabaseId);
+	appendStringInfo(&sql_command, "select gp_segment_id, diskquota.update_diskquota_db_list(%u, 0) from gp_dist_random('gp_id')  UNION ALL select -1, diskquota.update_diskquota_db_list(%u, 0);",
+				MyDatabaseId, MyDatabaseId);
 	ret = SPI_execute(sql_command.data, true, 0);
         if (ret != SPI_OK_SELECT)
                 ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
@@ -764,6 +764,33 @@ refresh_disk_quota_usage(bool is_init)
 	return;
 }
 
+static List*
+merge_uncommitted_table_to_oidlist(List *oidlist)
+{
+	HASH_SEQ_STATUS 			 iter;
+	DiskQuotaRelationCacheEntry *entry;
+
+	if (relation_cache == NULL)
+	{
+		return oidlist;
+	}
+
+	remove_committed_relation_from_cache();
+
+	LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+	hash_seq_init(&iter, relation_cache);
+	while ((entry = hash_seq_search(&iter)) != NULL)
+	{
+		if (entry->primary_table_relid == entry->relid)
+		{
+			oidlist = lappend_oid(oidlist, entry->relid);
+		}
+	}
+	LWLockRelease(diskquota_locks.relation_cache_lock);
+
+	return oidlist;
+}
+
 /*
  *  Incremental way to update the disk quota of every database objects
  *  Recalculate the table's disk usage when it's a new table or active table.
@@ -812,19 +839,41 @@ calculate_table_disk_usage(bool is_init)
 	 * and role_size_map
 	 */
 	oidlist = get_rel_oid_list();
+
+	oidlist = merge_uncommitted_table_to_oidlist(oidlist);
+	
 	foreach(l, oidlist)
 	{
 		HeapTuple	classTup;
-		Form_pg_class classForm;
+		Form_pg_class classForm = NULL;
+		Oid relnamespace = InvalidOid;
+		Oid relowner = InvalidOid;
+		Oid reltablespace = InvalidOid;
 		relOid = lfirst_oid(l);
 
 		classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relOid));
-		if (!HeapTupleIsValid(classTup))
+		if (HeapTupleIsValid(classTup))
 		{
-			elog(WARNING, "cache lookup failed for relation %u", relOid);
-			continue;
+			classForm = (Form_pg_class) GETSTRUCT(classTup);
+			relnamespace = classForm->relnamespace;
+			relowner = classForm->relowner;
+			reltablespace = classForm->reltablespace;
 		}
-		classForm = (Form_pg_class) GETSTRUCT(classTup);
+		else
+		{
+			LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+			DiskQuotaRelationCacheEntry *relation_entry = hash_search(relation_cache, &relOid, HASH_FIND, NULL);
+			if (relation_entry == NULL)
+			{
+				elog(WARNING, "cache lookup failed for relation %u", relOid);
+				LWLockRelease(diskquota_locks.relation_cache_lock);
+				continue;
+			}
+			relnamespace = relation_entry->namespaceoid;
+			relowner = relation_entry->owneroid;
+			reltablespace = relation_entry->rnode.node.spcNode;
+			LWLockRelease(diskquota_locks.relation_cache_lock);
+		}
 
 		/*
 		 * The segid is the same as the content id in gp_segment_configuration
@@ -863,19 +912,7 @@ calculate_table_disk_usage(bool is_init)
 					/* pretend process as utility mode, and append the table size on master */
 					Gp_role = GP_ROLE_UTILITY;
 
-					/* DirectFunctionCall1 may fail, since table maybe dropped by other backend */
-					PG_TRY();
-					{
-						/* call pg_table_size to get the active table size */
-						active_table_entry->tablesize += (Size) DatumGetInt64(DirectFunctionCall1(pg_table_size, ObjectIdGetDatum(relOid)));
-					}
-					PG_CATCH();
-					{
-						HOLD_INTERRUPTS();
-						FlushErrorState();
-						RESUME_INTERRUPTS();
-					}
-					PG_END_TRY();
+					active_table_entry->tablesize += calculate_table_size(relOid);
 
 					Gp_role = GP_ROLE_DISPATCH;
 
@@ -901,63 +938,68 @@ calculate_table_disk_usage(bool is_init)
 			}
 
 			/* if schema change, transfer the file size */
-			if (tsentry->namespaceoid != classForm->relnamespace)
+			if (tsentry->namespaceoid != relnamespace)
 			{
 				transfer_table_for_quota(
 						tsentry->totalsize,
 						NAMESPACE_QUOTA,
 						(Oid[]){tsentry->namespaceoid},
-						(Oid[]){classForm->relnamespace},
+						(Oid[]){relnamespace},
 						key.segid);
 				transfer_table_for_quota(
 						tsentry->totalsize,
 						NAMESPACE_TABLESPACE_QUOTA,
 						(Oid[]){tsentry->namespaceoid, tsentry->tablespaceoid},
-						(Oid[]){classForm->relnamespace, tsentry->tablespaceoid},
+						(Oid[]){relnamespace, tsentry->tablespaceoid},
 						key.segid);
-				tsentry->namespaceoid = classForm->relnamespace;
+				tsentry->namespaceoid = relnamespace;
 			}
 			/* if owner change, transfer the file size */
-			if (tsentry->owneroid != classForm->relowner)
+			if (tsentry->owneroid != relowner)
 			{
 				transfer_table_for_quota(
 						tsentry->totalsize,
 						ROLE_QUOTA,
 						(Oid[]){tsentry->owneroid},
-						(Oid[]){classForm->relowner},
+						(Oid[]){relowner},
 						key.segid
 						);
 				transfer_table_for_quota(
 						tsentry->totalsize,
 						ROLE_TABLESPACE_QUOTA,
 						(Oid[]){tsentry->owneroid, tsentry->tablespaceoid},
-						(Oid[]){classForm->relowner, tsentry->tablespaceoid},
+						(Oid[]){relowner, tsentry->tablespaceoid},
 						key.segid
 						);
-				tsentry->owneroid = classForm->relowner;
+				tsentry->owneroid = relowner;
 			}
 
-			if (tsentry->tablespaceoid != classForm->reltablespace)
+			if (tsentry->tablespaceoid != reltablespace)
 			{
 				transfer_table_for_quota(
 						tsentry->totalsize,
 						NAMESPACE_TABLESPACE_QUOTA,
 						(Oid[]){tsentry->namespaceoid, tsentry->tablespaceoid},
-						(Oid[]){tsentry->namespaceoid, classForm->reltablespace},
+						(Oid[]){tsentry->namespaceoid, reltablespace},
 						key.segid
 						);
 				transfer_table_for_quota(
 						tsentry->totalsize,
 						ROLE_TABLESPACE_QUOTA,
 						(Oid[]){tsentry->owneroid, tsentry->tablespaceoid},
-						(Oid[]){tsentry->owneroid, classForm->reltablespace},
+						(Oid[]){tsentry->owneroid, reltablespace},
 						key.segid
 						);
-				tsentry->tablespaceoid = classForm->reltablespace;
+				tsentry->tablespaceoid = reltablespace;
 			}
 		}
-		heap_freetuple(classTup);
+		if (HeapTupleIsValid(classTup))
+		{
+			heap_freetuple(classTup);
+		}
 	}
+
+	list_free(oidlist);
 
 	hash_destroy(local_active_table_stat_map);
 
@@ -1582,97 +1624,6 @@ export_exceeded_error(GlobalBlackMapEntry *entry, bool skip_name)
 }
 
 /*
- * The order of the returned index list is not guaranteed, Don't
- * apply the relation_open() to the returned list, or deadlock
- * may happen.
- */
-static List*
-GetIndexOidListByRelid(Oid reloid)
-{
-	List		   *result = NIL;
-	ScanKeyData		skey;
-	SysScanDesc		indscan;
-	Relation		indrel;
-	HeapTuple		htup;
-
-	ScanKeyInit(&skey, Anum_pg_index_indrelid,
-				BTEqualStrategyNumber, F_OIDEQ, reloid);
-	indrel = heap_open(IndexRelationId, AccessShareLock);
-	indscan = systable_beginscan(indrel, IndexIndrelidIndexId,
-								 true /*indexOk*/, NULL /*snapshot*/,
-								 1 /*nkeys*/, &skey);
-	while (HeapTupleIsValid(htup = systable_getnext(indscan)))
-	{
-		Form_pg_index	index = (Form_pg_index) GETSTRUCT(htup);
-
-		if (!IndexIsLive(index))
-			continue;
-
-		result = lappend_oid(result, index->indexrelid);
-	}
-	systable_endscan(indscan);
-	heap_close(indrel, AccessShareLock);
-
-	return result;
-}
-
-/*
- * Get auxiliary relations oid by searching the pg_appendonly table.
- */
-static void
-GetAppendOnlyEntryAuxOidListByRelid(Oid reloid, Oid *segrelid,
-									Oid *blkdirrelid, Oid *visimaprelid)
-{
-	ScanKeyData			skey;
-	SysScanDesc			scan;
-	TupleDesc			tupDesc;
-	Relation			aorel;
-	HeapTuple			htup;
-	Datum  				auxoid;
-	bool				isnull;
-
-	ScanKeyInit(&skey, Anum_pg_appendonly_relid,
-				BTEqualStrategyNumber, F_OIDEQ, reloid);
-	aorel = heap_open(AppendOnlyRelationId, AccessShareLock);
-	tupDesc = RelationGetDescr(aorel);
-	scan = systable_beginscan(aorel, AppendOnlyRelidIndexId,
-							  true /*indexOk*/, NULL /*snapshot*/,
-							  1 /*nkeys*/, &skey);
-	while (HeapTupleIsValid(htup = systable_getnext(scan)))
-	{
-		if (segrelid)
-		{
-			auxoid = heap_getattr(htup,
-								  Anum_pg_appendonly_segrelid,
-								  tupDesc, &isnull);
-			if (!isnull)
-				*segrelid = DatumGetObjectId(auxoid);
-		}
-
-		if (blkdirrelid)
-		{
-			auxoid = heap_getattr(htup,
-								  Anum_pg_appendonly_blkdirrelid,
-								  tupDesc, &isnull);
-			if (!isnull)
-				*blkdirrelid = DatumGetObjectId(auxoid);
-		}
-
-		if (visimaprelid)
-		{
-			auxoid = heap_getattr(htup,
-								  Anum_pg_appendonly_visimaprelid,
-								  tupDesc, &isnull);
-			if (!isnull)
-				*visimaprelid = DatumGetObjectId(auxoid);
-		}
-	}
-
-	systable_endscan(scan);
-	heap_close(aorel, AccessShareLock);
-}
-
-/*
  * refresh_blackmap() takes two arguments.
  * The first argument is an array of blackmap entries on QD.
  * The second argument is an array of active relations' oid.
@@ -1840,26 +1791,26 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 					if (OidIsValid(toastrelid))
 					{
 						oid_list = lappend_oid(oid_list, toastrelid);
-						oid_list = list_concat(oid_list, GetIndexOidListByRelid(toastrelid));
+						oid_list = list_concat(oid_list, diskquota_get_index_list(toastrelid));
 					}
 
 					/* Append ao auxiliary relations and their indexes to the oid_list if any. */
-					GetAppendOnlyEntryAuxOidListByRelid(active_oid, &aosegrelid,
+					diskquota_get_appendonly_aux_oid_list(active_oid, &aosegrelid,
 														&aoblkdirrelid, &aovisimaprelid);
 					if (OidIsValid(aosegrelid))
 					{
 						oid_list = lappend_oid(oid_list, aosegrelid);
-						oid_list = list_concat(oid_list, GetIndexOidListByRelid(aosegrelid));
+						oid_list = list_concat(oid_list, diskquota_get_index_list(aosegrelid));
 					}
 					if (OidIsValid(aoblkdirrelid))
 					{
 						oid_list = lappend_oid(oid_list, aoblkdirrelid);
-						oid_list = list_concat(oid_list, GetIndexOidListByRelid(aoblkdirrelid));
+						oid_list = list_concat(oid_list, diskquota_get_index_list(aoblkdirrelid));
 					}
 					if (OidIsValid(aovisimaprelid))
 					{
 						oid_list = lappend_oid(oid_list, aovisimaprelid);
-						oid_list = list_concat(oid_list, GetIndexOidListByRelid(aovisimaprelid));
+						oid_list = list_concat(oid_list, diskquota_get_index_list(aovisimaprelid));
 					}
 
 					/* Iterate over the oid_list and add their relfilenodes to the blackmap. */

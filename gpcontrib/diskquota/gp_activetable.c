@@ -207,8 +207,8 @@ report_relation_cache_helper(Oid relid)
 {
 	bool found;
 	
-	/* We do not collect the active table in either master or mirror segments  */
-	if (IS_QUERY_DISPATCHER() || IsRoleMirror())
+	/* We do not collect the active table in mirror segments  */
+	if (IsRoleMirror())
 	{
 		return;
 	}
@@ -242,8 +242,8 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 	Oid dbid = relFileNode->node.dbNode;
 
 	
-	/* We do not collect the active table in either master or mirror segments  */
-	if (IS_QUERY_DISPATCHER() || IsRoleMirror())
+	/* We do not collect the active table in mirror segments  */
+	if (IsRoleMirror())
 	{
 		return;
 	}
@@ -494,6 +494,7 @@ get_active_tables_stats(ArrayType *array)
 	HASHCTL		ctl;
 	TableEntryKey key;
 	DiskQuotaActiveTableEntry *entry;
+	bool		found;
 
 	Assert(ARR_ELEMTYPE(array) == OIDOID);
 
@@ -530,68 +531,18 @@ get_active_tables_stats(ArrayType *array)
 		}
 		else
 		{
-			MemoryContext			oldcontext;
-			ResourceOwner			oldowner;
-
 			relOid = DatumGetObjectId(fetch_att(ptr, typbyval, typlen));
 			segId = GpIdentity.segindex;
 			key.reloid = relOid;
 			key.segid = segId;
 
-			entry = (DiskQuotaActiveTableEntry *) hash_search(local_table, &key, HASH_ENTER, NULL);
-			entry->reloid = relOid;
-			entry->segid = segId;
-
-			/*
-			 * pg_table_size() may throw exceptions, in order not to abort the top level
-			 * transaction, we start a subtransaction for it. This operation is expensive,
-			 * but there're good reasons. E.g.,
-			 * When the subtransaction is aborted, the resources (e.g., locks) acquired
-			 * in pg_table_size() are released in time. We can avoid potential deadlock
-			 * risks by doing this.
-			 */
-			oldcontext = CurrentMemoryContext;
-			oldowner = CurrentResourceOwner;
-
-			BeginInternalSubTransaction(NULL /* save point name */);
-			/* Run inside the function's memory context. */
-			MemoryContextSwitchTo(oldcontext);
-			PG_TRY();
+			entry = (DiskQuotaActiveTableEntry *) hash_search(local_table, &key, HASH_ENTER, &found);
+			if (!found)
 			{
-				/* call pg_table_size to get the active table size */
-				entry->tablesize = (Size) DatumGetInt64(DirectFunctionCall1(pg_table_size,
-																			ObjectIdGetDatum(relOid)));
-
-#ifdef FAULT_INJECTOR
-				SIMPLE_FAULT_INJECTOR("diskquota_fetch_table_stat");
-#endif
-				/* Commit the subtransaction. */
-				ReleaseCurrentSubTransaction();
-				MemoryContextSwitchTo(oldcontext);
-				CurrentResourceOwner = oldowner;
+				entry->reloid = relOid;
+				entry->segid = segId;
+				entry->tablesize = calculate_table_size(relOid);
 			}
-			PG_CATCH();
-			{
-				ErrorData		   *edata;
-
-				/*
-				 * Save the error information, or we have no idea what is causing the
-				 * exception.
-				 */
-				MemoryContextSwitchTo(oldcontext);
-				edata = CopyErrorData();
-				FlushErrorState();
-
-				/* Abort the subtransaction and rollback. */
-				RollbackAndReleaseCurrentSubTransaction();
-				MemoryContextSwitchTo(oldcontext);
-				CurrentResourceOwner = oldowner;
-				elog(WARNING, "%s", edata->message);
-				FreeErrorData(edata);
-
-				entry->tablesize = 0;
-			}
-			PG_END_TRY();
 
 			ptr = att_addlength_pointer(ptr, typlen, ptr);
 			ptr = (char *) att_align_nominal(ptr, typalign);

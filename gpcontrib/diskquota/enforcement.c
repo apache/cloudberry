@@ -51,7 +51,6 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 	{
 		List	   	*indexIds;
 		ListCell	*oid;
-		Relation	relation;
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(l);
 
 		/* see ExecCheckRTEPerms() */
@@ -72,11 +71,7 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 		 */
 		quota_check_common(rte->relid, NULL /*relfilenode*/);
 		/* Check the indexes of the this relation */
-		relation = try_relation_open(rte->relid, AccessShareLock, false);
-		if (!relation)
-			continue;
-
-		indexIds = RelationGetIndexList(relation);
+		indexIds = diskquota_get_index_list(rte->relid);
 		PG_TRY();
 		{
 			if (indexIds != NIL )
@@ -89,12 +84,10 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 		}
 		PG_CATCH();
 		{
-			relation_close(relation, AccessShareLock);
 			list_free(indexIds);
 			PG_RE_THROW();
 		}
 		PG_END_TRY();
-		relation_close(relation, AccessShareLock);
 		list_free(indexIds);
 	}
 	return true;
