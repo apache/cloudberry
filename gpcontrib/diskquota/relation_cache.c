@@ -3,6 +3,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
 #include "catalog/objectaccess.h"
 #include "executor/spi.h"
@@ -404,4 +405,160 @@ show_relation_cache(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(funcctx);
+}
+
+static void
+add_auxrelation_to_relation_entry(Oid relid, DiskQuotaRelationCacheEntry *pentry)
+{
+	List 		*index_oids;
+	ListCell	*cell;
+
+	add_auxrelid_to_relation_entry(pentry, relid);
+
+	index_oids = diskquota_get_index_list(relid);
+	foreach(cell, index_oids)
+	{
+		Oid	idxrelid = lfirst_oid(cell);
+		add_auxrelid_to_relation_entry(pentry, idxrelid);
+	}
+	list_free(index_oids);
+}
+
+static void
+get_relation_entry_from_pg_class(Oid relid, DiskQuotaRelationCacheEntry* relation_entry)
+{
+	HeapTuple classTup;
+	Form_pg_class classForm;
+	Oid segrelid = InvalidOid;
+	Oid blkdirrelid = InvalidOid;
+	Oid visimaprelid = InvalidOid;
+
+	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
+	if (!HeapTupleIsValid(classTup) || relation_entry == NULL)
+	{
+		return;
+	}
+	
+	classForm = (Form_pg_class) GETSTRUCT(classTup);
+
+	relation_entry->relid = relid;
+	relation_entry->primary_table_relid = relid;
+	relation_entry->owneroid = classForm->relowner;
+	relation_entry->namespaceoid = classForm->relnamespace;
+	relation_entry->relstorage = classForm->relstorage;
+	relation_entry->rnode.node.spcNode = OidIsValid(classForm->reltablespace) ? 
+										 classForm->reltablespace : DEFAULTTABLESPACE_OID;
+	relation_entry->rnode.node.dbNode = MyDatabaseId;
+	relation_entry->rnode.node.relNode = classForm->relfilenode;
+	relation_entry->rnode.backend = classForm->relpersistence == RELPERSISTENCE_TEMP ? 
+									TempRelBackendId : InvalidBackendId;
+
+	/* toast table */
+	if (OidIsValid(classForm->reltoastrelid))
+	{
+		add_auxrelation_to_relation_entry(classForm->reltoastrelid, relation_entry);
+	}
+
+	heap_freetuple(classTup);
+
+	/* ao table */
+	diskquota_get_appendonly_aux_oid_list(relid, &segrelid, &blkdirrelid, &visimaprelid);
+	if (OidIsValid(segrelid))
+	{
+		add_auxrelation_to_relation_entry(segrelid, relation_entry);
+	}
+	if (OidIsValid(blkdirrelid))
+	{
+		add_auxrelation_to_relation_entry(blkdirrelid, relation_entry);
+	}
+	if (OidIsValid(visimaprelid))
+	{
+		add_auxrelation_to_relation_entry(visimaprelid, relation_entry);
+	}
+}
+
+static void
+get_relation_entry(Oid relid, DiskQuotaRelationCacheEntry* entry)
+{
+	DiskQuotaRelationCacheEntry* tentry;
+
+	LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+	tentry = hash_search(relation_cache, &relid, HASH_FIND, NULL);
+	if (tentry)
+	{
+		memcpy(entry, tentry, sizeof(DiskQuotaRelationCacheEntry));
+		LWLockRelease(diskquota_locks.relation_cache_lock);
+		return;
+	}
+	LWLockRelease(diskquota_locks.relation_cache_lock);
+	
+	get_relation_entry_from_pg_class(relid, entry);
+}
+
+static void
+get_relfilenode_by_relid(Oid relid, RelFileNodeBackend *rnode, char *relstorage)
+{
+	DiskQuotaRelationCacheEntry *relation_cache_entry;
+	HeapTuple classTup;
+	Form_pg_class classForm;
+	
+	memset(rnode, 0, sizeof(RelFileNodeBackend));
+	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
+	if (HeapTupleIsValid(classTup))
+	{
+		classForm = (Form_pg_class) GETSTRUCT(classTup);
+		rnode->node.spcNode = OidIsValid(classForm->reltablespace) ? 
+							  classForm->reltablespace : DEFAULTTABLESPACE_OID;
+		rnode->node.dbNode = MyDatabaseId;
+		rnode->node.relNode = classForm->relfilenode;
+		rnode->backend = classForm->relpersistence == RELPERSISTENCE_TEMP ? 
+						 TempRelBackendId : InvalidBackendId;
+		*relstorage = classForm->relstorage;
+		heap_freetuple(classTup);
+		remove_cache_entry(relid, InvalidOid);
+		return;
+	}
+
+	LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+	relation_cache_entry = hash_search(relation_cache, &relid, HASH_FIND, NULL);
+	if (relation_cache_entry)
+	{
+		*rnode = relation_cache_entry->rnode;
+		*relstorage = relation_cache_entry->relstorage;
+	}
+	LWLockRelease(diskquota_locks.relation_cache_lock);
+
+	return;
+}
+
+
+static Size
+do_calculate_table_size(DiskQuotaRelationCacheEntry *entry)
+{
+	Size tablesize = 0;
+	RelFileNodeBackend rnode;
+	char relstorage = 0;
+	Oid subrelid;
+	int i;
+
+	get_relfilenode_by_relid(entry->relid, &rnode, &relstorage);
+	tablesize += calculate_relation_size_all_forks(&rnode, relstorage);
+
+	for (i = 0; i < entry->auxrel_num; i++)
+	{
+		subrelid = entry->auxrel_oid[i];
+		get_relfilenode_by_relid(subrelid, &rnode, &relstorage);
+		tablesize += calculate_relation_size_all_forks(&rnode, relstorage);
+	}
+	return tablesize;
+}
+
+Size
+calculate_table_size(Oid relid)
+{
+	DiskQuotaRelationCacheEntry entry = {0};
+
+	get_relation_entry(relid, &entry);
+
+	return do_calculate_table_size(&entry);
 }
