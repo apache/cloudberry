@@ -1175,14 +1175,9 @@ get_rel_oid_list(void)
 		oid = DatumGetObjectId(SPI_getbinval(tup,tupdesc, 1, &isnull));
 		if (!isnull)
 		{
-			Relation	relation;
-			List	   	*indexIds;
-			relation = try_relation_open(oid, AccessShareLock, false);
-			if (!relation)
-				continue;
-
+			List *indexIds;
 			oidlist = lappend_oid(oidlist, oid);
-			indexIds = RelationGetIndexList(relation);
+			indexIds = diskquota_get_index_list(oid);
 			if (indexIds != NIL )
 			{
 				foreach(l, indexIds)
@@ -1190,7 +1185,6 @@ get_rel_oid_list(void)
 					oidlist = lappend_oid(oidlist, lfirst_oid(l));
 				}
 			}
-		    relation_close(relation, AccessShareLock);
 			list_free(indexIds);
 		}
 	}
@@ -1308,4 +1302,102 @@ diskquota_relation_open(Oid relid, LOCKMODE mode)
 	}
 	PG_END_TRY();
 	return success_open ? rel : NULL;
+}
+
+List*
+diskquota_get_index_list(Oid relid)
+{
+	Relation	indrel;
+	SysScanDesc indscan;
+	ScanKeyData skey;
+	HeapTuple	htup;
+	List	   *result = NIL;
+
+	/* Prepare to scan pg_index for entries having indrelid = this rel. */
+	ScanKeyInit(&skey,
+				Anum_pg_index_indrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				relid);
+
+	indrel = heap_open(IndexRelationId, AccessShareLock);
+	indscan = systable_beginscan(indrel, IndexIndrelidIndexId, true,
+								 NULL, 1, &skey);
+
+	while (HeapTupleIsValid(htup = systable_getnext(indscan)))
+	{
+		Form_pg_index index = (Form_pg_index) GETSTRUCT(htup);
+
+		/*
+		 * Ignore any indexes that are currently being dropped. This will
+		 * prevent them from being searched, inserted into, or considered in
+		 * HOT-safety decisions. It's unsafe to touch such an index at all
+		 * since its catalog entries could disappear at any instant.
+		 */
+		if (!IndexIsLive(index))
+			continue;
+
+		/* Add index's OID to result list in the proper order */
+		result = lappend_oid(result, index->indexrelid);
+	}
+
+	systable_endscan(indscan);
+
+	heap_close(indrel, AccessShareLock);
+
+	return result;
+}
+
+/*
+ * Get auxiliary relations oid by searching the pg_appendonly table.
+ */
+void
+diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid)
+{
+	ScanKeyData			skey;
+	SysScanDesc			scan;
+	TupleDesc			tupDesc;
+	Relation			aorel;
+	HeapTuple			htup;
+	Datum  				auxoid;
+	bool				isnull;
+
+	ScanKeyInit(&skey, Anum_pg_appendonly_relid,
+				BTEqualStrategyNumber, F_OIDEQ, reloid);
+	aorel = heap_open(AppendOnlyRelationId, AccessShareLock);
+	tupDesc = RelationGetDescr(aorel);
+	scan = systable_beginscan(aorel, AppendOnlyRelidIndexId,
+							  true /*indexOk*/, NULL /*snapshot*/,
+							  1 /*nkeys*/, &skey);
+	while (HeapTupleIsValid(htup = systable_getnext(scan)))
+	{
+		if (segrelid)
+		{
+			auxoid = heap_getattr(htup,
+								  Anum_pg_appendonly_segrelid,
+								  tupDesc, &isnull);
+			if (!isnull)
+				*segrelid = DatumGetObjectId(auxoid);
+		}
+
+		if (blkdirrelid)
+		{
+			auxoid = heap_getattr(htup,
+								  Anum_pg_appendonly_blkdirrelid,
+								  tupDesc, &isnull);
+			if (!isnull)
+				*blkdirrelid = DatumGetObjectId(auxoid);
+		}
+
+		if (visimaprelid)
+		{
+			auxoid = heap_getattr(htup,
+								  Anum_pg_appendonly_visimaprelid,
+								  tupDesc, &isnull);
+			if (!isnull)
+				*visimaprelid = DatumGetObjectId(auxoid);
+		}
+	}
+
+	systable_endscan(scan);
+	heap_close(aorel, AccessShareLock);
 }

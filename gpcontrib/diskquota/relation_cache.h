@@ -33,6 +33,6 @@ extern Oid get_uncommitted_table_relid(Oid relfilenode);
 extern void update_relation_cache(Oid relid);
 extern Oid get_primary_table_oid(Oid relid);
 extern void remove_committed_relation_from_cache(void);
-
+extern Size calculate_table_size(Oid relid);
 
 #endif
