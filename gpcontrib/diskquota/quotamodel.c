@@ -1431,6 +1431,36 @@ check_blackmap_by_relfilenode(RelFileNode relfilenode)
 }
 
 /*
+ * This function takes relowner, relnamespace, reltablespace as arguments,
+ * prepares the searching key of the global blackmap for us.
+ */
+static void
+prepare_blackmap_search_key(BlackMapEntry *keyitem, QuotaType type,
+							Oid relowner, Oid relnamespace, Oid reltablespace)
+{
+	Assert(keyitem != NULL);
+	memset(keyitem, 0, sizeof(BlackMapEntry));
+	if (type == ROLE_QUOTA || type == ROLE_TABLESPACE_QUOTA)
+		keyitem->targetoid = relowner;
+	else if (type == NAMESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
+		keyitem->targetoid = relnamespace;
+	else
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("[diskquota] unknown quota type: %d", type)));
+
+	if (type == ROLE_TABLESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
+		keyitem->tablespaceoid = reltablespace;
+	else
+	{
+		/* refer to add_quota_to_blacklist */
+		keyitem->tablespaceoid = InvalidOid;
+	}
+	keyitem->databaseoid = MyDatabaseId;
+	keyitem->targettype = type;
+}
+
+/*
  * Given table oid, check whether quota limit
  * of table's schema or table's owner are reached.
  * Do enforcement if quota exceeds.
@@ -1454,32 +1484,7 @@ check_blackmap_by_reloid(Oid reloid)
 	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
 	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 	{
-		if (type == ROLE_QUOTA || type == ROLE_TABLESPACE_QUOTA)
-		{
-			keyitem.targetoid = ownerOid;
-		}
-		else if (type == NAMESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
-		{
-			keyitem.targetoid = nsOid;
-		}
-		else
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("[diskquota] unknown quota type: %d", type)));
-		}
-		if (type == ROLE_TABLESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
-		{
-			keyitem.tablespaceoid = tablespaceoid;
-		}
-		else
-		{
-			/* refer to add_quota_to_blacklist */
-			keyitem.tablespaceoid = InvalidOid;
-		}
-		keyitem.databaseoid = MyDatabaseId;
-		keyitem.targettype = type;
-		memset(&keyitem.relfilenode, 0, sizeof(RelFileNode));
+		prepare_blackmap_search_key(&keyitem, type, ownerOid, nsOid, tablespaceoid);
 		entry = hash_search(disk_quota_black_map,
 					&keyitem,
 					HASH_FIND, &found);
@@ -1686,6 +1691,13 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 	hashctl.hcxt = CurrentMemoryContext;
 	hashctl.hash = tag_hash;
 
+	/*
+	 * Since uncommitted relations' information and the global blackmap entries
+	 * are cached in shared memory. The memory regions are guarded by lightweight
+	 * locks. In order not to hold multiple locks at the same time, We add blackmap
+	 * entries into the local_blackmap below and then flush the content of the
+	 * local_blackmap to the global blackmap at the end of this UDF.
+	 */
 	local_blackmap = hash_create("local_blackmap",
 								 1024, &hashctl,
 								 HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
@@ -1754,22 +1766,8 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 
 			for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 			{
-				/*
-				 * Check that if the current relation should be blocked.
-				 * FIXME: The logic of preparing the blackmap searching
-				 * key is identical to check_blackmap_by_reloid(), we can
-				 * make it into a static helper function.
-				 */
-				memset(&keyitem, 0, sizeof(BlackMapEntry));
-				if (type == ROLE_QUOTA || type == ROLE_TABLESPACE_QUOTA)
-					keyitem.targetoid = relowner;
-				else if (type == NAMESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
-					keyitem.targetoid = relnamespace;
-				if (type == ROLE_TABLESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
-					keyitem.tablespaceoid = reltablespace;
-				keyitem.databaseoid = MyDatabaseId;
-				keyitem.targettype = type;
-
+				/* Check that if the current relation should be blocked. */
+				prepare_blackmap_search_key(&keyitem, type, relowner, relnamespace, reltablespace);
 				blackmapentry = hash_search(local_blackmap,
 											&keyitem, HASH_FIND, &found);
 				if (found && blackmapentry)
@@ -1835,8 +1833,7 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 							memset(&blocked_filenode_keyitem, 0, sizeof(BlackMapEntry));
 							memcpy(&blocked_filenode_keyitem.relfilenode, &relfilenode, sizeof(RelFileNode));
 
-							LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
-							blocked_filenode_entry = hash_search(disk_quota_black_map,
+							blocked_filenode_entry = hash_search(local_blackmap,
 																 &blocked_filenode_keyitem,
 																 HASH_ENTER_NULL, &found);
 							if (!found && blocked_filenode_entry)
@@ -1844,7 +1841,6 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 								memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(BlackMapEntry));
 								blocked_filenode_entry->segexceeded = blackmapentry->segexceeded;
 							}
-							LWLockRelease(diskquota_locks.black_map_lock);
 						}
 					}
 					/*
@@ -1855,7 +1851,84 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 				}
 			}
 		}
+		else
+		{
+			/*
+			 * We cannot fetch the relation from syscache. It may be an uncommitted relation.
+			 * Let's try to fetch it from relation_cache.
+			 */
+			DiskQuotaRelationCacheEntry		   *relation_cache_entry;
+			bool								found;
+			LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+			relation_cache_entry = hash_search(relation_cache, &active_oid,
+											   HASH_FIND, &found);
+			if (found && relation_cache_entry)
+			{
+				Oid				relnamespace = relation_cache_entry->namespaceoid;
+				Oid				reltablespace = relation_cache_entry->rnode.node.spcNode;
+				Oid				relowner = relation_cache_entry->owneroid;
+				BlackMapEntry	keyitem;
+				for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
+				{
+					/* Check that if the current relation should be blocked. */
+					prepare_blackmap_search_key(&keyitem, type, relowner, relnamespace, reltablespace);
+					blackmapentry = hash_search(local_blackmap, &keyitem, HASH_FIND, &found);
+
+					if (found && blackmapentry)
+					{
+						List	   *oid_list = NIL;
+						ListCell   *cell = NULL;
+
+						/* Collect the relation oid together with its auxiliary relations' oid. */
+						oid_list = lappend_oid(oid_list, active_oid);
+						for (int auxoidcnt = 0; auxoidcnt < relation_cache_entry->auxrel_num; ++auxoidcnt)
+							oid_list = lappend_oid(oid_list, relation_cache_entry->auxrel_oid[auxoidcnt]);
+
+						foreach(cell, oid_list)
+						{
+							bool						found;
+							GlobalBlackMapEntry		   *blocked_filenode_entry;
+							BlackMapEntry				blocked_filenode_keyitem;
+							Oid							curr_oid = lfirst_oid(cell);
+
+							relation_cache_entry = hash_search(relation_cache,
+															   &curr_oid, HASH_FIND, &found);
+							if (found && relation_cache_entry)
+							{
+								memset(&blocked_filenode_keyitem, 0, sizeof(BlackMapEntry));
+								memcpy(&blocked_filenode_keyitem.relfilenode,
+									   &relation_cache_entry->rnode.node, sizeof(RelFileNode));
+
+								blocked_filenode_entry = hash_search(local_blackmap,
+																	 &blocked_filenode_keyitem,
+																	 HASH_ENTER_NULL, &found);
+								if (!found && blocked_filenode_entry)
+								{
+									memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(BlackMapEntry));
+									blocked_filenode_entry->segexceeded = blackmapentry->segexceeded;
+								}
+							}
+						}
+					}
+				}
+			}
+			LWLockRelease(diskquota_locks.relation_cache_lock);
+		}
 	}
+
+	/* Flush the content of local_blackmap to the global blackmap. */
+	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+	hash_seq_init(&hash_seq, local_blackmap);
+	while ((blackmapentry = hash_seq_search(&hash_seq)) != NULL)
+	{
+		bool					found;
+		GlobalBlackMapEntry	   *new_entry;
+		new_entry = hash_search(disk_quota_black_map, &blackmapentry->keyitem,
+								HASH_ENTER_NULL, &found);
+		if (!found && new_entry)
+			memcpy(new_entry, blackmapentry, sizeof(GlobalBlackMapEntry));
+	}
+	LWLockRelease(diskquota_locks.black_map_lock);
 
 	SPI_finish();
 	PG_RETURN_VOID();
