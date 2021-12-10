@@ -1252,6 +1252,12 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 		RelationFileStatCtx ctx = {0};
 		ctx.relation_path = relpathbackend(rnode->node, rnode->backend, MAIN_FORKNUM);
 		ctx.size = 0;
+		/*
+		 * Since the extension file with (segno=0, column=1) is not traversed by
+		 * ao_foreach_extent_file(), we need to handle the size of it additionally.
+		 * See comments in ao_foreach_extent_file() for details.
+		 */
+		relation_file_stat(0, &ctx);
 		ao_foreach_extent_file(relation_file_stat, &ctx);
 		return ctx.size;
 	}
