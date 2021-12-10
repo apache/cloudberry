@@ -48,7 +48,7 @@ SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 
 SELECT pg_table_size('ao');
 commit;
 
--- AOCS table index
+-- AO table index
 begin;
 CREATE INDEX ao_idx on ao(i);
 SELECT pg_sleep(5);
@@ -56,6 +56,15 @@ SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 
 SELECT pg_table_size('ao_idx');
 commit;
 
+DROP TABLE ao;
+
+-- AO table CTAS
+begin;
+CREATE TABLE ao WITH(appendonly=true) AS SELECT generate_series(1, 10000);
+SELECT pg_sleep(5);
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
+SELECT pg_table_size('ao');
+commit;
 DROP TABLE ao;
 
 -- AOCS table
@@ -75,4 +84,13 @@ SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 
 SELECT pg_table_size('aocs_idx');
 commit;
 
+DROP TABLE aocs;
+
+-- AOCS table CTAS
+begin;
+CREATE TABLE aocs WITH(appendonly=true, orientation=column) AS SELECT i, array(select * from generate_series(1,1000)) FROM generate_series(1, 100) AS i;
+SELECT pg_sleep(5);
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'aocs'::regclass and segid = -1;
+SELECT pg_table_size('aocs');
+commit;
 DROP TABLE aocs;
