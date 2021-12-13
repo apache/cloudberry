@@ -40,6 +40,11 @@ CREATE OR REPLACE FUNCTION block_relation_on_seg0(rel regclass, block_type text,
   END; $$                                                                 /*in func*/
 LANGUAGE 'plpgsql';
 
+
+-- Enable check quota by relfilenode on seg0.
+SELECT gp_inject_fault_infinite('enable_check_quota_by_relfilenode', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role='p' AND content=0;
+
 -- 1. Test canceling the extending of an ordinary table.
 CREATE TABLE blocked_t1(i int) DISTRIBUTED BY (i);
 INSERT INTO blocked_t1 SELECT generate_series(1, 100);
@@ -506,3 +511,7 @@ SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
 SELECT diskquota.refresh_blackmap(
   ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
+
+-- Disable check quota by relfilenode on seg0.
+SELECT gp_inject_fault_infinite('enable_check_quota_by_relfilenode', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role='p' AND content=0;
