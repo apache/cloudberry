@@ -20,7 +20,6 @@ SELECT gp_inject_fault_infinite('diskquota_fetch_table_stat', 'error', dbid)
 SELECT COUNT(*)
     FROM (SELECT diskquota.diskquota_fetch_table_stat(1, array[(SELECT oid FROM pg_class WHERE relname='t_error_handling')])
           FROM gp_dist_random('gp_id') WHERE gp_segment_id=0) AS count;
-WARNING:  fault triggered, fault name:'diskquota_fetch_table_stat' fault type:'error'
  count 
 -------
      1
