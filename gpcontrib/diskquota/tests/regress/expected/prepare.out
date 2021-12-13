@@ -1,18 +1,12 @@
 CREATE EXTENSION diskquota;
 -- start_ignore
 \! gpstop -u
-20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Starting gpstop with args: -u
-20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Gathering information and validating the environment...
-20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
-20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Obtaining Segment details from master...
-20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.16105.gdfbfc2b build dev'
-20190319:07:07:05:020219 gpstop:df38f510da4b:gpadmin-[INFO]:-Signalling all postmaster processes to reload
-SELECT diskquota.init_table_size_table();
- init_table_size_table 
------------------------
- 
-(1 row)
-
+20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Starting gpstop with args: -u
+20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Gathering information and validating the environment...
+20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Obtaining Greenplum Master catalog information
+20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Obtaining Segment details from master...
+20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.18.2+dev.173.g55557f44f3 build dev'
+20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
 SELECT pg_sleep(1);
  pg_sleep 
@@ -24,6 +18,13 @@ SELECT pg_sleep(1);
 SELECT pg_sleep(15);
  pg_sleep 
 ----------
+ 
+(1 row)
+
+-- disable hardlimit feature.
+SELECT diskquota.disable_hardlimit();
+ disable_hardlimit 
+-------------------
  
 (1 row)
 
@@ -56,13 +57,15 @@ SELECT pg_sleep(10);
  
 (1 row)
 
-SELECT size, segid from diskquota.table_size where tableid in (select oid from pg_class where relname='t1');
+SELECT size, segid FROM diskquota.table_size
+  WHERE tableid IN (SELECT oid FROM pg_class WHERE relname='t1')
+  ORDER BY segid DESC;
   size   | segid 
 ---------+-------
- 1310720 |     0
  1310720 |     2
- 3932160 |    -1
  1310720 |     1
+ 1310720 |     0
+ 3932160 |    -1
 (4 rows)
 
 -- expect fail
