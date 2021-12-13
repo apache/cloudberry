@@ -65,7 +65,6 @@ static volatile sig_atomic_t got_sigusr1 = false;
 /* GUC variables */
 int			diskquota_naptime = 0;
 int			diskquota_max_active_tables = 0;
-static bool diskquota_enable_hardlimit = false;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 
@@ -251,17 +250,6 @@ define_guc_variables(void)
 							NULL,
 							NULL,
 							NULL);
-
-	DefineCustomBoolVariable("diskquota.enable_hardlimit",
-							 "Use in-query diskquota enforcement",
-							 NULL,
-							 &diskquota_enable_hardlimit,
-							 false,
-							 PGC_SIGHUP,
-							 0,
-							 NULL,
-							 NULL,
-							 NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
@@ -390,11 +378,6 @@ disk_quota_worker_main(Datum main_arg)
 
 		/* Do the work */
 		refresh_disk_quota_model(false);
-
-		if (diskquota_enable_hardlimit)
-		{
-			/* TODO: Add hard limit function here */
-		}
 	}
 
 	/* clear the out-of-quota blacklist in shared memory */
