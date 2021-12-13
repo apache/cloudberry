@@ -37,6 +37,7 @@ struct DiskQuotaLocks
 	LWLock	   *monitoring_dbid_cache_lock;
 	LWLock	   *paused_lock;
 	LWLock	   *relation_cache_lock;
+	LWLock	   *hardlimit_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 #define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))
@@ -93,6 +94,7 @@ typedef enum MessageResult MessageResult;
 extern DiskQuotaLocks diskquota_locks;
 extern ExtensionDDLMessage *extension_ddl_message;
 extern bool *diskquota_paused;
+extern bool *diskquota_hardlimit;
 
 /* drop extension hook */
 extern void register_diskquota_object_access_hook(void);
