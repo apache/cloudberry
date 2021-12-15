@@ -15,9 +15,26 @@ function test(){
 		gpstop -arf
 		# the dir to run the "make install" command
 		pushd $1
-		trap "[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs" EXIT
+
+		function look4diffs() {
+			diff_files=\`find .. -name regression.diffs\`
+			for diff_file in \${diff_files}; do
+				if [ -f "\${diff_file}" ]; then
+					cat <<-FEOF
+						======================================================================
+						DIFF FILE: \${diff_file}
+						======================================================================
+
+						\$(grep -v GP_IGNORE "\${diff_file}")
+					FEOF
+				fi
+			done
+			exit 1
+		}
+
+		trap look4diffs ERR
 		make installcheck
-		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && cat regression.diffs && exit 1
+
 		if $2 ; then
 			## Bring down the QD.
 			gpstop -may -M immediate
@@ -26,7 +43,6 @@ function test(){
 			source /usr/local/greenplum-db-devel/greenplum_path.sh
 			gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
 			make installcheck
-			[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && cat regression.diffs && exit 1
 		fi
 		popd
 	EOF
