@@ -17,16 +17,16 @@ function test(){
 		pushd $1
 		trap "[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs" EXIT
 		make installcheck
-		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
+		[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && cat regression.diffs && exit 1
 		if $2 ; then
-			ps -ef | grep postgres| grep qddir| cut -d ' ' -f ${CUT_NUMBER} | xargs kill -9
+			## Bring down the QD.
+			gpstop -may -M immediate
 			export PGPORT=6001
 			echo "export PGPROT=\$PGPORT" >> /usr/local/greenplum-db-devel/greenplum_path.sh
 			source /usr/local/greenplum-db-devel/greenplum_path.sh
-			rm /tmp/.s.PGSQL.6000*
 			gpactivatestandby -ad ${TOP_DIR}/gpdb_src/gpAux/gpdemo/datadirs/standby
 			make installcheck
-			[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && exit 1
+			[ -s regression.diffs ] && grep -v GP_IGNORE regression.diffs && cat regression.diffs && exit 1
 		fi
 		popd
 	EOF
