@@ -110,16 +110,11 @@ SELECT pg_sleep(5);
  
 (1 row)
 
-SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
- tableid |  size   | segid 
----------+---------+-------
- ao      | 1263784 |    -1
-(1 row)
-
-SELECT pg_table_size('ao');
- pg_table_size 
----------------
-       1263784
+SELECT (SELECT size FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1)=
+       (SELECT pg_table_size('ao'));
+ ?column? 
+----------
+ t
 (1 row)
 
 commit;
@@ -157,16 +152,11 @@ SELECT pg_sleep(5);
  
 (1 row)
 
-SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
- tableid |  size  | segid 
----------+--------+-------
- ao      | 329576 |    -1
-(1 row)
-
-SELECT pg_table_size('ao');
- pg_table_size 
----------------
-        329576
+SELECT (SELECT size FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1)=
+       (SELECT pg_table_size('ao'));
+ ?column? 
+----------
+ t
 (1 row)
 
 commit;
