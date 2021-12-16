@@ -44,8 +44,8 @@ begin;
 CREATE TABLE ao (i int) WITH (appendonly=true);
 INSERT INTO ao SELECT generate_series(1, 100000);
 SELECT pg_sleep(5);
-SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
-SELECT pg_table_size('ao');
+SELECT (SELECT size FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1)=
+       (SELECT pg_table_size('ao'));
 commit;
 
 -- AO table index
@@ -62,8 +62,8 @@ DROP TABLE ao;
 begin;
 CREATE TABLE ao WITH(appendonly=true) AS SELECT generate_series(1, 10000);
 SELECT pg_sleep(5);
-SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
-SELECT pg_table_size('ao');
+SELECT (SELECT size FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1)=
+       (SELECT pg_table_size('ao'));
 commit;
 DROP TABLE ao;
 
