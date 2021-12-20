@@ -34,6 +34,19 @@ SELECT pg_sleep(20);
  
 (1 row)
 
+SELECT tableid::regclass, size, segid from diskquota.table_size WHERE tableid::regclass::name NOT LIKE '%.%' ORDER BY size, segid DESC;
+ tableid | size  | segid 
+---------+-------+-------
+ b       |     0 |     2
+ b       |     0 |     1
+ b       |     0 |     0
+ b       |     0 |    -1
+ a       | 32768 |     2
+ a       | 32768 |     1
+ a       | 32768 |     0
+ a       | 98304 |    -1
+(8 rows)
+
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,10);
 INSERT INTO b SELECT generate_series(1,10);
