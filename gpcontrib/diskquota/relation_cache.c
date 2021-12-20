@@ -289,9 +289,15 @@ remove_committed_relation_from_cache(void)
 	hash_seq_init(&iter, local_relation_cache);
 	while ((local_entry = hash_seq_search(&iter)) != NULL)
 	{
-		if (SearchSysCacheExists1(RELOID, local_entry->relid))
+		/*
+		 * The committed table's oid can be fetched by RelidByRelfilenode().
+		 * If the table's relfilenode is modified and its relation_cache_entry
+		 * remains in relation_cache, the outdated relation_cache_entry should 
+		 * be removed.
+		 */
+		if (OidIsValid(RelidByRelfilenode(local_entry->rnode.node.spcNode, local_entry->rnode.node.relNode)))
 		{
-			remove_cache_entry(local_entry->relid, InvalidOid);
+			remove_cache_entry(InvalidOid, local_entry->rnode.node.relNode);
 		}
 	}
 	hash_destroy(local_relation_cache);
