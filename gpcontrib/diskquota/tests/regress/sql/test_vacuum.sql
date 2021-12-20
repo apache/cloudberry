@@ -13,6 +13,8 @@ INSERT INTO b SELECT generate_series(1,10);
 DELETE FROM a WHERE i > 10;
 VACUUM FULL a;
 SELECT pg_sleep(20);
+SELECT tableid::regclass, size, segid from diskquota.table_size WHERE tableid::regclass::name not like '%.%' ORDER BY size, segid DESC;
+
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,10);
 INSERT INTO b SELECT generate_series(1,10);
