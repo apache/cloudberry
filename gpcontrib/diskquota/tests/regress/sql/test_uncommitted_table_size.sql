@@ -54,6 +54,8 @@ CREATE INDEX ao_idx on ao(i);
 SELECT pg_sleep(5);
 SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao_idx'::regclass and segid = -1;
 SELECT pg_table_size('ao_idx');
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
+SELECT pg_table_size('ao');
 commit;
 
 DROP TABLE ao;
