@@ -125,4 +125,5 @@ extern int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char r
 extern Relation diskquota_relation_open(Oid relid, LOCKMODE mode);
 extern List* diskquota_get_index_list(Oid relid);
 extern void diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
+extern Oid diskquota_parse_primary_table_oid(Oid namespace, char *relname);
 #endif
