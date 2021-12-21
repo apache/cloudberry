@@ -201,6 +201,7 @@ parse_primary_table_oid(Oid relid)
 {
 	Relation rel;
 	Oid namespace;
+	Oid parsed_oid;
 	char relname[NAMEDATALEN];
 
 	rel = diskquota_relation_open(relid, NoLock);
@@ -213,22 +214,10 @@ parse_primary_table_oid(Oid relid)
 	memcpy(relname, rel->rd_rel->relname.data, NAMEDATALEN);
 	relation_close(rel, NoLock);
 
-	switch (namespace)
+	parsed_oid = diskquota_parse_primary_table_oid(namespace, relname);
+	if (OidIsValid(parsed_oid))
 	{
-		case PG_TOAST_NAMESPACE:
-			if (strncmp(relname, "pg_toast", 8) == 0)
-				return atoi(&relname[9]);
-		break;
-		case PG_AOSEGMENT_NAMESPACE:
-		{
-			if (strncmp(relname, "pg_aoseg", 8) == 0)
-				return atoi(&relname[9]);
-			else if (strncmp(relname, "pg_aovisimap", 12) == 0)
-				return atoi(&relname[13]);
-			else if (strncmp(relname, "pg_aocsseg", 10) == 0)
-				return atoi(&relname[11]);
-		}
-		break;
+		return parsed_oid;
 	}
 	return relid;
 }
@@ -430,7 +419,14 @@ add_auxrelation_to_relation_entry(Oid relid, DiskQuotaRelationCacheEntry *pentry
 	list_free(index_oids);
 }
 
-static void
+/*
+ * Returns true iff blkdirrelid is missing.
+ * pg_aoblkdir_xxxx is created by `create index on ao_table`, which can not be
+ * fetched by diskquota_get_appendonly_aux_oid_list() before index's creation 
+ * finish. By returning true to inform the caller that blkdirrelid is missing,
+ * then the caller will fetch blkdirrelid by traversing relation_cache.
+ */
+static bool
 get_relation_entry_from_pg_class(Oid relid, DiskQuotaRelationCacheEntry* relation_entry)
 {
 	HeapTuple classTup;
@@ -438,11 +434,12 @@ get_relation_entry_from_pg_class(Oid relid, DiskQuotaRelationCacheEntry* relatio
 	Oid segrelid = InvalidOid;
 	Oid blkdirrelid = InvalidOid;
 	Oid visimaprelid = InvalidOid;
+	bool is_ao = false;
 
 	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(classTup) || relation_entry == NULL)
 	{
-		return;
+		return false;
 	}
 	
 	classForm = (Form_pg_class) GETSTRUCT(classTup);
@@ -465,28 +462,42 @@ get_relation_entry_from_pg_class(Oid relid, DiskQuotaRelationCacheEntry* relatio
 		add_auxrelation_to_relation_entry(classForm->reltoastrelid, relation_entry);
 	}
 
+	if (classForm->relstorage == RELSTORAGE_AOROWS || classForm->relstorage == RELSTORAGE_AOCOLS)
+	{
+		is_ao = true;
+	}
 	heap_freetuple(classTup);
 
 	/* ao table */
-	diskquota_get_appendonly_aux_oid_list(relid, &segrelid, &blkdirrelid, &visimaprelid);
-	if (OidIsValid(segrelid))
+	if (is_ao)
 	{
-		add_auxrelation_to_relation_entry(segrelid, relation_entry);
+		diskquota_get_appendonly_aux_oid_list(relid, &segrelid, &blkdirrelid, &visimaprelid);
+		if (OidIsValid(segrelid))
+		{
+			add_auxrelation_to_relation_entry(segrelid, relation_entry);
+		}
+		if (OidIsValid(blkdirrelid))
+		{
+			add_auxrelation_to_relation_entry(blkdirrelid, relation_entry);
+		}
+		if (OidIsValid(visimaprelid))
+		{
+			add_auxrelation_to_relation_entry(visimaprelid, relation_entry);
+		}
+
+		if (!OidIsValid(blkdirrelid))
+		{
+			return true;
+		}
 	}
-	if (OidIsValid(blkdirrelid))
-	{
-		add_auxrelation_to_relation_entry(blkdirrelid, relation_entry);
-	}
-	if (OidIsValid(visimaprelid))
-	{
-		add_auxrelation_to_relation_entry(visimaprelid, relation_entry);
-	}
+	return false;
 }
 
 static void
 get_relation_entry(Oid relid, DiskQuotaRelationCacheEntry* entry)
 {
 	DiskQuotaRelationCacheEntry* tentry;
+	bool is_missing_relid;
 
 	LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
 	tentry = hash_search(relation_cache, &relid, HASH_FIND, NULL);
@@ -498,7 +509,23 @@ get_relation_entry(Oid relid, DiskQuotaRelationCacheEntry* entry)
 	}
 	LWLockRelease(diskquota_locks.relation_cache_lock);
 	
-	get_relation_entry_from_pg_class(relid, entry);
+	is_missing_relid = get_relation_entry_from_pg_class(relid, entry);
+
+	if (is_missing_relid)
+	{
+		DiskQuotaRelationCacheEntry *relation_cache_entry;
+		HASH_SEQ_STATUS iter;
+		LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
+		hash_seq_init(&iter, relation_cache);
+		while ((relation_cache_entry = hash_seq_search(&iter)) != NULL)
+		{
+			if (relation_cache_entry->primary_table_relid == relid)
+			{
+				add_auxrelid_to_relation_entry(entry, relation_cache_entry->relid);
+			}
+		}
+		LWLockRelease(diskquota_locks.relation_cache_lock);
+	}
 }
 
 static void
