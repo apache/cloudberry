@@ -29,6 +29,8 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_tablespace.h"
 #include "catalog/indexing.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
@@ -1406,4 +1408,29 @@ diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirreli
 
 	systable_endscan(scan);
 	heap_close(aorel, AccessShareLock);
+}
+
+Oid
+diskquota_parse_primary_table_oid(Oid namespace, char *relname)
+{
+	switch (namespace)
+	{
+		case PG_TOAST_NAMESPACE:
+			if (strncmp(relname, "pg_toast", 8) == 0)
+				return atoi(&relname[9]);
+		break;
+		case PG_AOSEGMENT_NAMESPACE:
+		{
+			if (strncmp(relname, "pg_aoseg", 8) == 0)
+				return atoi(&relname[9]);
+			else if (strncmp(relname, "pg_aovisimap", 12) == 0)
+				return atoi(&relname[13]);
+			else if (strncmp(relname, "pg_aocsseg", 10) == 0)
+				return atoi(&relname[11]);
+			else if (strncmp(relname, "pg_aoblkdir", 11) == 0)
+				return atoi(&relname[12]);
+		}
+		break;
+	}
+	return InvalidOid;
 }
