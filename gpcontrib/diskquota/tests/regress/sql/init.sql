@@ -7,7 +7,7 @@ CREATE DATABASE diskquota;
 -- end_ignore
 \! echo $?
 -- start_ignore
-\! gpconfig -c diskquota.naptime -v 2 > /dev/null
+\! gpconfig -c diskquota.naptime -v 0 > /dev/null
 -- end_ignore
 \! echo $?
 -- start_ignore
@@ -19,5 +19,3 @@ CREATE DATABASE diskquota;
 \! gpstop -raf > /dev/null
 -- end_ignore
 \! echo $?
-
-\! sleep 10

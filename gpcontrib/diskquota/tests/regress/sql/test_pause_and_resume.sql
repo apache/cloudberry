@@ -9,7 +9,7 @@ CREATE TABLE b(i int);
 INSERT INTO a SELECT generate_series(1,100000);
 
 SELECT diskquota.set_schema_quota('s1', '1 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail

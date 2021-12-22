@@ -15,18 +15,18 @@ CREATE TABLE measurement (
 );
 
 INSERT INTO measurement SELECT generate_series(1,100), '2006-02-02' ,1,1;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
 INSERT INTO measurement SELECT generate_series(1,100000), '2006-03-02' ,1,1;
-SELECT pg_sleep(10);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
 INSERT INTO measurement SELECT 1, '2006-03-03' ,1,1;
 DELETE FROM measurement WHERE logdate='2006-03-02';
 VACUUM FULL measurement;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 INSERT INTO measurement SELECT 1, '2006-03-03' ,1,1;
 

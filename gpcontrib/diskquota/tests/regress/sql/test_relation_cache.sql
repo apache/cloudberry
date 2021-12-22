@@ -19,7 +19,7 @@ insert into t select generate_series(1, 100000);
 select count(*) from diskquota.show_relation_cache_all_seg();
 commit;
 
-select pg_sleep(5);
+select diskquota.wait_for_worker_new_epoch();
 select count(*) from diskquota.show_relation_cache_all_seg();
 drop table t;
 
@@ -33,7 +33,7 @@ select count(*) from diskquota.show_relation_cache_all_seg();
 select diskquota.check_relation_cache();
 commit;
 
-select pg_sleep(5);
+select diskquota.wait_for_worker_new_epoch();
 select count(*) from diskquota.show_relation_cache_all_seg();
 drop table t;
 
@@ -47,7 +47,7 @@ select count(*) from diskquota.show_relation_cache_all_seg();
 select diskquota.check_relation_cache();
 commit;
 
-select pg_sleep(5);
+select diskquota.wait_for_worker_new_epoch();
 select count(*) from diskquota.show_relation_cache_all_seg();
 drop table t;
 
@@ -61,7 +61,7 @@ select count(*) from diskquota.show_relation_cache_all_seg();
 select diskquota.check_relation_cache();
 commit;
 
-select pg_sleep(5);
+select diskquota.wait_for_worker_new_epoch();
 select count(*) from diskquota.show_relation_cache_all_seg();
 drop table t;
 

@@ -9,7 +9,7 @@ SELECT (SELECT
         FROM generate_series(1,10000)) 
 FROM generate_series(1,10000);
 
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert toast fail
 INSERT INTO a5
 SELECT (SELECT 

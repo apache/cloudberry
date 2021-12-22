@@ -30,7 +30,7 @@ $$ language plpythonu;
 CREATE TABLE a(i int);
 INSERT INTO a SELECT generate_series(1,100);
 INSERT INTO a SELECT generate_series(1,100000);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
 
@@ -52,18 +52,14 @@ SELECT diskquota.set_schema_quota('ftsr', '200 MB');
 -- pull up failed primary
 -- start_ignore
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
-select pg_sleep(10);
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
-select pg_sleep(15);
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
-select pg_sleep(10);
 select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
-select pg_sleep(10);
 -- check GPDB status
 select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
-SELECT pg_sleep(10);
 -- end_ignore
 
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
 INSERT INTO a SELECT generate_series(1,100);
 
