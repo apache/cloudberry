@@ -18,13 +18,12 @@ ALTER TABLE b2 OWNER TO rolespcu1;
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100000);
-SELECT pg_sleep(5);
 SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '1 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 ALTER TABLE b OWNER TO rolespcu1;
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert fail
@@ -35,13 +34,13 @@ SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM
 
 -- Test alter owner
 ALTER TABLE b OWNER TO rolespcu2;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert succeed
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert succeed
 INSERT INTO b2 SELECT generate_series(1,100);
 ALTER TABLE b OWNER TO rolespcu1;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
@@ -52,29 +51,29 @@ INSERT INTO b SELECT generate_series(1,100);
 DROP TABLESPACE  IF EXISTS rolespc2;
 CREATE TABLESPACE rolespc2 LOCATION '/tmp/rolespc2';
 ALTER TABLE b SET TABLESPACE rolespc2;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert succeed
 INSERT INTO b SELECT generate_series(1,100);
 -- alter table b back to tablespace rolespc
 ALTER TABLE b SET TABLESPACE rolespc;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
 -- Test update quota config
 SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '10 MB');
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,1000000);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
 -- Test delete quota config
 SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '-1 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 

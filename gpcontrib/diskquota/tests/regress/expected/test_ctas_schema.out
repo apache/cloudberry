@@ -13,21 +13,15 @@ SELECT diskquota.set_schema_quota('hardlimit_s', '1 MB');
 (1 row)
 
 SET search_path TO hardlimit_s;
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
-(1 row)
-
 -- heap table
 CREATE TABLE t1 AS SELECT generate_series(1, 100000000);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 [hardlimit] schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- toast table
@@ -36,10 +30,10 @@ CREATE TABLE toast_table
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'array' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 [hardlimit] schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- ao table
@@ -47,10 +41,10 @@ CREATE TABLE ao_table WITH (appendonly=true) AS SELECT generate_series(1, 100000
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 [hardlimit] schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- aocs table
@@ -59,10 +53,10 @@ CREATE TABLE aocs_table WITH (appendonly=true, orientation=column)
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 [hardlimit] schema's disk space quota exceeded
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- disable hardlimit and do some clean-ups.

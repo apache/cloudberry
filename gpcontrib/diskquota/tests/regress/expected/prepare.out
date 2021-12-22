@@ -1,26 +1,14 @@
 CREATE EXTENSION diskquota;
 -- start_ignore
 \! gpstop -u
-20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Starting gpstop with args: -u
-20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Gathering information and validating the environment...
-20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Obtaining Greenplum Master catalog information
-20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Obtaining Segment details from master...
-20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.18.2+dev.173.g55557f44f3 build dev'
-20211213:00:02:48:240132 gpstop:laptop:v-[INFO]:-Signalling all postmaster processes to reload
+20211216:15:13:33:152977 gpstop:laptop:v-[INFO]:-Starting gpstop with args: -u
+20211216:15:13:33:152977 gpstop:laptop:v-[INFO]:-Gathering information and validating the environment...
+20211216:15:13:33:152977 gpstop:laptop:v-[INFO]:-Obtaining Greenplum Master catalog information
+20211216:15:13:33:152977 gpstop:laptop:v-[INFO]:-Obtaining Segment details from master...
+20211216:15:13:33:152977 gpstop:laptop:v-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.18.2+dev.173.g55557f44f3 build dev'
+20211216:15:13:33:152977 gpstop:laptop:v-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
-SELECT pg_sleep(1);
- pg_sleep 
-----------
- 
-(1 row)
-
 \! cp data/csmall.txt /tmp/csmall.txt
-SELECT pg_sleep(15);
- pg_sleep 
-----------
- 
-(1 row)
-
 -- disable hardlimit feature.
 SELECT diskquota.disable_hardlimit();
  disable_hardlimit 
@@ -51,10 +39,10 @@ SELECT diskquota.set_schema_quota('badquota', '1 MB');
  
 (1 row)
 
-SELECT pg_sleep(10);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 SELECT size, segid FROM diskquota.table_size

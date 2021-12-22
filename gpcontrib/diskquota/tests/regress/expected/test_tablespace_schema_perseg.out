@@ -20,10 +20,10 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert success
 INSERT INTO a SELECT generate_series(1,100000);
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert fail by tablespace schema diskquota
@@ -36,10 +36,10 @@ SELECT diskquota.set_schema_tablespace_quota('spcs1_perseg', 'schemaspc_perseg',
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert success
@@ -56,10 +56,10 @@ SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 0.1);
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 ---- expect insert fail by tablespace schema perseg quota
@@ -68,19 +68,19 @@ ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per s
 -- Test alter table set schema
 CREATE SCHEMA spcs2_perseg;
 ALTER TABLE spcs1_perseg.a SET SCHEMA spcs2_perseg;
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert succeed
 INSERT INTO spcs2_perseg.a SELECT generate_series(1,200);
 ALTER TABLE spcs2_perseg.a SET SCHEMA spcs1_perseg;
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert fail
@@ -100,19 +100,19 @@ DROP TABLESPACE  IF EXISTS schemaspc_perseg2;
 NOTICE:  tablespace "schemaspc_perseg2" does not exist, skipping
 CREATE TABLESPACE schemaspc_perseg2 LOCATION '/tmp/schemaspc_perseg2';
 ALTER TABLE a SET TABLESPACE schemaspc_perseg2;
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,200);
 ALTER TABLE a SET TABLESPACE schemaspc_perseg;
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert fail
@@ -125,10 +125,10 @@ SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 3.1);
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert success
@@ -139,10 +139,10 @@ SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 0.123);
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 ---- expect insert fail
@@ -155,10 +155,10 @@ SELECT diskquota.set_per_segment_quota('schemaspc_perseg', -1);
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert success
@@ -169,10 +169,10 @@ SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 0.123);
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 ---- expect insert fail
@@ -191,10 +191,10 @@ SELECT diskquota.set_schema_tablespace_quota('spcs1_perseg', 'schemaspc_perseg',
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert success

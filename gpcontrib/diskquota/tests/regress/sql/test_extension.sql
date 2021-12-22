@@ -26,7 +26,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -50,7 +50,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -62,7 +62,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -74,7 +74,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -86,7 +86,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -98,7 +98,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -110,7 +110,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -122,7 +122,7 @@ CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 

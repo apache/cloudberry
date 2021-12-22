@@ -7,7 +7,7 @@ CREATE TABLE c (i int);
 COPY c FROM '/tmp/csmall.txt';
 -- expect failed 
 INSERT INTO c SELECT generate_series(1,100000);
-SELECT pg_sleep(10);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect copy fail
 COPY c FROM '/tmp/csmall.txt';
 
