@@ -14,10 +14,10 @@ CREATE INDEX index_t2 ON t_aoco(i);
 --    is identical to the result of pg_table_size().
 INSERT INTO t_ao SELECT generate_series(1, 100);
 INSERT INTO t_aoco SELECT generate_series(1, 100);
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- Query the size of t_ao.
@@ -59,10 +59,10 @@ SELECT diskquota.set_schema_quota('s_appendonly', '1 MB');
 
 -- expect success.
 INSERT INTO t_ao SELECT generate_series(1, 1000);
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect fail.

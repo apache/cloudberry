@@ -15,24 +15,24 @@ SELECT diskquota.set_role_quota('u1', '1 MB');
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100000);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO b2 SELECT generate_series(1,100);
 -- Delete role quota
 SELECT diskquota.set_role_quota('u1', '-1 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 -- Reset role quota
 SELECT diskquota.set_role_quota('u1', '1 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 SELECT role_name, quota_in_mb, rolsize_in_bytes FROM diskquota.show_fast_role_quota_view WHERE role_name='u1';
 ALTER TABLE b OWNER TO u2;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert succeed
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert succeed
