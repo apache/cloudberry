@@ -13,7 +13,7 @@ CREATE INDEX index_t2 ON t_aoco(i);
 INSERT INTO t_ao SELECT generate_series(1, 100);
 INSERT INTO t_aoco SELECT generate_series(1, 100);
 
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 
 -- Query the size of t_ao.
 SELECT tableid::regclass, size
@@ -34,7 +34,7 @@ SELECT diskquota.set_schema_quota('s_appendonly', '1 MB');
 -- expect success.
 INSERT INTO t_ao SELECT generate_series(1, 1000);
 
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect fail.
 INSERT INTO t_ao SELECT generate_series(1, 10);

@@ -1,5 +1,6 @@
 test: init
 test: prepare
+test: test_worker_epoch
 test: test_relation_size
 test: test_relation_cache
 test: test_uncommitted_table_size

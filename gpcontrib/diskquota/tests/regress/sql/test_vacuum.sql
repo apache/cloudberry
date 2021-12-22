@@ -5,14 +5,14 @@ SET search_path TO s6;
 CREATE TABLE a (i int);
 CREATE TABLE b (i int);
 INSERT INTO a SELECT generate_series(1,100000);
-SELECT pg_sleep(10);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,10);
 DELETE FROM a WHERE i > 10;
 VACUUM FULL a;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid from diskquota.table_size WHERE tableid::regclass::name NOT LIKE '%.%' ORDER BY size, segid DESC;
 
 -- expect insert succeed

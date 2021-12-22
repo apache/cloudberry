@@ -2,6 +2,7 @@
 #define DISK_QUOTA_H
 
 #include "storage/lwlock.h"
+#include "postmaster/bgworker.h"
 
 /* max number of monitored database with diskquota enabled */
 #define MAX_NUM_MONITORED_DB 10
@@ -38,6 +39,7 @@ struct DiskQuotaLocks
 	LWLock	   *paused_lock;
 	LWLock	   *relation_cache_lock;
 	LWLock	   *hardlimit_lock;
+	LWLock	   *worker_map_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 #define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))
@@ -96,6 +98,19 @@ extern ExtensionDDLMessage *extension_ddl_message;
 extern bool *diskquota_paused;
 extern bool *diskquota_hardlimit;
 
+typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
+
+/* disk quota worker info used by launcher to manage the worker processes. */
+struct DiskQuotaWorkerEntry
+{
+	Oid			dbid;
+	pid_t		pid;			/* worker pid */
+	unsigned int epoch;
+	BackgroundWorkerHandle *handle;
+};
+
+extern HTAB *disk_quota_worker_map;
+
 /* drop extension hook */
 extern void register_diskquota_object_access_hook(void);
 
@@ -126,4 +141,8 @@ extern Relation diskquota_relation_open(Oid relid, LOCKMODE mode);
 extern List* diskquota_get_index_list(Oid relid);
 extern void diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
 extern Oid diskquota_parse_primary_table_oid(Oid namespace, char *relname);
+
+extern bool worker_increase_epoch(Oid database_oid);
+extern unsigned int worker_get_epoch(Oid database_oid);
+
 #endif

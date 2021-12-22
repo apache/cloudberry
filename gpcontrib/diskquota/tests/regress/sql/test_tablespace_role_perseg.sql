@@ -19,12 +19,12 @@ SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg',
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100000);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 -- change tablespace role quota
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '10 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 
@@ -32,16 +32,16 @@ INSERT INTO b SELECT generate_series(1,100);
 SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view WHERE role_name = 'rolespc_persegu1' and tablespace_name = 'rolespc_perseg';
 
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', '0.1');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 ---- expect insert fail by tablespace schema perseg quota
 INSERT INTO b SELECT generate_series(1,100);
 -- Test alter owner
 ALTER TABLE b OWNER TO rolespc_persegu2;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert succeed
 INSERT INTO b SELECT generate_series(1,100);
 ALTER TABLE b OWNER TO rolespc_persegu1;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
@@ -52,40 +52,40 @@ INSERT INTO b SELECT generate_series(1,100);
 DROP TABLESPACE  IF EXISTS rolespc_perseg2;
 CREATE TABLESPACE rolespc_perseg2 LOCATION '/tmp/rolespc_perseg2';
 ALTER TABLE b SET TABLESPACE rolespc_perseg2;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert succeed
 INSERT INTO b SELECT generate_series(1,100);
 -- alter table b back to tablespace rolespc_perseg
 ALTER TABLE b SET TABLESPACE rolespc_perseg;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
 -- Test update per segment ratio
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', 3.1);
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view WHERE role_name = 'rolespc_persegu1' and tablespace_name = 'rolespc_perseg';
 
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', 0.11);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
 -- Test delete per segment ratio
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', -1);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', 0.11);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
 
 -- Test delete quota config
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '-1 MB');
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 
