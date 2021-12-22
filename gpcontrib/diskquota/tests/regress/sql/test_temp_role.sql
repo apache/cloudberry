@@ -11,11 +11,11 @@ ALTER TABLE ta OWNER TO u3temp;
 
 -- expected failed: fill temp table
 INSERT INTO ta SELECT generate_series(1,100000);
-SELECT pg_sleep(5);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expected failed: 
 INSERT INTO a SELECT generate_series(1,100);
 DROP TABLE ta;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO a SELECT generate_series(1,100);
 
 DROP TABLE a;

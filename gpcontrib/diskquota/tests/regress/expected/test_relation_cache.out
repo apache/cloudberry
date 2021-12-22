@@ -23,10 +23,10 @@ select count(*) from diskquota.show_relation_cache_all_seg();
 (1 row)
 
 commit;
-select pg_sleep(5);
- pg_sleep 
-----------
- 
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 select count(*) from diskquota.show_relation_cache_all_seg();
@@ -55,10 +55,10 @@ select diskquota.check_relation_cache();
 (1 row)
 
 commit;
-select pg_sleep(5);
- pg_sleep 
-----------
- 
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 select count(*) from diskquota.show_relation_cache_all_seg();
@@ -87,10 +87,10 @@ select diskquota.check_relation_cache();
 (1 row)
 
 commit;
-select pg_sleep(5);
- pg_sleep 
-----------
- 
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 select count(*) from diskquota.show_relation_cache_all_seg();
@@ -119,10 +119,10 @@ select diskquota.check_relation_cache();
 (1 row)
 
 commit;
-select pg_sleep(5);
- pg_sleep 
-----------
- 
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 select count(*) from diskquota.show_relation_cache_all_seg();

@@ -17,10 +17,10 @@ SELECT diskquota.set_schema_tablespace_quota('indexschema1', 'indexspc','2 MB');
  
 (1 row)
 
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 SELECT schema_name,tablespace_name,quota_in_mb,nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name='indexschema1' and tablespace_name='indexspc';
@@ -38,10 +38,10 @@ SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and re
 -- create index for the table, index in default tablespace
 CREATE INDEX a_index ON test_index_a(i);
 INSERT INTO test_index_a SELECT generate_series(1,10000);
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert success
@@ -61,10 +61,10 @@ SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and (r
 
 -- add index to tablespace indexspc
 ALTER index a_index SET TABLESPACE indexspc;
-SELECT pg_sleep(20);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 SELECT schema_name,tablespace_name,quota_in_mb,nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name ='indexschema1' and tablespace_name='indexspc';
@@ -76,8 +76,8 @@ SELECT schema_name,tablespace_name,quota_in_mb,nspsize_tablespace_in_bytes FROM 
 SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and (relname='test_index_a' or relname='a_index') and segid=-1;
   size   | segid 
 ---------+-------
- 1441792 |    -1
  1212416 |    -1
+ 1441792 |    -1
 (2 rows)
 
 -- expect insert fail
@@ -85,19 +85,19 @@ INSERT INTO test_index_a SELECT generate_series(1,100);
 ERROR:  tablespace:indexspc schema:indexschema1 diskquota exceeded
 -- index tablespace quota exceeded 
 ALTER table test_index_a SET TABLESPACE pg_default;
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert success
 INSERT INTO test_index_a SELECT generate_series(1,100);
 INSERT INTO test_index_a SELECT generate_series(1,200000);
-SELECT pg_sleep(5);
- pg_sleep 
-----------
- 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 -- expect insert fail

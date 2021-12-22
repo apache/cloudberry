@@ -2,9 +2,7 @@ CREATE EXTENSION diskquota;
 -- start_ignore
 \! gpstop -u
 -- end_ignore
-SELECT pg_sleep(1);
 \! cp data/csmall.txt /tmp/csmall.txt
-SELECT pg_sleep(15);
 
 -- disable hardlimit feature.
 SELECT diskquota.disable_hardlimit();
@@ -18,7 +16,7 @@ ALTER TABLE badquota.t1 OWNER TO testbody;
 INSERT INTO badquota.t1 SELECT generate_series(0, 100000);
 SELECT diskquota.init_table_size_table();
 SELECT diskquota.set_schema_quota('badquota', '1 MB');
-SELECT pg_sleep(10);
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT size, segid FROM diskquota.table_size
   WHERE tableid IN (SELECT oid FROM pg_class WHERE relname='t1')
   ORDER BY segid DESC;

@@ -5,12 +5,12 @@ SET search_path TO s7;
 CREATE TABLE a (i int);
 CREATE TABLE b (i int);
 INSERT INTO a SELECT generate_series(1,100000);
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,30);
 INSERT INTO b SELECT generate_series(1,30);
 TRUNCATE TABLE a;
-SELECT pg_sleep(20);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,30);
 INSERT INTO b SELECT generate_series(1,30);

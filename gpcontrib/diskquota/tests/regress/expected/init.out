@@ -4,7 +4,7 @@
 \! echo $?
 0
 -- start_ignore
-\! gpconfig -c diskquota.naptime -v 2 > /dev/null
+\! gpconfig -c diskquota.naptime -v 0 > /dev/null
 -- end_ignore
 \! echo $?
 0
@@ -18,4 +18,3 @@
 -- end_ignore
 \! echo $?
 0
-\! sleep 10
