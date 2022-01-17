@@ -4336,7 +4336,7 @@ static struct config_string ConfigureNamesString[] =
 		{"log_destination", PGC_SIGHUP, DEFUNCT_OPTIONS,
 			gettext_noop("Defunct: Sets the destination for server log output."),
 			gettext_noop("Valid values are combinations of \"stderr\", "
-						 "\"syslog\", \"csvlog\", and \"eventlog\", "
+						 "\"syslog\", \"csvlog\", \"jsonlog\" and \"eventlog\", "
 						 "depending on the platform."),
 			GUC_LIST_INPUT | GUC_NO_SHOW_ALL
 		},
@@ -12280,6 +12280,8 @@ check_log_destination(char **newval, void **extra, GucSource source)
 			newlogdest |= LOG_DESTINATION_STDERR;
 		else if (pg_strcasecmp(tok, "csvlog") == 0)
 			newlogdest |= LOG_DESTINATION_CSVLOG;
+		else if (pg_strcasecmp(tok, "jsonlog") == 0)
+			newlogdest |= LOG_DESTINATION_JSONLOG;
 #ifdef HAVE_SYSLOG
 		else if (pg_strcasecmp(tok, "syslog") == 0)
 			newlogdest |= LOG_DESTINATION_SYSLOG;

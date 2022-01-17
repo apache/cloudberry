@@ -102,6 +102,7 @@ typedef struct
 /* log destinations */
 #define PIPE_PROTO_DEST_STDERR	0x10
 #define PIPE_PROTO_DEST_CSVLOG	0x20
+#define PIPE_PROTO_DEST_JSONLOG	0x40
 
 typedef struct CSVChunkStr
 {
