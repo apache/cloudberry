@@ -32,6 +32,7 @@ extern void init_lock_active_tables(void);
 
 extern HTAB *active_tables_map;
 extern HTAB *monitoring_dbid_cache;
+extern HTAB *altered_reloid_cache;
 
 #define atooid(x)  ((Oid) strtoul((x), NULL, 10))
 
