@@ -2,4 +2,6 @@ test: init
 test: prepare
 test: test_relation_size
 test: test_blackmap
+test: test_vacuum
+test: test_truncate
 test: cleanup
