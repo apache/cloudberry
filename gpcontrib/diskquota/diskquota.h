@@ -40,6 +40,7 @@ struct DiskQuotaLocks
 	LWLock	   *relation_cache_lock;
 	LWLock	   *hardlimit_lock;
 	LWLock	   *worker_map_lock;
+	LWLock	   *altered_reloid_cache_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
 #define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))

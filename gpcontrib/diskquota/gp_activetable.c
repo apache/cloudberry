@@ -17,6 +17,7 @@
 
 #include "access/htup_details.h"
 #include "access/xact.h"
+#include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
@@ -58,6 +59,7 @@ typedef struct DiskQuotaSetOFCache
 
 HTAB	   *active_tables_map = NULL;
 HTAB	   *monitoring_dbid_cache = NULL;
+HTAB	   *altered_reloid_cache = NULL;
 
 /* active table hooks which detect the disk file size change. */
 static file_create_hook_type prev_file_create_hook = NULL;
@@ -80,6 +82,7 @@ static StringInfoData convert_map_to_string(HTAB *active_list);
 static void load_table_size(HTAB *local_table_stats_map);
 static void report_active_table_helper(const RelFileNodeBackend *relFileNode);
 static void report_relation_cache_helper(Oid relid);
+static void report_altered_reloid(Oid reloid);
 
 void		init_active_table_hook(void);
 void		init_shm_worker_active_tables(void);
@@ -95,16 +98,24 @@ init_shm_worker_active_tables(void)
 	HASHCTL		ctl;
 
 	memset(&ctl, 0, sizeof(ctl));
-
 	ctl.keysize = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.entrysize = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.hash = tag_hash;
-
 	active_tables_map = ShmemInitHash("active_tables",
 									  diskquota_max_active_tables,
 									  diskquota_max_active_tables,
 									  &ctl,
 									  HASH_ELEM | HASH_FUNCTION);
+
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.keysize = sizeof(Oid);
+	ctl.entrysize = sizeof(Oid);
+	ctl.hash = tag_hash;
+	altered_reloid_cache = ShmemInitHash("altered_reloid_cache",
+										 diskquota_max_active_tables,
+										 diskquota_max_active_tables,
+										 &ctl,
+										 HASH_ELEM | HASH_FUNCTION);
 }
 
 /*
@@ -138,6 +149,7 @@ active_table_hook_smgrcreate(RelFileNodeBackend rnode)
 	if (prev_file_create_hook)
 		(*prev_file_create_hook) (rnode);
 
+	SIMPLE_FAULT_INJECTOR("diskquota_after_smgrcreate");
 	report_active_table_helper(&rnode);
 }
 
@@ -168,7 +180,7 @@ active_table_hook_smgrtruncate(RelFileNodeBackend rnode)
 	report_active_table_helper(&rnode);
 }
 
-static void 
+static void
 active_table_hook_smgrunlink(RelFileNodeBackend rnode)
 {
 	if (prev_file_unlink_hook)
@@ -194,12 +206,33 @@ object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId,
 		return;
 	}
 
-	if (access != OAT_POST_CREATE)
+	switch (access)
 	{
-		return;
+	case OAT_POST_CREATE:
+		report_relation_cache_helper(objectId);
+		break;
+	case OAT_POST_ALTER:
+		SIMPLE_FAULT_INJECTOR("object_access_post_alter");
+		report_altered_reloid(objectId);
+		break;
+	default:
+		break;
 	}
+}
 
-	report_relation_cache_helper(objectId);
+static void
+report_altered_reloid(Oid reloid)
+{
+	/*
+	 * We don't collect altered relations' reloid on mirrors
+	 * and QD.
+	 */
+	if (IsRoleMirror() || IS_QUERY_DISPATCHER())
+		return;
+
+	LWLockAcquire(diskquota_locks.altered_reloid_cache_lock, LW_EXCLUSIVE);
+	hash_search(altered_reloid_cache, &reloid, HASH_ENTER, NULL);
+	LWLockRelease(diskquota_locks.altered_reloid_cache_lock);
 }
 
 static void
@@ -565,6 +598,34 @@ get_active_tables_stats(ArrayType *array)
 }
 
 /*
+ * SetLocktagRelationOid
+ *		Set up a locktag for a relation, given only relation OID
+ */
+static inline void
+SetLocktagRelationOid(LOCKTAG *tag, Oid relid)
+{
+	Oid			dbid;
+
+	if (IsSharedRelation(relid))
+		dbid = InvalidOid;
+	else
+		dbid = MyDatabaseId;
+
+	SET_LOCKTAG_RELATION(*tag, dbid, relid);
+}
+
+static bool
+is_relation_being_altered(Oid relid)
+{
+	LOCKTAG locktag;
+	SetLocktagRelationOid(&locktag, relid);
+	VirtualTransactionId *vxid_list = GetLockConflicts(&locktag, AccessShareLock);
+	bool being_altered = VirtualTransactionIdIsValid(*vxid_list); /* if vxid_list is empty */
+	pfree(vxid_list);
+	return being_altered;
+}
+
+/*
  * Get local active table with table oid and table size info.
  * This function first copies active table map from shared memory
  * to local active table map with refilenode info. Then traverses
@@ -577,9 +638,11 @@ get_active_tables_oid(void)
 	HASHCTL		ctl;
 	HTAB	   *local_active_table_file_map = NULL;
 	HTAB	   *local_active_table_stats_map = NULL;
+	HTAB	   *local_altered_reloid_cache = NULL;
 	HASH_SEQ_STATUS iter;
 	DiskQuotaActiveTableFileEntry *active_table_file_entry;
 	DiskQuotaActiveTableEntry *active_table_entry;
+	Oid		   *altered_reloid_entry;
 
 	Oid			relOid;
 
@@ -588,11 +651,20 @@ get_active_tables_oid(void)
 	ctl.entrysize = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.hcxt = CurrentMemoryContext;
 	ctl.hash = tag_hash;
-
 	local_active_table_file_map = hash_create("local active table map with relfilenode info",
 											  1024,
 											  &ctl,
 											  HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.keysize = sizeof(Oid);
+	ctl.entrysize = sizeof(Oid);
+	ctl.hcxt = CurrentMemoryContext;
+	ctl.hash = tag_hash;
+	local_altered_reloid_cache = hash_create("local_altered_reloid_cache",
+											 1024,
+											 &ctl,
+											 HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
 	/* Move active table from shared memory to local active table map */
 	LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
@@ -616,6 +688,7 @@ get_active_tables_oid(void)
 			*entry = *active_table_file_entry;
 		hash_search(active_tables_map, active_table_file_entry, HASH_REMOVE, NULL);
 	}
+	// TODO: hash_seq_term(&iter);
 	LWLockRelease(diskquota_locks.active_table_lock);
 
 	memset(&ctl, 0, sizeof(ctl));
@@ -648,7 +721,7 @@ get_active_tables_oid(void)
 		rnode.relNode = active_table_file_entry->relfilenode;
 		rnode.spcNode = active_table_file_entry->tablespaceoid;
 		relOid = get_relid_by_relfilenode(rnode);
-		
+
 		if (relOid != InvalidOid)
 		{
 			prelid = get_primary_table_oid(relOid);
@@ -660,9 +733,75 @@ get_active_tables_oid(void)
 				active_table_entry->tablesize = 0;
 				active_table_entry->segid = -1;
 			}
-			hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
+			if (!is_relation_being_altered(relOid))
+				hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
 		}
 	}
+
+	// TODO: hash_seq_term(&iter);
+	
+	/* Adding the remaining relfilenodes back to the map in the shared memory */
+	LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
+	hash_seq_init(&iter, local_active_table_file_map);
+	while ((active_table_file_entry = (DiskQuotaActiveTableFileEntry *) hash_seq_search(&iter)) != NULL)
+	{
+		/* TODO: handle possible ERROR here so that the bgworker will not go down. */
+		hash_search(active_tables_map, active_table_file_entry, HASH_ENTER, NULL); 
+	}
+	/* TODO: hash_seq_term(&iter); */
+	LWLockRelease(diskquota_locks.active_table_lock);
+
+
+	LWLockAcquire(diskquota_locks.altered_reloid_cache_lock, LW_SHARED);
+	hash_seq_init(&iter, altered_reloid_cache);
+	while ((altered_reloid_entry = (Oid *) hash_seq_search(&iter)) != NULL)
+	{
+		bool		found;
+		Oid			altered_oid = *altered_reloid_entry;
+		if (OidIsValid(*altered_reloid_entry))
+		{
+			active_table_entry = hash_search(local_active_table_stats_map,
+											 &altered_oid,
+											 HASH_ENTER, &found);
+			if (!found && active_table_entry)
+			{
+				active_table_entry->reloid = altered_oid;
+				/* We don't care segid and tablesize here. */
+				active_table_entry->tablesize = 0;
+				active_table_entry->segid = -1;
+			}
+		}
+		hash_search(local_altered_reloid_cache,
+				    &altered_oid, HASH_ENTER, NULL);
+	}
+	LWLockRelease(diskquota_locks.altered_reloid_cache_lock);
+
+	hash_seq_init(&iter, local_altered_reloid_cache);
+	while ((altered_reloid_entry = (Oid *) hash_seq_search(&iter)) != NULL)
+	{
+		if (OidIsValid(*altered_reloid_entry) && 
+			!is_relation_being_altered(*altered_reloid_entry))
+		{
+			hash_search(local_altered_reloid_cache,
+						altered_reloid_entry, HASH_REMOVE, NULL);
+		}
+	}
+
+	LWLockAcquire(diskquota_locks.altered_reloid_cache_lock, LW_EXCLUSIVE);
+	hash_seq_init(&iter, altered_reloid_cache);
+	while ((altered_reloid_entry = (Oid *) hash_seq_search(&iter)) != NULL)
+	{
+		bool		found;
+		Oid			altered_reloid = *altered_reloid_entry;
+		hash_search(local_altered_reloid_cache, &altered_reloid,
+					HASH_FIND, &found);
+		if (!found)
+		{
+			hash_search(altered_reloid_cache, &altered_reloid,
+						HASH_REMOVE, NULL);
+		}
+	}
+	LWLockRelease(diskquota_locks.altered_reloid_cache_lock);
 
 	/*
 	 * If cannot convert relfilenode to relOid, put them back to shared memory
@@ -684,6 +823,7 @@ get_active_tables_oid(void)
 		LWLockRelease(diskquota_locks.active_table_lock);
 	}
 	hash_destroy(local_active_table_file_map);
+	hash_destroy(local_altered_reloid_cache);
 	return local_active_table_stats_map;
 }
 
@@ -803,7 +943,6 @@ convert_map_to_string(HTAB *local_active_table_oid_maps)
 
 	return buffer;
 }
-
 
 /*
  * Get active table size from all the segments based on
