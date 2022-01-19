@@ -25,6 +25,7 @@ INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
 -- expect insert fail
 INSERT INTO measurement SELECT 1, '2006-03-03' ,1,1;
 DELETE FROM measurement WHERE logdate='2006-03-02';
+SELECT diskquota.wait_for_worker_new_epoch();
 VACUUM FULL measurement;
 SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO measurement SELECT 1, '2006-02-02' ,1,1;
