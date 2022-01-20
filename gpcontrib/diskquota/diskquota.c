@@ -79,6 +79,15 @@ static int	num_db = 0;
  */
 bool *diskquota_paused = NULL;
 
+bool
+diskquota_is_paused()
+{
+	LWLockAcquire(diskquota_locks.paused_lock, LW_SHARED);
+	bool paused = *diskquota_paused;
+	LWLockRelease(diskquota_locks.paused_lock);
+	return paused;
+}
+
 /* functions of disk quota*/
 void		_PG_init(void);
 void		_PG_fini(void);
@@ -365,7 +374,8 @@ disk_quota_worker_main(Datum main_arg)
 		}
 
 		/* Do the work */
-		refresh_disk_quota_model(false);
+		if (!diskquota_is_paused())
+			refresh_disk_quota_model(false);
 		worker_increase_epoch(MyDatabaseId);
 	}
 
