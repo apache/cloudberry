@@ -4,9 +4,6 @@ SET search_path TO s1;
 CREATE TABLE a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-CREATE TABLE b(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,100000);
 SELECT diskquota.set_schema_quota('s1', '1 MB');
@@ -24,9 +21,6 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name:s1
--- expect insert fail
-INSERT INTO b SELECT generate_series(1,100);
-ERROR:  schema's disk space quota exceeded with name:s1
 -- pause extension
 SELECT diskquota.pause();
  pause 
@@ -34,10 +28,21 @@ SELECT diskquota.pause();
  
 (1 row)
 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size 
+WHERE tableid = 'a'::regclass AND segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ a       | 3932160 |    -1
+(1 row)
+
 -- expect insert succeed
-INSERT INTO a SELECT generate_series(1,100);
--- expect insert succeed
-INSERT INTO b SELECT generate_series(1,100);
+INSERT INTO a SELECT generate_series(1,100000);
 -- resume extension
 SELECT diskquota.resume();
  resume 
@@ -45,12 +50,23 @@ SELECT diskquota.resume();
  
 (1 row)
 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name:s1
--- expect insert fail
-INSERT INTO b SELECT generate_series(1,100);
-ERROR:  schema's disk space quota exceeded with name:s1
+-- table size should be updated after resume
+SELECT tableid::regclass, size, segid FROM diskquota.table_size 
+WHERE tableid = 'a'::regclass AND segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ a       | 7569408 |    -1
+(1 row)
+
 RESET search_path;
-DROP TABLE s1.a, s1.b;
+DROP TABLE s1.a;
 DROP SCHEMA s1;
