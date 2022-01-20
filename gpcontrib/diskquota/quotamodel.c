@@ -1599,17 +1599,12 @@ check_blackmap_by_reloid(Oid reloid)
 bool
 quota_check_common(Oid reloid, RelFileNode *relfilenode)
 {
-	bool	paused;
 	bool	enable_hardlimit;
 
 	if (!IsTransactionState())
 		return true;
 
-	LWLockAcquire(diskquota_locks.paused_lock, LW_SHARED);
-	paused = *diskquota_paused;
-	LWLockRelease(diskquota_locks.paused_lock);
-
-	if (paused)
+	if (diskquota_is_paused())
 		return true;
 
 	if (OidIsValid(reloid))
