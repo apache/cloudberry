@@ -3,6 +3,7 @@
 
 #include "storage/lwlock.h"
 #include "postmaster/bgworker.h"
+#include "port/atomics.h"
 
 /* max number of monitored database with diskquota enabled */
 #define MAX_NUM_MONITORED_DB 10
@@ -36,7 +37,6 @@ struct DiskQuotaLocks
 	LWLock	   *extension_ddl_message_lock;
 	LWLock	   *extension_ddl_lock; /* ensure create diskquota extension serially */
 	LWLock	   *monitoring_dbid_cache_lock;
-	LWLock	   *paused_lock;
 	LWLock	   *relation_cache_lock;
 	LWLock	   *hardlimit_lock;
 	LWLock	   *worker_map_lock;
@@ -96,7 +96,6 @@ typedef enum MessageResult MessageResult;
 
 extern DiskQuotaLocks diskquota_locks;
 extern ExtensionDDLMessage *extension_ddl_message;
-extern bool *diskquota_paused;
 extern bool *diskquota_hardlimit;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
@@ -106,7 +105,8 @@ struct DiskQuotaWorkerEntry
 {
 	Oid			dbid;
 	pid_t		pid;			/* worker pid */
-	unsigned int epoch;
+	unsigned int epoch; 		/* this counter will be increased after each worker loop */
+	bool is_paused; 			/* true if this worker is paused */
 	BackgroundWorkerHandle *handle;
 };
 
@@ -145,6 +145,6 @@ extern Oid diskquota_parse_primary_table_oid(Oid namespace, char *relname);
 
 extern bool worker_increase_epoch(Oid database_oid);
 extern unsigned int worker_get_epoch(Oid database_oid);
-extern bool diskquota_is_paused();
+extern bool diskquota_is_paused(void);
 
 #endif

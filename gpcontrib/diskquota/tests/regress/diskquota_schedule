@@ -5,6 +5,7 @@ test: test_relation_size
 test: test_relation_cache
 test: test_uncommitted_table_size
 test: test_pause_and_resume
+test: test_pause_and_resume_multiple_db
 # disable this tese due to GPDB behavior change
 # test: test_table_size
 test: test_fast_disk_check
