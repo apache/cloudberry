@@ -72,19 +72,25 @@ ExtensionDDLMessage *extension_ddl_message = NULL;
 HTAB *disk_quota_worker_map = NULL;
 static int	num_db = 0;
 
-/*
- * diskquota_paused is a flag used to pause the extension (when the flag is
- * enabled, the extension keeps counting the disk usage but doesn't emit an
- * error when the disk usage limit is exceeded).
- */
-bool *diskquota_paused = NULL;
-
 bool
 diskquota_is_paused()
 {
-	LWLockAcquire(diskquota_locks.paused_lock, LW_SHARED);
-	bool paused = *diskquota_paused;
-	LWLockRelease(diskquota_locks.paused_lock);
+	Assert(MyDatabaseId != InvalidOid);
+	bool paused;
+
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+	{
+		DiskQuotaWorkerEntry	*hash_entry;
+		bool					found;
+
+		hash_entry = (DiskQuotaWorkerEntry*) hash_search(disk_quota_worker_map,
+														(void*)&MyDatabaseId,
+														HASH_FIND,
+														&found);
+		paused = found ? hash_entry->is_paused : false;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+
 	return paused;
 }
 
@@ -376,6 +382,7 @@ disk_quota_worker_main(Datum main_arg)
 		/* Do the work */
 		if (!diskquota_is_paused())
 			refresh_disk_quota_model(false);
+
 		worker_increase_epoch(MyDatabaseId);
 	}
 
@@ -1002,6 +1009,7 @@ start_worker_by_dboid(Oid dbid)
 		workerentry->handle = handle;
 		workerentry->pid = pid;
 		workerentry->epoch = 0;
+		workerentry->is_paused = false;
 	}
 
 	LWLockRelease(diskquota_locks.worker_map_lock);
@@ -1034,7 +1042,7 @@ worker_increase_epoch(Oid database_oid)
 	bool found = false;
 	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
 		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
-	
+
 	if (found)
 	{
 		++(workerentry->epoch);

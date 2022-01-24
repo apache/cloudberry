@@ -431,8 +431,7 @@ disk_quota_shmem_startup(void)
 	 * Four shared memory data. extension_ddl_message is used to handle
 	 * diskquota extension create/drop command. disk_quota_black_map is used
 	 * to store out-of-quota blacklist. active_tables_map is used to store
-	 * active tables whose disk usage is changed. diskquota_paused is a flag
-	 * used to pause the extension.
+	 * active tables whose disk usage is changed.
 	 */
 	extension_ddl_message = ShmemInitStruct("disk_quota_extension_ddl_message",
 											sizeof(ExtensionDDLMessage),
@@ -465,12 +464,6 @@ disk_quota_shmem_startup(void)
 			MAX_NUM_MONITORED_DB,
 			&hash_ctl,
 			HASH_ELEM | HASH_FUNCTION);
-
-	diskquota_paused = ShmemInitStruct("diskquota_paused",
-											sizeof(bool),
-											&found);
-	if (!found)
-		memset((void *) diskquota_paused, 0, sizeof(bool));
 
 	diskquota_hardlimit = ShmemInitStruct("diskquota_hardlimit",
 										  sizeof(bool),
@@ -511,7 +504,6 @@ init_lwlocks(void)
 	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
 	diskquota_locks.extension_ddl_lock = LWLockAssign();
 	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
-	diskquota_locks.paused_lock = LWLockAssign();
 	diskquota_locks.relation_cache_lock = LWLockAssign();
 	diskquota_locks.hardlimit_lock = LWLockAssign();
 	diskquota_locks.worker_map_lock = LWLockAssign();
@@ -535,7 +527,6 @@ DiskQuotaShmemSize(void)
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(Oid)));
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(DiskQuotaWorkerEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(Oid)));
-	size += sizeof(bool); /* sizeof(*diskquota_paused) */
 	size += sizeof(bool); /* sizeof(*diskquota_hardlimit) */
 	return size;
 }
