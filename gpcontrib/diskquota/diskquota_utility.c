@@ -306,14 +306,19 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
  * Dispatch pausing/resuming command to segments.
  */
 static void
-dispatch_pause_or_resume_command(bool pause_extension)
+dispatch_pause_or_resume_command(Oid dbid, bool pause_extension)
 {
 	CdbPgResults cdb_pgresults = {NULL, 0};
 	int			i;
 	StringInfoData sql;
 
 	initStringInfo(&sql);
-	appendStringInfo(&sql, "SELECT diskquota.%s", pause_extension ? "pause()" : "resume()");
+	appendStringInfo(&sql, "SELECT diskquota.%s", pause_extension ? "pause" : "resume");
+	if (dbid == InvalidOid) {
+		appendStringInfo(&sql, "()");
+	} else {
+		appendStringInfo(&sql, "(%d)", dbid);
+	}
 	CdbDispatchCommand(sql.data, DF_NONE, &cdb_pgresults);
 
 	for (i = 0; i < cdb_pgresults.numResults; ++i)
@@ -332,10 +337,9 @@ dispatch_pause_or_resume_command(bool pause_extension)
 }
 
 /*
- * Set diskquota_paused to true.
- * This function is called by user. After this function being called, diskquota
- * keeps counting the disk usage but doesn't emit an error when the disk usage
- * limit is exceeded.
+ * this function is called by user.
+ * pause diskquota in current or specific database
+ * After this function being called, diskquota doesn't emit an error when the disk usage
  */
 Datum
 diskquota_pause(PG_FUNCTION_ARGS)
@@ -347,20 +351,39 @@ diskquota_pause(PG_FUNCTION_ARGS)
 				 errmsg("must be superuser to pause diskquota")));
 	}
 
-	LWLockAcquire(diskquota_locks.paused_lock, LW_EXCLUSIVE);
-	*diskquota_paused = true;
-	LWLockRelease(diskquota_locks.paused_lock);
+	Oid dbid = MyDatabaseId;
+	if (PG_NARGS() == 1) {
+		dbid = PG_GETARG_OID(0);
+	}
+
+	// pause current worker
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+	{
+		bool found;
+		DiskQuotaWorkerEntry *hentry;
+
+		hentry = (DiskQuotaWorkerEntry*) hash_search(disk_quota_worker_map,
+													(void*)&dbid,
+													// segment dose not boot the worker
+													// this will add new element on segment
+													// delete this element in diskquota_resume()
+													HASH_ENTER,
+													&found);
+
+		hentry->is_paused = true;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
 
 	if (IS_QUERY_DISPATCHER())
-		dispatch_pause_or_resume_command(true /* pause_extension */);
+		dispatch_pause_or_resume_command(PG_NARGS() == 0 ? InvalidOid : dbid,
+										 true /* pause_extension */);
 
 	PG_RETURN_VOID();
 }
 
 /*
- * Set diskquota_paused to false.
- * This function is called by user. After this function being called, diskquota
- * resume to emit an error when the disk usage limit is exceeded.
+ * this function is called by user.
+ * active diskquota in current or specific database
  */
 Datum
 diskquota_resume(PG_FUNCTION_ARGS)
@@ -372,12 +395,36 @@ diskquota_resume(PG_FUNCTION_ARGS)
 				 errmsg("must be superuser to resume diskquota")));
 	}
 
-	LWLockAcquire(diskquota_locks.paused_lock, LW_EXCLUSIVE);
-	*diskquota_paused = false;
-	LWLockRelease(diskquota_locks.paused_lock);
+	Oid dbid = MyDatabaseId;
+	if (PG_NARGS() == 1) {
+		dbid = PG_GETARG_OID(0);
+	}
+
+	// active current worker
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+	{
+		bool found;
+		DiskQuotaWorkerEntry *hentry;
+
+		hentry = (DiskQuotaWorkerEntry*) hash_search(disk_quota_worker_map,
+													(void*)&dbid,
+													HASH_FIND,
+													&found);
+		if (found) {
+			hentry->is_paused = false;
+		}
+
+		// remove the element since we do not need any more
+		// ref diskquota_pause()
+		if (found && hentry->handle == NULL) {
+			hash_search(disk_quota_worker_map, (void*)&dbid, HASH_REMOVE, &found);
+		}
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
 
 	if (IS_QUERY_DISPATCHER())
-		dispatch_pause_or_resume_command(false /* pause_extension */);
+		dispatch_pause_or_resume_command(PG_NARGS() == 0 ? InvalidOid : dbid,
+										 false /* pause_extension */);
 
 	PG_RETURN_VOID();
 }
