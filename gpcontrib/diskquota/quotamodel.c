@@ -165,7 +165,7 @@ static HTAB *table_size_map = NULL;
 static HTAB *disk_quota_black_map = NULL;
 static HTAB *local_disk_quota_black_map = NULL;
 
-bool *diskquota_hardlimit = NULL;
+pg_atomic_uint32 *diskquota_hardlimit = NULL;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
@@ -445,10 +445,10 @@ disk_quota_shmem_startup(void)
 			HASH_ELEM | HASH_FUNCTION);
 
 	diskquota_hardlimit = ShmemInitStruct("diskquota_hardlimit",
-										  sizeof(bool),
+										  sizeof(pg_atomic_uint32),
 										  &found);
 	if (!found)
-		memset((void *) diskquota_hardlimit, 0, sizeof(bool));
+		memset((void *) diskquota_hardlimit, 0, sizeof(pg_atomic_uint32));
 
 	/* use disk_quota_worker_map to manage diskquota worker processes. */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
@@ -484,7 +484,6 @@ init_lwlocks(void)
 	diskquota_locks.extension_ddl_lock = LWLockAssign();
 	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
 	diskquota_locks.relation_cache_lock = LWLockAssign();
-	diskquota_locks.hardlimit_lock = LWLockAssign();
 	diskquota_locks.worker_map_lock = LWLockAssign();
 	diskquota_locks.altered_reloid_cache_lock = LWLockAssign();
 }
@@ -711,7 +710,6 @@ refresh_disk_quota_usage(bool is_init)
 	bool		pushed_active_snap = false;
 	bool		ret = true;
 	HTAB	   *local_active_table_stat_map = NULL;
-	bool		enable_hardlimit;
 
 	StartTransactionCommand();
 
@@ -746,10 +744,7 @@ refresh_disk_quota_usage(bool is_init)
 		/* copy local black map back to shared black map */
 		flush_local_black_map();
 		/* Dispatch blackmap entries to segments to perform hard-limit. */
-		LWLockAcquire(diskquota_locks.hardlimit_lock, LW_SHARED);
-		enable_hardlimit = *diskquota_hardlimit;
-		LWLockRelease(diskquota_locks.hardlimit_lock);
-		if (enable_hardlimit)
+		if (pg_atomic_read_u32(diskquota_hardlimit))
 			dispatch_blackmap(local_active_table_stat_map);
 		hash_destroy(local_active_table_stat_map);
 	}
@@ -1580,9 +1575,7 @@ quota_check_common(Oid reloid, RelFileNode *relfilenode)
 	if (OidIsValid(reloid))
 		return check_blackmap_by_reloid(reloid);
 
-	LWLockAcquire(diskquota_locks.hardlimit_lock, LW_SHARED);
-	enable_hardlimit = *diskquota_hardlimit;
-	LWLockRelease(diskquota_locks.hardlimit_lock);
+	enable_hardlimit = pg_atomic_read_u32(diskquota_hardlimit);
 
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("enable_check_quota_by_relfilenode") == FaultInjectorTypeSkip)
@@ -2202,9 +2195,7 @@ diskquota_enable_hardlimit(PG_FUNCTION_ARGS)
 		LWLockRelease(diskquota_locks.black_map_lock);
 	}
 
-	LWLockAcquire(diskquota_locks.hardlimit_lock, LW_EXCLUSIVE);
-	*diskquota_hardlimit = true;
-	LWLockRelease(diskquota_locks.hardlimit_lock);
+	pg_atomic_write_u32(diskquota_hardlimit, true);
 
 	if (IS_QUERY_DISPATCHER())
 		dispatch_hardlimit_flag(true /*enable_hardlimit*/);
@@ -2221,9 +2212,7 @@ diskquota_disable_hardlimit(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to disable hardlimit")));
 
-	LWLockAcquire(diskquota_locks.hardlimit_lock, LW_EXCLUSIVE);
-	*diskquota_hardlimit = false;
-	LWLockRelease(diskquota_locks.hardlimit_lock);
+	pg_atomic_write_u32(diskquota_hardlimit, false);
 
 	if (IS_QUERY_DISPATCHER())
 		dispatch_hardlimit_flag(false /*enable_hardlimit*/);
