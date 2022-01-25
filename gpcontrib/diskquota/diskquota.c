@@ -14,43 +14,24 @@
  *
  * -------------------------------------------------------------------------
  */
+#include "diskquota.h"
+#include "gp_activetable.h"
+
 #include "postgres.h"
 
-#include <unistd.h>
-#include <utils/timeout.h>
-
-#include "access/tupdesc.h"
 #include "access/xact.h"
-#include "catalog/indexing.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_collation.h"
-#include "catalog/pg_database.h"
-#include "catalog/pg_extension.h"
-#include "catalog/pg_type.h"
 #include "cdb/cdbvars.h"
 #include "commands/dbcommands.h"
-#include "commands/extension.h"
 #include "executor/spi.h"
-#include "libpq/libpq-be.h"
-#include "miscadmin.h"
-#include "nodes/makefuncs.h"
-#include "pgstat.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "tcop/idle_resource_cleaner.h"
 #include "tcop/utility.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/formatting.h"
-#include "utils/memutils.h"
-#include "utils/numeric.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
-#include "gp_activetable.h"
-#include "diskquota.h"
 PG_MODULE_MAGIC;
 
 #define DISKQUOTA_DB	"diskquota"
