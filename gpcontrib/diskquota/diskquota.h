@@ -3,17 +3,15 @@
 
 #include "c.h"
 #include "postgres.h"
+#include "port/atomics.h"
 
 #include "fmgr.h"
 #include "storage/lock.h"
 #include "storage/lwlock.h"
+#include "storage/relfilenode.h"
 #include "postmaster/bgworker.h"
 
 #include "utils/hsearch.h"
-#include "storage/relfilenode.h"
-#include "storage/lock.h"
-
-#include "fmgr.h"
 #include "utils/relcache.h"
 
 #include <signal.h>
@@ -51,7 +49,6 @@ struct DiskQuotaLocks
 	LWLock	   *extension_ddl_lock; /* ensure create diskquota extension serially */
 	LWLock	   *monitoring_dbid_cache_lock;
 	LWLock	   *relation_cache_lock;
-	LWLock	   *hardlimit_lock;
 	LWLock	   *worker_map_lock;
 	LWLock	   *altered_reloid_cache_lock;
 };
@@ -109,7 +106,7 @@ typedef enum MessageResult MessageResult;
 
 extern DiskQuotaLocks diskquota_locks;
 extern ExtensionDDLMessage *extension_ddl_message;
-extern bool *diskquota_hardlimit;
+extern pg_atomic_uint32 *diskquota_hardlimit;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 
