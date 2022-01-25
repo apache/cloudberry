@@ -236,7 +236,7 @@ generate_insert_table_size_sql(StringInfoData *insert_buf, int extMajorVersion)
 Datum
 diskquota_start_worker(PG_FUNCTION_ARGS)
 {
-	int			rc;
+	int rc, launcher_pid;
 
 	/*
 	 * Lock on extension_ddl_lock to avoid multiple backend create diskquota
@@ -248,8 +248,9 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	extension_ddl_message->cmd = CMD_CREATE_EXTENSION;
 	extension_ddl_message->result = ERR_PENDING;
 	extension_ddl_message->dbid = MyDatabaseId;
+	launcher_pid = extension_ddl_message->launcher_pid;
 	/* setup sig handler to diskquota launcher process */
-	rc = kill(extension_ddl_message->launcher_pid, SIGUSR1);
+	rc = kill(launcher_pid, SIGUSR1);
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	if (rc == 0)
 	{
@@ -264,6 +265,11 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 			if (rc & WL_POSTMASTER_DEATH)
 				break;
 			ResetLatch(&MyProc->procLatch);
+
+			ereportif(ERROR,
+					kill(launcher_pid, 0) == -1 && errno == ESRCH, // do existence check
+					(errmsg("[diskquota] diskquotal launcher pid = %d no longer exist", launcher_pid)));
+
 			LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_SHARED);
 			if (extension_ddl_message->result != ERR_PENDING)
 			{
@@ -486,7 +492,7 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 					  Oid objectId, int subId, void *arg)
 {
 	Oid			oid;
-	int			rc;
+	int			rc, launcher_pid;
 
 	if (access != OAT_DROP || classId != ExtensionRelationId)
 		goto out;
@@ -504,7 +510,8 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	extension_ddl_message->cmd = CMD_DROP_EXTENSION;
 	extension_ddl_message->result = ERR_PENDING;
 	extension_ddl_message->dbid = MyDatabaseId;
-	rc = kill(extension_ddl_message->launcher_pid, SIGUSR1);
+	launcher_pid = extension_ddl_message->launcher_pid;
+	rc = kill(launcher_pid, SIGUSR1);
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	if (rc == 0)
 	{
@@ -519,6 +526,11 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 			if (rc & WL_POSTMASTER_DEATH)
 				break;
 			ResetLatch(&MyProc->procLatch);
+
+			ereportif(ERROR,
+					kill(launcher_pid, 0) == -1 && errno == ESRCH, // do existence check
+					(errmsg("[diskquota] diskquotal launcher pid = %d no longer exist", launcher_pid)));
+
 			LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_SHARED);
 			if (extension_ddl_message->result != ERR_PENDING)
 			{
