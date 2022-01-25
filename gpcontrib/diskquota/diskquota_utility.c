@@ -17,20 +17,14 @@
  */
 #include "postgres.h"
 
-#include <unistd.h>
 #include <sys/stat.h>
 
 #include "access/aomd.h"
-#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_collation.h"
-#include "catalog/pg_database.h"
 #include "catalog/pg_extension.h"
-#include "catalog/pg_tablespace.h"
-#include "catalog/pg_type.h"
 #include "catalog/pg_namespace.h"
-#include "catalog/pg_tablespace.h"
 #include "catalog/indexing.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
@@ -38,19 +32,14 @@
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "storage/proc.h"
-#include "tcop/utility.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/formatting.h"
-#include "utils/memutils.h"
 #include "utils/numeric.h"
-#include "utils/snapmgr.h"
 #include "libpq-fe.h"
 
 #include <cdb/cdbvars.h>
-#include <cdb/cdbutil.h>
 #include <cdb/cdbdisp_query.h>
 #include <cdb/cdbdispatchresult.h>
 
@@ -338,8 +327,8 @@ dispatch_pause_or_resume_command(Oid dbid, bool pause_extension)
 
 /*
  * this function is called by user.
- * pause diskquota in current or specific database
- * After this function being called, diskquota doesn't emit an error when the disk usage
+ * pause diskquota in current or specific database.
+ * After this function being called, diskquota doesn't emit an error when the disk usage limit is exceeded.
  */
 Datum
 diskquota_pause(PG_FUNCTION_ARGS)

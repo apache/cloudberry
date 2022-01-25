@@ -1,8 +1,8 @@
 #ifndef ACTIVE_TABLE_H
 #define ACTIVE_TABLE_H
 
-#include "storage/lwlock.h"
-#include "diskquota.h"
+#include "c.h"
+#include "utils/hsearch.h"
 
 /* Cache to detect the active table list */
 typedef struct DiskQuotaActiveTableFileEntry
