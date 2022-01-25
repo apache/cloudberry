@@ -1,10 +1,9 @@
 #ifndef RELATION_CACHE_H
 #define RELATION_CACHE_H
 
+#include "c.h"
+#include "utils/hsearch.h"
 #include "storage/relfilenode.h"
-#include "utils/relcache.h"
-#include "storage/lock.h"
-#include "postgres.h"
 
 typedef struct DiskQuotaRelationCacheEntry
 {

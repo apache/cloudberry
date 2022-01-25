@@ -15,10 +15,8 @@
 #include "postgres.h"
 
 #include "cdb/cdbdisp.h"
-#include "cdb/cdbdisp_async.h"
 #include "executor/executor.h"
-#include "storage/bufmgr.h"
-#include "utils/resowner.h"
+
 #include "diskquota.h"
 
 #define CHECKED_OID_LIST_NUM 64
