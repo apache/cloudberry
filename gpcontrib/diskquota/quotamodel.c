@@ -13,52 +13,31 @@
  *
  * -------------------------------------------------------------------------
  */
+#include "diskquota.h"
+#include "gp_activetable.h"
+#include "relation_cache.h"
+
 #include "postgres.h"
 
-#include "access/heapam.h"
-#include "access/htup_details.h"
-#include "access/reloptions.h"
-#include "access/skey.h"
-#include "access/transam.h"
-#include "access/tupdesc.h"
 #include "access/xact.h"
-#include "catalog/indexing.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_class.h"
-#include "catalog/pg_database.h"
 #include "catalog/pg_tablespace.h"
-#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/tablespace.h"
 #include "executor/spi.h"
 #include "funcapi.h"
-#include "lib/stringinfo.h"
-#include "miscadmin.h"
-#include "nodes/makefuncs.h"
 #include "storage/ipc.h"
-#include "storage/latch.h"
-#include "storage/lwlock.h"
-#include "storage/relfilenode.h"
-#include "storage/shmem.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/faultinjector.h"
-#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "libpq-fe.h"
 
-#include <stdlib.h>
-#include <math.h>
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbutil.h"
-
-#include "gp_activetable.h"
-#include "diskquota.h"
-#include "relation_cache.h"
 
 /* cluster level max size of black list */
 #define MAX_DISK_QUOTA_BLACK_ENTRIES (1024 * 1024)
