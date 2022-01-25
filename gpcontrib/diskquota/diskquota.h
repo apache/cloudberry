@@ -1,9 +1,22 @@
 #ifndef DISK_QUOTA_H
 #define DISK_QUOTA_H
 
+#include "c.h"
+#include "postgres.h"
+
+#include "fmgr.h"
+#include "storage/lock.h"
 #include "storage/lwlock.h"
 #include "postmaster/bgworker.h"
-#include "port/atomics.h"
+
+#include "utils/hsearch.h"
+#include "storage/relfilenode.h"
+#include "storage/lock.h"
+
+#include "fmgr.h"
+#include "utils/relcache.h"
+
+#include <signal.h>
 
 /* max number of monitored database with diskquota enabled */
 #define MAX_NUM_MONITORED_DB 10
