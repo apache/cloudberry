@@ -1,0 +1,24 @@
+CREATE DATABASE test_drop_after_pause;
+
+\c test_drop_after_pause
+
+CREATE EXTENSION diskquota;
+SELECT FROM diskquota.pause();
+DROP EXTENSION diskquota;
+
+CREATE EXTENSION diskquota;
+
+SELECT diskquota.enable_hardlimit();
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+SELECT diskquota.wait_for_worker_new_epoch();
+INSERT INTO SX.a SELECT generate_series(1,1000000); -- expect insert fail
+
+SELECT diskquota.disable_hardlimit();
+DROP EXTENSION diskquota;
+
+\c contrib_regression
+
+DROP DATABASE test_drop_after_pause;
