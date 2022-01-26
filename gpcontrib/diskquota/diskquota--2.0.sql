@@ -235,3 +235,7 @@ BEGIN
         RETURN FALSE;
 END;
 $$ LANGUAGE PLpgSQL;
+
+-- re-dispatch pause status to false. in case user pause-drop-recreate.
+-- refer to see test case 'test_drop_after_pause'
+SELECT from diskquota.resume();
