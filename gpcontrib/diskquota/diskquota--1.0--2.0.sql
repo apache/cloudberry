@@ -117,3 +117,9 @@ CREATE TYPE diskquota.diskquota_active_table_type AS ("TABLE_OID" oid,  "TABLE_S
 CREATE OR REPLACE FUNCTION diskquota.diskquota_fetch_table_stat(int4, oid[]) RETURNS setof diskquota.diskquota_active_table_type
 AS 'MODULE_PATHNAME', 'diskquota_fetch_table_stat'
 LANGUAGE C VOLATILE;
+
+-- returns the current status in current database
+CREATE OR REPLACE FUNCTION diskquota.status()
+RETURNS TABLE ("name" text, "status" text) STRICT
+AS 'MODULE_PATHNAME', 'diskquota_status'
+LANGUAGE C;

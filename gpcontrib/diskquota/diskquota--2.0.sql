@@ -236,6 +236,13 @@ BEGIN
 END;
 $$ LANGUAGE PLpgSQL;
 
+-- returns the current status in current database
+CREATE OR REPLACE FUNCTION diskquota.status()
+RETURNS TABLE ("name" text, "status" text) STRICT
+AS 'MODULE_PATHNAME', 'diskquota_status'
+LANGUAGE C;
+
 -- re-dispatch pause status to false. in case user pause-drop-recreate.
 -- refer to see test case 'test_drop_after_pause'
 SELECT from diskquota.resume();
+
