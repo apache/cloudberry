@@ -7,6 +7,7 @@ test: test_uncommitted_table_size
 test: test_pause_and_resume
 test: test_pause_and_resume_multiple_db
 test: test_drop_after_pause
+test: test_show_status
 # disable this tese due to GPDB behavior change
 # test: test_table_size
 test: test_fast_disk_check
