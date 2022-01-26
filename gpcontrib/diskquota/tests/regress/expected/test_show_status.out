@@ -1,0 +1,77 @@
+select * from diskquota.status();
+    name     |  status  
+-------------+----------
+ soft limits | enabled
+ hard limits | disabled
+(2 rows)
+
+select from diskquota.enable_hardlimit();
+--
+(1 row)
+
+select * from diskquota.status();
+    name     | status  
+-------------+---------
+ soft limits | enabled
+ hard limits | enabled
+(2 rows)
+
+select from diskquota.disable_hardlimit();
+--
+(1 row)
+
+select * from diskquota.status();
+    name     |  status  
+-------------+----------
+ soft limits | enabled
+ hard limits | disabled
+(2 rows)
+
+select from diskquota.pause();
+--
+(1 row)
+
+select * from diskquota.status();
+    name     |  status  
+-------------+----------
+ soft limits | paused
+ hard limits | disabled
+(2 rows)
+
+select from diskquota.enable_hardlimit();
+--
+(1 row)
+
+select * from diskquota.status();
+    name     | status 
+-------------+--------
+ soft limits | paused
+ hard limits | paused
+(2 rows)
+
+select from diskquota.disable_hardlimit();
+--
+(1 row)
+
+select * from diskquota.status();
+    name     |  status  
+-------------+----------
+ soft limits | paused
+ hard limits | disabled
+(2 rows)
+
+select from diskquota.resume();
+--
+(1 row)
+
+select from diskquota.disable_hardlimit();
+--
+(1 row)
+
+select * from diskquota.status();
+    name     |  status  
+-------------+----------
+ soft limits | enabled
+ hard limits | disabled
+(2 rows)
+
