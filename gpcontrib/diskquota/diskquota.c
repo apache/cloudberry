@@ -19,6 +19,7 @@
 
 #include "postgres.h"
 
+#include "funcapi.h"
 #include "access/xact.h"
 #include "cdb/cdbvars.h"
 #include "commands/dbcommands.h"
@@ -1078,4 +1079,111 @@ Datum
 show_worker_epoch(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_UINT32(worker_get_epoch(MyDatabaseId));
+}
+
+static const char* diskquota_status_check_soft_limit() {
+	// should run on coordinator only.
+	Assert(IS_QUERY_DISPATCHER());
+
+	bool found, paused;
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+	{
+		DiskQuotaWorkerEntry	*hash_entry;
+
+		hash_entry = (DiskQuotaWorkerEntry*) hash_search(disk_quota_worker_map,
+														(void*)&MyDatabaseId,
+														HASH_FIND,
+														&found);
+		paused = found ? hash_entry->is_paused : false;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+
+	// if worker no booted, aka 'CREATE EXTENSION' not called, diskquota is paused
+	if (!found)
+		return "paused";
+
+	// if worker booted, check 'worker_map->is_paused'
+	return paused ? "paused" : "enabled";
+}
+
+static const char* diskquota_status_check_hard_limit()
+{
+	// should run on coordinator only.
+	Assert(IS_QUERY_DISPATCHER());
+
+	bool hardlimit = pg_atomic_read_u32(diskquota_hardlimit);
+
+	bool found, paused;
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+	{
+		DiskQuotaWorkerEntry	*hash_entry;
+
+		hash_entry = (DiskQuotaWorkerEntry*) hash_search(disk_quota_worker_map,
+														(void*)&MyDatabaseId,
+														HASH_FIND,
+														&found);
+		paused = found ? hash_entry->is_paused : false;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+
+	// if worker booted and 'worker_map->is_paused == true' and hardlimit is enabled
+	// hard limits should also paused
+	if (found && paused && hardlimit)
+		return "paused";
+
+	return hardlimit ? "enabled": "disabled";
+}
+
+PG_FUNCTION_INFO_V1(diskquota_status);
+Datum diskquota_status(PG_FUNCTION_ARGS)
+{
+	typedef struct Context {
+		int index;
+	} Context;
+
+	typedef struct FeatureStatus {
+		const char* name;
+		const char* (*status)(void);
+	} FeatureStatus;
+
+	static const FeatureStatus fs[] = {
+		{.name = "soft limits", .status = diskquota_status_check_soft_limit},
+		{.name = "hard limits", .status = diskquota_status_check_hard_limit},
+	};
+
+	FuncCallContext *funcctx;
+
+	if (SRF_IS_FIRSTCALL()) {
+		funcctx = SRF_FIRSTCALL_INIT();
+
+		MemoryContext oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+		{
+			TupleDesc tupdesc = CreateTemplateTupleDesc(2, false);
+			TupleDescInitEntry(tupdesc, 1, "name", TEXTOID, -1, 0);
+			TupleDescInitEntry(tupdesc, 2, "status", TEXTOID, -1, 0);
+			funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+			Context *context = (Context *)palloc(sizeof(Context));
+			context->index = 0;
+			funcctx->user_fctx = context;
+		}
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+	Context *context = (Context *)funcctx->user_fctx;
+
+	if (context->index >= sizeof(fs) / sizeof(FeatureStatus)) {
+		SRF_RETURN_DONE(funcctx);
+	}
+
+	bool nulls[2] = {false, false};
+	Datum v[2] = {
+		DirectFunctionCall1(textin, CStringGetDatum(fs[context->index].name)),
+		DirectFunctionCall1(textin, CStringGetDatum(fs[context->index].status())),
+	};
+	ReturnSetInfo *rsi = (ReturnSetInfo *)fcinfo->resultinfo;
+	HeapTuple tuple = heap_form_tuple(rsi->expectedDesc, v, nulls);
+
+	context->index++;
+	SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
 }

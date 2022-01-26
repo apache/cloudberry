@@ -14,6 +14,8 @@ DROP FUNCTION IF EXISTS diskquota.enable_hardlimit();
 
 DROP FUNCTION IF EXISTS diskquota.refresh_blackmap(diskquota.blackmap_entry[], oid[]);
 
+DROP FUNCTION IF EXISTS diskquota.status();
+
 DROP TYPE IF EXISTS diskquota.blackmap_entry;
 
 DROP VIEW IF EXISTS diskquota.blackmap;
