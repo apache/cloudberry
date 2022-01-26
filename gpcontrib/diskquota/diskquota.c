@@ -820,18 +820,35 @@ on_del_db(Oid dbid, MessageResult * code)
 static void
 add_dbid_to_database_list(Oid dbid)
 {
-	StringInfoData str;
 	int			ret;
 
-	initStringInfo(&str);
-	appendStringInfo(&str, "insert into diskquota_namespace.database_list values(%u);", dbid);
+	Oid argt[1] = {INT4OID};
+	Datum argv[1] = {Int32GetDatum(dbid)};
 
-	/* errors will be cached in outer function */
-	ret = SPI_execute(str.data, false, 0);
-	if (ret != SPI_OK_INSERT)
-	{
-		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql:'%s', errno:%d", str.data, errno)));
+	ret = SPI_execute_with_args(
+			"select * from diskquota_namespace.database_list where dbid = $1",
+			1, argt, argv, NULL, true, 0);
+
+	if (ret != SPI_OK_SELECT)
+		ereport(ERROR, (errmsg(
+					"[diskquota launcher] error occured while checking database_list, "
+					" code = %d errno = %d", ret, errno)));
+
+	if (SPI_processed == 1) {
+		ereport(WARNING, (errmsg(
+						"[diskquota launcher] database id %d is already actived, "
+						"skip database_list update", dbid)));
+		return;
 	}
+
+	ret = SPI_execute_with_args("insert into diskquota_namespace.database_list values($1)",
+			1, argt,argv, NULL, false, 0);
+
+	if (ret != SPI_OK_INSERT || SPI_processed != 1)
+		ereport(ERROR, (errmsg(
+					"[diskquota launcher] error occured while updating database_list, "
+					" code = %d errno = %d", ret, errno)));
+
 	return;
 }
 
