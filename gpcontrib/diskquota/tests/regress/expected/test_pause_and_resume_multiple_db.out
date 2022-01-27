@@ -161,8 +161,32 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
 ERROR:  schema's disk space quota exceeded with name:s1
 \c test_pause_and_resume
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
 \c test_new_create_database
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
 \c contrib_regression
 DROP SCHEMA s1 CASCADE;
