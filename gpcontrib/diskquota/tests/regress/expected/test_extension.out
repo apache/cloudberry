@@ -23,7 +23,6 @@ show max_worker_processes;
 2
 \c dbx0
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 3
 CREATE SCHEMA SX;
@@ -74,7 +73,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx2
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 5
 CREATE SCHEMA SX;
@@ -99,7 +97,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx3
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 6
 CREATE SCHEMA SX;
@@ -124,7 +121,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx4
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 7
 CREATE SCHEMA SX;
@@ -149,7 +145,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx5
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 8
 CREATE SCHEMA SX;
@@ -174,7 +169,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx6
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 9
 CREATE SCHEMA SX;
@@ -199,7 +193,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx7
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 10
 CREATE SCHEMA SX;
@@ -224,7 +217,6 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx8
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
 CREATE SCHEMA SX;
@@ -249,74 +241,177 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx9
 CREATE EXTENSION diskquota;
-ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:290)
-\! sleep 2
+ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:287)
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
 \c dbx10
 CREATE EXTENSION diskquota;
-ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:290)
-\! sleep 2
+ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:287)
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
 \c dbx0
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 10
 \c dbx1
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 9
 \c dbx2
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 8
 \c dbx3
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 7
 \c dbx4
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 6
 \c dbx5
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 5
 \c dbx6
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 4
 \c dbx7
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 3
 \c dbx8
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 2
 \c dbx9
+SELECT diskquota.pause();
+ERROR:  schema "diskquota" does not exist
+SELECT diskquota.wait_for_worker_new_epoch();
+ERROR:  schema "diskquota" does not exist
 DROP EXTENSION diskquota;
 ERROR:  extension "diskquota" does not exist
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 2
 \c dbx10
+SELECT diskquota.pause();
+ERROR:  schema "diskquota" does not exist
+SELECT diskquota.wait_for_worker_new_epoch();
+ERROR:  schema "diskquota" does not exist
 DROP EXTENSION diskquota;
 ERROR:  extension "diskquota" does not exist
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 2
-\c postgres
+\c contrib_regression
 DROP DATABASE dbx0 ;
 DROP DATABASE dbx1 ;
 DROP DATABASE dbx2 ;

@@ -4,6 +4,18 @@ CREATE DATABASE test_recreate;
 INSERT INTO diskquota_namespace.database_list(dbid) SELECT oid FROM pg_database WHERE datname = 'test_recreate';
 \c test_recreate
 CREATE EXTENSION diskquota; -- shoud be ok
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
 \c contrib_regression
 DROP DATABASE test_recreate;

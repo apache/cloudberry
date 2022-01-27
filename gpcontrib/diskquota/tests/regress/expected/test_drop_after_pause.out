@@ -1,8 +1,16 @@
 CREATE DATABASE test_drop_after_pause;
 \c test_drop_after_pause
 CREATE EXTENSION diskquota;
-SELECT FROM diskquota.pause();
---
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 DROP EXTENSION diskquota;
@@ -30,11 +38,23 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a SELECT generate_series(1,1000000); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:41008  (seg0 127.0.0.1:6002 pid=388076)
+ERROR:  schema's disk space quota exceeded with name:746125  (seg0 127.0.0.1:6002 pid=22648)
 SELECT diskquota.disable_hardlimit();
  disable_hardlimit 
 -------------------
  
+(1 row)
+
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
 (1 row)
 
 DROP EXTENSION diskquota;
