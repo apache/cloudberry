@@ -66,9 +66,13 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
 
 \c test_pause_and_resume
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
 
 \c test_new_create_database
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
 
 \c contrib_regression
