@@ -20,7 +20,6 @@ show max_worker_processes;
 
 \c dbx0
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -44,7 +43,6 @@ DROP TABLE SX.a;
 
 \c dbx2
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -56,7 +54,6 @@ DROP TABLE SX.a;
 
 \c dbx3
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -68,7 +65,6 @@ DROP TABLE SX.a;
 
 \c dbx4
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -80,7 +76,6 @@ DROP TABLE SX.a;
 
 \c dbx5
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -92,7 +87,6 @@ DROP TABLE SX.a;
 
 \c dbx6
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -104,7 +98,6 @@ DROP TABLE SX.a;
 
 \c dbx7
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -116,7 +109,6 @@ DROP TABLE SX.a;
 
 \c dbx8
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -128,70 +120,79 @@ DROP TABLE SX.a;
 
 \c dbx9
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx10
 CREATE EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx0
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx1
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx2
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx3
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx4
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx5
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx6
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx7
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx8
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx9
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx10
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! sleep 2
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
-\c postgres
+\c contrib_regression
 
 DROP DATABASE dbx0 ;
 DROP DATABASE dbx1 ;

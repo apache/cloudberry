@@ -3,7 +3,8 @@ CREATE DATABASE test_drop_after_pause;
 \c test_drop_after_pause
 
 CREATE EXTENSION diskquota;
-SELECT FROM diskquota.pause();
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
 
 CREATE EXTENSION diskquota;
@@ -17,6 +18,8 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a SELECT generate_series(1,1000000); -- expect insert fail
 
 SELECT diskquota.disable_hardlimit();
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
 
 \c contrib_regression
