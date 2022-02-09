@@ -1,6 +1,6 @@
 -- Test schema
 -- start_ignore
-\! mkdir /tmp/indexspc
+\! mkdir -p /tmp/indexspc
 -- end_ignore
 CREATE SCHEMA indexschema1;
 DROP TABLESPACE  IF EXISTS indexspc;
@@ -108,4 +108,3 @@ DROP INDEX indexschema1.a_index;
 DROP TABLE indexschema1.test_index_a;
 DROP SCHEMA indexschema1;
 DROP TABLESPACE indexspc;
-\! rm -rf /tmp/indexspc
