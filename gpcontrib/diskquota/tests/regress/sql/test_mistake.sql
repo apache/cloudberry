@@ -11,7 +11,7 @@ CREATE ROLE rmistake;
 select diskquota.set_role_quota('rmistake', '0 MB');
 
 -- start_ignore
-\! mkdir /tmp/spcmistake
+\! mkdir -p /tmp/spcmistake
 -- end_ignore
 DROP TABLESPACE  IF EXISTS spcmistake;
 CREATE TABLESPACE spcmistake LOCATION '/tmp/spcmistake';
@@ -22,4 +22,3 @@ SELECT diskquota.set_per_segment_quota('spcmistake', 0);
 DROP SCHEMA nmistake;
 DROP ROLE rmistake;
 DROP TABLESPACE spcmistake;
-\! rm -rf /tmp/spcmistake

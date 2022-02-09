@@ -1,6 +1,6 @@
 -- Test role quota
 -- start_ignore
-\! mkdir /tmp/rolespc
+\! mkdir -p /tmp/rolespc
 -- end_ignore
 DROP TABLESPACE  IF EXISTS rolespc;
 NOTICE:  tablespace "rolespc" does not exist, skipping
@@ -83,7 +83,7 @@ INSERT INTO b SELECT generate_series(1,100);
 ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
 -- Test alter tablespace
 -- start_ignore
-\! mkdir /tmp/rolespc2
+\! mkdir -p /tmp/rolespc2
 -- end_ignore
 DROP TABLESPACE  IF EXISTS rolespc2;
 NOTICE:  tablespace "rolespc2" does not exist, skipping
@@ -155,5 +155,3 @@ RESET search_path;
 DROP SCHEMA rolespcrole;
 DROP TABLESPACE rolespc;
 DROP TABLESPACE rolespc2;
-\! rm -rf /tmp/rolespc;
-\! rm -rf /tmp/rolespc2

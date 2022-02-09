@@ -41,5 +41,4 @@ RESET search_path;
 RESET default_tablespace;
 DROP SCHEMA hardlimit_s;
 DROP TABLESPACE ctas_schemaspc;
-\! rm -rf /tmp/ctas_schemaspc;
 SELECT diskquota.disable_hardlimit();

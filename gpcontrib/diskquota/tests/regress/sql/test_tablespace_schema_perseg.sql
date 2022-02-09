@@ -1,6 +1,6 @@
 -- Test schema
 -- start_ignore
-\! mkdir /tmp/schemaspc_perseg
+\! mkdir -p /tmp/schemaspc_perseg
 -- end_ignore
 -- Test tablespace quota perseg
 CREATE SCHEMA spcs1_perseg;
@@ -42,7 +42,7 @@ SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FR
 
 -- Test alter tablespace
 -- start_ignore
-\! mkdir /tmp/schemaspc_perseg2
+\! mkdir -p /tmp/schemaspc_perseg2
 -- end_ignore
 DROP TABLESPACE  IF EXISTS schemaspc_perseg2;
 CREATE TABLESPACE schemaspc_perseg2 LOCATION '/tmp/schemaspc_perseg2';
@@ -88,6 +88,4 @@ DROP TABLE spcs1_perseg.a;
 DROP SCHEMA spcs1_perseg;
 DROP TABLESPACE schemaspc_perseg;
 DROP TABLESPACE schemaspc_perseg2;
-\! rm -rf /tmp/schemaspc_perseg
-\! rm -rf /tmp/schemaspc_perseg2
 
