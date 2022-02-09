@@ -1,6 +1,6 @@
 -- Test role quota
 -- start_ignore
-\! mkdir /tmp/rolespc_perseg
+\! mkdir -p /tmp/rolespc_perseg
 -- end_ignore
 DROP TABLESPACE  IF EXISTS rolespc_perseg;
 CREATE TABLESPACE rolespc_perseg LOCATION '/tmp/rolespc_perseg';
@@ -47,7 +47,7 @@ INSERT INTO b SELECT generate_series(1,100);
 
 -- Test alter tablespace
 -- start_ignore
-\! mkdir /tmp/rolespc_perseg2
+\! mkdir -p /tmp/rolespc_perseg2
 -- end_ignore
 DROP TABLESPACE  IF EXISTS rolespc_perseg2;
 CREATE TABLESPACE rolespc_perseg2 LOCATION '/tmp/rolespc_perseg2';
@@ -95,5 +95,3 @@ RESET search_path;
 DROP SCHEMA rolespc_persegrole;
 DROP TABLESPACE rolespc_perseg;
 DROP TABLESPACE rolespc_perseg2;
-\! rm -rf /tmp/rolespc_perseg;
-\! rm -rf /tmp/rolespc_perseg2

@@ -81,7 +81,7 @@ SELECT rel.relname, be.target_type, (be.target_oid=rel.relowner) AS owner_matche
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
 
 -- Create a tablespace to test the rest of blocking types.
-\! mkdir /tmp/blocked_space
+\! mkdir -p /tmp/blocked_space
 CREATE TABLESPACE blocked_space LOCATION '/tmp/blocked_space';
 ALTER TABLE blocked_t1 SET TABLESPACE blocked_space;
 
@@ -191,6 +191,5 @@ DROP TABLE blocked_t3;
 DROP TABLE blocked_t4;
 DROP TABLE blocked_t5;
 DROP TABLESPACE blocked_space;
-\! rm -rf /tmp/blocked_space
 SET search_path TO DEFAULT;
 DROP SCHEMA s_blackmap;
