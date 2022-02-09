@@ -1,6 +1,6 @@
 -- Test schema
 -- start_ignore
-\! mkdir /tmp/schemaspc
+\! mkdir -p /tmp/schemaspc
 -- end_ignore
 CREATE SCHEMA spcs1;
 DROP TABLESPACE  IF EXISTS schemaspc;
@@ -65,7 +65,7 @@ SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FR
 
 -- Test alter tablespace
 -- start_ignore
-\! mkdir /tmp/schemaspc2
+\! mkdir -p /tmp/schemaspc2
 -- end_ignore
 DROP TABLESPACE  IF EXISTS schemaspc2;
 NOTICE:  tablespace "schemaspc2" does not exist, skipping
@@ -135,5 +135,3 @@ DROP TABLE spcs1.a2, spcs1.a;
 DROP SCHEMA spcs1, spcs2;
 DROP TABLESPACE schemaspc;
 DROP TABLESPACE schemaspc2;
-\! rm -rf /tmp/schemaspc
-\! rm -rf /tmp/schemaspc2

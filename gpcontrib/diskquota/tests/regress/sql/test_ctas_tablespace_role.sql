@@ -41,7 +41,6 @@ DROP TABLE IF EXISTS aocs_table;
 RESET ROLE;
 RESET default_tablespace;
 DROP TABLESPACE ctas_rolespc;
-\! rm -rf /tmp/ctas_rolespc;
 REVOKE USAGE ON SCHEMA diskquota FROM hardlimit_r;
 DROP ROLE hardlimit_r;
 SELECT diskquota.disable_hardlimit();
