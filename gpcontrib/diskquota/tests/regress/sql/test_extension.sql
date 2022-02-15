@@ -15,12 +15,11 @@ CREATE DATABASE dbx10 ;
 
 show max_worker_processes;
 
-\! sleep 4
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx0
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -36,8 +35,7 @@ INSERT INTO SX.a values(generate_series(0, 100000));
 CREATE EXTENSION diskquota;
 SELECT diskquota.init_table_size_table();
 SELECT diskquota.set_schema_quota('SX', '1MB');
-\! sleep 5
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
 
@@ -54,7 +52,7 @@ DROP TABLE SX.a;
 
 \c dbx3
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -65,7 +63,7 @@ DROP TABLE SX.a;
 
 \c dbx4
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -76,7 +74,7 @@ DROP TABLE SX.a;
 
 \c dbx5
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -87,7 +85,7 @@ DROP TABLE SX.a;
 
 \c dbx6
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -98,7 +96,7 @@ DROP TABLE SX.a;
 
 \c dbx7
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -109,7 +107,7 @@ DROP TABLE SX.a;
 
 \c dbx8
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -120,77 +118,77 @@ DROP TABLE SX.a;
 
 \c dbx9
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx10
 CREATE EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx0
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx1
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx2
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx3
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx4
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx5
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx6
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx7
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx8
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx9
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c dbx10
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
-\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 \c contrib_regression
 
