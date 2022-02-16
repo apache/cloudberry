@@ -25,5 +25,6 @@ DROP DATABASE test_manytable01;
 DROP DATABASE test_manytable02;
 
 -- start_ignore
-\! gpconfig -c diskquota.max_active_tables -v 1024 > /dev/null
+\! gpconfig -r diskquota.max_active_tables
+\! gpstop -far
 -- end_ignore

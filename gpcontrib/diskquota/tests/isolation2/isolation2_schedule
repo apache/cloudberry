@@ -1,7 +1,8 @@
-test: init
-test: prepare
+test: config
+test: test_create_extension
 test: test_relation_size
 test: test_blackmap
 test: test_vacuum
 test: test_truncate
-test: cleanup
+test: test_worker_timeout
+test: test_drop_extension

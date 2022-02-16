@@ -1,6 +1,5 @@
--- NOTE: when test this script, you must make sure that there is no diskquota launcher
--- process or diskquota worker process. i.e. `ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l`
--- returns 0
+-- NOTE: when test this script, you must make sure that there is no diskquota
+-- worker process.
 CREATE DATABASE dbx0 ;
 CREATE DATABASE dbx1 ;
 CREATE DATABASE dbx2 ;
@@ -17,9 +16,13 @@ show max_worker_processes;
 
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
+-- FIXME: We need to sleep for a while each time after CREATE EXTENSION and
+-- DROP EXTENSION to wait for the bgworker to start or to exit.
+
 \c dbx0
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -34,6 +37,7 @@ CREATE TABLE SX.a(i int);
 INSERT INTO SX.a values(generate_series(0, 100000));
 CREATE EXTENSION diskquota;
 SELECT diskquota.init_table_size_table();
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT diskquota.set_schema_quota('SX', '1MB');
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 INSERT INTO SX.a values(generate_series(0, 10));
@@ -41,6 +45,7 @@ DROP TABLE SX.a;
 
 \c dbx2
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
@@ -53,6 +58,7 @@ DROP TABLE SX.a;
 \c dbx3
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -64,6 +70,7 @@ DROP TABLE SX.a;
 \c dbx4
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -75,6 +82,7 @@ DROP TABLE SX.a;
 \c dbx5
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -86,6 +94,7 @@ DROP TABLE SX.a;
 \c dbx6
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -97,6 +106,7 @@ DROP TABLE SX.a;
 \c dbx7
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -108,6 +118,7 @@ DROP TABLE SX.a;
 \c dbx8
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 SELECT diskquota.set_schema_quota('SX', '1MB');
@@ -119,10 +130,12 @@ DROP TABLE SX.a;
 \c dbx9
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 
 \c dbx10
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+SELECT diskquota.wait_for_worker_new_epoch();
 
 \c dbx0
 SELECT diskquota.pause();
