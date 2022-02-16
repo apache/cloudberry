@@ -24,14 +24,17 @@
 #include "cdb/cdbvars.h"
 #include "commands/dbcommands.h"
 #include "executor/spi.h"
+#include "port/atomics.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "tcop/idle_resource_cleaner.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
 
 PG_MODULE_MAGIC;
 
@@ -46,6 +49,7 @@ static volatile sig_atomic_t got_sigusr1 = false;
 /* GUC variables */
 int			diskquota_naptime = 0;
 int			diskquota_max_active_tables = 0;
+int	        diskquota_worker_timeout = 60; /* default timeout is 60 seconds */
 
 DiskQuotaLocks diskquota_locks;
 ExtensionDDLMessage *extension_ddl_message = NULL;
@@ -236,6 +240,19 @@ define_guc_variables(void)
 							NULL,
 							NULL,
 							NULL);
+
+	DefineCustomIntVariable("diskquota.worker_timeout",
+							"Duration between each check (in seconds).",
+							NULL,
+							&diskquota_worker_timeout,
+							60,
+							1,
+							INT_MAX,
+							PGC_SIGHUP,
+							0,
+							NULL,
+							NULL,
+							NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
@@ -360,6 +377,8 @@ disk_quota_worker_main(Datum main_arg)
 			got_sighup = false;
 			ProcessConfigFile(PGC_SIGHUP);
 		}
+
+		SIMPLE_FAULT_INJECTOR("diskquota_worker_main");
 
 		/* Do the work */
 		if (!diskquota_is_paused())
@@ -1007,7 +1026,7 @@ start_worker_by_dboid(Oid dbid)
 	{
 		workerentry->handle = handle;
 		workerentry->pid = pid;
-		workerentry->epoch = 0;
+		pg_atomic_write_u32(&(workerentry->epoch), 0);
 		workerentry->is_paused = false;
 	}
 
@@ -1036,7 +1055,7 @@ is_valid_dbid(Oid dbid)
 bool
 worker_increase_epoch(Oid database_oid)
 {
-	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
 
 	bool found = false;
 	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
@@ -1044,32 +1063,32 @@ worker_increase_epoch(Oid database_oid)
 
 	if (found)
 	{
-		++(workerentry->epoch);
+		pg_atomic_fetch_add_u32(&(workerentry->epoch), 1);
 	}
 	LWLockRelease(diskquota_locks.worker_map_lock);
 	return found;
 }
 
-unsigned int
+uint32
 worker_get_epoch(Oid database_oid)
 {
 	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
 
 	bool found = false;
-	unsigned int epoch = 0;
+	uint32 epoch = 0;
 	DiskQuotaWorkerEntry * workerentry = (DiskQuotaWorkerEntry *) hash_search(
 		disk_quota_worker_map, (void *) &database_oid, HASH_FIND, &found);
 	
 	if (found)
 	{
-		epoch = workerentry->epoch;
+		epoch = pg_atomic_read_u32(&(workerentry->epoch));
 	}
 	LWLockRelease(diskquota_locks.worker_map_lock);
 	if (!found)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 						errmsg("[diskquota] worker not found for database \"%s\"",
-							   get_database_name(MyDatabaseId))));	
+							   get_database_name(database_oid))));	
 	}
 	return epoch;
 }
@@ -1186,4 +1205,46 @@ Datum diskquota_status(PG_FUNCTION_ARGS)
 
 	context->index++;
 	SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
+}
+
+static bool
+check_for_timeout(TimestampTz start_time)
+{
+	long diff_secs = 0;
+	int diff_usecs = 0;
+	TimestampDifference(start_time, GetCurrentTimestamp(), &diff_secs, &diff_usecs);
+	if (diff_secs >= diskquota_worker_timeout)
+	{
+		ereport(NOTICE, (
+			errmsg("[diskquota] timeout when waiting for worker"),
+			errhint("please check if the bgworker is still alive.")));
+		return true;
+	}
+	return false;
+}
+
+PG_FUNCTION_INFO_V1(wait_for_worker_new_epoch);
+Datum
+wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
+{
+	TimestampTz start_time = GetCurrentTimestamp();
+	uint32 current_epoch = worker_get_epoch(MyDatabaseId);
+	for (;;)
+	{
+		CHECK_FOR_INTERRUPTS();
+		if (check_for_timeout(start_time))
+			start_time = GetCurrentTimestamp();
+		uint32 new_epoch = worker_get_epoch(MyDatabaseId);
+		/* Unsigned integer underflow is OK */
+		if (new_epoch - current_epoch >= 2u)
+		{
+			PG_RETURN_BOOL(true);
+		}
+		/* Sleep for naptime to reduce CPU usage */
+		(void) WaitLatch(&MyProc->procLatch,
+						 WL_LATCH_SET | WL_TIMEOUT,
+						 diskquota_naptime ? diskquota_naptime : 1);
+		ResetLatch(&MyProc->procLatch);
+	}
+	PG_RETURN_BOOL(false);
 }

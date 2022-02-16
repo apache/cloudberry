@@ -9,6 +9,7 @@ CREATE DATABASE test_new_create_database;
 \c test_pause_and_resume
 CREATE SCHEMA s1;
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
 
 \c contrib_regression
 CREATE TABLE s1.a(i int);
@@ -44,7 +45,8 @@ INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert succeed
 
 \c test_new_create_database;
 CREATE SCHEMA s1;
-CREATE EXTENSION diskquota; -- new database should be active although other database is paused
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch(); -- new database should be active although other database is paused
 CREATE TABLE s1.a(i int);
 INSERT INTO s1.a SELECT generate_series(1,100000); -- expect insert succeed
 SELECT diskquota.set_schema_quota('s1', '1 MB');

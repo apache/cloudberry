@@ -1,6 +1,7 @@
 CREATE DATABASE db_insert_after_drop;
 \c db_insert_after_drop
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
 -- Test Drop Extension
 CREATE SCHEMA sdrtbl;
 SELECT diskquota.set_schema_quota('sdrtbl', '1 MB');

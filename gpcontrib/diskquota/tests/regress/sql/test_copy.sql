@@ -3,6 +3,8 @@ CREATE SCHEMA s3;
 SELECT diskquota.set_schema_quota('s3', '1 MB');
 SET search_path TO s3;
 
+\! seq 100 > /tmp/csmall.txt
+
 CREATE TABLE c (i int);
 COPY c FROM '/tmp/csmall.txt';
 -- expect failed 
