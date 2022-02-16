@@ -1,0 +1,13 @@
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;

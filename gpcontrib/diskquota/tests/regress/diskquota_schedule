@@ -1,6 +1,5 @@
-test: init
-test: prepare
-test: test_worker_epoch
+test: config
+test: test_create_extension
 test: test_relation_size
 test: test_relation_cache
 test: test_uncommitted_table_size
@@ -29,4 +28,4 @@ test: test_ctas_role
 test: test_ctas_schema
 test: test_ctas_tablespace_role
 test: test_ctas_tablespace_schema
-test: clean
+test: test_drop_extension

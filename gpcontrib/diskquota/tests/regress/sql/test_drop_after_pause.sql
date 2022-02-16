@@ -3,11 +3,13 @@ CREATE DATABASE test_drop_after_pause;
 \c test_drop_after_pause
 
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT diskquota.pause();
 SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
 
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
 
 SELECT diskquota.enable_hardlimit();
 
