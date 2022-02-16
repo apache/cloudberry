@@ -214,27 +214,8 @@ LANGUAGE C;
 --    In this case, we must ensure this UDF can be interrupted by the user.
 CREATE OR REPLACE FUNCTION diskquota.wait_for_worker_new_epoch()
 RETURNS boolean STRICT
-AS $$
-DECLARE
-        current_epoch bigint;
-        new_epoch bigint;
-BEGIN
-        current_epoch := diskquota.show_worker_epoch();
-        LOOP
-                new_epoch := diskquota.show_worker_epoch();
-                IF new_epoch <> current_epoch THEN
-                        current_epoch := new_epoch;
-                        LOOP
-                                new_epoch := diskquota.show_worker_epoch();
-                                IF new_epoch <> current_epoch THEN
-                                        RETURN TRUE;
-                                END IF;
-                        END LOOP;
-                END IF;
-        END LOOP;
-        RETURN FALSE;
-END;
-$$ LANGUAGE PLpgSQL;
+AS 'MODULE_PATHNAME', 'wait_for_worker_new_epoch'
+LANGUAGE C;
 
 -- returns the current status in current database
 CREATE OR REPLACE FUNCTION diskquota.status()

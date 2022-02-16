@@ -1,0 +1,20 @@
+\c
+-- Show the values of all GUC variables
+SHOW diskquota.naptime;
+ diskquota.naptime 
+-------------------
+ 0
+(1 row)
+
+SHOW diskquota.max_active_tables;
+ diskquota.max_active_tables 
+-----------------------------
+ 1048576
+(1 row)
+
+SHOW diskquota.worker_timeout;
+ diskquota.worker_timeout 
+--------------------------
+ 60
+(1 row)
+

@@ -1,6 +1,5 @@
--- NOTE: when test this script, you must make sure that there is no diskquota launcher
--- process or diskquota worker process. i.e. `ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l`
--- returns 0
+-- NOTE: when test this script, you must make sure that there is no diskquota
+-- worker process.
 CREATE DATABASE dbx0 ;
 CREATE DATABASE dbx1 ;
 CREATE DATABASE dbx2 ;
@@ -20,10 +19,18 @@ show max_worker_processes;
 
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 2
+-- FIXME: We need to sleep for a while each time after CREATE EXTENSION and
+-- DROP EXTENSION to wait for the bgworker to start or to exit.
 \c dbx0
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 3
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -58,6 +65,12 @@ SELECT diskquota.init_table_size_table();
  
 (1 row)
 
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 SELECT diskquota.set_schema_quota('SX', '1MB');
  set_schema_quota 
 ------------------
@@ -71,6 +84,12 @@ ERROR:  schema's disk space quota exceeded with name:sx
 DROP TABLE SX.a;
 \c dbx2
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 5
 CREATE SCHEMA SX;
@@ -97,6 +116,12 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 6
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -121,6 +146,12 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 7
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -145,6 +176,12 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 8
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -169,6 +206,12 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 9
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -193,6 +236,12 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 10
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -217,6 +266,12 @@ DROP TABLE SX.a;
 CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -242,11 +297,15 @@ CREATE EXTENSION diskquota;
 ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:287)
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
+SELECT diskquota.wait_for_worker_new_epoch();
+ERROR:  schema "diskquota" does not exist
 \c dbx10
 CREATE EXTENSION diskquota;
 ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:287)
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 11
+SELECT diskquota.wait_for_worker_new_epoch();
+ERROR:  schema "diskquota" does not exist
 \c dbx0
 SELECT diskquota.pause();
  pause 

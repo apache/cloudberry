@@ -1,16 +1,12 @@
-DROP TABLE badquota.t1;
-DROP ROLE testbody;
-DROP SCHEMA badquota;
 SELECT diskquota.pause();
  pause 
 -------
- 
+       
 (1 row)
-
 SELECT diskquota.wait_for_worker_new_epoch();
  wait_for_worker_new_epoch 
 ---------------------------
- t
+ t                         
 (1 row)
-
 DROP EXTENSION diskquota;
+DROP
