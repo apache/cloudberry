@@ -115,7 +115,7 @@ struct DiskQuotaWorkerEntry
 {
 	Oid			dbid;
 	pid_t		pid;			/* worker pid */
-	unsigned int epoch; 		/* this counter will be increased after each worker loop */
+	pg_atomic_uint32 epoch; 		/* this counter will be increased after each worker loop */
 	bool is_paused; 			/* true if this worker is paused */
 	BackgroundWorkerHandle *handle;
 };

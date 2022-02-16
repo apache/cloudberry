@@ -1,4 +1,5 @@
 CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
 -- start_ignore
 \! gpstop -u
 SELECT diskquota.init_table_size_table();
