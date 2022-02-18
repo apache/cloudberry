@@ -50,6 +50,7 @@ static volatile sig_atomic_t got_sigusr1 = false;
 int			diskquota_naptime = 0;
 int			diskquota_max_active_tables = 0;
 int	        diskquota_worker_timeout = 60; /* default timeout is 60 seconds */
+bool		diskquota_hardlimit = false;
 
 DiskQuotaLocks diskquota_locks;
 ExtensionDDLMessage *extension_ddl_message = NULL;
@@ -229,7 +230,7 @@ define_guc_variables(void)
 							NULL);
 
 	DefineCustomIntVariable("diskquota.max_active_tables",
-							"max number of active tables monitored by disk-quota",
+							"Max number of active tables monitored by disk-quota.",
 							NULL,
 							&diskquota_max_active_tables,
 							1 * 1024 * 1024,
@@ -248,6 +249,16 @@ define_guc_variables(void)
 							60,
 							1,
 							INT_MAX,
+							PGC_SIGHUP,
+							0,
+							NULL,
+							NULL,
+							NULL);
+	DefineCustomBoolVariable("diskquota.hard_limit",
+							"Set this to 'on' to enable disk-quota hardlimit.",
+							NULL,
+							&diskquota_hardlimit,
+							false,
 							PGC_SIGHUP,
 							0,
 							NULL,
@@ -1130,7 +1141,7 @@ static const char* diskquota_status_check_hard_limit()
 	// should run on coordinator only.
 	Assert(IS_QUERY_DISPATCHER());
 
-	bool hardlimit = pg_atomic_read_u32(diskquota_hardlimit);
+	bool hardlimit = diskquota_hardlimit;
 
 	bool found, paused;
 	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
