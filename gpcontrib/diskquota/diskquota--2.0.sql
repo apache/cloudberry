@@ -93,16 +93,6 @@ RETURNS void STRICT
 AS 'MODULE_PATHNAME', 'diskquota_resume'
 LANGUAGE C;
 
-CREATE OR REPLACE FUNCTION diskquota.enable_hardlimit()
-RETURNS void STRICT
-AS 'MODULE_PATHNAME', 'diskquota_enable_hardlimit'
-LANGUAGE C;
-
-CREATE OR REPLACE FUNCTION diskquota.disable_hardlimit()
-RETURNS void STRICT
-AS 'MODULE_PATHNAME', 'diskquota_disable_hardlimit'
-LANGUAGE C;
-
 CREATE VIEW diskquota.show_fast_schema_quota_view AS
 select pgns.nspname as schema_name, pgc.relnamespace as schema_oid, qc.quotalimitMB as quota_in_mb, sum(ts.size) as nspsize_in_bytes
 from diskquota.table_size as ts,

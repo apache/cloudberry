@@ -8,10 +8,6 @@ DROP FUNCTION IF EXISTS diskquota.pause();
 
 DROP FUNCTION IF EXISTS diskquota.resume();
 
-DROP FUNCTION IF EXISTS diskquota.disable_hardlimit();
-
-DROP FUNCTION IF EXISTS diskquota.enable_hardlimit();
-
 DROP FUNCTION IF EXISTS diskquota.refresh_blackmap(diskquota.blackmap_entry[], oid[]);
 
 DROP FUNCTION IF EXISTS diskquota.status();
