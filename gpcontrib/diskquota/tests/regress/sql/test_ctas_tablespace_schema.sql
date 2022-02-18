@@ -1,5 +1,6 @@
 -- Test that diskquota is able to cancel a running CTAS query by the tablespace schema quota.
-SELECT diskquota.enable_hardlimit();
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
 
 -- start_ignore
 \! mkdir -p /tmp/ctas_schemaspc
@@ -41,4 +42,5 @@ RESET search_path;
 RESET default_tablespace;
 DROP SCHEMA hardlimit_s;
 DROP TABLESPACE ctas_schemaspc;
-SELECT diskquota.disable_hardlimit();
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null
