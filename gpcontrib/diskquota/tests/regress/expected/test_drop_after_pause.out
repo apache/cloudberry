@@ -27,12 +27,8 @@ SELECT diskquota.wait_for_worker_new_epoch();
  t
 (1 row)
 
-SELECT diskquota.enable_hardlimit();
- enable_hardlimit 
-------------------
- 
-(1 row)
-
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
 CREATE SCHEMA SX;
 CREATE TABLE SX.a(i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
@@ -51,12 +47,8 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 INSERT INTO SX.a SELECT generate_series(1,1000000); -- expect insert fail
 ERROR:  schema's disk space quota exceeded with name:16933  (seg2 127.0.0.1:6004 pid=24622)
-SELECT diskquota.disable_hardlimit();
- disable_hardlimit 
--------------------
- 
-(1 row)
-
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null
 SELECT diskquota.pause();
  pause 
 -------

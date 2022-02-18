@@ -1,5 +1,7 @@
 -- Test that diskquota is able to cancel a running CTAS query by the schema quota.
-SELECT diskquota.enable_hardlimit();
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
+
 CREATE SCHEMA hardlimit_s;
 SELECT diskquota.set_schema_quota('hardlimit_s', '1 MB');
 SET search_path TO hardlimit_s;
@@ -23,7 +25,8 @@ CREATE TABLE aocs_table WITH (appendonly=true, orientation=column)
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- disable hardlimit and do some clean-ups.
-SELECT diskquota.disable_hardlimit();
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS toast_table;
 DROP TABLE IF EXISTS ao_table;

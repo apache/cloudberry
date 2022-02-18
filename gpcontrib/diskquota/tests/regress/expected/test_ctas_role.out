@@ -1,10 +1,6 @@
 -- Test that diskquota is able to cancel a running CTAS query by the role quota.
-SELECT diskquota.enable_hardlimit();
- enable_hardlimit 
-------------------
- 
-(1 row)
-
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
 CREATE ROLE hardlimit_r;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_quota('hardlimit_r', '1MB');
@@ -85,9 +81,5 @@ NOTICE:  table "aocs_table" does not exist, skipping
 RESET ROLE;
 REVOKE USAGE ON SCHEMA diskquota FROM hardlimit_r;
 DROP ROLE hardlimit_r;
-SELECT diskquota.disable_hardlimit();
- disable_hardlimit 
--------------------
- 
-(1 row)
-
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null

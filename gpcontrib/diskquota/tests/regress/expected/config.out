@@ -18,3 +18,9 @@ SHOW diskquota.worker_timeout;
  60
 (1 row)
 
+SHOW diskquota.hard_limit;
+ diskquota.hard_limit 
+----------------------
+ off
+(1 row)
+

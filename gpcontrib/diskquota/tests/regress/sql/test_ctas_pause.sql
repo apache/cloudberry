@@ -1,7 +1,8 @@
 CREATE SCHEMA hardlimit_s;
 SET search_path TO hardlimit_s;
 
-SELECT diskquota.enable_hardlimit();
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
 SELECT diskquota.set_schema_quota('hardlimit_s', '1 MB');
 SELECT diskquota.wait_for_worker_new_epoch();
 
@@ -13,7 +14,8 @@ SELECT diskquota.pause();
 CREATE TABLE t1 AS SELECT generate_series(1,1000000); -- expect succeed
 
 -- disable hardlimit and do some clean-ups.
-SELECT diskquota.disable_hardlimit();
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null
 SELECT diskquota.resume();
 
 DROP SCHEMA hardlimit_s CASCADE;

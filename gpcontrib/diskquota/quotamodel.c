@@ -166,8 +166,6 @@ static HTAB *table_size_map = NULL;
 static HTAB *disk_quota_black_map = NULL;
 static HTAB *local_disk_quota_black_map = NULL;
 
-pg_atomic_uint32 *diskquota_hardlimit = NULL;
-
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 /* functions to maintain the quota maps */
@@ -445,12 +443,6 @@ disk_quota_shmem_startup(void)
 			&hash_ctl,
 			HASH_ELEM | HASH_FUNCTION);
 
-	diskquota_hardlimit = ShmemInitStruct("diskquota_hardlimit",
-										  sizeof(pg_atomic_uint32),
-										  &found);
-	if (!found)
-		memset((void *) diskquota_hardlimit, 0, sizeof(pg_atomic_uint32));
-
 	/* use disk_quota_worker_map to manage diskquota worker processes. */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
@@ -506,7 +498,6 @@ DiskQuotaShmemSize(void)
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(Oid)));
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(DiskQuotaWorkerEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(Oid)));
-	size += sizeof(bool); /* sizeof(*diskquota_hardlimit) */
 	return size;
 }
 
@@ -745,7 +736,7 @@ refresh_disk_quota_usage(bool is_init)
 		/* copy local black map back to shared black map */
 		flush_local_black_map();
 		/* Dispatch blackmap entries to segments to perform hard-limit. */
-		if (pg_atomic_read_u32(diskquota_hardlimit))
+		if (diskquota_hardlimit)
 			dispatch_blackmap(local_active_table_stat_map);
 		hash_destroy(local_active_table_stat_map);
 	}
@@ -1576,7 +1567,7 @@ quota_check_common(Oid reloid, RelFileNode *relfilenode)
 	if (OidIsValid(reloid))
 		return check_blackmap_by_reloid(reloid);
 
-	enable_hardlimit = pg_atomic_read_u32(diskquota_hardlimit);
+	enable_hardlimit = diskquota_hardlimit;
 
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("enable_check_quota_by_relfilenode") == FaultInjectorTypeSkip)
@@ -2142,81 +2133,4 @@ show_blackmap(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(funcctx);
-}
-
-static void
-dispatch_hardlimit_flag(bool enable_hardlimit)
-{
-	CdbPgResults		cdb_pgresults = {NULL, 0};
-	int					i;
-	StringInfoData		sql;
-
-	initStringInfo(&sql);
-	appendStringInfo(&sql, "SELECT diskquota.%s",
-					 enable_hardlimit ? "enable_hardlimit()" : "disable_hardlimit()");
-	CdbDispatchCommand(sql.data, DF_NONE, &cdb_pgresults);
-
-	for (i = 0; i < cdb_pgresults.numResults; ++i)
-	{
-		PGresult *pgresult = cdb_pgresults.pg_results[i];
-		if (PQresultStatus(pgresult) != PGRES_TUPLES_OK)
-		{
-			cdbdisp_clearCdbPgResults(&cdb_pgresults);
-			ereport(ERROR,
-					(errmsg("[diskquota] cannot %s hardlimit on segments, encounter unexpected result from segment: %d",
-							enable_hardlimit ? "enable" : "disable",
-							PQresultStatus(pgresult))));
-		}
-	}
-	cdbdisp_clearCdbPgResults(&cdb_pgresults);
-}
-
-PG_FUNCTION_INFO_V1(diskquota_enable_hardlimit);
-Datum
-diskquota_enable_hardlimit(PG_FUNCTION_ARGS)
-{
-	if (!superuser())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to enable hardlimit")));
-
-	/*
-	 * If this UDF is executed on segment servers, we should clear
-	 * the blackmap firstly, or the relation may be blocked by the
-	 * blackmap dispatched by the previous iteration.
-	 */
-	if (!IS_QUERY_DISPATCHER())
-	{
-		HASH_SEQ_STATUS			hash_seq;
-		GlobalBlackMapEntry	   *blackmapentry;
-		LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
-		hash_seq_init(&hash_seq, disk_quota_black_map);
-		while ((blackmapentry = hash_seq_search(&hash_seq)) != NULL)
-			hash_search(disk_quota_black_map, &blackmapentry->keyitem, HASH_REMOVE, NULL);
-		LWLockRelease(diskquota_locks.black_map_lock);
-	}
-
-	pg_atomic_write_u32(diskquota_hardlimit, true);
-
-	if (IS_QUERY_DISPATCHER())
-		dispatch_hardlimit_flag(true /*enable_hardlimit*/);
-
-	PG_RETURN_VOID();
-}
-
-PG_FUNCTION_INFO_V1(diskquota_disable_hardlimit);
-Datum
-diskquota_disable_hardlimit(PG_FUNCTION_ARGS)
-{
-	if (!superuser())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to disable hardlimit")));
-
-	pg_atomic_write_u32(diskquota_hardlimit, false);
-
-	if (IS_QUERY_DISPATCHER())
-		dispatch_hardlimit_flag(false /*enable_hardlimit*/);
-
-	PG_RETURN_VOID();
 }
