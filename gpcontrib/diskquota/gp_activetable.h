@@ -29,6 +29,7 @@ extern HTAB *gp_fetch_active_tables(bool force);
 extern void init_active_table_hook(void);
 extern void init_shm_worker_active_tables(void);
 extern void init_lock_active_tables(void);
+extern void update_diskquota_db_list(Oid dbid, HASHACTION action);
 
 extern HTAB *active_tables_map;
 extern HTAB *monitoring_dbid_cache;
