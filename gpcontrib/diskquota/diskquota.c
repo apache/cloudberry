@@ -981,6 +981,53 @@ terminate_all_workers(void)
 	LWLockRelease(diskquota_locks.worker_map_lock);
 }
 
+static bool
+worker_create_entry(Oid dbid)
+{
+	DiskQuotaWorkerEntry *workerentry = NULL;
+	bool found = false;
+
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+
+	workerentry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
+													   (void *) &dbid,
+													   HASH_ENTER, &found);
+	if (!found)
+	{
+		workerentry->handle = NULL;
+		pg_atomic_write_u32(&(workerentry->epoch), 0);
+		workerentry->is_paused = false;
+	}
+
+	LWLockRelease(diskquota_locks.worker_map_lock);
+	return found;
+}
+
+static bool
+worker_set_handle(Oid dbid, BackgroundWorkerHandle *handle)
+{
+	DiskQuotaWorkerEntry *workerentry = NULL;
+	bool found = false;
+
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
+
+	workerentry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
+													   (void *) &dbid,
+													   HASH_ENTER, &found);
+	if (found)
+	{
+		workerentry->handle = handle;
+	} 
+	LWLockRelease(diskquota_locks.worker_map_lock);
+	if (!found)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("[diskquota] worker not found for database \"%s\"",
+							   get_database_name(dbid))));	
+	}
+	return found;
+}
+
 /*
  * Dynamically launch an disk quota worker process.
  * This function is called when laucher process receive
@@ -995,9 +1042,10 @@ start_worker_by_dboid(Oid dbid)
 	MemoryContext old_ctx;
 	char	   *dbname;
 	pid_t		pid;
-	bool		found;
 	bool		ret;
-	DiskQuotaWorkerEntry *workerentry;
+
+	/* Create entry first so that it can be checked by bgworker and QD. */
+	worker_create_entry(dbid);
 
 	memset(&worker, 0, sizeof(BackgroundWorker));
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS |
@@ -1041,22 +1089,8 @@ start_worker_by_dboid(Oid dbid)
 
 	Assert(status == BGWH_STARTED);
 
-	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
-
-	/* put the worker handle into the worker map */
-	workerentry = (DiskQuotaWorkerEntry *) hash_search(disk_quota_worker_map,
-													   (void *) &dbid,
-													   HASH_ENTER, &found);
-	if (!found)
-	{
-		workerentry->handle = handle;
-		workerentry->pid = pid;
-		pg_atomic_write_u32(&(workerentry->epoch), 0);
-		workerentry->is_paused = false;
-	}
-
-	LWLockRelease(diskquota_locks.worker_map_lock);
-
+	/* Save the handle to the worker map to check the liveness. */
+	worker_set_handle(dbid, handle);
 	return true;
 }
 
