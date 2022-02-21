@@ -7,7 +7,7 @@ DROP TABLESPACE  IF EXISTS indexspc;
 CREATE TABLESPACE indexspc LOCATION '/tmp/indexspc';
 SET search_path TO indexschema1;
 
-CREATE TABLE test_index_a(i int) TABLESPACE indexspc;
+CREATE TABLE test_index_a(i int) TABLESPACE indexspc DISTRIBUTED BY (i);
 INSERT INTO test_index_a SELECT generate_series(1,20000);
 SELECT diskquota.set_schema_tablespace_quota('indexschema1', 'indexspc','2 MB');
 SELECT diskquota.wait_for_worker_new_epoch();

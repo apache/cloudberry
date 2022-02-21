@@ -3,7 +3,7 @@
 --    the error message is preserved for us to debug.
 --
 
-CREATE TABLE t_error_handling (i int);
+CREATE TABLE t_error_handling (i int) DISTRIBUTED BY (i);
 -- Inject an error to a segment server, since this UDF is only called on segments.
 SELECT gp_inject_fault_infinite('diskquota_fetch_table_stat', 'error', dbid)
     FROM gp_segment_configuration WHERE role='p' AND content=0;

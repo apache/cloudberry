@@ -7,19 +7,19 @@ GRANT USAGE ON SCHEMA diskquota TO hardlimit_r;
 SET ROLE hardlimit_r;
 
 -- heap table
-CREATE TABLE t1 AS SELECT generate_series(1, 10000000);
+CREATE TABLE t1 (i) AS SELECT generate_series(1, 10000000) DISTRIBUTED BY (i);
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- temp table
-CREATE TEMP TABLE t2 AS SELECT generate_series(1, 100000000);
+CREATE TEMP TABLE t2 (i) AS SELECT generate_series(1, 100000000);
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- toast table
-CREATE TABLE toast_table AS SELECT ARRAY(SELECT generate_series(1,10000)) FROM generate_series(1, 100000);
+CREATE TABLE toast_table (i) AS SELECT ARRAY(SELECT generate_series(1,10000)) FROM generate_series(1, 100000) DISTRIBUTED BY (i);
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- ao table
-CREATE TABLE ao_table WITH (appendonly=true) AS SELECT generate_series(1, 100000000);
+CREATE TABLE ao_table (i) WITH (appendonly=true) AS SELECT generate_series(1, 100000000) DISTRIBUTED BY (i);
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- aocs table
