@@ -4,7 +4,7 @@
 --    the error and returns 0.
 --
 
-CREATE TABLE t_dropped(i int);
+CREATE TABLE t_dropped(i int) DISTRIBUTED BY (i);
 -- Insert a small amount of data to 't_dropped'.
 INSERT INTO t_dropped SELECT generate_series(1, 100);
 -- Shows that the size of relfilenode is not zero.
@@ -28,7 +28,7 @@ SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'reset', db
 --    Since no row is deleted, diskquota.relation_size() should be equal to 
 --    pg_relation_size().
 
-CREATE TABLE t_ao(i int) WITH (appendonly=true);
+CREATE TABLE t_ao(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 1: BEGIN;
 1: INSERT INTO t_ao SELECT generate_series(1, 10000);
 2: BEGIN;

@@ -6,7 +6,7 @@
 CREATE SCHEMA diskquota;
 
 -- Configuration table
-CREATE TABLE diskquota.quota_config (targetOid oid, quotatype int, quotalimitMB int8, PRIMARY KEY(targetOid, quotatype));
+CREATE TABLE diskquota.quota_config (targetOid oid, quotatype int, quotalimitMB int8, PRIMARY KEY(targetOid, quotatype)) DISTRIBUTED BY (targetOid, quotatype);
 
 SELECT pg_catalog.pg_extension_config_dump('diskquota.quota_config', '');
 SELECT gp_segment_id, pg_catalog.pg_extension_config_dump('diskquota.quota_config', '') from gp_dist_random('gp_id');
@@ -23,7 +23,7 @@ LANGUAGE C;
 
 CREATE TABLE diskquota.table_size (tableid oid, size bigint, PRIMARY KEY(tableid));
 
-CREATE TABLE diskquota.state (state int, PRIMARY KEY(state));
+CREATE TABLE diskquota.state (state int, PRIMARY KEY(state)) DISTRIBUTED BY (state);
 
 INSERT INTO diskquota.state SELECT (count(relname) = 0)::int  FROM pg_class AS c, pg_namespace AS n WHERE c.oid > 16384 and relnamespace = n.oid and nspname != 'diskquota';
 

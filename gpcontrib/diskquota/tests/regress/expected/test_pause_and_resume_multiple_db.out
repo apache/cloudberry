@@ -14,12 +14,12 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 \c contrib_regression
-CREATE TABLE s1.a(i int);
+CREATE TABLE s1.a(i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO s1.a SELECT generate_series(1,100000); -- expect insert succeed
 \c test_pause_and_resume
-CREATE TABLE s1.a(i int);
+CREATE TABLE s1.a(i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO s1.a SELECT generate_series(1,100000); -- expect insert succeed
@@ -110,7 +110,7 @@ SELECT diskquota.wait_for_worker_new_epoch(); -- new database should be active a
  t
 (1 row)
 
-CREATE TABLE s1.a(i int);
+CREATE TABLE s1.a(i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO s1.a SELECT generate_series(1,100000); -- expect insert succeed
