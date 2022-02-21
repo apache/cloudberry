@@ -17,7 +17,6 @@ source "${TOP_DIR}/diskquota_src/concourse/scripts/test_common.sh"
 function create_fake_gpdb_src() {
 	pushd gpdb_src
 	./configure --prefix=/usr/local/greenplum-db-devel \
-		    --with-perl --with-python --with-libxml \
 		    --without-zstd \
 		    --disable-orca --disable-gpcloud --enable-debug-extensions
 	popd
