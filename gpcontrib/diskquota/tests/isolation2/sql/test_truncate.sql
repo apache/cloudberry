@@ -1,7 +1,7 @@
 -- Test various race conditions for TRUNCATE.
 
 -- Case 1: Pulling active table before swapping relfilenode
-CREATE TABLE dummy_t1(i int);
+CREATE TABLE dummy_t1(i int) DISTRIBUTED BY (i);
 INSERT INTO dummy_t1 SELECT generate_series(1, 1000);
 -- Wait for the diskquota bgworker refreshing the size of 'dummy_t1'.
 SELECT diskquota.wait_for_worker_new_epoch();

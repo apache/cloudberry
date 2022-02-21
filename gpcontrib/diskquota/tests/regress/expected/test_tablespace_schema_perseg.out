@@ -14,7 +14,7 @@ SELECT diskquota.set_schema_tablespace_quota('spcs1_perseg', 'schemaspc_perseg',
 (1 row)
 
 SET search_path TO spcs1_perseg;
-CREATE TABLE a(i int) TABLESPACE schemaspc_perseg;
+CREATE TABLE a(i int) TABLESPACE schemaspc_perseg DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO a SELECT generate_series(1,100);

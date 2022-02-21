@@ -2,7 +2,7 @@
 CREATE SCHEMA s1;
 SET search_path TO s1;
 
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 
 -- expect insert succeed
 INSERT INTO a SELECT generate_series(1,100000);

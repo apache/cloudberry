@@ -3,14 +3,14 @@
 -- SELECT diskquota.set_schema_quota('s1', '1 MB');
 SET search_path TO s1;
 
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000);
 SELECT pg_sleep(5);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-CREATE TABLE a2(i int);
+CREATE TABLE a2(i int) DISTRIBUTED BY (i);
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,100);
 

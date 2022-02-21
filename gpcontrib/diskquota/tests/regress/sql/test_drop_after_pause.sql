@@ -15,7 +15,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 \! gpstop -u > /dev/null
 
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO SX.a SELECT generate_series(1,1000000); -- expect insert fail

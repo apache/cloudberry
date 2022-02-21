@@ -13,7 +13,7 @@
 --    the old relation's size cannot be updated. We resolve it by making altered relations' oids
 --    constantly active so that the diskquota bgworker keeps updating the altered relation size
 --    during 'VACUUM FULL'.
-CREATE TABLE dummy_t1(i int);
+CREATE TABLE dummy_t1(i int) DISTRIBUTED BY (i);
 INSERT INTO dummy_t1 SELECT generate_series(1, 1000);
 DELETE FROM dummy_t1;
 -- Wait for the diskquota bgworker refreshing the size of 'dummy_t1'.

@@ -3,7 +3,7 @@ CREATE SCHEMA deleteschema;
 SELECT diskquota.set_schema_quota('deleteschema', '1 MB');
 SET search_path TO deleteschema;
 
-CREATE TABLE c (i INT);
+CREATE TABLE c (i INT) DISTRIBUTED BY (i);
 -- expect failed 
 INSERT INTO c SELECT generate_series(1,100000);
 SELECT diskquota.wait_for_worker_new_epoch();

@@ -5,7 +5,7 @@ SET search_path TO s3;
 
 \! seq 100 > /tmp/csmall.txt
 
-CREATE TABLE c (i int);
+CREATE TABLE c (i int) DISTRIBUTED BY (i);
 COPY c FROM '/tmp/csmall.txt';
 -- expect failed 
 INSERT INTO c SELECT generate_series(1,100000);

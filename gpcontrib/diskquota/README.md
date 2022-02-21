@@ -126,7 +126,7 @@ create schema s1;
 select diskquota.set_schema_quota('s1', '1 MB');
 set search_path to s1;
 
-create table a(i int);
+create table a(i int) DISTRIBUTED BY (i);
 # insert small data succeeded
 insert into a select generate_series(1,100);
 # insert large data failed
@@ -145,7 +145,7 @@ reset search_path;
 2. Set/update/delete role quota limit using diskquota.set_role_quota
 ```
 create role u1 nologin;
-create table b (i int);
+create table b (i int) DISTRIBUTED BY (i);
 alter table b owner to u1;
 select diskquota.set_role_quota('u1', '1 MB');
 
@@ -214,9 +214,9 @@ and do enfocement accordingly in later queries.
 ```
 # suppose quota of schema s1 is 1MB.
 set search_path to s1;
-create table b;
+create table b (i int) DISTRIBUTED BY (i);
 BEGIN;
-create table a;
+create table a (i int) DISTRIBUTED BY (i);
 # Issue: quota enforcement doesn't work on table a
 insert into a select generate_series(1,200000);
 # quota enforcement works on table b

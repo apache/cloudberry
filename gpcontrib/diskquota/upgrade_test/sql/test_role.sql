@@ -5,9 +5,9 @@
 -- 
 -- CREATE ROLE u1 NOLOGIN;
 -- CREATE ROLE u2 NOLOGIN;
--- CREATE TABLE b (t TEXT);
+-- CREATE TABLE b (t TEXT) DISTRIBUTED BY (i);
 -- ALTER TABLE b OWNER TO u1;
--- CREATE TABLE b2 (t TEXT);
+-- CREATE TABLE b2 (t TEXT) DISTRIBUTED BY (i);
 -- ALTER TABLE b2 OWNER TO u1;
 -- 
 -- SELECT diskquota.set_role_quota('u1', '1 MB');
