@@ -1,0 +1,56 @@
+#@ load("base.lib.yml", "add_res_by_name")
+
+#! PR trigger. For pull request pipelines
+#@ def pr_trigger(res_map):
+#@   add_res_by_name(res_map, "diskquota_pr")
+plan:
+  get: diskquota_src
+  resource: diskquota_pr
+  params:
+    fetch_tags: true
+  trigger: true
+on_failure:
+  put: diskquota_pr
+  params:
+    path: diskquota_src
+    status: failure
+on_error:
+  put: diskquota_pr
+  params:
+    path: diskquota_src
+    status: failure
+on_success:
+   put: diskquota_pr
+   params:
+     path: diskquota_src
+     status: success
+#@ end
+
+#! Commit trigger. For master pipelines
+#@ def commit_trigger(res_map):
+#@   add_res_by_name(res_map, "diskquota_commit")
+plan:
+  get: diskquota_src
+  resource: diskquota_commit
+  trigger: true
+#! To set the github commit status, https://github.com/Pix4D/cogito is a good choice.
+#! Unfortunately it doesn't work with Concourse 5.
+on_success:
+on_failure:
+on_error:
+#@ end
+
+#! Commit trigger. For dev pipelines. No webhook
+#@ def commit_dev_trigger(res_map):
+#@   add_res_by_name(res_map, "diskquota_commit_dev")
+plan:
+  get: diskquota_src
+  resource: diskquota_commit_dev
+  trigger: true
+#! To set the github commit status, https://github.com/Pix4D/cogito is a good choice.
+#! Unfortunately it doesn't work with Concourse 5.
+on_success:
+on_failure:
+on_error:
+#@ end
+
