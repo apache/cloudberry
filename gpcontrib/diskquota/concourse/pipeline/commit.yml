@@ -1,0 +1,29 @@
+#@ load("job_def.lib.yml",
+#@   "build_test_job",
+#@   "centos6_gpdb6_conf",
+#@   "centos7_gpdb6_conf",
+#@   "rhel8_gpdb6_conf",
+#@   "ubuntu18_gpdb6_conf")
+#@ load("trigger_def.lib.yml",
+#@   "commit_trigger",
+#@ )
+#@
+#@ load("base.lib.yml", "declare_res", "declare_res_type")
+#@ res_map = {}
+#@ res_type_map = {}
+#@ job_param = {
+#@   "res_map": res_map,
+#@   "trigger": commit_trigger(res_map),
+#@   "gpdb_src": "gpdb6_src",
+#@   "confs": [
+#@     centos6_gpdb6_conf(),
+#@     centos7_gpdb6_conf(),
+#@     rhel8_gpdb6_conf(),
+#@     ubuntu18_gpdb6_conf()]
+#@ }
+jobs:
+- #@ build_test_job(job_param)
+
+resources: #@ declare_res(res_type_map, res_map)
+
+resource_types: #@ declare_res_type(res_type_map)

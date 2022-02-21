@@ -1,0 +1,129 @@
+resource_types:
+- name: gcs
+  type: registry-image
+  check_every: 1h
+  source:
+    repository: frodenas/gcs-resource
+
+- name: pull-request
+  type: docker-image
+  check_every: 1h
+  source:
+    repository: teliaoss/github-pr-resource
+
+resources:
+# Pull Request
+- name: diskquota_pr
+  type: pull-request
+  # We should rely on the webhook. See README if webhook doesn't work
+  webhook_token: ((diskquota-webhook-token))
+  check_every: 24h
+  source:
+    disable_forks: false
+    repository: greenplum-db/diskquota
+    access_token: ((github-access-token))
+    base_branch: gpdb
+# Commit trigger
+- name: diskquota_commit
+  type: git
+  # We should rely on the webhook. See README if webhook doesn't work
+  webhook_token: ((diskquota-webhook-token))
+  check_every: 24h
+  source:
+    branch: ((diskquota-branch))
+    uri: https://github.com/greenplum-db/diskquota.git
+    username: ((github-access-token))
+    password: x-oauth-basic
+# Commit dev trigger. Not using webhook
+- name: diskquota_commit_dev
+  type: git
+  check_every: 1m
+  source:
+    branch: ((diskquota-branch))
+    uri: https://github.com/greenplum-db/diskquota.git
+    username: ((github-access-token))
+    password: x-oauth-basic
+
+
+# Greenplum sources
+- name: gpdb6_src
+  type: git
+  source:
+    branch: 6X_STABLE
+    uri: https://github.com/greenplum-db/gpdb.git
+
+# Image Resources
+# centos6
+- name: centos6-gpdb6-image-build
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb6-centos6-build
+    tag: latest
+- name: centos6-gpdb6-image-test
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb6-centos6-test
+    tag: latest
+# centos7
+- name: centos7-gpdb6-image-build
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb6-centos7-build
+    tag: latest
+- name: centos7-gpdb6-image-test
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb6-centos7-test
+    tag: latest
+# rhel8
+- name: rhel8-gpdb6-image-build
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-private-images/gpdb6-rhel8-build
+    tag: latest
+    username: _json_key
+    password: ((container-registry-readonly-service-account-key))
+- name: rhel8-gpdb6-image-test
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-private-images/gpdb6-rhel8-test
+    tag: latest
+    username: _json_key
+    password: ((container-registry-readonly-service-account-key))
+# Ubuntu18
+- name: ubuntu18-gpdb6-image-build
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-build
+    tag: latest
+- name: ubuntu18-gpdb6-image-test
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
+    tag: latest
+
+#! gpdb binary on gcs is located as different folder for different version
+- name: bin_gpdb6_centos6
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: 6X_STABLE/bin_gpdb_centos6/bin_gpdb.tar.gz
+- name: bin_gpdb6_centos7
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: 6X_STABLE/bin_gpdb_centos7/bin_gpdb.tar.gz
+- name: bin_gpdb6_ubuntu18
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: 6X_STABLE/bin_gpdb_ubuntu18.04/bin_gpdb.tar.gz
+- name: bin_gpdb6_rhel8
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: 6X_STABLE/bin_gpdb_rhel8/bin_gpdb.tar.gz
