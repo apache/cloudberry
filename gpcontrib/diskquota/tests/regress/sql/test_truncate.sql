@@ -2,8 +2,8 @@
 CREATE SCHEMA s7;
 SELECT diskquota.set_schema_quota('s7', '1 MB');
 SET search_path TO s7;
-CREATE TABLE a (i int);
-CREATE TABLE b (i int);
+CREATE TABLE a (i int) DISTRIBUTED BY (i);
+CREATE TABLE b (i int) DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,100000);
 SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail

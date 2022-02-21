@@ -6,7 +6,7 @@
 CREATE SCHEMA diskquota;
 
 -- Configuration table
-CREATE TABLE diskquota.quota_config (targetOid oid, quotatype int, quotalimitMB int8, segratio float4 DEFAULT -1, PRIMARY KEY(targetOid, quotatype));
+CREATE TABLE diskquota.quota_config (targetOid oid, quotatype int, quotalimitMB int8, segratio float4 DEFAULT -1, PRIMARY KEY(targetOid, quotatype)) DISTRIBUTED BY (targetOid, quotatype);
 
 CREATE TABLE diskquota.target (
         quotatype int, --REFERENCES disquota.quota_config.quotatype,
@@ -62,9 +62,9 @@ LANGUAGE C;
 CREATE VIEW diskquota.blackmap AS
   SELECT * FROM diskquota.show_blackmap() AS BM;
 
-CREATE TABLE diskquota.table_size (tableid oid, size bigint, segid smallint, PRIMARY KEY(tableid, segid));
+CREATE TABLE diskquota.table_size (tableid oid, size bigint, segid smallint, PRIMARY KEY(tableid, segid)) DISTRIBUTED BY (tableid, segid);
 
-CREATE TABLE diskquota.state (state int, PRIMARY KEY(state));
+CREATE TABLE diskquota.state (state int, PRIMARY KEY(state)) DISTRIBUTED BY (state);
 
 INSERT INTO diskquota.state SELECT (count(relname) = 0)::int  FROM pg_class AS c, pg_namespace AS n WHERE c.oid > 16384 and relnamespace = n.oid and nspname != 'diskquota';
 

@@ -4,7 +4,7 @@ CREATE ROLE u3temp NOLOGIN;
 SET search_path TO strole;
 
 SELECT diskquota.set_role_quota('u3temp', '1MB');
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 ALTER TABLE a OWNER TO u3temp;
 CREATE TEMP TABLE ta(i int);
 ALTER TABLE ta OWNER TO u3temp;

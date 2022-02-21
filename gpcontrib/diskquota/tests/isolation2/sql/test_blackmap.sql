@@ -283,7 +283,7 @@ LANGUAGE 'plpgsql';
 
 -- 7. Test that we are able to block an ordinary relation on seg0 by its relnamespace.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int);
+1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -308,7 +308,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 8. Test that we are able to block an ordinary relation on seg0 by its relowner.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int);
+1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -333,7 +333,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 9. Test that we are able to block an ordinary relation on seg0 by its relnamespace and reltablespace.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int);
+1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -358,7 +358,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 10. Test that we are able to block an ordinary relation on seg0 by its relowner and reltablespace.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int);
+1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -383,7 +383,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 11. Test that we are able to block an ordinary relation on seg0 by its relnamespace and reltablespace (segexceeded=true).
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int);
+1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -408,7 +408,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 12. Test that we are able to block an ordinary relation on seg0 by its relowner and reltablespace (segexceeded=true).
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int);
+1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -433,7 +433,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 13. Test that we are able to block a toast relation on seg0 by its namespace.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i text);
+1: CREATE TABLE blocked_t7(i text) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -460,7 +460,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 14. Test that we are able to block an appendonly relation on seg0 by its namespace.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int) WITH (appendonly=true);
+1: CREATE TABLE blocked_t7(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
@@ -487,7 +487,7 @@ SELECT diskquota.refresh_blackmap(
 
 -- 15. Test that we are able to block an appendonly (column oriented) relation on seg0 by its namespace.
 1: BEGIN;
-1: CREATE TABLE blocked_t7(i int) WITH (appendonly=true, orientation=column);
+1: CREATE TABLE blocked_t7(i int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
 -- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
 SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)

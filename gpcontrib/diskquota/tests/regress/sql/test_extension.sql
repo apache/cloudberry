@@ -24,7 +24,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -33,7 +33,7 @@ DROP TABLE SX.a;
 
 \c dbx1
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 INSERT INTO SX.a values(generate_series(0, 100000));
 CREATE EXTENSION diskquota;
 SELECT diskquota.init_table_size_table();
@@ -48,7 +48,7 @@ CREATE EXTENSION diskquota;
 SELECT diskquota.wait_for_worker_new_epoch();
 \! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -60,7 +60,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -72,7 +72,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -84,7 +84,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -96,7 +96,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -108,7 +108,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -120,7 +120,7 @@ CREATE EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 SELECT diskquota.wait_for_worker_new_epoch();
 CREATE SCHEMA SX;
-CREATE TABLE SX.a(i int);
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
 SELECT diskquota.set_schema_quota('SX', '1MB');
 INSERT INTO SX.a values(generate_series(0, 100000));
 SELECT diskquota.wait_for_worker_new_epoch();

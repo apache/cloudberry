@@ -14,7 +14,7 @@ SELECT pg_table_size('t1');
         688128
 (1 row)
 
-CREATE TABLE t2(i int);
+CREATE TABLE t2(i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t2 SELECT generate_series(1, 10000);
@@ -66,7 +66,7 @@ SELECT pg_table_size('t2');
 
 DROP TABLE t1, t2;
 DROP TABLESPACE test_spc;
-CREATE TABLE ao (i int) WITH (appendonly=true);
+CREATE TABLE ao (i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO ao SELECT generate_series(1, 10000);
@@ -83,7 +83,7 @@ SELECT pg_relation_size('ao');
 (1 row)
 
 DROP TABLE ao;
-CREATE TABLE aocs (i int, t text) WITH (appendonly=true,  orientation=column);
+CREATE TABLE aocs (i int, t text) WITH (appendonly=true,  orientation=column) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO aocs SELECT i, repeat('a', 1000) FROM generate_series(1, 10000) AS i;

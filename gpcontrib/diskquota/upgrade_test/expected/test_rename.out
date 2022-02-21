@@ -2,7 +2,7 @@
 -- CREATE SCHEMA srs1;
 -- SELECT diskquota.set_schema_quota('srs1', '1 MB');
 set search_path to srs1;
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- expect insert fail
@@ -34,7 +34,7 @@ DROP SCHEMA srs2;
 -- CREATE ROLE srerole NOLOGIN;
 -- SELECT diskquota.set_role_quota('srerole', '1MB');
 SET search_path TO srr1;
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE a OWNER TO srerole;

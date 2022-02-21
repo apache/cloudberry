@@ -11,7 +11,7 @@ DROP ROLE IF EXISTS rolespc_persegu1;
 DROP ROLE IF EXISTS rolespc_persegu2;
 CREATE ROLE rolespc_persegu1 NOLOGIN;
 CREATE ROLE rolespc_persegu2 NOLOGIN;
-CREATE TABLE b (t TEXT) TABLESPACE rolespc_perseg;
+CREATE TABLE b (t TEXT) TABLESPACE rolespc_perseg DISTRIBUTED BY (t);
 ALTER TABLE b OWNER TO rolespc_persegu1;
 
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '1 MB');

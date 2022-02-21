@@ -7,7 +7,7 @@ DROP TABLESPACE  IF EXISTS schemaspc;
 CREATE TABLESPACE schemaspc LOCATION '/tmp/schemaspc';
 SET search_path TO spcs1;
 
-CREATE TABLE a(i int) TABLESPACE schemaspc;
+CREATE TABLE a(i int) TABLESPACE schemaspc DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000);
@@ -16,7 +16,7 @@ SELECT diskquota.set_schema_tablespace_quota('spcs1', 'schemaspc','1 MB');
 SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-CREATE TABLE a2(i int) TABLESPACE schemaspc;
+CREATE TABLE a2(i int) TABLESPACE schemaspc DISTRIBUTED BY (i);
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,100);
 

@@ -7,10 +7,10 @@ SELECT diskquota.set_schema_quota('sdrtbl', '1 MB');
 (1 row)
 
 SET search_path TO sdrtbl;
-CREATE TABLE a(i INT);
+CREATE TABLE a(i INT) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-CREATE TABLE a2(i INT);
+CREATE TABLE a2(i INT) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO a SELECT generate_series(1,100);

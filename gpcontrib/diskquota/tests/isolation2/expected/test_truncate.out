@@ -1,7 +1,7 @@
 -- Test various race conditions for TRUNCATE.
 
 -- Case 1: Pulling active table before swapping relfilenode
-CREATE TABLE dummy_t1(i int);
+CREATE TABLE dummy_t1(i int) DISTRIBUTED BY (i);
 CREATE
 INSERT INTO dummy_t1 SELECT generate_series(1, 1000);
 INSERT 1000

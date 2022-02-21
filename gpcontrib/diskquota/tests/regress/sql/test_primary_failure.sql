@@ -27,7 +27,7 @@ returns text as $$
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
 $$ language plpythonu;
 
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,100);
 INSERT INTO a SELECT generate_series(1,100000);
 SELECT diskquota.wait_for_worker_new_epoch();

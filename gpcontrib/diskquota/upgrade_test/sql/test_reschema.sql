@@ -2,7 +2,7 @@
 -- CREATE SCHEMA srE;
 -- SELECT diskquota.set_schema_quota('srE', '1 MB');
 SET search_path TO srE;
-CREATE TABLE a(i int);
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000);
 SELECT pg_sleep(5);

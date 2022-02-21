@@ -2,8 +2,8 @@
 CREATE SCHEMA s_appendonly;
 SET search_path TO s_appendonly;
 
-CREATE TABLE t_ao(i int) WITH (appendonly=true);
-CREATE TABLE t_aoco(i int) WITH (appendonly=true, orientation=column);
+CREATE TABLE t_ao(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
+CREATE TABLE t_aoco(i int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 -- Create an index on t_ao so that there will be pg_aoblkdir_XXX relations.
 CREATE INDEX index_t ON t_ao(i);
 CREATE INDEX index_t2 ON t_aoco(i);

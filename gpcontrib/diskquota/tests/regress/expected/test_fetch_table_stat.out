@@ -2,7 +2,7 @@
 -- 1. Test that when an error occurs in diskquota_fetch_table_stat
 --    the error message is preserved for us to debug.
 --
-CREATE TABLE t_error_handling (i int);
+CREATE TABLE t_error_handling (i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Inject an error to a segment server, since this UDF is only called on segments.

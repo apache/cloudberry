@@ -15,7 +15,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 -- heap table
-CREATE TABLE t1 AS SELECT generate_series(1,1000000); -- expect fail
+CREATE TABLE t1 (i) AS SELECT generate_series(1,1000000) DISTRIBUTED BY (i); -- expect fail
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  schema's disk space quota exceeded with name:110528  (seg1 127.0.0.1:6003 pid=73892)
@@ -25,7 +25,7 @@ SELECT diskquota.pause();
  
 (1 row)
 
-CREATE TABLE t1 AS SELECT generate_series(1,1000000); -- expect succeed
+CREATE TABLE t1 (i) AS SELECT generate_series(1,1000000) DISTRIBUTED BY (i); -- expect succeed
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- disable hardlimit and do some clean-ups.

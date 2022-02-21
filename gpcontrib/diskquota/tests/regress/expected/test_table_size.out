@@ -1,5 +1,5 @@
 -- Test tablesize table
-create table a(i text);
+create table a(i text) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into a select * from generate_series(1,10000);
@@ -9,7 +9,7 @@ select pg_sleep(2);
  
 (1 row)
 
-create table buffer(oid oid, relname name, size bigint);
+create table buffer(oid oid, relname name, size bigint) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'oid' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into buffer select oid, relname, sum(pg_table_size(oid)) from gp_dist_random('pg_class') where oid > 16384 and (relkind='r' or relkind='m') and relname = 'a' group by oid, relname;

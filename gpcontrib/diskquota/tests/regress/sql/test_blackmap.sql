@@ -60,7 +60,7 @@ LANGUAGE 'plpgsql';
 -- 1. Create an ordinary table and add its oid to blackmap on seg0.
 --    Check that it's relfilenode is blocked on seg0 by variouts conditions.
 --
-CREATE TABLE blocked_t1(i int);
+CREATE TABLE blocked_t1(i int) DISTRIBUTED BY (i);
 
 -- Insert an entry for blocked_t1 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'NAMESPACE'::text);
@@ -111,7 +111,7 @@ SELECT rel.relname, be.target_type,
 -- 2. Test that the relfilenodes of toast relation together with its
 --    index are blocked on seg0.
 --
-CREATE TABLE blocked_t2(i text);
+CREATE TABLE blocked_t2(i text) DISTRIBUTED BY (i);
 -- Insert an entry for blocked_t2 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t2'::regclass, 'NAMESPACE'::text);
 
@@ -129,7 +129,7 @@ SELECT replace_oid_with_relname(rel.relname),
 -- 3. Test that the relfilenodes of appendonly relation (row oriented) together with its
 --    auxiliary relations are blocked on seg0.
 --
-CREATE TABLE blocked_t3(i int) WITH (appendonly=true);
+CREATE TABLE blocked_t3(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t3_index ON blocked_t3(i);
 -- Insert an entry for blocked_t3 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t3'::regclass, 'NAMESPACE'::text);
@@ -148,7 +148,7 @@ SELECT replace_oid_with_relname(rel.relname),
 -- 4. Test that the relfilenodes of appendonly relation (column oriented) together with its
 --    auxiliary relations are blocked on seg0.
 --
-CREATE TABLE blocked_t4(i int) WITH (appendonly=true, orientation=column);
+CREATE TABLE blocked_t4(i int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t4_index ON blocked_t4(i);
 -- Insert an entry for blocked_t4 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t4'::regclass, 'NAMESPACE'::text);
@@ -167,7 +167,7 @@ SELECT replace_oid_with_relname(rel.relname),
 -- 5. Test that the relfilenodes of toast appendonly relation (row oriented) together with its
 --    auxiliary relations are blocked on seg0.
 --
-CREATE TABLE blocked_t5(i text) WITH (appendonly=true, orientation=column);
+CREATE TABLE blocked_t5(i text) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t5_index ON blocked_t5(i);
 -- Insert an entry for blocked_t5 to blackmap on seg0.
 SELECT block_relation_on_seg0('blocked_t5'::regclass, 'NAMESPACE'::text);
