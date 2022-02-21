@@ -41,6 +41,8 @@ PG_MODULE_MAGIC;
 #define DISKQUOTA_DB	"diskquota"
 #define DISKQUOTA_APPLICATION_NAME  "gp_reserved_gpdiskquota"
 
+extern int usleep(useconds_t usec); // in <unistd.h>
+
 /* flags set by signal handlers */
 static volatile sig_atomic_t got_sighup = false;
 static volatile sig_atomic_t got_sigterm = false;
@@ -335,6 +337,10 @@ disk_quota_worker_main(Datum main_arg)
 					   diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
 
+		// be nice to scheduler when naptime == 0 and diskquota_is_paused() == true
+		if (!diskquota_naptime)
+			usleep(1);
+
 		/* Emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
 			proc_exit(1);
@@ -377,6 +383,10 @@ disk_quota_worker_main(Datum main_arg)
 					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 					   diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
+
+		// be nice to scheduler when naptime == 0 and diskquota_is_paused() == true
+		if (!diskquota_naptime)
+			usleep(1);
 
 		/* Emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
@@ -480,6 +490,10 @@ disk_quota_launcher_main(Datum main_arg)
 					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 					   diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
+
+		// wait at least one time slice, avoid 100% CPU usage
+		if (!diskquota_naptime)
+			usleep(1);
 
 		/* Emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
