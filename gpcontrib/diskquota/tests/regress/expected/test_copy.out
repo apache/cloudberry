@@ -8,7 +8,7 @@ SELECT diskquota.set_schema_quota('s3', '1 MB');
 
 SET search_path TO s3;
 \! seq 100 > /tmp/csmall.txt
-CREATE TABLE c (i int);
+CREATE TABLE c (i int) DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY c FROM '/tmp/csmall.txt';

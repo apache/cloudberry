@@ -9,7 +9,7 @@ CREATE TABLESPACE schemaspc_perseg LOCATION '/tmp/schemaspc_perseg';
 SELECT diskquota.set_schema_tablespace_quota('spcs1_perseg', 'schemaspc_perseg','1 MB');
 SET search_path TO spcs1_perseg;
 
-CREATE TABLE a(i int) TABLESPACE schemaspc_perseg;
+CREATE TABLE a(i int) TABLESPACE schemaspc_perseg DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert success
 INSERT INTO a SELECT generate_series(1,100000);

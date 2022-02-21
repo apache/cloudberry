@@ -4,7 +4,7 @@ SELECT diskquota.set_schema_quota('scolumn', '1 MB');
 SET search_path TO scolumn;
 SELECT diskquota.wait_for_worker_new_epoch();
 
-CREATE TABLE a2(i INT);
+CREATE TABLE a2(i INT) DISTRIBUTED BY (i);
 -- expect fail
 INSERT INTO a2 SELECT generate_series(1,100000);
 SELECT diskquota.wait_for_worker_new_epoch();

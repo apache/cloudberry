@@ -7,7 +7,7 @@ SELECT diskquota.set_schema_quota('s5', '1 MB');
 (1 row)
 
 SET search_path TO s5;
-CREATE TABLE a5 (message text);
+CREATE TABLE a5 (t text) DISTRIBUTED BY (t);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'message' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO a5
