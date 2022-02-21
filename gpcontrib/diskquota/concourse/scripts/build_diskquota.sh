@@ -20,33 +20,14 @@ function pkg() {
     pushd /usr/local/greenplum-db-devel/
     echo 'cp -r lib share $GPHOME || exit 1'> install_gpdb_component
     chmod a+x install_gpdb_component
-    install_files=( \
+    tar -czf "$TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-${DISKQUOTA_OS}_x86_64.tar.gz" \
         "lib/postgresql/diskquota.so" \
         "share/postgresql/extension/diskquota.control" \
         "share/postgresql/extension/diskquota--1.0.sql" \
         "share/postgresql/extension/diskquota--2.0.sql" \
         "share/postgresql/extension/diskquota--1.0--2.0.sql" \
         "share/postgresql/extension/diskquota--2.0--1.0.sql" \
-        "install_gpdb_component")
-    case "$DISKQUOTA_OS" in
-    rhel6)
-        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel6_x86_64.tar.gz \
-            "${install_files[@]}"
-      ;;
-    rhel7)
-        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel7_x86_64.tar.gz \
-            "${install_files[@]}"
-      ;;
-    rhel8)
-        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-rhel8_x86_64.tar.gz \
-            "${install_files[@]}"
-      ;;
-    ubuntu18.04)
-        tar -czf $TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-ubuntu18.04_x86_64.tar.gz \
-            "${install_files[@]}"
-      ;;
-    *) echo "Unknown OS: $DISKQUOTA_OS"; exit 1 ;;
-    esac
+        "install_gpdb_component"
     popd
 }
 
