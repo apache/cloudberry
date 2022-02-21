@@ -1,0 +1,43 @@
+--start_ignore
+CREATE DATABASE test_db_cache;
+--end_ignore
+\c test_db_cache
+CREATE EXTENSION diskquota;
+CREATE TABLE t(i) AS SELECT generate_series(1, 100000)
+DISTRIBUTED BY (i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid
+FROM diskquota.table_size
+WHERE tableid = 't'::regclass
+ORDER BY segid;
+ tableid |  size   | segid 
+---------+---------+-------
+ t       | 3637248 |    -1
+ t       | 1212416 |     0
+ t       | 1212416 |     1
+ t       | 1212416 |     2
+(4 rows)
+
+DROP EXTENSION diskquota;
+-- Create table without extension
+CREATE TABLE t_no_extension(i) AS SELECT generate_series(1, 100000)
+DISTRIBUTED BY (i);
+CREATE EXTENSION diskquota;
+WARNING:  database is not empty, please run `select diskquota.init_table_size_table()` to initialize table_size information for diskquota extension. Note that for large database, this function may take a long time.
+-- Should find nothing since t_no_extension is not recorded.
+SELECT diskquota.diskquota_fetch_table_stat(0, ARRAY[]::oid[])
+FROM gp_dist_random('gp_id');
+ diskquota_fetch_table_stat 
+----------------------------
+(0 rows)
+
+DROP TABLE t;
+DROP TABLE t_no_extension;
+DROP EXTENSION diskquota;
+\c contrib_regression
+DROP DATABASE test_db_cache;
