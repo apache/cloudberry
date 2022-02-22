@@ -43,11 +43,6 @@ RETURNS void STRICT
 AS 'MODULE_PATHNAME'
 LANGUAGE C;
 
-CREATE FUNCTION diskquota.update_diskquota_db_list(oid, int4)
-RETURNS void STRICT
-AS 'MODULE_PATHNAME'
-LANGUAGE C;
-
 CREATE TYPE diskquota.blackmap_entry AS
   (target_oid oid, database_oid oid, tablespace_oid oid, target_type integer, seg_exceeded boolean);
 CREATE FUNCTION diskquota.refresh_blackmap(diskquota.blackmap_entry[], oid[])
