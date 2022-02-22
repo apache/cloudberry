@@ -1,0 +1,40 @@
+---
+BasedOnStyle: Google
+
+# How much whitespace?
+UseTab: ForIndentation
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 8
+
+SpacesBeforeTrailingComments: 1
+
+# Line things up
+AccessModifierOffset: -4  # outdent `public:`, etc
+
+DerivePointerAlignment: false
+PointerAlignment: Right   # char *foo, char &bar
+
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+
+# Braces
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterStruct: true
+  AfterClass: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterControlStatement: true
+  AfterNamespace: false
+  AfterExternBlock: false
+  BeforeCatch: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+
+# Put "postgres.h" and "postgres_undefs.h" first in a group of includes.
+IncludeCategories:
+- Regex: '"postgres(_undefs)?.h"'
+  Priority: 1
