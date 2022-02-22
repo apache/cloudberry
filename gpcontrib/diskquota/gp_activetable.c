@@ -348,22 +348,11 @@ gp_fetch_active_tables(bool is_init)
 
 /*
  * Function to get the table size from each segments
- * There are 4 modes:
- * 
- * - FETCH_ACTIVE_OID: gather active table oid from all the segments, since 
- * table may only be modified on a subset of the segments, we need to firstly
- * gather the active table oid list from all the segments.
- * 
- * - FETCH_ACTIVE_SIZE: calculate the active table size based on the active
- * table oid list.
- * 
- * - ADD_DB_TO_MONITOR: add MyDatabaseId to the monitored db cache so that 
- * active tables in the current database will be recorded. This is used each
- * time a worker starts.
- * 
- * - REMOVE_DB_FROM_BEING_MONITORED: remove MyDatabaseId from the monitored 
- * db cache so that active tables in the current database will be recorded. 
- * This is used when DROP EXTENSION. 
+ * There are three mode:
+ * 1. gather active table oid from all the segments, since table may only
+ * be modified on a subset of the segments, we need to firstly gather the
+ * active table oid list from all the segments.
+ * 2. calculate the active table size based on the active table oid list.
  */
 Datum
 diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
@@ -411,12 +400,6 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 			case FETCH_ACTIVE_SIZE:
 				localCacheTable = get_active_tables_stats(PG_GETARG_ARRAYTYPE_P(1));
 				break;
-			case ADD_DB_TO_MONITOR:
-				update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
-				break;
-			case REMOVE_DB_FROM_BEING_MONITORED:
-				update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
-				break;
 			default:
 				ereport(ERROR, (errmsg("Unused mode number, transaction will be aborted")));
 				break;
@@ -427,7 +410,7 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 		 * total number of active tables to be returned, each tuple contains
 		 * one active table stat
 		 */
-		funcctx->max_calls = localCacheTable ? (uint32) hash_get_num_entries(localCacheTable) : 0;
+		funcctx->max_calls = (uint32) hash_get_num_entries(localCacheTable);
 
 		/*
 		 * prepare attribute metadata for next calls that generate the tuple
