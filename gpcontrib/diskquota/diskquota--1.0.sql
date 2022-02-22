@@ -21,6 +21,11 @@ RETURNS void STRICT
 AS 'MODULE_PATHNAME'
 LANGUAGE C;
 
+CREATE FUNCTION diskquota.update_diskquota_db_list(oid, int4)
+RETURNS void STRICT
+AS 'MODULE_PATHNAME'
+LANGUAGE C;
+
 CREATE TABLE diskquota.table_size (tableid oid, size bigint, PRIMARY KEY(tableid));
 
 CREATE TABLE diskquota.state (state int, PRIMARY KEY(state)) DISTRIBUTED BY (state);
