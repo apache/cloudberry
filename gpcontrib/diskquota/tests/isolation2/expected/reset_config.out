@@ -1,0 +1,10 @@
+!\retcode gpconfig -c diskquota.naptime -v 10;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+1: SHOW diskquota.naptime;
+ diskquota.naptime 
+-------------------
+ 10                
+(1 row)
