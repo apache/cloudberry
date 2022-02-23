@@ -6,3 +6,4 @@ test: test_vacuum
 test: test_truncate
 test: test_worker_timeout
 test: test_drop_extension
+test: reset_config
