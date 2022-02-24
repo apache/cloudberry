@@ -3,12 +3,16 @@
 #! PR trigger. For pull request pipelines
 #@ def pr_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_pr")
-plan:
-  get: diskquota_src
+plans:
+- get: diskquota_src
   resource: diskquota_pr
   params:
     fetch_tags: true
   trigger: true
+- put: diskquota_pr
+  params:
+    path: diskquota_src
+    status: pending
 on_failure:
   put: diskquota_pr
   params:
@@ -29,8 +33,8 @@ on_success:
 #! Commit trigger. For master pipelines
 #@ def commit_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_commit")
-plan:
-  get: diskquota_src
+plans:
+- get: diskquota_src
   resource: diskquota_commit
   trigger: true
 #! To set the github commit status, https://github.com/Pix4D/cogito is a good choice.
@@ -43,8 +47,8 @@ on_error:
 #! Commit trigger. For dev pipelines. No webhook
 #@ def commit_dev_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_commit_dev")
-plan:
-  get: diskquota_src
+plans:
+- get: diskquota_src
   resource: diskquota_commit_dev
   trigger: true
 #! To set the github commit status, https://github.com/Pix4D/cogito is a good choice.
