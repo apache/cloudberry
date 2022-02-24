@@ -12,15 +12,20 @@ SELECT diskquota.relation_size('t_dropped');
 
 -- Inject 'suspension' to servers.
 SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'suspend', dbid)
-  FROM gp_segment_configuration WHERE role='p';
+  FROM gp_segment_configuration WHERE role='p' AND content>=0;
 
 -- Session 1 will hang before applying stat(2) to the physical file.
 1&: SELECT diskquota.relation_size('t_dropped');
+-- Wait until the fault is triggered to avoid the following race condition:
+-- The 't_dropped' table is dropped before evaluating "SELECT diskquota.relation_size('t_dropped')"
+-- and the query will fail with 'ERROR: relation "t_dropped" does not exist'
+SELECT gp_wait_until_triggered_fault('diskquota_before_stat_relfilenode', 1, dbid)
+  FROM gp_segment_configuration WHERE role='p' AND content>=0;
 -- Drop the table.
 DROP TABLE t_dropped;
 -- Remove the injected 'suspension'.
 SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role='p';
+  FROM gp_segment_configuration WHERE role='p' AND content>=0;
 -- Session 1 will continue and returns 0.
 1<:
 
