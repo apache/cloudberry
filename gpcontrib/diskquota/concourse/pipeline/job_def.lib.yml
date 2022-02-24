@@ -70,7 +70,9 @@ on_success: #@ trigger["on_success"]
 on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
-- #@ trigger["plan"]
+#@   for trigger_plan in trigger["plans"]:
+- #@ trigger_plan
+#@   end
 - in_parallel:
   - get: gpdb_src
     resource: #@ param["gpdb_src"]
