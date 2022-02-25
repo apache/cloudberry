@@ -446,7 +446,7 @@ get_relation_entry_from_pg_class(Oid relid, DiskQuotaRelationCacheEntry* relatio
 	relation_entry->namespaceoid = classForm->relnamespace;
 	relation_entry->relstorage = classForm->relstorage;
 	relation_entry->rnode.node.spcNode = OidIsValid(classForm->reltablespace) ? 
-										 classForm->reltablespace : DEFAULTTABLESPACE_OID;
+										 classForm->reltablespace : MyDatabaseTableSpace;
 	relation_entry->rnode.node.dbNode = MyDatabaseId;
 	relation_entry->rnode.node.relNode = classForm->relfilenode;
 	relation_entry->rnode.backend = classForm->relpersistence == RELPERSISTENCE_TEMP ? 
@@ -537,7 +537,7 @@ get_relfilenode_by_relid(Oid relid, RelFileNodeBackend *rnode, char *relstorage)
 	{
 		classForm = (Form_pg_class) GETSTRUCT(classTup);
 		rnode->node.spcNode = OidIsValid(classForm->reltablespace) ? 
-							  classForm->reltablespace : DEFAULTTABLESPACE_OID;
+							  classForm->reltablespace : MyDatabaseTableSpace;
 		rnode->node.dbNode = MyDatabaseId;
 		rnode->node.relNode = classForm->relfilenode;
 		rnode->backend = classForm->relpersistence == RELPERSISTENCE_TEMP ? 
