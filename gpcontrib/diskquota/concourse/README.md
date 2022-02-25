@@ -63,3 +63,11 @@ To test if the webhook works, use `curl` to send a `POST` request to the hook UR
 ```
 curl --data-raw "foo" <hook_url>
 ```
+
+# FAQ
+
+## PR pipeline is not triggered.
+
+The PR pipeline relies on the webhook to detect the new PR. However, due the the limitation of the webhook implemention of concourse, we rely on the push hook for this. It means if the PR is from a forked repo, the PR pipeline won't be triggered immediately. To manually trigger the pipeline, go to https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/PR:diskquota/resources/diskquota_pr and click ⟳ button there.
+
+TIPS: Just don't fork, name your branch as `<your_id>/<branch_name>` and push it here to create PR.
