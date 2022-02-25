@@ -8,9 +8,7 @@ CREATE TABLESPACE rolespc LOCATION '/tmp/rolespc';
 CREATE SCHEMA rolespcrole;
 SET search_path TO rolespcrole;
 DROP ROLE IF EXISTS rolespcu1;
-NOTICE:  role "rolespcu1" does not exist, skipping
 DROP ROLE IF EXISTS rolespcu2;
-NOTICE:  role "rolespcu2" does not exist, skipping
 CREATE ROLE rolespcu1 NOLOGIN;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE rolespcu2 NOLOGIN;
@@ -52,7 +50,7 @@ ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
 -- expect insert fail
 INSERT INTO b2 SELECT generate_series(1,100);
 ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
--- Test show_fast_schema_tablespace_quota_view
+-- Test show_fast_role_tablespace_quota_view
 SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view WHERE role_name = 'rolespcu1' and tablespace_name = 'rolespc';
  role_name | tablespace_name | quota_in_mb | rolsize_tablespace_in_bytes 
 -----------+-----------------+-------------+-----------------------------
