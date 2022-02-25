@@ -39,6 +39,7 @@ CREATE EXTENSION diskquota;
 SELECT diskquota.init_table_size_table();
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT diskquota.set_schema_quota('SX', '1MB');
+SELECT diskquota.wait_for_worker_new_epoch();
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 INSERT INTO SX.a values(generate_series(0, 10));
 DROP TABLE SX.a;
