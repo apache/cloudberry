@@ -41,6 +41,7 @@ PG_MODULE_MAGIC;
 #define DISKQUOTA_DB	"diskquota"
 #define DISKQUOTA_APPLICATION_NAME  "gp_reserved_gpdiskquota"
 
+#include <unistd.h> // for useconds_t
 extern int usleep(useconds_t usec); // in <unistd.h>
 
 /* flags set by signal handlers */
