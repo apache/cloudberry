@@ -1,0 +1,79 @@
+cmake_minimum_required(VERSION 3.13)
+project(diskquota)
+
+# generate 'compile_commands.json'
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Gpdb.cmake)
+
+# set include directories for all sub-projects
+include_directories(${PG_INCLUDE_DIR_SERVER})
+include_directories(${PG_INCLUDE_DIR}) # for libpq
+# set link flags for all sub-projects
+set(CMAKE_SHARED_LINKER_FLAGS "${PG_LD_FLAGS}")
+# set c and ld flags for all projects
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PG_C_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "${CMAKE_EXE_LINKER_FLAGS} ${PG_LD_FLAGS}")
+
+# generate version
+if(NOT DEFINED DISKQUOTA_VERSION)
+  file(STRINGS VERSION DISKQUOTA_VERSION)
+endif()
+
+string(REGEX REPLACE "^([0-9]+).[0-9]+.[0-9]+$" "\\1" DISKQUOTA_MAJOR_VERSION
+                     ${DISKQUOTA_VERSION})
+string(REGEX REPLACE "^[0-9]+.([0-9]+).[0-9]+$" "\\1" DISKQUOTA_MINOR_VERSION
+                     ${DISKQUOTA_VERSION})
+string(REGEX REPLACE "^[0-9]+.[0-9]+.([0-9]+)$" "\\1" DISKQUOTA_PATCH_VERSION
+                     ${DISKQUOTA_VERSION})
+
+set(CMAKE_C_FLAGS
+    "${CMAKE_C_FLAGS} \
+	-DDISKQUOTA_VERSION=\"${DISKQUOTA_VERSION}\" \
+	-DDISKQUOTA_MAJOR_VERSION=\"${DISKQUOTA_MAJOR_VERSION}\" \
+	-DDISKQUOTA_MINOR_VERSION=\"${DISKQUOTA_MINOR_VERSION}\" \
+	-DDISKQUOTA_PATCH_VERSION=\"${DISKQUOTA_PATCH_VERSION}\"")
+
+if("${DISKQUOTA_MAJOR_VERSION}.${DISKQUOTA_MINOR_VERSION}" STREQUAL "1.0")
+  # in special, version 1.0.x do not has suffix
+  set(DISKQUOTA_BINARY_NAME "diskquota")
+else()
+  set(DISKQUOTA_BINARY_NAME
+      "diskquota-${DISKQUOTA_MAJOR_VERSION}.${DISKQUOTA_MINOR_VERSION}")
+endif()
+
+list(
+  APPEND
+  diskquota_SRC
+  diskquota.c
+  diskquota_utility.c
+  enforcement.c
+  gp_activetable.c
+  quotamodel.c
+  relation_cache.c)
+
+list(
+  APPEND
+  diskquota_DDL
+  diskquota.control
+  diskquota--1.0.sql
+  diskquota--1.0--2.0.sql
+  diskquota--2.0.sql
+  diskquota--2.0--1.0.sql)
+
+add_library(diskquota MODULE ${diskquota_SRC})
+
+# pg_config do not give us the `--prefix` we use `../../` as a workaround
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${PG_PKG_LIB_DIR}/../../")
+endif()
+
+set_target_properties(
+  diskquota
+  PROPERTIES OUTPUT_NAME ${DISKQUOTA_BINARY_NAME}
+             PREFIX ""
+             C_STANDARD 99
+             LINKER_LANGUAGE "CXX")
+
+install(FILES ${diskquota_DDL} DESTINATION "share/postgresql/extension/")
+install(TARGETS diskquota DESTINATION "lib/postgresql/")
