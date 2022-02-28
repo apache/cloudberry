@@ -10,18 +10,23 @@ function pkg() {
     [ -f /opt/gcc_env.sh ] && source /opt/gcc_env.sh
     source /usr/local/greenplum-db-devel/greenplum_path.sh
 
+    if [ "${DISKQUOTA_OS}" = "rhel6" ]; then
+        export CC="$(which gcc)"
+    fi
+
     export USE_PGXS=1
     pushd diskquota_src/
     DISKQUOTA_VERSION=$(git describe --tags)
-    make clean
-    make install
+    mkdir build
+    cmake -B build .
+    make -C build install
     popd
 
     pushd /usr/local/greenplum-db-devel/
     echo 'cp -r lib share $GPHOME || exit 1'> install_gpdb_component
     chmod a+x install_gpdb_component
     tar -czf "$TOP_DIR/diskquota_artifacts/diskquota-${DISKQUOTA_VERSION}-${DISKQUOTA_OS}_x86_64.tar.gz" \
-        "lib/postgresql/diskquota.so" \
+        lib/postgresql/diskquota*.so \
         "share/postgresql/extension/diskquota.control" \
         "share/postgresql/extension/diskquota--1.0.sql" \
         "share/postgresql/extension/diskquota--2.0.sql" \
