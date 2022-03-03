@@ -98,7 +98,7 @@ create database diskquota;
 3. Enable diskquota as preload library 
 ```
 # enable diskquota in preload library.
-gpconfig -c shared_preload_libraries -v 'diskquota'
+gpconfig -c shared_preload_libraries -v 'diskquota-<major.minor>'
 # restart database.
 gpstop -ar
 ```
