@@ -1,9 +1,5 @@
 REGRESS = dummy
-ifeq ("$(INTEGRATION_TEST)","y")
-REGRESS_OPTS = --schedule=diskquota_schedule_int --init-file=../init_file --init-file=./regress_init_file
-else
 REGRESS_OPTS = --schedule=diskquota_schedule --init-file=../init_file --init-file=./regress_init_file
-endif
 
 # FIXME: This check is hacky, since test_fetch_table_stat relies on the
 # gp_inject_fault extension, we detect if the extension is built with
