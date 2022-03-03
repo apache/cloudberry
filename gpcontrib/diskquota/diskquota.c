@@ -41,6 +41,10 @@ PG_MODULE_MAGIC;
 #define DISKQUOTA_DB	"diskquota"
 #define DISKQUOTA_APPLICATION_NAME  "gp_reserved_gpdiskquota"
 
+#ifndef DISKQUOTA_BINARY_NAME
+	#error DISKQUOTA_BINARY_NAME should be defined by build system
+#endif
+
 #include <unistd.h> // for useconds_t
 extern int usleep(useconds_t usec); // in <unistd.h>
 
@@ -124,7 +128,7 @@ _PG_init(void)
 
 	/* diskquota.so must be in shared_preload_libraries to init SHM. */
 	if (!process_shared_preload_libraries_in_progress)
-		ereport(ERROR, (errmsg("diskquota.so not in shared_preload_libraries.")));
+		ereport(ERROR, (errmsg(DISKQUOTA_BINARY_NAME " not in shared_preload_libraries.")));
 
 	/* values are used in later calls */
 	define_guc_variables();
@@ -148,7 +152,7 @@ _PG_init(void)
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	/* launcher process should be restarted after pm reset. */
 	worker.bgw_restart_time = BGW_DEFAULT_RESTART_INTERVAL;
-	snprintf(worker.bgw_library_name, BGW_MAXLEN, "diskquota");
+	snprintf(worker.bgw_library_name, BGW_MAXLEN, DISKQUOTA_BINARY_NAME);
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "disk_quota_launcher_main");
 	worker.bgw_notify_pid = 0;
 
@@ -1048,7 +1052,7 @@ start_worker_by_dboid(Oid dbid)
 	 * be started by launcher process again.
 	 */
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	sprintf(worker.bgw_library_name, "diskquota");
+	sprintf(worker.bgw_library_name, DISKQUOTA_BINARY_NAME);
 	sprintf(worker.bgw_function_name, "disk_quota_worker_main");
 
 	dbname = get_database_name(dbid);
@@ -1141,6 +1145,10 @@ worker_get_epoch(Oid database_oid)
 	return epoch;
 }
 
+// Returns the worker epoch for the current database.
+// An epoch marks a new iteration of refreshing quota usage by a bgworker.
+// An epoch is a 32-bit unsigned integer and there is NO invalid value.
+// Therefore, the UDF must throw an error if something unexpected occurs.
 PG_FUNCTION_INFO_V1(show_worker_epoch);
 Datum
 show_worker_epoch(PG_FUNCTION_ARGS)
@@ -1271,6 +1279,10 @@ check_for_timeout(TimestampTz start_time)
 	return false;
 }
 
+// Checks if the bgworker for the current database works as expected.
+// 1. If it returns successfully in `diskquota.naptime`, the bgworker works as expected.
+// 2. If it does not terminate, there must be some issues with the bgworker.
+//    In this case, we must ensure this UDF can be interrupted by the user.
 PG_FUNCTION_INFO_V1(wait_for_worker_new_epoch);
 Datum
 wait_for_worker_new_epoch(PG_FUNCTION_ARGS)

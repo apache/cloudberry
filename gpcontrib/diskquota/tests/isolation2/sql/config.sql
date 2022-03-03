@@ -2,7 +2,7 @@
 CREATE DATABASE diskquota;
 --end_ignore
 
-!\retcode gpconfig -c shared_preload_libraries -v diskquota;
+!\retcode gpconfig -c shared_preload_libraries -v $(../../cmake/current_binary_name);
 !\retcode gpstop -raf;
 
 !\retcode gpconfig -c diskquota.naptime -v 0;
@@ -13,4 +13,3 @@ CREATE DATABASE diskquota;
 1: SHOW diskquota.naptime;
 1: SHOW diskquota.max_active_tables;
 1: SHOW diskquota.worker_timeout;
- 

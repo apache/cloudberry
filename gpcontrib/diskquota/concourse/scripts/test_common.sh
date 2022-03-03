@@ -9,9 +9,6 @@ function test(){
 		echo "export MASTER_DATA_DIRECTORY=\$MASTER_DATA_DIRECTORY" >> /usr/local/greenplum-db-devel/greenplum_path.sh
 		source /usr/local/greenplum-db-devel/greenplum_path.sh
 		createdb diskquota
-		gpconfig -c shared_preload_libraries -v 'diskquota'
-		gpstop -arf
-		gpconfig -c diskquota.naptime -v 1
 		gpstop -arf
 		# the dir to run the "make install" command
 		pushd $1

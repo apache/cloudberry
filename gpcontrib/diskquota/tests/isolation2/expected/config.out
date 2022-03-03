@@ -1,5 +1,5 @@
 
-!\retcode gpconfig -c shared_preload_libraries -v diskquota;
+!\retcode gpconfig -c shared_preload_libraries -v $(../../cmake/current_binary_name);
 (exited with code 0)
 !\retcode gpstop -raf;
 (exited with code 0)
@@ -27,4 +27,3 @@
 --------------------------
  60                       
 (1 row)
-
