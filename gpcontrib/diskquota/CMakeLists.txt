@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.18)
+# include_guard()           need 3.10
+# file(ARCHIVE_EXTRACT foo) need 3.18
+
 project(diskquota)
 
 # generate 'compile_commands.json'
