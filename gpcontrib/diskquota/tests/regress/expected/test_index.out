@@ -8,8 +8,6 @@ NOTICE:  tablespace "indexspc" does not exist, skipping
 CREATE TABLESPACE indexspc LOCATION '/tmp/indexspc';
 SET search_path TO indexschema1;
 CREATE TABLE test_index_a(i int) TABLESPACE indexspc DISTRIBUTED BY (i);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_index_a SELECT generate_series(1,20000);
 SELECT diskquota.set_schema_tablespace_quota('indexschema1', 'indexspc','2 MB');
  set_schema_tablespace_quota 
@@ -23,17 +21,25 @@ SELECT diskquota.wait_for_worker_new_epoch();
  t
 (1 row)
 
-SELECT schema_name,tablespace_name,quota_in_mb,nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name='indexschema1' and tablespace_name='indexspc';
+SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes 
+FROM diskquota.show_fast_schema_tablespace_quota_view 
+WHERE schema_name='indexschema1' and tablespace_name='indexspc';
  schema_name  | tablespace_name | quota_in_mb | nspsize_tablespace_in_bytes 
 --------------+-----------------+-------------+-----------------------------
  indexschema1 | indexspc        |           2 |                     1081344
 (1 row)
 
-SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and relname='test_index_a' and segid=-1;
-  size   | segid 
----------+-------
- 1081344 |    -1
-(1 row)
+SELECT tableid::regclass, size, segid 
+FROM diskquota.table_size 
+WHERE tableid = 'test_index_a'::regclass
+ORDER BY segid;
+   tableid    |  size   | segid 
+--------------+---------+-------
+ test_index_a | 1081344 |    -1
+ test_index_a |  360448 |     0
+ test_index_a |  360448 |     1
+ test_index_a |  360448 |     2
+(4 rows)
 
 -- create index for the table, index in default tablespace
 CREATE INDEX a_index ON test_index_a(i);
@@ -52,12 +58,29 @@ SELECT schema_name,tablespace_name,quota_in_mb,nspsize_tablespace_in_bytes FROM 
  indexschema1 | indexspc        |           2 |                     1441792
 (1 row)
 
-SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and (relname='test_index_a' or relname='a_index') and segid=-1;
-  size   | segid 
----------+-------
- 1441792 |    -1
- 1212416 |    -1
-(2 rows)
+SELECT tableid::regclass, size, segid 
+FROM diskquota.table_size 
+WHERE tableid = 'test_index_a'::regclass
+ORDER BY segid;
+   tableid    |  size   | segid 
+--------------+---------+-------
+ test_index_a | 1441792 |    -1
+ test_index_a |  491520 |     0
+ test_index_a |  491520 |     1
+ test_index_a |  458752 |     2
+(4 rows)
+
+SELECT tableid::regclass, size, segid 
+FROM diskquota.table_size 
+WHERE tableid = 'a_index'::regclass
+ORDER BY segid;
+ tableid |  size   | segid 
+---------+---------+-------
+ a_index | 1212416 |    -1
+ a_index |  393216 |     0
+ a_index |  393216 |     1
+ a_index |  393216 |     2
+(4 rows)
 
 -- add index to tablespace indexspc
 ALTER index a_index SET TABLESPACE indexspc;
