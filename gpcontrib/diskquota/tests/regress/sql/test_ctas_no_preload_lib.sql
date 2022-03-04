@@ -10,7 +10,7 @@ SET ROLE test;
 CREATE TABLE t_without_diskquota (i) AS SELECT generate_series(1, 100000)
 DISTRIBUTED BY (i);
 
-\! gpconfig -c shared_preload_libraries -v 'diskquota'> /dev/null 
+\! gpconfig -c shared_preload_libraries -v $(../../cmake/current_binary_name) > /dev/null
 \! gpstop -far > /dev/null
 \c
 
