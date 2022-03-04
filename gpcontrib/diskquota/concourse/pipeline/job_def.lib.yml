@@ -64,6 +64,7 @@ params:
 #@   trigger = param["trigger"]
 #@   confs = param["confs"]
 #@   add_res_by_name(res_map, param["gpdb_src"])
+#@   add_res_by_name(res_map, "bin_cmake")
 name: build_test
 max_in_flight: 10
 on_success: #@ trigger["on_success"]
@@ -76,6 +77,7 @@ plan:
 - in_parallel:
   - get: gpdb_src
     resource: #@ param["gpdb_src"]
+  - get: bin_cmake
 #@   for conf in confs:
 #@     add_res_by_conf(res_map, conf)
 #@     if conf["res_build_image"] == conf["res_test_image"]:

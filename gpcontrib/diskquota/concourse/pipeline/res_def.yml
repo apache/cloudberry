@@ -102,7 +102,7 @@ resources:
     repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
     tag: latest
 
-#! gpdb binary on gcs is located as different folder for different version
+# gpdb binary on gcs is located as different folder for different version
 - name: bin_gpdb6_centos6
   type: gcs
   source:
@@ -127,3 +127,11 @@ resources:
     bucket: ((gcs-bucket-intermediates))
     json_key: ((concourse-gcs-resources-service-account-key))
     versioned_file: 6X_STABLE/bin_gpdb_rhel8/bin_gpdb.tar.gz
+
+# Other dependencies
+- name: bin_cmake
+  type: gcs
+  source:
+    bucket: gpdb-extensions-concourse-resources
+    json_key: ((extensions-gcs-service-account-key))
+    regexp: dependencies/cmake-(.*)-linux-x86_64.sh
