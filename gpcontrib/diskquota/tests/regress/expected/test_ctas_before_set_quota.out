@@ -1,0 +1,61 @@
+CREATE ROLE test SUPERUSER;
+SET ROLE test;
+CREATE TABLE t_before_set_quota (i) AS SELECT generate_series(1, 100000)
+DISTRIBUTED BY (i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size
+WHERE tableid = 't_before_set_quota'::regclass ORDER BY segid;
+      tableid       |  size   | segid 
+--------------------+---------+-------
+ t_before_set_quota | 3637248 |    -1
+ t_before_set_quota | 1212416 |     0
+ t_before_set_quota | 1212416 |     1
+ t_before_set_quota | 1212416 |     2
+(4 rows)
+
+-- Ensure that the table is not active
+SELECT diskquota.diskquota_fetch_table_stat(0, ARRAY[]::oid[])
+FROM gp_dist_random('gp_id');
+ diskquota_fetch_table_stat 
+----------------------------
+(0 rows)
+
+SELECT diskquota.set_role_quota(current_role, '1MB');
+ set_role_quota 
+----------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- Expect that current role is in the blackmap 
+SELECT rolname FROM pg_authid, diskquota.blackmap WHERE oid = target_oid;
+ rolname 
+---------
+ test
+(1 row)
+
+SELECT diskquota.set_role_quota(current_role, '-1');
+ set_role_quota 
+----------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP TABLE t_before_set_quota;
+RESET ROLE;
+DROP ROLE test;
