@@ -5,6 +5,7 @@ set -exo pipefail
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TOP_DIR=${CWDIR}/../../../
 
+source "${TOP_DIR}/diskquota_src/concourse/scripts/install_dep.sh"
 source "${TOP_DIR}/gpdb_src/concourse/scripts/common.bash"
 function pkg() {
     [ -f /opt/gcc_env.sh ] && source /opt/gcc_env.sh
