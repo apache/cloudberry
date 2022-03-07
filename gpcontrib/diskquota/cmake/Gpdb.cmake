@@ -17,6 +17,7 @@
 # PG_C_FLAGS - CFLAGS value used when PostgreSQL was built
 # PG_LD_FLAGS - LDFLAGS value used when PostgreSQL was built
 # PG_HOME - The installation directory of Greenplum
+# PG_SRC_DIR - The directory of the postgres/greenplum source code
 
 include_guard()
 find_program(PG_CONFIG pg_config)
@@ -37,6 +38,19 @@ exec_program(${PG_CONFIG} ARGS --libs OUTPUT_VARIABLE PG_LIBS)
 exec_program(${PG_CONFIG} ARGS --libdir OUTPUT_VARIABLE PG_LIB_DIR)
 exec_program(${PG_CONFIG} ARGS --pgxs OUTPUT_VARIABLE PG_PGXS)
 get_filename_component(PG_HOME "${PG_BIN_DIR}/.." ABSOLUTE)
+if (NOT PG_SRC_DIR)
+    get_filename_component(pgsx_SRC_DIR ${PG_PGXS} DIRECTORY)
+    set(makefile_global ${pgsx_SRC_DIR}/../Makefile.global)
+    # Some magic to find out the source code root from pg's Makefile.global
+    execute_process(
+        COMMAND_ECHO STDOUT
+        COMMAND
+        grep abs_top_builddir ${makefile_global}
+        COMMAND
+        sed s/.*abs_top_builddir.*=\\\(.*\\\)/\\1/
+        OUTPUT_VARIABLE PG_SRC_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(STRIP ${PG_SRC_DIR} PG_SRC_DIR)
+endif()
 
 # Get the GP_MAJOR_VERSION from header
 file(READ ${PG_INCLUDE_DIR}/pg_config.h config_header)

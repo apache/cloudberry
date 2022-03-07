@@ -83,11 +83,33 @@ That is to say, a role may have different quota limit on different databases
 and their disk usage is isolated between databases.
 
 # Install
-1. Compile disk quota with pgxs.
+
+(cmake)[https://cmake.org] (>= 3.18) needs to be installed.
+
+1. Build & install disk quota
 ```
-cd $diskquota_src; 
-make; 
-make install;
+mkdir -p <diskquota_src>/build
+cd <diskquota_src>/build
+```
+
+If the `greenplum_path.sh` has been source:
+
+```
+cmake ..
+```
+
+Otherwise:
+
+```
+# Without source greenplum_path.sh
+cmake .. --DPG_CONFIG=<gpdb_installation_dir>/bin/pg_config
+#
+```
+
+Build and install:
+
+```
+make install
 ```
 
 2. Create database to store global information.
@@ -171,10 +193,18 @@ select * from diskquota.show_fast_schema_quota_view;
 
 
 # Test
-Run regression tests.
+Run regression tests:
 ```
-cd diskquota_src;
+cd <diskquota_src>/build;
 make installcheck
+```
+Show quick diff of regress results:
+```
+make diff_<test_target>_<case_name>
+```
+Show all build target:
+```
+make help
 ```
 
 # HA
