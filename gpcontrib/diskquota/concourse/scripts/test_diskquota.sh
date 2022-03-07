@@ -2,40 +2,25 @@
 
 set -exo pipefail
 
-CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-TOP_DIR=${CWDIR}/../../../
-GPDB_CONCOURSE_DIR=${TOP_DIR}/gpdb_src/concourse/scripts
-CUT_NUMBER=6
-
-source "${TOP_DIR}/diskquota_src/concourse/scripts/install_dep.sh"
-source "${GPDB_CONCOURSE_DIR}/common.bash"
-source "${TOP_DIR}/diskquota_src/concourse/scripts/test_common.sh"
-
-## Currently, isolation2 testing framework relies on pg_isolation2_regress, we
-## should build it from source. However, in concourse, the gpdb_bin is fetched
-## from remote machine, the $(abs_top_srcdir) variable points to a non-existing
-## location, we fixes this issue by creating a symbolic link for it.
-function create_fake_gpdb_src() {
-	pushd gpdb_src
-	./configure --prefix=/usr/local/greenplum-db-devel \
-		    --without-zstd \
-		    --disable-orca --disable-gpcloud --enable-debug-extensions
-	popd
-
-	FAKE_GPDB_SRC=/tmp/build/"$(grep -rnw '/usr/local/greenplum-db-devel' -e 'abs_top_srcdir = .*' | head -n 1 | awk -F"/" '{print $(NF-1)}')"
-	mkdir -p ${FAKE_GPDB_SRC}
-	ln -s ${TOP_DIR}/gpdb_src ${FAKE_GPDB_SRC}/gpdb_src
+function activate_standby() {
+    gpstop -may -M immediate
+    export PGPORT=6001
+    export MASTER_DATA_DIRECTORY=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/standby
+    gpactivatestandby -ad $MASTER_DATA_DIRECTORY
 }
 
 function _main() {
-	time install_gpdb
-	create_fake_gpdb_src
-	time setup_gpadmin_user
+    tar -xzf /home/gpadmin/bin_diskquota/*.tar.gz -C /usr/local/greenplum-db-devel
+    source /home/gpadmin/gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
-	time make_cluster
-	time install_diskquota
-
-	time test ${TOP_DIR}/diskquota_src/ true
+    pushd /home/gpadmin/diskquota_artifacts
+    # Show regress diff if test fails
+    export SHOW_REGRESS_DIFF=1
+    time cmake --build . --target installcheck
+    # Run test again with standby master
+    activate_standby
+    time cmake --build . --target installcheck
+    popd
 }
 
-_main "$@"
+_main

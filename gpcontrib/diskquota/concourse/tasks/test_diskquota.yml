@@ -9,6 +9,8 @@ inputs:
   - name: bin_cmake
 
 run:
-  path: diskquota_src/concourse/scripts/test_diskquota.sh
+  path: diskquota_src/concourse/scripts/entry.sh
+  args:
+    - test
 params:
   DISKQUOTA_OS:

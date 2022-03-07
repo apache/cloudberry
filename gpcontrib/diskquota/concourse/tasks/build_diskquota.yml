@@ -11,6 +11,8 @@ outputs:
   - name: diskquota_artifacts
 
 run:
-  path: diskquota_src/concourse/scripts/build_diskquota.sh
+  path: diskquota_src/concourse/scripts/entry.sh
+  args:
+    - build
 params:
   DISKQUOTA_OS:

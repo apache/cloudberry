@@ -78,6 +78,9 @@ set_target_properties(
              C_STANDARD 99
              LINKER_LANGUAGE "CXX")
 
+# Add installcheck targets
+add_subdirectory(tests)
+
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)
 
