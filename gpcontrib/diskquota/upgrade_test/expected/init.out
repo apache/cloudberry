@@ -1,5 +1,5 @@
 -- start_ignore
-\! gpconfig -c shared_preload_libraries -v $(../../cmake/current_binary_name) > /dev/null
+\! gpconfig -c shared_preload_libraries -v $(./data/current_binary_name) > /dev/null
 -- end_ignore
 \! echo $?
 0

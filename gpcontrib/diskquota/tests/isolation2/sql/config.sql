@@ -2,7 +2,7 @@
 CREATE DATABASE diskquota;
 --end_ignore
 
-!\retcode gpconfig -c shared_preload_libraries -v $(../../cmake/current_binary_name);
+!\retcode gpconfig -c shared_preload_libraries -v $(./data/current_binary_name);
 !\retcode gpstop -raf;
 
 !\retcode gpconfig -c diskquota.naptime -v 0;
