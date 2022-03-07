@@ -38,6 +38,7 @@
 #include "utils/formatting.h"
 #include "utils/numeric.h"
 #include "libpq-fe.h"
+#include "funcapi.h"
 
 #include <cdb/cdbvars.h>
 #include <cdb/cdbdisp_query.h>
@@ -58,6 +59,7 @@ PG_FUNCTION_INFO_V1(set_schema_tablespace_quota);
 PG_FUNCTION_INFO_V1(set_role_tablespace_quota);
 PG_FUNCTION_INFO_V1(set_per_segment_quota);
 PG_FUNCTION_INFO_V1(relation_size_local);
+PG_FUNCTION_INFO_V1(pull_all_table_size);
 
 /* timeout count to wait response from launcher process, in 1/10 sec */
 #define WAIT_TIME_COUNT  1200
@@ -70,8 +72,6 @@ static const char *ddl_err_code_to_err_message(MessageResult code);
 static int64 get_size_in_mb(char *str);
 static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
 static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
-static bool generate_insert_table_size_sql(StringInfoData *buf, int extMajorVersion);
-static char *convert_oidlist_to_string(List *oidlist);
 
 int get_ext_major_version(void);
 List *get_rel_oid_list(void);
@@ -88,12 +88,10 @@ init_table_size_table(PG_FUNCTION_ARGS)
 {
 	int		ret;
 	StringInfoData	buf;
-	StringInfoData	insert_buf;
 
 	RangeVar   	*rv;
 	Relation	rel;
 	int 		extMajorVersion;
-	bool		insert_flag;
 	/*
 	 * If error happens in init_table_size_table, just return error messages
 	 * to the client side. So there is no need to catch the error.
@@ -125,51 +123,44 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	 */
 	SPI_connect();
 	extMajorVersion = get_ext_major_version();
-	char *oids = convert_oidlist_to_string(get_rel_oid_list());
 
 	/* delete all the table size info in table_size if exist. */
 	initStringInfo(&buf);
-	initStringInfo(&insert_buf);
-	appendStringInfo(&buf, "delete from diskquota.table_size;");
+	appendStringInfo(&buf, "truncate table diskquota.table_size;");
 	ret = SPI_execute(buf.data, false, 0);
-	if (ret != SPI_OK_DELETE)
-		elog(ERROR, "cannot delete table_size table: error code %d", ret);
+	if (ret != SPI_OK_UTILITY)
+		elog(ERROR, "cannot truncate table_size table: error code %d", ret);
 
-	/* fetch table size for master*/
-	resetStringInfo(&buf);
-	appendStringInfo(&buf,
-					 "select oid, pg_table_size(oid), -1"
-					 " from pg_class"
-					 " where oid in (%s);",
-					 oids);
-	ret = SPI_execute(buf.data, false, 0);
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "cannot fetch in pg_table_size. error code %d", ret);
-
-	/* fill table_size table with table oid and size info for master. */
-	appendStringInfo(&insert_buf,
-	                 "insert into diskquota.table_size values");
-	insert_flag = generate_insert_table_size_sql(&insert_buf, extMajorVersion);
-	/* fetch table size on segments*/
-	resetStringInfo(&buf);
-	appendStringInfo(&buf,
-			"select oid, pg_table_size(oid), gp_segment_id"
-			" from gp_dist_random('pg_class')"
-			" where oid in (%s);",
-			oids);
-	ret = SPI_execute(buf.data, false, 0);
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "cannot fetch in pg_table_size. error code %d", ret);
-
-	/* fill table_size table with table oid and size info for segments. */
-	insert_flag = insert_flag | generate_insert_table_size_sql(&insert_buf, extMajorVersion);
-	if (insert_flag)
+	if (extMajorVersion == 1)
 	{
-		truncateStringInfo(&insert_buf, insert_buf.len - strlen(","));
-		appendStringInfo(&insert_buf, ";");
-		ret = SPI_execute(insert_buf.data, false, 0);
+		resetStringInfo(&buf);
+		appendStringInfo(&buf, "INSERT INTO diskquota.table_size WITH all_size AS "
+								"(SELECT diskquota.pull_all_table_size() as a FROM gp_dist_random('gp_id') "	
+								"UNION ALL SELECT diskquota.pull_all_table_size()) "	
+								"SELECT (a).tableid, sum((a).size) FROM all_size GROUP BY (a).tableid;");
+		ret = SPI_execute(buf.data, false, 0);
 		if (ret != SPI_OK_INSERT)
-			elog(ERROR, "cannot insert table_size_per_segment table: error code %d", ret);
+			elog(ERROR, "cannot insert into table_size table: error code %d", ret);
+	}
+	else
+	{
+		resetStringInfo(&buf);
+		appendStringInfo(&buf, "INSERT INTO diskquota.table_size WITH all_size AS "
+								"(SELECT diskquota.pull_all_table_size() as a FROM gp_dist_random('gp_id')) "	
+								"SELECT (a).* FROM all_size;");
+		ret = SPI_execute(buf.data, false, 0);
+		if (ret != SPI_OK_INSERT)
+			elog(ERROR, "cannot insert into table_size table: error code %d", ret);
+
+		resetStringInfo(&buf);
+        /* size is the sum of size on master and on all segments when segid == -1. */
+		appendStringInfo(&buf, "INSERT INTO diskquota.table_size WITH total_size AS "
+								"(SELECT * from diskquota.pull_all_table_size() "
+								"UNION ALL SELECT tableid, size, segid FROM diskquota.table_size) "	
+								"SELECT tableid, sum(size) as size, -1 as segid FROM total_size GROUP BY tableid;");
+		ret = SPI_execute(buf.data, false, 0);
+		if (ret != SPI_OK_INSERT)
+			elog(ERROR, "cannot insert into table_size table: error code %d", ret);
 	}
 
 	/* set diskquota state to ready. */
@@ -185,46 +176,138 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-/* last_part is true means there is no other set of values to be inserted to table_size */
-static bool
-generate_insert_table_size_sql(StringInfoData *insert_buf, int extMajorVersion)
+static HTAB*
+calculate_all_table_size()
 {
-	TupleDesc tupdesc = SPI_tuptable->tupdesc;
-	bool insert_flag = false;
-	for(int i = 0; i < SPI_processed; i++)
+	Relation classRel;
+	HeapTuple tuple;
+	HeapScanDesc relScan;
+	Oid relid;
+	Oid prelid;
+	Size tablesize;
+	RelFileNodeBackend rnode;
+	TableEntryKey keyitem;
+	HTAB *local_table_size_map;
+	HASHCTL	hashctl;
+	DiskQuotaActiveTableEntry *entry;
+	bool found;
+
+	memset(&hashctl, 0, sizeof(hashctl));
+	hashctl.keysize = sizeof(TableEntryKey);
+	hashctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
+	hashctl.hcxt = CurrentMemoryContext;
+	hashctl.hash = tag_hash;
+
+	local_table_size_map = hash_create("local_table_size_map",
+										1024, &hashctl,
+										HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+
+	classRel = heap_open(RelationRelationId, AccessShareLock);
+	relScan = heap_beginscan_catalog(classRel, 0, NULL);
+	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
 	{
-		HeapTuple	tup;
-		bool        	isnull;
-		Oid         	oid;
-		int64       	sz;
-		int16		segid;
+		Form_pg_class classForm = (Form_pg_class) GETSTRUCT(tuple);
+		if (classForm->relkind != RELKIND_RELATION &&
+			classForm->relkind != RELKIND_MATVIEW &&
+			classForm->relkind != RELKIND_INDEX &&
+			classForm->relkind != RELKIND_AOSEGMENTS &&
+			classForm->relkind != RELKIND_AOBLOCKDIR &&
+			classForm->relkind != RELKIND_AOVISIMAP &&
+			classForm->relkind != RELKIND_TOASTVALUE)
+			continue;
 
-		tup = SPI_tuptable->vals[i];
-		oid = SPI_getbinval(tup,tupdesc, 1, &isnull);
-		sz = SPI_getbinval(tup,tupdesc, 2, &isnull);
-		segid = SPI_getbinval(tup,tupdesc, 3, &isnull);
-		switch (extMajorVersion)
+		relid = HeapTupleGetOid(tuple);
+		/* ignore system table */
+		if (relid < FirstNormalObjectId)
+			continue;
+
+		rnode.node.dbNode = MyDatabaseId;
+		rnode.node.relNode = classForm->relfilenode;
+		rnode.node.spcNode = OidIsValid(classForm->reltablespace) ? classForm->reltablespace : MyDatabaseTableSpace;
+		rnode.backend = classForm->relpersistence == RELPERSISTENCE_TEMP ? TempRelBackendId : InvalidBackendId;
+		tablesize = calculate_relation_size_all_forks(&rnode, classForm->relstorage);
+
+		keyitem.reloid = relid;
+		keyitem.segid = GpIdentity.segindex;
+
+		prelid = diskquota_parse_primary_table_oid(classForm->relnamespace, classForm->relname.data);
+		if (OidIsValid(prelid))
 		{
-			case 1:
-				/* for version 1.0, only insert the values from master */
-				if (segid == -1)
-				{
-					appendStringInfo(insert_buf, " ( %u, %ld),", oid, sz);
-					insert_flag = true;
-				}
-				break;
-			case 2:
-				appendStringInfo(insert_buf, " ( %u, %ld, %d),", oid, sz, segid);
-				insert_flag = true;
-				break;
-			default:
-				ereport(ERROR,
-						(errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
-
+			keyitem.reloid = prelid;
 		}
+
+		entry = hash_search(local_table_size_map, &keyitem, HASH_ENTER, &found);
+		if (!found)
+		{
+			entry->tablesize = 0;
+		}
+		entry->tablesize += tablesize;
 	}
-	return insert_flag;
+	heap_endscan(relScan);
+	heap_close(classRel, AccessShareLock);
+
+	return local_table_size_map;
+}
+
+Datum
+pull_all_table_size(PG_FUNCTION_ARGS)
+{
+	DiskQuotaActiveTableEntry *entry;
+	FuncCallContext	*funcctx;
+	struct PullAllTableSizeCtx {
+		HASH_SEQ_STATUS			iter;
+		HTAB				   *local_table_size_map;
+	} *table_size_ctx;
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		TupleDesc			tupdesc;
+		MemoryContext		oldcontext;
+
+		/* Create a function context for cross-call persistence. */
+		funcctx = SRF_FIRSTCALL_INIT();
+
+		/* Switch to memory context appropriate for multiple function calls */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		tupdesc = CreateTemplateTupleDesc(3, false /*hasoid*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "TABLEID", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "SIZE", INT8OID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "SEGID", INT2OID, -1 /*typmod*/, 0 /*attdim*/);
+		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+
+		/* Create a local hash table and fill it with entries from shared memory. */
+		table_size_ctx = (struct PullAllTableSizeCtx *) palloc(sizeof(struct PullAllTableSizeCtx));
+		table_size_ctx->local_table_size_map = calculate_all_table_size();
+
+		/* Setup first calling context. */
+		hash_seq_init(&(table_size_ctx->iter), table_size_ctx->local_table_size_map);
+		funcctx->user_fctx = (void *) table_size_ctx;
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+	table_size_ctx = (struct PullAllTableSizeCtx *) funcctx->user_fctx;
+	
+	while ((entry = hash_seq_search(&(table_size_ctx->iter))) != NULL)
+	{
+		Datum		result;
+		Datum		values[3];
+		bool		nulls[3];
+		HeapTuple	tuple;
+
+		values[0] = ObjectIdGetDatum(entry->reloid);
+		values[1] = Int64GetDatum(entry->tablesize);
+		values[2] = Int16GetDatum(entry->segid);
+
+		memset(nulls, false, sizeof(nulls));
+		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+	}
+
+	SRF_RETURN_DONE(funcctx);
 }
 /*
  * Trigger to start diskquota worker when create extension diskquota.
@@ -1165,25 +1248,6 @@ get_ext_major_version(void)
 		return (int)strtol(extversion, (char **) NULL, 10);
 	}
 	return 0;
-}
-
-static char *
-convert_oidlist_to_string(List *oidlist)
-{
-	StringInfoData 	buf;
-	bool		hasOid = false;
-	ListCell   *l;
-	initStringInfo(&buf);
-
-	foreach(l, oidlist)
-	{
-		Oid	oid = lfirst_oid(l);
-		appendStringInfo(&buf, "%u, ", oid);
-		hasOid = true;
-	}
-	if (hasOid)
-		truncateStringInfo(&buf, buf.len - strlen(", "));
-	return buf.data;
 }
 
 /*
