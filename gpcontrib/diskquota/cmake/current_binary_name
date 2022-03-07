@@ -1,9 +1,0 @@
-#!/bin/bash
-
-cd "$(dirname "$0")"
-
-if [ $(grep -P '^1.0' ../VERSION) ]; then
-    echo -n "diskquota.so"
-else
-    echo -n "diskquota-$(grep -o -P '^\d+.\d+' ../VERSION).so"
-fi

@@ -1,7 +1,7 @@
 --start_ignore
 CREATE DATABASE diskquota;
 
-\! gpconfig -c shared_preload_libraries -v $(../../cmake/current_binary_name);
+\! gpconfig -c shared_preload_libraries -v $(./data/current_binary_name);
 \! gpstop -raf
 
 \! gpconfig -c diskquota.naptime -v 0
