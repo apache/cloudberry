@@ -1,4 +1,4 @@
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     |  status  
 -------------+----------
  soft limits | enabled
@@ -7,7 +7,7 @@ select * from diskquota.status();
 
 \! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
 \! gpstop -u > /dev/null
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     | status  
 -------------+---------
  soft limits | enabled
@@ -16,7 +16,7 @@ select * from diskquota.status();
 
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     |  status  
 -------------+----------
  soft limits | enabled
@@ -27,7 +27,7 @@ select from diskquota.pause();
 --
 (1 row)
 
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     |  status  
 -------------+----------
  soft limits | paused
@@ -36,7 +36,7 @@ select * from diskquota.status();
 
 \! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
 \! gpstop -u > /dev/null
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     | status 
 -------------+--------
  soft limits | paused
@@ -45,7 +45,7 @@ select * from diskquota.status();
 
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     |  status  
 -------------+----------
  soft limits | paused
@@ -58,7 +58,7 @@ select from diskquota.resume();
 
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null
-select * from diskquota.status();
+select * from diskquota.status() where name not like '%version';
     name     |  status  
 -------------+----------
  soft limits | enabled
