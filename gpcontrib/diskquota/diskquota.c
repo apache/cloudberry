@@ -1259,6 +1259,50 @@ static const char* diskquota_status_check_hard_limit()
 	return hardlimit ? "enabled": "disabled";
 }
 
+static const char* diskquota_status_binary_version()
+{
+	return DISKQUOTA_VERSION;
+}
+
+static const char* diskquota_status_schema_version()
+{
+	static char version[64] = {0};
+	memset(version, 0, sizeof(version));
+
+	int ret = SPI_connect();
+	Assert(ret = SPI_OK_CONNECT);
+
+	ret = SPI_execute("select extversion from pg_extension where extname = 'diskquota'", true, 0);
+
+	if(ret != SPI_OK_SELECT || SPI_processed != 1) {
+		ereport(WARNING,
+				(errmsg("[diskquota] when reading installed version lines %ld code = %d",
+						SPI_processed, ret)));
+		goto out;
+	}
+
+	if (SPI_processed == 0) {
+		goto out;
+	}
+
+	bool is_null = false;
+	Datum v = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &is_null);
+	Assert(is_null == false);
+
+	char *vv = TextDatumGetCString(v);
+	if (vv == NULL) {
+		ereport(WARNING,
+				(errmsg("[diskquota] 'extversion' is empty in pg_class.pg_extension. may catalog corrupted")));
+		goto out;
+	}
+
+	StrNCpy(version, vv, sizeof(version));
+
+out:
+	SPI_finish();
+	return version;
+}
+
 PG_FUNCTION_INFO_V1(diskquota_status);
 Datum diskquota_status(PG_FUNCTION_ARGS)
 {
@@ -1274,6 +1318,8 @@ Datum diskquota_status(PG_FUNCTION_ARGS)
 	static const FeatureStatus fs[] = {
 		{.name = "soft limits", .status = diskquota_status_check_soft_limit},
 		{.name = "hard limits", .status = diskquota_status_check_hard_limit},
+		{.name = "current binary version", .status = diskquota_status_binary_version},
+		{.name = "current schema version", .status = diskquota_status_schema_version},
 	};
 
 	FuncCallContext *funcctx;
