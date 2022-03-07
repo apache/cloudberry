@@ -68,7 +68,7 @@ list(
 add_library(diskquota MODULE ${diskquota_SRC})
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${PG_HOME}")
+  set(CMAKE_INSTALL_PREFIX "${PG_HOME}" CACHE PATH "default install prefix" FORCE)
 endif()
 
 set_target_properties(
