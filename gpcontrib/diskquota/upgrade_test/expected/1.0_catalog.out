@@ -1,0 +1,135 @@
+CREATE FUNCTION typeid_to_name(oid[]) RETURNS name[] AS '
+  WITH io AS (
+    SELECT x.i AS index, x.o AS type_id FROM (
+      SELECT generate_series(1, array_length($1, 1)) AS i, unnest($1) AS o
+    ) AS x
+  ) SELECT array_agg(typname order by io.index) FROM io, pg_type t WHERE io.type_id = t.oid;
+' LANGUAGE sql STABLE;
+-- types
+SELECT
+    t1.typname,
+    array_agg(t2.typname order by a.atttypid) typname
+FROM
+    pg_namespace n,
+    pg_class c,
+    pg_type t1,
+    pg_type t2,
+    pg_attribute a
+WHERE
+    n.nspname = 'diskquota'
+    AND c.oid = t1.typrelid
+    AND n.oid = t1.typnamespace
+    AND a.attrelid = c.oid
+    AND t2.oid = a.atttypid
+GROUP BY
+    t1.typname
+ORDER BY
+    t1.typname;
+           typname            |                   typname                    
+------------------------------+----------------------------------------------
+ diskquota_active_table_type  | {int8,oid}
+ quota_config                 | {int8,int4,int4,oid,oid,tid,xid,xid,cid,cid}
+ show_fast_database_size_view | {numeric}
+ show_fast_role_quota_view    | {name,int8,oid,numeric}
+ show_fast_schema_quota_view  | {name,int8,oid,numeric}
+ state                        | {int4,int4,oid,tid,xid,xid,cid,cid}
+ table_size                   | {int8,int4,oid,oid,tid,xid,xid,cid,cid}
+(7 rows)
+
+-- types end
+-- tables
+SELECT
+    relname,
+    typeid_to_name(ARRAY[c.reltype]::oid[]) AS reltype,
+    typeid_to_name(ARRAY[c.reloftype]::oid[]) AS reloftype
+FROM
+    pg_class c,
+    pg_namespace n
+WHERE
+    c.relnamespace = n.oid
+    AND n.nspname = 'diskquota'
+    and c.relkind != 'v'
+ORDER BY
+   relname;
+           relname           |            reltype            | reloftype 
+-----------------------------+-------------------------------+-----------
+ diskquota_active_table_type | {diskquota_active_table_type} | 
+ quota_config                | {quota_config}                | 
+ quota_config_pkey           |                               | 
+ state                       | {state}                       | 
+ state_pkey                  |                               | 
+ table_size                  | {table_size}                  | 
+ table_size_pkey             |                               | 
+(7 rows)
+
+-- tables end
+-- UDF
+SELECT
+    proname,
+    typeid_to_name(ARRAY[prorettype]::oid[]) AS prorettype,
+    typeid_to_name(proargtypes) AS proargtypes,
+    typeid_to_name(proallargtypes) AS proallargtypes,
+    proargmodes,
+    prosrc,
+    probin,
+    proacl
+FROM
+    pg_namespace n,
+    pg_proc p
+WHERE
+    n.nspname = 'diskquota'
+    AND n.oid = p.pronamespace
+ORDER BY
+    proname;
+          proname           |          prorettype           | proargtypes | proallargtypes | proargmodes |           prosrc           |        probin        | proacl 
+----------------------------+-------------------------------+-------------+----------------+-------------+----------------------------+----------------------+--------
+ diskquota_fetch_table_stat | {diskquota_active_table_type} | {int4,_oid} |                |             | diskquota_fetch_table_stat | $libdir/diskquota.so | 
+ init_table_size_table      | {void}                        |             |                |             | init_table_size_table      | $libdir/diskquota.so | 
+ set_role_quota             | {void}                        | {text,text} |                |             | set_role_quota             | $libdir/diskquota.so | 
+ set_schema_quota           | {void}                        | {text,text} |                |             | set_schema_quota           | $libdir/diskquota.so | 
+ update_diskquota_db_list   | {void}                        | {oid,int4}  |                |             | update_diskquota_db_list   | $libdir/diskquota.so | 
+(5 rows)
+
+-- UDF end
+-- views
+SELECT
+    schemaname,
+    viewname,
+    definition
+FROM
+    pg_views
+WHERE
+    schemaname = 'diskquota'
+ORDER BY
+    schemaname, viewname;
+ schemaname |           viewname           |                                                 definition                                                 
+------------+------------------------------+------------------------------------------------------------------------------------------------------------
+ diskquota  | show_fast_database_size_view |  SELECT (( SELECT sum(pg_relation_size((pg_class.oid)::regclass)) AS sum                                  +
+            |                              |            FROM pg_class                                                                                  +
+            |                              |           WHERE (pg_class.oid <= (16384)::oid)) + ( SELECT sum(table_size.size) AS sum                    +
+            |                              |            FROM diskquota.table_size)) AS dbsize;
+ diskquota  | show_fast_role_quota_view    |  SELECT pgr.rolname AS role_name,                                                                         +
+            |                              |     pgc.relowner AS role_oid,                                                                             +
+            |                              |     qc.quotalimitmb AS quota_in_mb,                                                                       +
+            |                              |     sum(ts.size) AS rolsize_in_bytes                                                                      +
+            |                              |    FROM diskquota.table_size ts,                                                                          +
+            |                              |     pg_class pgc,                                                                                         +
+            |                              |     diskquota.quota_config qc,                                                                            +
+            |                              |     pg_roles pgr                                                                                          +
+            |                              |   WHERE (((pgc.relowner = qc.targetoid) AND (pgc.relowner = pgr.oid)) AND (ts.tableid = pgc.oid))         +
+            |                              |   GROUP BY pgc.relowner, pgr.rolname, qc.quotalimitmb;
+ diskquota  | show_fast_schema_quota_view  |  SELECT pgns.nspname AS schema_name,                                                                      +
+            |                              |     pgc.relnamespace AS schema_oid,                                                                       +
+            |                              |     qc.quotalimitmb AS quota_in_mb,                                                                       +
+            |                              |     sum(ts.size) AS nspsize_in_bytes                                                                      +
+            |                              |    FROM diskquota.table_size ts,                                                                          +
+            |                              |     pg_class pgc,                                                                                         +
+            |                              |     diskquota.quota_config qc,                                                                            +
+            |                              |     pg_namespace pgns                                                                                     +
+            |                              |   WHERE (((ts.tableid = pgc.oid) AND (qc.targetoid = pgc.relnamespace)) AND (pgns.oid = pgc.relnamespace))+
+            |                              |   GROUP BY pgns.nspname, pgc.relnamespace, qc.quotalimitmb                                                +
+            |                              |   ORDER BY pgns.nspname;
+(3 rows)
+
+-- views end
+DROP FUNCTION typeid_to_name(oid[]);
