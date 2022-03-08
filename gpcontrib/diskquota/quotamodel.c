@@ -2089,12 +2089,13 @@ show_blackmap(PG_FUNCTION_ARGS)
 
 	while ((blackmap_entry = hash_seq_search(&(blackmap_ctx->blackmap_seq))) != NULL)
 	{
+#define _TARGETTYPE_STR_SIZE 32
 		Datum			result;
 		Datum			values[9];
 		bool			nulls[9];
 		HeapTuple		tuple;
 		BlackMapEntry	keyitem;
-		char			targettype_str[32];
+		char			targettype_str[_TARGETTYPE_STR_SIZE];
 		RelFileNode		blocked_relfilenode;
 
 		memcpy(&blocked_relfilenode,
@@ -2112,19 +2113,19 @@ show_blackmap(PG_FUNCTION_ARGS)
 		switch ((QuotaType) keyitem.targettype)
 		{
 		case ROLE_QUOTA:
-			strncpy(targettype_str, "ROLE_QUOTA", 10);
+			StrNCpy(targettype_str, "ROLE_QUOTA", _TARGETTYPE_STR_SIZE);
 			break;
 		case NAMESPACE_QUOTA:
-			strncpy(targettype_str, "NAMESPACE_QUOTA", 15);
+			StrNCpy(targettype_str, "NAMESPACE_QUOTA", _TARGETTYPE_STR_SIZE);
 			break;
 		case ROLE_TABLESPACE_QUOTA:
-			strncpy(targettype_str, "ROLE_TABLESPACE_QUOTA", 21);
+			StrNCpy(targettype_str, "ROLE_TABLESPACE_QUOTA", _TARGETTYPE_STR_SIZE);
 			break;
 		case NAMESPACE_TABLESPACE_QUOTA:
-			strncpy(targettype_str, "NAMESPACE_TABLESPACE_QUOTA", 26);
+			StrNCpy(targettype_str, "NAMESPACE_TABLESPACE_QUOTA", _TARGETTYPE_STR_SIZE);
 			break;
 		default:
-			strncpy(targettype_str, "UNKNOWN", 7);
+			StrNCpy(targettype_str, "UNKNOWN", _TARGETTYPE_STR_SIZE);
 			break;
 		}
 
