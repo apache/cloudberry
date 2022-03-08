@@ -128,6 +128,35 @@ resources:
     json_key: ((concourse-gcs-resources-service-account-key))
     versioned_file: 6X_STABLE/bin_gpdb_rhel8/bin_gpdb.tar.gz
 
+# Diskquota releases
+- name: bin_diskquota_gpdb6_rhel6
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*)-rhel6_x86_64.tar.gz
+
+- name: bin_diskquota_gpdb6_rhel7
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*)-rhel7_x86_64.tar.gz
+
+- name: bin_diskquota_gpdb6_rhel8
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*)-rhel8_x86_64.tar.gz
+
+- name: bin_diskquota_gpdb6_ubuntu18
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*)-ubuntu18.04_x86_64.tar.gz
+
 # Other dependencies
 - name: bin_cmake
   type: gcs
