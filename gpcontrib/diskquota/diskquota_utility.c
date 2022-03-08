@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 
 #include "access/aomd.h"
+#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_collation.h"
@@ -32,6 +33,7 @@
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "storage/proc.h"
+#include "utils/snapmgr.h"
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
@@ -563,27 +565,12 @@ register_diskquota_object_access_hook(void)
 	object_access_hook = dq_object_access_hook;
 }
 
-/*
- * This hook is used to handle drop extension diskquota event
- * It will send CMD_DROP_EXTENSION message to diskquota laucher.
- * Laucher will terminate the corresponding worker process and
- * remove the dbOid from the database_list table.
- */
-static void
-dq_object_access_hook(ObjectAccessType access, Oid classId,
-					  Oid objectId, int subId, void *arg)
+static void dq_object_access_hook_on_drop(void)
 {
-	Oid			oid;
-	int			rc, launcher_pid;
+	int rc, launcher_pid;
 
-	if (access != OAT_DROP || classId != ExtensionRelationId)
-		goto out;
-	oid = get_extension_oid("diskquota", true);
-	if (oid != objectId)
-		goto out;
-
-	/* 
-	 * Remove the current database from monitored db cache 
+	/*
+	 * Remove the current database from monitored db cache
 	 * on all segments and on coordinator.
 	 */
 	update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
@@ -642,6 +629,33 @@ dq_object_access_hook(ObjectAccessType access, Oid classId,
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	LWLockRelease(diskquota_locks.extension_ddl_lock);
+}
+
+/*
+ * listening on any modify on pg_extension table when:
+ * 		DROP:       will send CMD_DROP_EXTENSION to diskquota laucher
+ */
+static void
+dq_object_access_hook(ObjectAccessType access, Oid classId,
+					  Oid objectId, int subId, void *arg)
+{
+	if (classId != ExtensionRelationId)
+		goto out;
+
+	if (get_extension_oid("diskquota", true) != objectId)
+		goto out;
+
+	switch(access) {
+		case OAT_DROP:
+			dq_object_access_hook_on_drop();
+			break;
+		case OAT_POST_ALTER:
+		case OAT_FUNCTION_EXECUTE:
+		case OAT_POST_CREATE:
+		case OAT_NAMESPACE_SEARCH:
+			break;
+	}
+
 out:
 	if (next_object_access_hook)
 		(*next_object_access_hook) (access, classId, objectId,
@@ -1205,6 +1219,58 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 	 */
 	SPI_finish();
 	PG_RETURN_VOID();
+}
+
+int worker_spi_get_extension_version(int *major, int *minor)
+{
+	StartTransactionCommand();
+	int ret = SPI_connect();
+	Assert(ret = SPI_OK_CONNECT);
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	ret = SPI_execute("select extversion from pg_extension where extname = 'diskquota'", true, 0);
+
+	if (SPI_processed == 0) {
+		ret = -1;
+		goto out;
+	}
+
+	if(ret != SPI_OK_SELECT || SPI_processed != 1) {
+		ereport(WARNING,
+				(errmsg("[diskquota] when reading installed version lines %ld code = %d",
+						SPI_processed, ret)));
+		return -1;
+	}
+
+	bool is_null = false;
+	Datum v = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &is_null);
+	Assert(is_null == false);
+
+	char *version =  TextDatumGetCString(v);
+	if (version == NULL) {
+		ereport(WARNING,
+				(errmsg("[diskquota] 'extversion' is empty in pg_class.pg_extension. catalog might be corrupted")));
+		return -1;
+	}
+
+	ret = sscanf(version, "%d.%d", major, minor);
+
+	if (ret != 2) {
+		ereport(WARNING,
+				(errmsg("[diskquota] 'extversion' is '%s' in pg_class.pg_extension which is not valid format. "
+						"catalog might be corrupted",
+						version)));
+		return -1;
+	}
+
+	ret = 0;
+
+out:
+	SPI_finish();
+	PopActiveSnapshot();
+	CommitTransactionCommand();
+
+	return ret;
 }
 
 /*

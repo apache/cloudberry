@@ -20,6 +20,8 @@ function _main() {
     # Run test again with standby master
     activate_standby
     time cmake --build . --target installcheck
+    # Run upgrade test (with standby master)
+    time cmake --build . --target upgradecheck
     popd
 }
 
