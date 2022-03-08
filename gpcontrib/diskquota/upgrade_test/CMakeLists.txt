@@ -5,6 +5,7 @@ RegressTarget_Add(upgrade
     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sql
     EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/expected
+    RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/results
     SCHEDULE_FILE
         ${CMAKE_CURRENT_SOURCE_DIR}/schedule_1.0--2.0
         ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--1.0
