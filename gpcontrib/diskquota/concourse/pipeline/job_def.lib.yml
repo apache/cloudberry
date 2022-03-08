@@ -1,11 +1,13 @@
 #@ load("base.lib.yml", "add_res_by_conf", "add_res_by_name")
+#@ load("@ytt:template", "template")
 
 #! Job config for centos7
 #@ def centos6_gpdb6_conf():
 res_build_image: centos6-gpdb6-image-build
 res_test_image: centos6-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_centos6
-diskquota_os: rhel6
+res_diskquota_bin: bin_diskquota_gpdb6_rhel6
+os: rhel6
 #@ end
 
 #! Job config for centos7
@@ -13,7 +15,8 @@ diskquota_os: rhel6
 res_build_image: centos7-gpdb6-image-build
 res_test_image: centos7-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_centos7
-diskquota_os: rhel7
+res_diskquota_bin: bin_diskquota_gpdb6_rhel7
+os: rhel7
 #@ end
 
 #! Job config for rhel8
@@ -21,7 +24,8 @@ diskquota_os: rhel7
 res_build_image: rhel8-gpdb6-image-build
 res_test_image: rhel8-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_rhel8
-diskquota_os: rhel8
+res_diskquota_bin: bin_diskquota_gpdb6_rhel8
+os: rhel8
 #@ end
 
 #! Job config for ubuntu18
@@ -29,11 +33,23 @@ diskquota_os: rhel8
 res_build_image: ubuntu18-gpdb6-image-build
 res_test_image: ubuntu18-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_ubuntu18
-diskquota_os: ubuntu18.04
+res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
+os: ubuntu18.04
+#@ end
+
+#@ def gate_job(trigger):
+name: gate
+on_failure: #@ trigger["on_failure"]
+on_error: #@ trigger["on_error"]
+plan:
+#@   for to_get in trigger["to_get"]:
+- trigger: true
+  _: #@ template.replace(to_get)
+#@   end
 #@ end
 
 #@ def _build_task(conf):
-task: #@ "build_" + conf["diskquota_os"]
+task: #@ "build_" + conf["os"]
 file: diskquota_src/concourse/tasks/build_diskquota.yml
 image: #@ conf["res_build_image"]
 input_mapping:
@@ -42,63 +58,53 @@ input_mapping:
 #! output_mapping is necessary. Otherwise we may use a wrong
 #! diskquota_bin in the test task.
 output_mapping:
-  "diskquota_artifacts": #@ "diskquota_artifacts_" + conf["diskquota_os"]
+  "diskquota_artifacts": #@ "diskquota_artifacts_" + conf["os"]
 params:
-  DISKQUOTA_OS: #@ conf["diskquota_os"]
+  DISKQUOTA_OS: #@ conf["os"]
 #@ end
 
 #@ def _test_task(conf):
-task: #@ "test_" + conf["diskquota_os"]
+task: #@ "test_" + conf["os"]
 timeout: 1h
 file: diskquota_src/concourse/tasks/test_diskquota.yml
 image: #@ conf["res_test_image"]
 input_mapping:
   bin_gpdb: #@ conf["res_gpdb_bin"]
-  bin_diskquota: #@ "diskquota_artifacts_" + conf["diskquota_os"]
+  bin_diskquota: #@ "diskquota_artifacts_" + conf["os"]
 params:
-  DISKQUOTA_OS: #@ conf["diskquota_os"]
+  DISKQUOTA_OS: #@ conf["os"]
 #@ end
 
 #@ def build_test_job(param):
 #@   res_map = param["res_map"]
 #@   trigger = param["trigger"]
-#@   confs = param["confs"]
+#@   conf = param["conf"]
 #@   add_res_by_name(res_map, param["gpdb_src"])
 #@   add_res_by_name(res_map, "bin_cmake")
-name: build_test
+#@   add_res_by_conf(res_map, conf)
+name: #@ "build_test_" + conf["os"]
 max_in_flight: 10
 on_success: #@ trigger["on_success"]
 on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
-#@   for trigger_plan in trigger["plans"]:
-- #@ trigger_plan
+#@   for to_get in trigger["to_get"]:
+- passed: [gate]
+  trigger: true
+  _: #@ template.replace(to_get)
+#@   end
+#@   for to_put in trigger["to_put"]:
+- #@ to_put
 #@   end
 - in_parallel:
   - get: gpdb_src
     resource: #@ param["gpdb_src"]
   - get: bin_cmake
-#@   for conf in confs:
-#@     add_res_by_conf(res_map, conf)
-#@     if conf["res_build_image"] == conf["res_test_image"]:
-  - get: #@ conf["res_build_image"]
-#@     else:
   - get: #@ conf["res_build_image"]
   - get: #@ conf["res_test_image"]
-#@     end
   - get: #@ conf["res_gpdb_bin"]
-#@   end
-#@   if len(confs) == 1:
-#@     conf = confs[0]
+  - get: last_released_diskquota_bin
+    resource: #@ conf["res_diskquota_bin"]
 - #@ _build_task(conf)
 - #@ _test_task(conf)
-#@   else:
-- in_parallel:
-    steps:
-#@     for conf in confs:
-      - do:
-        - #@ _build_task(conf)
-        - #@ _test_task(conf)
-#@     end
-#@   end
 #@ end
