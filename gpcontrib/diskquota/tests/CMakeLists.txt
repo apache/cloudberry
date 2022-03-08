@@ -6,6 +6,7 @@ RegressTarget_Add(regress
     ${CMAKE_CURRENT_SOURCE_DIR}/regress/regress_init_file
     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/sql
     EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected
+    RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/results
     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
     SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/regress/diskquota_schedule
     REGRESS_OPTS
@@ -19,6 +20,7 @@ RegressTarget_Add(isolation2
     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/sql
     EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/expected
+    RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/results
     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
     SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/isolation2_schedule
     REGRESS_OPTS

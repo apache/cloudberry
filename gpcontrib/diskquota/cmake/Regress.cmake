@@ -4,6 +4,7 @@
 # RegressTarget_Add(<name>
 #   SQL_DIR <sql_dir>
 #   EXPECTED_DIR <expected_dir>
+#   RESULTS_DIR <results_dir>
 #   [INIT_FILE <init_file_1> <init_file_2> ...]
 #   [SCHEDULE_FILE <schedule_file_1> <schedule_file_2> ...]
 #   [REGRESS <test1> <test2> ...]
@@ -48,7 +49,7 @@ function(RegressTarget_Add name)
     cmake_parse_arguments(
         arg
         ""
-        "SQL_DIR;EXPECTED_DIR;DATA_DIR;REGRESS_TYPE"
+        "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE"
         "REGRESS;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
         ${ARGN})
     if (NOT arg_EXPECTED_DIR)
@@ -58,6 +59,9 @@ function(RegressTarget_Add name)
     if (NOT arg_SQL_DIR)
         message(FATAL_ERROR
             "'SQL_DIR' needs to be specified.")
+    endif()
+    if (NOT arg_RESULTS_DIR)
+        message(FATAL_ERROR "'RESULTS_DIR' needs to be specified")
     endif()
 
     set(working_DIR "${CMAKE_CURRENT_BINARY_DIR}/${name}")
@@ -95,6 +99,7 @@ function(RegressTarget_Add name)
 
     get_filename_component(sql_DIR ${arg_SQL_DIR} ABSOLUTE)
     get_filename_component(expected_DIR ${arg_EXPECTED_DIR} ABSOLUTE)
+    get_filename_component(results_DIR ${arg_RESULTS_DIR} ABSOLUTE)
     if (arg_DATA_DIR)
         get_filename_component(data_DIR ${arg_DATA_DIR} ABSOLUTE)
         set(ln_data_dir_CMD ln -s ${data_DIR} data)
@@ -108,6 +113,9 @@ function(RegressTarget_Add name)
         COMMAND ln -s ${sql_DIR} sql
         COMMAND rm -f expected
         COMMAND ln -s ${expected_DIR} expected
+        COMMAND rm -f results
+        COMMAND mkdir -p ${results_DIR}
+        COMMAND ln -s ${results_DIR} results
         COMMAND rm -f data
         COMMAND ${ln_data_dir_CMD}
         COMMAND
