@@ -41,9 +41,9 @@ endif()
 set(CMAKE_C_FLAGS
     "${CMAKE_C_FLAGS} \
 	-DDISKQUOTA_VERSION='\"${DISKQUOTA_VERSION}\"' \
-	-DDISKQUOTA_MAJOR_VERSION='\"${DISKQUOTA_MAJOR_VERSION}\"' \
-	-DDISKQUOTA_MINOR_VERSION='\"${DISKQUOTA_MINOR_VERSION}\"' \
-	-DDISKQUOTA_PATCH_VERSION='\"${DISKQUOTA_PATCH_VERSION}\"' \
+	-DDISKQUOTA_MAJOR_VERSION=${DISKQUOTA_MAJOR_VERSION} \
+	-DDISKQUOTA_MINOR_VERSION=${DISKQUOTA_MINOR_VERSION} \
+	-DDISKQUOTA_PATCH_VERSION=${DISKQUOTA_PATCH_VERSION} \
 	-DDISKQUOTA_BINARY_NAME='\"${DISKQUOTA_BINARY_NAME}\"'")
 
 list(
@@ -80,6 +80,7 @@ set_target_properties(
 
 # Add installcheck targets
 add_subdirectory(tests)
+add_subdirectory(upgrade_test)
 
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)

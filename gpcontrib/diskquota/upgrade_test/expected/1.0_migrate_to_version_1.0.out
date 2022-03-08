@@ -1,0 +1,12 @@
+\! gpconfig -c shared_preload_libraries -v 'diskquota.so' > /dev/null
+\! gpstop -raf > /dev/null
+\! gpconfig -s 'shared_preload_libraries'
+Values on all segments are consistent
+GUC          : shared_preload_libraries
+Master  value: diskquota.so
+Segment value: diskquota.so
+\c
+alter extension diskquota update to '1.0';
+-- downgrade to 1.0 need reboot, the version check is not in 1.0
+-- worker status is undefined at just downgrade
+\! gpstop -arf > /dev/null

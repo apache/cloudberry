@@ -1,0 +1,264 @@
+CREATE FUNCTION typeid_to_name(oid[]) RETURNS name[] AS '
+  WITH io AS (
+    SELECT x.i AS index, x.o AS type_id FROM (
+      SELECT generate_series(1, array_length($1, 1)) AS i, unnest($1) AS o
+    ) AS x
+  ) SELECT array_agg(typname order by io.index) FROM io, pg_type t WHERE io.type_id = t.oid;
+' LANGUAGE sql STABLE;
+-- types
+SELECT
+    t1.typname,
+    array_agg(t2.typname order by a.atttypid) typname
+FROM
+    pg_namespace n,
+    pg_class c,
+    pg_type t1,
+    pg_type t2,
+    pg_attribute a
+WHERE
+    n.nspname = 'diskquota'
+    AND c.oid = t1.typrelid
+    AND n.oid = t1.typnamespace
+    AND a.attrelid = c.oid
+    AND t2.oid = a.atttypid
+GROUP BY
+    t1.typname
+ORDER BY
+    t1.typname;
+                typname                 |                       typname                       
+----------------------------------------+-----------------------------------------------------
+ blackmap                               | {bool,int4,text,oid,oid,oid,oid,oid,oid}
+ blackmap_entry                         | {bool,int4,oid,oid,oid}
+ blackmap_entry_detail                  | {bool,int4,text,oid,oid,oid,oid,oid,oid}
+ diskquota_active_table_type            | {int8,int2,oid}
+ quota_config                           | {int8,int4,int4,oid,oid,tid,xid,xid,cid,cid,float4}
+ relation_cache_detail                  | {char,int4,int4,oid,oid,oid,oid,oid,oid,oid,_oid}
+ show_fast_database_size_view           | {numeric}
+ show_fast_role_quota_view              | {name,int8,oid,numeric}
+ show_fast_role_tablespace_quota_view   | {name,name,int8,oid,oid,numeric}
+ show_fast_schema_quota_view            | {name,int8,oid,numeric}
+ show_fast_schema_tablespace_quota_view | {name,name,int8,oid,oid,numeric}
+ state                                  | {int4,int4,oid,tid,xid,xid,cid,cid}
+ table_size                             | {int8,int2,int4,oid,oid,tid,xid,xid,cid,cid}
+ target                                 | {int4,int4,oid,oid,oid,tid,xid,xid,cid,cid}
+(14 rows)
+
+-- types end
+-- tables
+SELECT
+    relname,
+    typeid_to_name(ARRAY[c.reltype]::oid[]) as reltype,
+    typeid_to_name(ARRAY[c.reloftype]::oid[]) as reloftype
+FROM
+    pg_class c,
+    pg_namespace n
+WHERE
+    c.relnamespace = n.oid
+    AND n.nspname = 'diskquota'
+    and c.relkind != 'v'
+ORDER BY
+    relname;
+           relname           |            reltype            | reloftype 
+-----------------------------+-------------------------------+-----------
+ blackmap_entry              | {blackmap_entry}              | 
+ blackmap_entry_detail       | {blackmap_entry_detail}       | 
+ diskquota_active_table_type | {diskquota_active_table_type} | 
+ quota_config                | {quota_config}                | 
+ quota_config_pkey           |                               | 
+ relation_cache_detail       | {relation_cache_detail}       | 
+ state                       | {state}                       | 
+ state_pkey                  |                               | 
+ table_size                  | {table_size}                  | 
+ table_size_pkey             |                               | 
+ target                      | {target}                      | 
+ target_pkey                 |                               | 
+(12 rows)
+
+-- tables end
+-- UDF
+SELECT
+    proname,
+    typeid_to_name(ARRAY[prorettype]::oid[]) as prorettype,
+    typeid_to_name(proargtypes) as proargtypes,
+    typeid_to_name(proallargtypes) as proallargtypes,
+    proargmodes,
+    prosrc,
+    probin,
+    proacl
+FROM
+    pg_namespace n,
+    pg_proc p
+WHERE
+    n.nspname = 'diskquota'
+    AND n.oid = p.pronamespace
+    AND p.proname != 'update_diskquota_db_list' -- update_diskquota_db_list in 1.0 can not be dropd, this is acceptable
+ORDER BY
+    proname;
+           proname           |          prorettype           |      proargtypes       | proallargtypes  | proargmodes |                                                        prosrc                                                        |          probin          | proacl 
+-----------------------------+-------------------------------+------------------------+-----------------+-------------+----------------------------------------------------------------------------------------------------------------------+--------------------------+--------
+ diskquota_fetch_table_stat  | {diskquota_active_table_type} | {int4,_oid}            |                 |             | diskquota_fetch_table_stat                                                                                           | $libdir/diskquota-2.0.so | 
+ init_table_size_table       | {void}                        |                        |                 |             | init_table_size_table                                                                                                | $libdir/diskquota-2.0.so | 
+ pause                       | {void}                        |                        |                 |             | diskquota_pause                                                                                                      | $libdir/diskquota-2.0.so | 
+ pull_all_table_size         | {record}                      |                        | {oid,int8,int2} | {o,o,o}     | pull_all_table_size                                                                                                  | $libdir/diskquota-2.0.so | 
+ refresh_blackmap            | {void}                        | {_blackmap_entry,_oid} |                 |             | refresh_blackmap                                                                                                     | $libdir/diskquota-2.0.so | 
+ relation_size               | {int8}                        | {regclass}             |                 |             |                                                                                                                     +|                          | 
+                             |                               |                        |                 |             |         SELECT SUM(size)::bigint FROM (                                                                             +|                          | 
+                             |                               |                        |                 |             |                 SELECT diskquota.relation_size_local(reltablespace, relfilenode, relpersistence, relstorage) AS size+|                          | 
+                             |                               |                        |                 |             |                 FROM gp_dist_random('pg_class') WHERE oid = relation                                                +|                          | 
+                             |                               |                        |                 |             |                 UNION ALL                                                                                           +|                          | 
+                             |                               |                        |                 |             |                 SELECT diskquota.relation_size_local(reltablespace, relfilenode, relpersistence, relstorage) AS size+|                          | 
+                             |                               |                        |                 |             |                 FROM pg_class WHERE oid = relation                                                                  +|                          | 
+                             |                               |                        |                 |             |         ) AS t                                                                                                       |                          | 
+ relation_size_local         | {int8}                        | {oid,oid,char,char}    |                 |             | relation_size_local                                                                                                  | $libdir/diskquota-2.0.so | 
+ resume                      | {void}                        |                        |                 |             | diskquota_resume                                                                                                     | $libdir/diskquota-2.0.so | 
+ set_per_segment_quota       | {void}                        | {text,float4}          |                 |             | set_per_segment_quota                                                                                                | $libdir/diskquota-2.0.so | 
+ set_role_quota              | {void}                        | {text,text}            |                 |             | set_role_quota                                                                                                       | $libdir/diskquota-2.0.so | 
+ set_role_tablespace_quota   | {void}                        | {text,text,text}       |                 |             | set_role_tablespace_quota                                                                                            | $libdir/diskquota-2.0.so | 
+ set_schema_quota            | {void}                        | {text,text}            |                 |             | set_schema_quota                                                                                                     | $libdir/diskquota-2.0.so | 
+ set_schema_tablespace_quota | {void}                        | {text,text,text}       |                 |             | set_schema_tablespace_quota                                                                                          | $libdir/diskquota-2.0.so | 
+ show_blackmap               | {blackmap_entry_detail}       |                        |                 |             | show_blackmap                                                                                                        | $libdir/diskquota-2.0.so | 
+ show_relation_cache         | {relation_cache_detail}       |                        |                 |             | show_relation_cache                                                                                                  | $libdir/diskquota-2.0.so | 
+ show_relation_cache_all_seg | {relation_cache_detail}       |                        |                 |             |                                                                                                                     +|                          | 
+                             |                               |                        |                 |             |         WITH relation_cache AS (                                                                                    +|                          | 
+                             |                               |                        |                 |             |                 SELECT diskquota.show_relation_cache() AS a                                                         +|                          | 
+                             |                               |                        |                 |             |                 FROM  gp_dist_random('gp_id')                                                                       +|                          | 
+                             |                               |                        |                 |             |         )                                                                                                           +|                          | 
+                             |                               |                        |                 |             |         SELECT (a).* FROM relation_cache;                                                                            |                          | 
+ show_worker_epoch           | {int8}                        |                        |                 |             | show_worker_epoch                                                                                                    | $libdir/diskquota-2.0.so | 
+ status                      | {record}                      |                        | {text,text}     | {t,t}       | diskquota_status                                                                                                     | $libdir/diskquota-2.0.so | 
+ wait_for_worker_new_epoch   | {bool}                        |                        |                 |             | wait_for_worker_new_epoch                                                                                            | $libdir/diskquota-2.0.so | 
+(19 rows)
+
+-- UDF end
+-- views
+SELECT
+    schemaname,
+    viewname,
+    definition
+FROM
+    pg_views
+WHERE
+    schemaname = 'diskquota'
+ORDER by
+    schemaname, viewname;
+ schemaname |                viewname                |                                                                 definition                                                                  
+------------+----------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------
+ diskquota  | blackmap                               |  SELECT bm.target_type,                                                                                                                    +
+            |                                        |     bm.target_oid,                                                                                                                         +
+            |                                        |     bm.database_oid,                                                                                                                       +
+            |                                        |     bm.tablespace_oid,                                                                                                                     +
+            |                                        |     bm.seg_exceeded,                                                                                                                       +
+            |                                        |     bm.dbnode,                                                                                                                             +
+            |                                        |     bm.spcnode,                                                                                                                            +
+            |                                        |     bm.relnode,                                                                                                                            +
+            |                                        |     bm.segid                                                                                                                               +
+            |                                        |    FROM diskquota.show_blackmap() bm(target_type, target_oid, database_oid, tablespace_oid, seg_exceeded, dbnode, spcnode, relnode, segid);
+ diskquota  | show_fast_database_size_view           |  SELECT (( SELECT sum(pg_relation_size((pg_class.oid)::regclass)) AS sum                                                                   +
+            |                                        |            FROM pg_class                                                                                                                   +
+            |                                        |           WHERE (pg_class.oid <= (16384)::oid)) + ( SELECT sum(table_size.size) AS sum                                                     +
+            |                                        |            FROM diskquota.table_size                                                                                                       +
+            |                                        |           WHERE (table_size.segid = (-1)))) AS dbsize;
+ diskquota  | show_fast_role_quota_view              |  WITH quota_usage AS (                                                                                                                     +
+            |                                        |          SELECT pg_class.relowner,                                                                                                         +
+            |                                        |             sum(table_size.size) AS total_size                                                                                             +
+            |                                        |            FROM diskquota.table_size,                                                                                                      +
+            |                                        |             pg_class                                                                                                                       +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                        +
+            |                                        |           GROUP BY pg_class.relowner                                                                                                       +
+            |                                        |         )                                                                                                                                  +
+            |                                        |  SELECT pg_roles.rolname AS role_name,                                                                                                     +
+            |                                        |     quota_config.targetoid AS role_oid,                                                                                                    +
+            |                                        |     quota_config.quotalimitmb AS quota_in_mb,                                                                                              +
+            |                                        |     COALESCE(quota_usage.total_size, (0)::numeric) AS rolsize_in_bytes                                                                     +
+            |                                        |    FROM ((diskquota.quota_config                                                                                                           +
+            |                                        |      JOIN pg_roles ON ((quota_config.targetoid = pg_roles.oid)))                                                                           +
+            |                                        |      LEFT JOIN quota_usage ON ((pg_roles.oid = quota_usage.relowner)))                                                                     +
+            |                                        |   WHERE (quota_config.quotatype = 1);
+ diskquota  | show_fast_role_tablespace_quota_view   |  WITH default_tablespace AS (                                                                                                              +
+            |                                        |          SELECT pg_database.dattablespace                                                                                                  +
+            |                                        |            FROM pg_database                                                                                                                +
+            |                                        |           WHERE (pg_database.datname = current_database())                                                                                 +
+            |                                        |         ), quota_usage AS (                                                                                                                +
+            |                                        |          SELECT pg_class.relowner,                                                                                                         +
+            |                                        |                 CASE                                                                                                                       +
+            |                                        |                     WHEN (pg_class.reltablespace = (0)::oid) THEN default_tablespace.dattablespace                                         +
+            |                                        |                     ELSE pg_class.reltablespace                                                                                            +
+            |                                        |                 END AS reltablespace,                                                                                                      +
+            |                                        |             sum(table_size.size) AS total_size                                                                                             +
+            |                                        |            FROM diskquota.table_size,                                                                                                      +
+            |                                        |             pg_class,                                                                                                                      +
+            |                                        |             default_tablespace                                                                                                             +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                        +
+            |                                        |           GROUP BY pg_class.relowner, pg_class.reltablespace, default_tablespace.dattablespace                                             +
+            |                                        |         ), full_quota_config AS (                                                                                                          +
+            |                                        |          SELECT config.targetoid,                                                                                                          +
+            |                                        |             target.tablespaceoid,                                                                                                          +
+            |                                        |             config.quotalimitmb                                                                                                            +
+            |                                        |            FROM diskquota.quota_config config,                                                                                             +
+            |                                        |             diskquota.target target                                                                                                        +
+            |                                        |           WHERE (((config.targetoid = target.primaryoid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 3))            +
+            |                                        |         )                                                                                                                                  +
+            |                                        |  SELECT pg_roles.rolname AS role_name,                                                                                                     +
+            |                                        |     full_quota_config.targetoid AS role_oid,                                                                                               +
+            |                                        |     pg_tablespace.spcname AS tablespace_name,                                                                                              +
+            |                                        |     full_quota_config.tablespaceoid AS tablespace_oid,                                                                                     +
+            |                                        |     full_quota_config.quotalimitmb AS quota_in_mb,                                                                                         +
+            |                                        |     COALESCE(quota_usage.total_size, (0)::numeric) AS rolsize_tablespace_in_bytes                                                          +
+            |                                        |    FROM (((full_quota_config                                                                                                               +
+            |                                        |      JOIN pg_roles ON ((full_quota_config.targetoid = pg_roles.oid)))                                                                      +
+            |                                        |      JOIN pg_tablespace ON ((full_quota_config.tablespaceoid = pg_tablespace.oid)))                                                        +
+            |                                        |      LEFT JOIN quota_usage ON (((pg_roles.oid = quota_usage.relowner) AND (pg_tablespace.oid = quota_usage.reltablespace))));
+ diskquota  | show_fast_schema_quota_view            |  WITH quota_usage AS (                                                                                                                     +
+            |                                        |          SELECT pg_class.relnamespace,                                                                                                     +
+            |                                        |             sum(table_size.size) AS total_size                                                                                             +
+            |                                        |            FROM diskquota.table_size,                                                                                                      +
+            |                                        |             pg_class                                                                                                                       +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                        +
+            |                                        |           GROUP BY pg_class.relnamespace                                                                                                   +
+            |                                        |         )                                                                                                                                  +
+            |                                        |  SELECT pg_namespace.nspname AS schema_name,                                                                                               +
+            |                                        |     quota_config.targetoid AS schema_oid,                                                                                                  +
+            |                                        |     quota_config.quotalimitmb AS quota_in_mb,                                                                                              +
+            |                                        |     COALESCE(quota_usage.total_size, (0)::numeric) AS nspsize_in_bytes                                                                     +
+            |                                        |    FROM ((diskquota.quota_config                                                                                                           +
+            |                                        |      JOIN pg_namespace ON ((quota_config.targetoid = pg_namespace.oid)))                                                                   +
+            |                                        |      LEFT JOIN quota_usage ON ((pg_namespace.oid = quota_usage.relnamespace)))                                                             +
+            |                                        |   WHERE (quota_config.quotatype = 0);
+ diskquota  | show_fast_schema_tablespace_quota_view |  WITH default_tablespace AS (                                                                                                              +
+            |                                        |          SELECT pg_database.dattablespace                                                                                                  +
+            |                                        |            FROM pg_database                                                                                                                +
+            |                                        |           WHERE (pg_database.datname = current_database())                                                                                 +
+            |                                        |         ), quota_usage AS (                                                                                                                +
+            |                                        |          SELECT pg_class.relnamespace,                                                                                                     +
+            |                                        |                 CASE                                                                                                                       +
+            |                                        |                     WHEN (pg_class.reltablespace = (0)::oid) THEN default_tablespace.dattablespace                                         +
+            |                                        |                     ELSE pg_class.reltablespace                                                                                            +
+            |                                        |                 END AS reltablespace,                                                                                                      +
+            |                                        |             sum(table_size.size) AS total_size                                                                                             +
+            |                                        |            FROM diskquota.table_size,                                                                                                      +
+            |                                        |             pg_class,                                                                                                                      +
+            |                                        |             default_tablespace                                                                                                             +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                        +
+            |                                        |           GROUP BY pg_class.relnamespace, pg_class.reltablespace, default_tablespace.dattablespace                                         +
+            |                                        |         ), full_quota_config AS (                                                                                                          +
+            |                                        |          SELECT config.targetoid,                                                                                                          +
+            |                                        |             target.tablespaceoid,                                                                                                          +
+            |                                        |             config.quotalimitmb                                                                                                            +
+            |                                        |            FROM diskquota.quota_config config,                                                                                             +
+            |                                        |             diskquota.target target                                                                                                        +
+            |                                        |           WHERE (((config.targetoid = target.primaryoid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 2))            +
+            |                                        |         )                                                                                                                                  +
+            |                                        |  SELECT pg_namespace.nspname AS schema_name,                                                                                               +
+            |                                        |     full_quota_config.targetoid AS schema_oid,                                                                                             +
+            |                                        |     pg_tablespace.spcname AS tablespace_name,                                                                                              +
+            |                                        |     full_quota_config.tablespaceoid AS tablespace_oid,                                                                                     +
+            |                                        |     full_quota_config.quotalimitmb AS quota_in_mb,                                                                                         +
+            |                                        |     COALESCE(quota_usage.total_size, (0)::numeric) AS nspsize_tablespace_in_bytes                                                          +
+            |                                        |    FROM (((full_quota_config                                                                                                               +
+            |                                        |      JOIN pg_namespace ON ((full_quota_config.targetoid = pg_namespace.oid)))                                                              +
+            |                                        |      JOIN pg_tablespace ON ((full_quota_config.tablespaceoid = pg_tablespace.oid)))                                                        +
+            |                                        |      LEFT JOIN quota_usage ON (((pg_namespace.oid = quota_usage.relnamespace) AND (pg_tablespace.oid = quota_usage.reltablespace))));
+(6 rows)
+
+-- views end
+DROP FUNCTION typeid_to_name (oid[]);
