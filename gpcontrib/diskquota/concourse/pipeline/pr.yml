@@ -1,4 +1,5 @@
 #@ load("job_def.lib.yml",
+#@   "gate_job",
 #@   "build_test_job",
 #@   "centos6_gpdb6_conf",
 #@   "centos7_gpdb6_conf",
@@ -13,19 +14,24 @@
 #@  "declare_res_type")
 #@ res_map = {}
 #@ res_type_map = {}
-#@ job_param = {
-#@   "res_map": res_map,
-#@   "gpdb_src": "gpdb6_src",
-#@   "trigger": pr_trigger(res_map),
-#@   "confs": [
-#@     centos6_gpdb6_conf(),
-#@     centos7_gpdb6_conf(),
-#@     rhel8_gpdb6_conf(),
-#@     ubuntu18_gpdb6_conf()
-#@   ]
-#@ }
+#@ trigger = pr_trigger(res_map)
+#@ confs = [
+#@   centos6_gpdb6_conf(),
+#@   centos7_gpdb6_conf(),
+#@   rhel8_gpdb6_conf(),
+#@   ubuntu18_gpdb6_conf()
+#@ ]
 jobs:
-- #@ build_test_job(job_param)
+- #@ gate_job(trigger)
+#@ for conf in confs:
+#@   param = {
+#@     "res_map": res_map,
+#@     "trigger": trigger,
+#@     "gpdb_src": "gpdb6_src",
+#@     "conf": conf
+#@   }
+- #@ build_test_job(param)
+#@ end
 
 resources: #@ declare_res(res_type_map, res_map)
 

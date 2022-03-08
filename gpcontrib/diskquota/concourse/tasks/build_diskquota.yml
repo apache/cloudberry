@@ -6,6 +6,7 @@ inputs:
   - name: diskquota_src
   - name: gpdb_src
   - name: bin_cmake
+  - name: last_released_diskquota_bin
 
 outputs:
   - name: diskquota_artifacts
