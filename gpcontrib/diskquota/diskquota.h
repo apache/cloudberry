@@ -117,6 +117,8 @@ struct DiskQuotaWorkerEntry
 	Oid			dbid;
 	pg_atomic_uint32 epoch; 		/* this counter will be increased after each worker loop */
 	bool is_paused; 			/* true if this worker is paused */
+
+	// NOTE: this field only can access in diskquota launcher, in other process it is dangling pointer
 	BackgroundWorkerHandle *handle;
 };
 
@@ -145,6 +147,7 @@ extern int	diskquota_max_active_tables;
 extern bool	diskquota_hardlimit;
 
 extern int 	SEGCOUNT;
+extern int worker_spi_get_extension_version(int *major, int *minor);
 extern int  get_ext_major_version(void);
 extern void truncateStringInfo(StringInfo str, int nchars);
 extern List *get_rel_oid_list(void);

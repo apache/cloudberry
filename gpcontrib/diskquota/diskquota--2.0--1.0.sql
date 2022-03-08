@@ -57,6 +57,7 @@ DROP FUNCTION diskquota.relation_size_local(
 	relfilenode oid,
 	relpersistence "char",
 	relstorage "char");
+DROP FUNCTION diskquota.pull_all_table_size(OUT tableid oid, OUT size bigint, OUT segid smallint);
 DROP FUNCTION diskquota.relation_size(relation regclass);
 DROP FUNCTION diskquota.show_relation_cache_all_seg();
 -- UDF end
