@@ -5,6 +5,7 @@
 # PG_CONFIG - the path to the pg_config executable to be used. this determines the
 #             version to be built with.
 # GP_MAJOR_VERSION - the major version parsed from gpdb source
+# GP_VERSION - The GP_VERSION string
 # PG_BIN_DIR - location of user executables
 # PG_INCLUDE_DIR - location of C header files of the client
 # PG_INCLUDE_DIR_SERVER - location of C header files for the server
@@ -60,4 +61,11 @@ if (GP_MAJOR_VERSION)
     message(STATUS "Build extension for GPDB ${GP_MAJOR_VERSION}")
 else()
     message(FATAL_ERROR "Cannot read GP_MAJORVERSION from '${PG_INCLUDE_DIR}/pg_config.h'")
+endif()
+string(REGEX MATCH "#define *GP_VERSION *\"[^\"]*\"" macrodef "${config_header}")
+string(REGEX REPLACE ".*\"\(.*\)\".*" "\\1" GP_VERSION "${macrodef}")
+if (GP_VERSION)
+    message(STATUS "The exact GPDB version is '${GP_VERSION}'")
+else()
+    message(FATAL_ERROR "Cannot read GP_VERSION from '${PG_INCLUDE_DIR}/pg_config.h'")
 endif()
