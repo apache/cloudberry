@@ -1,12 +1,13 @@
 #@ load("base.lib.yml", "add_res_by_conf", "add_res_by_name")
 #@ load("@ytt:template", "template")
 
-#! Job config for centos7
+#! Job config for centos6
 #@ def centos6_gpdb6_conf():
 res_build_image: centos6-gpdb6-image-build
 res_test_image: centos6-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_centos6
 res_diskquota_bin: bin_diskquota_gpdb6_rhel6
+res_intermediates_bin: bin_diskquota_gpdb6_rhel6_intermediates
 os: rhel6
 #@ end
 
@@ -16,6 +17,7 @@ res_build_image: centos7-gpdb6-image-build
 res_test_image: centos7-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_centos7
 res_diskquota_bin: bin_diskquota_gpdb6_rhel7
+res_intermediates_bin: bin_diskquota_gpdb6_rhel7_intermediates
 os: rhel7
 #@ end
 
@@ -25,6 +27,7 @@ res_build_image: rhel8-gpdb6-image-build
 res_test_image: rhel8-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_rhel8
 res_diskquota_bin: bin_diskquota_gpdb6_rhel8
+res_intermediates_bin: bin_diskquota_gpdb6_rhel8_intermediates
 os: rhel8
 #@ end
 
@@ -34,6 +37,7 @@ res_build_image: ubuntu18-gpdb6-image-build
 res_test_image: ubuntu18-gpdb6-image-test
 res_gpdb_bin: bin_gpdb6_ubuntu18
 res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
+res_intermediates_bin: bin_diskquota_gpdb6_ubuntu18_intermediates
 os: ubuntu18.04
 #@ end
 
@@ -54,11 +58,6 @@ file: diskquota_src/concourse/tasks/build_diskquota.yml
 image: #@ conf["res_build_image"]
 input_mapping:
   bin_gpdb: #@ conf["res_gpdb_bin"]
-  diskquota_artifacts: diskquota_artifacts
-#! output_mapping is necessary. Otherwise we may use a wrong
-#! diskquota_bin in the test task.
-output_mapping:
-  "diskquota_artifacts": #@ "diskquota_artifacts_" + conf["os"]
 params:
   DISKQUOTA_OS: #@ conf["os"]
 #@ end
@@ -70,7 +69,7 @@ file: diskquota_src/concourse/tasks/test_diskquota.yml
 image: #@ conf["res_test_image"]
 input_mapping:
   bin_gpdb: #@ conf["res_gpdb_bin"]
-  bin_diskquota: #@ "diskquota_artifacts_" + conf["os"]
+  bin_diskquota: diskquota_artifacts
 params:
   DISKQUOTA_OS: #@ conf["os"]
 #@ end
@@ -81,6 +80,7 @@ params:
 #@   conf = param["conf"]
 #@   add_res_by_name(res_map, param["gpdb_src"])
 #@   add_res_by_name(res_map, "bin_cmake")
+#@   add_res_by_name(res_map, "bin_diskquota_intermediates")
 #@   add_res_by_conf(res_map, conf)
 name: #@ "build_test_" + conf["os"]
 max_in_flight: 10
@@ -107,4 +107,7 @@ plan:
     resource: #@ conf["res_diskquota_bin"]
 - #@ _build_task(conf)
 - #@ _test_task(conf)
+- put: #@ conf["res_intermediates_bin"]
+  params:
+    file: diskquota_artifacts/diskquota-*_x86_64.tar.gz
 #@ end
