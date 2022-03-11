@@ -3,10 +3,9 @@ CREATE DATABASE diskquota;
 --end_ignore
 
 !\retcode gpconfig -c shared_preload_libraries -v $(./data/current_binary_name);
-!\retcode gpstop -raf;
+!\retcode gpconfig -c diskquota.naptime -v 0 --skipvalidation;
+!\retcode gpconfig -c max_worker_processes -v 20 --skipvalidation;
 
-!\retcode gpconfig -c diskquota.naptime -v 0;
-!\retcode gpconfig -c max_worker_processes -v 20;
 !\retcode gpstop -raf;
 
 -- Show the values of all GUC variables
