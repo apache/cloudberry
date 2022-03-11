@@ -1,13 +1,11 @@
 
 !\retcode gpconfig -c shared_preload_libraries -v $(./data/current_binary_name);
 (exited with code 0)
-!\retcode gpstop -raf;
+!\retcode gpconfig -c diskquota.naptime -v 0 --skipvalidation;
+(exited with code 0)
+!\retcode gpconfig -c max_worker_processes -v 20 --skipvalidation;
 (exited with code 0)
 
-!\retcode gpconfig -c diskquota.naptime -v 0;
-(exited with code 0)
-!\retcode gpconfig -c max_worker_processes -v 20;
-(exited with code 0)
 !\retcode gpstop -raf;
 (exited with code 0)
 
