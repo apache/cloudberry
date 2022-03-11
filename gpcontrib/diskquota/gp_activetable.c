@@ -383,11 +383,14 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 		MemoryContext oldcontext;
 		TupleDesc	tupdesc;
 		int		extMajorVersion;
-		if (SPI_OK_CONNECT != SPI_connect())
+		int ret_code = SPI_connect();
+		if (ret_code != SPI_OK_CONNECT)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("unable to connect to execute internal query")));
+					 errmsg(
+						 "unable to connect to execute internal query. return code: %d.",
+						 ret_code)));
 		}
 		extMajorVersion = get_ext_major_version();
 		SPI_finish();
@@ -418,7 +421,7 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 				update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
 				break;
 			default:
-				ereport(ERROR, (errmsg("Unused mode number, transaction will be aborted")));
+				ereport(ERROR, (errmsg("Unused mode number %d, transaction will be aborted", mode)));
 				break;
 
 		}
@@ -859,7 +862,7 @@ load_table_size(HTAB *local_table_stats_map)
 	}
 
 	if (ret != SPI_OK_SELECT)
-		ereport(ERROR, (errmsg("[diskquota] load_table_size SPI_execute failed: error code %d", errno)));
+		ereport(ERROR, (errmsg("[diskquota] load_table_size SPI_execute failed: return code %d, error: %m", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 3 ||
@@ -867,6 +870,15 @@ load_table_size(HTAB *local_table_stats_map)
 		((tupdesc)->attrs[1])->atttypid != INT8OID ||
 		((tupdesc)->attrs[2])->atttypid != INT2OID)
 	{
+		if (tupdesc->natts != 3)
+		{
+			ereport(WARNING, (errmsg("[diskquota] tupdesc->natts: %d", tupdesc->natts)));
+		}
+		else
+		{
+			ereport(WARNING, (errmsg("[diskquota] attrs: %d, %d, %d",
+							tupdesc->attrs[0]->atttypid, tupdesc->attrs[1]->atttypid, tupdesc->attrs[2]->atttypid)));
+		}
 		ereport(ERROR, (errmsg("[diskquota] table \"table_size\" is corrupted in database \"%s\","
 							   " please recreate diskquota extension",
 							   get_database_name(MyDatabaseId))));
