@@ -1296,11 +1296,12 @@ load_quotas(void)
 	 */
 	PG_TRY();
 	{
-		if (SPI_OK_CONNECT != SPI_connect())
+		int ret_code = SPI_connect();
+		if (ret_code != SPI_OK_CONNECT)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("[diskquota] unable to connect to execute SPI query")));
+					 errmsg("[diskquota] unable to connect to execute SPI query, return code: %d", ret_code)));
 		}
 		connected = true;
 		PushActiveSnapshot(GetTransactionSnapshot());
@@ -1425,7 +1426,8 @@ do_load_quotas(void)
 		{
 			if (quota_info[quotaType].num_keys != 1) {
 				ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-							errmsg("[diskquota] tablespace Oid MUST NOT be NULL for quota type: %d", quotaType)));
+							errmsg("[diskquota] tablespace Oid MUST NOT be NULL for quota type: %d. num_keys: %d",
+								quotaType, quota_info[quotaType].num_keys)));
 			}
 			update_limit_for_quota(quota_limit_mb * (1 << 20), segratio, quotaType, (Oid[]){targetOid});
 		}
@@ -1730,6 +1732,7 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 	HASH_SEQ_STATUS			hash_seq;
 	HTAB				   *local_blackmap;
 	HASHCTL					hashctl;
+	int						ret_code;
 
 	if (!superuser())
 		errmsg("must be superuser to update blackmap");
@@ -1744,10 +1747,11 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 		hash_search(disk_quota_black_map, &blackmapentry->keyitem, HASH_REMOVE, NULL);
 	LWLockRelease(diskquota_locks.black_map_lock);
 
-	if (SPI_connect() != SPI_OK_CONNECT)
+	ret_code = SPI_connect();
+	if (ret_code != SPI_OK_CONNECT)
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("unable to connect to execute internal query")));
+				 errmsg("unable to connect to execute internal query, return code: %d", ret_code)));
 
 	/*
 	 * Secondly, iterate over blackmap entries and add these entries to the local black map
