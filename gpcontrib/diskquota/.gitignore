@@ -1,12 +1,13 @@
-*.o
-*.so
-build
+# Build directory
+build*/
 
-regression.out
-regression.diffs
+# The tests results
 /results/
 
+# For IDE/Editors
 .vscode
-upgrade_test/regression.out
-upgrade_test/regression.diffs
-upgrade_test/results
+.idea
+tags
+cscope*
+.ccls-cache/
+compile_commands.json
