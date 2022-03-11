@@ -2,11 +2,10 @@
 CREATE DATABASE diskquota;
 
 \! gpconfig -c shared_preload_libraries -v $(./data/current_binary_name);
-\! gpstop -raf
+\! gpconfig -c diskquota.naptime -v 0 --skipvalidation
+\! gpconfig -c max_worker_processes -v 20 --skipvalidation
+\! gpconfig -c diskquota.hard_limit -v "off" --skipvalidation
 
-\! gpconfig -c diskquota.naptime -v 0
-\! gpconfig -c max_worker_processes -v 20
-\! gpconfig -c diskquota.hard_limit -v "off"
 \! gpstop -raf
 --end_ignore
 
