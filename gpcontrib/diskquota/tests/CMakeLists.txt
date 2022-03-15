@@ -3,7 +3,6 @@ include(${CMAKE_SOURCE_DIR}/cmake/Regress.cmake)
 RegressTarget_Add(regress
     INIT_FILE
     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
-    ${CMAKE_CURRENT_SOURCE_DIR}/regress/regress_init_file
     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/sql
     EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected
     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/results
