@@ -1,0 +1,134 @@
+!\retcode gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u > /dev/null;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+1: CREATE SCHEMA postmaster_restart_s;
+CREATE
+1: SET search_path TO postmaster_restart_s;
+SET
+
+1: SELECT diskquota.set_schema_quota('postmaster_restart_s', '1 MB');
+ set_schema_quota 
+------------------
+                  
+(1 row)
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+
+-- expect fail
+1: CREATE TABLE t1 AS SELECT generate_series(1,1000000);
+ERROR:  schema's disk space quota exceeded with name:157893  (seg0 127.0.0.1:6002 pid=1025673)
+1q: ... <quitting>
+
+-- launcher should exist
+-- [p]ostgres is to filter out the pgrep itself
+!\retcode pgrep -f "[p]ostgres.*launcher";
+-- start_ignore
+2774491
+
+-- end_ignore
+(exited with code 0)
+-- bgworker should exist
+!\retcode pgrep -f "[p]ostgres.*diskquota.*isolation2test";
+-- start_ignore
+2774659
+
+-- end_ignore
+(exited with code 0)
+
+-- stop postmaster
+!\retcode pg_ctl -D $MASTER_DATA_DIRECTORY -w stop;
+-- start_ignore
+waiting for server to shut down.... done
+server stopped
+-- end_ignore
+(exited with code 0)
+
+-- launcher should be terminated
+!\retcode pgrep -f "[p]ostgres.*launcher";
+-- start_ignore
+
+-- end_ignore
+(exited with code 1)
+-- bgworker should be terminated
+!\retcode pgrep -f "[p]ostgres.*diskquota.*isolation2test";
+-- start_ignore
+
+-- end_ignore
+(exited with code 1)
+
+-- start postmaster
+-- -E needs to be changed to "-c gp_role=dispatch" for GPDB7
+-- See https://github.com/greenplum-db/gpdb/pull/9396
+!\retcode pg_ctl -D $MASTER_DATA_DIRECTORY -w -o "-E" start;
+-- start_ignore
+waiting for server to start....2022-02-14 21:41:39.147869 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""ftsprobe process""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
+2022-02-14 21:41:39.147899 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""dtx recovery process""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
+2022-02-14 21:41:39.147934 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""sweeper process""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
+2022-02-14 21:41:39.148550 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""[diskquota] - launcher""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
+2022-02-14 21:41:39.272714 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","redirecting log output to logging collector process",,"Future log output will appear in directory ""pg_log"".",,,,,,"SysLogger_Start","syslogger.c",986,
+ done
+server started
+
+-- end_ignore
+(exited with code 0)
+-- Hopefully the bgworker can be started in 5 seconds
+!\retcode sleep 5;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- launcher should be restarted
+!\retcode pgrep -f "[p]ostgres.*launcher";
+-- start_ignore
+2771049
+
+-- end_ignore
+(exited with code 0)
+-- bgworker should be restarted
+!\retcode pgrep -f "[p]ostgres.*diskquota.*isolation2test";
+-- start_ignore
+2771074
+
+-- end_ignore
+(exited with code 0)
+
+1: SET search_path TO postmaster_restart_s;
+SET
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+-- expect fail
+1: CREATE TABLE t2 AS SELECT generate_series(1,1000000);
+ERROR:  schema's disk space quota exceeded with name:158089  (seg0 127.0.0.1:6002 pid=1027799)
+-- enlarge the quota limits
+1: SELECT diskquota.set_schema_quota('postmaster_restart_s', '100 MB');
+ set_schema_quota 
+------------------
+                  
+(1 row)
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+-- expect succeed
+1: CREATE TABLE t3 AS SELECT generate_series(1,1000000);
+CREATE 1000000
+
+1: DROP SCHEMA postmaster_restart_s CASCADE;
+DROP
+1q: ... <quitting>
