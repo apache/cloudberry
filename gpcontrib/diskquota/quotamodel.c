@@ -1259,6 +1259,7 @@ dispatch_blackmap(HTAB *local_active_table_stat_map)
 	pfree(rows.data);
 	pfree(active_oids.data);
 	pfree(sql.data);
+	cdbdisp_clearCdbPgResults(&cdb_pgresults);
 }
 
 /*
