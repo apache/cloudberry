@@ -46,7 +46,7 @@ if (NOT PG_SRC_DIR)
     execute_process(
         COMMAND_ECHO STDOUT
         COMMAND
-        grep abs_top_builddir ${makefile_global}
+        grep "^abs_top_builddir" ${makefile_global}
         COMMAND
         sed s/.*abs_top_builddir.*=\\\(.*\\\)/\\1/
         OUTPUT_VARIABLE PG_SRC_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
