@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.18)
-# include_guard()           need 3.10
 # file(ARCHIVE_EXTRACT foo) need 3.18
 
 project(diskquota)
@@ -72,7 +71,9 @@ list(
 add_library(diskquota MODULE ${diskquota_SRC})
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${PG_HOME}" CACHE PATH "default install prefix" FORCE)
+  set(CMAKE_INSTALL_PREFIX
+      "${PG_HOME}"
+      CACHE PATH "default install prefix" FORCE)
 endif()
 
 set_target_properties(
@@ -81,10 +82,6 @@ set_target_properties(
              PREFIX ""
              C_STANDARD 99
              LINKER_LANGUAGE "CXX")
-
-# Add installcheck targets
-add_subdirectory(tests)
-add_subdirectory(upgrade_test)
 
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)
@@ -95,6 +92,26 @@ if(DEFINED DISKQUOTA_LAST_RELEASE_PATH)
   file(GLOB DISKQUOTA_PREVIOUS_LIBRARY
        "${CMAKE_BINARY_DIR}/lib/postgresql/*.so")
   install(PROGRAMS ${DISKQUOTA_PREVIOUS_LIBRARY} DESTINATION "lib/postgresql/")
+
+  get_filename_component(
+    DISKQUOTA_LAST_RELEASE_FILENAME ${DISKQUOTA_LAST_RELEASE_PATH} NAME CACHE
+    "last release installer name")
+  string(
+    REGEX
+    REPLACE "^diskquota-([0-9]+).[0-9]+.[0-9]+-.*$" "\\1"
+            DISKQUOTA_LAST_MAJOR_VERSION ${DISKQUOTA_LAST_RELEASE_FILENAME})
+  string(
+    REGEX
+    REPLACE "^diskquota-[0-9]+.([0-9]+).[0-9]+-.*$" "\\1"
+            DISKQUOTA_LAST_MINOR_VERSION ${DISKQUOTA_LAST_RELEASE_FILENAME})
+  string(
+    REGEX
+    REPLACE "^diskquota-[0-9]+.[0-9]+.([0-9]+)-.*$" "\\1"
+            DISKQUOTA_LAST_PATCH_VERSION ${DISKQUOTA_LAST_RELEASE_FILENAME})
+
+  set(DISKQUOTA_LAST_VERSION
+      "${DISKQUOTA_LAST_MAJOR_VERSION}.${DISKQUOTA_LAST_MINOR_VERSION}.${DISKQUOTA_LAST_PATCH_VERSION}"
+  )
 endif()
 
 set(CPACK_GENERATOR "TGZ")
@@ -116,6 +133,10 @@ BuildInfo_Create(${build_info_PATH}
   GP_MAJOR_VERSION
   GP_VERSION)
 # Create build-info end
+
+# Add installcheck targets
+add_subdirectory(tests)
+add_subdirectory(upgrade_test)
 
 # NOTE: keep install part at the end of file, to overwrite previous binary
 install(PROGRAMS "cmake/install_gpdb_component" DESTINATION ".")
