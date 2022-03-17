@@ -82,9 +82,9 @@ cluster level, we limit the diskquota of a role to be database specific.
 That is to say, a role may have different quota limit on different databases 
 and their disk usage is isolated between databases.
 
-# Install
+# Development
 
-(cmake)[https://cmake.org] (>= 3.18) needs to be installed.
+[cmake](https://cmake.org) (>= 3.18) needs to be installed.
 
 1. Build & install disk quota
 ```
@@ -139,6 +139,37 @@ create extension diskquota;
 6. Initialize existing table size information is needed if `create extension` is not executed in a new created database.
 ```
 select diskquota.init_table_size_table();
+```
+
+## clang-format
+
+In order to pass the CI check for PR, the changed code needs to be formated by
+[clang-format](https://clang.llvm.org/docs/ClangFormat.html) **13**. A static-linked
+version can be found at https://github.com/beeender/clang-tools-static-binaries/releases/tag/master-7d0aff9a .
+
+To format all the source files in the git tree:
+
+```
+git ls-files '*.c' '*.h' | xargs clang-format --style=file -i
+```
+
+If you have `git-clang-format` installed, it can be as easy as:
+
+```
+git clang-format <base-branch>
+```
+
+To skip formatting a certain piece of code:
+
+```c
+/* clang-format off */
+#if SOME_MACRO
+#define DO_NOT_FORMAT_ME \
+    (1 \
+    + \
+    )\
+#endif
+/* clang-format on */
 ```
 
 # Usage

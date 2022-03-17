@@ -41,8 +41,10 @@ res_intermediates_bin: bin_diskquota_gpdb6_ubuntu18_intermediates
 os: ubuntu18.04
 #@ end
 
-#@ def gate_job(trigger):
-name: gate
+#! The entry point of a pipeline. The job name must be 'entrance'.
+#@ def entrance_job(param):
+#@   trigger = param["trigger"]
+name: entrance
 on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
@@ -50,6 +52,29 @@ plan:
 - trigger: true
   _: #@ template.replace(to_get)
 #@   end
+#@ end
+
+#! Like the entrance_job, with more static checks.
+#@ def entrance_check_job(param):
+#@   add_res_by_name(param["res_map"], "clang-format-image")
+#@   trigger = param["trigger"]
+name: entrance
+on_failure: #@ trigger["on_failure"]
+on_error: #@ trigger["on_error"]
+plan:
+#@   for to_get in trigger["to_get"]:
+- trigger: true
+  _: #@ template.replace(to_get)
+#@   end
+- get: clang-format-image
+- task: check_clang_format
+  image: clang-format-image
+  config:
+    inputs:
+      - name: diskquota_src
+    platform: linux
+    run:
+      path: diskquota_src/concourse/scripts/check-clang-format.sh
 #@ end
 
 #@ def _build_task(conf):
@@ -89,7 +114,7 @@ on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
 #@   for to_get in trigger["to_get"]:
-- passed: [gate]
+- passed: [entrance]
   trigger: true
   _: #@ template.replace(to_get)
 #@   end

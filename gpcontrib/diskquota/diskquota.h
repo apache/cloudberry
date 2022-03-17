@@ -27,35 +27,35 @@ typedef enum
 	ROLE_TABLESPACE_QUOTA,
 
 	NUM_QUOTA_TYPES
-}			QuotaType;
+} QuotaType;
 
 typedef enum
 {
-	FETCH_ACTIVE_OID,			/* fetch active table list */
-	FETCH_ACTIVE_SIZE,			/* fetch size for active tables */
+	FETCH_ACTIVE_OID,  /* fetch active table list */
+	FETCH_ACTIVE_SIZE, /* fetch size for active tables */
 	ADD_DB_TO_MONITOR,
 	REMOVE_DB_FROM_BEING_MONITORED,
-}			FetchTableStatType;
+} FetchTableStatType;
 
 typedef enum
 {
 	DISKQUOTA_UNKNOWN_STATE,
 	DISKQUOTA_READY_STATE
-}			DiskQuotaState;
+} DiskQuotaState;
 
 struct DiskQuotaLocks
 {
-	LWLock	   *active_table_lock;
-	LWLock	   *black_map_lock;
-	LWLock	   *extension_ddl_message_lock;
-	LWLock	   *extension_ddl_lock; /* ensure create diskquota extension serially */
-	LWLock	   *monitoring_dbid_cache_lock;
-	LWLock	   *relation_cache_lock;
-	LWLock	   *worker_map_lock;
-	LWLock	   *altered_reloid_cache_lock;
+	LWLock *active_table_lock;
+	LWLock *black_map_lock;
+	LWLock *extension_ddl_message_lock;
+	LWLock *extension_ddl_lock; /* ensure create diskquota extension serially */
+	LWLock *monitoring_dbid_cache_lock;
+	LWLock *relation_cache_lock;
+	LWLock *worker_map_lock;
+	LWLock *altered_reloid_cache_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
-#define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void*))
+#define DiskQuotaLocksItemNumber (sizeof(DiskQuotaLocks) / sizeof(void *))
 
 /*
  * MessageBox is used to store a message for communication between
@@ -69,14 +69,14 @@ typedef struct DiskQuotaLocks DiskQuotaLocks;
  */
 struct ExtensionDDLMessage
 {
-	int			launcher_pid;	/* diskquota launcher pid */
-	int			req_pid;		/* pid of the QD process which create/drop
-								 * diskquota extension */
-	int			cmd;			/* message command type, see MessageCommand */
-	int			result;			/* message result writen by launcher, see
-								 * MessageResult */
-	int			dbid;			/* dbid of create/drop diskquota
-								 * extensionstatement */
+	int launcher_pid; /* diskquota launcher pid */
+	int req_pid;      /* pid of the QD process which create/drop
+	                   * diskquota extension */
+	int cmd;          /* message command type, see MessageCommand */
+	int result;       /* message result writen by launcher, see
+	                   * MessageResult */
+	int dbid;         /* dbid of create/drop diskquota
+	                   * extensionstatement */
 };
 
 enum MessageCommand
@@ -103,10 +103,10 @@ enum MessageResult
 };
 
 typedef struct ExtensionDDLMessage ExtensionDDLMessage;
-typedef enum MessageCommand MessageCommand;
-typedef enum MessageResult MessageResult;
+typedef enum MessageCommand        MessageCommand;
+typedef enum MessageResult         MessageResult;
 
-extern DiskQuotaLocks diskquota_locks;
+extern DiskQuotaLocks       diskquota_locks;
 extern ExtensionDDLMessage *extension_ddl_message;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
@@ -114,9 +114,9 @@ typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
 /* disk quota worker info used by launcher to manage the worker processes. */
 struct DiskQuotaWorkerEntry
 {
-	Oid			dbid;
-	pg_atomic_uint32 epoch; 		/* this counter will be increased after each worker loop */
-	bool is_paused; 			/* true if this worker is paused */
+	Oid              dbid;
+	pg_atomic_uint32 epoch;     /* this counter will be increased after each worker loop */
+	bool             is_paused; /* true if this worker is paused */
 
 	// NOTE: this field only can access in diskquota launcher, in other process it is dangling pointer
 	BackgroundWorkerHandle *handle;
@@ -142,23 +142,23 @@ extern bool quota_check_common(Oid reloid, RelFileNode *relfilenode);
 extern void init_disk_quota_hook(void);
 
 extern Datum diskquota_fetch_table_stat(PG_FUNCTION_ARGS);
-extern int	diskquota_naptime;
-extern int	diskquota_max_active_tables;
-extern bool	diskquota_hardlimit;
+extern int   diskquota_naptime;
+extern int   diskquota_max_active_tables;
+extern bool  diskquota_hardlimit;
 
-extern int 	SEGCOUNT;
-extern int worker_spi_get_extension_version(int *major, int *minor);
-extern int  get_ext_major_version(void);
-extern void truncateStringInfo(StringInfo str, int nchars);
-extern List *get_rel_oid_list(void);
-extern int64 calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage);
+extern int      SEGCOUNT;
+extern int      worker_spi_get_extension_version(int *major, int *minor);
+extern int      get_ext_major_version(void);
+extern void     truncateStringInfo(StringInfo str, int nchars);
+extern List    *get_rel_oid_list(void);
+extern int64    calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage);
 extern Relation diskquota_relation_open(Oid relid, LOCKMODE mode);
-extern List* diskquota_get_index_list(Oid relid);
-extern void diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
-extern Oid diskquota_parse_primary_table_oid(Oid namespace, char *relname);
+extern List    *diskquota_get_index_list(Oid relid);
+extern void     diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
+extern Oid      diskquota_parse_primary_table_oid(Oid namespace, char *relname);
 
-extern bool worker_increase_epoch(Oid database_oid);
+extern bool         worker_increase_epoch(Oid database_oid);
 extern unsigned int worker_get_epoch(Oid database_oid);
-extern bool diskquota_is_paused(void);
+extern bool         diskquota_is_paused(void);
 
 #endif
