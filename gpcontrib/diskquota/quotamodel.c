@@ -571,25 +571,25 @@ check_diskquota_state_is_ready(void)
 static bool
 do_check_diskquota_state_is_ready(void)
 {
-	int            ret;
-	TupleDesc      tupdesc;
-	int            i;
-	StringInfoData sql_command;
+	int       ret;
+	TupleDesc tupdesc;
+	int       i;
 
-	initStringInfo(&sql_command);
 	/* Add current database to the monitored db cache on all segments */
-	appendStringInfo(&sql_command,
-	                 "SELECT diskquota.diskquota_fetch_table_stat(%d, ARRAY[]::oid[]) "
-	                 "FROM gp_dist_random('gp_id');",
-	                 ADD_DB_TO_MONITOR);
-	ret = SPI_execute(sql_command.data, true, 0);
-	if (ret != SPI_OK_SELECT)
-	{
-		pfree(sql_command.data);
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-		                errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
-	}
-	pfree(sql_command.data);
+	ret = SPI_execute_with_args(
+	        "SELECT diskquota.diskquota_fetch_table_stat($1, ARRAY[]::oid[]) FROM gp_dist_random('gp_id')", 1,
+	        (Oid[]){
+	                INT4OID,
+	        },
+	        (Datum[]){
+	                Int32GetDatum(ADD_DB_TO_MONITOR),
+	        },
+	        NULL, true, 0);
+
+	ereportif(ret != SPI_OK_SELECT, ERROR,
+	          (errcode(ERRCODE_INTERNAL_ERROR),
+	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+
 	/* Add current database to the monitored db cache on coordinator */
 	update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
 	/*
@@ -597,9 +597,9 @@ do_check_diskquota_state_is_ready(void)
 	 * at upper level function.
 	 */
 	ret = SPI_execute("select state from diskquota.state", true, 0);
-	if (ret != SPI_OK_SELECT)
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-		                errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+	ereportif(ret != SPI_OK_SELECT, ERROR,
+	          (errcode(ERRCODE_INTERNAL_ERROR),
+	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 1 || ((tupdesc)->attrs[0])->atttypid != INT4OID)
@@ -970,7 +970,6 @@ flush_to_table_size(void)
 	bool            delete_statement_flag = false;
 	bool            insert_statement_flag = false;
 	int             ret;
-	int             extMajorVersion = get_ext_major_version();
 
 	/* TODO: Add flush_size_interval to avoid flushing size info in every loop */
 
@@ -983,24 +982,16 @@ flush_to_table_size(void)
 
 	initStringInfo(&insert_statement);
 	appendStringInfo(&insert_statement, "insert into diskquota.table_size values ");
+
+	initStringInfo(&delete_statement);
+
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
 		/* delete dropped table from both table_size_map and table table_size */
 		if (tsentry->is_exist == false)
 		{
-			switch (extMajorVersion)
-			{
-				case 1:
-					appendStringInfo(&deleted_table_expr, "%u, ", tsentry->reloid);
-					break;
-				case 2:
-					appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
-					break;
-				default:
-					ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-					                errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
-			}
+			appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
 			delete_statement_flag = true;
 
 			hash_search(table_size_map, &tsentry->reloid, HASH_REMOVE, NULL);
@@ -1009,28 +1000,10 @@ flush_to_table_size(void)
 		else if (tsentry->need_flush == true)
 		{
 			tsentry->need_flush = false;
-			switch (extMajorVersion)
-			{
-				case 1:
-					if (tsentry->segid == -1)
-					{
-						appendStringInfo(&deleted_table_expr, "%u, ", tsentry->reloid);
-						appendStringInfo(&insert_statement, "(%u,%ld), ", tsentry->reloid, tsentry->totalsize);
-						delete_statement_flag = true;
-						insert_statement_flag = true;
-					}
-					break;
-				case 2:
-					appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
-					appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->reloid, tsentry->totalsize,
-					                 tsentry->segid);
-					delete_statement_flag = true;
-					insert_statement_flag = true;
-					break;
-				default:
-					ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-					                errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
-			}
+			appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
+			appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->reloid, tsentry->totalsize, tsentry->segid);
+			delete_statement_flag = true;
+			insert_statement_flag = true;
 		}
 	}
 	truncateStringInfo(&deleted_table_expr, deleted_table_expr.len - strlen(", "));
@@ -1041,23 +1014,10 @@ flush_to_table_size(void)
 	if (delete_statement_flag)
 	{
 		/* concatenate all the need_to_flush table to SQL string */
-		initStringInfo(&delete_statement);
 		appendStringInfoString(&delete_statement, (const char *)deleted_table_expr.data);
-		switch (extMajorVersion)
-		{
-			case 1:
-				appendStringInfo(&delete_statement,
-				                 "delete from diskquota.table_size where tableid in ( SELECT * FROM deleted_table );");
-				break;
-			case 2:
-				appendStringInfo(
-				        &delete_statement,
-				        "delete from diskquota.table_size where (tableid, segid) in ( SELECT * FROM deleted_table );");
-				break;
-			default:
-				ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-				                errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
-		}
+		appendStringInfoString(
+		        &delete_statement,
+		        "delete from diskquota.table_size where (tableid, segid) in ( SELECT * FROM deleted_table );");
 		ret = SPI_execute(delete_statement.data, false, 0);
 		if (ret != SPI_OK_DELETE)
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
@@ -1072,6 +1032,10 @@ flush_to_table_size(void)
 	}
 
 	optimizer = old_optimizer;
+
+	pfree(delete_statement.data);
+	pfree(insert_statement.data);
+	pfree(deleted_table_expr.data);
 }
 
 /*
@@ -1255,7 +1219,6 @@ do_load_quotas(void)
 	int       ret;
 	TupleDesc tupdesc;
 	int       i;
-	int       extMajorVersion;
 
 	/*
 	 * TODO: we should skip to reload quota config when there is no change in
@@ -1263,43 +1226,16 @@ do_load_quotas(void)
 	 * config change.
 	 */
 	clear_all_quota_maps();
-	extMajorVersion = get_ext_major_version();
 
 	/*
 	 * read quotas from diskquota.quota_config and target table
 	 */
-
-	/*
-	 * We need to check the extension version.
-	 * Why do we need this?
-	 * As when we upgrade diskquota extension from an old to a new version,
-	 * we need firstly reload the new diskquota.so and then execute the
-	 * upgrade SQL. However, between the 2 steps, the new diskquota.so
-	 * needs to work with the old version diskquota sql file, otherwise,
-	 * the init work will fail and diskquota can not work correctly.
-	 * Maybe this is not the best sulotion, only a work arround. Optimizing
-	 * the init procedure is a better solution.
-	 */
-	switch (extMajorVersion)
-	{
-		case 1:
-			ret = SPI_execute(
-			        "select targetoid, quotatype, quotalimitMB, 0 as segratio, 0 as tablespaceoid from "
-			        "diskquota.quota_config",
-			        true, 0);
-			break;
-		case 2:
-			ret = SPI_execute(
-			        "SELECT c.targetOid, c.quotaType, c.quotalimitMB, COALESCE(c.segratio, 0) AS segratio, "
-			        "COALESCE(t.tablespaceoid, 0) AS tablespaceoid "
-			        "FROM diskquota.quota_config AS c LEFT OUTER JOIN diskquota.target AS t "
-			        "ON c.targetOid = t.primaryOid and c.quotaType = t.quotaType",
-			        true, 0);
-			break;
-		default:
-			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-			                errmsg("[diskquota] unknown diskquota extension version: %d", extMajorVersion)));
-	}
+	ret = SPI_execute(
+	        "SELECT c.targetOid, c.quotaType, c.quotalimitMB, COALESCE(c.segratio, 0) AS segratio, "
+	        "COALESCE(t.tablespaceoid, 0) AS tablespaceoid "
+	        "FROM diskquota.quota_config AS c LEFT OUTER JOIN diskquota.target AS t "
+	        "ON c.targetOid = t.primaryOid and c.quotaType = t.quotaType",
+	        true, 0);
 	if (ret != SPI_OK_SELECT)
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 		                errmsg("[diskquota] load_quotas SPI_execute failed: error code %d", ret)));
