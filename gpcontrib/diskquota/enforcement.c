@@ -33,7 +33,7 @@ init_disk_quota_enforcement(void)
 {
 	/* enforcement hook before query is loading data */
 	prev_ExecutorCheckPerms_hook = ExecutorCheckPerms_hook;
-	ExecutorCheckPerms_hook = quota_check_ExecCheckRTPerms;
+	ExecutorCheckPerms_hook      = quota_check_ExecCheckRTPerms;
 }
 
 /*
@@ -43,24 +43,22 @@ init_disk_quota_enforcement(void)
 static bool
 quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 {
-	ListCell	*l;
+	ListCell *l;
 
-	foreach(l, rangeTable)
+	foreach (l, rangeTable)
 	{
-		List	   	*indexIds;
-		ListCell	*oid;
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(l);
+		List          *indexIds;
+		ListCell      *oid;
+		RangeTblEntry *rte = (RangeTblEntry *)lfirst(l);
 
 		/* see ExecCheckRTEPerms() */
-		if (rte->rtekind != RTE_RELATION)
-			continue;
+		if (rte->rtekind != RTE_RELATION) continue;
 
 		/*
 		 * Only check quota on inserts. UPDATEs may well increase space usage
 		 * too, but we ignore that for now.
 		 */
-		if ((rte->requiredPerms & ACL_INSERT) == 0 && (rte->requiredPerms & ACL_UPDATE) == 0)
-			continue;
+		if ((rte->requiredPerms & ACL_INSERT) == 0 && (rte->requiredPerms & ACL_UPDATE) == 0) continue;
 
 		/*
 		 * Given table oid, check whether the quota limit of table's schema or
@@ -72,9 +70,9 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 		indexIds = diskquota_get_index_list(rte->relid);
 		PG_TRY();
 		{
-			if (indexIds != NIL )
+			if (indexIds != NIL)
 			{
-				foreach(oid, indexIds)
+				foreach (oid, indexIds)
 				{
 					quota_check_common(lfirst_oid(oid), NULL /*relfilenode*/);
 				}
