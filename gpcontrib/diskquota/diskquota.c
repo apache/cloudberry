@@ -881,8 +881,8 @@ add_dbid_to_database_list(Oid dbid)
 {
 	int ret;
 
-	Oid   argt[1] = {INT4OID};
-	Datum argv[1] = {Int32GetDatum(dbid)};
+	Oid   argt[1] = {OIDOID};
+	Datum argv[1] = {ObjectIdGetDatum(dbid)};
 
 	ret = SPI_execute_with_args("select * from diskquota_namespace.database_list where dbid = $1", 1, argt, argv, NULL,
 	                            true, 0);
@@ -918,20 +918,20 @@ add_dbid_to_database_list(Oid dbid)
 static void
 del_dbid_from_database_list(Oid dbid)
 {
-	StringInfoData str;
-	int            ret;
-
-	initStringInfo(&str);
-	appendStringInfo(&str, "delete from diskquota_namespace.database_list where dbid=%u;", dbid);
+	int ret;
 
 	/* errors will be cached in outer function */
-	ret = SPI_execute(str.data, false, 0);
-	if (ret != SPI_OK_DELETE)
-	{
-		ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute sql: \"%s\", errno: %d, ret_code: %d.", str.data,
-		                       errno, ret)));
-	}
-	pfree(str.data);
+	ret = SPI_execute_with_args("delete from diskquota_namespace.database_list where dbid = $1", 1,
+	                            (Oid[]){
+	                                    OIDOID,
+	                            },
+	                            (Datum[]){
+	                                    ObjectIdGetDatum(dbid),
+	                            },
+	                            NULL, false, 0);
+
+	ereportif(ret != SPI_OK_DELETE, ERROR,
+	          (errmsg("[diskquota launcher] del_dbid_from_database_list: errno: %d, ret_code: %d.", errno, ret)));
 }
 
 /*
