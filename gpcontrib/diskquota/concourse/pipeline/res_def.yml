@@ -101,6 +101,14 @@ resources:
   source:
     repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
     tag: latest
+# clang_format
+- name: clang-format-image
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-extensions/common/clang-format
+    tag: 13
+    username: _json_key
+    password: ((extensions-gcs-service-account-key))
 
 # gpdb binary on gcs is located as different folder for different version
 - name: bin_gpdb6_centos6

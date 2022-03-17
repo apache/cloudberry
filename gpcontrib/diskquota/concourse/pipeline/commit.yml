@@ -1,5 +1,5 @@
 #@ load("job_def.lib.yml",
-#@   "gate_job",
+#@   "entrance_job",
 #@   "build_test_job",
 #@   "centos6_gpdb6_conf",
 #@   "centos7_gpdb6_conf",
@@ -20,7 +20,11 @@
 #@   ubuntu18_gpdb6_conf()
 #@ ]
 jobs:
-- #@ gate_job(trigger)
+#@ param = {
+#@     "res_map": res_map,
+#@     "trigger": trigger,
+#@ }
+- #@ entrance_job(param)
 #@ for conf in confs:
 #@   param = {
 #@     "res_map": res_map,

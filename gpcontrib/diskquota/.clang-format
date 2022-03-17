@@ -1,6 +1,8 @@
 ---
 BasedOnStyle: Google
 
+ColumnLimit: 120
+
 # How much whitespace?
 UseTab: ForIndentation
 TabWidth: 4
@@ -34,7 +36,4 @@ BraceWrapping:
   SplitEmptyFunction: false
   SplitEmptyRecord: false
 
-# Put "postgres.h" and "postgres_undefs.h" first in a group of includes.
-IncludeCategories:
-- Regex: '"postgres(_undefs)?.h"'
-  Priority: 1
+SortIncludes: false
