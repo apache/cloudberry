@@ -148,7 +148,6 @@ extern bool  diskquota_hardlimit;
 
 extern int      SEGCOUNT;
 extern int      worker_spi_get_extension_version(int *major, int *minor);
-extern int      get_ext_major_version(void);
 extern void     truncateStringInfo(StringInfo str, int nchars);
 extern List    *get_rel_oid_list(void);
 extern int64    calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage);
