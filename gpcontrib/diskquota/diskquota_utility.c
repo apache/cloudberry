@@ -74,7 +74,6 @@ static int64       get_size_in_mb(char *str);
 static void        set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
 static void        set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 
-int   get_ext_major_version(void);
 List *get_rel_oid_list(void);
 
 /* ---- Help Functions to set quota limit. ---- */
@@ -87,12 +86,10 @@ List *get_rel_oid_list(void);
 Datum
 init_table_size_table(PG_FUNCTION_ARGS)
 {
-	int            ret;
-	StringInfoData buf;
+	int ret;
 
 	RangeVar *rv;
 	Relation  rel;
-	int       extMajorVersion;
 	/*
 	 * If error happens in init_table_size_table, just return error messages
 	 * to the client side. So there is no need to catch the error.
@@ -124,49 +121,45 @@ init_table_size_table(PG_FUNCTION_ARGS)
 	 * from entry-db currently.
 	 */
 	SPI_connect();
-	extMajorVersion = get_ext_major_version();
 
 	/* delete all the table size info in table_size if exist. */
-	initStringInfo(&buf);
-	appendStringInfo(&buf, "truncate table diskquota.table_size;");
-	ret = SPI_execute(buf.data, false, 0);
+	ret = SPI_execute("truncate table diskquota.table_size", false, 0);
 	if (ret != SPI_OK_UTILITY) elog(ERROR, "cannot truncate table_size table: error code %d", ret);
 
-	if (extMajorVersion == 1)
-	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf,
-		                 "INSERT INTO diskquota.table_size WITH all_size AS "
-		                 "(SELECT diskquota.pull_all_table_size() as a FROM gp_dist_random('gp_id') "
-		                 "UNION ALL SELECT diskquota.pull_all_table_size()) "
-		                 "SELECT (a).tableid, sum((a).size) FROM all_size GROUP BY (a).tableid;");
-		ret = SPI_execute(buf.data, false, 0);
-		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into table_size table: error code %d", ret);
-	} else
-	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf,
-		                 "INSERT INTO diskquota.table_size WITH all_size AS "
-		                 "(SELECT diskquota.pull_all_table_size() as a FROM gp_dist_random('gp_id')) "
-		                 "SELECT (a).* FROM all_size;");
-		ret = SPI_execute(buf.data, false, 0);
-		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into table_size table: error code %d", ret);
+	ret = SPI_execute(
+	        "INSERT INTO "
+	        "  diskquota.table_size "
+	        "WITH all_size AS "
+	        "  ("
+	        "    SELECT diskquota.pull_all_table_size() AS a FROM gp_dist_random('gp_id')"
+	        "  ) "
+	        "SELECT (a).* FROM all_size",
+	        false, 0);
+	if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into table_size table: error code %d", ret);
 
-		resetStringInfo(&buf);
-		/* size is the sum of size on master and on all segments when segid == -1. */
-		appendStringInfo(&buf,
-		                 "INSERT INTO diskquota.table_size WITH total_size AS "
-		                 "(SELECT * from diskquota.pull_all_table_size() "
-		                 "UNION ALL SELECT tableid, size, segid FROM diskquota.table_size) "
-		                 "SELECT tableid, sum(size) as size, -1 as segid FROM total_size GROUP BY tableid;");
-		ret = SPI_execute(buf.data, false, 0);
-		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into table_size table: error code %d", ret);
-	}
+	/* size is the sum of size on master and on all segments when segid == -1. */
+	ret = SPI_execute(
+	        "INSERT INTO "
+	        "  diskquota.table_size "
+	        "WITH total_size AS "
+	        "  ("
+	        "    SELECT * from diskquota.pull_all_table_size()"
+	        "    UNION ALL "
+	        "    SELECT tableid, size, segid FROM diskquota.table_size"
+	        "  ) "
+	        "SELECT tableid, sum(size) as size, -1 as segid FROM total_size GROUP BY tableid;",
+	        false, 0);
+	if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into table_size table: error code %d", ret);
 
 	/* set diskquota state to ready. */
-	resetStringInfo(&buf);
-	appendStringInfo(&buf, "update diskquota.state set state = %u;", DISKQUOTA_READY_STATE);
-	ret = SPI_execute(buf.data, false, 0);
+	ret = SPI_execute_with_args("update diskquota.state set state = $1", 1,
+	                            (Oid[]){
+	                                    INT4OID,
+	                            },
+	                            (Datum[]){
+	                                    Int32GetDatum(DISKQUOTA_READY_STATE),
+	                            },
+	                            NULL, false, 0);
 	if (ret != SPI_OK_UPDATE) elog(ERROR, "cannot update state table: error code %d", ret);
 
 	SPI_finish();
@@ -402,6 +395,8 @@ dispatch_pause_or_resume_command(Oid dbid, bool pause_extension)
 			                       pause_extension ? "pausing" : "resuming", PQresultStatus(pgresult))));
 		}
 	}
+
+	pfree(sql.data);
 	cdbdisp_clearCdbPgResults(&cdb_pgresults);
 }
 
@@ -497,15 +492,9 @@ diskquota_resume(PG_FUNCTION_ARGS)
 static bool
 is_database_empty(void)
 {
-	int            ret;
-	StringInfoData buf;
-	TupleDesc      tupdesc;
-	bool           is_empty = false;
-
-	initStringInfo(&buf);
-	appendStringInfo(&buf,
-	                 "SELECT (count(relname) = 0)  FROM pg_class AS c, pg_namespace AS n WHERE c.oid > 16384 and "
-	                 "relnamespace = n.oid and nspname != 'diskquota'");
+	int       ret;
+	TupleDesc tupdesc;
+	bool      is_empty = false;
 
 	/*
 	 * If error happens in is_database_empty, just return error messages to
@@ -513,8 +502,15 @@ is_database_empty(void)
 	 */
 	SPI_connect();
 
-	ret = SPI_execute(buf.data, true, 0);
+	ret = SPI_execute(
+	        "SELECT (count(relname) = 0) "
+	        "FROM "
+	        "  pg_class AS c, "
+	        "  pg_namespace AS n "
+	        "WHERE c.oid > 16384 and relnamespace = n.oid and nspname != 'diskquota'",
+	        true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select pg_class and pg_namespace table: error code %d", errno);
+
 	tupdesc = SPI_tuptable->tupdesc;
 	/* check sql return value whether database is empty */
 	if (SPI_processed > 0)
@@ -821,14 +817,7 @@ set_schema_tablespace_quota(PG_FUNCTION_ARGS)
 static void
 set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 {
-	int            ret;
-	StringInfoData buf;
-
-	initStringInfo(&buf);
-	appendStringInfo(&buf,
-	                 "select true from diskquota.quota_config where targetoid = %u"
-	                 " and quotatype =%d",
-	                 targetoid, type);
+	int ret;
 
 	/*
 	 * If error happens in set_quota_config_internal, just return error messages to
@@ -836,34 +825,62 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 	 */
 	SPI_connect();
 
-	ret = SPI_execute(buf.data, true, 0);
+	ret = SPI_execute_with_args("select true from diskquota.quota_config where targetoid = $1 and quotatype = $2", 2,
+	                            (Oid[]){
+	                                    OIDOID,
+	                                    INT4OID,
+	                            },
+	                            (Datum[]){
+	                                    ObjectIdGetDatum(targetoid),
+	                                    Int32GetDatum(type),
+	                            },
+	                            NULL, true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select quota setting table: error code %d", ret);
 
 	/* if the schema or role's quota has been set before */
 	if (SPI_processed == 0 && quota_limit_mb > 0)
 	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf, "insert into diskquota.quota_config values(%u,%d,%ld);", targetoid, type,
-		                 quota_limit_mb);
-		ret = SPI_execute(buf.data, false, 0);
+		ret = SPI_execute_with_args("insert into diskquota.quota_config values($1, $2, $3)", 3,
+		                            (Oid[]){
+		                                    OIDOID,
+		                                    INT4OID,
+		                                    INT8OID,
+		                            },
+		                            (Datum[]){
+		                                    ObjectIdGetDatum(targetoid),
+		                                    Int32GetDatum(type),
+		                                    Int64GetDatum(quota_limit_mb),
+		                            },
+		                            NULL, false, 0);
 		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
 	} else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf,
-		                 "delete from diskquota.quota_config where targetoid=%u"
-		                 " and quotatype=%d;",
-		                 targetoid, type);
-		ret = SPI_execute(buf.data, false, 0);
+		ret = SPI_execute_with_args("delete from diskquota.quota_config where targetoid = $1 and quotatype = $2", 2,
+		                            (Oid[]){
+		                                    OIDOID,
+		                                    INT4OID,
+		                            },
+		                            (Datum[]){
+		                                    ObjectIdGetDatum(targetoid),
+		                                    Int32GetDatum(type),
+		                            },
+		                            NULL, false, 0);
 		if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from quota setting table, error code %d", ret);
 	} else if (SPI_processed > 0 && quota_limit_mb > 0)
 	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf,
-		                 "update diskquota.quota_config set quotalimitMB = %ld where targetoid=%u"
-		                 " and quotatype=%d;",
-		                 quota_limit_mb, targetoid, type);
-		ret = SPI_execute(buf.data, false, 0);
+		ret = SPI_execute_with_args(
+		        "update diskquota.quota_config set quotalimitMB = $1 where targetoid= $2 and quotatype = $3", 3,
+		        (Oid[]){
+		                INT8OID,
+		                OIDOID,
+		                INT4OID,
+		        },
+		        (Datum[]){
+		                Int64GetDatum(quota_limit_mb),
+		                ObjectIdGetDatum(targetoid),
+		                Int32GetDatum(type),
+		        },
+		        NULL, false, 0);
 		if (ret != SPI_OK_UPDATE) elog(ERROR, "cannot update quota setting table, error code %d", ret);
 	}
 
@@ -877,18 +894,7 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 static void
 set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type)
 {
-	int            ret;
-	StringInfoData buf;
-
-	initStringInfo(&buf);
-	appendStringInfo(&buf,
-	                 "select true from diskquota.quota_config as q, diskquota.target as t"
-	                 " where t.primaryOid = %u"
-	                 " and t.tablespaceOid=%u"
-	                 " and t.quotaType=%d"
-	                 " and t.quotaType=q.quotaType"
-	                 " and t.primaryOid=q.targetOid;",
-	                 primaryoid, spcoid, type);
+	int ret;
 
 	/*
 	 * If error happens in set_quota_config_internal, just return error messages to
@@ -896,24 +902,56 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 	 */
 	SPI_connect();
 
-	ret = SPI_execute(buf.data, true, 0);
+	ret = SPI_execute_with_args(
+	        "select true from diskquota.quota_config as q, diskquota.target as t"
+	        " where t.primaryOid = $1"
+	        " and t.tablespaceOid = $2"
+	        " and t.quotaType = $3"
+	        " and t.quotaType = q.quotaType"
+	        " and t.primaryOid = q.targetOid",
+	        3,
+	        (Oid[]){
+	                OIDOID,
+	                OIDOID,
+	                INT4OID,
+	        },
+	        (Datum[]){
+	                ObjectIdGetDatum(primaryoid),
+	                ObjectIdGetDatum(spcoid),
+	                Int32GetDatum(type),
+	        },
+	        NULL, true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select target setting table: error code %d", ret);
 
 	/* if the schema or role's quota has been set before */
 	if (SPI_processed == 0 && quota_limit_mb > 0)
 	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf, "insert into diskquota.target values(%d,%u,%u)", type, primaryoid, spcoid);
-		ret = SPI_execute(buf.data, false, 0);
+		ret = SPI_execute_with_args("insert into diskquota.target values($1, $2, $3)", 3,
+		                            (Oid[]){
+		                                    INT4OID,
+		                                    OIDOID,
+		                                    OIDOID,
+		                            },
+		                            (Datum[]){
+		                                    Int32GetDatum(type),
+		                                    ObjectIdGetDatum(primaryoid),
+		                                    ObjectIdGetDatum(spcoid),
+		                            },
+		                            NULL, false, 0);
 		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
+
 	} else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
-		resetStringInfo(&buf);
-		appendStringInfo(&buf,
-		                 "delete from diskquota.target where primaryOid=%u"
-		                 " and tablespaceOid=%u;",
-		                 primaryoid, spcoid);
-		ret = SPI_execute(buf.data, false, 0);
+		ret = SPI_execute_with_args("delete from diskquota.target where primaryOid = $1 and tablespaceOid = $2", 2,
+		                            (Oid[]){
+		                                    OIDOID,
+		                                    OIDOID,
+		                            },
+		                            (Datum[]){
+		                                    ObjectIdGetDatum(primaryoid),
+		                                    ObjectIdGetDatum(spcoid),
+		                            },
+		                            NULL, false, 0);
 		if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from target setting table, error code %d", ret);
 	}
 
@@ -1087,10 +1125,9 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 	Oid    spcoid;
 	char  *spcname;
 	float4 ratio;
-	if (!superuser())
-	{
-		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to set disk quota limit")));
-	}
+
+	ereportif(!superuser(), ERROR,
+	          (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to set disk quota limit")));
 
 	spcname = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
@@ -1098,12 +1135,8 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 
 	ratio = PG_GETARG_FLOAT4(1);
 
-	if (ratio == 0)
-	{
-		ereport(ERROR,
-		        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("per segment quota ratio can not be set to 0")));
-	}
-	StringInfoData buf;
+	ereportif(ratio == 0, ERROR,
+	          (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("per segment quota ratio can not be set to 0")));
 
 	if (SPI_OK_CONNECT != SPI_connect())
 	{
@@ -1111,32 +1144,53 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 	}
 
 	/* Get all targetOid which are related to this tablespace, and saved into rowIds */
-	initStringInfo(&buf);
-	appendStringInfo(
-	        &buf,
-	        "SELECT true FROM diskquota.target as t, diskquota.quota_config as q WHERE tablespaceOid = %u AND "
-	        "(t.quotaType = %d OR t.quotaType = %d) AND t.primaryOid = q.targetOid AND t.quotaType = q.quotaType",
-	        spcoid, NAMESPACE_TABLESPACE_QUOTA, ROLE_TABLESPACE_QUOTA);
-
-	ret = SPI_execute(buf.data, true, 0);
+	ret = SPI_execute_with_args(
+	        "SELECT true FROM diskquota.target AS t, diskquota.quota_config AS q WHERE tablespaceOid = $1 AND "
+	        "(t.quotaType = $2 OR t.quotaType = $3) AND t.primaryOid = q.targetOid AND t.quotaType = q.quotaType",
+	        3,
+	        (Oid[]){
+	                OIDOID,
+	                INT4OID,
+	                INT4OID,
+	        },
+	        (Datum[]){
+	                ObjectIdGetDatum(spcoid),
+	                Int32GetDatum(NAMESPACE_TABLESPACE_QUOTA),
+	                Int32GetDatum(ROLE_TABLESPACE_QUOTA),
+	        },
+	        NULL, true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select target and quota setting table: error code %d", ret);
+
 	if (SPI_processed <= 0)
 	{
 		ereport(ERROR, (errmsg("there are no roles or schema quota configed for this tablespace: %s, can't config per "
 		                       "segment ratio for it",
 		                       spcname)));
 	}
-	resetStringInfo(&buf);
-	appendStringInfo(&buf,
-	                 "UPDATE diskquota.quota_config AS q set segratio = %f FROM diskquota.target AS t WHERE "
-	                 "q.targetOid = t.primaryOid AND (t.quotaType = %d OR t.quotaType = %d) AND t.quotaType = "
-	                 "q.quotaType And t.tablespaceOid = %d",
-	                 ratio, NAMESPACE_TABLESPACE_QUOTA, ROLE_TABLESPACE_QUOTA, spcoid);
+
 	/*
 	 * UPDATEA NAMESPACE_TABLESPACE_PERSEG_QUOTA AND ROLE_TABLESPACE_PERSEG_QUOTA config for this tablespace
 	 */
-	ret = SPI_execute(buf.data, false, 0);
+	ret = SPI_execute_with_args(
+	        "UPDATE diskquota.quota_config AS q set segratio = $1 FROM diskquota.target AS t WHERE "
+	        "q.targetOid = t.primaryOid AND (t.quotaType = $2 OR t.quotaType = $3) AND t.quotaType = "
+	        "q.quotaType And t.tablespaceOid = $4",
+	        4,
+	        (Oid[]){
+	                FLOAT4OID,
+	                INT4OID,
+	                INT4OID,
+	                OIDOID,
+	        },
+	        (Datum[]){
+	                Float4GetDatum(ratio),
+	                Int32GetDatum(NAMESPACE_TABLESPACE_QUOTA),
+	                Int32GetDatum(ROLE_TABLESPACE_QUOTA),
+	                ObjectIdGetDatum(spcoid),
+	        },
+	        NULL, false, 0);
 	if (ret != SPI_OK_UPDATE) elog(ERROR, "cannot update item from quota setting table, error code %d", ret);
+
 	/*
 	 * And finish our transaction.
 	 */
@@ -1200,43 +1254,6 @@ out:
 }
 
 /*
- * Get major version from extversion, and convert it to int
- * 0 means an invalid major version.
- */
-int
-get_ext_major_version(void)
-{
-	int       ret;
-	TupleDesc tupdesc;
-	HeapTuple tup;
-	Datum     dat;
-	bool      isnull;
-	char     *extversion;
-
-	ret = SPI_execute("select COALESCE(extversion,'') from pg_extension where extname = 'diskquota'", true, 0);
-	if (ret != SPI_OK_SELECT)
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-		                errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
-
-	tupdesc = SPI_tuptable->tupdesc;
-	if (tupdesc->natts != 1 || ((tupdesc)->attrs[0])->atttypid != TEXTOID || SPI_processed != 1)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] can not get diskquota extesion version")));
-	}
-
-	tup = SPI_tuptable->vals[0];
-	dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
-	if (isnull)
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] can not get diskquota extesion version")));
-	extversion = TextDatumGetCString(dat);
-	if (extversion)
-	{
-		return (int)strtol(extversion, (char **)NULL, 10);
-	}
-	return 0;
-}
-
-/*
  * Get the list of oids of the tables which diskquota
  * needs to care about in the database.
  * Firstly the all the table oids which relkind is 'r'
@@ -1247,19 +1264,19 @@ get_ext_major_version(void)
 List *
 get_rel_oid_list(void)
 {
-	List          *oidlist = NIL;
-	StringInfoData buf;
-	int            ret;
+	List *oidlist = NIL;
+	int   ret;
 
-	initStringInfo(&buf);
-	appendStringInfo(&buf,
-	                 "select oid "
-	                 " from pg_class"
-	                 " where oid >= %u and (relkind='r' or relkind='m')",
-	                 FirstNormalObjectId);
-
-	ret = SPI_execute(buf.data, false, 0);
+	ret = SPI_execute_with_args("select oid from pg_class where oid >= $1 and (relkind='r' or relkind='m')", 1,
+	                            (Oid[]){
+	                                    OIDOID,
+	                            },
+	                            (Datum[]){
+	                                    ObjectIdGetDatum(FirstNormalObjectId),
+	                            },
+	                            NULL, false, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot fetch in pg_class. error code %d", ret);
+
 	TupleDesc tupdesc = SPI_tuptable->tupdesc;
 	for (int i = 0; i < SPI_processed; i++)
 	{
