@@ -1,0 +1,22 @@
+name: Check
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "cmake/**"
+      - "test/**"
+      - "upgrade_test/**"
+      - "*.md"
+      - "*.sql"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: use clang-format 13
+        run: pip3 install clang-format==13.0.1
+      - name: Check clang code style
+        run: git ls-files *.{c,h} | xargs clang-format -i --style=file && git diff --exit-code
+
