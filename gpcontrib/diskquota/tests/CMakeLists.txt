@@ -47,3 +47,33 @@ RegressTarget_Add(isolation2
 
 add_custom_target(installcheck)
 add_dependencies(installcheck isolation2 regress)
+
+# Example to run test_truncate infinite times
+# RegressTarget_Add(regress_config
+#     INIT_FILE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
+#     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/sql
+#     EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected
+#     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/results
+#     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
+#     REGRESS
+#     config test_create_extension
+#     REGRESS_OPTS
+#     ${load_inject_fault_opts}
+#     --dbname=contrib_regression)
+# RegressTarget_Add(regress_truncate_loop
+#     INIT_FILE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
+#     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/sql
+#     EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected
+#     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/results
+#     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
+#     REGRESS
+#     test_truncate
+#     RUN_TIMES -1
+#     REGRESS_OPTS
+#     ${load_inject_fault_opts}
+#     --dbname=contrib_regression
+#     --use-existing)
+# add_dependencies(regress_truncate_loop regress_config)
+# add_dependencies(installcheck regress_truncate_loop)
