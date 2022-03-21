@@ -117,7 +117,7 @@ setup_gpadmin() {
 # Extract gpdb binary
 function install_gpdb() {
     [ ! -d /usr/local/greenplum-db-devel ] && mkdir -p /usr/local/greenplum-db-devel
-    tar -xzf "${CONCOURSE_WORK_DIR}/bin_gpdb/bin_gpdb.tar.gz" -C /usr/local/greenplum-db-devel
+    tar -xzf "${CONCOURSE_WORK_DIR}"/bin_gpdb/*.tar.gz -C /usr/local/greenplum-db-devel
     chown -R gpadmin:gpadmin /usr/local/greenplum-db-devel
 }
 
@@ -127,9 +127,9 @@ function install_gpdb() {
 ## location, we fixes this issue by creating a symbolic link for it.
 function create_fake_gpdb_src() {
     local fake_gpdb_src
-    fake_gpdb_src=/tmp/build/"$(\
-        grep -rnw '/usr/local/greenplum-db-devel' -e 'abs_top_srcdir = .*' |\
-        head -n 1 | awk -F"/" '{print $(NF-1)}')"
+    fake_gpdb_src="$(\
+        grep -rhw '/usr/local/greenplum-db-devel' -e 'abs_top_srcdir = .*' |\
+        head -n 1 | awk '{ print $NF; }')"
 
     if [ -d "${fake_gpdb_src}" ]; then
         echo "Fake gpdb source directory has been configured."
@@ -142,8 +142,10 @@ function create_fake_gpdb_src() {
         --disable-orca --disable-gpcloud --enable-debug-extensions
     popd
 
-    mkdir -p "${fake_gpdb_src}"
-    ln -s /home/gpadmin/gpdb_src "${fake_gpdb_src}/gpdb_src"
+    local fake_root
+    fake_root=$(dirname "${fake_gpdb_src}")
+    mkdir -p "${fake_root}"
+    ln -s /home/gpadmin/gpdb_src "${fake_gpdb_src}"
 }
 
 # Setup common environment

@@ -31,6 +31,12 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert to success
 INSERT INTO t SELECT generate_series(1, 100);
 INSERT INTO t SELECT generate_series(1, 1000000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 -- expect insert to fail
 INSERT INTO t SELECT generate_series(1, 1000000);
 ERROR:  tablespace:pg_default role:role1 diskquota exceeded
@@ -96,6 +102,12 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert to success
 CREATE TABLE t_in_custom_tablespace (i) AS SELECT generate_series(1, 100) DISTRIBUTED BY (i);
 INSERT INTO t_in_custom_tablespace SELECT generate_series(1, 1000000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 -- expect insert to fail
 INSERT INTO t_in_custom_tablespace SELECT generate_series(1, 1000000);
 ERROR:  tablespace:custom_tablespace role:role1 diskquota exceeded

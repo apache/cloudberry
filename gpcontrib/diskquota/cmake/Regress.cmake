@@ -8,6 +8,7 @@
 #   [INIT_FILE <init_file_1> <init_file_2> ...]
 #   [SCHEDULE_FILE <schedule_file_1> <schedule_file_2> ...]
 #   [REGRESS <test1> <test2> ...]
+#   [EXCLUDE <test1> <test2> ...]
 #   [REGRESS_OPTS <opt1> <opt2> ...]
 #   [REGRESS_TYPE isolation2/regress]
 # )
@@ -50,7 +51,7 @@ function(RegressTarget_Add name)
         arg
         ""
         "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE"
-        "REGRESS;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
+        "REGRESS;EXCLUDE;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
         ${ARGN})
     if (NOT arg_EXPECTED_DIR)
         message(FATAL_ERROR
@@ -93,6 +94,14 @@ function(RegressTarget_Add name)
         get_filename_component(schedule_file_PATH ${o} ABSOLUTE)
         list(APPEND arg_REGRESS_OPTS "--schedule=${schedule_file_PATH}")
     endforeach()
+    foreach(o IN LISTS arg_EXCLUDE)
+        list(APPEND to_exclude ${o})
+    endforeach()
+    if (to_exclude)
+        set(exclude_arg "--exclude-tests=${to_exclude}")
+        string(REPLACE ";" "," exclude_arg "${exclude_arg}")
+        set(regress_opts_arg ${regress_opts_arg} ${exclude_arg})
+    endif()
     foreach(o IN LISTS arg_REGRESS_OPTS)
         set(regress_opts_arg ${regress_opts_arg} ${o})
     endforeach()
