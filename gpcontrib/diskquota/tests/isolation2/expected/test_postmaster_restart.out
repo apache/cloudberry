@@ -26,7 +26,7 @@ SET
 (1 row)
 
 -- expect fail
-1: CREATE TABLE t1 AS SELECT generate_series(1,1000000);
+1: CREATE TABLE t1 AS SELECT generate_series(1,10000000);
 ERROR:  schema's disk space quota exceeded with name:157893  (seg0 127.0.0.1:6002 pid=1025673)
 1q: ... <quitting>
 
@@ -112,7 +112,7 @@ SET
  t                         
 (1 row)
 -- expect fail
-1: CREATE TABLE t2 AS SELECT generate_series(1,1000000);
+1: CREATE TABLE t2 AS SELECT generate_series(1,10000000);
 ERROR:  schema's disk space quota exceeded with name:158089  (seg0 127.0.0.1:6002 pid=1027799)
 -- enlarge the quota limits
 1: SELECT diskquota.set_schema_quota('postmaster_restart_s', '100 MB');
