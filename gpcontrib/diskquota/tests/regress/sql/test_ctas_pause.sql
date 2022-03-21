@@ -7,11 +7,11 @@ SELECT diskquota.set_schema_quota('hardlimit_s', '1 MB');
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- heap table
-CREATE TABLE t1 (i) AS SELECT generate_series(1,1000000) DISTRIBUTED BY (i); -- expect fail
+CREATE TABLE t1 (i) AS SELECT generate_series(1,5000000) DISTRIBUTED BY (i); -- expect fail
 
 SELECT diskquota.pause();
 
-CREATE TABLE t1 (i) AS SELECT generate_series(1,1000000) DISTRIBUTED BY (i); -- expect succeed
+CREATE TABLE t1 (i) AS SELECT generate_series(1,5000000) DISTRIBUTED BY (i); -- expect succeed
 
 -- disable hardlimit and do some clean-ups.
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null

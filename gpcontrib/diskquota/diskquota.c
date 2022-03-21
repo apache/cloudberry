@@ -226,8 +226,14 @@ disk_quota_sigusr1(SIGNAL_ARGS)
 static void
 define_guc_variables(void)
 {
+#if DISKQUOTA_DEBUG
+	const int min_naptime = 0;
+#else
+	const int min_naptime = 1;
+#endif
+
 	DefineCustomIntVariable("diskquota.naptime", "Duration between each check (in seconds).", NULL, &diskquota_naptime,
-	                        2, 0, INT_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
+	                        2, min_naptime, INT_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("diskquota.max_active_tables", "Max number of active tables monitored by disk-quota.", NULL,
 	                        &diskquota_max_active_tables, 1 * 1024 * 1024, 1, INT_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
