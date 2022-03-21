@@ -23,6 +23,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert to success
 INSERT INTO t SELECT generate_series(1, 100);
 INSERT INTO t SELECT generate_series(1, 1000000);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert to fail
 INSERT INTO t SELECT generate_series(1, 1000000);
 
@@ -64,6 +65,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert to success
 CREATE TABLE t_in_custom_tablespace (i) AS SELECT generate_series(1, 100) DISTRIBUTED BY (i);
 INSERT INTO t_in_custom_tablespace SELECT generate_series(1, 1000000);
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert to fail
 INSERT INTO t_in_custom_tablespace SELECT generate_series(1, 1000000);
 

@@ -3,6 +3,12 @@ cmake_minimum_required(VERSION 3.18)
 
 project(diskquota)
 
+if(NOT CMAKE_BUILD_TYPE)
+  message(STATUS "Setting build type to 'Debug' as none was specified.")
+  set(CMAKE_BUILD_TYPE "Debug" CACHE
+      STRING "Choose the type of build." FORCE)
+endif()
+
 # generate 'compile_commands.json'
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -16,6 +22,13 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Gpdb.cmake)
 # set include directories for all sub-projects
 include_directories(${PG_INCLUDE_DIR_SERVER})
 include_directories(${PG_INCLUDE_DIR}) # for libpq
+# Overwrite the default build type flags set by cmake.
+# We don't want the '-O3 -DNDEBUG' from cmake. Instead, those will be set by the CFLAGS from pg_config.
+# And, the good news is, GPDB release always have '-g'.
+set(CMAKE_C_FLAGS_RELEASE "" CACHE
+    STRING "Flags for RELEASE build" FORCE)
+set(CMAKE_C_FLAGS_DEBUG "-DDISKQUOTA_DEBUG"
+    CACHE STRING "Flags for DEBUG build" FORCE)
 # set link flags for all sub-projects
 set(CMAKE_SHARED_LINKER_FLAGS "${PG_LD_FLAGS}")
 # set c and ld flags for all projects
@@ -131,7 +144,8 @@ BuildInfo_Create(${build_info_PATH}
   DISKQUOTA_GIT_HASH
   DISKQUOTA_VERSION
   GP_MAJOR_VERSION
-  GP_VERSION)
+  GP_VERSION
+  CMAKE_BUILD_TYPE)
 # Create build-info end
 
 # Add installcheck targets

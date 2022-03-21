@@ -9,6 +9,9 @@ CREATE DATABASE diskquota;
 !\retcode gpstop -raf;
 
 -- Show the values of all GUC variables
+--start_ignore
+-- naptime cannot be 0 for release build
 1: SHOW diskquota.naptime;
+--end_ignore
 1: SHOW diskquota.max_active_tables;
 1: SHOW diskquota.worker_timeout;

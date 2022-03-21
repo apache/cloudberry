@@ -11,7 +11,9 @@ CREATE DATABASE diskquota;
 
 \c
 -- Show the values of all GUC variables
+-- start_ignore
 SHOW diskquota.naptime;
+-- end_ignore
 SHOW diskquota.max_active_tables;
 SHOW diskquota.worker_timeout;
 SHOW diskquota.hard_limit;

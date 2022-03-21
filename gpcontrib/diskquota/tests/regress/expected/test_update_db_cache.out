@@ -41,7 +41,7 @@ WARNING:  database is not empty, please run `select diskquota.init_table_size_ta
 -- FIXME: We cannot use wait_for_worker_new_epoch() here because 
 -- diskquota.state is not clean. Change sleep() to wait() after removing
 -- diskquota.state
-SELECT pg_sleep(1);
+SELECT pg_sleep(5);
  pg_sleep 
 ----------
  

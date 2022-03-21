@@ -31,7 +31,7 @@ CREATE EXTENSION diskquota;
 -- FIXME: We cannot use wait_for_worker_new_epoch() here because 
 -- diskquota.state is not clean. Change sleep() to wait() after removing
 -- diskquota.state
-SELECT pg_sleep(1);
+SELECT pg_sleep(5);
 
 -- Should find nothing since t_no_extension is not recorded.
 SELECT diskquota.diskquota_fetch_table_stat(0, ARRAY[]::oid[])

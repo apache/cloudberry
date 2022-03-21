@@ -17,3 +17,4 @@ run:
     - build
 params:
   DISKQUOTA_OS:
+  BUILD_TYPE:

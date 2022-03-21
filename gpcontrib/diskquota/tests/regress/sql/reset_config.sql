@@ -1,5 +1,5 @@
 --start_ignore
-\! gpconfig -c diskquota.naptime -v 10
+\! gpconfig -c diskquota.naptime -v 2
 \! gpstop -u
 --end_ignore
 

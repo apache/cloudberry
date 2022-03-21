@@ -10,11 +10,14 @@
 (exited with code 0)
 
 -- Show the values of all GUC variables
+--start_ignore
+-- naptime cannot be 0 for release build
 1: SHOW diskquota.naptime;
  diskquota.naptime 
 -------------------
  0                 
 (1 row)
+--end_ignore
 1: SHOW diskquota.max_active_tables;
  diskquota.max_active_tables 
 -----------------------------

@@ -111,30 +111,58 @@ resources:
     password: ((extensions-gcs-service-account-key))
 
 # gpdb binary on gcs is located as different folder for different version
+# Latest build with assertion enabled:
+# --enable-cassert --enable-tap-tests --enable-debug-extensions
+- name: bin_gpdb6_centos6_debug
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/gpdb6/server-rc-(.*)-rhel6_x86_64.debug.tar.gz
+- name: bin_gpdb6_centos7_debug
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/gpdb6/server-rc-(.*)-rhel7_x86_64.debug.tar.gz
+- name: bin_gpdb6_rhel8_debug
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/gpdb6/server-rc-(.*)-rhel8_x86_64.debug.tar.gz
+- name: bin_gpdb6_ubuntu18_debug
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/gpdb6/server-rc-(.*)-ubuntu18.04_x86_64.debug.tar.gz
+# Latest release candidates, no fault-injector, no assertion:
+# --disable-debug-extensions --disable-tap-tests --enable-ic-proxy
 - name: bin_gpdb6_centos6
   type: gcs
   source:
-    bucket: ((gcs-bucket-intermediates))
+    bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: 6X_STABLE/bin_gpdb_centos6/bin_gpdb.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-centos6.tar.gz
 - name: bin_gpdb6_centos7
   type: gcs
   source:
-    bucket: ((gcs-bucket-intermediates))
+    bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: 6X_STABLE/bin_gpdb_centos7/bin_gpdb.tar.gz
-- name: bin_gpdb6_ubuntu18
-  type: gcs
-  source:
-    bucket: ((gcs-bucket-intermediates))
-    json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: 6X_STABLE/bin_gpdb_ubuntu18.04/bin_gpdb.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-centos7.tar.gz
 - name: bin_gpdb6_rhel8
   type: gcs
   source:
-    bucket: ((gcs-bucket-intermediates))
+    bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: 6X_STABLE/bin_gpdb_rhel8/bin_gpdb.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-rhel8.tar.gz
+- name: bin_gpdb6_ubuntu18
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-ubuntu18.04.tar.gz
 
 # Diskquota releases
 - name: bin_diskquota_gpdb6_rhel6
