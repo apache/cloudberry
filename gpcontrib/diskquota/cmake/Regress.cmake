@@ -11,13 +11,18 @@
 #   [EXCLUDE <test1> <test2> ...]
 #   [REGRESS_OPTS <opt1> <opt2> ...]
 #   [REGRESS_TYPE isolation2/regress]
+#   [RUN_TIMES <times>]
 # )
 # All the file path can be the relative path to ${CMAKE_CURRENT_SOURCE_DIR}.
 # A bunch of diff targets will be created as well for comparing the regress results. The diff
 # target names like diff_<regress_target_name>_<casename>
 #
-# NOTE: To use this cmake file in another project, the show_regress_diff.sh needs to be placed
-# alongside.
+# Use RUN_TIMES to specify how many times the regress tests should be executed. A negative RUN_TIMES
+# will run the test infinite times.
+#
+# NOTE: To use this cmake file in another project, below files needs to be placed alongside:
+#  - regress_show_diff.sh
+#  - regress_loop.sh
 #
 # Example:
 # RegressTarget_Add(installcheck_avro_fmt
@@ -50,7 +55,7 @@ function(RegressTarget_Add name)
     cmake_parse_arguments(
         arg
         ""
-        "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE"
+        "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE;RUN_TIMES"
         "REGRESS;EXCLUDE;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
         ${ARGN})
     if (NOT arg_EXPECTED_DIR)
@@ -114,6 +119,17 @@ function(RegressTarget_Add name)
         set(ln_data_dir_CMD ln -s ${data_DIR} data)
     endif()
 
+    set(regress_command
+        ${regress_BIN} --psqldir='${PG_BIN_DIR}' ${regress_opts_arg}  ${regress_arg})
+    if (arg_RUN_TIMES)
+        set(test_command
+            ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/regress_loop.sh
+            ${arg_RUN_TIMES}
+            ${regress_command})
+    else()
+        set(test_command ${regress_command})
+    endif()
+
     # Create the target
     add_custom_target(
         ${name}
@@ -128,9 +144,9 @@ function(RegressTarget_Add name)
         COMMAND rm -f data
         COMMAND ${ln_data_dir_CMD}
         COMMAND
-        ${regress_BIN} --psqldir='${PG_BIN_DIR}' ${regress_opts_arg}  ${regress_arg}
+        ${test_command}
         ||
-        ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/show_regress_diff.sh ${working_DIR}
+        ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/regress_show_diff.sh ${working_DIR}
     )
 
     if(arg_REGRESS_TYPE STREQUAL isolation2)
