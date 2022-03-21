@@ -8,7 +8,7 @@
 1: SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect fail
-1: CREATE TABLE t1 AS SELECT generate_series(1,1000000);
+1: CREATE TABLE t1 AS SELECT generate_series(1,10000000);
 1q:
 
 -- launcher should exist
@@ -40,7 +40,7 @@
 1: SET search_path TO postmaster_restart_s;
 1: SELECT diskquota.wait_for_worker_new_epoch();
 -- expect fail
-1: CREATE TABLE t2 AS SELECT generate_series(1,1000000);
+1: CREATE TABLE t2 AS SELECT generate_series(1,10000000);
 -- enlarge the quota limits
 1: SELECT diskquota.set_schema_quota('postmaster_restart_s', '100 MB');
 1: SELECT diskquota.wait_for_worker_new_epoch();
