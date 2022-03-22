@@ -1,5 +1,6 @@
 #@ load("job_def.lib.yml",
 #@   "entrance_check_job",
+#@   "exit_pr_job",
 #@   "build_test_job",
 #@   "centos6_gpdb6_conf",
 #@   "centos7_gpdb6_conf",
@@ -36,6 +37,11 @@ jobs:
 #@   }
 - #@ build_test_job(param)
 #@ end
+#@ param = {
+#@     "trigger": trigger,
+#@     "confs": confs
+#@ }
+- #@ exit_pr_job(param)
 
 resources: #@ declare_res(res_type_map, res_map)
 

@@ -33,6 +33,7 @@ on_success:
 #! Commit trigger. For master pipelines
 #@ def commit_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_commit")
+#@   add_res_by_name(res_map, "slack_notify")
 to_get:
 - get: diskquota_src
   resource: diskquota_commit
@@ -41,7 +42,13 @@ to_put: #@ []
 #! Unfortunately it doesn't work with Concourse 5.
 on_success:
 on_failure:
+  put: slack_notify
+  params:
+    alert_type: failed
 on_error:
+  put: slack_notify
+  params:
+    alert_type: errored
 #@ end
 
 #! Commit trigger. For dev pipelines. No webhook
