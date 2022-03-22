@@ -57,6 +57,9 @@ plan:
 - trigger: true
   _: #@ template.replace(to_get)
 #@   end
+#@   for to_put in trigger["to_put"]:
+- #@ to_put
+#@   end
 #@ end
 
 #! Like the entrance_job, with more static checks.
@@ -71,6 +74,9 @@ plan:
 - trigger: true
   _: #@ template.replace(to_get)
 #@   end
+#@   for to_put in trigger["to_put"]:
+- #@ to_put
+#@   end
 - get: clang-format-image
 - task: check_clang_format
   image: clang-format-image
@@ -80,6 +86,44 @@ plan:
     platform: linux
     run:
       path: diskquota_src/concourse/scripts/check-clang-format.sh
+#@ end
+
+#@ def exit_job(param):
+#@   trigger = param["trigger"]
+#@   confs = param["confs"]
+#@   passed_jobs = []
+#@   for conf in confs:
+#@     passed_jobs.append(build_test_job_name(conf))
+#@   end
+name: exit
+on_failure: #@ trigger["on_failure"]
+on_error: #@ trigger["on_error"]
+on_success: #@ trigger["on_success"]
+plan:
+#@   for to_get in trigger["to_get"]:
+- passed: passed_jobs
+  trigger: true
+  _: #@ template.replace(to_get)
+#@   end
+#@ end
+
+#@ def exit_pr_job(param):
+#@   trigger = param["trigger"]
+#@   confs = param["confs"]
+#@   passed_jobs = []
+#@   for conf in confs:
+#@     passed_jobs.append(build_test_job_name(conf))
+#@   end
+name: exit_pr
+on_failure: #@ trigger["on_failure"]
+on_error: #@ trigger["on_error"]
+on_success: #@ trigger["on_success"]
+plan:
+#@   for to_get in trigger["to_get"]:
+- passed: #@ passed_jobs
+  trigger: true
+  _: #@ template.replace(to_get)
+#@   end
 #@ end
 
 #@ def _build_task(conf):
@@ -105,6 +149,9 @@ params:
   DISKQUOTA_OS: #@ conf["os"]
 #@ end
 
+#@ def build_test_job_name(conf):
+#@   return "build_test_" + conf["os"]
+#@ end
 #@ def build_test_job(param):
 #@   res_map = param["res_map"]
 #@   trigger = param["trigger"]
@@ -113,9 +160,8 @@ params:
 #@   add_res_by_name(res_map, "bin_cmake")
 #@   add_res_by_name(res_map, "bin_diskquota_intermediates")
 #@   add_res_by_conf(res_map, conf)
-name: #@ "build_test_" + conf["os"]
+name: #@ build_test_job_name(conf)
 max_in_flight: 10
-on_success: #@ trigger["on_success"]
 on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
@@ -123,9 +169,6 @@ plan:
 - passed: [entrance]
   trigger: true
   _: #@ template.replace(to_get)
-#@   end
-#@   for to_put in trigger["to_put"]:
-- #@ to_put
 #@   end
 - in_parallel:
   - get: gpdb_src
