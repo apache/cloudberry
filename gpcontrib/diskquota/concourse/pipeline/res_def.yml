@@ -11,6 +11,11 @@ resource_types:
   source:
     repository: teliaoss/github-pr-resource
 
+- name: slack-alert
+  type: docker-image
+  source:
+    repository: arbourd/concourse-slack-alert-resource
+
 resources:
 # Pull Request
 - name: diskquota_pr
@@ -229,3 +234,7 @@ resources:
     bucket: gpdb-extensions-concourse-resources
     json_key: ((extensions-gcs-service-account-key))
     regexp: dependencies/cmake-(.*)-linux-x86_64.sh
+- name: slack_notify
+  type: slack-alert
+  source:
+    url: ((extensions-slack-webhook))

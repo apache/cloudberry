@@ -14,10 +14,10 @@
 #@ res_type_map = {}
 #@ trigger = commit_dev_trigger(res_map)
 #@ confs= [
-#@   centos6_gpdb6_conf(release_build=True),
-#@   centos7_gpdb6_conf(release_build=True),
-#@   rhel8_gpdb6_conf(release_build=True),
-#@   ubuntu18_gpdb6_conf(release_build=True)
+#@   centos6_gpdb6_conf(release_build=False),
+#@   centos7_gpdb6_conf(release_build=False),
+#@   rhel8_gpdb6_conf(release_build=False),
+#@   ubuntu18_gpdb6_conf(release_build=False)
 #@ ]
 jobs:
 #@ param = {
