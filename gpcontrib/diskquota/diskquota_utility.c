@@ -509,7 +509,8 @@ is_database_empty(void)
 	        "  pg_namespace AS n "
 	        "WHERE c.oid > 16384 and relnamespace = n.oid and nspname != 'diskquota'",
 	        true, 0);
-	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select pg_class and pg_namespace table: error code %d", errno);
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "cannot select pg_class and pg_namespace table, reason: %s.", strerror(errno));
 
 	tupdesc = SPI_tuptable->tupdesc;
 	/* check sql return value whether database is empty */
