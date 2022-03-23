@@ -595,8 +595,8 @@ create_monitor_db_table(void)
 		ret_code = SPI_execute(sql, false, 0);
 		if (ret_code != SPI_OK_UTILITY)
 		{
-			ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute error, sql: \"%s\", errno: %d, ret_code: %d.", sql,
-			                       errno, ret_code)));
+			ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute error, sql: \"%s\", reason: %s, ret_code: %d.",
+			                       sql, strerror(errno), ret_code)));
 		}
 	}
 	PG_CATCH();
@@ -642,12 +642,13 @@ start_workers_from_dblist(void)
 	PushActiveSnapshot(GetTransactionSnapshot());
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
-		ereport(ERROR, (errmsg("[diskquota launcher] SPI connect error, errno: %d, return code: %d.", errno, ret)));
+		ereport(ERROR,
+		        (errmsg("[diskquota launcher] SPI connect error, reason: %s, return code: %d.", strerror(errno), ret)));
 	ret = SPI_execute("select dbid from diskquota_namespace.database_list;", true, 0);
 	if (ret != SPI_OK_SELECT)
 		ereport(ERROR,
-		        (errmsg("[diskquota launcher] 'select diskquota_namespace.database_list', errno: %d, return code: %d",
-		                errno, ret)));
+		        (errmsg("[diskquota launcher] 'select diskquota_namespace.database_list', reason: %s, return code: %d.",
+		                strerror(errno), ret)));
 	tupdesc = SPI_tuptable->tupdesc;
 	if (tupdesc->natts != 1 || tupdesc->attrs[0]->atttypid != OIDOID)
 	{
@@ -895,8 +896,8 @@ add_dbid_to_database_list(Oid dbid)
 
 	if (ret != SPI_OK_SELECT)
 		ereport(ERROR, (errmsg("[diskquota launcher] error occured while checking database_list, "
-		                       " code = %d errno = %d",
-		                       ret, errno)));
+		                       " code: %d, reason: %s.",
+		                       ret, strerror(errno))));
 
 	if (SPI_processed == 1)
 	{
@@ -911,8 +912,8 @@ add_dbid_to_database_list(Oid dbid)
 
 	if (ret != SPI_OK_INSERT || SPI_processed != 1)
 		ereport(ERROR, (errmsg("[diskquota launcher] error occured while updating database_list, "
-		                       " code = %d errno = %d",
-		                       ret, errno)));
+		                       " code: %d, reason: %s.",
+		                       ret, strerror(errno))));
 
 	return;
 }
@@ -937,7 +938,8 @@ del_dbid_from_database_list(Oid dbid)
 	                            NULL, false, 0);
 
 	ereportif(ret != SPI_OK_DELETE, ERROR,
-	          (errmsg("[diskquota launcher] del_dbid_from_database_list: errno: %d, ret_code: %d.", errno, ret)));
+	          (errmsg("[diskquota launcher] del_dbid_from_database_list: reason: %s, ret_code: %d.", strerror(errno),
+	                  ret)));
 }
 
 /*
