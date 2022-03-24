@@ -1,9 +1,9 @@
 #!/bin/bash
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
-if [ $(grep -P '^1.0' ../../VERSION) ]; then
+if grep -q -E '^1.0' ../../VERSION;  then
     echo -n "diskquota.so"
 else
-    echo -n "diskquota-$(grep -o -P '^\d+.\d+' ../../VERSION).so"
+    echo -n "diskquota-$(grep -o -E '^[0-9]*.[0-9]*' ../../VERSION).so"
 fi
