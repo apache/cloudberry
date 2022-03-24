@@ -30,10 +30,12 @@ set(CMAKE_C_FLAGS_RELEASE "" CACHE
 set(CMAKE_C_FLAGS_DEBUG "-DDISKQUOTA_DEBUG"
     CACHE STRING "Flags for DEBUG build" FORCE)
 # set link flags for all sub-projects
-set(CMAKE_SHARED_LINKER_FLAGS "${PG_LD_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS "${PG_LD_FLAGS}")
+if (APPLE)
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -bundle_loader ${PG_BIN_DIR}/postgres")
+endif()
 # set c and ld flags for all projects
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PG_C_FLAGS}")
-set(CMAKE_MODULE_LINKER_FLAGS_INIT "${CMAKE_EXE_LINKER_FLAGS} ${PG_LD_FLAGS}")
 
 # generate version
 if(NOT DEFINED DISKQUOTA_VERSION)
