@@ -607,15 +607,13 @@ extractcolumns_from_node(Node *expr, bool *cols, AttrNumber natts)
 	return  ecCtx.found;
 }
 
-static TableScanDesc
-aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot, int nkeys, struct ScanKeyData *key,
-							  ParallelTableScanDesc parallel_scan,
-							  PlanState *ps, uint32 flags)
+AOCSScanDesc
+aoco_beginscan_extractcolumns_quals(Relation rel, Snapshot snapshot,
+					List *targetlist, List *qual,
+					ParallelTableScanDesc parallel_scan, uint32 flags)
 {
 	AOCSScanDesc	aoscan;
 	AttrNumber		natts = RelationGetNumberOfAttributes(rel);
-	List *targetlist = ps->plan->targetlist;
-	List *qual = ps->plan->qual;
 	bool		   *cols;
 	bool			found = false;
 
@@ -639,6 +637,19 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot, int nkeys, struct
 							flags);
 
 	pfree(cols);
+	return aoscan;
+}
+
+static TableScanDesc
+aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot, int nkeys, struct ScanKeyData *key,
+							  ParallelTableScanDesc parallel_scan,
+							  PlanState *ps, uint32 flags)
+{
+	AOCSScanDesc	aoscan;
+	List *targetlist = ps->plan->targetlist;
+	List *qual = ps->plan->qual;
+
+	aoscan = aoco_beginscan_extractcolumns_quals(rel, snapshot, targetlist, qual, parallel_scan, flags);
 
 	if (gp_enable_predicate_pushdown)
 		ps->qual = aocs_predicate_pushdown_prepare(aoscan, qual, ps->qual, ps->ps_ExprContext, ps);
@@ -1687,14 +1698,13 @@ aoco_index_build_range_scan(Relation heapRelation,
 	int64 total_blockcount = 0; 
 	BlockNumber lastBlock = start_blockno;
 	int64 blockcounts = 0;
-#if 0
 	bool		need_create_blk_directory = false;
 	List	   *tlist = NIL;
 	List	   *qual = indexInfo->ii_Predicate;
-#endif
 	Oid			blkdirrelid;
 	Oid			blkidxrelid;
 	int64 		previous_blkno = -1;
+	Relation	blkdir;
 
 	/*
 	 * sanity checks
@@ -1734,6 +1744,17 @@ aoco_index_build_range_scan(Relation heapRelation,
 	/* Set up execution state for predicate, if any. */
 	predicate = ExecPrepareQual(indexInfo->ii_Predicate, estate);
 
+	/*
+	 * If block directory is empty, it must also be built along with the index.
+	 */
+	GetAppendOnlyEntryAuxOids(heapRelation, NULL,
+							  &blkdirrelid, &blkidxrelid, NULL, NULL);
+
+	blkdir = relation_open(blkdirrelid, AccessShareLock);
+
+	need_create_blk_directory = RelationGetNumberOfBlocks(blkdir) == 0;
+	relation_close(blkdir, NoLock);
+
 	if (!scan)
 	{
 		/*
@@ -1744,12 +1765,50 @@ aoco_index_build_range_scan(Relation heapRelation,
 		 */
 		snapshot = SnapshotAny;
 
-		scan = table_beginscan_strat(heapRelation,	/* relation */
-		                             snapshot,	/* snapshot */
-		                             0, /* number of keys */
-		                             NULL,	/* scan key */
-		                             true,	/* buffer access strategy OK */
-		                             allow_sync);	/* syncscan OK? */
+		/*
+		 * Scan all columns if we need to create block directory.
+		 */
+		if (need_create_blk_directory)
+		{
+			scan = table_beginscan_strat(heapRelation,	/* relation */
+										 snapshot,		/* snapshot */
+										 0,		/* number of keys */
+										 NULL,		/* scan key */
+										 true,			/* buffer access strategy OK */
+										 allow_sync);	/* syncscan OK? */
+		}
+		else
+		{
+			uint32		flags = SO_TYPE_SEQSCAN |
+				SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE;
+			/*
+			 * if block directory has created, we can only scan needed column.
+			 */
+			for (int i = 0; i < indexInfo->ii_NumIndexAttrs; i++)
+			{
+				AttrNumber attrnum = indexInfo->ii_IndexAttrNumbers[i];
+				Form_pg_attribute attr = TupleDescAttr(RelationGetDescr(heapRelation), attrnum - 1);
+				Var *var = makeVar(i,
+								   attrnum,
+								   attr->atttypid,
+								   attr->atttypmod,
+								   attr->attcollation,
+								   0);
+
+				/* Build a target list from index info */
+				tlist = lappend(tlist,
+								makeTargetEntry((Expr *) var,
+												list_length(tlist) + 1,
+												NULL,
+												false));
+			}
+
+			/* Push down target list and qual to scan */
+			scan = (TableScanDesc)aoco_beginscan_extractcolumns_quals(heapRelation,	/* relation */
+									  snapshot,		/* snapshot */
+									  tlist,		/* targetlist */
+									  qual, NULL, flags);		/* qual */
+		}
 	}
 	else
 	{
@@ -1768,11 +1827,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 	aocoscan = (AOCSScanDesc) scan;
 
 	/*
-	 * If block directory is empty, it must also be built along with the index.
-	 */
-	GetAppendOnlyEntryAuxOids(heapRelation, NULL,
-							  &blkdirrelid, &blkidxrelid, NULL, NULL);
-	/*
 	 * Note that block directory is created during creation of the first
 	 * index.  If it is found empty, it means the block directory was created
 	 * by this create index transaction.  The caller (DefineIndex) must have
@@ -1781,8 +1835,7 @@ aoco_index_build_range_scan(Relation heapRelation,
 	 * blocked.  We can rest assured of exclusive access to the block
 	 * directory relation.
 	 */
-	Relation blkdir = relation_open(blkdirrelid, AccessShareLock);
-	if (RelationGetNumberOfBlocks(blkdir) == 0)
+	if (need_create_blk_directory)
 	{
 		/*
 		 * Allocate blockDirectory in scan descriptor to let the access method
@@ -1792,7 +1845,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 		Assert(aocoscan->blockDirectory == NULL);
 		aocoscan->blockDirectory = palloc0(sizeof(AppendOnlyBlockDirectory));
 	}
-	relation_close(blkdir, NoLock);
 
 
 	/* Publish number of blocks to scan */
