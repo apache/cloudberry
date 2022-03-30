@@ -2,6 +2,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/Regress.cmake)
 
 # Test cases need fault injector needs to be excluded from release build.
 # GPDB release build doesn't support fault injector
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
 list(APPEND exclude_regress_for_release
     test_fetch_table_stat)
 list(APPEND exclude_isolation2_for_release
@@ -10,9 +11,8 @@ list(APPEND exclude_isolation2_for_release
     test_vacuum
     test_truncate
     test_worker_timeout)
-if (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(load_inject_fault_opts
-        --dbname=contrib_regression)
+else()
+    set(load_inject_fault_opts --load-extension=gp_inject_fault)
 endif()
 
 RegressTarget_Add(regress
