@@ -173,7 +173,7 @@ update_relation_cache(Oid relid)
 	memcpy(relid_entry, &relid_entry_data, sizeof(DiskQuotaRelidCacheEntry));
 	LWLockRelease(diskquota_locks.relation_cache_lock);
 
-	prelid = get_primary_table_oid(relid);
+	prelid = get_primary_table_oid(relid, false);
 	if (OidIsValid(prelid) && prelid != relid)
 	{
 		LWLockAcquire(diskquota_locks.relation_cache_lock, LW_EXCLUSIVE);
@@ -188,22 +188,35 @@ update_relation_cache(Oid relid)
 }
 
 static Oid
-parse_primary_table_oid(Oid relid)
+parse_primary_table_oid(Oid relid, bool on_bgworker)
 {
 	Relation rel;
 	Oid namespace;
 	Oid  parsed_oid;
 	char relname[NAMEDATALEN];
 
-	rel = diskquota_relation_open(relid, NoLock);
-	if (rel == NULL)
+	/*
+	 * diskquota bgworker should be error tolerant to keep it running in background,
+	 * so we can't throw an error.
+	 * On the other hand, diskquota launcher can throw an error if needed.
+	 */
+	if (on_bgworker)
 	{
-		return InvalidOid;
+		if (!get_rel_name_namespace(relid, &namespace, relname))
+		{
+			return InvalidOid;
+		}
+	} else
+	{
+		rel = diskquota_relation_open(relid, NoLock);
+		if (rel == NULL)
+		{
+			return InvalidOid;
+		}
+		namespace = rel->rd_rel->relnamespace;
+		memcpy(relname, rel->rd_rel->relname.data, NAMEDATALEN);
+		relation_close(rel, NoLock);
 	}
-
-	namespace = rel->rd_rel->relnamespace;
-	memcpy(relname, rel->rd_rel->relname.data, NAMEDATALEN);
-	relation_close(rel, NoLock);
 
 	parsed_oid = diskquota_parse_primary_table_oid(namespace, relname);
 	if (OidIsValid(parsed_oid))
@@ -214,13 +227,13 @@ parse_primary_table_oid(Oid relid)
 }
 
 Oid
-get_primary_table_oid(Oid relid)
+get_primary_table_oid(Oid relid, bool on_bgworker)
 {
 	DiskQuotaRelationCacheEntry *relation_entry;
 	Oid                          cached_prelid = relid;
 	Oid                          parsed_prelid;
 
-	parsed_prelid = parse_primary_table_oid(relid);
+	parsed_prelid = parse_primary_table_oid(relid, on_bgworker);
 	if (OidIsValid(parsed_prelid))
 	{
 		return parsed_prelid;
