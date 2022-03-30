@@ -1318,6 +1318,29 @@ get_rel_owner_schema_tablespace(Oid relid, Oid *ownerOid, Oid *nsOid, Oid *table
 	return found;
 }
 
+/*
+ * Given table oid, search for namespace and name.
+ * Memory relname points to should be pre-allocated at least NAMEDATALEN bytes.
+ */
+bool
+get_rel_name_namespace(Oid relid, Oid *nsOid, char *relname)
+{
+	HeapTuple tp;
+
+	tp         = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	bool found = HeapTupleIsValid(tp);
+	if (found)
+	{
+		Form_pg_class reltup = (Form_pg_class)GETSTRUCT(tp);
+
+		*nsOid = reltup->relnamespace;
+		memcpy(relname, reltup->relname.data, NAMEDATALEN);
+
+		ReleaseSysCache(tp);
+	}
+	return found;
+}
+
 static bool
 check_blackmap_by_relfilenode(RelFileNode relfilenode)
 {
