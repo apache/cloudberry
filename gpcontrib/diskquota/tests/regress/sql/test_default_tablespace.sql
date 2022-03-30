@@ -101,6 +101,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION IF EXISTS diskquota;
 
 \c contrib_regression;
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP DATABASE IF EXISTS db_with_tablespace;
 DROP TABLESPACE IF EXISTS custom_tablespace;
 

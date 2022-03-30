@@ -940,7 +940,6 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 		                            },
 		                            NULL, false, 0);
 		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
-
 	} else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
 		ret = SPI_execute_with_args("delete from diskquota.target where primaryOid = $1 and tablespaceOid = $2", 2,
@@ -1416,6 +1415,7 @@ diskquota_relation_open(Oid relid, LOCKMODE mode)
 	{
 		InterruptHoldoffCount = SavedInterruptHoldoffCount;
 		HOLD_INTERRUPTS();
+		EmitErrorReport();
 		FlushErrorState();
 		RESUME_INTERRUPTS();
 	}
