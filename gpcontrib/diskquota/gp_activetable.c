@@ -675,7 +675,7 @@ get_active_tables_oid(void)
 
 		if (relOid != InvalidOid)
 		{
-			prelid             = get_primary_table_oid(relOid);
+			prelid             = get_primary_table_oid(relOid, true);
 			active_table_entry = hash_search(local_active_table_stats_map, &prelid, HASH_ENTER, &found);
 			if (active_table_entry && !found)
 			{
