@@ -314,7 +314,8 @@ gp_fetch_active_tables(bool is_init)
 	if (is_init)
 	{
 		load_table_size(local_table_stats_map);
-	} else
+	}
+	else
 	{
 		/* step 1: fetch active oids from all the segments */
 		local_active_table_oid_maps = pull_active_list_from_seg();
@@ -426,7 +427,8 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 		hash_seq_init(&(cache->pos), localCacheTable);
 
 		MemoryContextSwitchTo(oldcontext);
-	} else
+	}
+	else
 	{
 		isFirstCall = false;
 	}
@@ -436,7 +438,8 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 	if (isFirstCall)
 	{
 		funcctx->user_fctx = (void *)cache;
-	} else
+	}
+	else
 	{
 		cache = (DiskQuotaSetOFCache *)funcctx->user_fctx;
 	}
@@ -521,7 +524,8 @@ get_active_tables_stats(ArrayType *array)
 		if (bitmap && (*bitmap & bitmask) == 0)
 		{
 			continue;
-		} else
+		}
+		else
 		{
 			relOid     = DatumGetObjectId(fetch_att(ptr, typbyval, typlen));
 			segId      = GpIdentity.segindex;
@@ -795,7 +799,8 @@ load_table_size(HTAB *local_table_stats_map)
 		if (tupdesc->natts != 3)
 		{
 			ereport(WARNING, (errmsg("[diskquota] tupdesc->natts: %d", tupdesc->natts)));
-		} else
+		}
+		else
 		{
 			ereport(WARNING, (errmsg("[diskquota] attrs: %d, %d, %d", tupdesc->attrs[0]->atttypid,
 			                         tupdesc->attrs[1]->atttypid, tupdesc->attrs[2]->atttypid)));
@@ -861,7 +866,8 @@ convert_map_to_string(HTAB *local_active_table_oid_maps)
 		if (count != nitems)
 		{
 			appendStringInfo(&buffer, "%d,", entry->reloid);
-		} else
+		}
+		else
 		{
 			appendStringInfo(&buffer, "%d", entry->reloid);
 		}
@@ -1016,7 +1022,8 @@ pull_active_table_size_from_seg(HTAB *local_table_stats_map, char *active_oid_ar
 				entry->reloid    = reloid;
 				entry->tablesize = tableSize;
 				entry->segid     = -1;
-			} else
+			}
+			else
 			{
 				/* sum table size from all the segments */
 				entry->tablesize = entry->tablesize + tableSize;

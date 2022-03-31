@@ -35,5 +35,6 @@ BraceWrapping:
   BeforeCatch: true
   SplitEmptyFunction: false
   SplitEmptyRecord: false
+  BeforeElse: true
 
 SortIncludes: false

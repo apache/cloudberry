@@ -243,7 +243,8 @@ update_limit_for_quota(int64 limit, float segratio, QuotaType type, Oid *keys)
 		if (key.segid == -1)
 		{
 			entry->limit = limit;
-		} else
+		}
+		else
 		{
 			entry->limit = round((limit / SEGCOUNT) * segratio);
 		}
@@ -817,7 +818,8 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 			{
 				reltablespace = MyDatabaseTableSpace;
 			}
-		} else
+		}
+		else
 		{
 			LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
 			DiskQuotaRelationCacheEntry *relation_entry = hash_search(relation_cache, &relOid, HASH_FIND, NULL);
@@ -1065,7 +1067,8 @@ flush_local_black_map(void)
 				ereport(WARNING, (errmsg("[diskquota] Shared disk quota black map size limit reached."
 				                         "Some out-of-limit schemas or roles will be lost"
 				                         "in blacklist.")));
-			} else
+			}
+			else
 			{
 				/* new db objects which exceed quota limit */
 				if (!found)
@@ -1080,7 +1083,8 @@ flush_local_black_map(void)
 			blackentry->segexceeded      = localblackentry->segexceeded;
 			localblackentry->isexceeded  = false;
 			localblackentry->segexceeded = false;
-		} else
+		}
+		else
 		{
 			/* db objects are removed or under quota limit in the new loop */
 			(void)hash_search(disk_quota_black_map, (void *)&localblackentry->keyitem, HASH_REMOVE, NULL);
@@ -1281,7 +1285,8 @@ do_load_quotas(void)
 				                       quotaType, quota_info[quotaType].num_keys)));
 			}
 			update_limit_for_quota(quota_limit_mb * (1 << 20), segratio, quotaType, (Oid[]){targetOid});
-		} else
+		}
+		else
 		{
 			update_limit_for_quota(quota_limit_mb * (1 << 20), segratio, quotaType, (Oid[]){targetOid, spcOid});
 		}
@@ -1767,7 +1772,8 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 					break;
 				}
 			}
-		} else
+		}
+		else
 		{
 			/*
 			 * We cannot fetch the relation from syscache. It may be an uncommitted relation.

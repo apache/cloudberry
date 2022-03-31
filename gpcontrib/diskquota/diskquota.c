@@ -130,7 +130,8 @@ _PG_init(void)
 	{
 		ereport(ERROR, (errmsg("[diskquota] booting " DISKQUOTA_VERSION ", but " DISKQUOTA_BINARY_NAME
 		                       " not in shared_preload_libraries. abort.")));
-	} else
+	}
+	else
 	{
 		ereport(INFO, (errmsg("booting diskquota-" DISKQUOTA_VERSION)));
 	}
@@ -298,7 +299,8 @@ disk_quota_worker_main(Datum main_arg)
 			snprintf(_errmsg, sizeof(_errmsg), _errfmt, times * diskquota_naptime);
 
 			init_ps_display("bgworker:", "[diskquota]", dbname, _errmsg);
-		} else
+		}
+		else
 		{
 			init_ps_display("bgworker:", "[diskquota]", dbname,
 			                "v" DISKQUOTA_VERSION " is not matching with current SQL. stop working");
