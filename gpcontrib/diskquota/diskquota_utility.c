@@ -379,7 +379,8 @@ dispatch_pause_or_resume_command(Oid dbid, bool pause_extension)
 	if (dbid == InvalidOid)
 	{
 		appendStringInfo(&sql, "()");
-	} else
+	}
+	else
 	{
 		appendStringInfo(&sql, "(%d)", dbid);
 	}
@@ -854,7 +855,8 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 		                            },
 		                            NULL, false, 0);
 		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
-	} else if (SPI_processed > 0 && quota_limit_mb < 0)
+	}
+	else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
 		ret = SPI_execute_with_args("delete from diskquota.quota_config where targetoid = $1 and quotatype = $2", 2,
 		                            (Oid[]){
@@ -867,7 +869,8 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 		                            },
 		                            NULL, false, 0);
 		if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from quota setting table, error code %d", ret);
-	} else if (SPI_processed > 0 && quota_limit_mb > 0)
+	}
+	else if (SPI_processed > 0 && quota_limit_mb > 0)
 	{
 		ret = SPI_execute_with_args(
 		        "update diskquota.quota_config set quotalimitMB = $1 where targetoid= $2 and quotatype = $3", 3,
@@ -940,7 +943,8 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 		                            },
 		                            NULL, false, 0);
 		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
-	} else if (SPI_processed > 0 && quota_limit_mb < 0)
+	}
+	else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
 		ret = SPI_execute_with_args("delete from diskquota.target where primaryOid = $1 and tablespaceOid = $2", 2,
 		                            (Oid[]){
@@ -1104,7 +1108,8 @@ update_diskquota_db_list(Oid dbid, HASHACTION action)
 		{
 			ereport(WARNING, (errmsg("can't alloc memory on dbid cache, there ary too many databases to monitor")));
 		}
-	} else if (action == HASH_REMOVE)
+	}
+	else if (action == HASH_REMOVE)
 	{
 		hash_search(monitoring_dbid_cache, &dbid, HASH_REMOVE, &found);
 		if (!found)
@@ -1360,7 +1365,8 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 			totalsize += ctx.size;
 		}
 		return totalsize;
-	} else if (relstorage == RELSTORAGE_AOROWS || relstorage == RELSTORAGE_AOCOLS)
+	}
+	else if (relstorage == RELSTORAGE_AOROWS || relstorage == RELSTORAGE_AOCOLS)
 	{
 		RelationFileStatCtx ctx = {0};
 		ctx.relation_path       = relpathbackend(rnode->node, rnode->backend, MAIN_FORKNUM);
@@ -1373,7 +1379,8 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 		relation_file_stat(0, &ctx);
 		ao_foreach_extent_file(relation_file_stat, &ctx);
 		return ctx.size;
-	} else
+	}
+	else
 	{
 		return 0;
 	}
