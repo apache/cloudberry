@@ -1,26 +1,26 @@
 select * from diskquota.status() where name not like '%version';
-    name     |  status  
--------------+----------
- soft limits | enabled
- hard limits | disabled
+    name     | status 
+-------------+--------
+ soft limits | on
+ hard limits | off
 (2 rows)
 
 \! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
 \! gpstop -u > /dev/null
 select * from diskquota.status() where name not like '%version';
-    name     | status  
--------------+---------
- soft limits | enabled
- hard limits | enabled
+    name     | status 
+-------------+--------
+ soft limits | on
+ hard limits | on
 (2 rows)
 
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null
 select * from diskquota.status() where name not like '%version';
-    name     |  status  
--------------+----------
- soft limits | enabled
- hard limits | disabled
+    name     | status 
+-------------+--------
+ soft limits | on
+ hard limits | off
 (2 rows)
 
 select from diskquota.pause();
@@ -28,10 +28,10 @@ select from diskquota.pause();
 (1 row)
 
 select * from diskquota.status() where name not like '%version';
-    name     |  status  
--------------+----------
+    name     | status 
+-------------+--------
  soft limits | paused
- hard limits | disabled
+ hard limits | off
 (2 rows)
 
 \! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
@@ -46,10 +46,10 @@ select * from diskquota.status() where name not like '%version';
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null
 select * from diskquota.status() where name not like '%version';
-    name     |  status  
--------------+----------
+    name     | status 
+-------------+--------
  soft limits | paused
- hard limits | disabled
+ hard limits | off
 (2 rows)
 
 select from diskquota.resume();
@@ -59,9 +59,9 @@ select from diskquota.resume();
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null
 select * from diskquota.status() where name not like '%version';
-    name     |  status  
--------------+----------
- soft limits | enabled
- hard limits | disabled
+    name     | status 
+-------------+--------
+ soft limits | on
+ hard limits | off
 (2 rows)
 
