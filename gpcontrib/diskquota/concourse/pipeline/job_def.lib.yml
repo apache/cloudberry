@@ -9,6 +9,7 @@ res_test_image: centos6-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_centos6" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_rhel6
 res_intermediates_bin: bin_diskquota_gpdb6_rhel6_intermediates
+release_bin: bin_diskquota_gpdb6_rhel6_release
 os: rhel6
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
@@ -20,6 +21,7 @@ res_test_image: centos7-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_centos7" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_rhel7
 res_intermediates_bin: bin_diskquota_gpdb6_rhel7_intermediates
+release_bin: bin_diskquota_gpdb6_rhel7_release
 os: rhel7
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
@@ -31,6 +33,7 @@ res_test_image: rhel8-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_rhel8" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_rhel8
 res_intermediates_bin: bin_diskquota_gpdb6_rhel8_intermediates
+release_bin: bin_diskquota_gpdb6_rhel8_release
 os: rhel8
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
@@ -42,6 +45,7 @@ res_test_image: ubuntu18-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_ubuntu18" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
 res_intermediates_bin: bin_diskquota_gpdb6_ubuntu18_intermediates
+release_bin: bin_diskquota_gpdb6_ubuntu18_release
 os: ubuntu18.04
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
@@ -54,10 +58,10 @@ on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
 #@   for to_get in trigger["to_get"]:
-- trigger: true
+- trigger: #@ trigger["auto_trigger"]
   _: #@ template.replace(to_get)
 #@   end
-#@   for to_put in trigger["to_put"]:
+#@   for to_put in trigger["to_put_pre"]:
 - #@ to_put
 #@   end
 #@ end
@@ -71,10 +75,10 @@ on_failure: #@ trigger["on_failure"]
 on_error: #@ trigger["on_error"]
 plan:
 #@   for to_get in trigger["to_get"]:
-- trigger: true
+- trigger: #@ trigger["auto_trigger"]
   _: #@ template.replace(to_get)
 #@   end
-#@   for to_put in trigger["to_put"]:
+#@   for to_put in trigger["to_put_pre"]:
 - #@ to_put
 #@   end
 - get: clang-format-image
@@ -126,6 +130,43 @@ plan:
 #@   end
 #@ end
 
+#! The final release job
+#! 1. Push the artifacts to the release bucket
+#! 2. Push the git tag
+#@ def exit_release_job(param):
+#@   trigger = param["trigger"]
+#@   confs = param["confs"]
+#@   passed_jobs = []
+#@   res_map = param["res_map"]
+#@   for conf in confs:
+#@     passed_jobs.append(build_test_job_name(conf))
+#@     add_res_by_name(res_map, conf["release_bin"])
+#@   end
+name: exit_release
+on_failure: #@ trigger["on_failure"]
+on_error: #@ trigger["on_error"]
+on_success: #@ trigger["on_success"]
+plan:
+#@   for to_get in trigger["to_get"]:
+- passed: #@ passed_jobs
+  _: #@ template.replace(to_get)
+#@   end
+- in_parallel:
+    steps:
+#@   for conf in confs:
+      - do:
+        - get: #@ conf["res_intermediates_bin"]
+          params:
+            unpack: true
+        - put: #@ conf["release_bin"]
+          params:
+            file: #@ conf["res_intermediates_bin"] + "/diskquota-*-*.tar.gz"
+#@   end
+#@   for to_put in trigger["to_put_post"]:
+- #@ to_put
+#@   end
+#@ end
+
 #@ def _build_task(conf):
 task: #@ "build_" + conf["os"]
 file: diskquota_src/concourse/tasks/build_diskquota.yml
@@ -139,7 +180,7 @@ params:
 
 #@ def _test_task(conf):
 task: #@ "test_" + conf["os"]
-timeout: 1h
+timeout: 2h
 file: diskquota_src/concourse/tasks/test_diskquota.yml
 image: #@ conf["res_test_image"]
 input_mapping:
@@ -183,5 +224,5 @@ plan:
 - #@ _test_task(conf)
 - put: #@ conf["res_intermediates_bin"]
   params:
-    file: diskquota_artifacts/diskquota-*_x86_64.tar.gz
+    file: diskquota_artifacts/diskquota.tar.gz
 #@ end

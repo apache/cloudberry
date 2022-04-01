@@ -46,7 +46,17 @@ https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/COMMIT:diskquota:gpdb
 
 ## Fly the release pipeline
 
-TBD
+By default, the release is built from the `gpdb` branch
+
+```
+./fly.sh -t extension -c release
+```
+
+To fly a release pipeline from a specific branch:
+
+```
+./fly.sh -t extension -c release -b release/<major>.<minor>
+```
 
 ## Fly the dev pipeline
 
