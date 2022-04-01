@@ -1184,7 +1184,7 @@ diskquota_status_check_soft_limit()
 	if (!found) return "paused";
 
 	// if worker booted, check 'worker_map->is_paused'
-	return paused ? "paused" : "enabled";
+	return paused ? "paused" : "on";
 }
 
 static const char *
@@ -1210,7 +1210,7 @@ diskquota_status_check_hard_limit()
 	// hard limits should also paused
 	if (found && paused && hardlimit) return "paused";
 
-	return hardlimit ? "enabled" : "disabled";
+	return hardlimit ? "on" : "off";
 }
 
 static const char *
