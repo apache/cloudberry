@@ -3,16 +3,18 @@
 #! PR trigger. For pull request pipelines
 #@ def pr_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_pr")
+auto_trigger: true
 to_get:
   - get: diskquota_src
     resource: diskquota_pr
     params:
       fetch_tags: true
-to_put:
+to_put_pre:
   - put: diskquota_pr
     params:
       path: diskquota_src
       status: pending
+to_put_post: #@ []
 on_failure:
   put: diskquota_pr
   params:
@@ -34,10 +36,12 @@ on_success:
 #@ def commit_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_commit")
 #@   add_res_by_name(res_map, "slack_notify")
+auto_trigger: true
 to_get:
 - get: diskquota_src
   resource: diskquota_commit
-to_put: #@ []
+to_put_pre: #@ []
+to_put_post: #@ []
 #! To set the github commit status, https://github.com/Pix4D/cogito is a good choice.
 #! Unfortunately it doesn't work with Concourse 5.
 on_success:
@@ -54,10 +58,12 @@ on_error:
 #! Commit trigger. For dev pipelines. No webhook
 #@ def commit_dev_trigger(res_map):
 #@   add_res_by_name(res_map, "diskquota_commit_dev")
+auto_trigger: true
 to_get:
 - get: diskquota_src
   resource: diskquota_commit_dev
-to_put: #@ []
+to_put_pre: #@ []
+to_put_post: #@ []
 #! To set the github commit status, https://github.com/Pix4D/cogito is a good choice.
 #! Unfortunately it doesn't work with Concourse 5.
 on_success:
@@ -65,3 +71,31 @@ on_failure:
 on_error:
 #@ end
 
+#! Commit trigger. For release pipelines
+#@ def release_trigger(res_map):
+#@   add_res_by_name(res_map, "diskquota_commit")
+#@   add_res_by_name(res_map, "slack_notify")
+auto_trigger: true
+to_get:
+- get: diskquota_src
+  resource: diskquota_commit
+to_put_pre: #@ []
+to_put_post:
+- put: diskquota_commit
+  params:
+    repository: diskquota_src
+    tag: diskquota_src/VERSION
+on_success:
+  put: slack_notify
+  params:
+    alert_type: success
+    text: A new diskquota release has been pushed!
+on_failure:
+  put: slack_notify
+  params:
+    alert_type: failed
+on_error:
+  put: slack_notify
+  params:
+    alert_type: errored
+#@ end

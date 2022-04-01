@@ -10,7 +10,7 @@ function activate_standby() {
 }
 
 function _main() {
-    tar -xzf /home/gpadmin/bin_diskquota/*.tar.gz -C /usr/local/greenplum-db-devel
+    tar -xzf /home/gpadmin/bin_diskquota/diskquota-*-*.tar.gz -C /usr/local/greenplum-db-devel
     source /home/gpadmin/gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
     pushd /home/gpadmin/diskquota_artifacts

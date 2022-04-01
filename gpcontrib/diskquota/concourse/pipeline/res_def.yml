@@ -33,7 +33,7 @@ resources:
   type: git
   # We should rely on the webhook. See README if webhook doesn't work
   webhook_token: ((diskquota-webhook-token))
-  check_every: 24h
+  check_every: 1h
   source:
     branch: ((diskquota-branch))
     uri: https://github.com/greenplum-db/diskquota.git
@@ -227,6 +227,35 @@ resources:
     json_key: ((extensions-gcs-service-account-key))
     versioned_file: intermediates/diskquota/diskquota_ubuntu18_gpdb6.tar.gz
 
+# For uploading to the release bucket
+- name: bin_diskquota_gpdb6_rhel6_release
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
+
+- name: bin_diskquota_gpdb6_rhel7_release
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
+
+- name: bin_diskquota_gpdb6_rhel8_release
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
+
+- name: bin_diskquota_gpdb6_ubuntu18_release
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
+
 # Other dependencies
 - name: bin_cmake
   type: gcs
@@ -234,6 +263,7 @@ resources:
     bucket: gpdb-extensions-concourse-resources
     json_key: ((extensions-gcs-service-account-key))
     regexp: dependencies/cmake-(.*)-linux-x86_64.sh
+
 - name: slack_notify
   type: slack-alert
   source:
