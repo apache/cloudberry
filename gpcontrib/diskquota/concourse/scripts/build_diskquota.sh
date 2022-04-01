@@ -16,7 +16,7 @@ function pkg() {
     cmake /home/gpadmin/diskquota_src \
         -DDISKQUOTA_LAST_RELEASE_PATH="${last_release_path}" \
         -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
-    cmake --build . --target package
+    cmake --build . --target create_artifact
     popd
 }
 

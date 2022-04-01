@@ -73,6 +73,17 @@ case ${pipeline_config} in
       pipeline_name="DEV:${pipeline_name}"
       config_file="dev.yml"
     ;;
+  release)
+      # Default branch is 'gpdb' as it is our main branch
+      if [ -z "${branch}" ]; then
+          branch="gpdb"
+      fi
+      if [ -z "${pipeline_name}" ]; then
+          pipeline_name="RELEASE:diskquota:${branch}"
+      fi
+      config_file="release.yml"
+      hook_res="diskquota_commit"
+    ;;
   *)
       usage ""
     ;;
