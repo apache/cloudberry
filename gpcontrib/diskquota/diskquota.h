@@ -1,3 +1,15 @@
+/* -------------------------------------------------------------------------
+ *
+ * diskquota.h
+ *
+ * Copyright (c) 2018-2020 Pivotal Software, Inc.
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
+ *
+ * IDENTIFICATION
+ *		diskquota/diskquota.c
+ *
+ * -------------------------------------------------------------------------
+ */
 #ifndef DISK_QUOTA_H
 #define DISK_QUOTA_H
 
