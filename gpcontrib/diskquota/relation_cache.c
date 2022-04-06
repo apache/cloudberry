@@ -1,3 +1,14 @@
+/* -------------------------------------------------------------------------
+ *
+ * relation_cache.c
+ *
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
+ *
+ * IDENTIFICATION
+ *		diskquota/relation_cache.c
+ *
+ * -------------------------------------------------------------------------
+ */
 #include "postgres.h"
 
 #include "catalog/indexing.h"

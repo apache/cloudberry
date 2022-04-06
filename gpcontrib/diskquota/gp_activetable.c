@@ -6,7 +6,8 @@
  * quotamodel will call gp_fetch_active_tables() to fetch the active tables
  * and their size information in each loop.
  *
- * Copyright (c) 2018-Present Pivotal Software, Inc.
+ * Copyright (c) 2018-2020 Pivotal Software, Inc.
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
  *
  * IDENTIFICATION
  *		diskquota/gp_activetable.c
