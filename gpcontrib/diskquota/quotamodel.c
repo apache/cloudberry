@@ -6,7 +6,8 @@
  * model. Disk quota related Shared memory initialization is also implemented
  * in this file.
  *
- * Copyright (c) 2018-Present Pivotal Software, Inc.
+ * Copyright (c) 2018-2020 Pivotal Software, Inc.
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
  *
  * IDENTIFICATION
  *		diskquota/quotamodel.c
