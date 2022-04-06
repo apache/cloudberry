@@ -5,7 +5,8 @@
  * This code registers enforcement hooks to cancel the query which exceeds
  * the quota limit.
  *
- * Copyright (c) 2018-Present Pivotal Software, Inc.
+ * Copyright (c) 2018-2020 Pivotal Software, Inc.
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
  *
  * IDENTIFICATION
  *		diskquota/enforcement.c

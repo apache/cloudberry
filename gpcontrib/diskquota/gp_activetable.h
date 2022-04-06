@@ -1,3 +1,15 @@
+/* -------------------------------------------------------------------------
+ *
+ * gp_activetable.h
+ *
+ * Copyright (c) 2018-2020 Pivotal Software, Inc.
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
+ *
+ * IDENTIFICATION
+ *		diskquota/gp_activetable.h
+ *
+ * -------------------------------------------------------------------------
+ */
 #ifndef ACTIVE_TABLE_H
 #define ACTIVE_TABLE_H
 

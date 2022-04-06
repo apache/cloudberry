@@ -1,3 +1,14 @@
+/* -------------------------------------------------------------------------
+ *
+ * relation_cache.h
+ *
+ * Copyright (c) 2020-Present VMware, Inc. or its affiliates
+ *
+ * IDENTIFICATION
+ *		diskquota/relation_cache.h
+ *
+ * -------------------------------------------------------------------------
+ */
 #ifndef RELATION_CACHE_H
 #define RELATION_CACHE_H
 
