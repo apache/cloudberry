@@ -7,7 +7,7 @@ CREATE TABLE diskquota.quota_config(
 	targetOid oid,
 	quotatype int,
 	quotalimitMB int8,
-	segratio float4 DEFAULT -1,
+	segratio float4 DEFAULT 0,
 	PRIMARY KEY(targetOid, quotatype)
 ) DISTRIBUTED BY (targetOid, quotatype);
 

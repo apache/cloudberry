@@ -1,7 +1,7 @@
 -- TODO check if worker should not refresh, current lib should be diskquota-2.0.so
 
 -- table part
-ALTER TABLE diskquota.quota_config ADD COLUMN segratio float4 DEFAULT -1;
+ALTER TABLE diskquota.quota_config ADD COLUMN segratio float4 DEFAULT 0;
 
 CREATE TABLE diskquota.target (
 	quotatype int, -- REFERENCES disquota.quota_config.quotatype,

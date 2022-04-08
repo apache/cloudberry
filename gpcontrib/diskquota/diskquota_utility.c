@@ -66,14 +66,35 @@ PG_FUNCTION_INFO_V1(pull_all_table_size);
 
 /* timeout count to wait response from launcher process, in 1/10 sec */
 #define WAIT_TIME_COUNT 1200
+/*
+ * three types values for "quota" column in "quota_config" table:
+ * 1) more than 0: valid value
+ * 2) 0: meaningless value, rejected by diskquota UDF
+ * 3) less than 0: to delete the quota config in the table
+ *
+ * the values for segratio column are the same as quota column
+ *
+ * In quota_config table,
+ * 1) when quota type is "TABLESPACE_QUOTA",
+ *    the quota column value is always INVALID_QUOTA
+ * 2) when quota type is "NAMESPACE_TABLESPACE_QUOTA" or "ROLE_TABLESPACE_QUOTA"
+ *    and no segratio configed for the tablespace, the segratio value is
+ *    INVALID_SEGRATIO.
+ * 3) when quota type is "NAMESPACE_QUOTA" or "ROLE_QUOTA", the segratio is
+ *    always INVALID_SEGRATIO.
+ */
+#define INVALID_SEGRATIO 0.0
+#define INVALID_QUOTA 0
 
 static object_access_hook_type next_object_access_hook;
 static bool                    is_database_empty(void);
 static void        dq_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
 static const char *ddl_err_code_to_err_message(MessageResult code);
 static int64       get_size_in_mb(char *str);
-static void        set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type);
-static void        set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
+static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, float4 segratio, Oid spcoid);
+static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
+static float4 get_per_segment_ratio(Oid spcoid);
+static bool   to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio);
 
 List *get_rel_oid_list(void);
 
@@ -695,7 +716,9 @@ set_role_quota(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
 	}
-	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_QUOTA);
+	SPI_connect();
+	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_QUOTA, INVALID_SEGRATIO, InvalidOid);
+	SPI_finish();
 	PG_RETURN_VOID();
 }
 
@@ -727,7 +750,9 @@ set_schema_quota(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
 	}
-	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_QUOTA);
+	SPI_connect();
+	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_QUOTA, INVALID_SEGRATIO, InvalidOid);
+	SPI_finish();
 	PG_RETURN_VOID();
 }
 
@@ -769,8 +794,10 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
 	}
 
+	SPI_connect();
 	set_target_internal(roleoid, spcoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
-	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
+	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA, INVALID_SEGRATIO, spcoid);
+	SPI_finish();
 	PG_RETURN_VOID();
 }
 
@@ -812,13 +839,23 @@ set_schema_tablespace_quota(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
 	}
 
+	SPI_connect();
 	set_target_internal(namespaceoid, spcoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
-	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
+	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA, INVALID_SEGRATIO, spcoid);
+	SPI_finish();
 	PG_RETURN_VOID();
 }
 
+/*
+ * set_quota_config_intenral - insert/update/delete quota_config table
+ *
+ * If the segratio is valid, query the segratio from
+ * the table "quota_config" by spcoid.
+ *
+ * DELETE doesn't need the segratio
+ */
 static void
-set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
+set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, float4 segratio, Oid spcoid)
 {
 	int ret;
 
@@ -826,7 +863,6 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 	 * If error happens in set_quota_config_internal, just return error messages to
 	 * the client side. So there is no need to catch the error.
 	 */
-	SPI_connect();
 
 	ret = SPI_execute_with_args("select true from diskquota.quota_config where targetoid = $1 and quotatype = $2", 2,
 	                            (Oid[]){
@@ -840,59 +876,90 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type)
 	                            NULL, true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select quota setting table: error code %d", ret);
 
-	/* if the schema or role's quota has been set before */
-	if (SPI_processed == 0 && quota_limit_mb > 0)
+	if (to_delete_quota(type, quota_limit_mb, segratio))
 	{
-		ret = SPI_execute_with_args("insert into diskquota.quota_config values($1, $2, $3)", 3,
-		                            (Oid[]){
-		                                    OIDOID,
-		                                    INT4OID,
-		                                    INT8OID,
-		                            },
-		                            (Datum[]){
-		                                    ObjectIdGetDatum(targetoid),
-		                                    Int32GetDatum(type),
-		                                    Int64GetDatum(quota_limit_mb),
-		                            },
-		                            NULL, false, 0);
-		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
+		if (SPI_processed > 0)
+		{
+			ret = SPI_execute_with_args("delete from diskquota.quota_config where targetoid = $1 and quotatype = $2", 2,
+			                            (Oid[]){
+			                                    OIDOID,
+			                                    INT4OID,
+			                            },
+			                            (Datum[]){
+			                                    ObjectIdGetDatum(targetoid),
+			                                    Int32GetDatum(type),
+			                            },
+			                            NULL, false, 0);
+			if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from quota setting table, error code %d", ret);
+		}
+		// else do nothing
 	}
-	else if (SPI_processed > 0 && quota_limit_mb < 0)
+	// to upsert quota_config
+	else
 	{
-		ret = SPI_execute_with_args("delete from diskquota.quota_config where targetoid = $1 and quotatype = $2", 2,
-		                            (Oid[]){
-		                                    OIDOID,
-		                                    INT4OID,
-		                            },
-		                            (Datum[]){
-		                                    ObjectIdGetDatum(targetoid),
-		                                    Int32GetDatum(type),
-		                            },
-		                            NULL, false, 0);
-		if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from quota setting table, error code %d", ret);
-	}
-	else if (SPI_processed > 0 && quota_limit_mb > 0)
-	{
-		ret = SPI_execute_with_args(
-		        "update diskquota.quota_config set quotalimitMB = $1 where targetoid= $2 and quotatype = $3", 3,
-		        (Oid[]){
-		                INT8OID,
-		                OIDOID,
-		                INT4OID,
-		        },
-		        (Datum[]){
-		                Int64GetDatum(quota_limit_mb),
-		                ObjectIdGetDatum(targetoid),
-		                Int32GetDatum(type),
-		        },
-		        NULL, false, 0);
-		if (ret != SPI_OK_UPDATE) elog(ERROR, "cannot update quota setting table, error code %d", ret);
+		if (SPI_processed == 0)
+		{
+			if (segratio == INVALID_SEGRATIO && !(type == ROLE_QUOTA || type == NAMESPACE_QUOTA))
+				segratio = get_per_segment_ratio(spcoid);
+			ret = SPI_execute_with_args("insert into diskquota.quota_config values($1, $2, $3, $4)", 4,
+			                            (Oid[]){
+			                                    OIDOID,
+			                                    INT4OID,
+			                                    INT8OID,
+			                                    FLOAT4OID,
+			                            },
+			                            (Datum[]){
+			                                    ObjectIdGetDatum(targetoid),
+			                                    Int32GetDatum(type),
+			                                    Int64GetDatum(quota_limit_mb),
+			                                    Float4GetDatum(segratio),
+			                            },
+			                            NULL, false, 0);
+			if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
+		}
+		else
+		{
+			// no need to update segratio
+			if (segratio == INVALID_SEGRATIO)
+			{
+				ret = SPI_execute_with_args(
+				        "update diskquota.quota_config set quotalimitMB = $1 where targetoid= $2 and quotatype = $3", 3,
+				        (Oid[]){
+				                INT8OID,
+				                OIDOID,
+				                INT4OID,
+				        },
+				        (Datum[]){
+				                Int64GetDatum(quota_limit_mb),
+				                ObjectIdGetDatum(targetoid),
+				                Int32GetDatum(type),
+				        },
+				        NULL, false, 0);
+			}
+			else
+			{
+				ret = SPI_execute_with_args(
+				        "update diskquota.quota_config set quotalimitMb = $1, segratio = $2 where targetoid= $3 and "
+				        "quotatype = $4",
+				        4,
+				        (Oid[]){
+				                INT8OID,
+				                FLOAT4OID,
+				                OIDOID,
+				                INT4OID,
+				        },
+				        (Datum[]){
+				                Int64GetDatum(quota_limit_mb),
+				                Float4GetDatum(segratio),
+				                ObjectIdGetDatum(targetoid),
+				                Int32GetDatum(type),
+				        },
+				        NULL, false, 0);
+			}
+			if (ret != SPI_OK_UPDATE) elog(ERROR, "cannot update quota setting table, error code %d", ret);
+		}
 	}
 
-	/*
-	 * And finish our transaction.
-	 */
-	SPI_finish();
 	return;
 }
 
@@ -902,10 +969,9 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 	int ret;
 
 	/*
-	 * If error happens in set_quota_config_internal, just return error messages to
+	 * If error happens in set_target_internal, just return error messages to
 	 * the client side. So there is no need to catch the error.
 	 */
-	SPI_connect();
 
 	ret = SPI_execute_with_args(
 	        "select true from diskquota.quota_config as q, diskquota.target as t"
@@ -928,7 +994,7 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 	        NULL, true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select target setting table: error code %d", ret);
 
-	/* if the schema or role's quota has been set before */
+	/* if the schema or role's quota has not been set before */
 	if (SPI_processed == 0 && quota_limit_mb > 0)
 	{
 		ret = SPI_execute_with_args("insert into diskquota.target values($1, $2, $3)", 3,
@@ -959,11 +1025,8 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 		                            NULL, false, 0);
 		if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from target setting table, error code %d", ret);
 	}
+	/* No need to update the target table */
 
-	/*
-	 * And finish our transaction.
-	 */
-	SPI_finish();
 	return;
 }
 
@@ -1148,35 +1211,35 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("unable to connect to execute internal query")));
 	}
+	/*
+	 * lock table quota_config table in exlusive mode
+	 *
+	 * Firstly insert the segratio with TABLESPACE_QUOTA
+	 * row into the table(ROWSHARE lock), then udpate the
+	 * segratio for TABLESPACE_SHCEMA/ROLE_QUOTA rows
+	 * (EXLUSIZE lock), if we don't lock the table in
+	 * exlusive mode first, deadlock will heappen.
+	 */
+	ret = SPI_execute("LOCK TABLE diskquota.quota_config IN EXCLUSIVE MODE", false, 0);
+	if (ret != SPI_OK_UTILITY) elog(ERROR, "cannot lock quota_config table, error code %d", ret);
 
-	/* Get all targetOid which are related to this tablespace, and saved into rowIds */
-	ret = SPI_execute_with_args(
-	        "SELECT true FROM diskquota.target AS t, diskquota.quota_config AS q WHERE tablespaceOid = $1 AND "
-	        "(t.quotaType = $2 OR t.quotaType = $3) AND t.primaryOid = q.targetOid AND t.quotaType = q.quotaType",
-	        3,
-	        (Oid[]){
-	                OIDOID,
-	                INT4OID,
-	                INT4OID,
-	        },
-	        (Datum[]){
-	                ObjectIdGetDatum(spcoid),
-	                Int32GetDatum(NAMESPACE_TABLESPACE_QUOTA),
-	                Int32GetDatum(ROLE_TABLESPACE_QUOTA),
-	        },
-	        NULL, true, 0);
-	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select target and quota setting table: error code %d", ret);
-
-	if (SPI_processed <= 0)
-	{
-		ereport(ERROR, (errmsg("there are no roles or schema quota configed for this tablespace: %s, can't config per "
-		                       "segment ratio for it",
-		                       spcname)));
-	}
+	/*
+	 * insert/update/detele tablespace ratio config in the quota_config table
+	 * for TABLESPACE_QUOTA, it doesn't store any quota info, just used to
+	 * store the ratio for the tablespace.
+	 */
+	set_quota_config_internal(spcoid, INVALID_QUOTA, TABLESPACE_QUOTA, ratio, InvalidOid);
 
 	/*
 	 * UPDATEA NAMESPACE_TABLESPACE_PERSEG_QUOTA AND ROLE_TABLESPACE_PERSEG_QUOTA config for this tablespace
 	 */
+
+	/* set to invalid ratio value if the tablespace per segment quota deleted */
+	if (ratio < 0)
+	{
+		ratio = INVALID_SEGRATIO;
+	}
+
 	ret = SPI_execute_with_args(
 	        "UPDATE diskquota.quota_config AS q set segratio = $1 FROM diskquota.target AS t WHERE "
 	        "q.targetOid = t.primaryOid AND (t.quotaType = $2 OR t.quotaType = $3) AND t.quotaType = "
@@ -1534,4 +1597,63 @@ diskquota_parse_primary_table_oid(Oid namespace, char *relname)
 		break;
 	}
 	return InvalidOid;
+}
+
+static float4
+get_per_segment_ratio(Oid spcoid)
+{
+	int    ret;
+	float4 segratio = INVALID_SEGRATIO;
+
+	if (!OidIsValid(spcoid)) return segratio;
+
+	/*
+	 * using row share lock to lock TABLESPACE_QUTAO
+	 * row to avoid concurrently updating the segratio
+	 */
+	ret = SPI_execute_with_args(
+	        "select segratio from diskquota.quota_config where targetoid = $1 and quotatype = $2 for share", 2,
+	        (Oid[]){
+	                OIDOID,
+	                INT4OID,
+	        },
+	        (Datum[]){
+	                ObjectIdGetDatum(spcoid),
+	                Int32GetDatum(TABLESPACE_QUOTA),
+	        },
+	        NULL, false, 0);
+	if (ret != SPI_OK_SELECT)
+	{
+		elog(ERROR, "cannot get per segment ratio for the tablepace: error code %d", ret);
+	}
+
+	if (SPI_processed == 1)
+	{
+		TupleDesc tupdesc = SPI_tuptable->tupdesc;
+		HeapTuple tup     = SPI_tuptable->vals[0];
+		Datum     dat;
+		bool      isnull;
+
+		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
+		if (!isnull)
+		{
+			segratio = DatumGetFloat4(dat);
+		}
+	}
+	return segratio;
+}
+
+/*
+ * For quota type: TABLESPACE_QUOTA, it only stores
+ * segratio not quota info. So when segratio is
+ * negtive, we can just delete it.
+ */
+static bool
+to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio)
+{
+	if (quota_limit_mb < 0)
+		return true;
+	else if (segratio < 0 && type == TABLESPACE_QUOTA)
+		return true;
+	return false;
 }
