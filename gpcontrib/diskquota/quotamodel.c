@@ -112,7 +112,9 @@ struct QuotaInfo quota_info[NUM_QUOTA_TYPES] = {
         [ROLE_TABLESPACE_QUOTA]      = {.map_name  = "Tablespace-role map",
                                         .num_keys  = 2,
                                         .sys_cache = (Oid[]){AUTHOID, TABLESPACEOID},
-                                        .map       = NULL}};
+                                        .map       = NULL},
+        [TABLESPACE_QUOTA]           = {
+                          .map_name = "Tablespace map", .num_keys = 1, .sys_cache = (Oid[]){TABLESPACEOID}, .map = NULL}};
 
 /* global blacklist for which exceed their quota limit */
 struct BlackMapEntry
@@ -1389,6 +1391,8 @@ prepare_blackmap_search_key(BlackMapEntry *keyitem, QuotaType type, Oid relowner
 		keyitem->targetoid = relowner;
 	else if (type == NAMESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
 		keyitem->targetoid = relnamespace;
+	else if (type == TABLESPACE_QUOTA)
+		keyitem->targetoid = reltablespace;
 	else
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] unknown quota type: %d", type)));
 
