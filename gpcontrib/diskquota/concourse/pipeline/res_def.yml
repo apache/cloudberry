@@ -149,25 +149,25 @@ resources:
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-centos6.tar.gz
+    regexp: server/published/gpdb6/server-rc-(.*)-rhel6_x86_64.tar.gz
 - name: bin_gpdb6_centos7
   type: gcs
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-centos7.tar.gz
+    regexp: server/published/gpdb6/server-rc-(.*)-rhel7_x86_64.tar.gz
 - name: bin_gpdb6_rhel8
   type: gcs
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-rhel8.tar.gz
+    regexp: server/published/gpdb6/server-rc-(.*)-rhel8_x86_64.tar.gz
 - name: bin_gpdb6_ubuntu18
   type: gcs
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-(.*)-ubuntu18.04.tar.gz
+    regexp: server/published/gpdb6/server-rc-(.*)-ubuntu18.04_x86_64.tar.gz
 
 # Diskquota releases
 - name: bin_diskquota_gpdb6_rhel6
