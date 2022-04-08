@@ -30,13 +30,23 @@
 
 /* max number of monitored database with diskquota enabled */
 #define MAX_NUM_MONITORED_DB 10
-
 typedef enum
 {
 	NAMESPACE_QUOTA = 0,
 	ROLE_QUOTA,
 	NAMESPACE_TABLESPACE_QUOTA,
 	ROLE_TABLESPACE_QUOTA,
+	/*
+	 * TABLESPACE_QUOTA
+	 * used in `quota_config` table,
+	 * when set_per_segment_quota("xx",1.0) is called
+	 * to set per segment quota to '1.0', the config
+	 * will be:
+	 * quotatype = 4 (TABLESPACE_QUOTA)
+	 * quotalimitMB = 0 (invalid quota confined)
+	 * segratio = 1.0
+	 */
+	TABLESPACE_QUOTA,
 
 	NUM_QUOTA_TYPES
 } QuotaType;
