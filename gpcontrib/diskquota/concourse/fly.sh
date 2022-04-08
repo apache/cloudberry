@@ -118,9 +118,10 @@ if [ "${pipeline_config}" == "dev" ]; then
     exit 0
 fi
 
+concourse_url=$(fly targets | awk "{if (\$1 == \"${target}\") {print \$2}}")
 echo ""
 echo "================================================================================"
 echo "Remeber to set the the webhook URL on GitHub:"
-echo "https://extensions.ci.gpdb.pivotal.io/api/v1/teams/main/pipelines/${pipeline_name}/resources/${hook_res}/check/webhook?webhook_token=<hook_token>"
+echo "${concourse_url}/api/v1/teams/main/pipelines/${pipeline_name}/resources/${hook_res}/check/webhook?webhook_token=<hook_token>"
 echo "You may need to change the base URL if a differnt concourse server is used."
 echo "================================================================================"
