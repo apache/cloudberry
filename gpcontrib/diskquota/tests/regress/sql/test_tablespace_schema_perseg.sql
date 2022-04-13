@@ -83,17 +83,31 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO a SELECT generate_series(1,100);
 SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name = 'spcs1_perseg' and tablespace_name ='schemaspc_perseg';
 
--- test config per segment quota 
+-- test config per segment quota
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg2','1');
 SELECT distinct(segratio) from diskquota.quota_config, pg_tablespace where targetoid = oid and spcname = 'schemaspc_perseg2';
+
 SELECT diskquota.set_schema_tablespace_quota('spcs2_perseg', 'schemaspc_perseg2','1 MB');
-SELECT distinct(segratio) from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 'spcs2_perseg';
+
+SELECT distinct(segratio) FROM diskquota.quota_config, pg_namespace, diskquota.target
+ WHERE diskquota.quota_config.targetoid = diskquota.target.rowId AND
+       diskquota.target.primaryOid = pg_namespace.oid AND nspname = 'spcs2_perseg';
+
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg2','-2');
+
 SELECT distinct(segratio) from diskquota.quota_config, pg_tablespace where targetoid = oid and spcname = 'schemaspc_perseg2';
-SELECT distinct(segratio) from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 'spcs2_perseg';
+
+SELECT distinct(segratio) FROM diskquota.quota_config, pg_namespace, diskquota.target
+ WHERE diskquota.quota_config.targetoid = diskquota.target.rowId AND
+       diskquota.target.primaryOid = pg_namespace.oid AND nspname = 'spcs2_perseg';
+
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg2','3');
+
 SELECT distinct(segratio) from diskquota.quota_config, pg_tablespace where targetoid = oid and spcname = 'schemaspc_perseg2';
-SELECT distinct(segratio) from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 'spcs2_perseg';
+
+SELECT distinct(segratio) FROM diskquota.quota_config, pg_namespace, diskquota.target
+ WHERE diskquota.quota_config.targetoid = diskquota.target.rowId AND
+       diskquota.target.primaryOid = pg_namespace.oid AND nspname = 'spcs2_perseg';
 
 RESET search_path;
 DROP TABLE spcs1_perseg.a;
