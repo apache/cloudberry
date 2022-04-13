@@ -268,6 +268,13 @@ SELECT distinct(segratio) FROM diskquota.quota_config, pg_namespace, diskquota.t
         3
 (1 row)
 
+SELECT tablespace_name, per_seg_quota_ratio FROM diskquota.show_segment_ratio_quota_view where tablespace_name in ('schemaspc_perseg2', 'schemaspc_perseg');
+  tablespace_name  | per_seg_quota_ratio 
+-------------------+---------------------
+ schemaspc_perseg  |                   2
+ schemaspc_perseg2 |                   3
+(2 rows)
+
 RESET search_path;
 DROP TABLE spcs1_perseg.a;
 DROP SCHEMA spcs1_perseg;

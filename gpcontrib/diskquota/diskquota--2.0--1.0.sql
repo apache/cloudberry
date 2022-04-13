@@ -4,6 +4,7 @@
 DROP VIEW diskquota.blackmap;
 DROP VIEW diskquota.show_fast_schema_tablespace_quota_view;
 DROP VIEW diskquota.show_fast_role_tablespace_quota_view;
+DROP VIEW diskquota.show_segment_ratio_quota_view;
 
 /* ALTER */ CREATE OR REPLACE VIEW diskquota.show_fast_database_size_view AS
 SELECT (
