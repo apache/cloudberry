@@ -17,6 +17,8 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- with hardlimits off, expect to success
 INSERT INTO a SELECT generate_series(1,1000000);
 
+-- wait for next loop for bgworker to add it to blackmap
+SELECT diskquota.wait_for_worker_new_epoch();
 -- expect to fail
 INSERT INTO a SELECT generate_series(1,1000000);
 
