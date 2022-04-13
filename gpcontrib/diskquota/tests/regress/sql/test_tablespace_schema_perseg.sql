@@ -108,6 +108,7 @@ SELECT distinct(segratio) from diskquota.quota_config, pg_tablespace where targe
 SELECT distinct(segratio) FROM diskquota.quota_config, pg_namespace, diskquota.target
  WHERE diskquota.quota_config.targetoid = diskquota.target.rowId AND
        diskquota.target.primaryOid = pg_namespace.oid AND nspname = 'spcs2_perseg';
+SELECT tablespace_name, per_seg_quota_ratio FROM diskquota.show_segment_ratio_quota_view where tablespace_name in ('schemaspc_perseg2', 'schemaspc_perseg');
 
 RESET search_path;
 DROP TABLE spcs1_perseg.a;
