@@ -34,5 +34,6 @@ test: test_ctas_schema
 test: test_ctas_tablespace_role
 test: test_ctas_tablespace_schema
 test: test_default_tablespace
+test: test_tablespace_diff_schema
 test: test_drop_extension
 test: reset_config

@@ -25,8 +25,8 @@ GROUP BY
     t1.typname
 ORDER BY
     t1.typname;
-                typname                 |                       typname                       
-----------------------------------------+-----------------------------------------------------
+                typname                 |                                     typname                                      
+----------------------------------------+----------------------------------------------------------------------------------
  blackmap                               | {bool,int4,text,oid,oid,oid,oid,oid,oid}
  blackmap_entry                         | {bool,int4,oid,oid,oid}
  blackmap_entry_detail                  | {bool,int4,text,oid,oid,oid,oid,oid,oid}
@@ -40,8 +40,9 @@ ORDER BY
  show_fast_schema_tablespace_quota_view | {name,name,int8,oid,oid,numeric}
  state                                  | {int4,int4,oid,tid,xid,xid,cid,cid}
  table_size                             | {int8,int2,int4,oid,oid,tid,xid,xid,cid,cid}
- target                                 | {int4,int4,oid,oid,oid,tid,xid,xid,cid,cid}
-(14 rows)
+ target                                 | {int4,int4,int4,oid,oid,oid,tid,xid,xid,cid,cid}
+ target_rowid_seq                       | {bool,bool,name,int8,int8,int8,int8,int8,int8,int8,int4,oid,tid,xid,xid,cid,cid}
+(15 rows)
 
 -- types end
 -- tables
@@ -72,7 +73,8 @@ ORDER BY
  table_size_pkey             |                               | 
  target                      | {target}                      | 
  target_pkey                 |                               | 
-(12 rows)
+ target_rowid_seq            | {target_rowid_seq}            | 
+(13 rows)
 
 -- tables end
 -- UDF
@@ -191,21 +193,21 @@ ORDER by
             |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                        +
             |                                        |           GROUP BY pg_class.relowner, pg_class.reltablespace, default_tablespace.dattablespace                                             +
             |                                        |         ), full_quota_config AS (                                                                                                          +
-            |                                        |          SELECT config.targetoid,                                                                                                          +
+            |                                        |          SELECT target.primaryoid,                                                                                                         +
             |                                        |             target.tablespaceoid,                                                                                                          +
             |                                        |             config.quotalimitmb                                                                                                            +
             |                                        |            FROM diskquota.quota_config config,                                                                                             +
             |                                        |             diskquota.target target                                                                                                        +
-            |                                        |           WHERE (((config.targetoid = target.primaryoid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 3))            +
+            |                                        |           WHERE (((config.targetoid = (target.rowid)::oid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 3))          +
             |                                        |         )                                                                                                                                  +
             |                                        |  SELECT pg_roles.rolname AS role_name,                                                                                                     +
-            |                                        |     full_quota_config.targetoid AS role_oid,                                                                                               +
+            |                                        |     full_quota_config.primaryoid AS role_oid,                                                                                              +
             |                                        |     pg_tablespace.spcname AS tablespace_name,                                                                                              +
             |                                        |     full_quota_config.tablespaceoid AS tablespace_oid,                                                                                     +
             |                                        |     full_quota_config.quotalimitmb AS quota_in_mb,                                                                                         +
             |                                        |     COALESCE(quota_usage.total_size, (0)::numeric) AS rolsize_tablespace_in_bytes                                                          +
             |                                        |    FROM (((full_quota_config                                                                                                               +
-            |                                        |      JOIN pg_roles ON ((full_quota_config.targetoid = pg_roles.oid)))                                                                      +
+            |                                        |      JOIN pg_roles ON ((full_quota_config.primaryoid = pg_roles.oid)))                                                                     +
             |                                        |      JOIN pg_tablespace ON ((full_quota_config.tablespaceoid = pg_tablespace.oid)))                                                        +
             |                                        |      LEFT JOIN quota_usage ON (((pg_roles.oid = quota_usage.relowner) AND (pg_tablespace.oid = quota_usage.reltablespace))));
  diskquota  | show_fast_schema_quota_view            |  WITH quota_usage AS (                                                                                                                     +
@@ -241,21 +243,21 @@ ORDER by
             |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                        +
             |                                        |           GROUP BY pg_class.relnamespace, pg_class.reltablespace, default_tablespace.dattablespace                                         +
             |                                        |         ), full_quota_config AS (                                                                                                          +
-            |                                        |          SELECT config.targetoid,                                                                                                          +
+            |                                        |          SELECT target.primaryoid,                                                                                                         +
             |                                        |             target.tablespaceoid,                                                                                                          +
             |                                        |             config.quotalimitmb                                                                                                            +
             |                                        |            FROM diskquota.quota_config config,                                                                                             +
             |                                        |             diskquota.target target                                                                                                        +
-            |                                        |           WHERE (((config.targetoid = target.primaryoid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 2))            +
+            |                                        |           WHERE (((config.targetoid = (target.rowid)::oid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 2))          +
             |                                        |         )                                                                                                                                  +
             |                                        |  SELECT pg_namespace.nspname AS schema_name,                                                                                               +
-            |                                        |     full_quota_config.targetoid AS schema_oid,                                                                                             +
+            |                                        |     full_quota_config.primaryoid AS schema_oid,                                                                                            +
             |                                        |     pg_tablespace.spcname AS tablespace_name,                                                                                              +
             |                                        |     full_quota_config.tablespaceoid AS tablespace_oid,                                                                                     +
             |                                        |     full_quota_config.quotalimitmb AS quota_in_mb,                                                                                         +
             |                                        |     COALESCE(quota_usage.total_size, (0)::numeric) AS nspsize_tablespace_in_bytes                                                          +
             |                                        |    FROM (((full_quota_config                                                                                                               +
-            |                                        |      JOIN pg_namespace ON ((full_quota_config.targetoid = pg_namespace.oid)))                                                              +
+            |                                        |      JOIN pg_namespace ON ((full_quota_config.primaryoid = pg_namespace.oid)))                                                             +
             |                                        |      JOIN pg_tablespace ON ((full_quota_config.tablespaceoid = pg_tablespace.oid)))                                                        +
             |                                        |      LEFT JOIN quota_usage ON (((pg_namespace.oid = quota_usage.relnamespace) AND (pg_tablespace.oid = quota_usage.reltablespace))));
 (6 rows)
