@@ -38,11 +38,12 @@ ORDER BY
  show_fast_role_tablespace_quota_view   | {name,name,int8,oid,oid,numeric}
  show_fast_schema_quota_view            | {name,int8,oid,numeric}
  show_fast_schema_tablespace_quota_view | {name,name,int8,oid,oid,numeric}
+ show_segment_ratio_quota_view          | {name,oid,float4}
  state                                  | {int4,int4,oid,tid,xid,xid,cid,cid}
  table_size                             | {int8,int2,int4,oid,oid,tid,xid,xid,cid,cid}
  target                                 | {int4,int4,int4,oid,oid,oid,tid,xid,xid,cid,cid}
  target_rowid_seq                       | {bool,bool,name,int8,int8,int8,int8,int8,int8,int8,int4,oid,tid,xid,xid,cid,cid}
-(15 rows)
+(16 rows)
 
 -- types end
 -- tables
@@ -260,7 +261,12 @@ ORDER by
             |                                        |      JOIN pg_namespace ON ((full_quota_config.primaryoid = pg_namespace.oid)))                                                             +
             |                                        |      JOIN pg_tablespace ON ((full_quota_config.tablespaceoid = pg_tablespace.oid)))                                                        +
             |                                        |      LEFT JOIN quota_usage ON (((pg_namespace.oid = quota_usage.relnamespace) AND (pg_tablespace.oid = quota_usage.reltablespace))));
-(6 rows)
+ diskquota  | show_segment_ratio_quota_view          |  SELECT pg_tablespace.spcname AS tablespace_name,                                                                                          +
+            |                                        |     pg_tablespace.oid AS tablespace_oid,                                                                                                   +
+            |                                        |     quota_config.segratio AS per_seg_quota_ratio                                                                                           +
+            |                                        |    FROM (diskquota.quota_config                                                                                                            +
+            |                                        |      JOIN pg_tablespace ON (((quota_config.targetoid = pg_tablespace.oid) AND (quota_config.quotatype = 4))));
+(7 rows)
 
 -- views end
 DROP FUNCTION typeid_to_name (oid[]);
