@@ -49,7 +49,7 @@
 #define MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES 8192
 #define MAX_NUM_KEYS_QUOTA_MAP 8
 /* Number of attributes in quota configuration records. */
-#define NUM_QUOTA_CONFIG_ATTRS 5
+#define NUM_QUOTA_CONFIG_ATTRS 6
 
 typedef struct TableSizeEntry      TableSizeEntry;
 typedef struct NamespaceSizeEntry  NamespaceSizeEntry;
@@ -1237,12 +1237,21 @@ do_load_quotas(void)
 	/*
 	 * read quotas from diskquota.quota_config and target table
 	 */
-	ret = SPI_execute(
+	ret = SPI_execute_with_args(
 	        "SELECT c.targetOid, c.quotaType, c.quotalimitMB, COALESCE(c.segratio, 0) AS segratio, "
-	        "COALESCE(t.tablespaceoid, 0) AS tablespaceoid "
+	        "COALESCE(t.tablespaceoid, 0) AS tablespaceoid, COALESCE(t.primaryOid, 0) AS primaryoid "
 	        "FROM diskquota.quota_config AS c LEFT OUTER JOIN diskquota.target AS t "
-	        "ON c.targetOid = t.primaryOid and c.quotaType = t.quotaType",
-	        true, 0);
+	        "ON c.targetOid = t.rowId AND c.quotaType IN ($1, $2) AND c.quotaType = t.quotaType",
+	        2,
+	        (Oid[]){
+	                INT4OID,
+	                INT4OID,
+	        },
+	        (Datum[]){
+	                Int32GetDatum(NAMESPACE_TABLESPACE_QUOTA),
+	                Int32GetDatum(ROLE_TABLESPACE_QUOTA),
+	        },
+	        NULL, true, 0);
 	if (ret != SPI_OK_SELECT)
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 		                errmsg("[diskquota] load_quotas SPI_execute failed: error code %d", ret)));
@@ -1278,6 +1287,12 @@ do_load_quotas(void)
 		int64 quota_limit_mb = DatumGetInt64(vals[2]);
 		float segratio       = DatumGetFloat4(vals[3]);
 		Oid   spcOid         = DatumGetObjectId(vals[4]);
+		Oid   primaryOid     = DatumGetObjectId(vals[5]);
+
+		if (quotaType == NAMESPACE_TABLESPACE_QUOTA || quotaType == ROLE_TABLESPACE_QUOTA)
+		{
+			targetOid = primaryOid;
+		}
 
 		if (spcOid == InvalidOid)
 		{
