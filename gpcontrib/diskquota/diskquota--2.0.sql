@@ -286,6 +286,17 @@ FROM
   pg_roles ON primaryoid = pg_roles.oid JOIN
   pg_tablespace ON tablespaceoid = pg_tablespace.oid LEFT OUTER JOIN
   quota_usage ON pg_roles.oid = relowner AND pg_tablespace.oid = reltablespace;
+
+CREATE VIEW diskquota.show_segment_ratio_quota_view AS
+SELECT 
+  spcname as tablespace_name,
+  pg_tablespace.oid as tablespace_oid,
+  segratio as per_seg_quota_ratio
+FROM
+  diskquota.quota_config JOIN
+  pg_tablespace ON targetOid = pg_tablespace.oid
+  AND quotatype = 4;
+
 -- view end
 
 -- prepare to boot
