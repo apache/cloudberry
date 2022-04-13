@@ -48,7 +48,7 @@ typedef enum
 	 */
 	TABLESPACE_QUOTA,
 
-	NUM_QUOTA_TYPES
+	NUM_QUOTA_TYPES,
 } QuotaType;
 
 typedef enum

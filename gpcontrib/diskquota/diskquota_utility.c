@@ -92,7 +92,7 @@ static void        dq_object_access_hook(ObjectAccessType access, Oid classId, O
 static const char *ddl_err_code_to_err_message(MessageResult code);
 static int64       get_size_in_mb(char *str);
 static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, float4 segratio, Oid spcoid);
-static void set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
+static int  set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static float4 get_per_segment_ratio(Oid spcoid);
 static bool   to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio);
 
@@ -772,6 +772,7 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 	char *rolname;
 	char *sizestr;
 	int64 quota_limit_mb;
+	int   row_id;
 
 	if (!superuser())
 	{
@@ -795,8 +796,8 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 	}
 
 	SPI_connect();
-	set_target_internal(roleoid, spcoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
-	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA, INVALID_SEGRATIO, spcoid);
+	row_id = set_target_internal(roleoid, spcoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
+	set_quota_config_internal(row_id, quota_limit_mb, ROLE_TABLESPACE_QUOTA, INVALID_SEGRATIO, spcoid);
 	SPI_finish();
 	PG_RETURN_VOID();
 }
@@ -817,6 +818,7 @@ set_schema_tablespace_quota(PG_FUNCTION_ARGS)
 	char *nspname;
 	char *sizestr;
 	int64 quota_limit_mb;
+	int   row_id;
 
 	if (!superuser())
 	{
@@ -840,8 +842,8 @@ set_schema_tablespace_quota(PG_FUNCTION_ARGS)
 	}
 
 	SPI_connect();
-	set_target_internal(namespaceoid, spcoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
-	set_quota_config_internal(namespaceoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA, INVALID_SEGRATIO, spcoid);
+	row_id = set_target_internal(namespaceoid, spcoid, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA);
+	set_quota_config_internal(row_id, quota_limit_mb, NAMESPACE_TABLESPACE_QUOTA, INVALID_SEGRATIO, spcoid);
 	SPI_finish();
 	PG_RETURN_VOID();
 }
@@ -963,10 +965,13 @@ set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, f
 	return;
 }
 
-static void
+static int
 set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type)
 {
-	int ret;
+	int   ret;
+	int   row_id  = -1;
+	bool  is_null = false;
+	Datum v;
 
 	/*
 	 * If error happens in set_target_internal, just return error messages to
@@ -974,12 +979,12 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 	 */
 
 	ret = SPI_execute_with_args(
-	        "select true from diskquota.quota_config as q, diskquota.target as t"
+	        "select t.rowId from diskquota.quota_config as q, diskquota.target as t"
 	        " where t.primaryOid = $1"
 	        " and t.tablespaceOid = $2"
 	        " and t.quotaType = $3"
 	        " and t.quotaType = q.quotaType"
-	        " and t.primaryOid = q.targetOid",
+	        " and t.rowId = q.targetOid",
 	        3,
 	        (Oid[]){
 	                OIDOID,
@@ -994,40 +999,63 @@ set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType 
 	        NULL, true, 0);
 	if (ret != SPI_OK_SELECT) elog(ERROR, "cannot select target setting table: error code %d", ret);
 
+	if (SPI_processed > 0)
+	{
+		is_null = false;
+		v       = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &is_null);
+		Assert(is_null == false);
+		row_id = DatumGetInt32(v);
+	}
+
 	/* if the schema or role's quota has not been set before */
 	if (SPI_processed == 0 && quota_limit_mb > 0)
 	{
-		ret = SPI_execute_with_args("insert into diskquota.target values($1, $2, $3)", 3,
-		                            (Oid[]){
-		                                    INT4OID,
-		                                    OIDOID,
-		                                    OIDOID,
-		                            },
-		                            (Datum[]){
-		                                    Int32GetDatum(type),
-		                                    ObjectIdGetDatum(primaryoid),
-		                                    ObjectIdGetDatum(spcoid),
-		                            },
-		                            NULL, false, 0);
-		if (ret != SPI_OK_INSERT) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
+		ret = SPI_execute_with_args(
+		        "insert into diskquota.target (quotatype, primaryOid, tablespaceOid) values($1, $2, $3) returning "
+		        "rowId",
+		        3,
+		        (Oid[]){
+		                INT4OID,
+		                OIDOID,
+		                OIDOID,
+		        },
+		        (Datum[]){
+		                Int32GetDatum(type),
+		                ObjectIdGetDatum(primaryoid),
+		                ObjectIdGetDatum(spcoid),
+		        },
+		        NULL, false, 0);
+		if (ret != SPI_OK_INSERT_RETURNING) elog(ERROR, "cannot insert into quota setting table, error code %d", ret);
+
+		is_null = false;
+		v       = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &is_null);
+		Assert(is_null == false);
+		row_id = DatumGetInt32(v);
 	}
 	else if (SPI_processed > 0 && quota_limit_mb < 0)
 	{
-		ret = SPI_execute_with_args("delete from diskquota.target where primaryOid = $1 and tablespaceOid = $2", 2,
-		                            (Oid[]){
-		                                    OIDOID,
-		                                    OIDOID,
-		                            },
-		                            (Datum[]){
-		                                    ObjectIdGetDatum(primaryoid),
-		                                    ObjectIdGetDatum(spcoid),
-		                            },
-		                            NULL, false, 0);
-		if (ret != SPI_OK_DELETE) elog(ERROR, "cannot delete item from target setting table, error code %d", ret);
+		ret = SPI_execute_with_args(
+		        "delete from diskquota.target where primaryOid = $1 and tablespaceOid = $2 returning rowId", 2,
+		        (Oid[]){
+		                OIDOID,
+		                OIDOID,
+		        },
+		        (Datum[]){
+		                ObjectIdGetDatum(primaryoid),
+		                ObjectIdGetDatum(spcoid),
+		        },
+		        NULL, false, 0);
+		if (ret != SPI_OK_DELETE_RETURNING)
+			elog(ERROR, "cannot delete item from target setting table, error code %d", ret);
+
+		is_null = false;
+		v       = SPI_getbinval(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1, &is_null);
+		Assert(is_null == false);
+		row_id = DatumGetInt32(v);
 	}
 	/* No need to update the target table */
 
-	return;
+	return row_id;
 }
 
 /*
@@ -1242,7 +1270,7 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 
 	ret = SPI_execute_with_args(
 	        "UPDATE diskquota.quota_config AS q set segratio = $1 FROM diskquota.target AS t WHERE "
-	        "q.targetOid = t.primaryOid AND (t.quotaType = $2 OR t.quotaType = $3) AND t.quotaType = "
+	        "q.targetOid = t.rowId AND (t.quotaType = $2 OR t.quotaType = $3) AND t.quotaType = "
 	        "q.quotaType And t.tablespaceOid = $4",
 	        4,
 	        (Oid[]){

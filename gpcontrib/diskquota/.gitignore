@@ -2,7 +2,7 @@
 build*/
 
 # The tests results
-/results/
+results/
 
 # For IDE/Editors
 .vscode

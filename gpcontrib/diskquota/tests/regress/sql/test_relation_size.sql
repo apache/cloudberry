@@ -26,6 +26,9 @@ SELECT pg_table_size('t2');
 
 DROP TABLE t1, t2;
 DROP TABLESPACE test_spc;
+-- start_ignore
+\! rm -rf /tmp/test_spc
+  -- end_ignore
 
 CREATE TABLE ao (i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 INSERT INTO ao SELECT generate_series(1, 10000);

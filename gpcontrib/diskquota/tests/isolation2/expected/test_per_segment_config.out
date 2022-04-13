@@ -41,7 +41,7 @@ COMMIT
 2: COMMIT;
 COMMIT
 
-SELECT segratio from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 's101';
+SELECT segratio FROM diskquota.quota_config, pg_namespace, diskquota.target WHERE targetoid = diskquota.target.rowId AND diskquota.target.primaryOid = oid AND nspname = 's101';
  segratio 
 ----------
  1.0      
@@ -78,7 +78,7 @@ COMMIT
 2: COMMIT;
 COMMIT
 
-SELECT segratio from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 's101';
+SELECT segratio FROM diskquota.quota_config, pg_namespace, diskquota.target WHERE targetoid = diskquota.target.rowId AND diskquota.target.primaryOid = oid AND nspname = 's101';
  segratio 
 ----------
  1.0      
@@ -124,7 +124,7 @@ COMMIT
 2: COMMIT;
 COMMIT
 
-SELECT segratio from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 's101';
+SELECT segratio FROM diskquota.quota_config, pg_namespace, diskquota.target WHERE targetoid = diskquota.target.rowId AND diskquota.target.primaryOid = oid AND nspname = 's101';
  segratio 
 ----------
  1.0      
@@ -166,7 +166,7 @@ COMMIT
 2: COMMIT;
 COMMIT
 
-SELECT segratio from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 's101';
+SELECT segratio FROM diskquota.quota_config, pg_namespace, diskquota.target WHERE targetoid = diskquota.target.rowId AND diskquota.target.primaryOid = oid AND nspname = 's101';
  segratio 
 ----------
  1.0      
@@ -208,7 +208,7 @@ COMMIT
 2: COMMIT;
 COMMIT
 
-SELECT segratio from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 's101';
+SELECT segratio FROM diskquota.quota_config, pg_namespace, diskquota.target WHERE targetoid = diskquota.target.rowId AND diskquota.target.primaryOid = oid AND nspname = 's101';
  segratio 
 ----------
  0.0      
@@ -249,7 +249,7 @@ COMMIT
 2: COMMIT;
 COMMIT
 
-SELECT segratio from diskquota.quota_config, pg_namespace where targetoid = oid and nspname = 's101';
+SELECT segratio FROM diskquota.quota_config, pg_namespace, diskquota.target WHERE targetoid = diskquota.target.rowId AND diskquota.target.primaryOid = oid AND nspname = 's101';
  segratio 
 ----------
  0.0      

@@ -4,6 +4,7 @@
 ALTER TABLE diskquota.quota_config ADD COLUMN segratio float4 DEFAULT 0;
 
 CREATE TABLE diskquota.target (
+	rowId serial,
 	quotatype int, -- REFERENCES disquota.quota_config.quotatype,
 	primaryOid oid,
 	tablespaceOid oid, -- REFERENCES pg_tablespace.oid,
@@ -193,27 +194,27 @@ WITH
   ),
   full_quota_config AS (
     SELECT
-      targetOid,
+      primaryOid,
       tablespaceoid,
       quotalimitMB
     FROM
       diskquota.quota_config AS config,
       diskquota.target AS target
     WHERE
-      config.targetOid = target.primaryOid AND
+      config.targetOid = target.rowId AND
       config.quotaType = target.quotaType AND
       config.quotaType = 2 -- NAMESPACE_TABLESPACE_QUOTA
   )
 SELECT
   nspname AS schema_name,
-  targetoid AS schema_oid,
+  primaryoid AS schema_oid,
   spcname AS tablespace_name,
   tablespaceoid AS tablespace_oid,
   quotalimitMB AS quota_in_mb,
   COALESCE(total_size, 0) AS nspsize_tablespace_in_bytes
 FROM
   full_quota_config JOIN
-  pg_namespace ON targetoid = pg_namespace.oid JOIN
+  pg_namespace ON primaryoid = pg_namespace.oid JOIN
   pg_tablespace ON tablespaceoid = pg_tablespace.oid LEFT OUTER JOIN
   quota_usage ON pg_namespace.oid = relnamespace AND pg_tablespace.oid = reltablespace;
 
@@ -245,27 +246,27 @@ WITH
   ),
   full_quota_config AS (
     SELECT
-      targetOid,
+      primaryOid,
       tablespaceoid,
       quotalimitMB
     FROM
       diskquota.quota_config AS config,
       diskquota.target AS target
     WHERE
-      config.targetOid = target.primaryOid AND
+      config.targetOid = target.rowId AND
       config.quotaType = target.quotaType AND
       config.quotaType = 3 -- ROLE_TABLESPACE_QUOTA
   )
 SELECT
   rolname AS role_name,
-  targetoid AS role_oid,
+  primaryoid AS role_oid,
   spcname AS tablespace_name,
   tablespaceoid AS tablespace_oid,
   quotalimitMB AS quota_in_mb,
   COALESCE(total_size, 0) AS rolsize_tablespace_in_bytes
 FROM
   full_quota_config JOIN
-  pg_roles ON targetoid = pg_roles.oid JOIN
+  pg_roles ON primaryoid = pg_roles.oid JOIN
   pg_tablespace ON tablespaceoid = pg_tablespace.oid LEFT OUTER JOIN
   quota_usage ON pg_roles.oid = relowner AND pg_tablespace.oid = reltablespace;
 -- views end
