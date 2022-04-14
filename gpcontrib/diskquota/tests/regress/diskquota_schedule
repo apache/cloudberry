@@ -23,7 +23,7 @@ test: test_partition
 test: test_vacuum
 test: test_primary_failure
 test: test_extension
-test: test_manytable
+test: test_activetable_limit
 test: test_many_active_tables
 test: test_fetch_table_stat
 test: test_appendonly
