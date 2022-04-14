@@ -20,10 +20,12 @@
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/objectaccess.h"
+#include "catalog/pg_extension.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbvars.h"
 #include "commands/dbcommands.h"
+#include "commands/extension.h"
 #include "executor/spi.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
@@ -169,6 +171,15 @@ static void
 object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg)
 {
 	if (prev_object_access_hook) (*prev_object_access_hook)(access, classId, objectId, subId, arg);
+
+	// if is 'drop extension diskquota'
+	if (classId == ExtensionRelationId)
+	{
+		if (get_extension_oid("diskquota", true) == objectId)
+		{
+			invalidate_database_blackmap(MyDatabaseId);
+		}
+	}
 
 	/* TODO: do we need to use "&&" instead of "||"? */
 	if (classId != RelationRelationId || subId != 0)
