@@ -425,6 +425,8 @@ disk_quota_worker_main(Datum main_arg)
 		/* Do the work */
 		if (!diskquota_is_paused()) refresh_disk_quota_model(false);
 
+		/* Reset memory account to fix memory leak */
+		MemoryAccounting_Reset();
 		worker_increase_epoch(MyDatabaseId);
 	}
 
