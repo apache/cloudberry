@@ -12,7 +12,7 @@ CREATE TABLE b (t TEXT) DISTRIBUTED BY (t);
 ALTER TABLE b OWNER TO r;
 SELECT diskquota.wait_for_worker_new_epoch();
 
-INSERT INTO b SELECT generate_series(1, 100000); -- fail
+INSERT INTO b SELECT generate_series(1, 100000000); -- fail
 
 DROP EXTENSION diskquota;
 
