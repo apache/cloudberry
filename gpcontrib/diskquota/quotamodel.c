@@ -124,6 +124,7 @@ struct BlackMapEntry
 	Oid    tablespaceoid;
 	uint32 targettype;
 	/*
+	 * TODO refactor this data structure
 	 * QD index the blackmap by (targetoid, databaseoid, tablespaceoid, targettype).
 	 * QE index the blackmap by (relfilenode).
 	 */
@@ -1499,7 +1500,7 @@ invalidate_database_blackmap(Oid dbid)
 	hash_seq_init(&iter, disk_quota_black_map);
 	while ((entry = hash_seq_search(&iter)) != NULL)
 	{
-		if (entry->databaseoid == dbid)
+		if (entry->databaseoid == dbid || entry->relfilenode.dbNode == dbid)
 		{
 			hash_search(disk_quota_black_map, entry, HASH_REMOVE, NULL);
 		}
