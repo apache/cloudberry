@@ -107,14 +107,26 @@ INSERT INTO b2 SELECT generate_series(1,100);
 SELECT rolname from pg_roles where rolsuper=true;
  rolname 
 ---------
- xx
+ sa
 (1 row)
 
 --end_ignore
 \gset
 select diskquota.set_role_quota(:'rolname', '1mb');
-ERROR:  Can not set disk quota for system owner: xx
+ERROR:  Can not set disk quota for system owner: sa
+CREATE ROLE "Tn" NOLOGIN;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SELECT diskquota.set_role_quota('Tn', '-1 MB'); -- fail
+ERROR:  role "tn" does not exist
+SELECT diskquota.set_role_quota('"tn"', '-1 MB'); -- fail
+ERROR:  role "tn" does not exist
+SELECT diskquota.set_role_quota('"Tn"', '-1 MB');
+ set_role_quota 
+----------------
+ 
+(1 row)
+
 DROP TABLE b, b2;
-DROP ROLE u1, u2;
+DROP ROLE u1, u2, "Tn";
 RESET search_path;
 DROP SCHEMA srole;
