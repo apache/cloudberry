@@ -90,9 +90,19 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 
+-- start_ignore
+\! mkdir -p /tmp/rolespc_perseg3
+-- end_ignore
+DROP TABLESPACE  IF EXISTS "Rolespc_perseg3";
+CREATE TABLESPACE "Rolespc_perseg3" LOCATION '/tmp/rolespc_perseg3';
+CREATE ROLE "Rolespc_persegu3" NOLOGIN;
+SELECT diskquota.set_role_tablespace_quota('"Rolespc_persegu3"', '"Rolespc_perseg3"', '-1 MB');
+SELECT diskquota.set_per_segment_quota('"Rolespc_perseg3"', 0.11);
+
 DROP table b;
-DROP ROLE rolespc_persegu1, rolespc_persegu2;
+DROP ROLE rolespc_persegu1, rolespc_persegu2, "Rolespc_persegu3";
 RESET search_path;
 DROP SCHEMA rolespc_persegrole;
 DROP TABLESPACE rolespc_perseg;
 DROP TABLESPACE rolespc_perseg2;
+DROP TABLESPACE "Rolespc_perseg3";
