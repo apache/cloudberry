@@ -690,6 +690,31 @@ ddl_err_code_to_err_message(MessageResult code)
 	}
 }
 
+static Datum
+__get_oid_auto_case_convert(Oid (*f)(const char *name, bool missing_ok), const char *name)
+{
+	char *b   = NULL;
+	int   l   = strlen(name);
+	Oid   ret = InvalidOid;
+
+	if (l > 2 && name[0] == '"' && name[l - 1] == '"')
+	{
+		// object name wrapped by '"'. eg: "foo"
+		b = palloc(l);
+		StrNCpy(b, name + 1, l - 1); // trim the '"'. unlike strncpy, StrNCpy will ensure b[l-1] = '\0'
+	}
+	else
+	{
+		// lower the object name if not wrapped by '"'
+		b = str_tolower(name, strlen(name), DEFAULT_COLLATION_OID);
+	}
+
+	ret = f(b, false);
+
+	pfree(b);
+	return ret;
+}
+
 /*
  * Set disk quota limit for role.
  */
@@ -707,8 +732,7 @@ set_role_quota(PG_FUNCTION_ARGS)
 	}
 
 	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	rolname = str_tolower(rolname, strlen(rolname), DEFAULT_COLLATION_OID);
-	roleoid = get_role_oid(rolname, false);
+	roleoid = __get_oid_auto_case_convert(get_role_oid, rolname);
 	check_role(roleoid, rolname);
 
 	sizestr        = text_to_cstring(PG_GETARG_TEXT_PP(1));
@@ -742,8 +766,7 @@ set_schema_quota(PG_FUNCTION_ARGS)
 	}
 
 	nspname      = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	nspname      = str_tolower(nspname, strlen(nspname), DEFAULT_COLLATION_OID);
-	namespaceoid = get_namespace_oid(nspname, false);
+	namespaceoid = __get_oid_auto_case_convert(get_namespace_oid, nspname);
 
 	sizestr        = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	sizestr        = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
@@ -783,17 +806,16 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 	}
 
 	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	rolname = str_tolower(rolname, strlen(rolname), DEFAULT_COLLATION_OID);
-	roleoid = get_role_oid(rolname, false);
+	roleoid = __get_oid_auto_case_convert(get_role_oid, rolname);
 	check_role(roleoid, rolname);
 
 	spcname = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
-	spcoid  = get_tablespace_oid(spcname, false);
+	spcoid  = __get_oid_auto_case_convert(get_tablespace_oid, spcname);
 
 	sizestr        = text_to_cstring(PG_GETARG_TEXT_PP(2));
 	sizestr        = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
 	quota_limit_mb = get_size_in_mb(sizestr);
+
 	if (quota_limit_mb == 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
@@ -830,12 +852,10 @@ set_schema_tablespace_quota(PG_FUNCTION_ARGS)
 	}
 
 	nspname      = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	nspname      = str_tolower(nspname, strlen(nspname), DEFAULT_COLLATION_OID);
-	namespaceoid = get_namespace_oid(nspname, false);
+	namespaceoid = __get_oid_auto_case_convert(get_namespace_oid, nspname);
 
 	spcname = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
-	spcoid  = get_tablespace_oid(spcname, false);
+	spcoid  = __get_oid_auto_case_convert(get_tablespace_oid, spcname);
 
 	sizestr        = text_to_cstring(PG_GETARG_TEXT_PP(2));
 	sizestr        = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
@@ -1231,8 +1251,7 @@ set_per_segment_quota(PG_FUNCTION_ARGS)
 	          (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to set disk quota limit")));
 
 	spcname = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
-	spcoid  = get_tablespace_oid(spcname, false);
+	spcoid  = __get_oid_auto_case_convert(get_tablespace_oid, spcname);
 
 	ratio = PG_GETARG_FLOAT4(1);
 

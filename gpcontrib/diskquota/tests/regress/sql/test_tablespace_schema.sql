@@ -66,9 +66,17 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO a SELECT generate_series(1,100);
 
+-- start_ignore
+\! mkdir -p /tmp/schemaspc3
+-- end_ignore
+DROP TABLESPACE  IF EXISTS "Schemaspc3";
+CREATE TABLESPACE "Schemaspc3" LOCATION '/tmp/schemaspc3';
+CREATE SCHEMA "Spcs2";
+SELECT diskquota.set_schema_tablespace_quota('"Spcs2"', '"Schemaspc3"', '-1 MB');
+
 RESET search_path;
 DROP TABLE spcs1.a2, spcs1.a;
 DROP SCHEMA spcs1, spcs2;
 DROP TABLESPACE schemaspc;
 DROP TABLESPACE schemaspc2;
-
+DROP TABLESPACE "Schemaspc3";

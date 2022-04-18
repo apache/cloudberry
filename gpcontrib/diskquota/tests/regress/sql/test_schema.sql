@@ -47,9 +47,12 @@ INSERT INTO badquota.a SELECT generate_series(0, 100);
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT schema_name, quota_in_mb FROM diskquota.show_fast_schema_quota_view WHERE schema_name = 's1';
 
+CREATE SCHEMA "Tn1";
+SELECT diskquota.set_schema_quota('"Tn1"', '-1 MB');
+
 RESET search_path;
 DROP TABLE s1.a2, badquota.a;
-DROP SCHEMA s1, s2;
+DROP SCHEMA s1, s2, "Tn1";
 
 DROP TABLE badquota.t1;
 DROP ROLE testbody;
