@@ -1622,8 +1622,10 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 	HASHCTL              hashctl;
 	int                  ret_code;
 
-	if (!superuser()) errmsg("must be superuser to update blackmap");
-
+	if (!superuser())
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to update blackmap")));
+	if (IS_QUERY_DISPATCHER())
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("\"refresh_blackmap()\" can only be executed on QE.")));
 	if (ARR_NDIM(blackmap_array_type) > 1 || ARR_NDIM(active_oid_array_type) > 1)
 		ereport(ERROR, (errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR), errmsg("1-dimensional array needed")));
 
