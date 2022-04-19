@@ -105,7 +105,7 @@ SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and (r
 
 -- expect insert fail
 INSERT INTO test_index_a SELECT generate_series(1,100);
-ERROR:  tablespace:indexspc schema:indexschema1 diskquota exceeded
+ERROR:  tablespace: indexspc, schema: indexschema1 diskquota exceeded
 -- index tablespace quota exceeded 
 ALTER table test_index_a SET TABLESPACE pg_default;
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -125,7 +125,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO test_index_a SELECT generate_series(1,100);
-ERROR:  tablespace:indexspc schema:indexschema1 diskquota exceeded
+ERROR:  tablespace: indexspc, schema: indexschema1 diskquota exceeded
 RESET search_path;
 DROP INDEX indexschema1.a_index;
 DROP TABLE indexschema1.test_index_a;

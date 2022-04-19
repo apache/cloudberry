@@ -19,7 +19,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect update fail.
 UPDATE a SET i = 100;
-ERROR:  schema's disk space quota exceeded with name:s4
+ERROR:  schema's disk space quota exceeded with name: s4
 DROP TABLE a;
 RESET search_path;
 DROP SCHEMA s4;

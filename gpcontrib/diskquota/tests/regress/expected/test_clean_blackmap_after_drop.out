@@ -20,7 +20,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO b SELECT generate_series(1, 100000000); -- fail
-ERROR:  role's disk space quota exceeded with name:16574  (seg0 127.0.0.1:6002 pid=356116)
+ERROR:  role's disk space quota exceeded with name: 16574  (seg0 127.0.0.1:6002 pid=356116)
 DROP EXTENSION diskquota;
 INSERT INTO b SELECT generate_series(1, 100); -- ok
 \c contrib_regression

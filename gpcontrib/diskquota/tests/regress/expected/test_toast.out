@@ -27,7 +27,7 @@ SELECT (SELECT
         string_agg(chr(floor(random() * 26)::int + 65), '')
         FROM generate_series(1,1000)) 
 FROM generate_series(1,1000);
-ERROR:  schema's disk space quota exceeded with name:s5
+ERROR:  schema's disk space quota exceeded with name: s5
 DROP TABLE a5;
 RESET search_path;
 DROP SCHEMA s5;

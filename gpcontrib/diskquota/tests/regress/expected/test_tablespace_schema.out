@@ -27,13 +27,13 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc schema:spcs1 diskquota exceeded
+ERROR:  tablespace: schemaspc, schema: spcs1 diskquota exceeded
 CREATE TABLE a2(i int) TABLESPACE schemaspc DISTRIBUTED BY (i);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc schema:spcs1 diskquota exceeded
+ERROR:  tablespace: schemaspc, schema: spcs1 diskquota exceeded
 -- Test alter table set schema
 CREATE SCHEMA spcs2;
 ALTER TABLE spcs1.a SET SCHEMA spcs2;
@@ -56,7 +56,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,200);
-ERROR:  tablespace:schemaspc schema:spcs1 diskquota exceeded
+ERROR:  tablespace: schemaspc, schema: spcs1 diskquota exceeded
 SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name = 'spcs1' and tablespace_name ='schemaspc';
  schema_name | tablespace_name | quota_in_mb | nspsize_tablespace_in_bytes 
 -------------+-----------------+-------------+-----------------------------
@@ -88,7 +88,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,200);
-ERROR:  tablespace:schemaspc schema:spcs1 diskquota exceeded
+ERROR:  tablespace: schemaspc, schema: spcs1 diskquota exceeded
 -- Test update quota config
 SELECT diskquota.set_schema_tablespace_quota('spcs1', 'schemaspc', '10 MB');
  set_schema_tablespace_quota 
@@ -114,7 +114,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc schema:spcs1 diskquota exceeded
+ERROR:  tablespace: schemaspc, schema: spcs1 diskquota exceeded
 -- Test delete quota config
 SELECT diskquota.set_schema_tablespace_quota('spcs1', 'schemaspc', '-1 MB');
  set_schema_tablespace_quota 

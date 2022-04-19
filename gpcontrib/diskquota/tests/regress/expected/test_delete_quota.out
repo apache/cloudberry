@@ -20,7 +20,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect fail
 INSERT INTO c SELECT generate_series(1,100);
-ERROR:  schema's disk space quota exceeded with name:deleteschema
+ERROR:  schema's disk space quota exceeded with name: deleteschema
 SELECT diskquota.set_schema_quota('deleteschema', '-1 MB');
  set_schema_quota 
 ------------------
