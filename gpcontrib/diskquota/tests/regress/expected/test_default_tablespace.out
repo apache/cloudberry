@@ -39,7 +39,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert to fail
 INSERT INTO t SELECT generate_series(1, 1000000);
-ERROR:  tablespace:pg_default role:role1 diskquota exceeded
+ERROR:  tablespace: pg_default, role: role1 diskquota exceeded
 SELECT r.rolname, t.spcname, b.target_type
 FROM diskquota.blackmap AS b, pg_tablespace AS t, pg_roles AS r
 WHERE b.tablespace_oid = t.oid AND b.target_oid = r.oid AND r.rolname = 'role1'
@@ -75,7 +75,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert to fail because of hard limits
 INSERT INTO t SELECT generate_series(1, 50000000);
-ERROR:  tablespace:1663 role:3050113 diskquota exceeded  (seg1 127.0.0.1:6003 pid=21307)
+ERROR:  tablespace: 1663, role: 3050113 diskquota exceeded  (seg1 127.0.0.1:6003 pid=21307)
 DROP TABLE IF EXISTS t;
 SET ROLE role1;
 -- database in customized tablespace
@@ -110,7 +110,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert to fail
 INSERT INTO t_in_custom_tablespace SELECT generate_series(1, 1000000);
-ERROR:  tablespace:custom_tablespace role:role1 diskquota exceeded
+ERROR:  tablespace: custom_tablespace, role: role1 diskquota exceeded
 SELECT r.rolname, t.spcname, b.target_type
 FROM diskquota.blackmap AS b, pg_tablespace AS t, pg_roles AS r
 WHERE b.tablespace_oid = t.oid AND b.target_oid = r.oid AND r.rolname = 'role1'
@@ -153,7 +153,7 @@ DROP TABLE IF EXISTS t_in_custom_tablespace;
 NOTICE:  table "t_in_custom_tablespace" does not exist, skipping
 -- expect insert to fail because of hard limits
 CREATE TABLE t_in_custom_tablespace (i) AS SELECT generate_series(1, 50000000) DISTRIBUTED BY (i);
-ERROR:  tablespace:3050120 role:3050113 diskquota exceeded  (seg0 127.0.0.1:6002 pid=22270)
+ERROR:  tablespace: 3050120, role: 3050113 diskquota exceeded  (seg0 127.0.0.1:6002 pid=22270)
 -- clean up
 DROP TABLE IF EXISTS t_in_custom_tablespace;
 NOTICE:  table "t_in_custom_tablespace" does not exist, skipping

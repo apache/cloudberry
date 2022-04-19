@@ -22,10 +22,10 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
-ERROR:  schema's disk space quota exceeded with name:s6
+ERROR:  schema's disk space quota exceeded with name: s6
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,10);
-ERROR:  schema's disk space quota exceeded with name:s6
+ERROR:  schema's disk space quota exceeded with name: s6
 DELETE FROM a WHERE i > 10;
 SELECT diskquota.wait_for_worker_new_epoch();
  wait_for_worker_new_epoch 

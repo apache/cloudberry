@@ -46,10 +46,10 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
+ERROR:  tablespace: rolespc, role: rolespcu1 diskquota exceeded
 -- expect insert fail
 INSERT INTO b2 SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
+ERROR:  tablespace: rolespc, role: rolespcu1 diskquota exceeded
 -- Test show_fast_role_tablespace_quota_view
 SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view WHERE role_name = 'rolespcu1' and tablespace_name = 'rolespc';
  role_name | tablespace_name | quota_in_mb | rolsize_tablespace_in_bytes 
@@ -78,7 +78,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
+ERROR:  tablespace: rolespc, role: rolespcu1 diskquota exceeded
 -- Test alter tablespace
 -- start_ignore
 \! mkdir -p /tmp/rolespc2
@@ -105,7 +105,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
+ERROR:  tablespace: rolespc, role: rolespcu1 diskquota exceeded
 -- Test update quota config
 SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '10 MB');
  set_role_tablespace_quota 
@@ -131,7 +131,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc role:rolespcu1 diskquota exceeded
+ERROR:  tablespace: rolespc, role: rolespcu1 diskquota exceeded
 -- Test delete quota config
 SELECT diskquota.set_role_tablespace_quota('rolespcu1', 'rolespc', '-1 MB');
  set_role_tablespace_quota 

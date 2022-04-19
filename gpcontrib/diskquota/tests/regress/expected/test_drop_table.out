@@ -24,7 +24,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,100);
-ERROR:  schema's disk space quota exceeded with name:sdrtbl
+ERROR:  schema's disk space quota exceeded with name: sdrtbl
 DROP TABLE a;
 SELECT diskquota.wait_for_worker_new_epoch();
  wait_for_worker_new_epoch 

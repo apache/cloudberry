@@ -36,7 +36,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc_perseg role:rolespc_persegu1 diskquota exceeded
+ERROR:  tablespace: rolespc_perseg, role: rolespc_persegu1 diskquota exceeded
 -- change tablespace role quota
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '10 MB');
  set_role_tablespace_quota 
@@ -73,7 +73,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 ---- expect insert fail by tablespace schema perseg quota
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc_perseg role:rolespc_persegu1 diskquota exceeded per segment quota
+ERROR:  tablespace: rolespc_perseg, role: rolespc_persegu1 diskquota exceeded per segment quota
 -- Test alter owner
 ALTER TABLE b OWNER TO rolespc_persegu2;
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -93,7 +93,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc_perseg role:rolespc_persegu1 diskquota exceeded per segment quota
+ERROR:  tablespace: rolespc_perseg, role: rolespc_persegu1 diskquota exceeded per segment quota
 -- Test alter tablespace
 -- start_ignore
 \! mkdir -p /tmp/rolespc_perseg2
@@ -120,7 +120,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc_perseg role:rolespc_persegu1 diskquota exceeded per segment quota
+ERROR:  tablespace: rolespc_perseg, role: rolespc_persegu1 diskquota exceeded per segment quota
 -- Test update per segment ratio
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', 3.1);
  set_per_segment_quota 
@@ -156,7 +156,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc_perseg role:rolespc_persegu1 diskquota exceeded per segment quota
+ERROR:  tablespace: rolespc_perseg, role: rolespc_persegu1 diskquota exceeded per segment quota
 -- Test delete per segment ratio
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', -1);
  set_per_segment_quota 
@@ -186,7 +186,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  tablespace:rolespc_perseg role:rolespc_persegu1 diskquota exceeded per segment quota
+ERROR:  tablespace: rolespc_perseg, role: rolespc_persegu1 diskquota exceeded per segment quota
 -- Test delete quota config
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '-1 MB');
  set_role_tablespace_quota 

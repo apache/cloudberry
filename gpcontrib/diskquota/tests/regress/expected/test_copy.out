@@ -22,7 +22,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect copy fail
 COPY c FROM '/tmp/csmall.txt';
-ERROR:  schema's disk space quota exceeded with name:s3
+ERROR:  schema's disk space quota exceeded with name: s3
 DROP TABLE c;
 RESET search_path;
 DROP SCHEMA s3;
