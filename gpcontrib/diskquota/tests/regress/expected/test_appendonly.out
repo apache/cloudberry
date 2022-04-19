@@ -67,9 +67,9 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect fail.
 INSERT INTO t_ao SELECT generate_series(1, 10);
-ERROR:  schema's disk space quota exceeded with name:s_appendonly
+ERROR:  schema's disk space quota exceeded with name: s_appendonly
 INSERT INTO t_aoco SELECT generate_series(1, 10);
-ERROR:  schema's disk space quota exceeded with name:s_appendonly
+ERROR:  schema's disk space quota exceeded with name: s_appendonly
 DROP TABLE t_ao;
 DROP TABLE t_aoco;
 SET search_path TO DEFAULT;

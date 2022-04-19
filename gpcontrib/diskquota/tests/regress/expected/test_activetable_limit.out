@@ -36,10 +36,10 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 CREATE TABLE s.t2(i int) DISTRIBUTED BY (i); -- activetable = 2
 INSERT INTO s.t2 SELECT generate_series(1, 10);  -- expect failed
-ERROR:  schema's disk space quota exceeded with name:s
+ERROR:  schema's disk space quota exceeded with name: s
 CREATE TABLE s.t3(i int) DISTRIBUTED BY (i); -- activetable = 3 should not crash.
 INSERT INTO s.t3 SELECT generate_series(1, 10);  -- expect failed
-ERROR:  schema's disk space quota exceeded with name:s
+ERROR:  schema's disk space quota exceeded with name: s
 -- Q: why diskquota still works when activetable = 3?
 -- A: the activetable limit by shmem size, calculate by hash_estimate_size()
 --    the result will bigger than sizeof(DiskQuotaActiveTableEntry) * max_active_tables

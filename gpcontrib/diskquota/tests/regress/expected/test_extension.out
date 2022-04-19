@@ -47,7 +47,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx1
 CREATE SCHEMA SX;
@@ -82,7 +82,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 4
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx2
 CREATE EXTENSION diskquota;
@@ -110,7 +110,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx3
 CREATE EXTENSION diskquota;
@@ -138,7 +138,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx4
 CREATE EXTENSION diskquota;
@@ -166,7 +166,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx5
 CREATE EXTENSION diskquota;
@@ -194,7 +194,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx6
 CREATE EXTENSION diskquota;
@@ -222,7 +222,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx7
 CREATE EXTENSION diskquota;
@@ -250,7 +250,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx8
 CREATE EXTENSION diskquota;
@@ -278,7 +278,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO SX.a values(generate_series(0, 10));
-ERROR:  schema's disk space quota exceeded with name:sx
+ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx9
 CREATE EXTENSION diskquota;

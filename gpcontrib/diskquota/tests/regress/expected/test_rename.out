@@ -20,17 +20,17 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
-ERROR:  schema's disk space quota exceeded with name:srs1
+ERROR:  schema's disk space quota exceeded with name: srs1
 ALTER SCHEMA srs1 RENAME TO srs2;
 SET search_path TO srs2;
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
-ERROR:  schema's disk space quota exceeded with name:srs2
+ERROR:  schema's disk space quota exceeded with name: srs2
 -- test rename table
 ALTER TABLE a RENAME TO a2;
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,10);
-ERROR:  schema's disk space quota exceeded with name:srs2
+ERROR:  schema's disk space quota exceeded with name: srs2
 DROP TABLE a2;
 RESET search_path;
 DROP SCHEMA srs2;
@@ -59,16 +59,16 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
-ERROR:  role's disk space quota exceeded with name:srerole
+ERROR:  role's disk space quota exceeded with name: srerole
 ALTER ROLE srerole RENAME TO srerole2;
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,10);
-ERROR:  role's disk space quota exceeded with name:srerole2
+ERROR:  role's disk space quota exceeded with name: srerole2
 -- test rename table
 ALTER TABLE a RENAME TO a2;
 -- expect insert fail
 INSERT INTO a2 SELECT generate_series(1,10);
-ERROR:  role's disk space quota exceeded with name:srerole2
+ERROR:  role's disk space quota exceeded with name: srerole2
 DROP TABLE a2;
 DROP ROLE srerole2;
 RESET search_path;

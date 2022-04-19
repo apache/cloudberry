@@ -2,9 +2,9 @@
 -- FIXME add version check here
 \!sleep 5
 insert into s1.a select generate_series(1, 100); -- fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 insert into srole.b select generate_series(1, 100); -- fail
-ERROR:  role's disk space quota exceeded with name:u1
+ERROR:  role's disk space quota exceeded with name: u1
 drop table s1.a, srole.b;
 drop schema s1, srole;
 drop role u1;

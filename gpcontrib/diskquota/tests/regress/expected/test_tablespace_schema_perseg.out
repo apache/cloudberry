@@ -26,7 +26,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail by tablespace schema diskquota
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded
+ERROR:  tablespace: schemaspc_perseg, schema: spcs1_perseg diskquota exceeded
 -- change tablespace schema quota
 SELECT diskquota.set_schema_tablespace_quota('spcs1_perseg', 'schemaspc_perseg', '10 MB');
  set_schema_tablespace_quota 
@@ -62,7 +62,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 ---- expect insert fail by tablespace schema perseg quota
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per segment quota
+ERROR:  tablespace: schemaspc_perseg, schema: spcs1_perseg diskquota exceeded per segment quota
 -- Test alter table set schema
 CREATE SCHEMA spcs2_perseg;
 ALTER TABLE spcs1_perseg.a SET SCHEMA spcs2_perseg;
@@ -83,7 +83,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,200);
-ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per segment quota
+ERROR:  tablespace: schemaspc_perseg, schema: spcs1_perseg diskquota exceeded per segment quota
 SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name = 'spcs1_perseg' and tablespace_name ='schemaspc_perseg';
  schema_name  | tablespace_name  | quota_in_mb | nspsize_tablespace_in_bytes 
 --------------+------------------+-------------+-----------------------------
@@ -115,7 +115,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,200);
-ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per segment quota
+ERROR:  tablespace: schemaspc_perseg, schema: spcs1_perseg diskquota exceeded per segment quota
 -- Test update per segment ratio
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 3.1);
  set_per_segment_quota 
@@ -145,7 +145,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 ---- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per segment quota
+ERROR:  tablespace: schemaspc_perseg, schema: spcs1_perseg diskquota exceeded per segment quota
 -- Test delete per segment ratio
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg', -1);
  set_per_segment_quota 
@@ -175,7 +175,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 ---- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  tablespace:schemaspc_perseg schema:spcs1_perseg diskquota exceeded per segment quota
+ERROR:  tablespace: schemaspc_perseg, schema: spcs1_perseg diskquota exceeded per segment quota
 -- Test delete tablespace schema quota
 SELECT diskquota.set_per_segment_quota('schemaspc_perseg', 2);
  set_per_segment_quota 
