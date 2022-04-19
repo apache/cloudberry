@@ -26,10 +26,10 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  role's disk space quota exceeded with name:u1
+ERROR:  role's disk space quota exceeded with name: u1
 -- expect insert fail
 INSERT INTO b2 SELECT generate_series(1,100);
-ERROR:  role's disk space quota exceeded with name:u1
+ERROR:  role's disk space quota exceeded with name: u1
 -- Delete role quota
 SELECT diskquota.set_role_quota('u1', '-1 MB');
  set_role_quota 
@@ -60,7 +60,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO b SELECT generate_series(1,100);
-ERROR:  role's disk space quota exceeded with name:u1
+ERROR:  role's disk space quota exceeded with name: u1
 SELECT role_name, quota_in_mb, rolsize_in_bytes FROM diskquota.show_fast_role_quota_view WHERE role_name='u1';
  role_name | quota_in_mb | rolsize_in_bytes 
 -----------+-------------+------------------
