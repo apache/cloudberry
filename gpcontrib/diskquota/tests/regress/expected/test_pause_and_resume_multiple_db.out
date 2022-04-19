@@ -37,7 +37,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 \c test_pause_and_resume
 SELECT diskquota.set_schema_quota('s1', '1 MB');
  set_schema_quota 
@@ -52,7 +52,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 \c contrib_regression
 SELECT diskquota.pause(); -- pause extension, onle effect current database
  pause 
@@ -81,7 +81,7 @@ SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 
 (1 row)
 
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 SELECT diskquota.pause(); -- pause extension, onle effect current database
  pause 
 -------
@@ -127,7 +127,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO s1.a SELECT generate_series(1,100000); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 SELECT diskquota.pause(); -- pause extension, onle effect current database
  pause 
 -------
@@ -155,7 +155,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 \c contrib_regression
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert succeed
 SELECT diskquota.resume();
@@ -171,7 +171,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 (1 row)
 
 INSERT INTO s1.a SELECT generate_series(1,100); -- expect insert fail
-ERROR:  schema's disk space quota exceeded with name:s1
+ERROR:  schema's disk space quota exceeded with name: s1
 \c test_pause_and_resume
 SELECT diskquota.pause();
  pause 

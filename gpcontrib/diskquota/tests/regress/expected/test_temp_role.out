@@ -27,7 +27,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expected failed: 
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  role's disk space quota exceeded with name:u3temp
+ERROR:  role's disk space quota exceeded with name: u3temp
 DROP TABLE ta;
 SELECT diskquota.wait_for_worker_new_epoch();
  wait_for_worker_new_epoch 

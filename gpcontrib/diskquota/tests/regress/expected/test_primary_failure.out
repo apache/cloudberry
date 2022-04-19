@@ -43,7 +43,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  schema's disk space quota exceeded with name:ftsr
+ERROR:  schema's disk space quota exceeded with name: ftsr
 -- now one of primary is down
 select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
         pg_ctl        
@@ -69,7 +69,7 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100);
-ERROR:  schema's disk space quota exceeded with name:ftsr
+ERROR:  schema's disk space quota exceeded with name: ftsr
 -- increase quota
 SELECT diskquota.set_schema_quota('ftsr', '200 MB');
  set_schema_quota 
