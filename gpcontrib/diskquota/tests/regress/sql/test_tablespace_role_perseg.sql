@@ -64,10 +64,11 @@ INSERT INTO b SELECT generate_series(1,100);
 -- Test update per segment ratio
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', 3.1);
 SELECT diskquota.wait_for_worker_new_epoch();
-SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view WHERE role_name = 'rolespc_persegu1' and tablespace_name = 'rolespc_perseg';
-
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
+SELECT diskquota.wait_for_worker_new_epoch();
+SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view WHERE role_name = 'rolespc_persegu1' and tablespace_name = 'rolespc_perseg';
+
 SELECT diskquota.set_per_segment_quota('rolespc_perseg', 0.11);
 SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert fail
