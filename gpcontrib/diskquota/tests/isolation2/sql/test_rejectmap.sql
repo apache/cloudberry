@@ -1,5 +1,5 @@
 --
--- This file contains tests for dispatching blackmap and canceling
+-- This file contains tests for dispatching rejectmap and canceling
 -- queries in smgrextend hook by relation's relfilenode.
 --
 
@@ -48,7 +48,7 @@ CREATE OR REPLACE FUNCTION block_relation_on_seg0(rel regclass, block_type text,
         SELECT relowner INTO targetoid                                                                                 /*in func*/
           FROM pg_class WHERE relname=rel::text;                                                                       /*in func*/
     END CASE;                                                                                                          /*in func*/
-    PERFORM diskquota.refresh_blackmap(                                                                                /*in func*/
+    PERFORM diskquota.refresh_rejectmap(                                                                                /*in func*/
     ARRAY[                                                                                                             /*in func*/
           ROW (targetoid,                                                                                              /*in func*/
                (SELECT oid FROM pg_database WHERE datname = CURRENT_DATABASE()),                                       /*in func*/
@@ -58,7 +58,7 @@ CREATE OR REPLACE FUNCTION block_relation_on_seg0(rel regclass, block_type text,
                )),                                                                                                     /*in func*/
                bt,                                                                                                     /*in func*/
                segexceeded)                                                                                            /*in func*/
-      ]::diskquota.blackmap_entry[],                                                                                   /*in func*/
+      ]::diskquota.rejectmap_entry[],                                                                                   /*in func*/
     ARRAY[rel]::oid[])                                                                                                 /*in func*/
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;                                                                  /*in func*/
   END; $$                                                                                                              /*in func*/
@@ -72,130 +72,130 @@ SELECT gp_inject_fault_infinite('enable_check_quota_by_relfilenode', 'skip', dbi
 -- 1. Test canceling the extending of an ordinary table.
 CREATE TABLE blocked_t1(i int) DISTRIBUTED BY (i);
 INSERT INTO blocked_t1 SELECT generate_series(1, 100);
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
--- Insert a small amount of data into blocked_t1. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t1. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t1 SELECT generate_series(1, 10000);
 
--- Dispatch blackmap to seg0.
+-- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'NAMESPACE'::text, false);
 
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:
 
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 2. Test canceling the extending of a toast relation.
 CREATE TABLE blocked_t2(i text) DISTRIBUTED BY (i);
 INSERT INTO blocked_t2 SELECT generate_series(1, 100);
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
--- Insert a small amount of data into blocked_t2. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t2. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t2 SELECT generate_series(1, 10000);
 
--- Dispatch blackmap to seg0.
+-- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t2'::regclass, 'NAMESPACE'::text, false);
 
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:
 
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 3. Test canceling the extending of an appendonly relation.
 CREATE TABLE blocked_t3(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 INSERT INTO blocked_t3 SELECT generate_series(1, 100);
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
--- Insert a small amount of data into blocked_t3. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t3. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t3 SELECT generate_series(1, 10000);
 
--- Dispatch blackmap to seg0.
+-- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t3'::regclass, 'NAMESPACE'::text, false);
 
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:
 
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 4. Test canceling the extending of an index relation.
 CREATE TABLE blocked_t4(i int) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t4_index ON blocked_t4(i);
 INSERT INTO blocked_t4 SELECT generate_series(1, 100);
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
--- Insert a small amount of data into blocked_t4. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t4. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t4 SELECT generate_series(1, 10000);
 
--- Dispatch blackmap to seg0.
+-- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t4_index'::regclass, 'NAMESPACE'::text, false);
 
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:
 
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 5. Test error message for NAMESPACE_TABLESPACE_QUOTA when the quota limit is exceeded on segments.
 CREATE TABLE blocked_t5(i int) DISTRIBUTED BY (i);
 INSERT INTO blocked_t5 SELECT generate_series(1, 100);
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1&: INSERT INTO blocked_t5 SELECT generate_series(1, 10000);
 SELECT block_relation_on_seg0('blocked_t5'::regclass, 'NAMESPACE_TABLESPACE'::text, true);
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 6. Test error message for ROLE_TABLESPACE_QUOTA when the quota limit is exceeded on segments.
 CREATE TABLE blocked_t6(i int) DISTRIBUTED BY (i);
 INSERT INTO blocked_t6 SELECT generate_series(1, 100);
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1&: INSERT INTO blocked_t6 SELECT generate_series(1, 10000);
 SELECT block_relation_on_seg0('blocked_t6'::regclass, 'ROLE_TABLESPACE'::text, true);
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- Do some clean-ups.
@@ -207,7 +207,7 @@ DROP TABLE blocked_t5;
 DROP TABLE blocked_t6;
 
 --
--- Below are helper functions for testing adding uncommitted relations to blackmap.
+-- Below are helper functions for testing adding uncommitted relations to rejectmap.
 --
 -- start_ignore
 CREATE OR REPLACE LANGUAGE plpythonu;
@@ -261,7 +261,7 @@ CREATE OR REPLACE FUNCTION replace_oid_with_relname(given_name text, filename te
   END;                                                                                    /*in func*/
 $$ LANGUAGE plpgsql;
 
--- This function helps dispatch blackmap for the given relation to seg0.
+-- This function helps dispatch rejectmap for the given relation to seg0.
 CREATE OR REPLACE FUNCTION block_uncommitted_relation_on_seg0(rel text, block_type text, segexceeded boolean, filename text)
   RETURNS void AS $$                                                                           /*in func*/
   DECLARE                                                                                      /*in func*/
@@ -290,7 +290,7 @@ CREATE OR REPLACE FUNCTION block_uncommitted_relation_on_seg0(rel text, block_ty
           FROM read_relation_cache_from_file(filename)                                         /*in func*/
     WHERE relname=rel::text AND segid=0;                                                       /*in func*/
     END CASE;                                                                                  /*in func*/
-    PERFORM diskquota.refresh_blackmap(                                                        /*in func*/
+    PERFORM diskquota.refresh_rejectmap(                                                        /*in func*/
     ARRAY[                                                                                     /*in func*/
           ROW (targetoid,                                                                      /*in func*/
                (SELECT oid FROM pg_database WHERE datname = CURRENT_DATABASE()),               /*in func*/
@@ -303,7 +303,7 @@ CREATE OR REPLACE FUNCTION block_uncommitted_relation_on_seg0(rel text, block_ty
                )),                                                                             /*in func*/
                bt,                                                                             /*in func*/
                segexceeded)                                                                    /*in func*/
-      ]::diskquota.blackmap_entry[],                                                           /*in func*/
+      ]::diskquota.rejectmap_entry[],                                                           /*in func*/
     ARRAY[(SELECT reloid FROM read_relation_cache_from_file(filename)                          /*in func*/
              WHERE relname=rel::text AND segid=0)::regclass]::oid[])                           /*in func*/
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;                                          /*in func*/
@@ -313,232 +313,232 @@ LANGUAGE 'plpgsql';
 -- 7. Test that we are able to block an ordinary relation on seg0 by its relnamespace.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, false, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, false, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
-2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text),
+2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text),
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 8. Test that we are able to block an ordinary relation on seg0 by its relowner.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'ROLE'::text, false, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'ROLE'::text, false, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
-2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text),
+2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text),
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 9. Test that we are able to block an ordinary relation on seg0 by its relnamespace and reltablespace.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE_TABLESPACE'::text, false, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE_TABLESPACE'::text, false, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
-2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text),
+2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text),
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 10. Test that we are able to block an ordinary relation on seg0 by its relowner and reltablespace.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'ROLE_TABLESPACE'::text, false, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'ROLE_TABLESPACE'::text, false, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
-2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text),
+2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text),
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 11. Test that we are able to block an ordinary relation on seg0 by its relnamespace and reltablespace (segexceeded=true).
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE_TABLESPACE'::text, true, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE_TABLESPACE'::text, true, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
-2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text),
+2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text),
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 12. Test that we are able to block an ordinary relation on seg0 by its relowner and reltablespace (segexceeded=true).
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'ROLE_TABLESPACE'::text, true, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'ROLE_TABLESPACE'::text, true, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
-2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text),
+2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text),
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 13. Test that we are able to block a toast relation on seg0 by its namespace.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i text) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, true, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, true, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
 2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner,
-          replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text) AS relname,
+          replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text) AS relname,
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0
      ORDER BY relname DESC;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 14. Test that we are able to block an appendonly relation on seg0 by its namespace.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, true, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, true, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
 2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner,
-          replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text) AS relname,
+          replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text) AS relname,
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0
      ORDER BY relname DESC;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- 15. Test that we are able to block an appendonly (column oriented) relation on seg0 by its namespace.
 1: BEGIN;
 1: CREATE TABLE blocked_t7(i int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
-1: SELECT dump_relation_cache_to_file('/tmp/test_blackmap.csv');
--- Inject 'suspension' to check_blackmap_by_relfilenode on seg0.
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'suspend', dbid)
+1: SELECT dump_relation_cache_to_file('/tmp/test_rejectmap.csv');
+-- Inject 'suspension' to check_rejectmap_by_relfilenode on seg0.
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
--- Insert a small amount of data into blocked_t7. It will hang up at check_blackmap_by_relfilenode().
+-- Insert a small amount of data into blocked_t7. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t7 SELECT generate_series(1, 10000);
-SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, true, '/tmp/test_blackmap.csv'::text);
+SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text, true, '/tmp/test_rejectmap.csv'::text);
 -- Show that blocked_t7 is blocked on seg0.
 2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner,
-          replace_oid_with_relname(rel.relname, '/tmp/test_blackmap.csv'::text) AS relname,
+          replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text) AS relname,
           be.target_type, be.target_oid
-     FROM gp_dist_random('diskquota.blackmap') AS be,
-          read_relation_cache_from_file('/tmp/test_blackmap.csv') AS rel
+     FROM gp_dist_random('diskquota.rejectmap') AS be,
+          read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel
      WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0
      ORDER BY relname DESC;
-SELECT gp_inject_fault_infinite('check_blackmap_by_relfilenode', 'reset', dbid)
+SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content=0;
 1<:
 1: ABORT;
--- Clean up the blackmap on seg0.
-SELECT diskquota.refresh_blackmap(
-  ARRAY[]::diskquota.blackmap_entry[], ARRAY[]::oid[])
+-- Clean up the rejectmap on seg0.
+SELECT diskquota.refresh_rejectmap(
+  ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
 
 -- Disable check quota by relfilenode on seg0.
