@@ -45,7 +45,7 @@ CREATE TYPE diskquota.diskquota_active_table_type AS (
 	"GP_SEGMENT_ID" smallint
 );
 
-CREATE TYPE diskquota.blackmap_entry AS (
+CREATE TYPE diskquota.rejectmap_entry AS (
 	target_oid oid,
 	database_oid oid,
 	tablespace_oid oid,
@@ -53,7 +53,7 @@ CREATE TYPE diskquota.blackmap_entry AS (
 	seg_exceeded boolean
 );
 
-CREATE TYPE diskquota.blackmap_entry_detail AS (
+CREATE TYPE diskquota.rejectmap_entry_detail AS (
 	target_type text,
 	target_oid oid,
 	database_oid oid,
@@ -86,8 +86,8 @@ CREATE FUNCTION diskquota.diskquota_fetch_table_stat(int4, oid[]) RETURNS setof 
 CREATE FUNCTION diskquota.set_schema_tablespace_quota(text, text, text) RETURNS void STRICT AS '$libdir/diskquota-2.0.so' LANGUAGE C;
 CREATE FUNCTION diskquota.set_role_tablespace_quota(text, text, text) RETURNS void STRICT AS '$libdir/diskquota-2.0.so' LANGUAGE C;
 CREATE FUNCTION diskquota.set_per_segment_quota(text, float4) RETURNS void STRICT AS '$libdir/diskquota-2.0.so' LANGUAGE C;
-CREATE FUNCTION diskquota.refresh_blackmap(diskquota.blackmap_entry[], oid[]) RETURNS void STRICT AS '$libdir/diskquota-2.0.so' LANGUAGE C;
-CREATE FUNCTION diskquota.show_blackmap() RETURNS setof diskquota.blackmap_entry_detail AS '$libdir/diskquota-2.0.so', 'show_blackmap' LANGUAGE C;
+CREATE FUNCTION diskquota.refresh_rejectmap(diskquota.rejectmap_entry[], oid[]) RETURNS void STRICT AS '$libdir/diskquota-2.0.so' LANGUAGE C;
+CREATE FUNCTION diskquota.show_rejectmap() RETURNS setof diskquota.rejectmap_entry_detail AS '$libdir/diskquota-2.0.so', 'show_rejectmap' LANGUAGE C;
 CREATE FUNCTION diskquota.pause() RETURNS void STRICT AS '$libdir/diskquota-2.0.so', 'diskquota_pause' LANGUAGE C;
 CREATE FUNCTION diskquota.resume() RETURNS void STRICT AS '$libdir/diskquota-2.0.so', 'diskquota_resume' LANGUAGE C;
 CREATE FUNCTION diskquota.show_worker_epoch() RETURNS bigint STRICT AS '$libdir/diskquota-2.0.so', 'show_worker_epoch' LANGUAGE C;
@@ -181,7 +181,7 @@ SELECT (
     (SELECT SUM(size) FROM diskquota.table_size WHERE segid = -1)
 ) AS dbsize;
 
-CREATE VIEW diskquota.blackmap AS SELECT * FROM diskquota.show_blackmap() AS BM;
+CREATE VIEW diskquota.rejectmap AS SELECT * FROM diskquota.show_rejectmap() AS BM;
 
 CREATE VIEW diskquota.show_fast_schema_tablespace_quota_view AS
 WITH

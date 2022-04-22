@@ -28,7 +28,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO t SELECT generate_series(1, 1000000);
 
 SELECT r.rolname, t.spcname, b.target_type
-FROM diskquota.blackmap AS b, pg_tablespace AS t, pg_roles AS r
+FROM diskquota.rejectmap AS b, pg_tablespace AS t, pg_roles AS r
 WHERE b.tablespace_oid = t.oid AND b.target_oid = r.oid AND r.rolname = 'role1'
 ORDER BY r.rolname, t.spcname, b.target_type;
 
@@ -70,7 +70,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO t_in_custom_tablespace SELECT generate_series(1, 1000000);
 
 SELECT r.rolname, t.spcname, b.target_type
-FROM diskquota.blackmap AS b, pg_tablespace AS t, pg_roles AS r
+FROM diskquota.rejectmap AS b, pg_tablespace AS t, pg_roles AS r
 WHERE b.tablespace_oid = t.oid AND b.target_oid = r.oid AND r.rolname = 'role1'
 ORDER BY r.rolname, t.spcname, b.target_type;
 

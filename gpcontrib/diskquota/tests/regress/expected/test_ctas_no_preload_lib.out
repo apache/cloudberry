@@ -59,8 +59,8 @@ SELECT diskquota.wait_for_worker_new_epoch();
  t
 (1 row)
 
--- Expect that current role is in the blackmap 
-SELECT rolname FROM pg_authid, diskquota.blackmap WHERE oid = target_oid;
+-- Expect that current role is in the rejectmap 
+SELECT rolname FROM pg_authid, diskquota.rejectmap WHERE oid = target_oid;
  rolname 
 ---------
  test
@@ -78,7 +78,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
  t
 (1 row)
 
-SELECT rolname FROM pg_authid, diskquota.blackmap WHERE oid = target_oid;
+SELECT rolname FROM pg_authid, diskquota.rejectmap WHERE oid = target_oid;
  rolname 
 ---------
 (0 rows)

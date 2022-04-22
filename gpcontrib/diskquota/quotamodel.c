@@ -41,23 +41,23 @@
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbutil.h"
 
-/* cluster level max size of black list */
-#define MAX_DISK_QUOTA_BLACK_ENTRIES (1024 * 1024)
-/* cluster level init size of black list */
-#define INIT_DISK_QUOTA_BLACK_ENTRIES 8192
-/* per database level max size of black list */
-#define MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES 8192
+/* cluster level max size of rejectmap */
+#define MAX_DISK_QUOTA_REJECT_ENTRIES (1024 * 1024)
+/* cluster level init size of rejectmap */
+#define INIT_DISK_QUOTA_REJECT_ENTRIES 8192
+/* per database level max size of rejectmap */
+#define MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES 8192
 #define MAX_NUM_KEYS_QUOTA_MAP 8
 /* Number of attributes in quota configuration records. */
 #define NUM_QUOTA_CONFIG_ATTRS 6
 
-typedef struct TableSizeEntry      TableSizeEntry;
-typedef struct NamespaceSizeEntry  NamespaceSizeEntry;
-typedef struct RoleSizeEntry       RoleSizeEntry;
-typedef struct QuotaLimitEntry     QuotaLimitEntry;
-typedef struct BlackMapEntry       BlackMapEntry;
-typedef struct GlobalBlackMapEntry GlobalBlackMapEntry;
-typedef struct LocalBlackMapEntry  LocalBlackMapEntry;
+typedef struct TableSizeEntry       TableSizeEntry;
+typedef struct NamespaceSizeEntry   NamespaceSizeEntry;
+typedef struct RoleSizeEntry        RoleSizeEntry;
+typedef struct QuotaLimitEntry      QuotaLimitEntry;
+typedef struct RejectMapEntry       RejectMapEntry;
+typedef struct GlobalRejectMapEntry GlobalRejectMapEntry;
+typedef struct LocalRejectMapEntry  LocalRejectMapEntry;
 
 int SEGCOUNT = 0;
 /*
@@ -116,8 +116,8 @@ struct QuotaInfo quota_info[NUM_QUOTA_TYPES] = {
         [TABLESPACE_QUOTA]           = {
                           .map_name = "Tablespace map", .num_keys = 1, .sys_cache = (Oid[]){TABLESPACEOID}, .map = NULL}};
 
-/* global blacklist for which exceed their quota limit */
-struct BlackMapEntry
+/* global rejectmap for which exceed their quota limit */
+struct RejectMapEntry
 {
 	Oid    targetoid;
 	Oid    databaseoid;
@@ -125,16 +125,16 @@ struct BlackMapEntry
 	uint32 targettype;
 	/*
 	 * TODO refactor this data structure
-	 * QD index the blackmap by (targetoid, databaseoid, tablespaceoid, targettype).
-	 * QE index the blackmap by (relfilenode).
+	 * QD index the rejectmap by (targetoid, databaseoid, tablespaceoid, targettype).
+	 * QE index the rejectmap by (relfilenode).
 	 */
 	RelFileNode relfilenode;
 };
 
-struct GlobalBlackMapEntry
+struct GlobalRejectMapEntry
 {
-	BlackMapEntry keyitem;
-	bool          segexceeded;
+	RejectMapEntry keyitem;
+	bool           segexceeded;
 	/*
 	 * When the quota limit is exceeded on segment servers,
 	 * we need an extra auxiliary field to preserve the quota
@@ -142,23 +142,23 @@ struct GlobalBlackMapEntry
 	 * servers, e.g., targettype, targetoid. This field is
 	 * useful on segment servers.
 	 */
-	BlackMapEntry auxblockinfo;
+	RejectMapEntry auxblockinfo;
 };
 
-/* local blacklist for which exceed their quota limit */
-struct LocalBlackMapEntry
+/* local rejectmap for which exceed their quota limit */
+struct LocalRejectMapEntry
 {
-	BlackMapEntry keyitem;
-	bool          isexceeded;
-	bool          segexceeded;
+	RejectMapEntry keyitem;
+	bool           isexceeded;
+	bool           segexceeded;
 };
 
 /* using hash table to support incremental update the table size entry.*/
 static HTAB *table_size_map = NULL;
 
-/* black list for database objects which exceed their quota limit */
-static HTAB *disk_quota_black_map       = NULL;
-static HTAB *local_disk_quota_black_map = NULL;
+/* rejectmap for database objects which exceed their quota limit */
+static HTAB *disk_quota_reject_map       = NULL;
+static HTAB *local_disk_quota_reject_map = NULL;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
@@ -167,7 +167,7 @@ static void init_all_quota_maps(void);
 static void update_size_for_quota(int64 size, QuotaType type, Oid *keys, int16 segid);
 static void update_limit_for_quota(int64 limit, float segratio, QuotaType type, Oid *keys);
 static void remove_quota(QuotaType type, Oid *keys, int16 segid);
-static void add_quota_to_blacklist(QuotaType type, Oid targetOid, Oid tablespaceoid, bool segexceeded);
+static void add_quota_to_rejectmap(QuotaType type, Oid targetOid, Oid tablespaceoid, bool segexceeded);
 static void check_quota_map(QuotaType type);
 static void clear_all_quota_maps(void);
 static void transfer_table_for_quota(int64 totalsize, QuotaType type, Oid *old_keys, Oid *new_keys, int16 segid);
@@ -176,8 +176,8 @@ static void transfer_table_for_quota(int64 totalsize, QuotaType type, Oid *old_k
 static void refresh_disk_quota_usage(bool is_init);
 static void calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map);
 static void flush_to_table_size(void);
-static void flush_local_black_map(void);
-static void dispatch_blackmap(HTAB *local_active_table_stat_map);
+static void flush_local_reject_map(void);
+static void dispatch_rejectmap(HTAB *local_active_table_stat_map);
 static bool load_quotas(void);
 static void do_load_quotas(void);
 static bool do_check_diskquota_state_is_ready(void);
@@ -186,7 +186,7 @@ static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
 static void init_lwlocks(void);
 
-static void export_exceeded_error(GlobalBlackMapEntry *entry, bool skip_name);
+static void export_exceeded_error(GlobalRejectMapEntry *entry, bool skip_name);
 void        truncateStringInfo(StringInfo str, int nchars);
 
 static void
@@ -267,28 +267,28 @@ remove_quota(QuotaType type, Oid *keys, int16 segid)
 
 /*
  * Compare the disk quota limit and current usage of a database object.
- * Put them into local blacklist if quota limit is exceeded.
+ * Put them into local rejectmap if quota limit is exceeded.
  */
 static void
-add_quota_to_blacklist(QuotaType type, Oid targetOid, Oid tablespaceoid, bool segexceeded)
+add_quota_to_rejectmap(QuotaType type, Oid targetOid, Oid tablespaceoid, bool segexceeded)
 {
-	LocalBlackMapEntry *localblackentry;
-	BlackMapEntry       keyitem = {0};
+	LocalRejectMapEntry *localrejectentry;
+	RejectMapEntry       keyitem = {0};
 
 	keyitem.targetoid     = targetOid;
 	keyitem.databaseoid   = MyDatabaseId;
 	keyitem.tablespaceoid = tablespaceoid;
 	keyitem.targettype    = (uint32)type;
-	ereport(DEBUG1, (errmsg("[diskquota] Put object %u to blacklist", targetOid)));
-	localblackentry = (LocalBlackMapEntry *)hash_search(local_disk_quota_black_map, &keyitem, HASH_ENTER, NULL);
-	localblackentry->isexceeded  = true;
-	localblackentry->segexceeded = segexceeded;
+	ereport(DEBUG1, (errmsg("[diskquota] Put object %u to rejectmap", targetOid)));
+	localrejectentry = (LocalRejectMapEntry *)hash_search(local_disk_quota_reject_map, &keyitem, HASH_ENTER, NULL);
+	localrejectentry->isexceeded  = true;
+	localrejectentry->segexceeded = segexceeded;
 }
 
 /*
  * Check the quota map, if the entry doesn't exist anymore,
  * remove it from the map. Otherwise, check if it has hit
- * the quota limit, if it does, add it to the black list.
+ * the quota limit, if it does, add it to the rejectmap.
  */
 static void
 check_quota_map(QuotaType type)
@@ -326,7 +326,7 @@ check_quota_map(QuotaType type)
 				                            : InvalidOid;
 
 				bool segmentExceeded = entry->segid == -1 ? false : true;
-				add_quota_to_blacklist(type, targetOid, tablespaceoid, segmentExceeded);
+				add_quota_to_rejectmap(type, targetOid, tablespaceoid, segmentExceeded);
 			}
 		}
 	}
@@ -396,20 +396,20 @@ disk_quota_shmem_startup(void)
 
 	/*
 	 * Four shared memory data. extension_ddl_message is used to handle
-	 * diskquota extension create/drop command. disk_quota_black_map is used
-	 * to store out-of-quota blacklist. active_tables_map is used to store
+	 * diskquota extension create/drop command. disk_quota_reject_map is used
+	 * to store out-of-quota rejectmap. active_tables_map is used to store
 	 * active tables whose disk usage is changed.
 	 */
 	extension_ddl_message = ShmemInitStruct("disk_quota_extension_ddl_message", sizeof(ExtensionDDLMessage), &found);
 	if (!found) memset((void *)extension_ddl_message, 0, sizeof(ExtensionDDLMessage));
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize   = sizeof(BlackMapEntry);
-	hash_ctl.entrysize = sizeof(GlobalBlackMapEntry);
+	hash_ctl.keysize   = sizeof(RejectMapEntry);
+	hash_ctl.entrysize = sizeof(GlobalRejectMapEntry);
 	hash_ctl.hash      = tag_hash;
 
-	disk_quota_black_map = ShmemInitHash("blackmap whose quota limitation is reached", INIT_DISK_QUOTA_BLACK_ENTRIES,
-	                                     MAX_DISK_QUOTA_BLACK_ENTRIES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	disk_quota_reject_map = ShmemInitHash("rejectmap whose quota limitation is reached", INIT_DISK_QUOTA_REJECT_ENTRIES,
+	                                      MAX_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
 
 	init_shm_worker_active_tables();
 
@@ -438,7 +438,7 @@ disk_quota_shmem_startup(void)
 /*
  * Initialize four shared memory locks.
  * active_table_lock is used to access active table map.
- * black_map_lock is used to access out-of-quota blacklist.
+ * reject_map_lock is used to access out-of-quota rejectmap.
  * extension_ddl_message_lock is used to access content of
  * extension_ddl_message.
  * extension_ddl_lock is used to avoid concurrent diskquota
@@ -449,7 +449,7 @@ static void
 init_lwlocks(void)
 {
 	diskquota_locks.active_table_lock          = LWLockAssign();
-	diskquota_locks.black_map_lock             = LWLockAssign();
+	diskquota_locks.reject_map_lock            = LWLockAssign();
 	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
 	diskquota_locks.extension_ddl_lock         = LWLockAssign();
 	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
@@ -468,7 +468,7 @@ DiskQuotaShmemSize(void)
 	Size size;
 
 	size = sizeof(ExtensionDDLMessage);
-	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_BLACK_ENTRIES, sizeof(GlobalBlackMapEntry)));
+	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_REJECT_ENTRIES, sizeof(GlobalRejectMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelationCacheEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelidCacheEntry)));
@@ -499,17 +499,17 @@ init_disk_quota_model(void)
 	init_all_quota_maps();
 
 	/*
-	 * local diskquota black map is used to reduce the lock hold time of
-	 * blackmap in shared memory
+	 * local diskquota reject map is used to reduce the lock hold time of
+	 * rejectmap in shared memory
 	 */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize   = sizeof(BlackMapEntry);
-	hash_ctl.entrysize = sizeof(LocalBlackMapEntry);
+	hash_ctl.keysize   = sizeof(RejectMapEntry);
+	hash_ctl.entrysize = sizeof(LocalRejectMapEntry);
 	hash_ctl.hcxt      = CurrentMemoryContext;
 	hash_ctl.hash      = tag_hash;
 
-	local_disk_quota_black_map =
-	        hash_create("local blackmap whose quota limitation is reached", MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES,
+	local_disk_quota_reject_map =
+	        hash_create("local rejectmap whose quota limitation is reached", MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES,
 	                    &hash_ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 }
 
@@ -662,7 +662,7 @@ refresh_disk_quota_model(bool is_init)
 
 /*
  * Update the disk usage of namespace, role and tablespace.
- * Put the exceeded namespace and role into shared black map.
+ * Put the exceeded namespace and role into shared reject map.
  * Parameter 'is_init' is true when it's the first time that worker
  * process is constructing quota model.
  */
@@ -704,10 +704,10 @@ refresh_disk_quota_usage(bool is_init)
 		}
 		/* flush local table_size_map to user table table_size */
 		flush_to_table_size();
-		/* copy local black map back to shared black map */
-		flush_local_black_map();
-		/* Dispatch blackmap entries to segments to perform hard-limit. */
-		if (diskquota_hardlimit) dispatch_blackmap(local_active_table_stat_map);
+		/* copy local reject map back to shared reject map */
+		flush_local_reject_map();
+		/* Dispatch rejectmap entries to segments to perform hard-limit. */
+		if (diskquota_hardlimit) dispatch_rejectmap(local_active_table_stat_map);
 		hash_destroy(local_active_table_stat_map);
 	}
 	PG_CATCH();
@@ -1045,67 +1045,67 @@ flush_to_table_size(void)
 }
 
 /*
- * Generate the new shared blacklist from the local_black_list which
+ * Generate the new shared rejectmap from the local_rejectmap which
  * exceed the quota limit.
- * local_black_list is used to reduce the lock contention.
+ * local_rejectmap is used to reduce the lock contention.
  */
 static void
-flush_local_black_map(void)
+flush_local_reject_map(void)
 {
-	HASH_SEQ_STATUS      iter;
-	LocalBlackMapEntry  *localblackentry;
-	GlobalBlackMapEntry *blackentry;
-	bool                 found;
+	HASH_SEQ_STATUS       iter;
+	LocalRejectMapEntry  *localrejectentry;
+	GlobalRejectMapEntry *rejectentry;
+	bool                  found;
 
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_EXCLUSIVE);
 
-	hash_seq_init(&iter, local_disk_quota_black_map);
-	while ((localblackentry = hash_seq_search(&iter)) != NULL)
+	hash_seq_init(&iter, local_disk_quota_reject_map);
+	while ((localrejectentry = hash_seq_search(&iter)) != NULL)
 	{
-		if (localblackentry->isexceeded)
+		if (localrejectentry->isexceeded)
 		{
-			blackentry = (GlobalBlackMapEntry *)hash_search(disk_quota_black_map, (void *)&localblackentry->keyitem,
-			                                                HASH_ENTER_NULL, &found);
-			if (blackentry == NULL)
+			rejectentry = (GlobalRejectMapEntry *)hash_search(disk_quota_reject_map, (void *)&localrejectentry->keyitem,
+			                                                  HASH_ENTER_NULL, &found);
+			if (rejectentry == NULL)
 			{
-				ereport(WARNING, (errmsg("[diskquota] Shared disk quota black map size limit reached."
+				ereport(WARNING, (errmsg("[diskquota] Shared disk quota reject map size limit reached."
 				                         "Some out-of-limit schemas or roles will be lost"
-				                         "in blacklist.")));
+				                         "in rejectmap.")));
 			}
 			else
 			{
 				/* new db objects which exceed quota limit */
 				if (!found)
 				{
-					blackentry->keyitem.targetoid     = localblackentry->keyitem.targetoid;
-					blackentry->keyitem.databaseoid   = MyDatabaseId;
-					blackentry->keyitem.targettype    = localblackentry->keyitem.targettype;
-					blackentry->keyitem.tablespaceoid = localblackentry->keyitem.tablespaceoid;
-					blackentry->segexceeded           = localblackentry->segexceeded;
+					rejectentry->keyitem.targetoid     = localrejectentry->keyitem.targetoid;
+					rejectentry->keyitem.databaseoid   = MyDatabaseId;
+					rejectentry->keyitem.targettype    = localrejectentry->keyitem.targettype;
+					rejectentry->keyitem.tablespaceoid = localrejectentry->keyitem.tablespaceoid;
+					rejectentry->segexceeded           = localrejectentry->segexceeded;
 				}
 			}
-			blackentry->segexceeded      = localblackentry->segexceeded;
-			localblackentry->isexceeded  = false;
-			localblackentry->segexceeded = false;
+			rejectentry->segexceeded      = localrejectentry->segexceeded;
+			localrejectentry->isexceeded  = false;
+			localrejectentry->segexceeded = false;
 		}
 		else
 		{
 			/* db objects are removed or under quota limit in the new loop */
-			(void)hash_search(disk_quota_black_map, (void *)&localblackentry->keyitem, HASH_REMOVE, NULL);
-			(void)hash_search(local_disk_quota_black_map, (void *)&localblackentry->keyitem, HASH_REMOVE, NULL);
+			(void)hash_search(disk_quota_reject_map, (void *)&localrejectentry->keyitem, HASH_REMOVE, NULL);
+			(void)hash_search(local_disk_quota_reject_map, (void *)&localrejectentry->keyitem, HASH_REMOVE, NULL);
 		}
 	}
-	LWLockRelease(diskquota_locks.black_map_lock);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 }
 
 /*
- * Dispatch blackmap to segment servers.
+ * Dispatch rejectmap to segment servers.
  */
 static void
-dispatch_blackmap(HTAB *local_active_table_stat_map)
+dispatch_rejectmap(HTAB *local_active_table_stat_map)
 {
 	HASH_SEQ_STATUS            hash_seq;
-	GlobalBlackMapEntry       *blackmap_entry;
+	GlobalRejectMapEntry      *rejectmap_entry;
 	DiskQuotaActiveTableEntry *active_table_entry;
 	int                        num_entries, count = 0;
 	CdbPgResults               cdb_pgresults = {NULL, 0};
@@ -1117,18 +1117,18 @@ dispatch_blackmap(HTAB *local_active_table_stat_map)
 	initStringInfo(&active_oids);
 	initStringInfo(&sql);
 
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
-	num_entries = hash_get_num_entries(disk_quota_black_map);
-	hash_seq_init(&hash_seq, disk_quota_black_map);
-	while ((blackmap_entry = hash_seq_search(&hash_seq)) != NULL)
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_SHARED);
+	num_entries = hash_get_num_entries(disk_quota_reject_map);
+	hash_seq_init(&hash_seq, disk_quota_reject_map);
+	while ((rejectmap_entry = hash_seq_search(&hash_seq)) != NULL)
 	{
-		appendStringInfo(&rows, "ROW(%d, %d, %d, %d, %s)", blackmap_entry->keyitem.targetoid,
-		                 blackmap_entry->keyitem.databaseoid, blackmap_entry->keyitem.tablespaceoid,
-		                 blackmap_entry->keyitem.targettype, blackmap_entry->segexceeded ? "true" : "false");
+		appendStringInfo(&rows, "ROW(%d, %d, %d, %d, %s)", rejectmap_entry->keyitem.targetoid,
+		                 rejectmap_entry->keyitem.databaseoid, rejectmap_entry->keyitem.tablespaceoid,
+		                 rejectmap_entry->keyitem.targettype, rejectmap_entry->segexceeded ? "true" : "false");
 
 		if (++count != num_entries) appendStringInfo(&rows, ",");
 	}
-	LWLockRelease(diskquota_locks.black_map_lock);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 
 	count       = 0;
 	num_entries = hash_get_num_entries(local_active_table_stat_map);
@@ -1141,8 +1141,8 @@ dispatch_blackmap(HTAB *local_active_table_stat_map)
 	}
 
 	appendStringInfo(&sql,
-	                 "select diskquota.refresh_blackmap("
-	                 "ARRAY[%s]::diskquota.blackmap_entry[], "
+	                 "select diskquota.refresh_rejectmap("
+	                 "ARRAY[%s]::diskquota.rejectmap_entry[], "
 	                 "ARRAY[%s]::oid[])",
 	                 rows.data, active_oids.data);
 	CdbDispatchCommand(sql.data, DF_NONE, &cdb_pgresults);
@@ -1366,43 +1366,43 @@ get_rel_name_namespace(Oid relid, Oid *nsOid, char *relname)
 }
 
 static bool
-check_blackmap_by_relfilenode(RelFileNode relfilenode)
+check_rejectmap_by_relfilenode(RelFileNode relfilenode)
 {
-	bool                 found;
-	BlackMapEntry        keyitem;
-	GlobalBlackMapEntry *entry;
+	bool                  found;
+	RejectMapEntry        keyitem;
+	GlobalRejectMapEntry *entry;
 
-	SIMPLE_FAULT_INJECTOR("check_blackmap_by_relfilenode");
+	SIMPLE_FAULT_INJECTOR("check_rejectmap_by_relfilenode");
 
 	memset(&keyitem, 0, sizeof(keyitem));
 	memcpy(&keyitem.relfilenode, &relfilenode, sizeof(RelFileNode));
 
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
-	entry = hash_search(disk_quota_black_map, &keyitem, HASH_FIND, &found);
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_SHARED);
+	entry = hash_search(disk_quota_reject_map, &keyitem, HASH_FIND, &found);
 
 	if (found && entry)
 	{
-		GlobalBlackMapEntry segblackentry;
-		memcpy(&segblackentry.keyitem, &entry->auxblockinfo, sizeof(BlackMapEntry));
-		segblackentry.segexceeded = entry->segexceeded;
-		LWLockRelease(diskquota_locks.black_map_lock);
+		GlobalRejectMapEntry segrejectentry;
+		memcpy(&segrejectentry.keyitem, &entry->auxblockinfo, sizeof(RejectMapEntry));
+		segrejectentry.segexceeded = entry->segexceeded;
+		LWLockRelease(diskquota_locks.reject_map_lock);
 
-		export_exceeded_error(&segblackentry, true /*skip_name*/);
+		export_exceeded_error(&segrejectentry, true /*skip_name*/);
 		return false;
 	}
-	LWLockRelease(diskquota_locks.black_map_lock);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 	return true;
 }
 
 /*
  * This function takes relowner, relnamespace, reltablespace as arguments,
- * prepares the searching key of the global blackmap for us.
+ * prepares the searching key of the global rejectmap for us.
  */
 static void
-prepare_blackmap_search_key(BlackMapEntry *keyitem, QuotaType type, Oid relowner, Oid relnamespace, Oid reltablespace)
+prepare_rejectmap_search_key(RejectMapEntry *keyitem, QuotaType type, Oid relowner, Oid relnamespace, Oid reltablespace)
 {
 	Assert(keyitem != NULL);
-	memset(keyitem, 0, sizeof(BlackMapEntry));
+	memset(keyitem, 0, sizeof(RejectMapEntry));
 	if (type == ROLE_QUOTA || type == ROLE_TABLESPACE_QUOTA)
 		keyitem->targetoid = relowner;
 	else if (type == NAMESPACE_QUOTA || type == NAMESPACE_TABLESPACE_QUOTA)
@@ -1416,7 +1416,7 @@ prepare_blackmap_search_key(BlackMapEntry *keyitem, QuotaType type, Oid relowner
 		keyitem->tablespaceoid = reltablespace;
 	else
 	{
-		/* refer to add_quota_to_blacklist */
+		/* refer to add_quota_to_rejectmap */
 		keyitem->tablespaceoid = InvalidOid;
 	}
 	keyitem->databaseoid = MyDatabaseId;
@@ -1429,14 +1429,14 @@ prepare_blackmap_search_key(BlackMapEntry *keyitem, QuotaType type, Oid relowner
  * Do enforcement if quota exceeds.
  */
 static bool
-check_blackmap_by_reloid(Oid reloid)
+check_rejectmap_by_reloid(Oid reloid)
 {
-	Oid                  ownerOid      = InvalidOid;
-	Oid                  nsOid         = InvalidOid;
-	Oid                  tablespaceoid = InvalidOid;
-	bool                 found;
-	BlackMapEntry        keyitem;
-	GlobalBlackMapEntry *entry;
+	Oid                   ownerOid      = InvalidOid;
+	Oid                   nsOid         = InvalidOid;
+	Oid                   tablespaceoid = InvalidOid;
+	bool                  found;
+	RejectMapEntry        keyitem;
+	GlobalRejectMapEntry *entry;
 
 	bool found_rel = get_rel_owner_schema_tablespace(reloid, &ownerOid, &nsOid, &tablespaceoid);
 	if (!found_rel)
@@ -1444,19 +1444,19 @@ check_blackmap_by_reloid(Oid reloid)
 		return true;
 	}
 
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_SHARED);
 	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 	{
-		prepare_blackmap_search_key(&keyitem, type, ownerOid, nsOid, tablespaceoid);
-		entry = hash_search(disk_quota_black_map, &keyitem, HASH_FIND, &found);
+		prepare_rejectmap_search_key(&keyitem, type, ownerOid, nsOid, tablespaceoid);
+		entry = hash_search(disk_quota_reject_map, &keyitem, HASH_FIND, &found);
 		if (found)
 		{
-			LWLockRelease(diskquota_locks.black_map_lock);
+			LWLockRelease(diskquota_locks.reject_map_lock);
 			export_exceeded_error(entry, false /*skip_name*/);
 			return false;
 		}
 	}
-	LWLockRelease(diskquota_locks.black_map_lock);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 	return true;
 }
 
@@ -1474,7 +1474,7 @@ quota_check_common(Oid reloid, RelFileNode *relfilenode)
 
 	if (diskquota_is_paused()) return true;
 
-	if (OidIsValid(reloid)) return check_blackmap_by_reloid(reloid);
+	if (OidIsValid(reloid)) return check_rejectmap_by_reloid(reloid);
 
 	enable_hardlimit = diskquota_hardlimit;
 
@@ -1482,30 +1482,30 @@ quota_check_common(Oid reloid, RelFileNode *relfilenode)
 	if (SIMPLE_FAULT_INJECTOR("enable_check_quota_by_relfilenode") == FaultInjectorTypeSkip) enable_hardlimit = true;
 #endif
 
-	if (relfilenode && enable_hardlimit) return check_blackmap_by_relfilenode(*relfilenode);
+	if (relfilenode && enable_hardlimit) return check_rejectmap_by_relfilenode(*relfilenode);
 
 	return true;
 }
 
 /*
- * invalidate all black entry with a specific dbid in SHM
+ * invalidate all reject entry with a specific dbid in SHM
  */
 void
-invalidate_database_blackmap(Oid dbid)
+invalidate_database_rejectmap(Oid dbid)
 {
-	BlackMapEntry  *entry;
+	RejectMapEntry *entry;
 	HASH_SEQ_STATUS iter;
 
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
-	hash_seq_init(&iter, disk_quota_black_map);
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_EXCLUSIVE);
+	hash_seq_init(&iter, disk_quota_reject_map);
 	while ((entry = hash_seq_search(&iter)) != NULL)
 	{
 		if (entry->databaseoid == dbid || entry->relfilenode.dbNode == dbid)
 		{
-			hash_search(disk_quota_black_map, entry, HASH_REMOVE, NULL);
+			hash_search(disk_quota_reject_map, entry, HASH_REMOVE, NULL);
 		}
 	}
-	LWLockRelease(diskquota_locks.black_map_lock);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 }
 
 static char *
@@ -1545,42 +1545,42 @@ GetUserName(Oid relowner, bool skip_name)
 }
 
 static void
-export_exceeded_error(GlobalBlackMapEntry *entry, bool skip_name)
+export_exceeded_error(GlobalRejectMapEntry *entry, bool skip_name)
 {
-	BlackMapEntry *blackentry = &entry->keyitem;
-	switch (blackentry->targettype)
+	RejectMapEntry *rejectentry = &entry->keyitem;
+	switch (rejectentry->targettype)
 	{
 		case NAMESPACE_QUOTA:
 			ereport(ERROR, (errcode(ERRCODE_DISK_FULL), errmsg("schema's disk space quota exceeded with name: %s",
-			                                                   GetNamespaceName(blackentry->targetoid, skip_name))));
+			                                                   GetNamespaceName(rejectentry->targetoid, skip_name))));
 			break;
 		case ROLE_QUOTA:
 			ereport(ERROR, (errcode(ERRCODE_DISK_FULL), errmsg("role's disk space quota exceeded with name: %s",
-			                                                   GetUserName(blackentry->targetoid, skip_name))));
+			                                                   GetUserName(rejectentry->targetoid, skip_name))));
 			break;
 		case NAMESPACE_TABLESPACE_QUOTA:
 			if (entry->segexceeded)
 				ereport(ERROR, (errcode(ERRCODE_DISK_FULL),
 				                errmsg("tablespace: %s, schema: %s diskquota exceeded per segment quota",
-				                       GetTablespaceName(blackentry->tablespaceoid, skip_name),
-				                       GetNamespaceName(blackentry->targetoid, skip_name))));
+				                       GetTablespaceName(rejectentry->tablespaceoid, skip_name),
+				                       GetNamespaceName(rejectentry->targetoid, skip_name))));
 			else
 				ereport(ERROR,
 				        (errcode(ERRCODE_DISK_FULL), errmsg("tablespace: %s, schema: %s diskquota exceeded",
-				                                            GetTablespaceName(blackentry->tablespaceoid, skip_name),
-				                                            GetNamespaceName(blackentry->targetoid, skip_name))));
+				                                            GetTablespaceName(rejectentry->tablespaceoid, skip_name),
+				                                            GetNamespaceName(rejectentry->targetoid, skip_name))));
 			break;
 		case ROLE_TABLESPACE_QUOTA:
 			if (entry->segexceeded)
 				ereport(ERROR, (errcode(ERRCODE_DISK_FULL),
 				                errmsg("tablespace: %s, role: %s diskquota exceeded per segment quota",
-				                       GetTablespaceName(blackentry->tablespaceoid, skip_name),
-				                       GetUserName(blackentry->targetoid, skip_name))));
+				                       GetTablespaceName(rejectentry->tablespaceoid, skip_name),
+				                       GetUserName(rejectentry->targetoid, skip_name))));
 			else
 				ereport(ERROR,
 				        (errcode(ERRCODE_DISK_FULL), errmsg("tablespace: %s, role: %s diskquota exceeded",
-				                                            GetTablespaceName(blackentry->tablespaceoid, skip_name),
-				                                            GetUserName(blackentry->targetoid, skip_name))));
+				                                            GetTablespaceName(rejectentry->tablespaceoid, skip_name),
+				                                            GetUserName(rejectentry->targetoid, skip_name))));
 			break;
 		default:
 			ereport(ERROR, (errcode(ERRCODE_DISK_FULL), errmsg("diskquota exceeded, unknown quota type")));
@@ -1588,53 +1588,54 @@ export_exceeded_error(GlobalBlackMapEntry *entry, bool skip_name)
 }
 
 /*
- * refresh_blackmap() takes two arguments.
- * The first argument is an array of blackmap entries on QD.
+ * refresh_rejectmap() takes two arguments.
+ * The first argument is an array of rejectmap entries on QD.
  * The second argument is an array of active relations' oid.
  *
  * The basic idea is that, we iterate over the active relations' oid, check that
- * whether the relation's owner/tablespace/namespace is in one of the blackmap
+ * whether the relation's owner/tablespace/namespace is in one of the rejectmap
  * entries dispatched from diskquota worker from QD. If the relation should be
  * blocked, we then add its relfilenode together with the toast, toast index,
- * appendonly, appendonly index relations' relfilenodes to the global blackmap.
+ * appendonly, appendonly index relations' relfilenodes to the global rejectmap.
  * Note that, this UDF is called on segment servers by diskquota worker on QD and
- * the global blackmap on segment servers is indexed by relfilenode.
+ * the global rejectmap on segment servers is indexed by relfilenode.
  */
-PG_FUNCTION_INFO_V1(refresh_blackmap);
+PG_FUNCTION_INFO_V1(refresh_rejectmap);
 Datum
-refresh_blackmap(PG_FUNCTION_ARGS)
+refresh_rejectmap(PG_FUNCTION_ARGS)
 {
-	ArrayType           *blackmap_array_type   = PG_GETARG_ARRAYTYPE_P(0);
-	ArrayType           *active_oid_array_type = PG_GETARG_ARRAYTYPE_P(1);
-	Oid                  blackmap_elem_type    = ARR_ELEMTYPE(blackmap_array_type);
-	Oid                  active_oid_elem_type  = ARR_ELEMTYPE(active_oid_array_type);
-	Datum               *datums;
-	bool                *nulls;
-	int16                elem_width;
-	bool                 elem_type_by_val;
-	char                 elem_alignment_code;
-	int                  count;
-	HeapTupleHeader      lt;
-	bool                 segexceeded;
-	GlobalBlackMapEntry *blackmapentry;
-	HASH_SEQ_STATUS      hash_seq;
-	HTAB                *local_blackmap;
-	HASHCTL              hashctl;
-	int                  ret_code;
+	ArrayType            *rejectmap_array_type  = PG_GETARG_ARRAYTYPE_P(0);
+	ArrayType            *active_oid_array_type = PG_GETARG_ARRAYTYPE_P(1);
+	Oid                   rejectmap_elem_type   = ARR_ELEMTYPE(rejectmap_array_type);
+	Oid                   active_oid_elem_type  = ARR_ELEMTYPE(active_oid_array_type);
+	Datum                *datums;
+	bool                 *nulls;
+	int16                 elem_width;
+	bool                  elem_type_by_val;
+	char                  elem_alignment_code;
+	int                   count;
+	HeapTupleHeader       lt;
+	bool                  segexceeded;
+	GlobalRejectMapEntry *rejectmapentry;
+	HASH_SEQ_STATUS       hash_seq;
+	HTAB                 *local_rejectmap;
+	HASHCTL               hashctl;
+	int                   ret_code;
 
 	if (!superuser())
-		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to update blackmap")));
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to update rejectmap")));
 	if (IS_QUERY_DISPATCHER())
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("\"refresh_blackmap()\" can only be executed on QE.")));
-	if (ARR_NDIM(blackmap_array_type) > 1 || ARR_NDIM(active_oid_array_type) > 1)
+		ereport(ERROR,
+		        (errcode(ERRCODE_INTERNAL_ERROR), errmsg("\"refresh_rejectmap()\" can only be executed on QE.")));
+	if (ARR_NDIM(rejectmap_array_type) > 1 || ARR_NDIM(active_oid_array_type) > 1)
 		ereport(ERROR, (errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR), errmsg("1-dimensional array needed")));
 
-	/* Firstly, clear the blackmap entries. */
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
-	hash_seq_init(&hash_seq, disk_quota_black_map);
-	while ((blackmapentry = hash_seq_search(&hash_seq)) != NULL)
-		hash_search(disk_quota_black_map, &blackmapentry->keyitem, HASH_REMOVE, NULL);
-	LWLockRelease(diskquota_locks.black_map_lock);
+	/* Firstly, clear the rejectmap entries. */
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_EXCLUSIVE);
+	hash_seq_init(&hash_seq, disk_quota_reject_map);
+	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
+		hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_REMOVE, NULL);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 
 	ret_code = SPI_connect();
 	if (ret_code != SPI_OK_CONNECT)
@@ -1642,55 +1643,55 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 		                errmsg("unable to connect to execute internal query, return code: %d", ret_code)));
 
 	/*
-	 * Secondly, iterate over blackmap entries and add these entries to the local black map
+	 * Secondly, iterate over rejectmap entries and add these entries to the local reject map
 	 * on segment servers so that we are able to check whether the given relation (by oid)
-	 * should be blacked in O(1) time complexity in third step.
+	 * should be rejected in O(1) time complexity in third step.
 	 */
 	memset(&hashctl, 0, sizeof(hashctl));
-	hashctl.keysize   = sizeof(BlackMapEntry);
-	hashctl.entrysize = sizeof(GlobalBlackMapEntry);
+	hashctl.keysize   = sizeof(RejectMapEntry);
+	hashctl.entrysize = sizeof(GlobalRejectMapEntry);
 	hashctl.hcxt      = CurrentMemoryContext;
 	hashctl.hash      = tag_hash;
 
 	/*
-	 * Since uncommitted relations' information and the global blackmap entries
+	 * Since uncommitted relations' information and the global rejectmap entries
 	 * are cached in shared memory. The memory regions are guarded by lightweight
-	 * locks. In order not to hold multiple locks at the same time, We add blackmap
-	 * entries into the local_blackmap below and then flush the content of the
-	 * local_blackmap to the global blackmap at the end of this UDF.
+	 * locks. In order not to hold multiple locks at the same time, We add rejectmap
+	 * entries into the local_rejectmap below and then flush the content of the
+	 * local_rejectmap to the global rejectmap at the end of this UDF.
 	 */
-	local_blackmap = hash_create("local_blackmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	get_typlenbyvalalign(blackmap_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
-	deconstruct_array(blackmap_array_type, blackmap_elem_type, elem_width, elem_type_by_val, elem_alignment_code,
+	local_rejectmap = hash_create("local_rejectmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	get_typlenbyvalalign(rejectmap_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
+	deconstruct_array(rejectmap_array_type, rejectmap_elem_type, elem_width, elem_type_by_val, elem_alignment_code,
 	                  &datums, &nulls, &count);
 	for (int i = 0; i < count; ++i)
 	{
-		BlackMapEntry keyitem;
-		bool          isnull;
+		RejectMapEntry keyitem;
+		bool           isnull;
 
 		if (nulls[i]) continue;
 
-		memset(&keyitem, 0, sizeof(BlackMapEntry));
+		memset(&keyitem, 0, sizeof(RejectMapEntry));
 		lt                    = DatumGetHeapTupleHeader(datums[i]);
 		keyitem.targetoid     = DatumGetObjectId(GetAttributeByNum(lt, 1, &isnull));
 		keyitem.databaseoid   = DatumGetObjectId(GetAttributeByNum(lt, 2, &isnull));
 		keyitem.tablespaceoid = DatumGetObjectId(GetAttributeByNum(lt, 3, &isnull));
 		keyitem.targettype    = DatumGetInt32(GetAttributeByNum(lt, 4, &isnull));
-		/* blackmap entries from QD should have the real tablespace oid */
+		/* rejectmap entries from QD should have the real tablespace oid */
 		if ((keyitem.targettype == NAMESPACE_TABLESPACE_QUOTA || keyitem.targettype == ROLE_TABLESPACE_QUOTA))
 		{
 			Assert(OidIsValid(keyitem.tablespaceoid));
 		}
 		segexceeded = DatumGetBool(GetAttributeByNum(lt, 5, &isnull));
 
-		blackmapentry = hash_search(local_blackmap, &keyitem, HASH_ENTER_NULL, NULL);
-		if (blackmapentry) blackmapentry->segexceeded = segexceeded;
+		rejectmapentry = hash_search(local_rejectmap, &keyitem, HASH_ENTER_NULL, NULL);
+		if (rejectmapentry) rejectmapentry->segexceeded = segexceeded;
 	}
 
 	/*
 	 * Thirdly, iterate over the active oid list. Check that if the relation should be blocked.
 	 * If the relation should be blocked, we insert the toast, toast index, appendonly, appendonly
-	 * index relations to the global black map.
+	 * index relations to the global reject map.
 	 */
 	get_typlenbyvalalign(active_oid_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
 	deconstruct_array(active_oid_array_type, active_oid_elem_type, elem_width, elem_type_by_val, elem_alignment_code,
@@ -1707,24 +1708,24 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 		tuple = SearchSysCacheCopy1(RELOID, active_oid);
 		if (HeapTupleIsValid(tuple))
 		{
-			Form_pg_class form          = (Form_pg_class)GETSTRUCT(tuple);
-			Oid           relnamespace  = form->relnamespace;
-			Oid           reltablespace = OidIsValid(form->reltablespace) ? form->reltablespace : MyDatabaseTableSpace;
-			Oid           relowner      = form->relowner;
-			BlackMapEntry keyitem;
-			bool          found;
+			Form_pg_class  form          = (Form_pg_class)GETSTRUCT(tuple);
+			Oid            relnamespace  = form->relnamespace;
+			Oid            reltablespace = OidIsValid(form->reltablespace) ? form->reltablespace : MyDatabaseTableSpace;
+			Oid            relowner      = form->relowner;
+			RejectMapEntry keyitem;
+			bool           found;
 
 			for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 			{
 				/* Check that if the current relation should be blocked. */
-				prepare_blackmap_search_key(&keyitem, type, relowner, relnamespace, reltablespace);
-				blackmapentry = hash_search(local_blackmap, &keyitem, HASH_FIND, &found);
-				if (found && blackmapentry)
+				prepare_rejectmap_search_key(&keyitem, type, relowner, relnamespace, reltablespace);
+				rejectmapentry = hash_search(local_rejectmap, &keyitem, HASH_FIND, &found);
+				if (found && rejectmapentry)
 				{
 					/*
 					 * If the current relation is blocked, we should add the relfilenode
 					 * of itself together with the relfilenodes of its toast relation and
-					 * appendonly relations to the global black map.
+					 * appendonly relations to the global reject map.
 					 */
 					List     *oid_list       = NIL;
 					ListCell *cell           = NULL;
@@ -1759,7 +1760,7 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 						oid_list = list_concat(oid_list, diskquota_get_index_list(aovisimaprelid));
 					}
 
-					/* Iterate over the oid_list and add their relfilenodes to the blackmap. */
+					/* Iterate over the oid_list and add their relfilenodes to the rejectmap. */
 					foreach (cell, oid_list)
 					{
 						Oid       curr_oid   = lfirst_oid(cell);
@@ -1769,22 +1770,22 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 							Form_pg_class curr_form = (Form_pg_class)GETSTRUCT(curr_tuple);
 							Oid curr_reltablespace  = OidIsValid(curr_form->reltablespace) ? curr_form->reltablespace
 							                                                               : MyDatabaseTableSpace;
-							RelFileNode          relfilenode = {.dbNode  = MyDatabaseId,
-							                                    .relNode = curr_form->relfilenode,
-							                                    .spcNode = curr_reltablespace};
-							bool                 found;
-							GlobalBlackMapEntry *blocked_filenode_entry;
-							BlackMapEntry        blocked_filenode_keyitem;
+							RelFileNode           relfilenode = {.dbNode  = MyDatabaseId,
+							                                     .relNode = curr_form->relfilenode,
+							                                     .spcNode = curr_reltablespace};
+							bool                  found;
+							GlobalRejectMapEntry *blocked_filenode_entry;
+							RejectMapEntry        blocked_filenode_keyitem;
 
-							memset(&blocked_filenode_keyitem, 0, sizeof(BlackMapEntry));
+							memset(&blocked_filenode_keyitem, 0, sizeof(RejectMapEntry));
 							memcpy(&blocked_filenode_keyitem.relfilenode, &relfilenode, sizeof(RelFileNode));
 
 							blocked_filenode_entry =
-							        hash_search(local_blackmap, &blocked_filenode_keyitem, HASH_ENTER_NULL, &found);
+							        hash_search(local_rejectmap, &blocked_filenode_keyitem, HASH_ENTER_NULL, &found);
 							if (!found && blocked_filenode_entry)
 							{
-								memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(BlackMapEntry));
-								blocked_filenode_entry->segexceeded = blackmapentry->segexceeded;
+								memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(RejectMapEntry));
+								blocked_filenode_entry->segexceeded = rejectmapentry->segexceeded;
 							}
 						}
 					}
@@ -1808,17 +1809,17 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 			relation_cache_entry = hash_search(relation_cache, &active_oid, HASH_FIND, &found);
 			if (found && relation_cache_entry)
 			{
-				Oid           relnamespace  = relation_cache_entry->namespaceoid;
-				Oid           reltablespace = relation_cache_entry->rnode.node.spcNode;
-				Oid           relowner      = relation_cache_entry->owneroid;
-				BlackMapEntry keyitem;
+				Oid            relnamespace  = relation_cache_entry->namespaceoid;
+				Oid            reltablespace = relation_cache_entry->rnode.node.spcNode;
+				Oid            relowner      = relation_cache_entry->owneroid;
+				RejectMapEntry keyitem;
 				for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 				{
 					/* Check that if the current relation should be blocked. */
-					prepare_blackmap_search_key(&keyitem, type, relowner, relnamespace, reltablespace);
-					blackmapentry = hash_search(local_blackmap, &keyitem, HASH_FIND, &found);
+					prepare_rejectmap_search_key(&keyitem, type, relowner, relnamespace, reltablespace);
+					rejectmapentry = hash_search(local_rejectmap, &keyitem, HASH_FIND, &found);
 
-					if (found && blackmapentry)
+					if (found && rejectmapentry)
 					{
 						List     *oid_list = NIL;
 						ListCell *cell     = NULL;
@@ -1830,24 +1831,24 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 
 						foreach (cell, oid_list)
 						{
-							bool                 found;
-							GlobalBlackMapEntry *blocked_filenode_entry;
-							BlackMapEntry        blocked_filenode_keyitem;
-							Oid                  curr_oid = lfirst_oid(cell);
+							bool                  found;
+							GlobalRejectMapEntry *blocked_filenode_entry;
+							RejectMapEntry        blocked_filenode_keyitem;
+							Oid                   curr_oid = lfirst_oid(cell);
 
 							relation_cache_entry = hash_search(relation_cache, &curr_oid, HASH_FIND, &found);
 							if (found && relation_cache_entry)
 							{
-								memset(&blocked_filenode_keyitem, 0, sizeof(BlackMapEntry));
+								memset(&blocked_filenode_keyitem, 0, sizeof(RejectMapEntry));
 								memcpy(&blocked_filenode_keyitem.relfilenode, &relation_cache_entry->rnode.node,
 								       sizeof(RelFileNode));
 
-								blocked_filenode_entry =
-								        hash_search(local_blackmap, &blocked_filenode_keyitem, HASH_ENTER_NULL, &found);
+								blocked_filenode_entry = hash_search(local_rejectmap, &blocked_filenode_keyitem,
+								                                     HASH_ENTER_NULL, &found);
 								if (!found && blocked_filenode_entry)
 								{
-									memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(BlackMapEntry));
-									blocked_filenode_entry->segexceeded = blackmapentry->segexceeded;
+									memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(RejectMapEntry));
+									blocked_filenode_entry->segexceeded = rejectmapentry->segexceeded;
 								}
 							}
 						}
@@ -1858,44 +1859,44 @@ refresh_blackmap(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/* Flush the content of local_blackmap to the global blackmap. */
-	LWLockAcquire(diskquota_locks.black_map_lock, LW_EXCLUSIVE);
-	hash_seq_init(&hash_seq, local_blackmap);
-	while ((blackmapentry = hash_seq_search(&hash_seq)) != NULL)
+	/* Flush the content of local_rejectmap to the global rejectmap. */
+	LWLockAcquire(diskquota_locks.reject_map_lock, LW_EXCLUSIVE);
+	hash_seq_init(&hash_seq, local_rejectmap);
+	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
 	{
-		bool                 found;
-		GlobalBlackMapEntry *new_entry;
-		new_entry = hash_search(disk_quota_black_map, &blackmapentry->keyitem, HASH_ENTER_NULL, &found);
+		bool                  found;
+		GlobalRejectMapEntry *new_entry;
+		new_entry = hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_ENTER_NULL, &found);
 		/*
 		 * We don't perform soft-limit on segment servers, so we don't flush the
-		 * blackmap entry with a valid targetoid to the global blackmap on segment
+		 * rejectmap entry with a valid targetoid to the global rejectmap on segment
 		 * servers.
 		 */
-		if (!found && new_entry && !OidIsValid(blackmapentry->keyitem.targetoid))
-			memcpy(new_entry, blackmapentry, sizeof(GlobalBlackMapEntry));
+		if (!found && new_entry && !OidIsValid(rejectmapentry->keyitem.targetoid))
+			memcpy(new_entry, rejectmapentry, sizeof(GlobalRejectMapEntry));
 	}
-	LWLockRelease(diskquota_locks.black_map_lock);
+	LWLockRelease(diskquota_locks.reject_map_lock);
 
 	SPI_finish();
 	PG_RETURN_VOID();
 }
 
 /*
- * show_blackmap() provides developers or users to dump the blackmap in shared
- * memory on a single server. If you want to query blackmap on segment servers,
+ * show_rejectmap() provides developers or users to dump the rejectmap in shared
+ * memory on a single server. If you want to query rejectmap on segment servers,
  * you should dispatch this query to segments.
  */
-PG_FUNCTION_INFO_V1(show_blackmap);
+PG_FUNCTION_INFO_V1(show_rejectmap);
 Datum
-show_blackmap(PG_FUNCTION_ARGS)
+show_rejectmap(PG_FUNCTION_ARGS)
 {
-	FuncCallContext     *funcctx;
-	GlobalBlackMapEntry *blackmap_entry;
-	struct BlackMapCtx
+	FuncCallContext      *funcctx;
+	GlobalRejectMapEntry *rejectmap_entry;
+	struct RejectMapCtx
 	{
-		HASH_SEQ_STATUS blackmap_seq;
-		HTAB           *blackmap;
-	} * blackmap_ctx;
+		HASH_SEQ_STATUS rejectmap_seq;
+		HTAB           *rejectmap;
+	} * rejectmap_ctx;
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -1925,59 +1926,60 @@ show_blackmap(PG_FUNCTION_ARGS)
 
 		/* Create a local hash table and fill it with entries from shared memory. */
 		memset(&hashctl, 0, sizeof(hashctl));
-		hashctl.keysize   = sizeof(BlackMapEntry);
-		hashctl.entrysize = sizeof(GlobalBlackMapEntry);
+		hashctl.keysize   = sizeof(RejectMapEntry);
+		hashctl.entrysize = sizeof(GlobalRejectMapEntry);
 		hashctl.hcxt      = CurrentMemoryContext;
 		hashctl.hash      = tag_hash;
 
-		blackmap_ctx = (struct BlackMapCtx *)palloc(sizeof(struct BlackMapCtx));
-		blackmap_ctx->blackmap =
-		        hash_create("blackmap_ctx blackmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+		rejectmap_ctx = (struct RejectMapCtx *)palloc(sizeof(struct RejectMapCtx));
+		rejectmap_ctx->rejectmap =
+		        hash_create("rejectmap_ctx rejectmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
-		LWLockAcquire(diskquota_locks.black_map_lock, LW_SHARED);
-		hash_seq_init(&hash_seq, disk_quota_black_map);
-		while ((blackmap_entry = hash_seq_search(&hash_seq)) != NULL)
+		LWLockAcquire(diskquota_locks.reject_map_lock, LW_SHARED);
+		hash_seq_init(&hash_seq, disk_quota_reject_map);
+		while ((rejectmap_entry = hash_seq_search(&hash_seq)) != NULL)
 		{
-			GlobalBlackMapEntry *local_blackmap_entry = NULL;
-			local_blackmap_entry = hash_search(blackmap_ctx->blackmap, &blackmap_entry->keyitem, HASH_ENTER_NULL, NULL);
-			if (local_blackmap_entry)
+			GlobalRejectMapEntry *local_rejectmap_entry = NULL;
+			local_rejectmap_entry =
+			        hash_search(rejectmap_ctx->rejectmap, &rejectmap_entry->keyitem, HASH_ENTER_NULL, NULL);
+			if (local_rejectmap_entry)
 			{
-				memcpy(&local_blackmap_entry->keyitem, &blackmap_entry->keyitem, sizeof(BlackMapEntry));
-				local_blackmap_entry->segexceeded = blackmap_entry->segexceeded;
-				memcpy(&local_blackmap_entry->auxblockinfo, &blackmap_entry->auxblockinfo, sizeof(BlackMapEntry));
+				memcpy(&local_rejectmap_entry->keyitem, &rejectmap_entry->keyitem, sizeof(RejectMapEntry));
+				local_rejectmap_entry->segexceeded = rejectmap_entry->segexceeded;
+				memcpy(&local_rejectmap_entry->auxblockinfo, &rejectmap_entry->auxblockinfo, sizeof(RejectMapEntry));
 			}
 		}
-		LWLockRelease(diskquota_locks.black_map_lock);
+		LWLockRelease(diskquota_locks.reject_map_lock);
 
 		/* Setup first calling context. */
-		hash_seq_init(&(blackmap_ctx->blackmap_seq), blackmap_ctx->blackmap);
-		funcctx->user_fctx = (void *)blackmap_ctx;
+		hash_seq_init(&(rejectmap_ctx->rejectmap_seq), rejectmap_ctx->rejectmap);
+		funcctx->user_fctx = (void *)rejectmap_ctx;
 		MemoryContextSwitchTo(oldcontext);
 	}
 
-	funcctx      = SRF_PERCALL_SETUP();
-	blackmap_ctx = (struct BlackMapCtx *)funcctx->user_fctx;
+	funcctx       = SRF_PERCALL_SETUP();
+	rejectmap_ctx = (struct RejectMapCtx *)funcctx->user_fctx;
 
-	while ((blackmap_entry = hash_seq_search(&(blackmap_ctx->blackmap_seq))) != NULL)
+	while ((rejectmap_entry = hash_seq_search(&(rejectmap_ctx->rejectmap_seq))) != NULL)
 	{
 #define _TARGETTYPE_STR_SIZE 32
-		Datum         result;
-		Datum         values[9];
-		bool          nulls[9];
-		HeapTuple     tuple;
-		BlackMapEntry keyitem;
-		char          targettype_str[_TARGETTYPE_STR_SIZE];
-		RelFileNode   blocked_relfilenode;
+		Datum          result;
+		Datum          values[9];
+		bool           nulls[9];
+		HeapTuple      tuple;
+		RejectMapEntry keyitem;
+		char           targettype_str[_TARGETTYPE_STR_SIZE];
+		RelFileNode    blocked_relfilenode;
 
-		memcpy(&blocked_relfilenode, &blackmap_entry->keyitem.relfilenode, sizeof(RelFileNode));
+		memcpy(&blocked_relfilenode, &rejectmap_entry->keyitem.relfilenode, sizeof(RelFileNode));
 		/*
-		 * If the blackmap entry is indexed by relfilenode, we dump the blocking
+		 * If the rejectmap entry is indexed by relfilenode, we dump the blocking
 		 * condition from auxblockinfo.
 		 */
 		if (!OidIsValid(blocked_relfilenode.relNode))
-			memcpy(&keyitem, &blackmap_entry->keyitem, sizeof(keyitem));
+			memcpy(&keyitem, &rejectmap_entry->keyitem, sizeof(keyitem));
 		else
-			memcpy(&keyitem, &blackmap_entry->auxblockinfo, sizeof(keyitem));
+			memcpy(&keyitem, &rejectmap_entry->auxblockinfo, sizeof(keyitem));
 		memset(targettype_str, 0, sizeof(targettype_str));
 
 		switch ((QuotaType)keyitem.targettype)
@@ -2003,7 +2005,7 @@ show_blackmap(PG_FUNCTION_ARGS)
 		values[1] = ObjectIdGetDatum(keyitem.targetoid);
 		values[2] = ObjectIdGetDatum(keyitem.databaseoid);
 		values[3] = ObjectIdGetDatum(keyitem.tablespaceoid);
-		values[4] = BoolGetDatum(blackmap_entry->segexceeded);
+		values[4] = BoolGetDatum(rejectmap_entry->segexceeded);
 		values[5] = ObjectIdGetDatum(blocked_relfilenode.dbNode);
 		values[6] = ObjectIdGetDatum(blocked_relfilenode.spcNode);
 		values[7] = ObjectIdGetDatum(blocked_relfilenode.relNode);

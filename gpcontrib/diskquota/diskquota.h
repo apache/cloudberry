@@ -68,7 +68,7 @@ typedef enum
 struct DiskQuotaLocks
 {
 	LWLock *active_table_lock;
-	LWLock *black_map_lock;
+	LWLock *reject_map_lock;
 	LWLock *extension_ddl_message_lock;
 	LWLock *extension_ddl_lock; /* ensure create diskquota extension serially */
 	LWLock *monitoring_dbid_cache_lock;
@@ -151,7 +151,7 @@ extern void register_diskquota_object_access_hook(void);
 
 /* enforcement interface*/
 extern void init_disk_quota_enforcement(void);
-extern void invalidate_database_blackmap(Oid dbid);
+extern void invalidate_database_rejectmap(Oid dbid);
 
 /* quota model interface*/
 extern void init_disk_quota_shmem(void);
