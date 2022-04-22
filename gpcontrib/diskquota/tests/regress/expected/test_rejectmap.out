@@ -1,10 +1,8 @@
 --
--- This file contains tests for dispatching and quering blackmap.
+-- This file contains tests for dispatching and quering rejectmap.
 --
-
-CREATE SCHEMA s_blackmap;
-SET search_path TO s_blackmap;
-
+CREATE SCHEMA s_rejectmap;
+SET search_path TO s_rejectmap;
 -- This function replaces the oid appears in the auxiliary relation's name
 -- with the corresponding relname of that oid.
 CREATE OR REPLACE FUNCTION replace_oid_with_relname(given_name text)
@@ -18,7 +16,6 @@ CREATE OR REPLACE FUNCTION replace_oid_with_relname(given_name text)
           WHERE oid=REGEXP_REPLACE(given_name, '\D', '', 'g')::oid), 'g'), given_name);
   END;
 $$ LANGUAGE plpgsql;
-
 -- this function return valid tablespaceoid.
 -- For role/namespace quota, return as it is.
 -- For namespace_tablespace/role_tablespace quota, return non-zero tablespaceoid.
@@ -38,7 +35,6 @@ BEGIN
 		END CASE;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION block_relation_on_seg0(rel regclass, block_type text)
   RETURNS void AS $$
   DECLARE
@@ -65,77 +61,110 @@ CREATE OR REPLACE FUNCTION block_relation_on_seg0(rel regclass, block_type text)
         SELECT relowner INTO targetoid
           FROM pg_class WHERE relname=rel::text;
 	END CASE;
-    PERFORM diskquota.refresh_blackmap(
+    PERFORM diskquota.refresh_rejectmap(
     ARRAY[
       ROW(targetoid,
           (SELECT oid FROM pg_database WHERE datname=current_database()),
           (SELECT get_real_tablespace_oid(block_type, tablespaceoid)),
           bt,
           false)
-      ]::diskquota.blackmap_entry[],
+      ]::diskquota.rejectmap_entry[],
     ARRAY[rel]::oid[])
   FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
   END; $$
 LANGUAGE 'plpgsql';
-
 --
--- 1. Create an ordinary table and add its oid to blackmap on seg0.
+-- 1. Create an ordinary table and add its oid to rejectmap on seg0.
 --    Check that it's relfilenode is blocked on seg0 by various conditions.
 --
 CREATE TABLE blocked_t1(i int) DISTRIBUTED BY (i);
-
--- Insert an entry for blocked_t1 to blackmap on seg0.
+-- Insert an entry for blocked_t1 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'NAMESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenode of blocked_t1 is blocked on seg0 by its namespace.
 SELECT rel.relname, be.target_type, (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
+  relname   |   target_type   | namespace_matched 
+------------+-----------------+-------------------
+ blocked_t1 | NAMESPACE_QUOTA | t
+(1 row)
 
--- Insert an entry for blocked_t1 to blackmap on seg0.
+-- Insert an entry for blocked_t1 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'ROLE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenode of blocked_t1 is blocked on seg0 by its owner.
 SELECT rel.relname, be.target_type, (be.target_oid=rel.relowner) AS owner_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
+  relname   | target_type | owner_matched 
+------------+-------------+---------------
+ blocked_t1 | ROLE_QUOTA  | t
+(1 row)
 
 -- Create a tablespace to test the rest of blocking types.
 \! mkdir -p /tmp/blocked_space
 CREATE TABLESPACE blocked_space LOCATION '/tmp/blocked_space';
 ALTER TABLE blocked_t1 SET TABLESPACE blocked_space;
-
--- Insert an entry for blocked_t1 to blackmap on seg0.
+-- Insert an entry for blocked_t1 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'NAMESPACE_TABLESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenode of blocked_t1 is blocked on seg0 by its namespace and tablespace.
 SELECT rel.relname, be.target_type,
                     (be.target_oid=rel.relnamespace) AS namespace_matched,
                     (be.tablespace_oid=rel.reltablespace) AS tablespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
+  relname   |        target_type         | namespace_matched | tablespace_matched 
+------------+----------------------------+-------------------+--------------------
+ blocked_t1 | NAMESPACE_TABLESPACE_QUOTA | t                 | t
+(1 row)
 
--- Insert an entry for blocked_t1 to blackmap on seg0.
+-- Insert an entry for blocked_t1 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'ROLE_TABLESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenode of blocked_t1 is blocked on seg0 by its owner and tablespace.
 SELECT rel.relname, be.target_type,
                     (be.target_oid=rel.relowner) AS owner_matched,
                     (be.tablespace_oid=rel.reltablespace) AS tablespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid;
+  relname   |      target_type      | owner_matched | tablespace_matched 
+------------+-----------------------+---------------+--------------------
+ blocked_t1 | ROLE_TABLESPACE_QUOTA | t             | t
+(1 row)
 
 --
 -- 2. Test that the relfilenodes of toast relation together with its
 --    index are blocked on seg0.
 --
 CREATE TABLE blocked_t2(i text) DISTRIBUTED BY (i);
--- Insert an entry for blocked_t2 to blackmap on seg0.
+-- Insert an entry for blocked_t2 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t2'::regclass, 'NAMESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenodes of blocked_t2 together with its toast relation and toast
 -- index relation are blocked on seg0 by its namespace.
@@ -143,9 +172,15 @@ SELECT replace_oid_with_relname(rel.relname),
        rel.relkind, be.target_type,
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
+ replace_oid_with_relname  | relkind |   target_type   | namespace_matched 
+---------------------------+---------+-----------------+-------------------
+ pg_toast_blocked_t2_index | i       | NAMESPACE_QUOTA | f
+ pg_toast_blocked_t2       | t       | NAMESPACE_QUOTA | f
+ blocked_t2                | r       | NAMESPACE_QUOTA | t
+(3 rows)
 
 --
 -- 3. Test that the relfilenodes of appendonly relation (row oriented) together with its
@@ -153,8 +188,12 @@ SELECT replace_oid_with_relname(rel.relname),
 --
 CREATE TABLE blocked_t3(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t3_index ON blocked_t3(i);
--- Insert an entry for blocked_t3 to blackmap on seg0.
+-- Insert an entry for blocked_t3 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t3'::regclass, 'NAMESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenodes of blocked_t3 together with its appendonly relation and appendonly
 -- index relations are blocked on seg0 by its namespace.
@@ -162,9 +201,18 @@ SELECT replace_oid_with_relname(rel.relname),
        rel.relkind, be.target_type,
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
+   replace_oid_with_relname    | relkind |   target_type   | namespace_matched 
+-------------------------------+---------+-----------------+-------------------
+ pg_aovisimap_blocked_t3_index | i       | NAMESPACE_QUOTA | f
+ pg_aovisimap_blocked_t3       | M       | NAMESPACE_QUOTA | f
+ pg_aoseg_blocked_t3           | o       | NAMESPACE_QUOTA | f
+ pg_aoblkdir_blocked_t3_index  | i       | NAMESPACE_QUOTA | f
+ pg_aoblkdir_blocked_t3        | b       | NAMESPACE_QUOTA | f
+ blocked_t3                    | r       | NAMESPACE_QUOTA | t
+(6 rows)
 
 --
 -- 4. Test that the relfilenodes of appendonly relation (column oriented) together with its
@@ -172,8 +220,12 @@ SELECT replace_oid_with_relname(rel.relname),
 --
 CREATE TABLE blocked_t4(i int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t4_index ON blocked_t4(i);
--- Insert an entry for blocked_t4 to blackmap on seg0.
+-- Insert an entry for blocked_t4 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t4'::regclass, 'NAMESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenodes of blocked_t4 together with its appendonly relation and appendonly
 -- index relation are blocked on seg0 by its namespace.
@@ -181,9 +233,18 @@ SELECT replace_oid_with_relname(rel.relname),
        rel.relkind, be.target_type,
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
+   replace_oid_with_relname    | relkind |   target_type   | namespace_matched 
+-------------------------------+---------+-----------------+-------------------
+ pg_aovisimap_blocked_t4_index | i       | NAMESPACE_QUOTA | f
+ pg_aovisimap_blocked_t4       | M       | NAMESPACE_QUOTA | f
+ pg_aocsseg_blocked_t4         | o       | NAMESPACE_QUOTA | f
+ pg_aoblkdir_blocked_t4_index  | i       | NAMESPACE_QUOTA | f
+ pg_aoblkdir_blocked_t4        | b       | NAMESPACE_QUOTA | f
+ blocked_t4                    | r       | NAMESPACE_QUOTA | t
+(6 rows)
 
 --
 -- 5. Test that the relfilenodes of toast appendonly relation (row oriented) together with its
@@ -191,8 +252,12 @@ SELECT replace_oid_with_relname(rel.relname),
 --
 CREATE TABLE blocked_t5(i text) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
 CREATE INDEX blocked_t5_index ON blocked_t5(i);
--- Insert an entry for blocked_t5 to blackmap on seg0.
+-- Insert an entry for blocked_t5 to rejectmap on seg0.
 SELECT block_relation_on_seg0('blocked_t5'::regclass, 'NAMESPACE'::text);
+ block_relation_on_seg0 
+------------------------
+ 
+(1 row)
 
 -- Shows that the relfilenodes of blocked_t5 together with its toast relation, toast
 -- index relation and appendonly relations are blocked on seg0 by its namespace.
@@ -200,9 +265,20 @@ SELECT replace_oid_with_relname(rel.relname),
        rel.relkind, be.target_type,
        (be.target_oid=rel.relnamespace) AS namespace_matched
   FROM gp_dist_random('pg_class') AS rel,
-       gp_dist_random('diskquota.blackmap') AS be
+       gp_dist_random('diskquota.rejectmap') AS be
   WHERE rel.relfilenode=be.relnode AND be.relnode<>0 AND rel.gp_segment_id=be.segid
   ORDER BY rel.relname DESC;
+   replace_oid_with_relname    | relkind |   target_type   | namespace_matched 
+-------------------------------+---------+-----------------+-------------------
+ pg_toast_blocked_t5_index     | i       | NAMESPACE_QUOTA | f
+ pg_toast_blocked_t5           | t       | NAMESPACE_QUOTA | f
+ pg_aovisimap_blocked_t5_index | i       | NAMESPACE_QUOTA | f
+ pg_aovisimap_blocked_t5       | M       | NAMESPACE_QUOTA | f
+ pg_aocsseg_blocked_t5         | o       | NAMESPACE_QUOTA | f
+ pg_aoblkdir_blocked_t5_index  | i       | NAMESPACE_QUOTA | f
+ pg_aoblkdir_blocked_t5        | b       | NAMESPACE_QUOTA | f
+ blocked_t5                    | r       | NAMESPACE_QUOTA | t
+(8 rows)
 
 -- Do some clean-ups.
 DROP FUNCTION replace_oid_with_relname(text);
@@ -215,4 +291,4 @@ DROP TABLE blocked_t4;
 DROP TABLE blocked_t5;
 DROP TABLESPACE blocked_space;
 SET search_path TO DEFAULT;
-DROP SCHEMA s_blackmap;
+DROP SCHEMA s_rejectmap;
