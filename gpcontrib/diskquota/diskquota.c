@@ -114,7 +114,7 @@ static void terminate_all_workers(void);
 static void on_add_db(Oid dbid, MessageResult *code);
 static void on_del_db(Oid dbid, MessageResult *code);
 static bool is_valid_dbid(Oid dbid);
-extern void invalidate_database_blackmap(Oid dbid);
+extern void invalidate_database_rejectmap(Oid dbid);
 
 /*
  * Entrypoint of diskquota module.
@@ -376,8 +376,8 @@ disk_quota_worker_main(Datum main_arg)
 	if (got_sigterm)
 	{
 		ereport(LOG, (errmsg("[diskquota] bgworker for \"%s\" is being terminated by SIGTERM.", dbname)));
-		/* clear the out-of-quota blacklist in shared memory */
-		invalidate_database_blackmap(MyDatabaseId);
+		/* clear the out-of-quota rejectmap in shared memory */
+		invalidate_database_rejectmap(MyDatabaseId);
 		proc_exit(0);
 	}
 
@@ -431,8 +431,8 @@ disk_quota_worker_main(Datum main_arg)
 	}
 
 	ereport(LOG, (errmsg("[diskquota] bgworker for \"%s\" is being terminated by SIGTERM.", dbname)));
-	/* clear the out-of-quota blacklist in shared memory */
-	invalidate_database_blackmap(MyDatabaseId);
+	/* clear the out-of-quota rejectmap in shared memory */
+	invalidate_database_rejectmap(MyDatabaseId);
 	proc_exit(0);
 }
 
@@ -853,7 +853,7 @@ on_add_db(Oid dbid, MessageResult *code)
  * do:
  * 1. kill the associated worker process
  * 2. delete dbid from diskquota_namespace.database_list
- * 3. invalidate black-map entries and monitoring_dbid_cache from shared memory
+ * 3. invalidate reject-map entries and monitoring_dbid_cache from shared memory
  */
 static void
 on_del_db(Oid dbid, MessageResult *code)

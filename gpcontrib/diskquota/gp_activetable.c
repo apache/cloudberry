@@ -177,7 +177,7 @@ object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId,
 	{
 		if (get_extension_oid("diskquota", true) == objectId)
 		{
-			invalidate_database_blackmap(MyDatabaseId);
+			invalidate_database_rejectmap(MyDatabaseId);
 		}
 	}
 
@@ -787,7 +787,7 @@ get_active_tables_oid(void)
 
 /*
  * Load table size info from diskquota.table_size table.
- * This is called when system startup, disk quota black list
+ * This is called when system startup, disk quota rejectmap
  * and other shared memory will be warmed up by table_size table.
  */
 static void
