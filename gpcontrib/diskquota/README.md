@@ -42,8 +42,8 @@ database, and do quota enforcement. It will periodically (can be set via
 diskquota.naptime) recalculate the table size of active tables, and update 
 their corresponding schema or owner's disk usage. Then compare with quota 
 limit for those schemas or roles. If exceeds the limit, put the corresponding 
-schemas or roles into the blacklist in shared memory. Schemas or roles in 
-blacklist are used to do query enforcement to cancel queries which plan to 
+schemas or roles into the rejectmap in shared memory. Schemas or roles in 
+rejectmap are used to do query enforcement to cancel queries which plan to 
 load data into these schemas or roles.
 
 From MPP perspective, diskquota launcher and worker processes are all run at
@@ -304,7 +304,7 @@ show_fast_schema_quota_view and show_fast_role_quota_view.
 3. Out of shared memory
 
 Diskquota extension uses two kinds of shared memories. One is used to save 
-black list and another one is to save active table list. The black list shared
+rejectmap and another one is to save active table list. The rejectmap shared
 memory can support up to 1 MiB database objects which exceed quota limit.
 The active table list shared memory can support up to 1 MiB active tables in 
 default, and user could reset it in GUC diskquota_max_active_tables.
@@ -312,7 +312,7 @@ default, and user could reset it in GUC diskquota_max_active_tables.
 As shared memory is pre-allocated, user needs to restart DB if they updated 
 this GUC value.
 
-If black list shared memory is full, it's possible to load data into some 
+If rejectmap shared memory is full, it's possible to load data into some 
 schemas or roles which quota limit are reached.
 If active table shared memory is full, disk quota worker may failed to detect
 the corresponding disk usage change in time.
