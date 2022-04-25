@@ -102,6 +102,18 @@ SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO b SELECT generate_series(1,100);
 -- expect insert succeed
 INSERT INTO b2 SELECT generate_series(1,100);
+-- superuser is blocked to set quota
+--start_ignore
+SELECT rolname from pg_roles where rolsuper=true;
+ rolname 
+---------
+ xx
+(1 row)
+
+--end_ignore
+\gset
+select diskquota.set_role_quota(:'rolname', '1mb');
+ERROR:  Can not set disk quota for system owner: xx
 DROP TABLE b, b2;
 DROP ROLE u1, u2;
 RESET search_path;
