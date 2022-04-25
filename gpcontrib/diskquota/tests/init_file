@@ -32,4 +32,7 @@ s/ERROR:  tablespace: \d+, role: \d+ diskquota exceeded.*/[hardlimit] tablespace
 
 m/ERROR:  tablespace: \d+, schema: \d+ diskquota exceeded.*/
 s/ERROR:  tablespace: \d+, schema: \d+ diskquota exceeded.*/[hardlimit] tablespace-schema's disk space quota exceeded/
+
+m/^ERROR:  Can not set disk quota for system owner:.*/
+s/^ERROR:  Can not set disk quota for system owner:.*/ERROR:  Can not set disk quota from system owner:/
 -- end_matchsubs
