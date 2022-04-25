@@ -77,6 +77,13 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- expect insert success
 INSERT INTO b SELECT generate_series(1,100);
 
+-- superuser is blocked to set quota
+-- start_ignore
+SELECT rolname from pg_roles where rolsuper=true;
+-- end_ignore
+\gset
+select diskquota.set_role_tablespace_quota(:'rolname', 'rolespc', '1mb');
+
 DROP TABLE b, b2;
 DROP ROLE rolespcu1, rolespcu2;
 RESET search_path;
