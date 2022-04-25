@@ -24,6 +24,7 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
@@ -95,6 +96,7 @@ static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, Quota
 static int  set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static float4 get_per_segment_ratio(Oid spcoid);
 static bool   to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio);
+static void   check_role(Oid roleoid, char *rolname);
 
 List *get_rel_oid_list(void);
 
@@ -707,6 +709,7 @@ set_role_quota(PG_FUNCTION_ARGS)
 	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	rolname = str_tolower(rolname, strlen(rolname), DEFAULT_COLLATION_OID);
 	roleoid = get_role_oid(rolname, false);
+	check_role(roleoid, rolname);
 
 	sizestr        = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	sizestr        = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
@@ -782,6 +785,7 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	rolname = str_tolower(rolname, strlen(rolname), DEFAULT_COLLATION_OID);
 	roleoid = get_role_oid(rolname, false);
+	check_role(roleoid, rolname);
 
 	spcname = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	spcname = str_tolower(spcname, strlen(spcname), DEFAULT_COLLATION_OID);
@@ -1684,4 +1688,12 @@ to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio)
 	else if (segratio < 0 && type == TABLESPACE_QUOTA)
 		return true;
 	return false;
+}
+
+static void
+check_role(Oid roleoid, char *rolname)
+{
+	if (roleoid == BOOTSTRAP_SUPERUSERID)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+		                errmsg("Can not set disk quota for system owner: %s", rolname)));
 }
