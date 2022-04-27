@@ -781,6 +781,8 @@ static inline void logPkt(char *prefix, icpkthdr *pkt);
 static void aggregateStatistics(ChunkTransportStateEntry *pChunkEntry);
 
 static inline bool pollAcks(ChunkTransportState *transportStates, int fd, int timeout);
+
+static ssize_t sendtoWithRetry(int socket, const void *message, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len, int retry, const char *errDetail);
 static TupleChunkListItem receiveChunksUDPIFCLoop(ChunkTransportState *pTransportStates, ChunkTransportStateEntry *pEntry,
 						int16 *srcRoute, MotionConn *conn, WaitEventSet *waitset, int nevent);
 
@@ -1814,9 +1816,6 @@ destroyConnHashTable(ConnHashTable *ht)
 /*
  * sendControlMessage
  * 		Helper function to send a control message.
- *
- * It is different from sendOnce which retries on interrupts...
- * Here, we leave it to retransmit logic to handle these cases.
  */
 static inline void
 sendControlMessage(icpkthdr *pkt, int fd, struct sockaddr *addr, socklen_t peerLen)
@@ -1837,13 +1836,10 @@ sendControlMessage(icpkthdr *pkt, int fd, struct sockaddr *addr, socklen_t peerL
 	if (gp_interconnect_full_crc)
 		addCRC(pkt);
 
-	n = sendto(fd, (const char *) pkt, pkt->len, 0, addr, peerLen);
-
-	/*
-	 * No need to handle EAGAIN here: no-space just means that we dropped the
-	 * packet: our ordinary retransmit mechanism will handle that case
-	 */
-
+	char errDetail[100];
+	snprintf(errDetail, sizeof(errDetail), "Send control message: got error with seq %u", pkt->seq);
+	/* Retry for infinite times since we have no retransmit mechanism for control message */
+	n = sendtoWithRetry(fd, (const char *) pkt, pkt->len, 0, addr, peerLen, -1, errDetail);
 	if (n < pkt->len)
 		write_log("sendcontrolmessage: got error %d errno %d seq %d", n, errno, pkt->seq);
 }
@@ -4831,13 +4827,74 @@ prepareXmit(MotionConn *mConn)
 }
 
 /*
+ * sendtoWithRetry
+ * 		Retry sendto logic and send the packets.
+ */
+static ssize_t
+sendtoWithRetry(int socket, const void *message, size_t length,
+           int flags, const struct sockaddr *dest_addr,
+           socklen_t dest_len, int retry, const char *errDetail)
+{
+	int32		n;
+	int count = 0;
+
+xmit_retry:
+	/*
+	 * If given retry count is positive, retry up to the limited times.
+	 * Otherwise, retry for unlimited times until succeed.
+	 */
+	if (retry > 0 && ++count > retry)
+		return n;
+	n = sendto(socket, message, length, flags, dest_addr, dest_len);
+	if (n < 0)
+	{
+		int			save_errno = errno;
+
+		if (errno == EINTR)
+			goto xmit_retry;
+
+		/*
+		 * EAGAIN: no space ? not an error.
+		 *
+		 * EFAULT: In Linux system call, it only happens when copying a socket
+		 * address into kernel space failed, which is less likely to happen,
+		 * but mocked heavily by our fault injection in regression tests.
+		 */
+		if (errno == EAGAIN || errno == EFAULT)
+			return n;
+
+		/*
+		 * If Linux iptables (nf_conntrack?) drops an outgoing packet, it may
+		 * return an EPERM to the application. This might be simply because of
+		 * traffic shaping or congestion, so ignore it.
+		 */
+		if (errno == EPERM)
+		{
+			ereport(LOG,
+					(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+					 errmsg("Interconnect error writing an outgoing packet: %m"),
+					 errdetail("error during sendto() %s", errDetail)));
+			return n;
+		}
+
+		ereport(ERROR, (errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+						errmsg("Interconnect error writing an outgoing packet: %m"),
+						errdetail("error during sendto() call (error:%d).\n"
+								  "%s", save_errno, errDetail)));
+		/* not reached */
+	}
+
+	return n;
+}
+
+/*
  * sendOnce
  * 		Send a packet.
  */
 static void
 sendOnce(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkEntry, ICBuffer *buf, MotionConn *mConn)
 {
-	int32		n;
+	int32 n;
 	ChunkTransportStateEntryUDP *pEntry = NULL;
 	MotionConnUDP *conn = NULL;
 
@@ -4856,43 +4913,12 @@ sendOnce(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkE
 	}
 #endif
 
-xmit_retry:
-	n = sendto(pEntry->txfd, buf->pkt, buf->pkt->len, 0,
-			   (struct sockaddr *) &conn->peer, conn->peer_len);
-	if (n < 0)
-	{
-		int			save_errno = errno;
-
-		if (errno == EINTR)
-			goto xmit_retry;
-
-		if (errno == EAGAIN)	/* no space ? not an error. */
-			return;
-
-		/*
-		 * If Linux iptables (nf_conntrack?) drops an outgoing packet, it may
-		 * return an EPERM to the application. This might be simply because of
-		 * traffic shaping or congestion, so ignore it.
-		 */
-		if (errno == EPERM)
-		{
-			ereport(LOG,
-					(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
-					 errmsg("Interconnect error writing an outgoing packet: %m"),
-					 errdetail("error during sendto() for Remote Connection: contentId=%d at %s",
-							   conn->mConn.remoteContentId, conn->mConn.remoteHostAndPort)));
-			return;
-		}
-
-		ereport(ERROR, (errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
-						errmsg("Interconnect error writing an outgoing packet: %m"),
-						errdetail("error during sendto() call (error:%d).\n"
-								  "For Remote Connection: contentId=%d at %s",
-								  save_errno, conn->mConn.remoteContentId,
-								  conn->mConn.remoteHostAndPort)));
-		/* not reached */
-	}
-
+	char errDetail[100];
+	snprintf(errDetail, sizeof(errDetail), "For Remote Connection: contentId=%d at %s",
+					  conn->mConn.remoteContentId,
+					  conn->mConn.remoteHostAndPort);
+	n = sendtoWithRetry(pEntry->txfd, buf->pkt, buf->pkt->len, 0,
+                          (struct sockaddr *) &conn->peer, conn->peer_len, -1, errDetail);
 	if (n != buf->pkt->len)
 	{
 		if (DEBUG1 >= log_min_messages)
@@ -4904,7 +4930,6 @@ xmit_retry:
 		logPkt("PKT DETAILS ", buf->pkt);
 #endif
 	}
-
 	return;
 }
 
@@ -5384,7 +5409,7 @@ checkNetworkTimeout(ICBuffer *buf, uint64 now, bool *networkTimeoutIsLogged)
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 				 errmsg("interconnect encountered a network error, please check your network"),
-				 errdetail("Failed to send packet (seq %d) to %s (pid %d cid %d) after %d retries in %d seconds.",
+				 errdetail("Failed to send packet (seq %u) to %s (pid %d cid %d) after %u retries in %d seconds.",
 						   buf->pkt->seq, buf->conn->remoteHostAndPort,
 						   buf->pkt->dstPid, buf->pkt->dstContentId,
 						   buf->nRetry, Gp_interconnect_transmit_timeout)));
@@ -5405,7 +5430,7 @@ checkNetworkTimeout(ICBuffer *buf, uint64 now, bool *networkTimeoutIsLogged)
 	{
 		ereport(WARNING,
 				(errmsg("interconnect may encountered a network error, please check your network"),
-				 errdetail("Failed to send packet (seq %d) to %s (pid %d cid %d) after %d retries.",
+				 errdetail("Failing to send packet (seq %u) to %s (pid %d cid %d) after %u retries.",
 						   buf->pkt->seq, buf->conn->remoteHostAndPort,
 						   buf->pkt->dstPid, buf->pkt->dstContentId,
 						   buf->nRetry)));
