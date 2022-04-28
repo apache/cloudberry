@@ -87,11 +87,22 @@ PG_FUNCTION_INFO_V1(pull_all_table_size);
 #define INVALID_SEGRATIO 0.0
 #define INVALID_QUOTA 0
 
+#define report_ddl_err(ddl_msg, prefix)                                                      \
+	do                                                                                       \
+	{                                                                                        \
+		MessageResult ddl_result_ = (MessageResult)ddl_msg->result;                          \
+		const char   *ddl_err_;                                                              \
+		const char   *ddl_hint_;                                                             \
+		ddl_err_code_to_err_message(ddl_result_, &ddl_err_, &ddl_hint_);                     \
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("%s: %s", prefix, ddl_err_), \
+		                ddl_hint_ ? errhint("%s", ddl_hint_) : 0));                          \
+	} while (0)
+
 static object_access_hook_type next_object_access_hook;
 static bool                    is_database_empty(void);
-static void        dq_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
-static const char *ddl_err_code_to_err_message(MessageResult code);
-static int64       get_size_in_mb(char *str);
+static void  dq_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
+static void  ddl_err_code_to_err_message(MessageResult code, const char **err_msg, const char **hint_msg);
+static int64 get_size_in_mb(char *str);
 static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, float4 segratio, Oid spcoid);
 static int  set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static float4 get_per_segment_ratio(Oid spcoid);
@@ -356,7 +367,10 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 			ResetLatch(&MyProc->procLatch);
 
 			ereportif(kill(launcher_pid, 0) == -1 && errno == ESRCH, // do existence check
-			          ERROR, (errmsg("[diskquota] diskquota launcher pid = %d no longer exists", launcher_pid)));
+			          ERROR,
+			          (errmsg("[diskquota] diskquota launcher pid = %d no longer exists", launcher_pid),
+			           errhint("The diskquota launcher process has been terminated for some reasons. Consider to "
+			                   "restart the cluster to start it.")));
 
 			LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_SHARED);
 			if (extension_ddl_message->result != ERR_PENDING)
@@ -372,8 +386,7 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	{
 		LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 		LWLockRelease(diskquota_locks.extension_ddl_lock);
-		elog(ERROR, "[diskquota] failed to create diskquota extension: %s",
-		     ddl_err_code_to_err_message((MessageResult)extension_ddl_message->result));
+		report_ddl_err(extension_ddl_message, "[diskquota] failed to create diskquota extension");
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	LWLockRelease(diskquota_locks.extension_ddl_lock);
@@ -611,7 +624,10 @@ dq_object_access_hook_on_drop(void)
 			ResetLatch(&MyProc->procLatch);
 
 			ereportif(kill(launcher_pid, 0) == -1 && errno == ESRCH, // do existence check
-			          ERROR, (errmsg("[diskquota] diskquota launcher pid = %d no longer exists", launcher_pid)));
+			          ERROR,
+			          (errmsg("[diskquota] diskquota launcher pid = %d no longer exists", launcher_pid),
+			           errhint("The diskquota launcher process has been terminated for some reasons. Consider to "
+			                   "restart the cluster to start it.")));
 
 			LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_SHARED);
 			if (extension_ddl_message->result != ERR_PENDING)
@@ -627,8 +643,7 @@ dq_object_access_hook_on_drop(void)
 	{
 		LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 		LWLockRelease(diskquota_locks.extension_ddl_lock);
-		elog(ERROR, "[diskquota launcher] failed to drop diskquota extension: %s",
-		     ddl_err_code_to_err_message((MessageResult)extension_ddl_message->result));
+		report_ddl_err(extension_ddl_message, "[diskquota] failed to drop diskquota extension");
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	LWLockRelease(diskquota_locks.extension_ddl_lock);
@@ -666,27 +681,37 @@ out:
  * Using this function to convert error code from diskquota
  * launcher to error message and return it to client.
  */
-static const char *
-ddl_err_code_to_err_message(MessageResult code)
+static void
+ddl_err_code_to_err_message(MessageResult code, const char **err_msg, const char **hint_msg)
 {
+	*hint_msg = NULL;
 	switch (code)
 	{
 		case ERR_PENDING:
-			return "no response from diskquota launcher, check whether launcher process exists";
+			*err_msg  = "no response from diskquota launcher, check whether launcher process exists";
+			*hint_msg = "Create \"diskquota\" database and restart the cluster.";
+			break;
 		case ERR_OK:
-			return "succeeded";
+			*err_msg = "succeeded";
+			break;
 		case ERR_EXCEED:
-			return "too many databases to monitor";
+			*err_msg = "too many databases to monitor";
+			break;
 		case ERR_ADD_TO_DB:
-			return "add dbid to database_list failed";
+			*err_msg = "add dbid to database_list failed";
+			break;
 		case ERR_DEL_FROM_DB:
-			return "delete dbid from database_list failed";
+			*err_msg = "delete dbid from database_list failed";
+			break;
 		case ERR_START_WORKER:
-			return "start diskquota worker failed";
+			*err_msg = "start diskquota worker failed";
+			break;
 		case ERR_INVALID_DBID:
-			return "invalid dbid";
+			*err_msg = "invalid dbid";
+			break;
 		default:
-			return "unknown error";
+			*err_msg = "unknown error";
+			break;
 	}
 }
 
