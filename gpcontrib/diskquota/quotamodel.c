@@ -1620,7 +1620,6 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	HASH_SEQ_STATUS       hash_seq;
 	HTAB                 *local_rejectmap;
 	HASHCTL               hashctl;
-	int                   ret_code;
 
 	if (!superuser())
 		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), errmsg("must be superuser to update rejectmap")));
@@ -1630,20 +1629,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	if (ARR_NDIM(rejectmap_array_type) > 1 || ARR_NDIM(active_oid_array_type) > 1)
 		ereport(ERROR, (errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR), errmsg("1-dimensional array needed")));
 
-	/* Firstly, clear the rejectmap entries. */
-	LWLockAcquire(diskquota_locks.reject_map_lock, LW_EXCLUSIVE);
-	hash_seq_init(&hash_seq, disk_quota_reject_map);
-	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
-		hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_REMOVE, NULL);
-	LWLockRelease(diskquota_locks.reject_map_lock);
-
-	ret_code = SPI_connect();
-	if (ret_code != SPI_OK_CONNECT)
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-		                errmsg("unable to connect to execute internal query, return code: %d", ret_code)));
-
 	/*
-	 * Secondly, iterate over rejectmap entries and add these entries to the local reject map
+	 * Iterate over rejectmap entries and add these entries to the local reject map
 	 * on segment servers so that we are able to check whether the given relation (by oid)
 	 * should be rejected in O(1) time complexity in third step.
 	 */
@@ -1859,8 +1846,14 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/* Flush the content of local_rejectmap to the global rejectmap. */
 	LWLockAcquire(diskquota_locks.reject_map_lock, LW_EXCLUSIVE);
+
+	/* Clear rejectmap entries. */
+	hash_seq_init(&hash_seq, disk_quota_reject_map);
+	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
+		hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_REMOVE, NULL);
+
+	/* Flush the content of local_rejectmap to the global rejectmap. */
 	hash_seq_init(&hash_seq, local_rejectmap);
 	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
 	{
@@ -1877,7 +1870,6 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	}
 	LWLockRelease(diskquota_locks.reject_map_lock);
 
-	SPI_finish();
 	PG_RETURN_VOID();
 }
 
