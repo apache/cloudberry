@@ -31,6 +31,8 @@
 #include "libpq-fe.h"
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
+#include "utils/inval.h"
 
 #include "gp_activetable.h"
 #include "diskquota.h"
@@ -69,6 +71,7 @@ static void           pull_active_table_size_from_seg(HTAB *local_table_stats_ma
 static StringInfoData convert_map_to_string(HTAB *active_list);
 static void           load_table_size(HTAB *local_table_stats_map);
 static void           report_active_table_helper(const RelFileNodeBackend *relFileNode);
+static void           remove_from_active_table_map(const RelFileNodeBackend *relFileNode);
 static void           report_relation_cache_helper(Oid relid);
 static void           report_altered_reloid(Oid reloid);
 
@@ -164,6 +167,11 @@ active_table_hook_smgrunlink(RelFileNodeBackend rnode)
 {
 	if (prev_file_unlink_hook) (*prev_file_unlink_hook)(rnode);
 
+	/*
+	 * Since we do not remove the relfilenode if it does not map to any valid
+	 * relation oid, we need to do the cleaning here to avoid memory leak
+	 */
+	remove_from_active_table_map(&rnode);
 	remove_cache_entry(InvalidOid, rnode.node.relNode);
 }
 
@@ -297,6 +305,23 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 }
 
 /*
+ * Remove relfilenode from the active table map if exists.
+ */
+static void
+remove_from_active_table_map(const RelFileNodeBackend *relFileNode)
+{
+	DiskQuotaActiveTableFileEntry item = {0};
+
+	item.dbid          = relFileNode->node.dbNode;
+	item.relfilenode   = relFileNode->node.relNode;
+	item.tablespaceoid = relFileNode->node.spcNode;
+
+	LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
+	hash_search(active_tables_map, &item, HASH_REMOVE, NULL);
+	LWLockRelease(diskquota_locks.active_table_lock);
+}
+
+/*
  * Interface of activetable module
  * This function is called by quotamodel module.
  * Disk quota worker process need to collect
@@ -332,6 +357,9 @@ gp_fetch_active_tables(bool is_init)
 		/* step 1: fetch active oids from all the segments */
 		local_active_table_oid_maps = pull_active_list_from_seg();
 		active_oid_list             = convert_map_to_string(local_active_table_oid_maps);
+
+		ereport(DEBUG1,
+		        (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] active_old_list = %s", active_oid_list.data)));
 
 		/* step 2: fetch active table sizes based on active oids */
 		pull_active_table_size_from_seg(local_table_stats_map, active_oid_list.data);
@@ -600,6 +628,42 @@ is_relation_being_altered(Oid relid)
 }
 
 /*
+ * Check whether the cached relfilenode is stale compared to the given one
+ * due to delayed cache invalidation messages.
+ *
+ * NOTE: It will return false if the relation is currently uncommitted.
+ */
+static bool
+is_cached_relfilenode_stale(Oid relOid, RelFileNode rnode)
+{
+	/*
+	 * Since we don't take any lock on relation, need to check for cache
+	 * invalidation messages manually.
+	 */
+	AcceptInvalidationMessages();
+	HeapTuple tp = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relOid));
+
+	/*
+	 * Tuple is not valid if
+	 * - The relation has not been committed yet, or
+	 * - The relation has been deleted
+	 */
+	if (!HeapTupleIsValid(tp)) return false;
+	Form_pg_class reltup = (Form_pg_class)GETSTRUCT(tp);
+
+	/*
+	 * If cache invalidation messages are not delievered in time, the
+	 * relfilenode in the tuple of the relation is stale. In that case,
+	 * the relfilenode in the relation tuple is not equal to the one in
+	 * the active table map.
+	 */
+	Oid  cached_relfilenode = reltup->relfilenode;
+	bool is_stale           = cached_relfilenode != rnode.relNode;
+	heap_freetuple(tp);
+	return is_stale;
+}
+
+/*
  * Get local active table with table oid and table size info.
  * This function first copies active table map from shared memory
  * to local active table map with refilenode info. Then traverses
@@ -700,8 +764,15 @@ get_active_tables_oid(void)
 				active_table_entry->tablesize = 0;
 				active_table_entry->segid     = -1;
 			}
-			if (!is_relation_being_altered(relOid))
+			/*
+			 * Do NOT remove relation from the active table map if it is being
+			 * altered or its cached relfilenode is stale so that we can check it
+			 * again in the next epoch.
+			 */
+			if (!is_relation_being_altered(relOid) && !is_cached_relfilenode_stale(relOid, rnode))
+			{
 				hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
+			}
 		}
 	}
 

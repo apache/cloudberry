@@ -19,6 +19,7 @@
 #include "utils/relfilenodemap.h"
 #include "utils/syscache.h"
 #include "utils/array.h"
+#include "utils/inval.h"
 #include "funcapi.h"
 
 #include "relation_cache.h"
@@ -449,6 +450,12 @@ get_relation_entry_from_pg_class(Oid relid, DiskQuotaRelationCacheEntry *relatio
 	Oid           visimaprelid = InvalidOid;
 	bool          is_ao        = false;
 
+	/*
+	 * Since we don't take any lock on relation, check for cache
+	 * invalidation messages manually to minimize risk of cache
+	 * inconsistency.
+	 */
+	AcceptInvalidationMessages();
 	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(classTup) || relation_entry == NULL)
 	{
@@ -549,6 +556,12 @@ get_relfilenode_by_relid(Oid relid, RelFileNodeBackend *rnode, char *relstorage)
 	Form_pg_class                classForm;
 
 	memset(rnode, 0, sizeof(RelFileNodeBackend));
+	/*
+	 * Since we don't take any lock on relation, check for cache
+	 * invalidation messages manually to minimize risk of cache
+	 * inconsistency.
+	 */
+	AcceptInvalidationMessages();
 	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
 	if (HeapTupleIsValid(classTup))
 	{
