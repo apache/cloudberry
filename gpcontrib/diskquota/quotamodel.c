@@ -181,7 +181,6 @@ static void flush_local_reject_map(void);
 static void dispatch_rejectmap(HTAB *local_active_table_stat_map);
 static bool load_quotas(void);
 static void do_load_quotas(void);
-static bool do_check_diskquota_state_is_ready(void);
 
 static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
@@ -514,6 +513,28 @@ init_disk_quota_model(void)
 	                    &hash_ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 }
 
+static void
+dispatch_my_db_to_all_segments(void)
+{
+	/* Add current database to the monitored db cache on all segments */
+	int ret = SPI_execute_with_args(
+	        "SELECT diskquota.diskquota_fetch_table_stat($1, ARRAY[]::oid[]) FROM gp_dist_random('gp_id')", 1,
+	        (Oid[]){
+	                INT4OID,
+	        },
+	        (Datum[]){
+	                Int32GetDatum(ADD_DB_TO_MONITOR),
+	        },
+	        NULL, true, 0);
+
+	ereportif(ret != SPI_OK_SELECT, ERROR,
+	          (errcode(ERRCODE_INTERNAL_ERROR),
+	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+
+	/* Add current database to the monitored db cache on coordinator */
+	update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
+}
+
 /*
  * Check whether the diskquota state is ready
  */
@@ -542,7 +563,9 @@ check_diskquota_state_is_ready(void)
 		connected = true;
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pushed_active_snap = true;
-		is_ready           = do_check_diskquota_state_is_ready();
+		dispatch_my_db_to_all_segments();
+		do_check_diskquota_state_is_ready();
+		is_ready = true;
 	}
 	PG_CATCH();
 	{
@@ -566,76 +589,46 @@ check_diskquota_state_is_ready(void)
 }
 
 /*
- * Check whether the diskquota state is ready
- * For empty database, the diskquota state would
- * be ready after 'create extension diskquota' and
- * it's ready to use. But for non-empty database,
+ * Check whether the diskquota state is ready. Throw an error if it is not.
+ *
+ * For empty database, table diskquota.state would be ready after
+ * 'CREATE EXTENSION diskquota;'. But for non-empty database,
  * user need to run UDF diskquota.init_table_size_table()
  * manually to get all the table size information and
  * store them into table diskquota.table_size
  */
-static bool
+void
 do_check_diskquota_state_is_ready(void)
 {
 	int       ret;
 	TupleDesc tupdesc;
-	int       i;
-
-	/* Add current database to the monitored db cache on all segments */
-	ret = SPI_execute_with_args(
-	        "SELECT diskquota.diskquota_fetch_table_stat($1, ARRAY[]::oid[]) FROM gp_dist_random('gp_id')", 1,
-	        (Oid[]){
-	                INT4OID,
-	        },
-	        (Datum[]){
-	                Int32GetDatum(ADD_DB_TO_MONITOR),
-	        },
-	        NULL, true, 0);
-
-	ereportif(ret != SPI_OK_SELECT, ERROR,
-	          (errcode(ERRCODE_INTERNAL_ERROR),
-	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
-
-	/* Add current database to the monitored db cache on coordinator */
-	update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
-	/*
-	 * check diskquota state from table diskquota.state errors will be catch
-	 * at upper level function.
-	 */
 	ret = SPI_execute("select state from diskquota.state", true, 0);
 	ereportif(ret != SPI_OK_SELECT, ERROR,
 	          (errcode(ERRCODE_INTERNAL_ERROR),
 	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
-	if (tupdesc->natts != 1 || ((tupdesc)->attrs[0])->atttypid != INT4OID)
+	if (SPI_processed != 1 || tupdesc->natts != 1 || ((tupdesc)->attrs[0])->atttypid != INT4OID)
 	{
-		ereport(ERROR,
-		        (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] table \"state\" is corrupted in database \"%s\","
-		                                                 " please recreate diskquota extension",
-		                                                 get_database_name(MyDatabaseId))));
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+		                errmsg("[diskquota] \"diskquota.state\" is corrupted in database \"%s\","
+		                       " please recreate diskquota extension",
+		                       get_database_name(MyDatabaseId))));
 	}
 
-	for (i = 0; i < SPI_processed; i++)
+	HeapTuple tup = SPI_tuptable->vals[0];
+	Datum     dat;
+	int       state;
+	bool      isnull;
+
+	dat   = SPI_getbinval(tup, tupdesc, 1, &isnull);
+	state = isnull ? DISKQUOTA_UNKNOWN_STATE : DatumGetInt32(dat);
+
+	if (state != DISKQUOTA_READY_STATE)
 	{
-		HeapTuple tup = SPI_tuptable->vals[i];
-		Datum     dat;
-		int       state;
-		bool      isnull;
-
-		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
-		if (isnull) continue;
-		state = DatumGetInt64(dat);
-
-		if (state == DISKQUOTA_READY_STATE)
-		{
-			return true;
-		}
+		ereport(ERROR, (errmsg("[diskquota] diskquota is not ready"),
+		                errhint("please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota")));
 	}
-	ereport(WARNING, (errmsg("Diskquota is not in ready state. "
-	                         "please run UDF init_table_size_table()")));
-
-	return false;
 }
 
 /*

@@ -35,7 +35,8 @@ DROP EXTENSION diskquota;
 CREATE TABLE t_no_extension(i) AS SELECT generate_series(1, 100000)
 DISTRIBUTED BY (i);
 CREATE EXTENSION diskquota;
-WARNING:  database is not empty, please run `select diskquota.init_table_size_table()` to initialize table_size information for diskquota extension. Note that for large database, this function may take a long time.
+WARNING:  [diskquota] diskquota is not ready because current database is not empty
+HINT:  please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota
 -- Sleep until the worker adds the current db to cache so that it can be found 
 -- when DROP EXTENSION.
 -- FIXME: We cannot use wait_for_worker_new_epoch() here because 

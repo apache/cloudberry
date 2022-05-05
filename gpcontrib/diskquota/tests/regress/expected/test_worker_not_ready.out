@@ -1,0 +1,25 @@
+CREATE DATABASE db_not_ready;
+\c db_not_ready;
+CREATE TABLE t (i int) DISTRIBUTED BY (i);
+CREATE EXTENSION diskquota;
+WARNING:  [diskquota] diskquota is not ready because current database is not empty
+HINT:  please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota
+SELECT diskquota.set_role_quota(CURRENT_ROLE, '1 MB');
+ERROR:  Can not set disk quota for system owner: gpadmin
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+-- diskquota.wait_for_worker_new_epoch() cannot be used here because 
+-- diskquota.state is not clean.
+SELECT pg_sleep(5);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+DROP EXTENSION diskquota;
+\c contrib_regression
+DROP DATABASE db_not_ready;
