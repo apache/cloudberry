@@ -14,6 +14,8 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 INSERT INTO b SELECT generate_series(1, 100000000); -- fail
 
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
 DROP EXTENSION diskquota;
 
 INSERT INTO b SELECT generate_series(1, 100); -- ok
