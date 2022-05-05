@@ -394,9 +394,8 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	/* notify DBA to run init_table_size_table() when db is not empty */
 	if (!is_database_empty())
 	{
-		ereport(WARNING, (errmsg("database is not empty, please run `select diskquota.init_table_size_table()` to "
-		                         "initialize table_size information for diskquota extension. Note that for large "
-		                         "database, this function may take a long time.")));
+		ereport(WARNING, (errmsg("[diskquota] diskquota is not ready because current database is not empty"),
+		                  errhint("please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota")));
 	}
 	PG_RETURN_VOID();
 }
@@ -909,6 +908,9 @@ static void
 set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, float4 segratio, Oid spcoid)
 {
 	int ret;
+
+	/* Report error if diskquota is not ready. */
+	do_check_diskquota_state_is_ready();
 
 	/*
 	 * If error happens in set_quota_config_internal, just return error messages to
