@@ -13,6 +13,7 @@ test: test_quota_view_no_table
 # disable this test due to GPDB behavior change
 # test: test_table_size
 test: test_fast_disk_check
+test: test_worker_not_ready
 #test: test_insert_after_drop
 test: test_role test_schema test_drop_table test_column test_copy test_update test_toast test_truncate test_reschema test_temp_role test_rename test_delete_quota test_mistake test_tablespace_role test_tablespace_schema test_tablespace_role_perseg test_tablespace_schema_perseg test_index test_recreate
 test: test_ctas_no_preload_lib
