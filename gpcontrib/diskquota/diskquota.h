@@ -182,5 +182,6 @@ extern Oid      diskquota_parse_primary_table_oid(Oid namespace, char *relname);
 extern bool         worker_increase_epoch(Oid database_oid);
 extern unsigned int worker_get_epoch(Oid database_oid);
 extern bool         diskquota_is_paused(void);
+extern void         do_check_diskquota_state_is_ready(void);
 
 #endif
