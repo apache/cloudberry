@@ -56,6 +56,7 @@ SELECT rolname from pg_roles where rolsuper=true;
 --end_ignore
 \gset
 select diskquota.set_role_quota(:'rolname', '1mb');
+select diskquota.set_role_quota(:'rolname', '-1mb');
 
 CREATE ROLE "Tn" NOLOGIN;
 SELECT diskquota.set_role_quota('Tn', '-1 MB'); -- fail

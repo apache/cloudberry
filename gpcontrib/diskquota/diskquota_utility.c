@@ -107,7 +107,7 @@ static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, Quota
 static int  set_target_internal(Oid primaryoid, Oid spcoid, int64 quota_limit_mb, QuotaType type);
 static float4 get_per_segment_ratio(Oid spcoid);
 static bool   to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio);
-static void   check_role(Oid roleoid, char *rolname);
+static void   check_role(Oid roleoid, char *rolname, int64 quota_limit_mb);
 
 List *get_rel_oid_list(void);
 
@@ -757,7 +757,6 @@ set_role_quota(PG_FUNCTION_ARGS)
 
 	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	roleoid = __get_oid_auto_case_convert(get_role_oid, rolname);
-	check_role(roleoid, rolname);
 
 	sizestr        = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	sizestr        = str_tolower(sizestr, strlen(sizestr), DEFAULT_COLLATION_OID);
@@ -767,6 +766,8 @@ set_role_quota(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
 	}
+	check_role(roleoid, rolname, quota_limit_mb);
+
 	SPI_connect();
 	set_quota_config_internal(roleoid, quota_limit_mb, ROLE_QUOTA, INVALID_SEGRATIO, InvalidOid);
 	SPI_finish();
@@ -831,7 +832,6 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 
 	rolname = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	roleoid = __get_oid_auto_case_convert(get_role_oid, rolname);
-	check_role(roleoid, rolname);
 
 	spcname = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	spcoid  = __get_oid_auto_case_convert(get_tablespace_oid, spcname);
@@ -844,6 +844,7 @@ set_role_tablespace_quota(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("disk quota can not be set to 0 MB")));
 	}
+	check_role(roleoid, rolname, quota_limit_mb);
 
 	SPI_connect();
 	row_id = set_target_internal(roleoid, spcoid, quota_limit_mb, ROLE_TABLESPACE_QUOTA);
@@ -1737,9 +1738,10 @@ to_delete_quota(QuotaType type, int64 quota_limit_mb, float4 segratio)
 }
 
 static void
-check_role(Oid roleoid, char *rolname)
+check_role(Oid roleoid, char *rolname, int64 quota_limit_mb)
 {
-	if (roleoid == BOOTSTRAP_SUPERUSERID)
+	/* reject setting quota for super user, but deletion is allowed */
+	if (roleoid == BOOTSTRAP_SUPERUSERID && quota_limit_mb >= 0)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 		                errmsg("Can not set disk quota for system owner: %s", rolname)));
 }
