@@ -114,6 +114,12 @@ SELECT rolname from pg_roles where rolsuper=true;
 \gset
 select diskquota.set_role_quota(:'rolname', '1mb');
 ERROR:  Can not set disk quota for system owner: sa
+select diskquota.set_role_quota(:'rolname', '-1mb');
+ set_role_quota 
+----------------
+ 
+(1 row)
+
 CREATE ROLE "Tn" NOLOGIN;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_quota('Tn', '-1 MB'); -- fail
