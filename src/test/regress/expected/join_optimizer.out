@@ -3813,18 +3813,14 @@ create function mki4(int) returns int4_tbl as
 $$select row($1)::int4_tbl$$ language sql;
 explain (verbose, costs off)
 select * from mki8(1,2);
-                    QUERY PLAN                    
---------------------------------------------------
- Subquery Scan on sirvf_sq
-   Output: (sirvf_sq.mki8).q1, (sirvf_sq.mki8).q2
-   ->  Result
-         Output: $0
-         InitPlan 1 (returns $0)
-           ->  Result
-                 Output: '(1,2)'::int8_tbl
+              QUERY PLAN               
+---------------------------------------
+ Function Scan on mki8
+   Output: q1, q2
+   Function Call: '(1,2)'::int8_tbl
  Settings: optimizer = 'on'
- Optimizer: Postgres query optimizer
-(9 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 select * from mki8(1,2);
  q1 | q2 
@@ -3834,18 +3830,14 @@ select * from mki8(1,2);
 
 explain (verbose, costs off)
 select * from mki4(42);
-                QUERY PLAN                
-------------------------------------------
- Subquery Scan on sirvf_sq
-   Output: (sirvf_sq.mki4).f1
-   ->  Result
-         Output: $0
-         InitPlan 1 (returns $0)
-           ->  Result
-                 Output: '(42)'::int4_tbl
+              QUERY PLAN               
+---------------------------------------
+ Function Scan on mki4
+   Output: f1
+   Function Call: '(42)'::int4_tbl
  Settings: optimizer = 'on'
- Optimizer: Postgres query optimizer
-(9 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 select * from mki4(42);
  f1 

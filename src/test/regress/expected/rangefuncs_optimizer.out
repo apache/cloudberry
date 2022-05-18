@@ -2040,13 +2040,14 @@ select testrngfunc();
 
 explain (verbose, costs off)
 select * from testrngfunc();
-                       QUERY PLAN                       
---------------------------------------------------------
- Result
-   Output: 7.136178::numeric(35,6), 7.14::numeric(35,2)
+              QUERY PLAN               
+---------------------------------------
+ Function Scan on public.testrngfunc
+   Output: f1, f2
+   Function Call: testrngfunc()
  Settings: optimizer = 'on'
- Optimizer: Postgres query optimizer
-(4 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 select * from testrngfunc();
     f1    |  f2  
@@ -2115,23 +2116,14 @@ select testrngfunc();
 
 explain (verbose, costs off)
 select * from testrngfunc();
-                        QUERY PLAN                        
-----------------------------------------------------------
- Subquery Scan on "*SELECT*"
-   Output: "*SELECT*"."?column?", "*SELECT*"."?column?_1"
-   ->  Unique
-         Output: (1), (2)
-         Group Key: (1), (2)
-         ->  Sort
-               Output: (1), (2)
-               Sort Key: (1), (2)
-               ->  Append
-                     ->  Result
-                           Output: 1, 2
-                     ->  Result
-                           Output: 3, 4
- Optimizer: Postgres query optimizer
-(14 rows)
+              QUERY PLAN               
+---------------------------------------
+ Function Scan on public.testrngfunc
+   Output: f1, f2
+   Function Call: testrngfunc()
+ Settings: optimizer = 'on'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 select * from testrngfunc();
     f1    |  f2  
