@@ -2182,20 +2182,154 @@ UPDATE 1
 ROLLBACK
 1q: ... <quitting>
 
+1: BEGIN;
+BEGIN
+1: INSERT INTO t_lockmods_part_tbl_dml SELECT i, 1, i FROM generate_series(1,10)i;
+INSERT 10
+-- With GDD enabled, QD will only hold lock on root for insert
+1: select * from show_locks_lockmodes;
+ locktype | mode             | granted | relation                
+----------+------------------+---------+-------------------------
+ relation | RowExclusiveLock | t       | t_lockmods_part_tbl_dml 
+(1 row)
+1: ROLLBACK;
+ROLLBACK
+1q: ... <quitting>
+
+-- 2.8 Verify behaviors of select with locking clause (i.e. select for update)
+-- when running concurrently with index creation, for Heap tables.
+-- For AO/CO tables, refer to create_index_allows_readonly.source.
+
+1: CREATE TABLE create_index_select_for_update_tbl(a int, b int);
+CREATE
+1: INSERT INTO create_index_select_for_update_tbl SELECT i,i FROM generate_series(1,10)i;
+INSERT 10
+1: set optimizer = off;
+SET
+
+-- 2.8.1 with GDD enabled, expect no blocking
+1: show gp_enable_global_deadlock_detector;
+ gp_enable_global_deadlock_detector 
+------------------------------------
+ on                                 
+(1 row)
+
+1: BEGIN;
+BEGIN
+1: SELECT * FROM create_index_select_for_update_tbl WHERE a = 2 FOR UPDATE;
+ a | b 
+---+---
+ 2 | 2 
+(1 row)
+
+2: set optimizer = off;
+SET
+
+2: BEGIN;
+BEGIN
+-- expect no blocking
+2: CREATE INDEX create_index_select_for_update_idx ON create_index_select_for_update_tbl(a);
+CREATE
+2: COMMIT;
+COMMIT
+
+1: COMMIT;
+COMMIT
+
+2: DROP INDEX create_index_select_for_update_idx;
+DROP
+
+2: BEGIN;
+BEGIN
+2: CREATE INDEX create_index_select_for_update_idx ON create_index_select_for_update_tbl(a);
+CREATE
+
+1: BEGIN;
+BEGIN
+-- expect no blocking
+1: SELECT * FROM create_index_select_for_update_tbl WHERE a = 2 FOR UPDATE;
+ a | b 
+---+---
+ 2 | 2 
+(1 row)
+1: COMMIT;
+COMMIT
+-- close session to avoid renew session failure after restart
+1q: ... <quitting>
+
+2: COMMIT;
+COMMIT
+
+2: DROP INDEX create_index_select_for_update_idx;
+DROP
+
+-- 2.8.2 with GDD disabled, expect blocking
 -- reset gdd
 2: ALTER SYSTEM RESET gp_enable_global_deadlock_detector;
 ALTER
+-- close session to avoid renew session failure after restart
+2q: ... <quitting>
 1U:SELECT pg_ctl(dir, 'restart') from lockmodes_datadir;
  pg_ctl 
 --------
  OK     
 (1 row)
 
+1: set optimizer = off;
+SET
 1: show gp_enable_global_deadlock_detector;
  gp_enable_global_deadlock_detector 
 ------------------------------------
  off                                
 (1 row)
+
+1: BEGIN;
+BEGIN
+1: SELECT * FROM create_index_select_for_update_tbl WHERE a = 2 FOR UPDATE;
+ a | b 
+---+---
+ 2 | 2 
+(1 row)
+
+2: set optimizer = off;
+SET
+
+2: BEGIN;
+BEGIN
+-- expect blocking
+2&: CREATE INDEX create_index_select_for_update_idx ON create_index_select_for_update_tbl(a);  <waiting ...>
+
+1: COMMIT;
+COMMIT
+
+2<:  <... completed>
+CREATE
+2: COMMIT;
+COMMIT
+
+2: DROP INDEX create_index_select_for_update_idx;
+DROP
+
+2: BEGIN;
+BEGIN
+2: CREATE INDEX create_index_select_for_update_idx ON create_index_select_for_update_tbl(a);
+CREATE
+
+1: BEGIN;
+BEGIN
+-- expect blocking
+1&: SELECT * FROM create_index_select_for_update_tbl WHERE a = 2 FOR UPDATE;  <waiting ...>
+
+2: COMMIT;
+COMMIT
+
+1<:  <... completed>
+ a | b 
+---+---
+ 2 | 2 
+(1 row)
+1: COMMIT;
+COMMIT
 
 1: drop table lockmodes_datadir;
 DROP
