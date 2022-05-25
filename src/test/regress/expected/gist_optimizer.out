@@ -376,18 +376,16 @@ create index gist_tbl_multi_index on gist_tbl using gist (circle(p,1), p);
 explain (verbose, costs off)
 select circle(p,1) from gist_tbl
 where p <@ box(point(5, 5), point(5.3, 5.3));
-                                                 QUERY PLAN
+                                                 QUERY PLAN                                                 
 ------------------------------------------------------------------------------------------------------------
- Result
-   Output: circle(p, '1'::double precision)
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: p
-         ->  Seq Scan on public.gist_tbl
-               Output: p
-               Filter: (gist_tbl.p <@ '(5.3,5.3),(5,5)'::box)
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (circle(p, '1'::double precision))
+   ->  Seq Scan on public.gist_tbl
+         Output: circle(p, '1'::double precision)
+         Filter: (gist_tbl.p <@ '(5.3,5.3),(5,5)'::box)
  Settings: enable_bitmapscan = 'off', enable_indexonlyscan = 'on', enable_seqscan = 'off', optimizer = 'on'
  Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+(7 rows)
 
 select circle(p,1) from gist_tbl
 where p <@ box(point(5, 5), point(5.3, 5.3));
