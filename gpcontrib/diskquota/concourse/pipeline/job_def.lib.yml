@@ -1,6 +1,14 @@
 #@ load("base.lib.yml", "add_res_by_conf", "add_res_by_name")
 #@ load("@ytt:template", "template")
 
+#@ def inter_bin_name(base_name, release_build):
+#@   if release_build:
+#@     return base_name + "_rel"
+#@   end
+#@
+#@   return base_name
+#@ end
+
 #! Job config for centos6
 #! Use bin_gpdb_postfix="" to use a release version of gpdb binary
 #@ def centos6_gpdb6_conf(release_build=False):
@@ -8,7 +16,7 @@ res_build_image: centos6-gpdb6-image-build
 res_test_image: centos6-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_centos6" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_rhel6
-res_intermediates_bin: bin_diskquota_gpdb6_rhel6_intermediates
+res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel6_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel6_release
 os: rhel6
 build_type: #@ "Release" if release_build else "Debug"
@@ -20,7 +28,7 @@ res_build_image: centos7-gpdb6-image-build
 res_test_image: centos7-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_centos7" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_rhel7
-res_intermediates_bin: bin_diskquota_gpdb6_rhel7_intermediates
+res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel7_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel7_release
 os: rhel7
 build_type: #@ "Release" if release_build else "Debug"
@@ -32,7 +40,7 @@ res_build_image: rhel8-gpdb6-image-build
 res_test_image: rhel8-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_rhel8" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_rhel8
-res_intermediates_bin: bin_diskquota_gpdb6_rhel8_intermediates
+res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel8_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel8_release
 os: rhel8
 build_type: #@ "Release" if release_build else "Debug"
@@ -44,7 +52,7 @@ res_build_image: ubuntu18-gpdb6-image-build
 res_test_image: ubuntu18-gpdb6-image-test
 res_gpdb_bin: #@ "bin_gpdb6_ubuntu18" + ("" if release_build else "_debug")
 res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
-res_intermediates_bin: bin_diskquota_gpdb6_ubuntu18_intermediates
+res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_ubuntu18_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_ubuntu18_release
 os: ubuntu18.04
 build_type: #@ "Release" if release_build else "Debug"
@@ -153,9 +161,12 @@ plan:
 #@   end
 - in_parallel:
     steps:
-#@   for conf in confs:
+#@   for i in range(len(confs)):
+#@     conf = confs[i]
       - do:
         - get: #@ conf["res_intermediates_bin"]
+          passed:
+            - #@ passed_jobs[i]
           params:
             unpack: true
         - put: #@ conf["release_bin"]
