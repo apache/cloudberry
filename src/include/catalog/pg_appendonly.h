@@ -18,6 +18,7 @@
 
 #include "catalog/genbki.h"
 #include "catalog/pg_appendonly_d.h"
+#include "catalog/pg_class.h"
 #include "utils/relcache.h"
 #include "utils/snapshot.h"
 
@@ -185,6 +186,8 @@ RemoveAppendonlyEntry(Oid relid);
 
 extern void
 SwapAppendonlyEntries(Oid entryRelId1, Oid entryRelId2);
+
+extern void ATAOEntries(Form_pg_class relform1, Form_pg_class relform2);
 
 extern int16
 GetAppendOnlySegmentFilesCount(Relation rel);
