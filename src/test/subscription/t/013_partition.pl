@@ -6,7 +6,9 @@ use strict;
 use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
-use Test::More;
+use PostgresNode;
+use TestLib;
+use Test::More tests => 70;
 
 # setup
 
@@ -852,9 +854,7 @@ $node_publisher->wait_for_catchup('sub2');
 
 $result = $node_subscriber2->safe_psql('postgres',
 	"SELECT a, b, c FROM tab5 ORDER BY 1");
-is($result, qq(3|1|),
-	'updates of tab5 replicated correctly after altering table on subscriber'
-);
+>>>>>>> e3e0003329f (Fix data inconsistency between publisher and subscriber.)
 
 # Test that replication into the partitioned target table continues to
 # work correctly when the published table is altered.
