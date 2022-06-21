@@ -8,7 +8,7 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use PostgresNode;
 use TestLib;
-use Test::More tests => 70;
+use Test::More tests => 71;
 
 # setup
 

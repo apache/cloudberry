@@ -692,6 +692,8 @@ logicalrep_partition_open(LogicalRepRelMapEntry *root,
 	/* Set if the table's replica identity is enough to apply update/delete. */
 	logicalrep_rel_mark_updatable(entry);
 
+	entry->localrelvalid = true;
+
 	/* state and statelsn are left set to 0. */
 	MemoryContextSwitchTo(oldctx);
 
