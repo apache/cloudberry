@@ -376,7 +376,7 @@ logicalrep_rel_open(LogicalRepRelId remoteid, LOCKMODE lockmode)
 		/* Release the no-longer-useful attrmap, if any. */
 		if (entry->attrmap)
 		{
-			pfree(entry->attrmap);
+			free_attrmap(entry->attrmap);
 			entry->attrmap = NULL;
 		}
 
@@ -591,6 +591,13 @@ logicalrep_partition_open(LogicalRepRelMapEntry *root,
 	{
 		memset(part_entry, 0, sizeof(LogicalRepPartMapEntry));
 		part_entry->partoid = partOid;
+	}
+
+	/* Release the no-longer-useful attrmap, if any. */
+	if (entry->attrmap)
+	{
+		free_attrmap(entry->attrmap);
+		entry->attrmap = NULL;
 	}
 
 	if (!entry->remoterel.remoteid)
