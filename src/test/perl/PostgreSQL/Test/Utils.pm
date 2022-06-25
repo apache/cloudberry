@@ -1,6 +1,5 @@
 # Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
-<<<<<<< HEAD
 =pod
 
 =head1 NAME
@@ -38,25 +37,13 @@ aimed at controlling command execution, logging and test functions.
 
 # This module should never depend on any other PostgreSQL regression test
 # modules.
-=======
-# Allow use of release 15+ Perl package name in older branches, by giving that
-# package the same symbol table as the older package.
->>>>>>> 4101d34fbab (For PostgreSQL::Test compatibility, alias entire package symbol tables.)
-
-package PostgreSQL::Test::Utils;
 
 use strict;
 use warnings;
 
-<<<<<<< HEAD
 use Carp;
 use Config;
 use Cwd;
-=======
-use TestLib;
-BEGIN { *PostgreSQL::Test::Utils:: = \*TestLib::; }
-
->>>>>>> 4101d34fbab (For PostgreSQL::Test compatibility, alias entire package symbol tables.)
 use Exporter 'import';
 use Fcntl qw(:mode :seek);
 use File::Basename;
@@ -68,7 +55,6 @@ use IPC::Run;
 use POSIX qw(locale_h);
 use PostgreSQL::Test::SimpleTee;
 
-<<<<<<< HEAD
 # We need a version of Test::More recent enough to support subtests
 use Test::More 0.98;
 
@@ -1093,6 +1079,4 @@ package PostgreSQL::Test::Utils; ## no critic (ProhibitMultiplePackages)
 
 no warnings qw(once);
 
-=======
->>>>>>> 4101d34fbab (For PostgreSQL::Test compatibility, alias entire package symbol tables.)
 1;
