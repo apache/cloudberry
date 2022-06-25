@@ -1,15 +1,15 @@
-# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
-<<<<<<< HEAD
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 =pod
 
 =head1 NAME
 
-PostgreSQL::Test::Utils - helper module for writing PostgreSQL's C<prove> tests.
+TestLib - helper module for writing PostgreSQL's C<prove> tests.
 
 =head1 SYNOPSIS
 
-  use PostgreSQL::Test::Utils;
+  use TestLib;
 
   # Test basic output of a command
   program_help_ok('initdb');
@@ -19,18 +19,18 @@ PostgreSQL::Test::Utils - helper module for writing PostgreSQL's C<prove> tests.
   # Test option combinations
   command_fails(['initdb', '--invalid-option'],
               'command fails with invalid option');
-  my $tempdir = PostgreSQL::Test::Utils::tempdir;
+  my $tempdir = TestLib::tempdir;
   command_ok('initdb', '-D', $tempdir);
 
   # Miscellanea
-  print "on Windows" if $PostgreSQL::Test::Utils::windows_os;
+  print "on Windows" if $TestLib::windows_os;
   ok(check_mode_recursive($stream_dir, 0700, 0600),
     "check stream dir permissions");
-  PostgreSQL::Test::Utils::system_log('pg_ctl', 'kill', 'QUIT', $slow_pid);
+  TestLib::system_log('pg_ctl', 'kill', 'QUIT', $slow_pid);
 
 =head1 DESCRIPTION
 
-C<PostgreSQL::Test::Utils> contains a set of routines dedicated to environment setup for
+C<TestLib> contains a set of routines dedicated to environment setup for
 a PostgreSQL regression test run and includes some low-level routines
 aimed at controlling command execution, logging and test functions.
 
@@ -38,25 +38,15 @@ aimed at controlling command execution, logging and test functions.
 
 # This module should never depend on any other PostgreSQL regression test
 # modules.
-=======
-# Allow use of release 15+ Perl package name in older branches, by giving that
-# package the same symbol table as the older package.
->>>>>>> 4101d34fbab (For PostgreSQL::Test compatibility, alias entire package symbol tables.)
 
-package PostgreSQL::Test::Utils;
+package TestLib;
 
 use strict;
 use warnings;
 
-<<<<<<< HEAD
 use Carp;
 use Config;
 use Cwd;
-=======
-use TestLib;
-BEGIN { *PostgreSQL::Test::Utils:: = \*TestLib::; }
-
->>>>>>> 4101d34fbab (For PostgreSQL::Test compatibility, alias entire package symbol tables.)
 use Exporter 'import';
 use Fcntl qw(:mode :seek);
 use File::Basename;
@@ -65,24 +55,21 @@ use File::Spec;
 use File::stat qw(stat);
 use File::Temp ();
 use IPC::Run;
-use POSIX qw(locale_h);
-use PostgreSQL::Test::SimpleTee;
+use SimpleTee;
 
-<<<<<<< HEAD
-# We need a version of Test::More recent enough to support subtests
-use Test::More 0.98;
+# specify a recent enough version of Test::More to support the
+# done_testing() function
+use Test::More 0.87;
 
 our @EXPORT = qw(
   generate_ascii_string
   slurp_dir
   slurp_file
   append_to_file
-  string_replace_file
   check_mode_recursive
   chmod_recursive
   check_pg_config
   dir_symlink
-  scan_server_header
   system_or_bail
   system_log
   run_log
@@ -116,7 +103,6 @@ BEGIN
 	delete $ENV{LANGUAGE};
 	delete $ENV{LC_ALL};
 	$ENV{LC_MESSAGES} = 'C';
-	setlocale(LC_ALL, "");
 
 	# This list should be kept in sync with pg_regress.c.
 	my @envkeys = qw (
@@ -125,7 +111,6 @@ BEGIN
 	  PGCONNECT_TIMEOUT
 	  PGDATA
 	  PGDATABASE
-	  PGGSSDELEGATION
 	  PGGSSENCMODE
 	  PGGSSLIB
 	  PGHOSTADDR
@@ -158,15 +143,14 @@ BEGIN
 	# Must be set early
 	$windows_os = $Config{osname} eq 'MSWin32' || $Config{osname} eq 'msys';
 	# Check if this environment is MSYS2.
-	$is_msys2 =
-		 $windows_os
-	  && -x '/usr/bin/uname'
-	  && `uname -or` =~ /^[2-9].*Msys/;
+	$is_msys2 = $windows_os && -x '/usr/bin/uname'  &&
+	  `uname -or` =~ /^[2-9].*Msys/;
 
 	if ($windows_os)
 	{
 		require Win32API::File;
-		Win32API::File->import(qw(createFile OsFHandleOpen CloseHandle));
+		Win32API::File->import(
+			qw(createFile OsFHandleOpen CloseHandle));
 	}
 
 	# Specifies whether to use Unix sockets for test setups.  On
@@ -205,11 +189,11 @@ INIT
 	# test may still fail, but it's more likely to report useful facts.
 	$SIG{PIPE} = 'IGNORE';
 
-	# Determine output directories, and create them.  The base paths are the
-	# TESTDATADIR / TESTLOGDIR environment variables, which are normally set
-	# by the invoking Makefile.
-	$tmp_check = $ENV{TESTDATADIR} ? "$ENV{TESTDATADIR}" : "tmp_check";
-	$log_path = $ENV{TESTLOGDIR} ? "$ENV{TESTLOGDIR}" : "log";
+	# Determine output directories, and create them.  The base path is the
+	# TESTDIR environment variable, which is normally set by the invoking
+	# Makefile.
+	$tmp_check = $ENV{TESTDIR} ? "$ENV{TESTDIR}/tmp_check" : "tmp_check";
+	$log_path = "$tmp_check/log";
 
 	mkdir $tmp_check;
 	mkdir $log_path;
@@ -224,18 +208,18 @@ INIT
 	# Hijack STDOUT and STDERR to the log file
 	open(my $orig_stdout, '>&', \*STDOUT);
 	open(my $orig_stderr, '>&', \*STDERR);
-	open(STDOUT, '>&', $testlog);
-	open(STDERR, '>&', $testlog);
+	open(STDOUT,          '>&', $testlog);
+	open(STDERR,          '>&', $testlog);
 
 	# The test output (ok ...) needs to be printed to the original STDOUT so
 	# that the 'prove' program can parse it, and display it to the user in
 	# real time. But also copy it to the log file, to provide more context
 	# in the log.
 	my $builder = Test::More->builder;
-	my $fh = $builder->output;
-	tie *$fh, "PostgreSQL::Test::SimpleTee", $orig_stdout, $testlog;
+	my $fh      = $builder->output;
+	tie *$fh, "SimpleTee", $orig_stdout, $testlog;
 	$fh = $builder->failure_output;
-	tie *$fh, "PostgreSQL::Test::SimpleTee", $orig_stderr, $testlog;
+	tie *$fh, "SimpleTee", $orig_stderr, $testlog;
 
 	# Enable auto-flushing for all the file handles. Stderr and stdout are
 	# redirected to the same file, and buffering causes the lines to appear
@@ -284,7 +268,7 @@ sub all_tests_passing
 
 Securely create a temporary directory inside C<$tmp_check>, like C<mkdtemp>,
 and return its name.  The directory will be removed automatically at the
-end of the tests, unless the environment variable PG_TEST_NOCLEAN is provided.
+end of the tests.
 
 If C<prefix> is given, the new directory is templated as C<${prefix}_XXXX>.
 Otherwise the template is C<tmp_test_XXXX>.
@@ -297,8 +281,8 @@ sub tempdir
 	$prefix = "tmp_test" unless defined $prefix;
 	return File::Temp::tempdir(
 		$prefix . '_XXXX',
-		DIR => $tmp_check,
-		CLEANUP => not defined $ENV{'PG_TEST_NOCLEAN'});
+		DIR     => $tmp_check,
+		CLEANUP => 1);
 }
 
 =pod
@@ -313,8 +297,7 @@ name, to avoid path length issues.
 sub tempdir_short
 {
 
-	return File::Temp::tempdir(
-		CLEANUP => not defined $ENV{'PG_TEST_NOCLEAN'});
+	return File::Temp::tempdir(CLEANUP => 1);
 }
 
 =pod
@@ -335,7 +318,7 @@ https://postgr.es/m/20220116210241.GC756210@rfd.leadboat.com for details.
 sub has_wal_read_bug
 {
 	return
-		 $Config{osname} eq 'linux'
+	     $Config{osname} eq 'linux'
 	  && $Config{archname} =~ /^sparc/
 	  && !run_log([ qw(df -x ext4), $tmp_check ], '>', '/dev/null', '2>&1');
 }
@@ -369,29 +352,9 @@ sub system_or_bail
 {
 	if (system_log(@_) != 0)
 	{
-		if ($? == -1)
-		{
-			BAIL_OUT(
-				sprintf(
-					"failed to execute command \"%s\": $!", join(" ", @_)));
-		}
-		elsif ($? & 127)
-		{
-			BAIL_OUT(
-				sprintf(
-					"command \"%s\" died with signal %d",
-					join(" ", @_),
-					$? & 127));
-		}
-		else
-		{
-			BAIL_OUT(
-				sprintf(
-					"command \"%s\" exited with value %d",
-					join(" ", @_),
-					$? >> 8));
-		}
+		BAIL_OUT("system $_[0] failed");
 	}
+	return;
 }
 
 =pod
@@ -446,16 +409,12 @@ sub pump_until
 		last if $$stream =~ /$until/;
 		if ($timeout->is_expired)
 		{
-			diag(
-				"pump_until: timeout expired when searching for \"$until\" with stream: \"$$stream\""
-			);
+			diag("pump_until: timeout expired when searching for \"$until\" with stream: \"$$stream\"");
 			return 0;
 		}
 		if (not $proc->pumpable())
 		{
-			diag(
-				"pump_until: process terminated unexpectedly when searching for \"$until\" with stream: \"$$stream\""
-			);
+			diag("pump_until: process terminated unexpectedly when searching for \"$until\" with stream: \"$$stream\"");
 			return 0;
 		}
 		$proc->pump();
@@ -566,32 +525,6 @@ sub append_to_file
 
 =pod
 
-=item string_replace_file(filename, find, replace)
-
-Find and replace string of a given file.
-
-=cut
-
-sub string_replace_file
-{
-	my ($filename, $find, $replace) = @_;
-	open(my $in, '<', $filename);
-	my $content = '';
-	while (<$in>)
-	{
-		$_ =~ s/$find/$replace/;
-		$content = $content . $_;
-	}
-	close $in;
-	open(my $out, '>', $filename);
-	print $out $content;
-	close($out);
-
-	return;
-}
-
-=pod
-
 =item check_mode_recursive(dir, expected_dir_mode, expected_file_mode, ignore_list)
 
 Check that all file/dir modes in a directory match the expected values,
@@ -609,7 +542,7 @@ sub check_mode_recursive
 	find(
 		{
 			follow_fast => 1,
-			wanted => sub {
+			wanted      => sub {
 				# Is file in the ignore list?
 				foreach my $ignore ($ignore_list ? @{$ignore_list} : [])
 				{
@@ -625,7 +558,7 @@ sub check_mode_recursive
 				unless (defined($file_stat))
 				{
 					my $is_ENOENT = $!{ENOENT};
-					my $msg = "unable to stat $File::Find::name: $!";
+					my $msg       = "unable to stat $File::Find::name: $!";
 					if ($is_ENOENT)
 					{
 						warn $msg;
@@ -696,7 +629,7 @@ sub chmod_recursive
 	find(
 		{
 			follow_fast => 1,
-			wanted => sub {
+			wanted      => sub {
 				my $file_stat = stat($File::Find::name);
 
 				if (defined($file_stat))
@@ -710,46 +643,6 @@ sub chmod_recursive
 		},
 		$dir);
 	return;
-}
-
-=pod
-
-=item scan_server_header(header_path, regexp)
-
-Returns an array that stores all the matches of the given regular expression
-within the PostgreSQL installation's C<header_path>.  This can be used to
-retrieve specific value patterns from the installation's header files.
-
-=cut
-
-sub scan_server_header
-{
-	my ($header_path, $regexp) = @_;
-
-	my ($stdout, $stderr);
-	my $result = IPC::Run::run [ 'pg_config', '--includedir-server' ], '>',
-	  \$stdout, '2>', \$stderr
-	  or die "could not execute pg_config";
-	chomp($stdout);
-	$stdout =~ s/\r$//;
-
-	open my $header_h, '<', "$stdout/$header_path" or die "$!";
-
-	my @match = undef;
-	while (<$header_h>)
-	{
-		my $line = $_;
-
-		if (@match = $line =~ /^$regexp/)
-		{
-			last;
-		}
-	}
-
-	close $header_h;
-	die "could not find match in header $header_path\n"
-	  unless @match;
-	return @match;
 }
 
 =pod
@@ -865,11 +758,15 @@ sub command_exit_is
 	my $h = IPC::Run::start $cmd;
 	$h->finish();
 
-	# Normally, if the child called exit(N), IPC::Run::result() returns N.  On
-	# Windows, with IPC::Run v20220807.0 and earlier, full_results() is the
-	# method that returns N (https://github.com/toddr/IPC-Run/issues/161).
+	# On Windows, the exit status of the process is returned directly as the
+	# process's exit code, while on Unix, it's returned in the high bits
+	# of the exit code (see WEXITSTATUS macro in the standard <sys/wait.h>
+	# header file). IPC::Run's result function always returns exit code >> 8,
+	# assuming the Unix convention, which will always return 0 on Windows as
+	# long as the process was not terminated by an exception. To work around
+	# that, use $h->full_results on Windows instead.
 	my $result =
-	  ($Config{osname} eq "MSWin32" && $IPC::Run::VERSION <= 20220807.0)
+	    ($Config{osname} eq "MSWin32")
 	  ? ($h->full_results)[0]
 	  : $h->result(0);
 	is($result, $expected, $test_name);
@@ -1082,17 +979,4 @@ sub command_checks_all
 
 =cut
 
-# support release 15+ perl module namespace
-
-package PostgreSQL::Test::Utils; ## no critic (ProhibitMultiplePackages)
-
-# we don't want to export anything here, but we want to support things called
-# via this package name explicitly.
-
-# use typeglobs to alias these functions and variables
-
-no warnings qw(once);
-
-=======
->>>>>>> 4101d34fbab (For PostgreSQL::Test compatibility, alias entire package symbol tables.)
 1;
