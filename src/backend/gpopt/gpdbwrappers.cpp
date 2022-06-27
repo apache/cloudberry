@@ -1658,7 +1658,9 @@ gpdb::GpdbEreportImpl(int xerrcode, int severitylevel, const char *xerrmsg,
 			errcode(xerrcode);
 			errmsg("%s", xerrmsg);
 			if (xerrhint)
+			{
 				errhint("%s", xerrhint);
+			}
 			errfinish(filename, lineno, funcname);
 		}
 	}
@@ -2642,7 +2644,9 @@ gpdb::MDCacheNeedsReset(void)
 			mdcache_invalidation_counter_registered = true;
 		}
 		if (last_mdcache_invalidation_counter == mdcache_invalidation_counter)
+		{
 			return false;
+		}
 		else
 		{
 			last_mdcache_invalidation_counter = mdcache_invalidation_counter;

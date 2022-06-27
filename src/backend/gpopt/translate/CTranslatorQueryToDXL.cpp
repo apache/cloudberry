@@ -158,9 +158,13 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL(
 	// If this is a subquery, make a copy of the parent's mapping, otherwise
 	// initialize a new, empty, mapping.
 	if (var_colid_mapping)
+	{
 		m_var_to_colid_map = var_colid_mapping->CopyMapColId(m_mp);
+	}
 	else
+	{
 		m_var_to_colid_map = GPOS_NEW(m_mp) CMappingVarColId(m_mp);
+	}
 
 	m_query_level_to_cte_map = GPOS_NEW(m_mp) HMUlCTEListEntry(m_mp);
 	m_dxl_cte_producers = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
@@ -269,7 +273,9 @@ CTranslatorQueryToDXL::~CTranslatorQueryToDXL()
 	CRefCount::SafeRelease(m_dxl_query_output_cols);
 
 	if (m_query_level == 0)
+	{
 		GPOS_DELETE(m_context);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -524,13 +530,17 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 
 	// RETURNING is not supported yet.
 	if (m_query->returningList)
+	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("RETURNING clause"));
+	}
 
 	// ON CONFLICT is not supported yet.
 	if (m_query->onConflict)
+	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("ON CONFLICT clause"));
+	}
 
 	if (m_query->limitOption == LIMIT_OPTION_WITH_TIES)
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
@@ -3343,9 +3353,13 @@ CTranslatorQueryToDXL::NoteDistributionPolicyOpclasses(const RangeTblEntry *rte)
 					gpdb::GetDefaultDistributionOpclassForType(typeoid);
 
 				if (opclasses[i] == default_opclass)
+				{
 					contains_default_hashops = true;
+				}
 				else
+				{
 					contains_nondefault_hashops = true;
+				}
 			}
 		}
 
@@ -3362,10 +3376,12 @@ CTranslatorQueryToDXL::NoteDistributionPolicyOpclasses(const RangeTblEntry *rte)
 		{
 			if (m_context->m_distribution_hashops !=
 				DistrHashOpsNotDeterminedYet)
+			{
 				GPOS_RAISE(
 					gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported,
 					GPOS_WSZ_LIT(
 						"Query contains relations with a mix of default and legacy hash opclasses"));
+			}
 			m_context->m_distribution_hashops = DistrUseDefaultHashOps;
 		}
 		if (contains_legacy_hashops &&
@@ -3373,10 +3389,12 @@ CTranslatorQueryToDXL::NoteDistributionPolicyOpclasses(const RangeTblEntry *rte)
 		{
 			if (m_context->m_distribution_hashops !=
 				DistrHashOpsNotDeterminedYet)
+			{
 				GPOS_RAISE(
 					gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported,
 					GPOS_WSZ_LIT(
 						"Query contains relations with a mix of default and legacy hash opclasses"));
+			}
 			m_context->m_distribution_hashops = DistrUseLegacyHashOps;
 		}
 	}
@@ -3934,7 +3952,9 @@ CTranslatorQueryToDXL::TranslateJoinExprInFromToDXL(JoinExpr *join_expr)
 		Node *join_alias_node = (Node *) lfirst(lc_node);
 		// rte->joinaliasvars may contain NULL ptrs which indicates dropped columns
 		if (!join_alias_node)
+		{
 			continue;
+		}
 		GPOS_ASSERT(IsA(join_alias_node, Var) ||
 					IsA(join_alias_node, FuncExpr) ||
 					IsA(join_alias_node, CoalesceExpr));
