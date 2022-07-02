@@ -15,6 +15,10 @@
 locale_t	ecpg_clocale = (locale_t) 0;
 #endif
 
+#ifdef HAVE_USELOCALE
+locale_t	ecpg_clocale;
+#endif
+
 #ifdef ENABLE_THREAD_SAFETY
 static pthread_mutex_t connections_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_key_t actual_connection_key;
