@@ -16,7 +16,7 @@ locale_t	ecpg_clocale = (locale_t) 0;
 #endif
 
 #ifdef HAVE_USELOCALE
-locale_t	ecpg_clocale;
+locale_t	ecpg_clocale = (locale_t) 0;
 #endif
 
 #ifdef ENABLE_THREAD_SAFETY
