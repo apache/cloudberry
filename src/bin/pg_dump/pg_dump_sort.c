@@ -138,7 +138,6 @@ static const int dbObjectTypePriority[] =
 	21,							/* DO_BLOB */
 	25,							/* DO_BLOB_DATA */
 	8,							/* DO_EXTPROTOCOL */
-	21,							/* DO_TYPE_STORAGE_OPTIONS */
 	1,							/* DO_BINARY_UPGRADE */
 	22,							/* DO_PRE_DATA_BOUNDARY */
 	26,							/* DO_POST_DATA_BOUNDARY */
@@ -1286,11 +1285,6 @@ describeDumpableObject(DumpableObject *obj, char *buf, int bufsize)
 			snprintf(buf, bufsize,
 					 "TYPE %s  (ID %d OID %u)",
 					 obj->name, obj->dumpId, obj->catId.oid);
-			return;
-		case DO_TYPE_STORAGE_OPTIONS:
-			snprintf(buf, bufsize,
-					 "TYPE STORAGE OPTIONS FOR TYPE %s.%s  (ID %d OID %u) OPTIONS %s",
-					 ((TypeStorageOptions *)obj)->typnamespace, obj->name, obj->dumpId, obj->catId.oid, ((TypeStorageOptions *)obj)->typoptions);
 			return;
 		case DO_SHELL_TYPE:
 			snprintf(buf, bufsize,
