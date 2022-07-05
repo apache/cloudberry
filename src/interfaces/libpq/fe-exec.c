@@ -1470,6 +1470,7 @@ int
 PQsendQueryInternal(PGconn *conn, const char *query, bool newQuery)
 {
 	PGcmdQueueEntry *entry = NULL;
+	PGcmdQueueEntry *entry2 = NULL;
 
 	if (!PQsendQueryStart(conn, newQuery))
 		return 0;
@@ -1491,6 +1492,12 @@ PQsendQueryInternal(PGconn *conn, const char *query, bool newQuery)
 	entry = pqAllocCmdQueueEntry(conn);
 	if (entry == NULL)
 		return 0;				/* error msg already set */
+	if (conn->pipelineStatus != PQ_PIPELINE_OFF)
+	{
+		entry2 = pqAllocCmdQueueEntry(conn);
+		if (entry2 == NULL)
+			goto sendFailed;
+	}
 
 	/* Send the query message(s) */
 	/* construct the outgoing Query message */
@@ -1517,6 +1524,19 @@ PQsendQueryInternal(PGconn *conn, const char *query, bool newQuery)
 
 	/* OK, it's launched! */
 	pqAppendCmdQueueEntry(conn, entry);
+
+	/*
+	 * When pipeline mode is in use, we need a second entry in the command
+	 * queue to represent Close Portal message.  This allows us later to wait
+	 * for the CloseComplete message to be received before getting in IDLE
+	 * state.
+	 */
+	if (conn->pipelineStatus != PQ_PIPELINE_OFF)
+	{
+		entry2->queryclass = PGQUERY_CLOSE;
+		entry2->query = NULL;
+		pqAppendCmdQueueEntry(conn, entry2);
+	}
 
 	return 1;
 
@@ -2140,10 +2160,12 @@ PQgetResult(PGconn *conn)
 
 			/*
 			 * We're about to return the NULL that terminates the round of
-			 * results from the current query; prepare to send the results of
-			 * the next query, if any, when we're called next.  If there's no
-			 * next element in the command queue, this gets us in IDLE state.
+			 * results from the current query; prepare to send the results
+			 * of the next query, if any, when we're called next.  If there's
+			 * no next element in the command queue, this gets us in IDLE
+			 * state.
 			 */
+			resetPQExpBuffer(&conn->errorMessage);
 			pqPipelineProcessQueue(conn);
 			res = NULL;			/* query is complete */
 			break;
@@ -2204,6 +2226,23 @@ PQgetResult(PGconn *conn)
 			res = pqPrepareAsyncResult(conn);
 			break;
 	}
+
+	/* If the next command we expect is CLOSE, read and consume it */
+	if (conn->asyncStatus == PGASYNC_PIPELINE_IDLE &&
+		conn->cmd_queue_head &&
+		conn->cmd_queue_head->queryclass == PGQUERY_CLOSE)
+	{
+		if (res && res->resultStatus != PGRES_FATAL_ERROR)
+		{
+			conn->asyncStatus = PGASYNC_BUSY;
+			parseInput(conn);
+			conn->asyncStatus = PGASYNC_PIPELINE_IDLE;
+		}
+		else
+			/* we won't ever see the Close */
+			pqCommandQueueAdvance(conn);
+	}
+
 
 	/* Time to fire PGEVT_RESULTCREATE events, if there are any */
 	if (res && res->nEvents > 0)
@@ -3106,7 +3145,6 @@ pqPipelineProcessQueue(PGconn *conn)
 			return;
 
 		case PGASYNC_IDLE:
-
 			/*
 			 * If we're in IDLE mode and there's some command in the queue,
 			 * get us into PIPELINE_IDLE mode and process normally.  Otherwise
