@@ -205,6 +205,10 @@ private:
 												 CColRefArray *pdrgpcrOutput,
 												 ColRefToUlongMap *col_mapping);
 
+	// swap logical select over logical project
+	static CExpression *PexprTransposeSelectAndProject(CMemoryPool *mp,
+													   CExpression *pexpr);
+
 	// private ctor
 	CExpressionPreprocessor();
 
