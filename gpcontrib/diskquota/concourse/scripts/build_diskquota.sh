@@ -6,9 +6,9 @@ function pkg() {
     [ -f /opt/gcc_env.sh ] && source /opt/gcc_env.sh
     source /usr/local/greenplum-db-devel/greenplum_path.sh
 
-    if [ "${DISKQUOTA_OS}" = "rhel6" ]; then
-        export CC="$(which gcc)"
-    fi
+    # Always use the gcc from $PATH, to avoid using a lower version compiler by /usr/bin/cc
+    export CC="$(which gcc)"
+    export CXX="$(which g++)"
 
     pushd /home/gpadmin/diskquota_artifacts
     local last_release_path
