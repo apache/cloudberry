@@ -150,8 +150,6 @@ const char *EXT_PARTITION_NAME_POSTFIX = "_external_partition__";
 /* pg_class.relstorage value used in GPDB 6.x and below to mark external tables. */
 #define RELSTORAGE_EXTERNAL 'x'
 
-static DumpId binary_upgrade_dumpid;
-
 /* override for standard extra_float_digits setting */
 static bool have_extra_float_digits = false;
 static int	extra_float_digits;
@@ -1444,11 +1442,10 @@ setup_connection(Archive *AH, const char *dumpencoding,
 		ExecuteSqlStatement(AH, "SET extra_float_digits TO 2");
 
 	/*
-	 * If synchronized scanning is supported, disable it, to prevent
-	 * unpredictable changes in row ordering across a dump and reload.
+	 * Disable synchronized scanning to prevent unpredictable
+	 * changes in row ordering across a dump and reload.
 	 */
-	if (AH->remoteVersion >= 80300)
-		ExecuteSqlStatement(AH, "SET synchronize_seqscans TO off");
+	ExecuteSqlStatement(AH, "SET synchronize_seqscans TO off");
 
 	/*
 	 * The default for enable_nestloop is off in GPDB. However, many of the queries
@@ -1468,7 +1465,7 @@ setup_connection(Archive *AH, const char *dumpencoding,
 	/*
 	 * Quote all identifiers, if requested.
 	 */
-	if (quote_all_identifiers && AH->remoteVersion >= 80300)
+	if (quote_all_identifiers)
 		ExecuteSqlStatement(AH, "SET quote_all_identifiers = true");
 
 	/*
@@ -5889,8 +5886,6 @@ getBinaryUpgradeObjects(void)
 	AssignDumpId(&binfo->dobj);
 	binfo->dobj.name = pg_strdup("__binary_upgrade");
 
-	binary_upgrade_dumpid = binfo->dobj.dumpId;
-
 	return binfo;
 }
 
@@ -6468,13 +6463,6 @@ getOpfamilies(Archive *fout, int *numOpfamilies)
 	int			i_opfnamespace;
 	int			i_opfowner;
 
-	/* Before 8.3, there is no separate concept of opfamilies */
-	if (fout->remoteVersion < 80300)
-	{
-		*numOpfamilies = 0;
-		return NULL;
-	}
-
 	query = createPQExpBuffer();
 
 	/*
@@ -6950,12 +6938,9 @@ getFuncs(Archive *fout, int *numFuncs)
 
 /*
  * GPDB: Much of the extension machinery was backported into GPDB 5 from higher
- * major versions. So include the clause if we are running against GPDB 5.
+ * major versions, so include the clause.
  */
-#if 0
-		if (dopt->binary_upgrade && fout->remoteVersion >= 90100)
-#endif
-		if (dopt->binary_upgrade && fout->remoteVersion >= 80300)
+		if (dopt->binary_upgrade)
 			appendPQExpBufferStr(query,
 								 "\n  OR EXISTS(SELECT 1 FROM pg_depend WHERE "
 								 "classid = 'pg_proc'::regclass AND "
@@ -7951,15 +7936,15 @@ getIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 	else
 	{
 		appendPQExpBuffer(query,
-							"LEFT JOIN pg_catalog.pg_depend d "
-							"ON (d.classid = t.tableoid "
-							"AND d.objid = t.oid "
-							"AND d.deptype = 'i') "
-							"LEFT JOIN pg_catalog.pg_constraint c "
-							"ON (d.refclassid = c.tableoid "
-							"AND d.refobjid = c.oid) "
-							"WHERE i.indisvalid "
-							"ORDER BY i.indrelid, indexname");
+						  "LEFT JOIN pg_catalog.pg_depend d "
+						  "ON (d.classid = t.tableoid "
+						  "AND d.objid = t.oid "
+						  "AND d.deptype = 'i') "
+						  "LEFT JOIN pg_catalog.pg_constraint c "
+						  "ON (d.refclassid = c.tableoid "
+						  "AND d.refobjid = c.oid) "
+						  "WHERE i.indisvalid "
+						  "ORDER BY i.indrelid, indexname");
 	}
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -8491,24 +8476,12 @@ getRules(Archive *fout, int *numRules)
 	int			i_is_instead;
 	int			i_ev_enabled;
 
-	if (fout->remoteVersion >= 80300)
-	{
-		appendPQExpBufferStr(query, "SELECT "
-							 "tableoid, oid, rulename, "
-							 "ev_class AS ruletable, ev_type, is_instead, "
-							 "ev_enabled "
-							 "FROM pg_rewrite "
-							 "ORDER BY oid");
-	}
-	else
-	{
-		appendPQExpBufferStr(query, "SELECT "
-							 "tableoid, oid, rulename, "
-							 "ev_class AS ruletable, ev_type, is_instead, "
-							 "'O'::char AS ev_enabled "
-							 "FROM pg_rewrite "
-							 "ORDER BY oid");
-	}
+	appendPQExpBufferStr(query, "SELECT "
+							"tableoid, oid, rulename, "
+							"ev_class AS ruletable, ev_type, is_instead, "
+							"ev_enabled "
+							"FROM pg_rewrite "
+							"ORDER BY oid");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -11945,17 +11918,10 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 							"typsend::pg_catalog.oid AS typsendoid, "
 							"typanalyze, "
 							"typanalyze::pg_catalog.oid AS typanalyzeoid, "
-							"typdelim, typbyval, typalign, typstorage, ");
-
-		if (fout->remoteVersion >= 80300)
-			appendPQExpBufferStr(query,
-								"typmodin, typmodout, "
-								"typmodin::pg_catalog.oid AS typmodinoid, "
-								"typmodout::pg_catalog.oid AS typmodoutoid, ");
-		else
-			appendPQExpBufferStr(query,
-								"'-' AS typmodin, '-' AS typmodout, "
-								"0 AS typmodinoid, 0 AS typmodoutoid, ");
+							"typdelim, typbyval, typalign, typstorage, "
+							"typmodin, typmodout, "
+							"typmodin::pg_catalog.oid AS typmodinoid, "
+							"typmodout::pg_catalog.oid AS typmodoutoid, ");
 
 		if (fout->remoteVersion >= 80400)
 			appendPQExpBufferStr(query,
@@ -13173,10 +13139,9 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	q = createPQExpBuffer();
 	delqry = createPQExpBuffer();
 	asPart = createPQExpBuffer();
-	
+
 	if (!fout->is_prepared[PREPQUERY_DUMPFUNC])
 	{
-		/* GPDB_95_MERGE_FIXME: use isGE70 instead? */
 		/* Set up query for function-specific details */
 		appendPQExpBufferStr(query, "PREPARE dumpFunc(pg_catalog.oid) AS\n");
 
@@ -14386,32 +14351,17 @@ dumpOpclass(Archive *fout, const OpclassInfo *opcinfo)
 	nameusing = createPQExpBuffer();
 
 	/* Get additional fields from the pg_opclass row */
-	if (fout->remoteVersion >= 80300)
-	{
-		appendPQExpBuffer(query, "SELECT opcintype::pg_catalog.regtype, "
-						  "opckeytype::pg_catalog.regtype, "
-						  "opcdefault, opcfamily, "
-						  "opfname AS opcfamilyname, "
-						  "nspname AS opcfamilynsp, "
-						  "(SELECT amname FROM pg_catalog.pg_am WHERE oid = opcmethod) AS amname "
-						  "FROM pg_catalog.pg_opclass c "
-						  "LEFT JOIN pg_catalog.pg_opfamily f ON f.oid = opcfamily "
-						  "LEFT JOIN pg_catalog.pg_namespace n ON n.oid = opfnamespace "
-						  "WHERE c.oid = '%u'::pg_catalog.oid",
-						  opcinfo->dobj.catId.oid);
-	}
-	else
-	{
-		appendPQExpBuffer(query, "SELECT opcintype::pg_catalog.regtype, "
-						  "opckeytype::pg_catalog.regtype, "
-						  "opcdefault, NULL AS opcfamily, "
-						  "NULL AS opcfamilyname, "
-						  "NULL AS opcfamilynsp, "
-						  "(SELECT amname FROM pg_catalog.pg_am WHERE oid = opcamid) AS amname "
-						  "FROM pg_catalog.pg_opclass "
-						  "WHERE oid = '%u'::pg_catalog.oid",
-						  opcinfo->dobj.catId.oid);
-	}
+	appendPQExpBuffer(query, "SELECT opcintype::pg_catalog.regtype, "
+						"opckeytype::pg_catalog.regtype, "
+						"opcdefault, opcfamily, "
+						"opfname AS opcfamilyname, "
+						"nspname AS opcfamilynsp, "
+						"(SELECT amname FROM pg_catalog.pg_am WHERE oid = opcmethod) AS amname "
+						"FROM pg_catalog.pg_opclass c "
+						"LEFT JOIN pg_catalog.pg_opfamily f ON f.oid = opcfamily "
+						"LEFT JOIN pg_catalog.pg_namespace n ON n.oid = opfnamespace "
+						"WHERE c.oid = '%u'::pg_catalog.oid",
+						opcinfo->dobj.catId.oid);
 
 	res = ExecuteSqlQueryForSingleRow(fout, query->data);
 
@@ -14511,7 +14461,7 @@ dumpOpclass(Archive *fout, const OpclassInfo *opcinfo)
 						  "ORDER BY amopstrategy",
 						  opcinfo->dobj.catId.oid);
 	}
-	else if (fout->remoteVersion >= 80300)
+	else
 	{
 		appendPQExpBuffer(query, "SELECT amopstrategy, amopreqcheck, "
 						  "amopopr::pg_catalog.regoperator, "
@@ -14522,21 +14472,6 @@ dumpOpclass(Archive *fout, const OpclassInfo *opcinfo)
 						  "AND refobjid = '%u'::pg_catalog.oid "
 						  "AND classid = 'pg_catalog.pg_amop'::pg_catalog.regclass "
 						  "AND objid = ao.oid "
-						  "ORDER BY amopstrategy",
-						  opcinfo->dobj.catId.oid);
-	}
-	else
-	{
-		/*
-		 * Here, we print all entries since there are no opfamilies and hence
-		 * no loose operators to worry about.
-		 */
-		appendPQExpBuffer(query, "SELECT amopstrategy, amopreqcheck, "
-						  "amopopr::pg_catalog.regoperator, "
-						  "NULL AS sortfamily, "
-						  "NULL AS sortfamilynsp "
-						  "FROM pg_catalog.pg_amop "
-						  "WHERE amopclaid = '%u'::pg_catalog.oid "
 						  "ORDER BY amopstrategy",
 						  opcinfo->dobj.catId.oid);
 	}
@@ -14594,31 +14529,17 @@ dumpOpclass(Archive *fout, const OpclassInfo *opcinfo)
 	 */
 	resetPQExpBuffer(query);
 
-	if (fout->remoteVersion >= 80300)
-	{
-		appendPQExpBuffer(query, "SELECT amprocnum, "
-						  "amproc::pg_catalog.regprocedure, "
-						  "amproclefttype::pg_catalog.regtype, "
-						  "amprocrighttype::pg_catalog.regtype "
-						  "FROM pg_catalog.pg_amproc ap, pg_catalog.pg_depend "
-						  "WHERE refclassid = 'pg_catalog.pg_opclass'::pg_catalog.regclass "
-						  "AND refobjid = '%u'::pg_catalog.oid "
-						  "AND classid = 'pg_catalog.pg_amproc'::pg_catalog.regclass "
-						  "AND objid = ap.oid "
-						  "ORDER BY amprocnum",
-						  opcinfo->dobj.catId.oid);
-	}
-	else
-	{
-		appendPQExpBuffer(query, "SELECT amprocnum, "
-						  "amproc::pg_catalog.regprocedure, "
-						  "'' AS amproclefttype, "
-						  "'' AS amprocrighttype "
-						  "FROM pg_catalog.pg_amproc "
-						  "WHERE amopclaid = '%u'::pg_catalog.oid "
-						  "ORDER BY amprocnum",
-						  opcinfo->dobj.catId.oid);
-	}
+	appendPQExpBuffer(query, "SELECT amprocnum, "
+						"amproc::pg_catalog.regprocedure, "
+						"amproclefttype::pg_catalog.regtype, "
+						"amprocrighttype::pg_catalog.regtype "
+						"FROM pg_catalog.pg_amproc ap, pg_catalog.pg_depend "
+						"WHERE refclassid = 'pg_catalog.pg_opclass'::pg_catalog.regclass "
+						"AND refobjid = '%u'::pg_catalog.oid "
+						"AND classid = 'pg_catalog.pg_amproc'::pg_catalog.regclass "
+						"AND objid = ap.oid "
+						"ORDER BY amprocnum",
+						opcinfo->dobj.catId.oid);
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
