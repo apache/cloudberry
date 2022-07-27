@@ -203,6 +203,10 @@ typedef struct _dumpOptions
 	int			do_nothing;
 
 	char	   *restrict_key;
+	/* GPDB */
+	bool		dumpGpPolicy;
+	bool		isGPbackend;
+	bool 		gp_partitioning_available;
 } DumpOptions;
 
 
