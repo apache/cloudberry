@@ -1804,15 +1804,3 @@ order by 1, 2;
                ->  Function Scan on generate_series
 (7 rows)
 
--- Disallow pushing down sort when pathkey is an SRF.
-explain (costs off) select unique1 from tenk1 order by unnest('{1,2}'::int[]);
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (unnest('{1,2}'::anyarray))
-   ->  Sort
-         Sort Key: (unnest('{1,2}'::anyarray))
-         ->  ProjectSet
-               ->  Index Only Scan using tenk1_unique1 on tenk1
-(6 rows)
-
