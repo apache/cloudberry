@@ -80,9 +80,9 @@ DROP EXTENSION [ IF EXISTS ] <replaceable class="parameter">name</replaceable> [
     <term><literal>RESTRICT</literal></term>
     <listitem>
      <para>
-      Refuse to drop the extension if any objects depend on it (other than
-      its own member objects and other extensions listed in the same
-      <command>DROP</command> command).  This is the default.
+      This option prevents the specified extensions from being dropped
+      if there exist non-extension-member objects that depend on any
+      of the extensions.  This is the default.
      </para>
     </listitem>
    </varlistentry>
