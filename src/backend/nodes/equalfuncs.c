@@ -1222,6 +1222,7 @@ _equalAlterTableCmd(const AlterTableCmd *a, const AlterTableCmd *b)
 	COMPARE_SCALAR_FIELD(missing_ok);
 	COMPARE_NODE_FIELD(tags);
 	COMPARE_SCALAR_FIELD(unsettag);
+	COMPARE_SCALAR_FIELD(recurse);
 
 	return true;
 }
