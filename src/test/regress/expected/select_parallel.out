@@ -1217,6 +1217,33 @@ SELECT generate_series(1, two), array(select generate_series(1, two))
  Optimizer: Postgres query optimizer
 (18 rows)
 
+-- must disallow pushing sort below gather when pathkey contains an SRF
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT unnest(ARRAY[]::integer[]) + 1 AS pathkey
+  FROM tenk1 t1 JOIN tenk1 t2 ON TRUE
+  ORDER BY pathkey;
+                                                                                                          QUERY PLAN                                                                                                           
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Output: (((unnest('{}'::integer[])) + 1))
+   Merge Key: (((unnest('{}'::integer[])) + 1))
+   ->  Sort
+         Output: (((unnest('{}'::integer[])) + 1))
+         Sort Key: (((unnest('{}'::integer[])) + 1))
+         ->  Result
+               Output: ((unnest('{}'::integer[])) + 1)
+               ->  ProjectSet
+                     Output: unnest('{}'::integer[])
+                     ->  Nested Loop
+                           ->  Parallel Seq Scan on public.tenk1 t1
+                                 Output: t1.unique1, t1.unique2, t1.two, t1.four, t1.ten, t1.twenty, t1.hundred, t1.thousand, t1.twothousand, t1.fivethous, t1.tenthous, t1.odd, t1.even, t1.stringu1, t1.stringu2, t1.string4
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:6  (slice2; segments: 3)
+                                       ->  Seq Scan on public.tenk1 t2
+ Settings: enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+ Optimizer: Postgres query optimizer
+(18 rows)
+
 -- test passing expanded-value representations to workers
 CREATE FUNCTION make_some_array(int,int) returns int[] as
 $$declare x int[];
