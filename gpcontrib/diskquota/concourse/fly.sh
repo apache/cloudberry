@@ -108,9 +108,6 @@ set -v
     sp \
     -p "${pipeline_name}" \
     -c "${yml_path}" \
-    -l "${workspace}/gp-continuous-integration/secrets/gpdb_common-ci-secrets.yml" \
-    -l "${workspace}/gp-continuous-integration/secrets/gp-extensions-common.yml" \
-    -l "${workspace}/gp-continuous-integration/secrets/gpdb_6X_STABLE-ci-secrets.prod.yml" \
     -v "diskquota-branch=${branch}"
 set +v
 
