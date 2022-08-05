@@ -414,6 +414,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenTupleOidColId, GPOS_WSZ_LIT("TupleOidCol")},
 		{EdxltokenUpdatePreservesOids, GPOS_WSZ_LIT("PreserveOids")},
 		{EdxltokenInputSorted, GPOS_WSZ_LIT("InputSorted")},
+		{EdxltokenSplitUpdate, GPOS_WSZ_LIT("IsSplitUpdate")},
 
 		{EdxltokenInputSegments, GPOS_WSZ_LIT("InputSegments")},
 		{EdxltokenOutputSegments, GPOS_WSZ_LIT("OutputSegments")},

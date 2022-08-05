@@ -40,6 +40,7 @@
 #include "gpopt/operators/CLogicalSetOp.h"
 #include "gpopt/operators/CLogicalUnion.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
+#include "gpopt/operators/CLogicalUpdate.h"
 #include "gpopt/operators/CNormalizer.h"
 #include "gpopt/operators/COrderedAggPreprocessor.h"
 #include "gpopt/operators/CPredicateUtils.h"
@@ -2898,6 +2899,92 @@ CExpressionPreprocessor::PexprTransposeSelectAndProject(CMemoryPool *mp,
 	}
 }
 
+// Preprocessor function to decide if the Update operator to be proceeded with
+// split update or inplace update based on the columns modified by the update
+// operation.
+
+// Split Update if any of the modified columns is a distribution column or a partition key,
+// InPlace Update if all the modified columns are non-distribution columns and not partition keys.
+
+// Example: Update Modified non-distribution columns.
+// Input:
+// +--CLogicalUpdate ("foo"), Split Update, Delete Columns: ["a" (0), "b" (1)], Insert Columns: ["a" (0), "b" (9)], "ctid" (2), "gp_segment_id" (8)
+//   +--CLogicalProject
+//      |--CLogicalGet
+//      +--CScalarProjectList
+//
+// Output:
+// +--CLogicalUpdate ("foo"), In-place Update, Delete Columns: ["a" (0), "b" (1)], Insert Columns: ["a" (0), "b" (9)], "ctid" (2), "gp_segment_id" (8)
+//	 +--CLogicalProject
+//		|--CLogicalGet
+//		+--CScalarProjectList
+
+CExpression *
+CExpressionPreprocessor::ConvertSplitUpdateToInPlaceUpdate(CMemoryPool *mp,
+														   CExpression *pexpr)
+{
+	GPOS_ASSERT(nullptr != mp);
+	GPOS_ASSERT(nullptr != pexpr);
+	COperator *pop = pexpr->Pop();
+	if (COperator::EopLogicalUpdate != pop->Eopid())
+	{
+		pexpr->AddRef();
+		return pexpr;
+	}
+	CLogicalUpdate *popUpdate = CLogicalUpdate::PopConvert(pop);
+	CTableDescriptor *tabdesc = popUpdate->Ptabdesc();
+	CColRefArray *pdrgpcrInsert = popUpdate->PdrgpcrInsert();
+	CColRefArray *pdrgpcrDelete = popUpdate->PdrgpcrDelete();
+	const ULONG num_cols = pdrgpcrInsert->Size();
+	BOOL split_update = false;
+	CColRefArray *ppartColRefs = GPOS_NEW(mp) CColRefArray(mp);
+	const ULongPtrArray *pdrgpulPart = tabdesc->PdrgpulPart();
+	const ULONG ulPartKeys = pdrgpulPart->Size();
+
+	// Uses split update if any of the modified columns are either
+	// distribution or partition keys.
+	// FIXME: Tested on distribution columns. Validate this after DML on
+	//  partitioned tables is implemented in Orca
+	for (ULONG ul = 0; ul < ulPartKeys; ul++)
+	{
+		ULONG *pulPartKey = (*pdrgpulPart)[ul];
+		CColRef *colref = (*pdrgpcrInsert)[*pulPartKey];
+		ppartColRefs->Append(colref);
+	}
+
+	for (ULONG ul = 0; ul < num_cols; ul++)
+	{
+		CColRef *pcrInsert = (*pdrgpcrInsert)[ul];
+		CColRef *pcrDelete = (*pdrgpcrDelete)[ul];
+		// Checking if column is either distribution or partition key.
+		if (pcrInsert != pcrDelete &&
+			(pcrDelete->IsDistCol() ||
+			 ppartColRefs->Find(pcrInsert) != nullptr))
+		{
+			split_update = true;
+			break;
+		}
+	}
+	ppartColRefs->Release();
+	if (!split_update)
+	{
+		CExpression *pexprChild = (*pexpr)[0];
+		pexprChild->AddRef();
+		pdrgpcrInsert->AddRef();
+		pdrgpcrDelete->AddRef();
+		tabdesc->AddRef();
+		CExpression *pexprNew = GPOS_NEW(mp) CExpression(
+			mp,
+			GPOS_NEW(mp) CLogicalUpdate(
+				mp, tabdesc, pdrgpcrDelete, pdrgpcrInsert, popUpdate->PcrCtid(),
+				popUpdate->PcrSegmentId(), popUpdate->PcrTupleOid(), false),
+			pexprChild);
+		return pexprNew;
+	}
+	pexpr->AddRef();
+	return pexpr;
+}
+
 // main driver, pre-processing of input logical expression
 CExpression *
 CExpressionPreprocessor::PexprPreprocess(
@@ -3093,11 +3180,17 @@ CExpressionPreprocessor::PexprPreprocess(
 		PexprTransposeSelectAndProject(mp, pexprPrunedPartitions);
 	pexprPrunedPartitions->Release();
 
-	// (29) normalize expression again
-	CExpression *pexprNormalized2 =
-		CNormalizer::PexprNormalize(mp, pexprTransposeSelectAndProject);
+	// (29) convert split update to inplace update
+	CExpression *pexprSplitUpdateToInplace =
+		ConvertSplitUpdateToInPlaceUpdate(mp, pexprTransposeSelectAndProject);
 	GPOS_CHECK_ABORT;
 	pexprTransposeSelectAndProject->Release();
+
+	// (30) normalize expression again
+	CExpression *pexprNormalized2 =
+		CNormalizer::PexprNormalize(mp, pexprSplitUpdateToInplace);
+	GPOS_CHECK_ABORT;
+	pexprSplitUpdateToInplace->Release();
 
 	return pexprNormalized2;
 }

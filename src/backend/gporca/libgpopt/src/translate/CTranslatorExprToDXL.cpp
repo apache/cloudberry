@@ -5056,7 +5056,7 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	CDXLPhysicalDML *pdxlopDML = GPOS_NEW(m_mp) CDXLPhysicalDML(
 		m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid, oid_colid,
 		ctid_colid, segid_colid, preserve_oids, tuple_oid,
-		dxl_direct_dispatch_info, popDML->IsInputSortReq());
+		dxl_direct_dispatch_info, popDML->IsInputSortReq(), popDML->FSplit());
 
 	// project list
 	CColRefSet *pcrsOutput = pexpr->Prpp()->PcrsRequired();
