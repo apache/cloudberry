@@ -14,7 +14,7 @@ create table rank_13652 (id int, year int)
 partition by range (year)
 (start (2006) end (2009) every (1));
 
-select gp_inject_fault('func_init_plan_end', 'suspend', dbid) from gp_segment_configuration where content = 0 and role = 'p';
+1: select gp_inject_fault('func_init_plan_end', 'suspend', dbid, current_setting('gp_session_id')::int) from gp_segment_configuration where content = 0 and role = 'p';
 
 1&: insert into rank_13652 select i,i%3+2006 from generate_series(1, 30)i;
 select gp_wait_until_triggered_fault('func_init_plan_end', 1, dbid) from gp_segment_configuration where content = 0 and role = 'p';
