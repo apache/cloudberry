@@ -965,7 +965,7 @@ ExecChooseHashTableSize(double ntuples, int tupwidth, bool useskew,
 		 */
 		bucket_size = (tupsize * gp_hashjoin_tuples_per_bucket + sizeof(HashJoinTuple));
 		if (hash_table_bytes < bucket_size)
-			sbuckets = 1;
+			sbuckets = 1;		/* avoid pg_nextpower2_size_t(0) */
 		else
 			sbuckets = pg_nextpower2_size_t(hash_table_bytes / bucket_size);
 		sbuckets = Min(sbuckets, max_pointers);
