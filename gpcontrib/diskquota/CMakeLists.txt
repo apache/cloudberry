@@ -96,7 +96,7 @@ set_target_properties(
   PROPERTIES OUTPUT_NAME ${DISKQUOTA_BINARY_NAME}
              PREFIX ""
              C_STANDARD 99
-             LINKER_LANGUAGE "CXX")
+             LINKER_LANGUAGE "C")
 
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)
