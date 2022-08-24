@@ -2,25 +2,28 @@
 
 set -e
 
-workspace=${WORKSPACE:-"$HOME/workspace"}
 fly=${FLY:-"fly"}
-echo "'workspace' location: ${workspace}"
 echo "'fly' command: ${fly}"
 echo ""
+proj_name="diskquota"
 
 usage() {
-    echo "Usage: $0 -t <concourse_target> -c <pr|commit|dev> [-p <pipeline_name>] [-b branch]" 1>&2
     if [ -n "$1" ]; then
-        echo "$1"
+        echo "$1" 1>&2
+        echo "" 1>&2
     fi
+
+    echo "Usage: $0 -t <concourse_target> -c <pr|rel|merge|dev> [-p <postfix>] [-b branch] [-T]"
+    echo "Options:"
+    echo "       '-T' adds '_test' suffix to the pipeline type. Useful for pipeline debugging."
     exit 1
 }
 
 # Parse command line options
-while getopts ":c:t:p:b:" o; do
+while getopts ":c:t:p:b:T" o; do
     case "${o}" in
         c)
-            # pipeline type/config. pr/commit/dev/release
+            # pipeline type/config. pr/merge/dev/rel
             pipeline_config=${OPTARG}
             ;;
         t)
@@ -29,11 +32,14 @@ while getopts ":c:t:p:b:" o; do
             ;;
         p)
             # pipeline name
-            pipeline_name=${OPTARG}
+            postfix=${OPTARG}
             ;;
         b)
             # branch name
             branch=${OPTARG}
+            ;;
+        T)
+            test_suffix="_test"
             ;;
         *)
             usage ""
@@ -46,52 +52,66 @@ if [ -z "${target}" ] || [ -z "${pipeline_config}" ]; then
     usage ""
 fi
 
+pipeline_type=""
 # Decide ytt options to generate pipeline
 case ${pipeline_config} in
   pr)
-      if [ -z "${pipeline_name}" ]; then
-          pipeline_name="PR:diskquota"
-      fi
+      pipeline_type="pr"
       config_file="pr.yml"
-      hook_res="diskquota_pr"
+      hook_res="${proj_name}_pr"
     ;;
-  commit)
-      if [ -z "${pipeline_name}" ]; then
-          pipeline_name="COMMIT:diskquota:gpdb"
-      fi
+  merge|commit)
       # Default branch is 'gpdb' as it is our main branch
       if [ -z "${branch}" ]; then
           branch="gpdb"
       fi
+      pipeline_type="merge"
       config_file="commit.yml"
-      hook_res="diskquota_commit"
+      hook_res="${proj_name}_commit"
     ;;
   dev)
-      if [ -z "${pipeline_name}" ]; then
-          usage "'-p' needs to be supplied to specify the pipeline name for flying a 'dev' pipeline."
+      if [ -z "${postfix}" ]; then
+          usage "'-p' needs to be supplied to specify the pipeline name postfix for flying a 'dev' pipeline."
       fi
-      pipeline_name="DEV:${pipeline_name}"
+      if [ -z "${branch}" ]; then
+          usage "'-b' needs to be supplied to specify the branch for flying a 'dev' pipeline."
+      fi
+      pipeline_type="dev"
       config_file="dev.yml"
     ;;
-  release)
+  release|rel)
       # Default branch is 'gpdb' as it is our main branch
       if [ -z "${branch}" ]; then
           branch="gpdb"
       fi
-      if [ -z "${pipeline_name}" ]; then
-          pipeline_name="RELEASE:diskquota:${branch}"
-      fi
+      pipeline_type="rel"
       config_file="release.yml"
-      hook_res="diskquota_commit"
+      hook_res="${proj_name}_commit"
     ;;
   *)
       usage ""
     ;;
 esac
 
-yml_path="/tmp/diskquota_pipeline.yml"
+yml_path="/tmp/${proj_name}.yml"
 my_path=$(realpath "${BASH_SOURCE[0]}")
 ytt_base=$(dirname "${my_path}")/pipeline
+# pipeline cannot contain '/'
+pipeline_name=${pipeline_name/\//"_"}
+
+# Generate pipeline name
+if [ -n "${test_suffix}" ]; then
+    pipeline_type="${pipeline_type}_test"
+fi
+pipeline_name="${pipeline_type}.${proj_name}"
+if [ -n "${branch}" ]; then
+    pipeline_name="${pipeline_name}.${branch}"
+fi
+if [ -n "${postfix}" ]; then
+    pipeline_name="${pipeline_name}.${postfix}"
+fi
+# pipeline cannot contain '/'
+pipeline_name=${pipeline_name/\//"_"}
 
 ytt --data-values-file "${ytt_base}/res_def.yml" \
     -f "${ytt_base}/base.lib.yml" \
@@ -108,7 +128,7 @@ set -v
     sp \
     -p "${pipeline_name}" \
     -c "${yml_path}" \
-    -v "diskquota-branch=${branch}"
+    -v "${proj_name}-branch=${branch}"
 set +v
 
 if [ "${pipeline_config}" == "dev" ]; then
