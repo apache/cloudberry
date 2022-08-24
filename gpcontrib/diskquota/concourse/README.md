@@ -2,20 +2,21 @@
 
 ## Naming Prefix Rule
 
-- `PR:<project_name>` for pull-request pipelines
-- `COMMIT:<project_name>:<branch_name>` for branch pipelines. It will be executed when a commit committed/merged into the branch.
-- `DEV:<your_name>_<project_name>[any_other_info]` for personal development usage. Put your name into the pipeline name so others can know who own it.
+- `pr.<project_name>` for pull-request pipelines
+- `merge.<project_name>.<branch_name>` for branch pipelines. It will be executed when a commit committed/merged into the branch.
+- `dev.<project_name>.<branch_name>.<your_postfix>` for personal development usage. Put your name into the pipeline name so others can know who own it.
+- `<pipeline>_test.<project_name>.<branch_name>` for pipeline debugging.
 
 ## Pipelines for daily work
 
 ### PR Pipeline
 
-https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/PR:diskquota
+https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/pr.diskquota
 
 ### Main Branch Pipeline
 
-The development happens on the `gpdb` branch. The commit pipeline for the `gpdb`
-https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/COMMIT:diskquota:gpdb
+The development happens on the `gpdb` branch. The merge pipeline for the `gpdb` branch is
+https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/merge.diskquota:gpdb
 
 
 # Fly a pipeline
@@ -38,10 +39,10 @@ https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/COMMIT:diskquota:gpdb
 ./fly.sh -t extension -c pr
 ```
 
-## Fly the commit pipeline
+## Fly the merge pipeline
 
 ```
-./fly.sh -t extension -c commit
+./fly.sh -t extension -c merge
 ```
 
 ## Fly the release pipeline
@@ -54,24 +55,24 @@ The release pipeline should be located in https://prod.ci.gpdb.pivotal.io
 # Login to prod
 fly -t prod login -c https://prod.ci.gpdb.pivotal.io
 # Fly the release pipeline
-./fly.sh -t prod -c release
+./fly.sh -t prod -c rel
 ```
 
 To fly a release pipeline from a specific branch:
 
 ```
-./fly.sh -t <target> -c release -b release/<major>.<minor>
+./fly.sh -t <target> -c rel -b release/<major>.<minor>
 ```
 
 ## Fly the dev pipeline
 
 ```
-./fly.sh -t extension -c dev -p <your_name>_diskquota -b <your_branch>
+./fly.sh -t extension -c dev -p <your_postfix> -b <your_branch>
 ```
 
 ## Webhook
 
-By default, the PR and commit pipelines are using webhook instead of polling to trigger a build. The webhook URL will be printed when flying such a pipeline by `fly.sh`. The webhook needs to be set in the `github repository` -> `Settings` -> `Webhooks` with push notification enabled.
+By default, the PR and merge pipelines are using webhook instead of polling to trigger a build. The webhook URL will be printed when flying such a pipeline by `fly.sh`. The webhook needs to be set in the `github repository` -> `Settings` -> `Webhooks` with push notification enabled.
 
 To test if the webhook works, use `curl` to send a `POST` request to the hook URL with some random data. If it is the right URL, the relevant resource will be refreshed on the Concourse UI. The command line looks like:
 
@@ -83,6 +84,6 @@ curl --data-raw "foo" <hook_url>
 
 ## PR pipeline is not triggered.
 
-The PR pipeline relies on the webhook to detect the new PR. However, due the the limitation of the webhook implemention of concourse, we rely on the push hook for this. It means if the PR is from a forked repo, the PR pipeline won't be triggered immediately. To manually trigger the pipeline, go to https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/PR:diskquota/resources/diskquota_pr and click ⟳ button there.
+The PR pipeline relies on the webhook to detect the new PR. However, due to the the limitation of the webhook implemention of concourse, we rely on the push hook for this. It means if the PR is from a forked repo, the PR pipeline won't be triggered immediately. To manually trigger the pipeline, go to https://extensions.ci.gpdb.pivotal.io/teams/main/pipelines/pr.diskquota/resources/diskquota_pr and click ⟳ button there.
 
 TIPS: Just don't fork, name your branch as `<your_id>/<branch_name>` and push it here to create PR.
