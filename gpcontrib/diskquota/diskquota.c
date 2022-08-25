@@ -25,6 +25,8 @@
 #include "cdb/cdbvars.h"
 #include "commands/dbcommands.h"
 #include "executor/spi.h"
+#include "libpq/libpq-be.h"
+#include "miscadmin.h"
 #include "port/atomics.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
@@ -32,6 +34,7 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
+#include "utils/guc.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -91,6 +94,48 @@ diskquota_is_paused()
 	LWLockRelease(diskquota_locks.worker_map_lock);
 
 	return paused;
+}
+
+bool
+diskquota_is_readiness_logged()
+{
+	Assert(MyDatabaseId != InvalidOid);
+	bool is_readiness_logged;
+
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+	{
+		DiskQuotaWorkerEntry *hash_entry;
+		bool                  found;
+
+		hash_entry =
+		        (DiskQuotaWorkerEntry *)hash_search(disk_quota_worker_map, (void *)&MyDatabaseId, HASH_FIND, &found);
+		is_readiness_logged = found ? hash_entry->is_readiness_logged : false;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
+
+	return is_readiness_logged;
+}
+
+void
+diskquota_set_readiness_logged()
+{
+	Assert(MyDatabaseId != InvalidOid);
+
+	/*
+	 * We actually need ROW EXCLUSIVE lock here. Given that the current worker
+	 * is the the only process that modifies the entry, it is safe to only take
+	 * the shared lock.
+	 */
+	LWLockAcquire(diskquota_locks.worker_map_lock, LW_SHARED);
+	{
+		DiskQuotaWorkerEntry *hash_entry;
+		bool                  found;
+
+		hash_entry =
+		        (DiskQuotaWorkerEntry *)hash_search(disk_quota_worker_map, (void *)&MyDatabaseId, HASH_FIND, &found);
+		hash_entry->is_readiness_logged = true;
+	}
+	LWLockRelease(diskquota_locks.worker_map_lock);
 }
 
 /* functions of disk quota*/
@@ -256,6 +301,12 @@ void
 disk_quota_worker_main(Datum main_arg)
 {
 	char *dbname = MyBgworkerEntry->bgw_name;
+
+	MyProcPort                = (Port *)calloc(1, sizeof(Port));
+	MyProcPort->database_name = dbname; /* To show the database in the log */
+
+	/* Disable ORCA to avoid fallback */
+	optimizer = false;
 
 	ereport(LOG, (errmsg("[diskquota] start disk quota worker process to monitor database:%s", dbname)));
 
@@ -1010,7 +1061,8 @@ worker_create_entry(Oid dbid)
 	{
 		workerentry->handle = NULL;
 		pg_atomic_write_u32(&(workerentry->epoch), 0);
-		workerentry->is_paused = false;
+		workerentry->is_paused           = false;
+		workerentry->is_readiness_logged = false;
 	}
 
 	LWLockRelease(diskquota_locks.worker_map_lock);

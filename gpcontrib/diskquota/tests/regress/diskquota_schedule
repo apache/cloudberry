@@ -1,5 +1,6 @@
 test: config
 test: test_create_extension
+test: test_readiness_logged
 test: test_init_table_size_table
 test: test_relation_size
 test: test_relation_cache

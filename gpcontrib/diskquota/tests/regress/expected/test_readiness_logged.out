@@ -1,0 +1,37 @@
+CREATE DATABASE test_log_readiness;
+\c test_log_readiness
+CREATE TABLE t (i int) DISTRIBUTED BY (i);
+CREATE EXTENSION diskquota;
+WARNING:  [diskquota] diskquota is not ready because current database is not empty
+HINT:  please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota
+SELECT pg_sleep(1); --Wait for the check completes
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT count(*) FROM gp_toolkit.gp_log_database
+WHERE logmessage = '[diskquota] diskquota is not ready';
+ count 
+-------
+     1
+(1 row)
+
+\! gpstop -raf > /dev/null
+\c
+SELECT pg_sleep(1); --Wait for the check completes
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT count(*) FROM gp_toolkit.gp_log_database
+WHERE logmessage = '[diskquota] diskquota is not ready';
+ count 
+-------
+     2
+(1 row)
+
+DROP EXTENSION diskquota;
+\c contrib_regression
+DROP DATABASE test_log_readiness;

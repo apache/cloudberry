@@ -564,8 +564,7 @@ check_diskquota_state_is_ready(void)
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pushed_active_snap = true;
 		dispatch_my_db_to_all_segments();
-		do_check_diskquota_state_is_ready();
-		is_ready = true;
+		is_ready = do_check_diskquota_state_is_ready();
 	}
 	PG_CATCH();
 	{
@@ -589,7 +588,8 @@ check_diskquota_state_is_ready(void)
 }
 
 /*
- * Check whether the diskquota state is ready. Throw an error if it is not.
+ * Check whether the diskquota state is ready.
+ * Throw an error or return false if it is not.
  *
  * For empty database, table diskquota.state would be ready after
  * 'CREATE EXTENSION diskquota;'. But for non-empty database,
@@ -597,7 +597,7 @@ check_diskquota_state_is_ready(void)
  * manually to get all the table size information and
  * store them into table diskquota.table_size
  */
-void
+bool
 do_check_diskquota_state_is_ready(void)
 {
 	int       ret;
@@ -621,14 +621,17 @@ do_check_diskquota_state_is_ready(void)
 	int       state;
 	bool      isnull;
 
-	dat   = SPI_getbinval(tup, tupdesc, 1, &isnull);
-	state = isnull ? DISKQUOTA_UNKNOWN_STATE : DatumGetInt32(dat);
+	dat           = SPI_getbinval(tup, tupdesc, 1, &isnull);
+	state         = isnull ? DISKQUOTA_UNKNOWN_STATE : DatumGetInt32(dat);
+	bool is_ready = state == DISKQUOTA_READY_STATE;
 
-	if (state != DISKQUOTA_READY_STATE)
+	if (!is_ready && !diskquota_is_readiness_logged())
 	{
+		diskquota_set_readiness_logged();
 		ereport(ERROR, (errmsg("[diskquota] diskquota is not ready"),
 		                errhint("please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota")));
 	}
+	return is_ready;
 }
 
 /*
