@@ -145,7 +145,7 @@ add_custom_target(create_artifact
   COMMAND
   ${CMAKE_COMMAND} --build . --target package
   COMMAND
-  ${CMAKE_COMMAND} -E tar cvf ${artifact_NAME} "${tgz_NAME}.tar.gz")
+  ${CMAKE_COMMAND} -E tar czvf ${artifact_NAME} "${tgz_NAME}.tar.gz")
 # packing end
 
 # Create build-info
