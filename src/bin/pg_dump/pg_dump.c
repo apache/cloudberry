@@ -7312,14 +7312,8 @@ getTables(Archive *fout, int *numTables)
 		appendPQExpBufferStr(query,
 						  "AND c.relnamespace <> 3012\n"); /* BM_BITMAPINDEX_NAMESPACE in GPDB 5 and below */
 
-	if (fout->remoteVersion >= 90600)
-		appendPQExpBufferStr(query,
-						  "ORDER BY c.oid");
-	else
-		appendPQExpBufferStr(query,
-						  "AND c.oid NOT IN (select p.parchildrelid from pg_partition_rule p\n"
-						  "LEFT JOIN pg_exttable e on p.parchildrelid=e.reloid where e.reloid is null)\n"
-						  "ORDER BY c.oid");
+	appendPQExpBufferStr(query,
+						"ORDER BY c.oid");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -7464,7 +7458,8 @@ getTables(Archive *fout, int *numTables)
 		tblinfo[i].partbound = pg_strdup(PQgetvalue(res, i, i_partbound));
 
 		tblinfo[i].relstorage = *(PQgetvalue(res, i, i_relstorage));
-		if (tblinfo[i].parrelid != 0)
+
+		if (tblinfo[i].parparent && tblinfo[i].parrelid != 0 && tblinfo[i].relstorage == 'x')
 		{
 			/*
 			 * Length of tmpStr is bigger than the sum of NAMEDATALEN
@@ -7488,9 +7483,13 @@ getTables(Archive *fout, int *numTables)
 		/* other fields were zeroed above */
 
 		/*
-		 * Decide whether we want to dump this table.
+		 * GPDB5/6: To gather binary upgrade information for GP partition children,
+		 * they need to exist in the tblinfo array for findTableByOid.
+		 * This requires the getTable query to also collect all
+		 * partition children so they can be referenced, but we do not want
+		 * to dump the partition children as their DDL will be handled by the parent.
 		 */
-		if (tblinfo[i].relkind == RELKIND_COMPOSITE_TYPE)
+		if (tblinfo[i].relkind == RELKIND_COMPOSITE_TYPE || tblinfo[i].parrelid != 0)
 			tblinfo[i].dobj.dump = DUMP_COMPONENT_NONE;
 		else
 			selectDumpableTable(&tblinfo[i], fout);
@@ -7557,7 +7556,6 @@ getTables(Archive *fout, int *numTables)
 
 		/* GPDB_14_MERGE_FIXME: GPDB_96_MERGE_FIXME: Is the parrelid check still needed? */
 		if ((tblinfo[i].dobj.dump & DUMP_COMPONENTS_REQUIRING_LOCK) &&
-			tblinfo[i].parrelid == 0 &&
 			(tblinfo[i].relkind == RELKIND_RELATION ||
 			 tblinfo[i].relkind == RELKIND_PARTITIONED_TABLE))
 		{
@@ -17913,7 +17911,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 		 * decision, instead seems better to decide based on version. GPDB6
 		 * and below have pg_get_partition_def functions.
 		 */
-		if (fout->remoteVersion <= 90400)
+		if (fout->remoteVersion <= 90400 && tbinfo->parparent)
 		{
 			bool		isPartitioned = false;
 			PQExpBuffer query = createPQExpBuffer();
@@ -17976,8 +17974,12 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 				appendPQExpBuffer(q, ";\n %s", PQgetvalue(res, 0, 0));
 
 			PQclear(res);
-
-			if (isPartitioned)
+		
+		/*
+		 * If GP partitioning is supported and table is a parent partition
+		 * add the partitioning constraints to the table definition.
+		 */
+			if (isPartitioned && tbinfo->parparent)
 			{
 				/*
 				 * Find out if there are any external partitions.
