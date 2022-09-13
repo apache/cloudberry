@@ -309,6 +309,7 @@
 		"krb_server_keyfile",
 		"lc_collate",
 		"lc_ctype",
+		"lc_messages",
 		"listen_addresses",
 		"local_preload_libraries",
 		"lo_compat_privileges",
