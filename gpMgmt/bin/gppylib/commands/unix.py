@@ -625,8 +625,8 @@ class PgPortIsActive(Command):
 
         for r in rows:
             val = r.split('.')
-            netstatport = int(val[len(val) - 1])
-            if netstatport == self.port:
+            ssport = int(val[len(val) - 1])
+            if ssport == self.port:
                 return True
 
         return False
