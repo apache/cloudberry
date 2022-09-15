@@ -44,6 +44,7 @@
 
 /* cluster level max size of rejectmap */
 #define MAX_DISK_QUOTA_REJECT_ENTRIES (1024 * 1024)
+#define MAX_TABLES (1024L * 8)
 /* cluster level init size of rejectmap */
 #define INIT_DISK_QUOTA_REJECT_ENTRIES 8192
 /* per database level max size of rejectmap */
@@ -61,6 +62,7 @@ typedef struct GlobalRejectMapEntry GlobalRejectMapEntry;
 typedef struct LocalRejectMapEntry  LocalRejectMapEntry;
 
 int SEGCOUNT = 0;
+
 /*
  * local cache of table disk size and corresponding schema and owner
  */
@@ -78,6 +80,9 @@ struct TableSizeEntry
 	bool need_flush; /* whether need to flush to table table_size */
 };
 
+/*
+ * table disk size and corresponding schema and owner
+ */
 struct QuotaMapEntryKey
 {
 	Oid   keys[MAX_NUM_KEYS_QUOTA_MAP];
@@ -164,7 +169,6 @@ static HTAB *local_disk_quota_reject_map = NULL;
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 /* functions to maintain the quota maps */
-static void init_all_quota_maps(void);
 static void update_size_for_quota(int64 size, QuotaType type, Oid *keys, int16 segid);
 static void update_limit_for_quota(int64 limit, float segratio, QuotaType type, Oid *keys);
 static void remove_quota(QuotaType type, Oid *keys, int16 segid);
@@ -188,25 +192,7 @@ static void init_lwlocks(void);
 
 static void export_exceeded_error(GlobalRejectMapEntry *entry, bool skip_name);
 void        truncateStringInfo(StringInfo str, int nchars);
-
-static void
-init_all_quota_maps(void)
-{
-	HASHCTL hash_ctl   = {0};
-	hash_ctl.entrysize = sizeof(struct QuotaMapEntry);
-	hash_ctl.hcxt      = TopMemoryContext;
-	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
-	{
-		hash_ctl.keysize = sizeof(struct QuotaMapEntryKey);
-		hash_ctl.hash    = tag_hash;
-		if (quota_info[type].map != NULL)
-		{
-			hash_destroy(quota_info[type].map);
-		}
-		quota_info[type].map =
-		        hash_create(quota_info[type].map_name, 1024L, &hash_ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-	}
-}
+static void format_name(const char *prefix, uint32 id, StringInfo str);
 
 /* add a new entry quota or update the old entry quota */
 static void
@@ -417,21 +403,12 @@ disk_quota_shmem_startup(void)
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(Oid);
-	hash_ctl.entrysize = sizeof(Oid);
+	hash_ctl.entrysize = sizeof(struct MonitorDBEntryStruct);
 	hash_ctl.hash      = oid_hash;
 
-	monitoring_dbid_cache = ShmemInitHash("table oid cache which shoud tracking", MAX_NUM_MONITORED_DB,
-	                                      MAX_NUM_MONITORED_DB, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
-
-	/* use disk_quota_worker_map to manage diskquota worker processes. */
-	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize   = sizeof(Oid);
-	hash_ctl.entrysize = sizeof(DiskQuotaWorkerEntry);
-	hash_ctl.hash      = oid_hash;
-
-	disk_quota_worker_map = ShmemInitHash("disk quota worker map", MAX_NUM_MONITORED_DB, MAX_NUM_MONITORED_DB,
-	                                      &hash_ctl, HASH_ELEM | HASH_FUNCTION);
-
+	monitored_dbid_cache = ShmemInitHash("table oid cache which shoud tracking", MAX_NUM_MONITORED_DB,
+	                                     MAX_NUM_MONITORED_DB, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	init_launcher_shmem();
 	LWLockRelease(AddinShmemInitLock);
 }
 
@@ -443,7 +420,7 @@ disk_quota_shmem_startup(void)
  * extension_ddl_message.
  * extension_ddl_lock is used to avoid concurrent diskquota
  * extension ddl(create/drop) command.
- * monitoring_dbid_cache_lock is used to shared `monitoring_dbid_cache` on segment process.
+ * monitored_dbid_cache_lock is used to shared `monitored_dbid_cache` on segment process.
  */
 static void
 init_lwlocks(void)
@@ -452,10 +429,21 @@ init_lwlocks(void)
 	diskquota_locks.reject_map_lock            = LWLockAssign();
 	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
 	diskquota_locks.extension_ddl_lock         = LWLockAssign();
-	diskquota_locks.monitoring_dbid_cache_lock = LWLockAssign();
+	diskquota_locks.monitored_dbid_cache_lock  = LWLockAssign();
 	diskquota_locks.relation_cache_lock        = LWLockAssign();
-	diskquota_locks.worker_map_lock            = LWLockAssign();
+	diskquota_locks.dblist_lock                = LWLockAssign();
+	diskquota_locks.workerlist_lock            = LWLockAssign();
 	diskquota_locks.altered_reloid_cache_lock  = LWLockAssign();
+}
+
+static Size
+diskquota_worker_shmem_size()
+{
+	Size size;
+	size = hash_estimate_size(1024 * 1024, sizeof(TableSizeEntry));
+	size = add_size(size, hash_estimate_size(MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, sizeof(LocalRejectMapEntry)));
+	size = add_size(size, hash_estimate_size(1024L, sizeof(struct QuotaMapEntry)) * NUM_QUOTA_TYPES);
+	return size;
 }
 
 /*
@@ -466,15 +454,16 @@ static Size
 DiskQuotaShmemSize(void)
 {
 	Size size;
-
 	size = sizeof(ExtensionDDLMessage);
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_REJECT_ENTRIES, sizeof(GlobalRejectMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelationCacheEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelidCacheEntry)));
-	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(Oid)));
-	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB, sizeof(DiskQuotaWorkerEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(Oid)));
+	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB,
+	                                         sizeof(struct MonitorDBEntryStruct))); // monitored_dbid_cache
+	size = add_size(size, diskquota_launcher_shmem_size());
+	size = add_size(size, diskquota_worker_shmem_size() * MAX_NUM_MONITORED_DB);
 	return size;
 }
 
@@ -483,63 +472,123 @@ DiskQuotaShmemSize(void)
  * Init disk quota model when the worker process firstly started.
  */
 void
-init_disk_quota_model(void)
+init_disk_quota_model(uint32 id)
 {
-	HASHCTL hash_ctl;
+	HASHCTL        hash_ctl;
+	StringInfoData str;
+	initStringInfo(&str);
 
-	/* initialize hash table for table/schema/role etc. */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(TableEntryKey);
 	hash_ctl.entrysize = sizeof(TableSizeEntry);
-	hash_ctl.hcxt      = CurrentMemoryContext;
 	hash_ctl.hash      = tag_hash;
 
-	table_size_map = hash_create("TableSizeEntry map", 1024 * 8, &hash_ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	format_name("TableSizeEntrymap", id, &str);
+	table_size_map = ShmemInitHash(str.data, MAX_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
 
-	init_all_quota_maps();
-
-	/*
-	 * local diskquota reject map is used to reduce the lock hold time of
-	 * rejectmap in shared memory
-	 */
+	/* for localrejectmap */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(RejectMapEntry);
 	hash_ctl.entrysize = sizeof(LocalRejectMapEntry);
-	hash_ctl.hcxt      = CurrentMemoryContext;
 	hash_ctl.hash      = tag_hash;
-
+	/* WARNNING: The max length of name of the map is 48 */
+	format_name("localrejectmap", id, &str);
 	local_disk_quota_reject_map =
-	        hash_create("local rejectmap whose quota limitation is reached", MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES,
-	                    &hash_ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	        ShmemInitHash(str.data, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl,
+	                      HASH_ELEM | HASH_FUNCTION);
+
+	/* for quota_info */
+
+	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
+	{
+		memset(&hash_ctl, 0, sizeof(hash_ctl));
+		hash_ctl.entrysize = sizeof(struct QuotaMapEntry);
+		hash_ctl.keysize   = sizeof(struct QuotaMapEntryKey);
+		hash_ctl.hash      = tag_hash;
+		format_name(quota_info[type].map_name, id, &str);
+		quota_info[type].map = ShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	}
+	pfree(str.data);
 }
 
-static void
-dispatch_my_db_to_all_segments(void)
+/*
+ * Reset the shared memory of diskquota worker
+ *
+ * Suppose a user first drops diskquota extension, then recreates it in
+ * the same database, as diskquota worker will get the same memory address
+ * as before.
+ *
+ * As the shared memory can not be recycled, so we just clean up the shared
+ * memory when dropping the extension.
+ * - memset diskquotaDBStatus to 0
+ * - clean all items in the maps
+ */
+void
+vacuum_disk_quota_model(uint32 id)
 {
-	/* Add current database to the monitored db cache on all segments */
-	int ret = SPI_execute_with_args(
-	        "SELECT diskquota.diskquota_fetch_table_stat($1, ARRAY[]::oid[]) FROM gp_dist_random('gp_id')", 1,
-	        (Oid[]){
-	                INT4OID,
-	        },
-	        (Datum[]){
-	                Int32GetDatum(ADD_DB_TO_MONITOR),
-	        },
-	        NULL, true, 0);
+	HASH_SEQ_STATUS       iter;
+	TableSizeEntry       *tsentry = NULL;
+	LocalRejectMapEntry  *localrejectentry;
+	struct QuotaMapEntry *qentry;
 
-	ereportif(ret != SPI_OK_SELECT, ERROR,
-	          (errcode(ERRCODE_INTERNAL_ERROR),
-	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+	HASHCTL        hash_ctl;
+	StringInfoData str;
+	initStringInfo(&str);
 
-	/* Add current database to the monitored db cache on coordinator */
-	update_diskquota_db_list(MyDatabaseId, HASH_ENTER);
+	/* table_size_map */
+	memset(&hash_ctl, 0, sizeof(hash_ctl));
+	hash_ctl.keysize   = sizeof(TableEntryKey);
+	hash_ctl.entrysize = sizeof(TableSizeEntry);
+	hash_ctl.hash      = tag_hash;
+
+	format_name("TableSizeEntrymap", id, &str);
+	table_size_map = ShmemInitHash(str.data, MAX_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	hash_seq_init(&iter, table_size_map);
+	while ((tsentry = hash_seq_search(&iter)) != NULL)
+	{
+		hash_search(table_size_map, &tsentry->reloid, HASH_REMOVE, NULL);
+	}
+
+	/* localrejectmap */
+	memset(&hash_ctl, 0, sizeof(hash_ctl));
+	hash_ctl.keysize   = sizeof(RejectMapEntry);
+	hash_ctl.entrysize = sizeof(LocalRejectMapEntry);
+	hash_ctl.hash      = tag_hash;
+	/* WARNNING: The max length of name of the map is 48 */
+	format_name("localrejectmap", id, &str);
+	local_disk_quota_reject_map =
+	        ShmemInitHash(str.data, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl,
+	                      HASH_ELEM | HASH_FUNCTION);
+	hash_seq_init(&iter, local_disk_quota_reject_map);
+	while ((localrejectentry = hash_seq_search(&iter)) != NULL)
+	{
+		hash_search(local_disk_quota_reject_map, &localrejectentry->keyitem, HASH_REMOVE, NULL);
+	}
+
+	/* quota_info */
+
+	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
+	{
+		memset(&hash_ctl, 0, sizeof(hash_ctl));
+		hash_ctl.entrysize = sizeof(struct QuotaMapEntry);
+		hash_ctl.keysize   = sizeof(struct QuotaMapEntryKey);
+		hash_ctl.hash      = tag_hash;
+		format_name(quota_info[type].map_name, id, &str);
+		quota_info[type].map = ShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+		hash_seq_init(&iter, quota_info[type].map);
+		while ((qentry = hash_seq_search(&iter)) != NULL)
+		{
+			hash_search(quota_info[type].map, &qentry->keys, HASH_REMOVE, NULL);
+		}
+	}
+	pfree(str.data);
 }
 
 /*
  * Check whether the diskquota state is ready
  */
 bool
-check_diskquota_state_is_ready(void)
+check_diskquota_state_is_ready()
 {
 	bool is_ready           = false;
 	bool connected          = false;
@@ -563,8 +612,7 @@ check_diskquota_state_is_ready(void)
 		connected = true;
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pushed_active_snap = true;
-		dispatch_my_db_to_all_segments();
-		is_ready = do_check_diskquota_state_is_ready();
+		is_ready           = do_check_diskquota_state_is_ready();
 	}
 	PG_CATCH();
 	{
@@ -2026,4 +2074,32 @@ show_rejectmap(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(funcctx);
+}
+
+void
+update_monitor_db_mpp(Oid dbid, FetchTableStatType action, const char *schema)
+{
+	StringInfoData sql_command;
+	initStringInfo(&sql_command);
+	appendStringInfo(&sql_command,
+	                 "SELECT %s.diskquota_fetch_table_stat(%d, '{%d}'::oid[]) FROM gp_dist_random('gp_id')", schema,
+	                 action, dbid);
+	/* Add current database to the monitored db cache on all segments */
+	int ret = SPI_execute(sql_command.data, true, 0);
+	pfree(sql_command.data);
+
+	ereportif(ret != SPI_OK_SELECT, ERROR,
+	          (errcode(ERRCODE_INTERNAL_ERROR),
+	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
+
+	/* Add current database to the monitored db cache on coordinator */
+	update_monitor_db(dbid, action);
+}
+
+static void
+format_name(const char *prefix, uint32 id, StringInfo str)
+{
+	resetStringInfo(str);
+	appendStringInfo(str, "%s_%u", prefix, id);
+	Assert(str->len <= SHMEM_INDEX_KEYSIZE);
 }
