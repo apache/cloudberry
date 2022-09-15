@@ -17,6 +17,7 @@
 #include "postgres.h"
 #include "port/atomics.h"
 
+#include "lib/ilist.h"
 #include "fmgr.h"
 #include "storage/lock.h"
 #include "storage/lwlock.h"
@@ -29,7 +30,10 @@
 #include <signal.h>
 
 /* max number of monitored database with diskquota enabled */
-#define MAX_NUM_MONITORED_DB 10
+#define MAX_NUM_MONITORED_DB 50
+#define LAUNCHER_SCHEMA "diskquota_utility"
+#define EXTENSION_SCHEMA "diskquota"
+
 typedef enum
 {
 	NAMESPACE_QUOTA = 0,
@@ -57,6 +61,8 @@ typedef enum
 	FETCH_ACTIVE_SIZE, /* fetch size for active tables */
 	ADD_DB_TO_MONITOR,
 	REMOVE_DB_FROM_BEING_MONITORED,
+	PAUSE_DB_TO_MONITOR,
+	RESUME_DB_TO_MONITOR,
 } FetchTableStatType;
 
 typedef enum
@@ -71,9 +77,11 @@ struct DiskQuotaLocks
 	LWLock *reject_map_lock;
 	LWLock *extension_ddl_message_lock;
 	LWLock *extension_ddl_lock; /* ensure create diskquota extension serially */
-	LWLock *monitoring_dbid_cache_lock;
+	LWLock *monitored_dbid_cache_lock;
 	LWLock *relation_cache_lock;
-	LWLock *worker_map_lock;
+	/* dblist_lock is used to protect a DiskquotaDBEntry's content */
+	LWLock *dblist_lock;
+	LWLock *workerlist_lock;
 	LWLock *altered_reloid_cache_lock;
 };
 typedef struct DiskQuotaLocks DiskQuotaLocks;
@@ -84,6 +92,7 @@ typedef struct DiskQuotaLocks DiskQuotaLocks;
  * the diskquota launcher process and backends.
  * When backend create an extension, it send a message to launcher
  * to start the diskquota worker process and write the corresponding
+ *
  * dbOid into diskquota database_list table in postgres database.
  * When backend drop an extension, it will send a message to launcher
  * to stop the diskquota worker process and remove the dbOid from diskquota
@@ -132,17 +141,56 @@ extern DiskQuotaLocks       diskquota_locks;
 extern ExtensionDDLMessage *extension_ddl_message;
 
 typedef struct DiskQuotaWorkerEntry DiskQuotaWorkerEntry;
+typedef struct DiskquotaDBEntry     DiskquotaDBEntry;
 
-/* disk quota worker info used by launcher to manage the worker processes. */
+/*
+ * disk quota worker info used by launcher to manage the worker processes
+ * used in DiskquotaLauncherShmem->{freeWorkers, runningWorkers}
+ */
 struct DiskQuotaWorkerEntry
 {
-	Oid              dbid;
-	pg_atomic_uint32 epoch;               /* this counter will be increased after each worker loop */
-	bool             is_paused;           /* true if this worker is paused */
-	bool             is_readiness_logged; /* true if we have logged the error message for not ready */
+	dlist_node node; // the double linked list header
 
-	// NOTE: this field only can access in diskquota launcher, in other process it is dangling pointer
-	BackgroundWorkerHandle *handle;
+	int               id;      // starts from 0, -1 means invalid
+	DiskquotaDBEntry *dbEntry; // pointer to shared memory. DiskquotaLauncherShmem->dbArray
+};
+
+typedef struct
+{
+	dlist_head        freeWorkers;    // a list of DiskQuotaWorkerEntry
+	dlist_head        runningWorkers; // a list of DiskQuotaWorkerEntry
+	DiskquotaDBEntry *dbArray;        // size == MAX_NUM_MONITORED_DB
+	DiskquotaDBEntry *dbArrayTail;
+	int               running_workers_num;
+	volatile bool     isDynamicWorker;
+	/*
+	DiskQuotaWorkerEntry worker[diskquota_max_workers]; // the hidden memory to store WorkerEntry
+	DiskquotaDBEntry     dbentry[MAX_NUM_MONITORED_DB]; // the hidden memory for dbentry
+	*/
+} DiskquotaLauncherShmemStruct;
+
+/* In shmem, only used on master */
+struct DiskquotaDBEntry
+{
+	int id;   // the index of DiskquotaLauncherShmem->dbArray, start from 0
+	Oid dbid; // the database oid in postgres catalog
+
+#define INVALID_WORKER_ID -1
+	int workerId; // the id of the worker which is running for the, 0 means no worker for it.
+
+	bool inited; // this entry is inited, will set to true after the worker finish the frist run.
+	bool in_use; // this slot is in using. AKA dbid != 0
+};
+
+/* used in monitored_dbid_cache, in shmem, both on master and segments */
+typedef struct MonitorDBEntryStruct *MonitorDBEntry;
+struct MonitorDBEntryStruct
+{
+	Oid dbid; // the key
+
+	bool             paused;
+	bool             is_readiness_logged; /* true if we have logged the error message for not ready */
+	pg_atomic_uint32 epoch;               /* this counter will be increased after each worker loop */
 };
 
 extern HTAB *disk_quota_worker_map;
@@ -156,7 +204,7 @@ extern void invalidate_database_rejectmap(Oid dbid);
 
 /* quota model interface*/
 extern void init_disk_quota_shmem(void);
-extern void init_disk_quota_model(void);
+extern void init_disk_quota_model(uint32 id);
 extern void refresh_disk_quota_model(bool force);
 extern bool check_diskquota_state_is_ready(void);
 extern bool quota_check_common(Oid reloid, RelFileNode *relfilenode);
@@ -180,11 +228,15 @@ extern List    *diskquota_get_index_list(Oid relid);
 extern void     diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirrelid, Oid *visimaprelid);
 extern Oid      diskquota_parse_primary_table_oid(Oid namespace, char *relname);
 
-extern bool         worker_increase_epoch(Oid database_oid);
-extern unsigned int worker_get_epoch(Oid database_oid);
+extern bool         worker_increase_epoch(Oid dbid);
+extern unsigned int worker_get_epoch(Oid dbid);
 extern bool         diskquota_is_paused(void);
 extern bool         do_check_diskquota_state_is_ready(void);
 extern bool         diskquota_is_readiness_logged(void);
 extern void         diskquota_set_readiness_logged(void);
-
+extern Size         diskquota_launcher_shmem_size(void);
+extern void         init_launcher_shmem(void);
+extern void         vacuum_disk_quota_model(uint32 id);
+extern void         update_monitor_db(Oid dbid, FetchTableStatType action);
+extern void         update_monitor_db_mpp(Oid dbid, FetchTableStatType action, const char *schema);
 #endif

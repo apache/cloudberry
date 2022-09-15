@@ -353,7 +353,7 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 	extension_ddl_message->dbid    = MyDatabaseId;
 	launcher_pid                   = extension_ddl_message->launcher_pid;
 	/* setup sig handler to diskquota launcher process */
-	rc = kill(launcher_pid, SIGUSR1);
+	rc = kill(launcher_pid, SIGUSR2);
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	if (rc == 0)
 	{
@@ -401,43 +401,6 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 }
 
 /*
- * Dispatch pausing/resuming command to segments.
- */
-static void
-dispatch_pause_or_resume_command(Oid dbid, bool pause_extension)
-{
-	CdbPgResults   cdb_pgresults = {NULL, 0};
-	int            i;
-	StringInfoData sql;
-
-	initStringInfo(&sql);
-	appendStringInfo(&sql, "SELECT diskquota.%s", pause_extension ? "pause" : "resume");
-	if (dbid == InvalidOid)
-	{
-		appendStringInfo(&sql, "()");
-	}
-	else
-	{
-		appendStringInfo(&sql, "(%d)", dbid);
-	}
-	CdbDispatchCommand(sql.data, DF_NONE, &cdb_pgresults);
-
-	for (i = 0; i < cdb_pgresults.numResults; ++i)
-	{
-		PGresult *pgresult = cdb_pgresults.pg_results[i];
-		if (PQresultStatus(pgresult) != PGRES_TUPLES_OK)
-		{
-			cdbdisp_clearCdbPgResults(&cdb_pgresults);
-			ereport(ERROR, (errmsg("[diskquota] %s extension on segments, encounter unexpected result from segment: %d",
-			                       pause_extension ? "pausing" : "resuming", PQresultStatus(pgresult))));
-		}
-	}
-
-	pfree(sql.data);
-	cdbdisp_clearCdbPgResults(&cdb_pgresults);
-}
-
-/*
  * this function is called by user.
  * pause diskquota in current or specific database.
  * After this function being called, diskquota doesn't emit an error when the disk usage limit is exceeded.
@@ -455,26 +418,17 @@ diskquota_pause(PG_FUNCTION_ARGS)
 	{
 		dbid = PG_GETARG_OID(0);
 	}
-
-	// pause current worker
-	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
-	{
-		bool                  found;
-		DiskQuotaWorkerEntry *hentry;
-
-		hentry = (DiskQuotaWorkerEntry *)hash_search(disk_quota_worker_map, (void *)&dbid,
-		                                             // segment dose not boot the worker
-		                                             // this will add new element on segment
-		                                             // delete this element in diskquota_resume()
-		                                             HASH_ENTER, &found);
-
-		hentry->is_paused = true;
-	}
-	LWLockRelease(diskquota_locks.worker_map_lock);
-
 	if (IS_QUERY_DISPATCHER())
-		dispatch_pause_or_resume_command(PG_NARGS() == 0 ? InvalidOid : dbid, true /* pause_extension */);
-
+	{
+		// pause current worker
+		if (SPI_OK_CONNECT != SPI_connect())
+		{
+			ereport(ERROR,
+			        (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] unable to connect to execute SPI query")));
+		}
+		update_monitor_db_mpp(dbid, PAUSE_DB_TO_MONITOR, EXTENSION_SCHEMA);
+		SPI_finish();
+	}
 	PG_RETURN_VOID();
 }
 
@@ -497,28 +451,16 @@ diskquota_resume(PG_FUNCTION_ARGS)
 	}
 
 	// active current worker
-	LWLockAcquire(diskquota_locks.worker_map_lock, LW_EXCLUSIVE);
-	{
-		bool                  found;
-		DiskQuotaWorkerEntry *hentry;
-
-		hentry = (DiskQuotaWorkerEntry *)hash_search(disk_quota_worker_map, (void *)&dbid, HASH_FIND, &found);
-		if (found)
-		{
-			hentry->is_paused = false;
-		}
-
-		// remove the element since we do not need any more
-		// ref diskquota_pause()
-		if (found && hentry->handle == NULL)
-		{
-			hash_search(disk_quota_worker_map, (void *)&dbid, HASH_REMOVE, &found);
-		}
-	}
-	LWLockRelease(diskquota_locks.worker_map_lock);
-
 	if (IS_QUERY_DISPATCHER())
-		dispatch_pause_or_resume_command(PG_NARGS() == 0 ? InvalidOid : dbid, false /* pause_extension */);
+	{
+		if (SPI_OK_CONNECT != SPI_connect())
+		{
+			ereport(ERROR,
+			        (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] unable to connect to execute SPI query")));
+		}
+		update_monitor_db_mpp(dbid, RESUME_DB_TO_MONITOR, EXTENSION_SCHEMA);
+		SPI_finish();
+	}
 
 	PG_RETURN_VOID();
 }
@@ -587,12 +529,6 @@ dq_object_access_hook_on_drop(void)
 {
 	int rc, launcher_pid;
 
-	/*
-	 * Remove the current database from monitored db cache
-	 * on all segments and on coordinator.
-	 */
-	update_diskquota_db_list(MyDatabaseId, HASH_REMOVE);
-
 	if (!IS_QUERY_DISPATCHER())
 	{
 		return;
@@ -609,7 +545,7 @@ dq_object_access_hook_on_drop(void)
 	extension_ddl_message->result  = ERR_PENDING;
 	extension_ddl_message->dbid    = MyDatabaseId;
 	launcher_pid                   = extension_ddl_message->launcher_pid;
-	rc                             = kill(launcher_pid, SIGUSR1);
+	rc                             = kill(launcher_pid, SIGUSR2);
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	if (rc == 0)
 	{
@@ -1235,33 +1171,46 @@ get_size_in_mb(char *str)
  * Will print a WARNING to log if out of memory
  */
 void
-update_diskquota_db_list(Oid dbid, HASHACTION action)
+update_monitor_db(Oid dbid, FetchTableStatType action)
 {
 	bool found = false;
 
-	/* add/remove the dbid to monitoring database cache to filter out table not under
-	 * monitoring in hook functions
-	 */
+	// add/remove the dbid to monitoring database cache to filter out table not under
+	// monitoring in hook functions
 
-	LWLockAcquire(diskquota_locks.monitoring_dbid_cache_lock, LW_EXCLUSIVE);
-	if (action == HASH_ENTER)
+	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_EXCLUSIVE);
+	if (action == ADD_DB_TO_MONITOR)
 	{
-		Oid *entry = NULL;
-		entry      = hash_search(monitoring_dbid_cache, &dbid, HASH_ENTER_NULL, &found);
+		MonitorDBEntry entry = hash_search(monitored_dbid_cache, &dbid, HASH_ENTER_NULL, &found);
 		if (entry == NULL)
 		{
 			ereport(WARNING, (errmsg("can't alloc memory on dbid cache, there ary too many databases to monitor")));
 		}
+		entry->paused = false;
+		pg_atomic_init_u32(&(entry->epoch), 0);
 	}
-	else if (action == HASH_REMOVE)
+	else if (action == REMOVE_DB_FROM_BEING_MONITORED)
 	{
-		hash_search(monitoring_dbid_cache, &dbid, HASH_REMOVE, &found);
-		if (!found)
+		hash_search(monitored_dbid_cache, &dbid, HASH_REMOVE, &found);
+	}
+	else if (action == PAUSE_DB_TO_MONITOR)
+	{
+		MonitorDBEntry entry = hash_search(monitored_dbid_cache, &dbid, HASH_FIND, &found);
+		if (found)
 		{
-			ereport(WARNING, (errmsg("cannot remove the database from db list, dbid not found")));
+			entry->paused = true;
 		}
 	}
-	LWLockRelease(diskquota_locks.monitoring_dbid_cache_lock);
+	else if (action == RESUME_DB_TO_MONITOR)
+	{
+		MonitorDBEntry entry = hash_search(monitored_dbid_cache, &dbid, HASH_FIND, &found);
+
+		if (found)
+		{
+			entry->paused = false;
+		}
+	}
+	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
 }
 
 /*

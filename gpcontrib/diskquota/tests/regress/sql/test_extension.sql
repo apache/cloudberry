@@ -12,7 +12,13 @@ CREATE DATABASE dbx8 ;
 CREATE DATABASE dbx9 ;
 CREATE DATABASE dbx10 ;
 
+--start_ignore
+\! gpconfig -c diskquota.max_workers -v 20 --skipvalidation
+\! gpstop -arf
+--end_ignore
+\c
 show max_worker_processes;
+show diskquota.max_workers;
 
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
@@ -217,3 +223,9 @@ DROP DATABASE dbx7 ;
 DROP DATABASE dbx8 ;
 DROP DATABASE dbx9 ;
 DROP DATABASE dbx10 ;
+--start_ignore
+\! gpconfig -c diskquota.max_workers -v 1 --skipvalidation
+\! gpstop -arf;
+--end_ignore
+\c
+show diskquota.max_workers;

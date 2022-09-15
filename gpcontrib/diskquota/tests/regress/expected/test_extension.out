@@ -11,9 +11,51 @@ CREATE DATABASE dbx7 ;
 CREATE DATABASE dbx8 ;
 CREATE DATABASE dbx9 ;
 CREATE DATABASE dbx10 ;
+--start_ignore
+\! gpconfig -c diskquota.max_workers -v 20 --skipvalidation
+20220802:15:47:27:028366 gpconfig:wxiaoran-a01:xiwang-[INFO]:-completed successfully with parameters '-c diskquota.max_workers -v 20 --skipvalidation'
+\! gpstop -arf
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Starting gpstop with args: -arf
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Gathering information and validating the environment...
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Obtaining Greenplum Master catalog information
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Obtaining Segment details from master...
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.20.3+dev.5.g4bc90eab02 build dev'
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Commencing Master instance shutdown with mode='fast'
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Master segment instance directory=/Users/xiwang/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Attempting forceful termination of any leftover master process
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Terminating processes for segment /Users/xiwang/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/
+20220802:16:43:25:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Stopping master standby host wxiaoran-a01.vmware.com mode=fast
+20220802:16:43:26:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Successfully shutdown standby process on wxiaoran-a01.vmware.com
+20220802:16:43:26:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20220802:16:43:26:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20220802:16:43:26:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-0.00% of jobs completed
+20220802:16:43:28:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-100.00% of jobs completed
+20220802:16:43:28:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20220802:16:43:28:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-0.00% of jobs completed
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-100.00% of jobs completed
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-----------------------------------------------------
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-   Segments stopped successfully      = 6
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-   Segments with errors during stop   = 0
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-----------------------------------------------------
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Database successfully shutdown with no errors reported
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Cleaning up leftover gpmmon process
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-No leftover gpmmon process found
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Cleaning up leftover gpsmon processes
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20220802:16:43:29:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Cleaning up leftover shared memory
+20220802:16:43:30:058210 gpstop:wxiaoran-a01:xiwang-[INFO]:-Restarting System...
+--end_ignore
+\c
 show max_worker_processes;
  max_worker_processes 
 ----------------------
+ 20
+(1 row)
+
+show diskquota.max_workers;
+ diskquota.max_workers 
+-----------------------
  20
 (1 row)
 
@@ -283,18 +325,24 @@ ERROR:  schema's disk space quota exceeded with name: sx
 DROP TABLE SX.a;
 \c dbx9
 CREATE EXTENSION diskquota;
-ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:376)
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-11
+12
 SELECT diskquota.wait_for_worker_new_epoch();
-ERROR:  schema "diskquota" does not exist
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 \c dbx10
 CREATE EXTENSION diskquota;
-ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:376)
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-11
+13
 SELECT diskquota.wait_for_worker_new_epoch();
-ERROR:  schema "diskquota" does not exist
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 \c dbx0
 SELECT diskquota.pause();
  pause 
@@ -310,7 +358,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-10
+12
 \c dbx1
 SELECT diskquota.pause();
  pause 
@@ -326,7 +374,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-9
+11
 \c dbx2
 SELECT diskquota.pause();
  pause 
@@ -342,7 +390,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-8
+10
 \c dbx3
 SELECT diskquota.pause();
  pause 
@@ -358,7 +406,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-7
+9
 \c dbx4
 SELECT diskquota.pause();
  pause 
@@ -374,7 +422,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-6
+8
 \c dbx5
 SELECT diskquota.pause();
  pause 
@@ -390,7 +438,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-5
+7
 \c dbx6
 SELECT diskquota.pause();
  pause 
@@ -406,7 +454,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-4
+6
 \c dbx7
 SELECT diskquota.pause();
  pause 
@@ -422,7 +470,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-3
+5
 \c dbx8
 SELECT diskquota.pause();
  pause 
@@ -438,23 +486,37 @@ SELECT diskquota.wait_for_worker_new_epoch();
 
 DROP EXTENSION diskquota;
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-2
+4
 \c dbx9
 SELECT diskquota.pause();
-ERROR:  schema "diskquota" does not exist
+ pause 
+-------
+ 
+(1 row)
+
 SELECT diskquota.wait_for_worker_new_epoch();
-ERROR:  schema "diskquota" does not exist
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-ERROR:  extension "diskquota" does not exist
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
-2
+3
 \c dbx10
 SELECT diskquota.pause();
-ERROR:  schema "diskquota" does not exist
+ pause 
+-------
+ 
+(1 row)
+
 SELECT diskquota.wait_for_worker_new_epoch();
-ERROR:  schema "diskquota" does not exist
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
 DROP EXTENSION diskquota;
-ERROR:  extension "diskquota" does not exist
 \! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 2
 \c contrib_regression
@@ -469,3 +531,45 @@ DROP DATABASE dbx7 ;
 DROP DATABASE dbx8 ;
 DROP DATABASE dbx9 ;
 DROP DATABASE dbx10 ;
+--start_ignore
+\! gpconfig -c diskquota.max_workers -v 1 --skipvalidation
+20220802:15:49:09:029439 gpconfig:wxiaoran-a01:xiwang-[INFO]:-completed successfully with parameters '-c diskquota.max_workers -v 1 --skipvalidation'
+\! gpstop -arf;
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Starting gpstop with args: -arf
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Gathering information and validating the environment...
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Obtaining Greenplum Master catalog information
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Obtaining Segment details from master...
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.20.3+dev.5.g4bc90eab02 build dev'
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Commencing Master instance shutdown with mode='fast'
+20220802:16:32:34:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Master segment instance directory=/Users/xiwang/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/
+20220802:16:32:35:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Attempting forceful termination of any leftover master process
+20220802:16:32:35:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Terminating processes for segment /Users/xiwang/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/
+20220802:16:32:36:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Stopping master standby host wxiaoran-a01.vmware.com mode=fast
+20220802:16:32:37:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Successfully shutdown standby process on wxiaoran-a01.vmware.com
+20220802:16:32:37:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20220802:16:32:37:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20220802:16:32:37:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-0.00% of jobs completed
+20220802:16:32:40:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-100.00% of jobs completed
+20220802:16:32:40:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20220802:16:32:40:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-0.00% of jobs completed
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-100.00% of jobs completed
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-----------------------------------------------------
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-   Segments stopped successfully      = 6
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-   Segments with errors during stop   = 0
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-----------------------------------------------------
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Database successfully shutdown with no errors reported
+20220802:16:32:41:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Cleaning up leftover gpmmon process
+20220802:16:32:42:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-No leftover gpmmon process found
+20220802:16:32:42:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Cleaning up leftover gpsmon processes
+20220802:16:32:42:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20220802:16:32:42:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Cleaning up leftover shared memory
+20220802:16:32:44:046832 gpstop:wxiaoran-a01:xiwang-[INFO]:-Restarting System...
+--end_ignore
+\c
+show diskquota.max_workers;
+ diskquota.max_workers 
+-----------------------
+ 1
+(1 row)
+
