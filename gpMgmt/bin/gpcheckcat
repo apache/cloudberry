@@ -3256,12 +3256,6 @@ def checkcatReport():
             # Expand partition tables
             db = connect2(GV.cfg[GV.coordinator_dbid], utilityMode=False)
 
-            # GPDB_12_MERGE_FIXME: We used to have a query here, to fetch
-            # some extra informationa about partitioned tables. I (Heikki)
-            # didn't understand what it did. I ripped it out, and in the
-            # limited tests I did, I got the same result without it.
-            # What was it for? Do we need to put something back?
-
             GV.missing_attr_tables = list(set(GV.missing_attr_tables))
             if len(GV.missing_attr_tables) > 0:
                 myprint('----------------------------------------------------')
