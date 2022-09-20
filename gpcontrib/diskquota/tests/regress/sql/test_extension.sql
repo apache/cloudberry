@@ -20,7 +20,7 @@ CREATE DATABASE dbx10 ;
 show max_worker_processes;
 show diskquota.max_workers;
 
-\! sleep 0.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 1.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 
 -- FIXME: We need to sleep for a while each time after CREATE EXTENSION and
 -- DROP EXTENSION to wait for the bgworker to start or to exit.
