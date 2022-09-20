@@ -5,6 +5,7 @@
 -- start_matchignore
 # This pattern is extracted from gpdb/src/test/regress/init_file
 m/^(?:HINT|NOTICE):\s+.+\'DISTRIBUTED BY\' clause.*/
+m/WARNING:  \[diskquota\] worker not found for database.*/
 -- end_matchignore
 
 -- start_matchsubs
@@ -35,4 +36,5 @@ s/ERROR:  tablespace: \d+, schema: \d+ diskquota exceeded.*/[hardlimit] tablespa
 
 m/^ERROR:  Can not set disk quota for system owner:.*/
 s/^ERROR:  Can not set disk quota for system owner:.*/ERROR:  Can not set disk quota from system owner:/
+
 -- end_matchsubs
