@@ -640,14 +640,51 @@ disk_quota_launcher_main(Datum main_arg)
 	/* main loop: do this until the SIGTERM handler tells us to terminate. */
 	ereport(LOG, (errmsg("[diskquota launcher] start main loop")));
 	curDB = NULL;
-
 	while (!got_sigterm)
 	{
-		int  rc;
+		int rc;
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * modify wait time
+		 */
+		long secs;
+		int  microsecs;
+		TimestampDifference(GetCurrentTimestamp(),
+		                    TimestampTzPlusMilliseconds(loop_start_time, diskquota_naptime * 1000L), &secs, &microsecs);
+		nap.tv_sec  = secs;
+		nap.tv_usec = microsecs;
+
+		if (curDB == DiskquotaLauncherShmem->dbArrayTail)
+		{
+			/* Have sleep enough time, should start another loop */
+			if (nap.tv_sec == 0 && nap.tv_usec == 0)
+			{
+				loop_start_time = GetCurrentTimestamp();
+				/* set the curDB pointing to the head of the db list */
+				curDB = NULL;
+			}
+			/* do nothing, just to sleep untill the nap time is 0 */
+			else
+			{
+				continue;
+			}
+		}
+
+		/* If there are no enough workers to run db, we can firstly sleep to wait workers */
+		if (nap.tv_sec == 0 && nap.tv_usec == 0)
+		{
+			nap.tv_sec  = diskquota_naptime > 0 ? diskquota_naptime : 1;
+			nap.tv_usec = 0;
+		}
+
+		while (curDB != DiskquotaLauncherShmem->dbArrayTail && CanLaunchWorker())
+		{
+			start_worker();
+		}
+
 		bool sigusr1 = false;
 		bool sigusr2 = false;
-
-		CHECK_FOR_INTERRUPTS();
 
 		/*
 		 * background workers mustn't call usleep() or any direct equivalent:
@@ -700,44 +737,6 @@ disk_quota_launcher_main(Datum main_arg)
 		{
 			got_sigusr1 = false;
 			sigusr1     = true;
-		}
-
-		/*
-		 * modify wait time
-		 */
-		long secs;
-		int  microsecs;
-		TimestampDifference(GetCurrentTimestamp(),
-		                    TimestampTzPlusMilliseconds(loop_start_time, diskquota_naptime * 1000L), &secs, &microsecs);
-		nap.tv_sec  = secs;
-		nap.tv_usec = microsecs;
-
-		if (curDB == DiskquotaLauncherShmem->dbArrayTail)
-		{
-			/* Have sleep enough time, should start another loop */
-			if (nap.tv_sec == 0 && nap.tv_usec == 0)
-			{
-				loop_start_time = GetCurrentTimestamp();
-				/* set the curDB pointing to the head of the db list */
-				curDB = NULL;
-			}
-			/* do nothing, just to sleep untill the nap time is 0 */
-			else
-			{
-				continue;
-			}
-		}
-
-		/* If there are no enough workers to run db, we can firstly sleep to wait workers */
-		if (nap.tv_sec == 0 && nap.tv_usec == 0)
-		{
-			nap.tv_sec  = diskquota_naptime > 0 ? diskquota_naptime : 1;
-			nap.tv_usec = 0;
-		}
-
-		while (curDB != DiskquotaLauncherShmem->dbArrayTail && CanLaunchWorker())
-		{
-			start_worker();
 		}
 
 		loop_begin = loop_end;
@@ -1364,8 +1363,8 @@ worker_get_epoch(Oid dbid)
 	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
 	if (!found)
 	{
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-		                errmsg("[diskquota] worker not found for database \"%s\"", get_db_name(dbid))));
+		ereport(WARNING, (errcode(ERRCODE_INTERNAL_ERROR),
+		                  errmsg("[diskquota] worker not found for database \"%s\"", get_database_name(dbid))));
 	}
 	return epoch;
 }
