@@ -1343,6 +1343,7 @@ parse_toplevel:
 			stmtmulti
 			{
 				pg_yyget_extra(yyscanner)->parsetree = $1;
+				(void) yynerrs;		/* suppress compiler warning */
 			}
 			| MODE_TYPE_NAME Typename
 			{
