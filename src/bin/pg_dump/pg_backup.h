@@ -26,6 +26,14 @@
 #include "fe_utils/simple_list.h"
 #include "libpq-fe.h"
 
+#define GPDB5_MAJOR_PGVERSION 80300
+#define GPDB6_MAJOR_PGVERSION 90400
+#define GPDB7_MAJOR_PGVERSION 120000
+/* 
+ * GPDB7_MERGE_FIXME: it seems like we don't need those cuz for cbdb we have 
+ * fout->version.type and fout->version.version, which provide better checks
+ */
+#define CBDB2_MAJOR_PGVERSION 140000
 
 typedef enum trivalue
 {

@@ -191,10 +191,17 @@ ConnectDatabase(Archive *AHX,
 		}
 		keywords[i] = "fallback_application_name";
 		values[i++] = progname;
+		/* GPDB: If binary upgrade, we need to use the correct
+		* session GUC to connect in utility mode, which depends on
+		* the server version. We don't know the server version until
+		* we connect for the first time, so set the correct GUC and
+		* reconnect.
+		*/
 		if (binary_upgrade)
 		{
 			keywords[i] = "options";
-			values[i++] = "-c gp_role=utility";
+			values[i++] = AH->public.remoteVersion < GPDB7_MAJOR_PGVERSION ? 
+				"-c gp_session_role=utility" : "-c gp_role=utility";
 			keywords[i] = NULL;
 			values[i++] = NULL;
 		}
