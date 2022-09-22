@@ -74,32 +74,6 @@ plan:
 #@   end
 #@ end
 
-#! Like the entrance_job, with more static checks.
-#@ def entrance_check_job(param):
-#@   add_res_by_name(param["res_map"], "clang-format-image")
-#@   trigger = param["trigger"]
-name: entrance
-on_failure: #@ trigger["on_failure"]
-on_error: #@ trigger["on_error"]
-plan:
-#@   for to_get in trigger["to_get"]:
-- trigger: #@ trigger["auto_trigger"]
-  _: #@ template.replace(to_get)
-#@   end
-#@   for to_put in trigger["to_put_pre"]:
-- #@ to_put
-#@   end
-- get: clang-format-image
-- task: check_clang_format
-  image: clang-format-image
-  config:
-    inputs:
-      - name: diskquota_src
-    platform: linux
-    run:
-      path: diskquota_src/concourse/scripts/check-clang-format.sh
-#@ end
-
 #@ def exit_job(param):
 #@   trigger = param["trigger"]
 #@   confs = param["confs"]

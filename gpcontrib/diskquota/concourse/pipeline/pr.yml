@@ -1,5 +1,5 @@
 #@ load("job_def.lib.yml",
-#@   "entrance_check_job",
+#@   "entrance_job",
 #@   "exit_pr_job",
 #@   "build_test_job",
 #@   "centos6_gpdb6_conf",
@@ -27,7 +27,7 @@ jobs:
 #@     "res_map": res_map,
 #@     "trigger": trigger,
 #@ }
-- #@ entrance_check_job(param)
+- #@ entrance_job(param)
 #@ for conf in confs:
 #@   param = {
 #@     "res_map": res_map,
