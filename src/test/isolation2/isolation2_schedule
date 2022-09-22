@@ -309,3 +309,6 @@ test: stat_activity_extended
 test: sharedsnapshot
 # test pg_export_snapshot with distributed snapshot functionality
 test: export_distributed_snapshot
+
+# test TCP interconnect teardown bounded wait
+test: tcp_ic_teardown
