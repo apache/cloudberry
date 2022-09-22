@@ -6,6 +6,7 @@ fly=${FLY:-"fly"}
 echo "'fly' command: ${fly}"
 echo ""
 proj_name="diskquota"
+concourse_team="main"
 
 usage() {
     if [ -n "$1" ]; then
@@ -17,6 +18,26 @@ usage() {
     echo "Options:"
     echo "       '-T' adds '_test' suffix to the pipeline type. Useful for pipeline debugging."
     exit 1
+}
+
+# Hacky way to find out which concourse team is being used.
+# The team name is needed to generate webhook URL
+detect_concourse_team() {
+    local target="$1"
+    local fly_rc_file="$HOME/.flyrc"
+    local found_target=false
+    while read -r line;
+    do
+        line="$(echo -e "${line}" | tr -d '[:space:]')"
+        if [ ${found_target} != true ] && [ "${line}" = "${target}:" ]; then
+            found_target=true
+        fi
+        if [ ${found_target} = true ] && [[ "${line}" == team:* ]]; then
+            concourse_team=$(echo "${line}" | cut --delimiter=":" --fields=2)
+            echo "Use concourse target: ${target}, team: ${concourse_team}"
+            return
+        fi
+    done < "${fly_rc_file}"
 }
 
 # Parse command line options
@@ -51,6 +72,8 @@ shift $((OPTIND-1))
 if [ -z "${target}" ] || [ -z "${pipeline_config}" ]; then
     usage ""
 fi
+
+detect_concourse_team "${target}"
 
 pipeline_type=""
 # Decide ytt options to generate pipeline
@@ -139,6 +162,6 @@ concourse_url=$(fly targets | awk "{if (\$1 == \"${target}\") {print \$2}}")
 echo ""
 echo "================================================================================"
 echo "Remeber to set the the webhook URL on GitHub:"
-echo "${concourse_url}/api/v1/teams/main/pipelines/${pipeline_name}/resources/${hook_res}/check/webhook?webhook_token=<hook_token>"
+echo "${concourse_url}/api/v1/teams/${concourse_team}/pipelines/${pipeline_name}/resources/${hook_res}/check/webhook?webhook_token=<hook_token>"
 echo "You may need to change the base URL if a differnt concourse server is used."
 echo "================================================================================"
