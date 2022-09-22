@@ -106,14 +106,6 @@ resources:
   source:
     repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
     tag: latest
-# clang_format
-- name: clang-format-image
-  type: registry-image
-  source:
-    repository: gcr.io/data-gpdb-extensions/common/clang-format
-    tag: 13
-    username: _json_key
-    password: ((extension/extensions-gcs-service-account-key))
 
 # gpdb binary on gcs is located as different folder for different version
 # Latest build with assertion enabled:
@@ -203,58 +195,58 @@ resources:
 - name: bin_diskquota_gpdb6_rhel6_intermediates
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates/diskquota/diskquota_rhel6_gpdb6.tar.gz
 
 - name: bin_diskquota_gpdb6_rhel7_intermediates
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates/diskquota/diskquota_rhel7_gpdb6.tar.gz
 
 - name: bin_diskquota_gpdb6_rhel8_intermediates
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates/diskquota/diskquota_rhel8_gpdb6.tar.gz
 
 - name: bin_diskquota_gpdb6_ubuntu18_intermediates
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates/diskquota/diskquota_ubuntu18_gpdb6.tar.gz
 
 # Rel
 - name: bin_diskquota_gpdb6_rhel6_intermediates_rel
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates_release/diskquota/diskquota_rhel6_gpdb6.tar.gz
 
 - name: bin_diskquota_gpdb6_rhel7_intermediates_rel
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates_release/diskquota/diskquota_rhel7_gpdb6.tar.gz
 
 - name: bin_diskquota_gpdb6_rhel8_intermediates_rel
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates_release/diskquota/diskquota_rhel8_gpdb6.tar.gz
 
 - name: bin_diskquota_gpdb6_ubuntu18_intermediates_rel
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates_release/diskquota/diskquota_ubuntu18_gpdb6.tar.gz
 
 # For uploading to the release bucket
@@ -290,8 +282,8 @@ resources:
 - name: bin_cmake
   type: gcs
   source:
-    bucket: gpdb-extensions-concourse-resources
-    json_key: ((extension/extensions-gcs-service-account-key))
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
     regexp: dependencies/cmake-(.*)-linux-x86_64.sh
 
 - name: slack_notify
