@@ -98,9 +98,7 @@ PG_FUNCTION_INFO_V1(pull_all_table_size);
 		                ddl_hint_ ? errhint("%s", ddl_hint_) : 0));                          \
 	} while (0)
 
-static object_access_hook_type next_object_access_hook;
-static bool                    is_database_empty(void);
-static void  dq_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
+static bool  is_database_empty(void);
 static void  ddl_err_code_to_err_message(MessageResult code, const char **err_msg, const char **hint_msg);
 static int64 get_size_in_mb(char *str);
 static void set_quota_config_internal(Oid targetoid, int64 quota_limit_mb, QuotaType type, float4 segratio, Oid spcoid);
@@ -514,18 +512,8 @@ is_database_empty(void)
 	return is_empty;
 }
 
-/*
- * Add dq_object_access_hook to handle drop extension event.
- */
 void
-register_diskquota_object_access_hook(void)
-{
-	next_object_access_hook = object_access_hook;
-	object_access_hook      = dq_object_access_hook;
-}
-
-static void
-dq_object_access_hook_on_drop(void)
+diskquota_stop_worker(void)
 {
 	int rc, launcher_pid;
 
@@ -582,33 +570,6 @@ dq_object_access_hook_on_drop(void)
 	}
 	LWLockRelease(diskquota_locks.extension_ddl_message_lock);
 	LWLockRelease(diskquota_locks.extension_ddl_lock);
-}
-
-/*
- * listening on any modify on pg_extension table when:
- * 		DROP:       will send CMD_DROP_EXTENSION to diskquota laucher
- */
-static void
-dq_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg)
-{
-	if (classId != ExtensionRelationId) goto out;
-
-	if (get_extension_oid("diskquota", true) != objectId) goto out;
-
-	switch (access)
-	{
-		case OAT_DROP:
-			dq_object_access_hook_on_drop();
-			break;
-		case OAT_POST_ALTER:
-		case OAT_FUNCTION_EXECUTE:
-		case OAT_POST_CREATE:
-		case OAT_NAMESPACE_SEARCH:
-			break;
-	}
-
-out:
-	if (next_object_access_hook) (*next_object_access_hook)(access, classId, objectId, subId, arg);
 }
 
 /*
