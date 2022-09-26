@@ -252,9 +252,6 @@ _PG_init(void)
 	init_disk_quota_enforcement();
 	init_active_table_hook();
 
-	/* Add dq_object_access_hook to handle drop extension event. */
-	register_diskquota_object_access_hook();
-
 	/* start disk quota launcher only on master */
 	if (!IS_QUERY_DISPATCHER())
 	{

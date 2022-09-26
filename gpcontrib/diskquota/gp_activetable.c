@@ -190,12 +190,15 @@ object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId,
 	if (prev_object_access_hook) (*prev_object_access_hook)(access, classId, objectId, subId, arg);
 
 	// if is 'drop extension diskquota'
-	if (classId == ExtensionRelationId)
+	if (classId == ExtensionRelationId && access == OAT_DROP)
 	{
 		if (get_extension_oid("diskquota", true) == objectId)
 		{
 			invalidate_database_rejectmap(MyDatabaseId);
 		}
+
+		diskquota_stop_worker();
+		return;
 	}
 
 	/* TODO: do we need to use "&&" instead of "||"? */
