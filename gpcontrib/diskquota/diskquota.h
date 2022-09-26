@@ -239,4 +239,5 @@ extern void         init_launcher_shmem(void);
 extern void         vacuum_disk_quota_model(uint32 id);
 extern void         update_monitor_db(Oid dbid, FetchTableStatType action);
 extern void         update_monitor_db_mpp(Oid dbid, FetchTableStatType action, const char *schema);
+extern void         diskquota_stop_worker(void);
 #endif
