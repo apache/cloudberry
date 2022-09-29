@@ -5563,7 +5563,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 				pass = AT_PASS_MISC;
 				break;
 			}
-			ATSimplePermissions(rel, ATT_TABLE | ATT_DIRECTORY_TABLE);
+			ATSimplePermissions(rel, ATT_TABLE | ATT_DIRECTORY_TABLE | ATT_FOREIGN_TABLE);
 
 			if (!recursing) /* MPP-5772, MPP-5784 */
 			{
@@ -18620,6 +18620,12 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 
 			lwith = nlist;
 		}
+		/* External tables cannot really be re-organized. Error out if we are instructed to do so.*/
+		if (force_reorg && rel_is_external_table(RelationGetRelid(rel)))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot reorganize external table \"%s\"",
+							RelationGetRelationName(rel))));
 
 		if (ldistro)
 			change_policy = true;
@@ -18853,7 +18859,8 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		{
 			need_reorg = true;
 		}
-		else if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		else if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE ||
+			rel_is_external_table(RelationGetRelid(rel)))
 			need_reorg = false;
 		else
 			elog(ERROR, "unexpected relkind '%c'", rel->rd_rel->relkind);

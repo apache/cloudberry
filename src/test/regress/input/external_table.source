@@ -3614,9 +3614,6 @@ ALTER TABLE ext_w_dist SET DISTRIBUTED BY (b);
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
 ALTER TABLE ext_w_dist SET DISTRIBUTED RANDOMLY;
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
-CREATE EXTERNAL WEB TABLE ext_r_dist(a int) EXECUTE 'printf ${GP_SEGMENT_ID}' FORMAT 'TEXT' DISTRIBUTED BY (a);
-CREATE EXTERNAL WEB TABLE ext_r_dist(a int) EXECUTE 'printf ${GP_SEGMENT_ID}' FORMAT 'TEXT';
-ALTER TABLE ext_r_dist SET DISTRIBUTED BY (a); -- should error out altering readable external tables' distribution policy
 
 -- Testing external table as the partition child.
 CREATE TABLE part_root(a int) PARTITION BY RANGE(a);
@@ -3629,7 +3626,7 @@ ALTER TABLE part_root ATTACH PARTITION part_ext_w FOR VALUES FROM (10) TO (20);
 ALTER TABLE part_root ADD COLUMN b int;
 INSERT INTO part_root SELECT i,i FROM generate_series(1,19)i;
 
--- altering distribution policy should work fine
+-- altering distribution policy should work fine 
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'part_ext_w'::regclass;
 ALTER TABLE part_root SET DISTRIBUTED BY (b);
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'part_ext_w'::regclass;
