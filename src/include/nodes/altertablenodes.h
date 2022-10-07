@@ -123,6 +123,8 @@ typedef struct AlteredTableInfo
 	 */
 	List	   *beforeStmtLists;
 	List	   *constraintLists;
+
+	List	   *new_crsds;		/* new column reference storage directives */
 } AlteredTableInfo;
 
 typedef struct ExprState ExprState;

@@ -662,8 +662,10 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	 * it against access by any other process until commit (by which time it
 	 * will be gone).
 	 */
-	OIDNewHeap = make_new_heap_with_colname(matviewOid, tableSpace, matviewRel->rd_rel->relam, relpersistence,
+	OIDNewHeap = make_new_heap_with_colname(matviewOid, tableSpace, matviewRel->rd_rel->relam,
+							   NULL, relpersistence,
 							   ExclusiveLock, ao_has_index, true, "_$");
+
 
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 	dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent, relpersistence,
@@ -942,7 +944,7 @@ transientrel_init(QueryDesc *queryDesc)
 	 * will be gone).
 	 */
 	OIDNewHeap = make_new_heap(matviewOid, tableSpace, matviewRel->rd_rel->relam,
-							   relpersistence,
+							   NULL, relpersistence,
 							   ExclusiveLock, ao_has_index, false);
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 
@@ -3841,7 +3843,7 @@ ExecuteTruncateGuts_IVM(Relation matviewRel,
 	* will be gone).
 	*/
 	OIDNewHeap = make_new_heap(matviewOid, matviewRel->rd_rel->reltablespace, matviewRel->rd_rel->relam,
-								relpersistence, ExclusiveLock, false, true);
+								NULL, relpersistence, ExclusiveLock, false, true);
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 	dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, false,
 										relpersistence, false);
