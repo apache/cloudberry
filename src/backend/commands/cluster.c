@@ -727,7 +727,7 @@ rebuild_relation(Relation OldHeap, Oid indexOid, bool verbose)
 
 	/* Create the transient table that will receive the re-ordered data */
 	OIDNewHeap = make_new_heap(tableOid, tableSpace,
-							   accessMethod,
+							   accessMethod, NULL,
 							   relpersistence,
 							   AccessExclusiveLock,
 							   true /* createAoBlockDirectory */,
@@ -774,6 +774,7 @@ make_column_name(char *prefix, char *colname)
  */
 Oid
 make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
+			  List *NewEncodings,
 			  char relpersistence,
 			  LOCKMODE lockmode,
 			  bool createAoBlockDirectory,
@@ -978,12 +979,17 @@ make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMetho
 	 * Note that in the case of AM change from heap/ao to aoco, we still need 
 	 * to do this since we created those entries for the heap/ao table at the 
 	 * phase 2 of ATSETAM (see ATExecCmd).
+	 *
+	 * If we are also altering any column's encodings, (AT_SetColumnEncoding)
+	 * we update those columns with the new encoding values
 	 */
 	if (NewAccessMethod == AO_COLUMN_TABLE_AM_OID)
-		cloneAttributeEncoding(OIDOldHeap,
-							   OIDNewHeap,
-							   RelationGetNumberOfAttributes(OldHeap));
-
+	{
+		CloneAttributeEncodings(OIDOldHeap,
+								OIDNewHeap,
+								RelationGetNumberOfAttributes(OldHeap));
+		UpdateAttributeEncodings(OIDNewHeap, NewEncodings);
+	}
 	table_close(OldHeap, NoLock);
 
 	return OIDNewHeap;
@@ -991,14 +997,15 @@ make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMetho
 
 Oid
 make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
+			  List *NewEncodings,
 			  char relpersistence,
 			  LOCKMODE lockmode,
 			  bool createAoBlockDirectory,
 			  bool makeCdbPolicy)
 {
 	return make_new_heap_with_colname(OIDOldHeap, NewTableSpace, NewAccessMethod,
-						relpersistence, lockmode, createAoBlockDirectory, makeCdbPolicy,
-						NULL);
+						NewEncodings, relpersistence, lockmode, createAoBlockDirectory,
+						makeCdbPolicy, NULL);
 
 }
 
@@ -1360,6 +1367,14 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		relform1 = (Form_pg_class) GETSTRUCT(reltup1);
 	}
 
+	/*
+	 * GPDB_PORT: upstream a07d9f80e8 clones r2's pg_attribute_encoding entries
+	 * onto r1 at this point.  cbdb must not: ATAOEntries() already migrates the
+	 * pg_attribute_encoding entries for every access-method combination, and
+	 * doing it here builds the transient relation's relcache entry before its
+	 * pg_appendonly tuple has been swapped in, which fails with "could not find
+	 * pg_appendonly tuple for relation pg_temp_NNN".
+	 */
 	relfilenumber1 = relform1->relfilenode;
 	relfilenumber2 = relform2->relfilenode;
 	relam1 = relform1->relam;

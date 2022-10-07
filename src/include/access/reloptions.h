@@ -308,7 +308,10 @@ extern List *transformColumnEncoding(const TableAmRoutine *tam, Relation rel, Li
 
 List* transfromColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause);
 
+
 extern List *transformStorageEncodingClause(List *options, bool validate);
+extern bool updateEncodingList(List *current_encodings,
+								  ColumnReferenceStorageDirective *new_crsd);
 extern List *form_default_storage_directive(List *enc);
 extern bool is_storage_encoding_directive(const char *name);
 extern bool reloptions_has_opt(List *opts, const char *name);

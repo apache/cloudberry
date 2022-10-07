@@ -394,6 +394,8 @@ static ObjectAddress ATExecAddColumn(List **wqueue, AlteredTableInfo *tab,
 									 bool recurse, bool recursing,
 									 LOCKMODE lockmode, int cur_pass,
 									 AlterTableUtilityContext *context);
+static void ATExecSetColumnEncoding(AlteredTableInfo *tab, Relation rel,
+									AlterTableCmd *cmd);
 static bool check_for_column_name_collision(Relation rel, const char *colname,
 											bool if_not_exists);
 static void add_column_datatype_dependency(Oid relid, int32 attnum, Oid typid);
@@ -1396,10 +1398,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 									&& !stmt->partbound && !stmt->partspec
 									/* errorOnEncodingClause */, true);
 
-		AddRelationAttributeEncodings(rel, part_attr_encodings);
+		AddRelationAttributeEncodings(relationId, part_attr_encodings);
 	}
 	else if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
-		AddRelationAttributeEncodings(rel, stmt->attr_encodings);
+		AddRelationAttributeEncodings(relationId, stmt->attr_encodings);
 
 	/*
 	 * Make column generation expressions visible for use by partitioning.
@@ -5078,7 +5080,7 @@ static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOpti
 							newAccessMethod == AO_COLUMN_TABLE_AM_OID, RelationIsAppendOptimized(rel));
 
 
-	AddRelationAttributeEncodings(rel, attr_encodings);
+	AddRelationAttributeEncodings(RelationGetRelid(rel), attr_encodings);
 }
 
 /*
@@ -5160,6 +5162,7 @@ AlterTableGetLockLevel(List *cmds)
 				/*
 				 * These subcommands rewrite the heap, so require full locks.
 				 */
+			case AT_SetColumnEncoding: /* must rewrite heap */
 			case AT_AddColumn:	/* may rewrite heap, in some cases and visible
 								 * to SELECT */
 			case AT_SetAccessMethod:	/* must rewrite heap */
@@ -5608,6 +5611,11 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 							lockmode, context);
 			/* Recursion occurs during execution phase */
 			pass = AT_PASS_ADD_COL;
+			break;
+		case AT_SetColumnEncoding: /* ALTER COLUMN SET ENCODING */
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
+			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
+			pass = AT_PASS_MISC;
 			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 
@@ -6252,6 +6260,9 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			address = ATExecAddColumn(wqueue, tab, rel, &cmd,
 									  cmd->recurse, false,
 									  lockmode, cur_pass, context);
+			break;
+		case AT_SetColumnEncoding:
+			ATExecSetColumnEncoding(tab, rel, cmd);
 			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 			address = ATExecColumnDefault(rel, cmd->name, cmd->def, lockmode);
@@ -7074,7 +7085,8 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			 * unlogged anyway.
 			 */
 			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, NewAccessMethod,
-									   persistence, lockmode, hasIndexes, false);
+									   tab->new_crsds, persistence, lockmode,
+									   hasIndexes, false);
 
 			/*
 			 * Copy the heap data into the new table with the desired
@@ -7980,6 +7992,7 @@ ATGetQueueEntry(List **wqueue, Relation rel)
 	tab->relkind = rel->rd_rel->relkind;
 	tab->oldDesc = CreateTupleDescCopyConstr(RelationGetDescr(rel));
 	tab->newAccessMethod = InvalidOid;
+	tab->new_crsds = NIL;
 	tab->newTableSpace = InvalidOid;
 	tab->newrelpersistence = RELPERSISTENCE_PERMANENT;
 	tab->chgPersistence = false;
@@ -8053,6 +8066,8 @@ alter_table_type_to_string(AlterTableType cmdtype)
 			return "SET WITHOUT CLUSTER";
 		case AT_SetAccessMethod:
 			return "SET ACCESS METHOD";
+		case AT_SetColumnEncoding:
+			return "ALTER COLUMN ... SET ENCODING";
 		case AT_SetLogged:
 			return "SET LOGGED";
 		case AT_SetUnLogged:
@@ -9241,7 +9256,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 * Store the encoding clause for AO/CO tables.
 		 */
 		if (AMHandlerSupportEncodingClause(tam))
-			AddRelationAttributeEncodings(rel, enc);
+			AddRelationAttributeEncodings(myrelid, enc);
 	}
 
 	/* MPP-6929: metadata tracking */
@@ -9451,6 +9466,53 @@ add_column_collation_dependency(Oid relid, int32 attnum, Oid collid)
 		referenced.objectId = collid;
 		referenced.objectSubId = 0;
 		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+	}
+}
+
+/*
+ * ALTER TABLE ... ALTER COLUMN a SET ENCODING (...)
+ *
+ * Update pg_attribute_encoding with the given encoding options.
+ * Normally this will need a table rewrite, except when
+ * (1) the table is a partitioned one,
+ * or
+ * (2) the encoding option isn't really changed (they are the same as the given ones).
+ */
+static void
+ATExecSetColumnEncoding(AlteredTableInfo *tab, Relation rel, AlterTableCmd *cmd)
+{
+	ColumnReferenceStorageDirective *new_crsd;
+	bool is_updated;
+
+	if (OidIsValid(tab->newAccessMethod))
+	{
+		if (tab->newAccessMethod != AO_COLUMN_TABLE_AM_OID)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
+				errdetail("New access method for \"%s\" is not AOCO",
+						  RelationGetRelationName(rel))));
+	}
+	else if (rel->rd_rel->relam != AO_COLUMN_TABLE_AM_OID)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+			errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
+			errdetail("\"%s\" is not an AOCO table",
+					  RelationGetRelationName(rel))));
+
+
+	if (!tab->new_crsds) /* first iteration */
+		tab->new_crsds = rel_get_column_encodings(rel);
+
+	new_crsd = (ColumnReferenceStorageDirective *) cmd->def;
+	is_updated = updateEncodingList(tab->new_crsds, new_crsd);
+
+	if (is_updated)
+	{
+		if (rel->rd_rel->relkind == RELKIND_RELATION)
+			tab->rewrite = AT_REWRITE_COLUMN_REWRITE;
+		else if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+			UpdateAttributeEncodings(rel->rd_id, tab->new_crsds);
+		else
+			Assert(false); //cannot reach here
 	}
 }
 
