@@ -81,7 +81,10 @@ list(
   diskquota--1.0.sql
   diskquota--1.0--2.0.sql
   diskquota--2.0.sql
-  diskquota--2.0--1.0.sql)
+  diskquota--2.0--1.0.sql
+  diskquota--2.1.sql
+  diskquota--2.0--2.1.sql
+  diskquota--2.1--2.0.sql)
 
 add_library(diskquota MODULE ${diskquota_SRC})
 
