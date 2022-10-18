@@ -13,6 +13,8 @@ regresstarget_add(
   SCHEDULE_FILE
   ${CMAKE_CURRENT_SOURCE_DIR}/schedule_1.0--2.0
   ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--1.0
+  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--2.1
+  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.1--2.0
   REGRESS_OPTS
   --dbname=contrib_regression)
 
