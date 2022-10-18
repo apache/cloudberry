@@ -1,6 +1,9 @@
 -- Test that diskquota is able to cancel a running CTAS query by the role quota.
-\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
-\! gpstop -u > /dev/null
+-- start_ignore
+\! gpconfig -c "diskquota.hard_limit" -v "on"
+\! gpstop -u
+-- end_ignore
+SHOW diskquota.hard_limit;
 CREATE ROLE hardlimit_r;
 SELECT diskquota.set_role_quota('hardlimit_r', '1MB');
 GRANT USAGE ON SCHEMA diskquota TO hardlimit_r;
