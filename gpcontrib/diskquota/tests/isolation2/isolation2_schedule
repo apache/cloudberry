@@ -1,5 +1,6 @@
 test: config
 test: test_create_extension
+test: test_fast_quota_view
 test: test_relation_size
 test: test_rejectmap
 test: test_vacuum

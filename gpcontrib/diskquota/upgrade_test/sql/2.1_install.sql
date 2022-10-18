@@ -1,0 +1,17 @@
+-- cleanup previous diskquota installation
+\! gpconfig -c shared_preload_libraries -v '' > /dev/null
+\! gpstop -raf > /dev/null
+\! dropdb --if-exists diskquota
+
+-- TODO reset all diskquota GUC
+\! gpstop -raf > /dev/null
+
+-- setup basic environment
+\! createdb diskquota
+
+\! gpconfig -c shared_preload_libraries -v 'diskquota-2.1.so' > /dev/null
+\! gpstop -raf > /dev/null
+
+-- TODO setup GUC
+\! gpconfig -c diskquota.naptime -v '1' > /dev/null
+\! gpstop -raf > /dev/null
