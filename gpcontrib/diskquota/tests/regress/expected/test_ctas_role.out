@@ -1,6 +1,21 @@
 -- Test that diskquota is able to cancel a running CTAS query by the role quota.
-\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
-\! gpstop -u > /dev/null
+-- start_ignore
+\! gpconfig -c "diskquota.hard_limit" -v "on"
+20221018:11:33:42:045232 gpconfig:wxiaoran-a02:wxiaoran-[INFO]:-completed successfully with parameters '-c diskquota.hard_limit -v on'
+\! gpstop -u
+20221018:11:33:43:045341 gpstop:wxiaoran-a02:wxiaoran-[INFO]:-Starting gpstop with args: -u
+20221018:11:33:43:045341 gpstop:wxiaoran-a02:wxiaoran-[INFO]:-Gathering information and validating the environment...
+20221018:11:33:43:045341 gpstop:wxiaoran-a02:wxiaoran-[INFO]:-Obtaining Greenplum Master catalog information
+20221018:11:33:43:045341 gpstop:wxiaoran-a02:wxiaoran-[INFO]:-Obtaining Segment details from master...
+20221018:11:33:43:045341 gpstop:wxiaoran-a02:wxiaoran-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.22.1+dev.5.g4bb76bee5c build dev'
+20221018:11:33:43:045341 gpstop:wxiaoran-a02:wxiaoran-[INFO]:-Signalling all postmaster processes to reload
+-- end_ignore
+SHOW diskquota.hard_limit;
+ diskquota.hard_limit 
+----------------------
+ on
+(1 row)
+
 CREATE ROLE hardlimit_r;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_quota('hardlimit_r', '1MB');
