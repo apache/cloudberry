@@ -59,7 +59,7 @@ show diskquota.max_workers;
  20
 (1 row)
 
-\! sleep 1.5; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+\! sleep 3; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
 2
 -- FIXME: We need to sleep for a while each time after CREATE EXTENSION and
 -- DROP EXTENSION to wait for the bgworker to start or to exit.
