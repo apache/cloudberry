@@ -1,16 +1,15 @@
 -- Test that diskquota is able to cancel a running CTAS query by the role quota.
 -- start_ignore
-\! gpconfig -c "diskquota.hard_limit" -v "on"
-\! gpstop -u
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
 -- end_ignore
-SHOW diskquota.hard_limit;
 CREATE ROLE hardlimit_r;
 SELECT diskquota.set_role_quota('hardlimit_r', '1MB');
 GRANT USAGE ON SCHEMA diskquota TO hardlimit_r;
 SET ROLE hardlimit_r;
 
 -- heap table
-CREATE TABLE t1 (i) AS SELECT generate_series(1, 10000000) DISTRIBUTED BY (i);
+CREATE TABLE t1 (i) AS SELECT generate_series(1, 100000000) DISTRIBUTED BY (i);
 SELECT diskquota.wait_for_worker_new_epoch();
 
 -- temp table
