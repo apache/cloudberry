@@ -44,7 +44,10 @@
 
 /* cluster level max size of rejectmap */
 #define MAX_DISK_QUOTA_REJECT_ENTRIES (1024 * 1024)
-#define MAX_TABLES (1024L * 8)
+/* init size of table_size_map */
+#define INIT_TABLES (20 * 1024)
+/* max size of table_size_map */
+#define MAX_TABLES (1024 * 1024)
 /* cluster level init size of rejectmap */
 #define INIT_DISK_QUOTA_REJECT_ENTRIES 8192
 /* per database level max size of rejectmap */
@@ -68,17 +71,23 @@ int SEGCOUNT = 0;
  */
 struct TableSizeEntry
 {
-	Oid   reloid;
-	int16 segid;
-	Oid   tablespaceoid;
-	Oid   namespaceoid;
-	Oid   owneroid;
+	Oid    reloid;
+	int    segid;
+	Oid    tablespaceoid;
+	Oid    namespaceoid;
+	Oid    owneroid;
+	uint32 flag;     /* flag's each bit is used to show the table's status,
+	                  * which is described in TableSizeEntryFlag.
+	                  */
 	int64 totalsize; /* table size including fsm, visibility map
 	                  * etc. */
-	bool is_exist;   /* flag used to check whether table is already
-	                  * dropped */
-	bool need_flush; /* whether need to flush to table table_size */
 };
+
+typedef enum
+{
+	TABLE_EXIST      = (1 << 0), /* whether table is already dropped */
+	TABLE_NEED_FLUSH = (1 << 1)  /* whether need to flush to table table_size */
+} TableSizeEntryFlag;
 
 /*
  * table disk size and corresponding schema and owner
@@ -193,6 +202,10 @@ static void init_lwlocks(void);
 static void export_exceeded_error(GlobalRejectMapEntry *entry, bool skip_name);
 void        truncateStringInfo(StringInfo str, int nchars);
 static void format_name(const char *prefix, uint32 id, StringInfo str);
+
+static bool get_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag);
+static void reset_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag);
+static void set_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag);
 
 /* add a new entry quota or update the old entry quota */
 static void
@@ -440,7 +453,7 @@ static Size
 diskquota_worker_shmem_size()
 {
 	Size size;
-	size = hash_estimate_size(1024 * 1024, sizeof(TableSizeEntry));
+	size = hash_estimate_size(MAX_TABLES, sizeof(TableSizeEntry));
 	size = add_size(size, hash_estimate_size(MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, sizeof(LocalRejectMapEntry)));
 	size = add_size(size, hash_estimate_size(1024L, sizeof(struct QuotaMapEntry)) * NUM_QUOTA_TYPES);
 	return size;
@@ -462,8 +475,13 @@ DiskQuotaShmemSize(void)
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(Oid)));
 	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB,
 	                                         sizeof(struct MonitorDBEntryStruct))); // monitored_dbid_cache
-	size = add_size(size, diskquota_launcher_shmem_size());
-	size = add_size(size, diskquota_worker_shmem_size() * MAX_NUM_MONITORED_DB);
+
+	if (IS_QUERY_DISPATCHER())
+	{
+		size = add_size(size, diskquota_launcher_shmem_size());
+		size = add_size(size, diskquota_worker_shmem_size() * MAX_NUM_MONITORED_DB);
+	}
+
 	return size;
 }
 
@@ -484,7 +502,7 @@ init_disk_quota_model(uint32 id)
 	hash_ctl.hash      = tag_hash;
 
 	format_name("TableSizeEntrymap", id, &str);
-	table_size_map = ShmemInitHash(str.data, MAX_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	table_size_map = ShmemInitHash(str.data, INIT_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
 
 	/* for localrejectmap */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
@@ -542,7 +560,7 @@ vacuum_disk_quota_model(uint32 id)
 	hash_ctl.hash      = tag_hash;
 
 	format_name("TableSizeEntrymap", id, &str);
-	table_size_map = ShmemInitHash(str.data, MAX_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	table_size_map = ShmemInitHash(str.data, INIT_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
@@ -834,7 +852,7 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
-		tsentry->is_exist = false;
+		reset_table_size_entry_flag(tsentry, TABLE_EXIST);
 	}
 
 	/*
@@ -903,11 +921,12 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 				tsentry->owneroid      = InvalidOid;
 				tsentry->namespaceoid  = InvalidOid;
 				tsentry->tablespaceoid = InvalidOid;
-				tsentry->need_flush    = true;
+				tsentry->flag          = 0;
+				set_table_size_entry_flag(tsentry, TABLE_NEED_FLUSH);
 			}
 
 			/* mark tsentry is_exist */
-			if (tsentry) tsentry->is_exist = true;
+			if (tsentry) set_table_size_entry_flag(tsentry, TABLE_EXIST);
 			active_table_entry = (DiskQuotaActiveTableEntry *)hash_search(local_active_table_stat_map, &key, HASH_FIND,
 			                                                              &active_tbl_found);
 
@@ -927,8 +946,8 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 				updated_total_size = active_table_entry->tablesize - tsentry->totalsize;
 
 				/* update the table_size entry */
-				tsentry->totalsize  = (int64)active_table_entry->tablesize;
-				tsentry->need_flush = true;
+				tsentry->totalsize = (int64)active_table_entry->tablesize;
+				set_table_size_entry_flag(tsentry, TABLE_NEED_FLUSH);
 
 				/* update the disk usage, there may be entries in the map whose keys are InvlidOid as the tsentry does
 				 * not exist in the table_size_map */
@@ -942,7 +961,7 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 			/* table size info doesn't need to flush at init quota model stage */
 			if (is_init)
 			{
-				tsentry->need_flush = false;
+				reset_table_size_entry_flag(tsentry, TABLE_NEED_FLUSH);
 			}
 
 			/* if schema change, transfer the file size */
@@ -992,7 +1011,7 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
-		if (tsentry->is_exist == false)
+		if (!get_table_size_entry_flag(tsentry, TABLE_EXIST))
 		{
 			update_size_for_quota(-tsentry->totalsize, NAMESPACE_QUOTA, (Oid[]){tsentry->namespaceoid}, tsentry->segid);
 			update_size_for_quota(-tsentry->totalsize, ROLE_QUOTA, (Oid[]){tsentry->owneroid}, tsentry->segid);
@@ -1040,7 +1059,7 @@ flush_to_table_size(void)
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
 		/* delete dropped table from both table_size_map and table table_size */
-		if (tsentry->is_exist == false)
+		if (!get_table_size_entry_flag(tsentry, TABLE_EXIST))
 		{
 			appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
 			delete_statement_flag = true;
@@ -1048,9 +1067,9 @@ flush_to_table_size(void)
 			hash_search(table_size_map, &tsentry->reloid, HASH_REMOVE, NULL);
 		}
 		/* update the table size by delete+insert in table table_size */
-		else if (tsentry->need_flush == true)
+		else if (get_table_size_entry_flag(tsentry, TABLE_NEED_FLUSH))
 		{
-			tsentry->need_flush = false;
+			reset_table_size_entry_flag(tsentry, TABLE_NEED_FLUSH);
 			appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, tsentry->segid);
 			appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->reloid, tsentry->totalsize, tsentry->segid);
 			delete_statement_flag = true;
@@ -2102,4 +2121,22 @@ format_name(const char *prefix, uint32 id, StringInfo str)
 	resetStringInfo(str);
 	appendStringInfo(str, "%s_%u", prefix, id);
 	Assert(str->len <= SHMEM_INDEX_KEYSIZE);
+}
+
+static bool
+get_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag)
+{
+	return (entry->flag & flag) ? true : false;
+}
+
+static void
+reset_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag)
+{
+	entry->flag &= (UINT32_MAX ^ flag);
+}
+
+static void
+set_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag)
+{
+	entry->flag |= flag;
 }
