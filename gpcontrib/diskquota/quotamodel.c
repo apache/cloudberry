@@ -47,7 +47,7 @@
 /* init size of table_size_map */
 #define INIT_TABLES (20 * 1024)
 /* max size of table_size_map */
-#define MAX_TABLES (1024 * 1024)
+#define MAX_TABLES (200 * 1024)
 /* cluster level init size of rejectmap */
 #define INIT_DISK_QUOTA_REJECT_ENTRIES 8192
 /* per database level max size of rejectmap */
