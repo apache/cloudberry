@@ -285,7 +285,6 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 		memset(&sublist, 0, sizeof(GinMetaPageData));
 		makeSublist(index, collector->tuples, collector->ntuples, &sublist);
 
-
 		/*
 		 * metapage was unlocked, see above
 		 */
@@ -365,10 +364,10 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 
 		data.ntuples = collector->ntuples;
 
+		START_CRIT_SECTION();
+
 		if (needWal)
 			XLogBeginInsert();
-
-		START_CRIT_SECTION();
 
 		/*
 		 * Increase counter of heap tuples
