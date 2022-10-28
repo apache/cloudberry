@@ -1557,7 +1557,6 @@ quota_check_common(Oid reloid, RelFileNode *relfilenode)
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("enable_check_quota_by_relfilenode") == FaultInjectorTypeSkip) enable_hardlimit = true;
 #endif
-
 	if (relfilenode && enable_hardlimit) return check_rejectmap_by_relfilenode(*relfilenode);
 
 	return true;
