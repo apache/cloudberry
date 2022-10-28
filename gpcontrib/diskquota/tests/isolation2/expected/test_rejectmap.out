@@ -33,6 +33,12 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbi
 -- Insert a small amount of data into blocked_t1. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t1 SELECT generate_series(1, 10000);  <waiting ...>
 
+SELECT gp_wait_until_triggered_fault('check_rejectmap_by_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
 -- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t1'::regclass, 'NAMESPACE'::text, false);
  block_relation_on_seg0 
@@ -72,6 +78,12 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbi
 -- Insert a small amount of data into blocked_t2. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t2 SELECT generate_series(1, 10000);  <waiting ...>
 
+SELECT gp_wait_until_triggered_fault('check_rejectmap_by_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
 -- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t2'::regclass, 'NAMESPACE'::text, false);
  block_relation_on_seg0 
@@ -110,6 +122,12 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbi
 
 -- Insert a small amount of data into blocked_t3. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t3 SELECT generate_series(1, 10000);  <waiting ...>
+
+SELECT gp_wait_until_triggered_fault('check_rejectmap_by_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
 
 -- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t3'::regclass, 'NAMESPACE'::text, false);
@@ -152,6 +170,12 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbi
 -- Insert a small amount of data into blocked_t4. It will hang up at check_rejectmap_by_relfilenode().
 1&: INSERT INTO blocked_t4 SELECT generate_series(1, 10000);  <waiting ...>
 
+SELECT gp_wait_until_triggered_fault('check_rejectmap_by_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
 -- Dispatch rejectmap to seg0.
 SELECT block_relation_on_seg0('blocked_t4_index'::regclass, 'NAMESPACE'::text, false);
  block_relation_on_seg0 
@@ -188,6 +212,13 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbi
  Success:                 
 (1 row)
 1&: INSERT INTO blocked_t5 SELECT generate_series(1, 10000);  <waiting ...>
+
+SELECT gp_wait_until_triggered_fault('check_rejectmap_by_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
 SELECT block_relation_on_seg0('blocked_t5'::regclass, 'NAMESPACE_TABLESPACE'::text, true);
  block_relation_on_seg0 
 ------------------------
@@ -218,7 +249,15 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'suspend', dbi
 --------------------------
  Success:                 
 (1 row)
+
 1&: INSERT INTO blocked_t6 SELECT generate_series(1, 10000);  <waiting ...>
+
+SELECT gp_wait_until_triggered_fault('check_rejectmap_by_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
 SELECT block_relation_on_seg0('blocked_t6'::regclass, 'ROLE_TABLESPACE'::text, true);
  block_relation_on_seg0 
 ------------------------
