@@ -27,6 +27,7 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 #include "utils/syscache.h"
+#include "utils/faultinjector.h"
 
 /**
  * Statistics related parameters.
@@ -302,6 +303,8 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		res = heap_form_tuple(outDesc, outvalues, outnulls);
 
 		ctx->index++;
+
+		SIMPLE_FAULT_INJECTOR("returned_sample_row");
 
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(res));
 	}
