@@ -106,6 +106,57 @@ enum AOCSScanDescIdentifier
 };
 
 /*
+ * Used for fetch individual tuples from specified by TID of append only relations
+ * using the AO Block Directory.
+ */
+typedef struct AOCSFetchDescData
+{
+	Relation		relation;
+	Snapshot		appendOnlyMetaDataSnapshot;
+
+	/*
+	 * Snapshot to use for non-metadata operations.
+	 * Usually snapshot = appendOnlyMetaDataSnapshot, but they
+	 * differ e.g. if gp_select_invisible is set.
+	 */ 
+	Snapshot    snapshot;
+
+	MemoryContext	initContext;
+
+	int				totalSegfiles;
+	struct AOCSFileSegInfo **segmentFileInfo;
+
+	/*
+	 * Array containing the maximum row number in each aoseg (to be consulted
+	 * during fetch). This is a sparse array as not all segments are involved
+	 * in a scan. Sparse entries are marked with InvalidAORowNum.
+	 *
+	 * Note:
+	 * If we have no updates and deletes, the total_tupcount is equal to the
+	 * maximum row number. But after some updates and deletes, the maximum row
+	 * number is always much bigger than total_tupcount, so this carries the
+	 * last sequence from gp_fastsequence.
+	 */
+	int64			lastSequence[AOTupleId_MultiplierSegmentFileNum];
+
+	char			*segmentFileName;
+	int				segmentFileNameMaxLen;
+	char            *basepath;
+
+	AppendOnlyBlockDirectory	blockDirectory;
+
+	DatumStreamFetchDesc *datumStreamFetchDesc;
+
+	int64	skipBlockCount;
+
+	AppendOnlyVisimap visibilityMap;
+
+	Oid segrelid;
+} AOCSFetchDescData;
+
+typedef AOCSFetchDescData *AOCSFetchDesc;
+
+/*
  * Used for scan of appendoptimized column oriented relations, should be used in
  * the tableam api related code and under it.
  */
@@ -118,19 +169,41 @@ typedef struct AOCSScanDescData
 
 	/* synthetic system attributes */
 	ItemPointerData cdb_fake_ctid;
-	int64 total_row;
-	int64 segrowsprocessed;
 
 	/*
-	 * Only used by `analyze`
+	 * used by `analyze`
 	 */
-	int64		nextTupleId;
-	int64		targetTupleId;
 
 	/*
- 	 * Only used by `sample scan`
- 	 */	 	
+	 * targrow: the output of the Row-based sampler (Alogrithm S), denotes a
+	 * rownumber in the flattened row number space that is the target of a sample,
+	 * which starts from 0.
+	 * In other words, if we have seg0 rownums: [1, 100], seg1 rownums: [1, 200]
+	 * If targrow = 150, then we are referring to seg1's rownum=51.
+	 */
+	int64			targrow;
+
+	/*
+	 * segfirstrow: pointing to the next starting row which is used to check
+	 * the distance to `targrow`
+	 */
+	int64			segfirstrow;
+
+	/*
+	 * segrowsprocessed: track the rows processed under the current segfile.
+	 * Don't miss updating it accordingly when "segfirstrow" is updated.
+	 */
+	int64			segrowsprocessed;
+
+	AOBlkDirScan	blkdirscan;
+	AOCSFetchDesc	aocsfetch;
+	bool 			*proj;
+
+	/*
+	 * Only used by `sample scan`
+	 */
 	int64		fetchTupleId;
+	int64		nextTupleId;
 	int64		totalTuples;
 	/*
 	 * Part of the struct to be used only inside aocsam.c
@@ -211,57 +284,6 @@ typedef struct AOCSScanDescData
 } AOCSScanDescData;
 
 typedef AOCSScanDescData *AOCSScanDesc;
-
-/*
- * Used for fetch individual tuples from specified by TID of append only relations
- * using the AO Block Directory.
- */
-typedef struct AOCSFetchDescData
-{
-	Relation		relation;
-	Snapshot		appendOnlyMetaDataSnapshot;
-
-	/*
-	 * Snapshot to use for non-metadata operations.
-	 * Usually snapshot = appendOnlyMetaDataSnapshot, but they
-	 * differ e.g. if gp_select_invisible is set.
-	 */ 
-	Snapshot    snapshot;
-
-	MemoryContext	initContext;
-
-	int				totalSegfiles;
-	struct AOCSFileSegInfo **segmentFileInfo;
-
-	/*
-	 * Array containing the maximum row number in each aoseg (to be consulted
-	 * during fetch). This is a sparse array as not all segments are involved
-	 * in a scan. Sparse entries are marked with InvalidAORowNum.
-	 *
-	 * Note:
-	 * If we have no updates and deletes, the total_tupcount is equal to the
-	 * maximum row number. But after some updates and deletes, the maximum row
-	 * number is always much bigger than total_tupcount, so this carries the
-	 * last sequence from gp_fastsequence.
-	 */
-	int64			lastSequence[AOTupleId_MultiplierSegmentFileNum];
-
-	char			*segmentFileName;
-	int				segmentFileNameMaxLen;
-	char            *basepath;
-
-	AppendOnlyBlockDirectory	blockDirectory;
-
-	DatumStreamFetchDesc *datumStreamFetchDesc;
-
-	int64	skipBlockCount;
-
-	AppendOnlyVisimap visibilityMap;
-
-	Oid segrelid;
-} AOCSFetchDescData;
-
-typedef AOCSFetchDescData *AOCSFetchDesc;
 
 /*
  * AOCSDeleteDescData is used for delete data from AOCS relations.
@@ -397,6 +419,8 @@ extern void aocs_addcol_emptyvpe(
 extern void aocs_addcol_setfirstrownum(AOCSAddColumnDesc desc,
 		int64 firstRowNum);
 
+extern bool aocs_get_target_tuple(AOCSScanDesc aoscan, int64 targrow, TupleTableSlot *slot);
+
 extern void aoco_dml_init(Relation relation, CmdType operation);
 extern void aoco_dml_finish(Relation relation, CmdType operation);
 
@@ -423,5 +447,21 @@ AOCSScanDesc_UpdateTotalBytesRead(AOCSScanDesc scan, AttrNumber attno)
 		scan->totalBytesRead += scan->columnScanInfo.ds[attno]->ao_read.current.uncompressedLen;
 }
 
+static inline int64
+AOCSScanDesc_TotalTupCount(AOCSScanDesc scan)
+{
+	Assert(scan != NULL);
+
+	int64 totalrows = 0;
+	AOCSFileSegInfo **seginfo = scan->seginfo;
+
+	for (int i = 0; i < scan->total_seg; i++)
+	{
+		if (seginfo[i]->state != AOSEG_STATE_AWAITING_DROP)
+			totalrows += seginfo[i]->total_tupcount;
+	}
+
+	return totalrows;
+}
 
 #endif   /* AOCSAM_H */
