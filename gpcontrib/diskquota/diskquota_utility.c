@@ -1655,3 +1655,76 @@ check_role(Oid roleoid, char *rolname, int64 quota_limit_mb)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 		                errmsg("Can not set disk quota for system owner: %s", rolname)));
 }
+
+PG_FUNCTION_INFO_V1(db_status);
+Datum
+db_status(PG_FUNCTION_ARGS)
+{
+	FuncCallContext *funcctx;
+	struct StatusCtx
+	{
+		int slot;
+	} * status_ctx;
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		TupleDesc     tupdesc;
+		MemoryContext oldcontext;
+
+		/* Create a function context for cross-call persistence. */
+		funcctx = SRF_FIRSTCALL_INIT();
+
+		/* Switch to memory context appropriate for multiple function calls */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		tupdesc = CreateTemplateTupleDesc(8, false /*hasoid*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)1, "ID", INT2OID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)2, "DBID", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)3, "WORKERID", INT2OID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)4, "STATUS", INT2OID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)5, "LAST_RUN_TIME", TIMESTAMPTZOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)6, "COST", INT2OID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)7, "NEXT_RUN_TIME", TIMESTAMPTZOID, -1 /*typmod*/, 0 /*attdim*/);
+		TupleDescInitEntry(tupdesc, (AttrNumber)8, "EPOCH", INT8OID, -1 /*typmod*/, 0 /*attdim*/);
+		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+
+		/* Create a local hash table and fill it with entries from shared memory. */
+		status_ctx = (struct StatusCtx *)palloc(sizeof(struct StatusCtx));
+
+		/* Setup first calling context. */
+		status_ctx->slot   = 0;
+		funcctx->user_fctx = (void *)status_ctx;
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx    = SRF_PERCALL_SETUP();
+	status_ctx = (struct StatusCtx *)funcctx->user_fctx;
+
+	while (status_ctx->slot != MAX_NUM_MONITORED_DB)
+	{
+		DiskquotaDBEntry *dbEntry = &DiskquotaLauncherShmem->dbArray[status_ctx->slot];
+		status_ctx->slot++;
+		if (!dbEntry->in_use) continue;
+		Datum     result;
+		Datum     values[8];
+		bool      nulls[8];
+		HeapTuple tuple;
+
+		values[0] = Int16GetDatum(dbEntry->id);
+		values[1] = ObjectIdGetDatum(dbEntry->dbid);
+		values[2] = Int16GetDatum(dbEntry->workerId);
+		values[3] = Int16GetDatum(dbEntry->status);
+		values[4] = TimestampTzGetDatum(dbEntry->last_run_time);
+		values[5] = Int16GetDatum(dbEntry->cost);
+		values[6] = TimestampTzGetDatum(dbEntry->next_run_time);
+		values[7] = Int64GetDatum(worker_get_epoch(dbEntry->dbid));
+
+		memset(nulls, false, sizeof(nulls));
+		tuple  = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+	}
+
+	SRF_RETURN_DONE(funcctx);
+}
