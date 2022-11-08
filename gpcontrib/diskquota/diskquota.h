@@ -26,6 +26,7 @@
 
 #include "utils/hsearch.h"
 #include "utils/relcache.h"
+#include "utils/timestamp.h"
 
 #include <signal.h>
 
@@ -155,19 +156,26 @@ struct DiskQuotaWorkerEntry
 	DiskquotaDBEntry *dbEntry; // pointer to shared memory. DiskquotaLauncherShmem->dbArray
 };
 
+typedef enum
+{
+	SLOT_UNUSED = 0,
+	SLOT_SLEEPING,
+	SLOT_RUNNING
+} DBSlotStatus;
 typedef struct
 {
 	dlist_head        freeWorkers;    // a list of DiskQuotaWorkerEntry
 	dlist_head        runningWorkers; // a list of DiskQuotaWorkerEntry
 	DiskquotaDBEntry *dbArray;        // size == MAX_NUM_MONITORED_DB
 	DiskquotaDBEntry *dbArrayTail;
-	int               running_workers_num;
 	volatile bool     isDynamicWorker;
 	/*
 	DiskQuotaWorkerEntry worker[diskquota_max_workers]; // the hidden memory to store WorkerEntry
 	DiskquotaDBEntry     dbentry[MAX_NUM_MONITORED_DB]; // the hidden memory for dbentry
 	*/
 } DiskquotaLauncherShmemStruct;
+
+DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
 
 /* In shmem, only used on master */
 struct DiskquotaDBEntry
@@ -176,7 +184,11 @@ struct DiskquotaDBEntry
 	Oid dbid; // the database oid in postgres catalog
 
 #define INVALID_WORKER_ID -1
-	int workerId; // the id of the worker which is running for the, 0 means no worker for it.
+	int          workerId; // the id of the worker which is running for the (current DB?), 0 means no worker for it.
+	TimestampTz  next_run_time;
+	TimestampTz  last_run_time;
+	int16        cost; // ms
+	DBSlotStatus status;
 
 	bool inited; // this entry is inited, will set to true after the worker finish the frist run.
 	bool in_use; // this slot is in using. AKA dbid != 0
