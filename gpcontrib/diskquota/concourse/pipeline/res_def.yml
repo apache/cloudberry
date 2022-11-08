@@ -27,7 +27,6 @@ resources:
     disable_forks: false
     repository: greenplum-db/diskquota
     access_token: ((extension/github-access-token))
-    base_branch: gpdb
 # Commit trigger
 - name: diskquota_commit
   type: git
