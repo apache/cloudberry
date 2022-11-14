@@ -791,6 +791,9 @@ get_active_tables_oid(void)
 		RelFileNode rnode;
 		Oid         prelid;
 
+		/* The session of db1 should not see the table inside db2. */
+		if (active_table_file_entry->dbid != MyDatabaseId) continue;
+
 		rnode.dbNode  = active_table_file_entry->dbid;
 		rnode.relNode = active_table_file_entry->relfilenode;
 		rnode.spcNode = active_table_file_entry->tablespaceoid;
