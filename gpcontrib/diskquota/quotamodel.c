@@ -811,7 +811,8 @@ merge_uncommitted_table_to_oidlist(List *oidlist)
 	hash_seq_init(&iter, relation_cache);
 	while ((entry = hash_seq_search(&iter)) != NULL)
 	{
-		if (entry->primary_table_relid == entry->relid)
+		/* The session of db1 should not see the table inside db2. */
+		if (entry->primary_table_relid == entry->relid && entry->rnode.node.dbNode == MyDatabaseId)
 		{
 			oidlist = lappend_oid(oidlist, entry->relid);
 		}
@@ -1875,7 +1876,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 			bool                         found;
 			LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
 			relation_cache_entry = hash_search(relation_cache, &active_oid, HASH_FIND, &found);
-			if (found && relation_cache_entry)
+			/* The session of db1 should not see the table inside db2. */
+			if (found && relation_cache_entry && relation_cache_entry->rnode.node.dbNode == MyDatabaseId)
 			{
 				Oid            relnamespace  = relation_cache_entry->namespaceoid;
 				Oid            reltablespace = relation_cache_entry->rnode.node.spcNode;
