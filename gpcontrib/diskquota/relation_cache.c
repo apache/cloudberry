@@ -284,6 +284,8 @@ remove_committed_relation_from_cache(void)
 	hash_seq_init(&iter, relation_cache);
 	while ((entry = hash_seq_search(&iter)) != NULL)
 	{
+		/* The session of db1 should not see the table inside db2. */
+		if (entry->rnode.node.dbNode != MyDatabaseId) continue;
 		local_entry = hash_search(local_relation_cache, &entry->relid, HASH_ENTER, NULL);
 		memcpy(local_entry, entry, sizeof(DiskQuotaRelationCacheEntry));
 	}
@@ -360,6 +362,8 @@ show_relation_cache(PG_FUNCTION_ARGS)
 		hash_seq_init(&hash_seq, relation_cache);
 		while ((entry = (DiskQuotaRelationCacheEntry *)hash_seq_search(&hash_seq)) != NULL)
 		{
+			/* The session of db1 should not see the table inside db2. */
+			if (entry->rnode.node.dbNode != MyDatabaseId) continue;
 			DiskQuotaRelationCacheEntry *local_entry =
 			        hash_search(relation_cache_ctx->relation_cache, &entry->relid, HASH_ENTER_NULL, NULL);
 			if (local_entry)
