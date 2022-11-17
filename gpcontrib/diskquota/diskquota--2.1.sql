@@ -312,7 +312,7 @@ INSERT INTO diskquota.state SELECT (count(relname) = 0)::int FROM pg_class AS c,
 SELECT FROM diskquota.resume();
 
 
--- Starting the worker has to be the last step.
+--- Starting the worker has to be the last step.
 CREATE FUNCTION diskquota.diskquota_start_worker() RETURNS void STRICT AS '$libdir/diskquota-2.1.so' LANGUAGE C;
 SELECT diskquota.diskquota_start_worker();
 DROP FUNCTION diskquota.diskquota_start_worker();
