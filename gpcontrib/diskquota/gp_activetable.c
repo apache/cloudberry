@@ -242,7 +242,8 @@ report_altered_reloid(Oid reloid)
 static void
 report_relation_cache_helper(Oid relid)
 {
-	bool found;
+	bool     found;
+	Relation rel;
 
 	/* We do not collect the active table in mirror segments  */
 	if (IsRoleMirror())
@@ -263,7 +264,11 @@ report_relation_cache_helper(Oid relid)
 		return;
 	}
 
-	update_relation_cache(relid);
+	rel = diskquota_relation_open(relid, NoLock);
+	if (rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE || rel->rd_rel->relkind != RELKIND_COMPOSITE_TYPE ||
+	    rel->rd_rel->relkind != RELKIND_VIEW)
+		update_relation_cache(relid);
+	relation_close(rel, NoLock);
 }
 
 /*
