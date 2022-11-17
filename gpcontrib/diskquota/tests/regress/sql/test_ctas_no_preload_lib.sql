@@ -14,11 +14,6 @@ DISTRIBUTED BY (i);
 \! gpstop -far > /dev/null
 \c
 
--- Make sure that the worker has started. 
--- We cannot use wait_for_worker_new_epoch() here because the worker might not
--- have started yet.
-SELECT pg_sleep(1);
-
 SET ROLE test;
 
 -- Init table_size to include the table
@@ -28,7 +23,7 @@ SELECT diskquota.init_table_size_table();
 \! gpstop -far > /dev/null
 \c
 SET ROLE test;
-
+SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid FROM diskquota.table_size
 WHERE tableid = 't_without_diskquota'::regclass ORDER BY segid;
 

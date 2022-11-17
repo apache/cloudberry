@@ -72,7 +72,8 @@ list(
   enforcement.c
   gp_activetable.c
   quotamodel.c
-  relation_cache.c)
+  relation_cache.c
+  monitored_db.c)
 
 list(
   APPEND

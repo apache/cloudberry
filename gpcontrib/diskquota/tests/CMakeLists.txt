@@ -10,6 +10,7 @@ RegressTarget_Add(regress
     SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/regress/diskquota_schedule
     REGRESS_OPTS
     --load-extension=gp_inject_fault
+    --load-extension=diskquota_test
     --dbname=contrib_regression)
 
 RegressTarget_Add(isolation2
@@ -26,7 +27,16 @@ RegressTarget_Add(isolation2
     --load-extension=gp_inject_fault
     --dbname=isolation2test)
 
+add_custom_target(install_test_extension
+  COMMAND
+  cmake -E copy ${CMAKE_SOURCE_DIR}/diskquota_test.control ${PG_HOME}/share/postgresql/extension
+  COMMAND
+  cmake -E copy ${CMAKE_SOURCE_DIR}/diskquota_test--1.0.sql ${PG_HOME}/share/postgresql/extension
+  )
+
 add_custom_target(installcheck)
+add_dependencies(isolation2 install_test_extension)
+add_dependencies(regress install_test_extension)
 add_dependencies(installcheck isolation2 regress)
 
 # Example to run test_truncate infinite times

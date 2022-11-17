@@ -1,7 +1,6 @@
 CREATE DATABASE db_insert_after_drop;
 \c db_insert_after_drop
 CREATE EXTENSION diskquota;
-SELECT diskquota.wait_for_worker_new_epoch();
 -- Test Drop Extension
 CREATE SCHEMA sdrtbl;
 SELECT diskquota.set_schema_quota('sdrtbl', '1 MB');
@@ -10,11 +9,9 @@ CREATE TABLE a(i int) DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,100);
 -- expect insert fail
 INSERT INTO a SELECT generate_series(1,100000);
-SELECT pg_sleep(10);
+SELECT diskquota.wait_for_worker_new_epoch();
 INSERT INTO a SELECT generate_series(1,100);
 DROP EXTENSION diskquota;
--- sleep 1 second in case of system slow
-SELECT pg_sleep(1);
 INSERT INTO a SELECT generate_series(1,100);
 
 DROP TABLE a;
