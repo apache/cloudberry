@@ -156,12 +156,6 @@ struct DiskQuotaWorkerEntry
 	DiskquotaDBEntry *dbEntry; // pointer to shared memory. DiskquotaLauncherShmem->dbArray
 };
 
-typedef enum
-{
-	SLOT_UNUSED = 0,
-	SLOT_SLEEPING,
-	SLOT_RUNNING
-} DBSlotStatus;
 typedef struct
 {
 	dlist_head        freeWorkers;    // a list of DiskQuotaWorkerEntry
@@ -175,8 +169,6 @@ typedef struct
 	*/
 } DiskquotaLauncherShmemStruct;
 
-DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
-
 /* In shmem, only used on master */
 struct DiskquotaDBEntry
 {
@@ -184,27 +176,33 @@ struct DiskquotaDBEntry
 	Oid dbid; // the database oid in postgres catalog
 
 #define INVALID_WORKER_ID -1
-	int          workerId; // the id of the worker which is running for the (current DB?), 0 means no worker for it.
-	TimestampTz  next_run_time;
-	TimestampTz  last_run_time;
-	int16        cost; // ms
-	DBSlotStatus status;
+	int         workerId; // the id of the worker which is running for the (current DB?), 0 means no worker for it.
+	TimestampTz next_run_time;
+	TimestampTz last_run_time;
+	int16       cost; // ms
 
 	bool inited; // this entry is inited, will set to true after the worker finish the frist run.
 	bool in_use; // this slot is in using. AKA dbid != 0
 };
 
+typedef enum MonitorDBStatus
+{
+#define DB_STATUS(id, str) id,
+#include "diskquota_enum.h"
+#undef DB_STATUS
+	DB_STATUS_MAX
+} MonitorDBStatus;
 /* used in monitored_dbid_cache, in shmem, both on master and segments */
+
 typedef struct MonitorDBEntryStruct *MonitorDBEntry;
 struct MonitorDBEntryStruct
 {
-	Oid dbid; // the key
-
+	Oid              dbid;   // the key
+	pg_atomic_uint32 status; // enum MonitorDBStatus
 	bool             paused;
 	bool             is_readiness_logged; /* true if we have logged the error message for not ready */
 	pg_atomic_uint32 epoch;               /* this counter will be increased after each worker loop */
 };
-
 extern HTAB *disk_quota_worker_map;
 
 /* drop extension hook */
@@ -252,4 +250,5 @@ extern void         vacuum_disk_quota_model(uint32 id);
 extern void         update_monitor_db(Oid dbid, FetchTableStatType action);
 extern void         update_monitor_db_mpp(Oid dbid, FetchTableStatType action, const char *schema);
 extern void         diskquota_stop_worker(void);
+extern void         update_monitordb_status(Oid dbid, uint32 status);
 #endif

@@ -45,9 +45,6 @@ INSERT INTO s.t3 SELECT generate_series(1, 10);  -- expect failed
 
 DROP EXTENSION diskquota;
 
--- wait worker exit
-\! sleep 1
-
 \c contrib_regression
 DROP DATABASE test_tablenum_limit_01;
 DROP DATABASE test_tablenum_limit_02;
