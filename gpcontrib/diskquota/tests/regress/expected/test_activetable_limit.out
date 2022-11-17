@@ -49,8 +49,6 @@ ERROR:  schema's disk space quota exceeded with name: s
 --    this test case is useless, remove this if anyone dislike it.
 --    but the hash capacity is smaller than 6, so the test case works for issue 51
 DROP EXTENSION diskquota;
--- wait worker exit
-\! sleep 1
 \c contrib_regression
 DROP DATABASE test_tablenum_limit_01;
 DROP DATABASE test_tablenum_limit_02;

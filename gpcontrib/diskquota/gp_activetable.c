@@ -56,7 +56,6 @@ HTAB *active_tables_map = NULL; // Set<DiskQuotaActiveTableFileEntry>
  * dbid will be added to it when creating diskquota extension
  * dbid will be removed from it when droping diskquota extension
  */
-HTAB *monitored_dbid_cache = NULL; // Map<Oid, MonitorDBEntryStruct>
 HTAB *altered_reloid_cache = NULL; // Set<Oid>
 
 /* active table hooks which detect the disk file size change. */
