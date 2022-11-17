@@ -43,6 +43,7 @@ FROM diskquota.table_size
 WHERE segid = -1 AND tableid::regclass::name NOT LIKE '%.%'
 ORDER BY tableid;
 
+
 DROP TABLE t;
 DROP TABLE toast;
 DROP TABLE ao;
