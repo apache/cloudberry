@@ -4,10 +4,11 @@ CREATE TABLE t (i int) DISTRIBUTED BY (i);
 CREATE EXTENSION diskquota;
 WARNING:  [diskquota] diskquota is not ready because current database is not empty
 HINT:  please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota
-SELECT pg_sleep(5); --Wait for the check completes
- pg_sleep 
-----------
- 
+CREATE EXTENSION diskquota_test;
+SELECT diskquota_test.wait('SELECT diskquota_test.check_cur_db_status(''UNREADY'');');
+ wait 
+------
+ t
 (1 row)
 
 SELECT count(*) FROM gp_toolkit.gp_log_database
@@ -19,10 +20,10 @@ WHERE logmessage = '[diskquota] diskquota is not ready';
 
 \! gpstop -raf > /dev/null
 \c
-SELECT pg_sleep(1); --Wait for the check completes
- pg_sleep 
-----------
- 
+SELECT diskquota_test.wait('SELECT diskquota_test.check_cur_db_status(''UNREADY'');');
+ wait 
+------
+ t
 (1 row)
 
 SELECT count(*) FROM gp_toolkit.gp_log_database

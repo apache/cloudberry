@@ -83,8 +83,7 @@ static DiskQuotaWorkerEntry *volatile MyWorkerInfo = NULL;
 // how many database diskquota are monitoring on
 static int num_db = 0;
 
-// in shared memory, only for launcher process
-DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
+static DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
 
 #define MIN_SLEEPTIME 100 /* milliseconds */
 
@@ -96,46 +95,6 @@ DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
  * size: GUC diskquota_max_workers
  */
 BackgroundWorkerHandle **bgworker_handles;
-
-bool
-diskquota_is_readiness_logged()
-{
-	Assert(MyDatabaseId != InvalidOid);
-	bool is_readiness_logged;
-
-	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_SHARED);
-	{
-		MonitorDBEntry hash_entry;
-		bool           found;
-
-		hash_entry = (MonitorDBEntry)hash_search(monitored_dbid_cache, (void *)&MyDatabaseId, HASH_FIND, &found);
-		is_readiness_logged = found ? hash_entry->is_readiness_logged : false;
-	}
-	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
-
-	return is_readiness_logged;
-}
-
-void
-diskquota_set_readiness_logged()
-{
-	Assert(MyDatabaseId != InvalidOid);
-
-	/*
-	 * We actually need ROW EXCLUSIVE lock here. Given that the current worker
-	 * is the the only process that modifies the entry, it is safe to only take
-	 * the shared lock.
-	 */
-	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_SHARED);
-	{
-		MonitorDBEntry hash_entry;
-		bool           found;
-
-		hash_entry = (MonitorDBEntry)hash_search(monitored_dbid_cache, (void *)&MyDatabaseId, HASH_FIND, &found);
-		hash_entry->is_readiness_logged = true;
-	}
-	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
-}
 
 /* functions of disk quota*/
 void _PG_init(void);
@@ -171,24 +130,6 @@ static void                    init_bgworker_handles(void);
 static BackgroundWorkerHandle *get_bgworker_handle(uint32 worker_id);
 static void                    free_bgworker_handle(uint32 worker_id);
 static BgwHandleStatus         WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle);
-
-bool
-diskquota_is_paused()
-{
-	Assert(MyDatabaseId != InvalidOid);
-	bool           paused = false;
-	bool           found;
-	MonitorDBEntry entry;
-
-	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_SHARED);
-	entry = hash_search(monitored_dbid_cache, &MyDatabaseId, HASH_FIND, &found);
-	if (found)
-	{
-		paused = entry->paused;
-	}
-	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
-	return paused;
-}
 
 /*
  * diskquota_launcher_shmem_size
@@ -458,6 +399,8 @@ disk_quota_worker_main(Datum main_arg)
 	 */
 	init_ps_display("bgworker:", "[diskquota]", dbname, "");
 
+	/* suppose the database is ready, if not, then set it to false */
+	bool is_ready = true;
 	/* Waiting for diskquota state become ready */
 	while (!got_sigterm)
 	{
@@ -475,7 +418,13 @@ disk_quota_worker_main(Datum main_arg)
 		 */
 		if (check_diskquota_state_is_ready())
 		{
+			is_ready = true;
 			break;
+		}
+		if (is_ready)
+		{
+			update_monitordb_status(MyWorkerInfo->dbEntry->dbid, DB_UNREADY);
+			is_ready = false;
 		}
 		rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
@@ -498,6 +447,7 @@ disk_quota_worker_main(Datum main_arg)
 		}
 	}
 
+	if (!MyWorkerInfo->dbEntry->inited) update_monitordb_status(MyWorkerInfo->dbEntry->dbid, DB_RUNNING);
 	bool is_gang_destroyed = false;
 	while (!got_sigterm)
 	{
@@ -558,10 +508,12 @@ disk_quota_worker_main(Datum main_arg)
 	if (got_sigterm)
 		ereport(LOG, (errmsg("[diskquota] stop disk quota worker process to monitor database:%s", dbname)));
 	ereport(DEBUG1, (errmsg("[diskquota] stop disk quota worker process to monitor database:%s", dbname)));
+#if DISKQUOTA_DEBUG
 	long secs;
 	int  usecs;
 	TimestampDifference(MyWorkerInfo->dbEntry->last_run_time, GetCurrentTimestamp(), &secs, &usecs);
 	MyWorkerInfo->dbEntry->cost = secs * 1000L + usecs / 1000L;
+#endif
 	proc_exit(0);
 }
 
@@ -664,7 +616,11 @@ disk_quota_launcher_main(Datum main_arg)
 		else
 		{
 			TimestampTz curTime = GetCurrentTimestamp();
-			TimestampDifference(curTime, curDB->next_run_time, &nap.tv_sec, &nap.tv_usec);
+			long        sec;
+			int         usec;
+			TimestampDifference(curTime, curDB->next_run_time, &sec, &usec);
+			nap.tv_sec  = sec;
+			nap.tv_usec = usec;
 
 			/* if the sleep time is too short, just skip the sleeping */
 			if (nap.tv_sec == 0 && nap.tv_usec < MIN_SLEEPTIME * 1000L)
@@ -1289,9 +1245,12 @@ start_worker(DiskquotaDBEntry *dbEntry)
 	/* free the BackgroundWorkerHandle used by last database */
 	free_bgworker_handle(dq_worker->id);
 
-	dbEntry->workerId      = dq_worker->id;
-	dq_worker->dbEntry     = dbEntry;
+	dbEntry->workerId  = dq_worker->id;
+	dq_worker->dbEntry = dbEntry;
+
+#if DISKQUOTA_DEBUG
 	dbEntry->last_run_time = GetCurrentTimestamp();
+#endif
 
 	/* register a dynamic bgworker and wait for it to start */
 	memset(&worker, 0, sizeof(BackgroundWorker));
@@ -1342,7 +1301,6 @@ start_worker(DiskquotaDBEntry *dbEntry)
 	}
 
 	Assert(status == BGWH_STARTED);
-	dbEntry->status = SLOT_RUNNING;
 	return true;
 Failed:
 
@@ -1364,54 +1322,6 @@ is_valid_dbid(Oid dbid)
 	if (!HeapTupleIsValid(tuple)) return false;
 	ReleaseSysCache(tuple);
 	return true;
-}
-
-bool
-worker_increase_epoch(Oid dbid)
-{
-	bool           found = false;
-	MonitorDBEntry entry;
-	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_SHARED);
-	entry = hash_search(monitored_dbid_cache, &dbid, HASH_FIND, &found);
-
-	if (found)
-	{
-		pg_atomic_fetch_add_u32(&(entry->epoch), 1);
-	}
-	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
-	return found;
-}
-
-uint32
-worker_get_epoch(Oid dbid)
-{
-	bool           found = false;
-	uint32         epoch = 0;
-	MonitorDBEntry entry;
-	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_SHARED);
-	entry = hash_search(monitored_dbid_cache, &dbid, HASH_FIND, &found);
-	if (found)
-	{
-		epoch = pg_atomic_read_u32(&(entry->epoch));
-	}
-	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
-	if (!found)
-	{
-		ereport(WARNING, (errcode(ERRCODE_INTERNAL_ERROR),
-		                  errmsg("[diskquota] worker not found for database \"%s\"", get_database_name(dbid))));
-	}
-	return epoch;
-}
-
-// Returns the worker epoch for the current database.
-// An epoch marks a new iteration of refreshing quota usage by a bgworker.
-// An epoch is a 32-bit unsigned integer and there is NO invalid value.
-// Therefore, the UDF must throw an error if something unexpected occurs.
-PG_FUNCTION_INFO_V1(show_worker_epoch);
-Datum
-show_worker_epoch(PG_FUNCTION_ARGS)
-{
-	PG_RETURN_UINT32(worker_get_epoch(MyDatabaseId));
 }
 
 static const char *
@@ -1561,48 +1471,6 @@ diskquota_status(PG_FUNCTION_ARGS)
 	SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
 }
 
-static bool
-check_for_timeout(TimestampTz start_time)
-{
-	long diff_secs  = 0;
-	int  diff_usecs = 0;
-	TimestampDifference(start_time, GetCurrentTimestamp(), &diff_secs, &diff_usecs);
-	if (diff_secs >= diskquota_worker_timeout)
-	{
-		ereport(NOTICE, (errmsg("[diskquota] timeout when waiting for worker"),
-		                 errhint("please check if the bgworker is still alive.")));
-		return true;
-	}
-	return false;
-}
-
-// Checks if the bgworker for the current database works as expected.
-// 1. If it returns successfully in `diskquota.naptime`, the bgworker works as expected.
-// 2. If it does not terminate, there must be some issues with the bgworker.
-//    In this case, we must ensure this UDF can be interrupted by the user.
-PG_FUNCTION_INFO_V1(wait_for_worker_new_epoch);
-Datum
-wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
-{
-	TimestampTz start_time    = GetCurrentTimestamp();
-	uint32      current_epoch = worker_get_epoch(MyDatabaseId);
-	for (;;)
-	{
-		CHECK_FOR_INTERRUPTS();
-		if (check_for_timeout(start_time)) start_time = GetCurrentTimestamp();
-		uint32 new_epoch = worker_get_epoch(MyDatabaseId);
-		/* Unsigned integer underflow is OK */
-		if (new_epoch - current_epoch >= 2u)
-		{
-			PG_RETURN_BOOL(true);
-		}
-		/* Sleep for naptime to reduce CPU usage */
-		(void)WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT, diskquota_naptime ? diskquota_naptime : 1);
-		ResetLatch(&MyProc->procLatch);
-	}
-	PG_RETURN_BOOL(false);
-}
-
 static void
 FreeWorker(DiskQuotaWorkerEntry *worker)
 {
@@ -1615,7 +1483,6 @@ FreeWorker(DiskQuotaWorkerEntry *worker)
 			if (in_use && worker->dbEntry->workerId == worker->id)
 			{
 				worker->dbEntry->workerId = INVALID_WORKER_ID;
-				worker->dbEntry->status   = SLOT_SLEEPING;
 				worker->dbEntry->next_run_time =
 				        TimestampTzPlusMilliseconds(GetCurrentTimestamp(), diskquota_naptime * 1000L);
 			}
@@ -1681,7 +1548,6 @@ init_launcher_shmem()
 			memset(&DiskquotaLauncherShmem->dbArray[i], 0, sizeof(DiskquotaDBEntry));
 			DiskquotaLauncherShmem->dbArray[i].id       = i;
 			DiskquotaLauncherShmem->dbArray[i].workerId = INVALID_WORKER_ID;
-			DiskquotaLauncherShmem->dbArray[i].status   = SLOT_UNUSED;
 		}
 	}
 }
@@ -1709,7 +1575,6 @@ add_db_entry(Oid dbid)
 			dbEntry->dbid          = dbid;
 			dbEntry->in_use        = true;
 			dbEntry->next_run_time = GetCurrentTimestamp();
-			dbEntry->status        = SLOT_SLEEPING;
 			result                 = dbEntry;
 		}
 		else if (dbEntry->in_use && dbEntry->dbid == dbid)
@@ -1844,7 +1709,6 @@ vacuum_db_entry(DiskquotaDBEntry *db)
 	db->dbid     = InvalidOid;
 	db->inited   = false;
 	db->workerId = INVALID_WORKER_ID;
-	db->status   = SLOT_UNUSED;
 	db->in_use   = false;
 }
 
