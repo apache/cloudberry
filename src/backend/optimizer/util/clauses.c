@@ -23,6 +23,7 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#include "catalog/oid_dispatch.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_language.h"
@@ -2293,6 +2294,8 @@ Node *
 eval_const_expressions(PlannerInfo *root, Node *node)
 {
 	eval_const_expressions_context context;
+	Node                          *result;
+	List                          *saved_oid_assignments;
 
 	if (root)
 		context.boundParams = root->glob->boundParams;	/* bound Params */
@@ -2307,7 +2310,11 @@ eval_const_expressions(PlannerInfo *root, Node *node)
 	context.max_size = 0;
 	context.eval_stable_functions = should_eval_stable_functions(root);
 
-	return eval_const_expressions_mutator(node, &context);
+	saved_oid_assignments = SaveOidAssignments();
+	result = eval_const_expressions_mutator(node, &context);
+	RestoreOidAssignments(saved_oid_assignments);
+
+	return result;
 }
 
 #define MIN_ARRAY_SIZE_FOR_HASHED_SAOP 9
