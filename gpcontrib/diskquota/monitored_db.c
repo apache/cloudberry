@@ -304,7 +304,7 @@ check_for_timeout(TimestampTz start_time)
 	long diff_secs  = 0;
 	int  diff_usecs = 0;
 	TimestampDifference(start_time, GetCurrentTimestamp(), &diff_secs, &diff_usecs);
-	if (diff_secs >= 60)
+	if (diff_secs >= diskquota_worker_timeout)
 	{
 		ereport(NOTICE, (errmsg("[diskquota] timeout when waiting for worker"),
 		                 errhint("please check if the bgworker is still alive.")));
