@@ -226,7 +226,7 @@ worker_get_epoch(Oid dbid)
 	if (!found)
 	{
 		ereport(WARNING, (errcode(ERRCODE_INTERNAL_ERROR),
-		                  errmsg("[diskquota] database \"%s\" not found", get_database_name(dbid))));
+		                  errmsg("[diskquota] database \"%s\" not found for getting epoch", get_database_name(dbid))));
 	}
 	return epoch;
 }
@@ -294,7 +294,8 @@ update_monitordb_status(Oid dbid, uint32 status)
 		pg_atomic_write_u32(&(entry->status), status);
 	}
 	else
-		ereport(WARNING, (errcode(ERRCODE_INTERNAL_ERROR), errmsg("[diskquota] database %u not found", dbid)));
+		ereport(WARNING, (errcode(ERRCODE_INTERNAL_ERROR),
+		                  errmsg("[diskquota] database %u not found for updating monitor db", dbid)));
 	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
 }
 
