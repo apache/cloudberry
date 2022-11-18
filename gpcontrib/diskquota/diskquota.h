@@ -34,6 +34,7 @@
 #define MAX_NUM_MONITORED_DB 50
 #define LAUNCHER_SCHEMA "diskquota_utility"
 #define EXTENSION_SCHEMA "diskquota"
+extern int diskquota_worker_timeout;
 
 typedef enum
 {
