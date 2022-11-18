@@ -174,6 +174,9 @@ extern Size InstrShmemSize(void);
 extern void InstrShmemInit(void);
 extern Instrumentation *GpInstrAlloc(const Plan *node, int instrument_options, bool async_mode);
 
+/* needed by metrics_collector*/
+extern void gp_gettmid(int32*);
+
 /*
  * For each free slot in shmem, fill it with specific pattern
  * Use this pattern to detect the slot has been recycled.
