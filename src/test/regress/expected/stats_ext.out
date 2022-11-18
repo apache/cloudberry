@@ -242,7 +242,7 @@ SELECT 1 FROM pg_statistic_ext WHERE stxrelid = 'stxdinp'::regclass;
 SELECT * FROM check_estimated_rows('SELECT a, b FROM stxdinp GROUP BY 1, 2');
  estimated | actual 
 -----------+--------
-         1 |     10
+        10 |     10
 (1 row)
 
 DROP TABLE stxdinp;
