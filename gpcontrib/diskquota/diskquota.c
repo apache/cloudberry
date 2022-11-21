@@ -289,7 +289,7 @@ define_guc_variables(void)
 	DefineCustomIntVariable(
 	        "diskquota.max_workers",
 	        "Max number of backgroud workers to run diskquota extension, should be less than max_worker_processes.",
-	        NULL, &diskquota_max_workers, 10, 1, max_worker_processes, PGC_POSTMASTER, 0, NULL, NULL, NULL);
+	        NULL, &diskquota_max_workers, 10, 1, 20, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
@@ -595,7 +595,7 @@ disk_quota_launcher_main(Datum main_arg)
 			if (curDB != NULL)
 			{
 				curDBId = curDB->dbid;
-				elog(DEBUG1, "[diskquota] next db to run:%d", curDB->id);
+				elog(DEBUG1, "[diskquota] next db to run:%u", curDBId);
 			}
 			else
 				elog(DEBUG1, "[diskquota] no db to run");
