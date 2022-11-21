@@ -17,7 +17,11 @@ CREATE DATABASE tempdb2;
 
 1:@db_name tempdb1: ABORT;
 
+1:@db_name tempdb1: SELECT diskquota.pause();
+1:@db_name tempdb1: SELECT diskquota.wait_for_worker_new_epoch();
 1:@db_name tempdb1: DROP EXTENSION diskquota;
+2:@db_name tempdb2: SELECT diskquota.pause();
+2:@db_name tempdb2: SELECT diskquota.wait_for_worker_new_epoch();
 2:@db_name tempdb2: DROP EXTENSION diskquota;
 1q:
 2q:
