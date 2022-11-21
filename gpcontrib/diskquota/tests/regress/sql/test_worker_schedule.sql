@@ -54,48 +54,44 @@ INSERT into f3 SELECT generate_series(0,1000);
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'f3'::regclass and segid = -1;
 
-\c t4
-CREATE EXTENSION diskquota;
-\c t5
-CREATE EXTENSION diskquota;
-\c t6
-CREATE EXTENSION diskquota;
-\c t7
-CREATE EXTENSION diskquota;
-\c t8
-CREATE EXTENSION diskquota;
 --start_ignore
-\! gpconfig -c diskquota.max_workers -v 7;
--- available workers is 6
-\! gpconfig -c max_worker_processes -v 10;
+\! gpconfig -c diskquota.max_workers -v 11;
 \! gpstop -arf;
 --end_ignore
 
+\c 
+SHOW diskquota.max_workers;
+
 \c t4
+CREATE EXTENSION diskquota;
 CREATE TABLE f4(a int);
 INSERT into f4 SELECT generate_series(0,1000);
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'f4'::regclass and segid = -1;
 
 \c t5
+CREATE EXTENSION diskquota;
 CREATE TABLE f5(a int);
 INSERT into f5 SELECT generate_series(0,1000);
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'f5'::regclass and segid = -1;
 
 \c t6
+CREATE EXTENSION diskquota;
 CREATE TABLE f6(a int);
 INSERT into f6 SELECT generate_series(0,1000);
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'f6'::regclass and segid = -1;
 
 \c t7
+CREATE EXTENSION diskquota;
 CREATE TABLE f7(a int);
 INSERT into f7 SELECT generate_series(0,1000);
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'f7'::regclass and segid = -1;
 
 \c t8
+CREATE EXTENSION diskquota;
 CREATE TABLE f8(a int);
 INSERT into f8 SELECT generate_series(0,1000);
 SELECT diskquota.wait_for_worker_new_epoch();
@@ -225,6 +221,5 @@ DROP DATABASE t11;
 DROP DATABASE t12;
 \! gpconfig -r diskquota.worker_timeout;
 \! gpconfig -r diskquota.max_workers;
-\! gpconfig -r max_worker_processes;
 \! gpstop -arf;
 --end_ignore
