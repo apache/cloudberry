@@ -377,3 +377,4 @@ INSERT INTO unique_index_ao_column VALUES (1,2);
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (1,1);
 DROP TABLE unique_index_ao_column;
+RESET gp_appendonly_enable_unique_index;
