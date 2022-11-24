@@ -649,7 +649,6 @@ check_diskquota_state_is_ready()
 		CommitTransactionCommand();
 	else
 		AbortCurrentTransaction();
-
 	return is_ready;
 }
 
