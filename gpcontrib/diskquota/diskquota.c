@@ -357,6 +357,7 @@ disk_quota_worker_main(Datum main_arg)
 		int has_error = worker_spi_get_extension_version(&major, &minor) != 0;
 
 		if (major == DISKQUOTA_MAJOR_VERSION && minor == DISKQUOTA_MINOR_VERSION) break;
+		MemoryAccounting_Reset();
 
 		if (has_error)
 		{
@@ -421,6 +422,8 @@ disk_quota_worker_main(Datum main_arg)
 			is_ready = true;
 			break;
 		}
+
+		MemoryAccounting_Reset();
 		if (is_ready)
 		{
 			update_monitordb_status(MyWorkerInfo->dbEntry->dbid, DB_UNREADY);
@@ -937,6 +940,7 @@ process_extension_ddl_message()
 	        (errmsg("[diskquota launcher]: received create/drop extension diskquota message, extension launcher")));
 
 	do_process_extension_ddl_message(&code, local_extension_ddl_message);
+	MemoryAccounting_Reset();
 
 	/* Send createdrop extension diskquota result back to QD */
 	LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_EXCLUSIVE);
