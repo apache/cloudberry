@@ -16,7 +16,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
-#include "tcop/pquery.h"
+#include "utils/snapmgr.h"
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -34,10 +34,7 @@ test_execute_spi_expression(const char *query)
 {
 	int			r;
 
-	/* Set up the global portal */
-	Portal saveActivePortal = ActivePortal;
-
-	ActivePortal = CreateNewPortal();
+	PushActiveSnapshot(GetTransactionSnapshot());
 
 	PG_TRY();
 	{
@@ -52,8 +49,7 @@ test_execute_spi_expression(const char *query)
 	{
 		SPI_finish();
 
-		/* Restore the global portal */
-		ActivePortal = saveActivePortal;
+		PopActiveSnapshot();
 
 		PG_RE_THROW();
 	}
@@ -61,8 +57,7 @@ test_execute_spi_expression(const char *query)
 
 	SPI_finish();
 
-	/* Restore the global portal */
-	ActivePortal = saveActivePortal;
+	PopActiveSnapshot();
 }
 
 static void
