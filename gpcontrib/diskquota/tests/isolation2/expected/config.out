@@ -21,7 +21,7 @@
 1: SHOW diskquota.max_active_tables;
  diskquota.max_active_tables 
 -----------------------------
- 1048576                     
+ 307200                      
 (1 row)
 1: SHOW diskquota.worker_timeout;
  diskquota.worker_timeout 
