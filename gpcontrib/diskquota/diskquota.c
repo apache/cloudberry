@@ -280,7 +280,7 @@ define_guc_variables(void)
 	                        2, min_naptime, INT_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("diskquota.max_active_tables", "Max number of active tables monitored by disk-quota.", NULL,
-	                        &diskquota_max_active_tables, 1 * 1024 * 1024, 1, INT_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);
+	                        &diskquota_max_active_tables, 300 * 1024, 1, INT_MAX, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("diskquota.worker_timeout", "Duration between each check (in seconds).", NULL,
 	                        &diskquota_worker_timeout, 60, 1, INT_MAX, PGC_SIGHUP, 0, NULL, NULL, NULL);

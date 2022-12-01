@@ -11,7 +11,7 @@ SHOW diskquota.naptime;
 SHOW diskquota.max_active_tables;
  diskquota.max_active_tables 
 -----------------------------
- 1048576
+ 307200
 (1 row)
 
 SHOW diskquota.worker_timeout;
