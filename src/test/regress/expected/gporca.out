@@ -11555,7 +11555,8 @@ INSERT INTO tc0 VALUES (NULL);
 SELECT * from tc0 where a IS NULL;
  a 
 ---
-(0 rows)
+  
+(1 row)
 
 CREATE TABLE tc1 (a int check (a between 1 and 2 or a != 3 and a > 5));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
