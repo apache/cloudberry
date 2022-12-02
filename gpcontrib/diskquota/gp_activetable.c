@@ -1133,8 +1133,7 @@ pull_active_table_size_from_seg(HTAB *local_table_stats_map, char *active_oid_ar
 				/* get the segid, tablesize for each table */
 				segId     = atoi(PQgetvalue(pgresult, j, 2));
 				key.segid = segId;
-
-				entry = (DiskQuotaActiveTableEntry *)hash_search(local_table_stats_map, &key, HASH_ENTER, &found);
+				entry     = (DiskQuotaActiveTableEntry *)hash_search(local_table_stats_map, &key, HASH_ENTER, &found);
 
 				if (!found)
 				{
