@@ -2158,7 +2158,10 @@ drop cascades to view tt24v
 drop cascades to view tt25v
 drop cascades to view tt26v
 drop cascades to table tt26
+<<<<<<< HEAD
 drop cascades to table tt27v_tbl
 drop cascades to view tt27v
+=======
+>>>>>>> da471123a4e (Prevent pgstats from getting confused when relkind of a relation changes)
 drop cascades to table tdis
 drop cascades to view tdis_v1
