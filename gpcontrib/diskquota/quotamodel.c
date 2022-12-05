@@ -945,16 +945,18 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 		 * and the content id is continuous, so it's safe to use SEGCOUNT
 		 * to get segid.
 		 */
-		for (int i = -1; i < SEGCOUNT; i++)
+		for (int cur_segid = -1; cur_segid < SEGCOUNT; cur_segid++)
 		{
 			key.reloid = relOid;
-			key.id     = TableSizeEntryId(i);
+			key.id     = TableSizeEntryId(cur_segid);
 
 			tsentry = (TableSizeEntry *)hash_search(table_size_map, &key, HASH_ENTER, &table_size_map_found);
 			if (!table_size_map_found)
 			{
 				tsentry->key.reloid = relOid;
 				tsentry->key.id     = key.id;
+				Assert(TableSizeEntrySegidStart(tsentry) == cur_segid);
+
 				memset(tsentry->totalsize, 0, sizeof(tsentry->totalsize));
 				tsentry->owneroid      = InvalidOid;
 				tsentry->namespaceoid  = InvalidOid;
@@ -969,14 +971,14 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 			/* mark tsentry is_exist */
 			if (tsentry) set_table_size_entry_flag(tsentry, TABLE_EXIST);
 			active_table_key.reloid = relOid;
-			active_table_key.segid  = i;
+			active_table_key.segid  = cur_segid;
 			active_table_entry      = (DiskQuotaActiveTableEntry *)hash_search(
 			             local_active_table_stat_map, &active_table_key, HASH_FIND, &active_tbl_found);
 
 			/* skip to recalculate the tables which are not in active list */
 			if (active_tbl_found)
 			{
-				if (i == -1)
+				if (cur_segid == -1)
 				{
 					/* pretend process as utility mode, and append the table size on master */
 					Gp_role = GP_ROLE_UTILITY;
@@ -986,56 +988,57 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 					Gp_role = GP_ROLE_DISPATCH;
 				}
 				/* firstly calculate the updated total size of a table */
-				updated_total_size = active_table_entry->tablesize - TableSizeEntryGetSize(tsentry, i);
+				updated_total_size = active_table_entry->tablesize - TableSizeEntryGetSize(tsentry, cur_segid);
 
 				/* update the table_size entry */
-				TableSizeEntrySetSize(tsentry, i, active_table_entry->tablesize);
-				TableSizeEntrySetFlushFlag(tsentry, i);
+				TableSizeEntrySetSize(tsentry, cur_segid, active_table_entry->tablesize);
+				TableSizeEntrySetFlushFlag(tsentry, cur_segid);
 
 				/* update the disk usage, there may be entries in the map whose keys are InvlidOid as the tsentry does
 				 * not exist in the table_size_map */
-				update_size_for_quota(updated_total_size, NAMESPACE_QUOTA, (Oid[]){tsentry->namespaceoid}, i);
-				update_size_for_quota(updated_total_size, ROLE_QUOTA, (Oid[]){tsentry->owneroid}, i);
+				update_size_for_quota(updated_total_size, NAMESPACE_QUOTA, (Oid[]){tsentry->namespaceoid}, cur_segid);
+				update_size_for_quota(updated_total_size, ROLE_QUOTA, (Oid[]){tsentry->owneroid}, cur_segid);
 				update_size_for_quota(updated_total_size, ROLE_TABLESPACE_QUOTA,
-				                      (Oid[]){tsentry->owneroid, tsentry->tablespaceoid}, i);
+				                      (Oid[]){tsentry->owneroid, tsentry->tablespaceoid}, cur_segid);
 				update_size_for_quota(updated_total_size, NAMESPACE_TABLESPACE_QUOTA,
-				                      (Oid[]){tsentry->namespaceoid, tsentry->tablespaceoid}, i);
+				                      (Oid[]){tsentry->namespaceoid, tsentry->tablespaceoid}, cur_segid);
 			}
 			/* table size info doesn't need to flush at init quota model stage */
 			if (is_init)
 			{
-				TableSizeEntryResetFlushFlag(tsentry, i);
+				TableSizeEntryResetFlushFlag(tsentry, cur_segid);
 			}
 
 			/* if schema change, transfer the file size */
 			if (tsentry->namespaceoid != relnamespace)
 			{
-				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, i), NAMESPACE_QUOTA,
-				                         (Oid[]){tsentry->namespaceoid}, (Oid[]){relnamespace}, i);
-				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, i), NAMESPACE_TABLESPACE_QUOTA,
-				                         (Oid[]){tsentry->namespaceoid, tsentry->tablespaceoid},
-				                         (Oid[]){relnamespace, tsentry->tablespaceoid}, i);
-				tsentry->namespaceoid = relnamespace;
+				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, cur_segid), NAMESPACE_QUOTA,
+				                         (Oid[]){tsentry->namespaceoid}, (Oid[]){relnamespace}, cur_segid);
 			}
 			/* if owner change, transfer the file size */
 			if (tsentry->owneroid != relowner)
 			{
-				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, i), ROLE_QUOTA, (Oid[]){tsentry->owneroid},
-				                         (Oid[]){relowner}, i);
-				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, i), ROLE_TABLESPACE_QUOTA,
-				                         (Oid[]){tsentry->owneroid, tsentry->tablespaceoid},
-				                         (Oid[]){relowner, tsentry->tablespaceoid}, i);
-				tsentry->owneroid = relowner;
+				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, cur_segid), ROLE_QUOTA,
+				                         (Oid[]){tsentry->owneroid}, (Oid[]){relowner}, cur_segid);
 			}
 
-			if (tsentry->tablespaceoid != reltablespace)
+			if (tsentry->tablespaceoid != reltablespace || tsentry->namespaceoid != relnamespace)
 			{
-				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, i), NAMESPACE_TABLESPACE_QUOTA,
+				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, cur_segid), NAMESPACE_TABLESPACE_QUOTA,
 				                         (Oid[]){tsentry->namespaceoid, tsentry->tablespaceoid},
-				                         (Oid[]){tsentry->namespaceoid, reltablespace}, i);
-				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, i), ROLE_TABLESPACE_QUOTA,
+				                         (Oid[]){relnamespace, reltablespace}, cur_segid);
+			}
+			if (tsentry->tablespaceoid != reltablespace || tsentry->owneroid != relowner)
+			{
+				transfer_table_for_quota(TableSizeEntryGetSize(tsentry, cur_segid), ROLE_TABLESPACE_QUOTA,
 				                         (Oid[]){tsentry->owneroid, tsentry->tablespaceoid},
-				                         (Oid[]){tsentry->owneroid, reltablespace}, i);
+				                         (Oid[]){relowner, reltablespace}, cur_segid);
+			}
+
+			if (cur_segid == (TableSizeEntrySegidEnd(tsentry) - 1))
+			{
+				tsentry->namespaceoid  = relnamespace;
+				tsentry->owneroid      = relowner;
 				tsentry->tablespaceoid = reltablespace;
 			}
 		}
