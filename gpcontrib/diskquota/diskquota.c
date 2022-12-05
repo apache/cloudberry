@@ -652,7 +652,7 @@ disk_quota_launcher_main(Datum main_arg)
 
 		if (nap.tv_sec != 0 || nap.tv_usec != 0)
 		{
-			elog(DEBUG1, "[diskquota] naptime sec:%ld, usec:%d", nap.tv_sec, nap.tv_usec);
+			elog(DEBUG1, "[diskquota] naptime sec:%ld, usec:%ld", nap.tv_sec, nap.tv_usec);
 			rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 			               (nap.tv_sec * 1000L) + (nap.tv_usec / 1000L));
 			ResetLatch(&MyProc->procLatch);
