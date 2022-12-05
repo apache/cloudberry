@@ -71,10 +71,11 @@
 	entry->totalsize[TableSizeEntryIndex(segid)] &= TableSizeEntrySizeMask
 #define TableSizeEntryGetSize(entry, segid) (entry->totalsize[TableSizeEntryIndex(segid)] & TableSizeEntrySizeMask)
 #define TableSizeEntrySetSize(entry, segid, size) entry->totalsize[TableSizeEntryIndex(segid)] = size
-#define TableSizeEntrySegidStart(entry) (entry->id * SEGMENT_SIZE_ARRAY_LENGTH - 1)
-#define TableSizeEntrySegidEnd(entry)                                                                                 \
-	(((entry->id + 1) * SEGMENT_SIZE_ARRAY_LENGTH - 1) < SEGCOUNT ? ((entry->id + 1) * SEGMENT_SIZE_ARRAY_LENGTH - 1) \
-	                                                              : SEGCOUNT)
+#define TableSizeEntrySegidStart(entry) (entry->key.id * SEGMENT_SIZE_ARRAY_LENGTH - 1)
+#define TableSizeEntrySegidEnd(entry)                                 \
+	(((entry->key.id + 1) * SEGMENT_SIZE_ARRAY_LENGTH - 1) < SEGCOUNT \
+	         ? ((entry->key.id + 1) * SEGMENT_SIZE_ARRAY_LENGTH - 1)  \
+	         : SEGCOUNT)
 
 typedef struct TableSizeEntry       TableSizeEntry;
 typedef struct NamespaceSizeEntry   NamespaceSizeEntry;
@@ -104,15 +105,20 @@ int SEGCOUNT = 0;
  * totalsize contains tables' size on segments. When id is 0, totalsize[0] is the sum of all segments' table size.
  * table size including fsm, visibility map etc.
  */
+typedef struct TableSizeEntryKey
+{
+	Oid reloid;
+	int id;
+} TableSizeEntryKey;
+
 struct TableSizeEntry
 {
-	Oid    reloid;
-	int    id;
-	Oid    tablespaceoid;
-	Oid    namespaceoid;
-	Oid    owneroid;
-	uint32 flag;
-	int64  totalsize[SEGMENT_SIZE_ARRAY_LENGTH];
+	TableSizeEntryKey key;
+	Oid               tablespaceoid;
+	Oid               namespaceoid;
+	Oid               owneroid;
+	uint32            flag;
+	int64             totalsize[SEGMENT_SIZE_ARRAY_LENGTH];
 };
 
 typedef enum
@@ -528,7 +534,7 @@ init_disk_quota_model(uint32 id)
 	initStringInfo(&str);
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize   = sizeof(TableEntryKey);
+	hash_ctl.keysize   = sizeof(TableSizeEntryKey);
 	hash_ctl.entrysize = sizeof(TableSizeEntry);
 	hash_ctl.hash      = tag_hash;
 
@@ -579,7 +585,6 @@ vacuum_disk_quota_model(uint32 id)
 	TableSizeEntry       *tsentry = NULL;
 	LocalRejectMapEntry  *localrejectentry;
 	struct QuotaMapEntry *qentry;
-	TableEntryKey         key;
 
 	HASHCTL        hash_ctl;
 	StringInfoData str;
@@ -587,7 +592,7 @@ vacuum_disk_quota_model(uint32 id)
 
 	/* table_size_map */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
-	hash_ctl.keysize   = sizeof(TableEntryKey);
+	hash_ctl.keysize   = sizeof(TableSizeEntryKey);
 	hash_ctl.entrysize = sizeof(TableSizeEntry);
 	hash_ctl.hash      = tag_hash;
 
@@ -596,9 +601,7 @@ vacuum_disk_quota_model(uint32 id)
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
-		key.reloid = tsentry->reloid;
-		key.segid  = tsentry->id;
-		hash_search(table_size_map, &key, HASH_REMOVE, NULL);
+		hash_search(table_size_map, &tsentry->key, HASH_REMOVE, NULL);
 	}
 
 	/* localrejectmap */
@@ -875,7 +878,7 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 	Oid                        relOid;
 	HASH_SEQ_STATUS            iter;
 	DiskQuotaActiveTableEntry *active_table_entry;
-	TableEntryKey              key;
+	TableSizeEntryKey          key;
 	TableEntryKey              active_table_key;
 	List                      *oidlist;
 	ListCell                  *l;
@@ -945,20 +948,21 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 		for (int i = -1; i < SEGCOUNT; i++)
 		{
 			key.reloid = relOid;
-			key.segid  = TableSizeEntryId(i);
+			key.id     = TableSizeEntryId(i);
 
 			tsentry = (TableSizeEntry *)hash_search(table_size_map, &key, HASH_ENTER, &table_size_map_found);
 			if (!table_size_map_found)
 			{
-				tsentry->reloid = relOid;
-				tsentry->id     = key.segid;
+				tsentry->key.reloid = relOid;
+				tsentry->key.id     = key.id;
 				memset(tsentry->totalsize, 0, sizeof(tsentry->totalsize));
 				tsentry->owneroid      = InvalidOid;
 				tsentry->namespaceoid  = InvalidOid;
 				tsentry->tablespaceoid = InvalidOid;
 				tsentry->flag          = 0;
-				int seg_st             = TableSizeEntrySegidStart(tsentry);
-				int seg_ed             = TableSizeEntrySegidEnd(tsentry);
+
+				int seg_st = TableSizeEntrySegidStart(tsentry);
+				int seg_ed = TableSizeEntrySegidEnd(tsentry);
 				for (int j = seg_st; j < seg_ed; j++) TableSizeEntrySetFlushFlag(tsentry, j);
 			}
 
@@ -1079,7 +1083,6 @@ flush_to_table_size(void)
 {
 	HASH_SEQ_STATUS iter;
 	TableSizeEntry *tsentry = NULL;
-	TableEntryKey   key;
 	StringInfoData  delete_statement;
 	StringInfoData  insert_statement;
 	StringInfoData  deleted_table_expr;
@@ -1111,15 +1114,15 @@ flush_to_table_size(void)
 			/* delete dropped table from both table_size_map and table table_size */
 			if (!get_table_size_entry_flag(tsentry, TABLE_EXIST))
 			{
-				appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, i);
+				appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->key.reloid, i);
 				delete_statement_flag = true;
 			}
 			/* update the table size by delete+insert in table table_size */
 			else if (TableSizeEntryGetFlushFlag(tsentry, i))
 			{
-				appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->reloid, i);
-				appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->reloid, TableSizeEntryGetSize(tsentry, i),
-				                 i);
+				appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->key.reloid, i);
+				appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->key.reloid,
+				                 TableSizeEntryGetSize(tsentry, i), i);
 				delete_statement_flag = true;
 				insert_statement_flag = true;
 				TableSizeEntryResetFlushFlag(tsentry, i);
@@ -1127,9 +1130,7 @@ flush_to_table_size(void)
 		}
 		if (!get_table_size_entry_flag(tsentry, TABLE_EXIST))
 		{
-			key.reloid = tsentry->reloid;
-			key.segid  = tsentry->id;
-			hash_search(table_size_map, &key, HASH_REMOVE, NULL);
+			hash_search(table_size_map, &tsentry->key, HASH_REMOVE, NULL);
 		}
 	}
 	truncateStringInfo(&deleted_table_expr, deleted_table_expr.len - strlen(", "));
