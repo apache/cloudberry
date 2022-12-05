@@ -44,10 +44,6 @@
 
 /* cluster level max size of rejectmap */
 #define MAX_DISK_QUOTA_REJECT_ENTRIES (1024 * 1024)
-/* init size of table_size_map */
-#define INIT_TABLES (1 * 1024)
-/* max size of table_size_map */
-#define MAX_TABLES (4 * 1024)
 /* cluster level init size of rejectmap */
 #define INIT_DISK_QUOTA_REJECT_ENTRIES 8192
 /* per database level max size of rejectmap */
@@ -55,7 +51,6 @@
 #define MAX_NUM_KEYS_QUOTA_MAP 8
 /* Number of attributes in quota configuration records. */
 #define NUM_QUOTA_CONFIG_ATTRS 6
-#define SEGMENT_SIZE_ARRAY_LENGTH 100
 
 /* TableSizeEntry macro function */
 /* Use the top bit of totalsize as a flush flag. If this bit is set, the size should be flushed into
@@ -85,7 +80,9 @@ typedef struct RejectMapEntry       RejectMapEntry;
 typedef struct GlobalRejectMapEntry GlobalRejectMapEntry;
 typedef struct LocalRejectMapEntry  LocalRejectMapEntry;
 
-int SEGCOUNT = 0;
+int                      SEGCOUNT = 0;
+extern int               diskquota_max_table_segments;
+extern pg_atomic_uint32 *diskquota_table_size_entry_num;
 
 /*
  * local cache of table disk size and corresponding schema and owner.
@@ -490,7 +487,7 @@ static Size
 diskquota_worker_shmem_size()
 {
 	Size size;
-	size = hash_estimate_size(MAX_TABLES, sizeof(TableSizeEntry));
+	size = hash_estimate_size(MAX_NUM_TABLE_SIZE_ENTRIES / MAX_NUM_MONITORED_DB + 100, sizeof(TableSizeEntry));
 	size = add_size(size, hash_estimate_size(MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, sizeof(LocalRejectMapEntry)));
 	size = add_size(size, hash_estimate_size(1024L, sizeof(struct QuotaMapEntry)) * NUM_QUOTA_TYPES);
 	return size;
@@ -516,6 +513,7 @@ DiskQuotaShmemSize(void)
 	if (IS_QUERY_DISPATCHER())
 	{
 		size = add_size(size, diskquota_launcher_shmem_size());
+		size = add_size(size, sizeof(pg_atomic_uint32));
 		size = add_size(size, diskquota_worker_shmem_size() * MAX_NUM_MONITORED_DB);
 	}
 
@@ -539,7 +537,8 @@ init_disk_quota_model(uint32 id)
 	hash_ctl.hash      = tag_hash;
 
 	format_name("TableSizeEntrymap", id, &str);
-	table_size_map = ShmemInitHash(str.data, INIT_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	table_size_map = ShmemInitHash(str.data, INIT_NUM_TABLE_SIZE_ENTRIES, MAX_NUM_TABLE_SIZE_ENTRIES, &hash_ctl,
+	                               HASH_ELEM | HASH_FUNCTION);
 
 	/* for localrejectmap */
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
@@ -597,11 +596,13 @@ vacuum_disk_quota_model(uint32 id)
 	hash_ctl.hash      = tag_hash;
 
 	format_name("TableSizeEntrymap", id, &str);
-	table_size_map = ShmemInitHash(str.data, INIT_TABLES, MAX_TABLES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	table_size_map = ShmemInitHash(str.data, INIT_NUM_TABLE_SIZE_ENTRIES, MAX_NUM_TABLE_SIZE_ENTRIES, &hash_ctl,
+	                               HASH_ELEM | HASH_FUNCTION);
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
 		hash_search(table_size_map, &tsentry->key, HASH_REMOVE, NULL);
+		pg_atomic_fetch_sub_u32(diskquota_table_size_entry_num, 1);
 	}
 
 	/* localrejectmap */
@@ -950,22 +951,45 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 			key.reloid = relOid;
 			key.id     = TableSizeEntryId(cur_segid);
 
-			tsentry = (TableSizeEntry *)hash_search(table_size_map, &key, HASH_ENTER, &table_size_map_found);
-			if (!table_size_map_found)
+			uint32 counter = pg_atomic_read_u32(diskquota_table_size_entry_num);
+			if (counter > MAX_NUM_TABLE_SIZE_ENTRIES)
 			{
-				tsentry->key.reloid = relOid;
-				tsentry->key.id     = key.id;
-				Assert(TableSizeEntrySegidStart(tsentry) == cur_segid);
+				tsentry = (TableSizeEntry *)hash_search(table_size_map, &key, HASH_FIND, &table_size_map_found);
+				/* Too many tables have been added to the table_size_map, to avoid diskquota using
+				   too much share memory, just quit the loop. The diskquota won't work correctly
+				   anymore. */
+				if (!table_size_map_found)
+				{
+					break;
+				}
+			}
+			else
+			{
+				tsentry = (TableSizeEntry *)hash_search(table_size_map, &key, HASH_ENTER, &table_size_map_found);
 
-				memset(tsentry->totalsize, 0, sizeof(tsentry->totalsize));
-				tsentry->owneroid      = InvalidOid;
-				tsentry->namespaceoid  = InvalidOid;
-				tsentry->tablespaceoid = InvalidOid;
-				tsentry->flag          = 0;
+				if (!table_size_map_found)
+				{
+					counter = pg_atomic_add_fetch_u32(diskquota_table_size_entry_num, 1);
+					if (counter > MAX_NUM_TABLE_SIZE_ENTRIES)
+					{
+						ereport(WARNING, (errmsg("[diskquota] the number of tables exceeds the limit, please increase "
+						                         "the GUC value for diskquota.max_table_segments. Current "
+						                         "diskquota.max_table_segments value: %d",
+						                         diskquota_max_table_segments)));
+					}
+					tsentry->key.reloid = relOid;
+					tsentry->key.id     = key.id;
+					Assert(TableSizeEntrySegidStart(tsentry) == cur_segid);
+					memset(tsentry->totalsize, 0, sizeof(tsentry->totalsize));
+					tsentry->owneroid      = InvalidOid;
+					tsentry->namespaceoid  = InvalidOid;
+					tsentry->tablespaceoid = InvalidOid;
+					tsentry->flag          = 0;
 
-				int seg_st = TableSizeEntrySegidStart(tsentry);
-				int seg_ed = TableSizeEntrySegidEnd(tsentry);
-				for (int j = seg_st; j < seg_ed; j++) TableSizeEntrySetFlushFlag(tsentry, j);
+					int seg_st = TableSizeEntrySegidStart(tsentry);
+					int seg_ed = TableSizeEntrySegidEnd(tsentry);
+					for (int j = seg_st; j < seg_ed; j++) TableSizeEntrySetFlushFlag(tsentry, j);
+				}
 			}
 
 			/* mark tsentry is_exist */
@@ -1134,6 +1158,7 @@ flush_to_table_size(void)
 		if (!get_table_size_entry_flag(tsentry, TABLE_EXIST))
 		{
 			hash_search(table_size_map, &tsentry->key, HASH_REMOVE, NULL);
+			pg_atomic_fetch_sub_u32(diskquota_table_size_entry_num, 1);
 		}
 	}
 	truncateStringInfo(&deleted_table_expr, deleted_table_expr.len - strlen(", "));

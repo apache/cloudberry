@@ -67,11 +67,12 @@ static volatile sig_atomic_t got_sigusr1 = false;
 static volatile sig_atomic_t got_sigusr2 = false;
 
 /* GUC variables */
-int  diskquota_naptime           = 0;
-int  diskquota_max_active_tables = 0;
-int  diskquota_worker_timeout    = 60; /* default timeout is 60 seconds */
-bool diskquota_hardlimit         = false;
-int  diskquota_max_workers       = 10;
+int  diskquota_naptime            = 0;
+int  diskquota_max_active_tables  = 0;
+int  diskquota_worker_timeout     = 60; /* default timeout is 60 seconds */
+bool diskquota_hardlimit          = false;
+int  diskquota_max_workers        = 10;
+int  diskquota_max_table_segments = 0;
 
 DiskQuotaLocks       diskquota_locks;
 ExtensionDDLMessage *extension_ddl_message = NULL;
@@ -82,6 +83,9 @@ static DiskQuotaWorkerEntry *volatile MyWorkerInfo = NULL;
 
 // how many database diskquota are monitoring on
 static int num_db = 0;
+
+/* how many TableSizeEntry are maintained in all the table_size_map in shared memory*/
+pg_atomic_uint32 *diskquota_table_size_entry_num;
 
 static DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
 
@@ -290,6 +294,10 @@ define_guc_variables(void)
 	        "diskquota.max_workers",
 	        "Max number of backgroud workers to run diskquota extension, should be less than max_worker_processes.",
 	        NULL, &diskquota_max_workers, 10, 1, 20, PGC_POSTMASTER, 0, NULL, NULL, NULL);
+	DefineCustomIntVariable("diskquota.max_table_segments", "Max number of tables segments on the cluster.", NULL,
+	                        &diskquota_max_table_segments, 10 * 1024 * 1024,
+	                        INIT_NUM_TABLE_SIZE_ENTRIES * MAX_NUM_MONITORED_DB, INT_MAX, PGC_POSTMASTER, 0, NULL, NULL,
+	                        NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
@@ -1554,6 +1562,10 @@ init_launcher_shmem()
 			DiskquotaLauncherShmem->dbArray[i].workerId = INVALID_WORKER_ID;
 		}
 	}
+	/* init TableSizeEntry counter */
+	diskquota_table_size_entry_num =
+	        ShmemInitStruct("diskquota TableSizeEntry counter", sizeof(pg_atomic_uint32), &found);
+	if (!found) pg_atomic_init_u32(diskquota_table_size_entry_num, 0);
 }
 
 /*
