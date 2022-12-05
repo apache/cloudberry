@@ -30,6 +30,13 @@
 
 #include <signal.h>
 
+/* init number of TableSizeEntry in table_size_map */
+#define INIT_NUM_TABLE_SIZE_ENTRIES 128
+/* max number of TableSizeEntry in table_size_map */
+#define MAX_NUM_TABLE_SIZE_ENTRIES (diskquota_max_table_segments / SEGMENT_SIZE_ARRAY_LENGTH)
+/* length of segment size array in TableSizeEntry */
+#define SEGMENT_SIZE_ARRAY_LENGTH 100
+
 /* max number of monitored database with diskquota enabled */
 #define MAX_NUM_MONITORED_DB 50
 #define LAUNCHER_SCHEMA "diskquota_utility"
