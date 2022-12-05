@@ -1,5 +1,10 @@
 include(${CMAKE_SOURCE_DIR}/cmake/Regress.cmake)
 
+if(NOT DEFINED DISKQUOTA_DDL_CHANGE_CHECK)
+  set(DISKQUOTA_DDL_CHANGE_CHECK ON CACHE
+    STRING "Skip the DDL updates check. Should not be disabled on CI" FORCE)
+endif()
+
 regresstarget_add(
   upgradecheck
   INIT_FILE
@@ -44,7 +49,7 @@ foreach(ddl IN LISTS ddl_files)
 endforeach()
 
 # if DDL file modified, insure the last release file passed in
-if(DISKQUOTA_DDL_MODIFIED AND NOT DEFINED DISKQUOTA_LAST_RELEASE_PATH)
+if(DISKQUOTA_DDL_CHANGE_CHECK AND DISKQUOTA_DDL_MODIFIED AND NOT DEFINED DISKQUOTA_LAST_RELEASE_PATH)
   message(
     FATAL_ERROR
       "DDL file modify detected, upgrade test is required. Add -DDISKQUOTA_LAST_RELEASE_PATH=/<path>/diskquota-<version>-<os>_<arch>.tar.gz. And re-try the generation"
