@@ -250,8 +250,7 @@ predicate_refuted_by(List *predicate_list, List *clause_list,
 		c = (Node *) clause_list;
 
 	/* And away we go ... */
-	if ( predicate_refuted_by_recurse(c, p, weak))
-        return true;
+	return predicate_refuted_by_recurse(c, p, weak);
 }
 
 /*----------
