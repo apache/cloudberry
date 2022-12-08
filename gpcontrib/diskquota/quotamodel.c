@@ -224,7 +224,7 @@ static void transfer_table_for_quota(int64 totalsize, QuotaType type, Oid *old_k
 static void refresh_disk_quota_usage(bool is_init);
 static void calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map);
 static void flush_to_table_size(void);
-static void flush_local_reject_map(void);
+static bool flush_local_reject_map(void);
 static void dispatch_rejectmap(HTAB *local_active_table_stat_map);
 static bool load_quotas(void);
 static void do_load_quotas(void);
@@ -794,8 +794,13 @@ refresh_disk_quota_usage(bool is_init)
 		/*
 		 * initialization stage all the tables are active. later loop, only the
 		 * tables whose disk size changed will be treated as active
+		 *
+		 * local_active_table_stat_map only contains the active tables which belong
+		 * to the current database.
 		 */
 		local_active_table_stat_map = gp_fetch_active_tables(is_init);
+		bool hasActiveTable         = (hash_get_num_entries(local_active_table_stat_map) != 0);
+		/* TODO: if we can skip the following steps when there is no active table */
 		/* recalculate the disk usage of table, schema and role */
 		calculate_table_disk_usage(is_init, local_active_table_stat_map);
 		for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
@@ -805,9 +810,10 @@ refresh_disk_quota_usage(bool is_init)
 		/* flush local table_size_map to user table table_size */
 		flush_to_table_size();
 		/* copy local reject map back to shared reject map */
-		flush_local_reject_map();
+		bool reject_map_changed = flush_local_reject_map();
 		/* Dispatch rejectmap entries to segments to perform hard-limit. */
-		if (diskquota_hardlimit) dispatch_rejectmap(local_active_table_stat_map);
+		if (diskquota_hardlimit && (reject_map_changed || hasActiveTable))
+			dispatch_rejectmap(local_active_table_stat_map);
 		hash_destroy(local_active_table_stat_map);
 	}
 	PG_CATCH();
@@ -1198,9 +1204,10 @@ flush_to_table_size(void)
  * exceed the quota limit.
  * local_rejectmap is used to reduce the lock contention.
  */
-static void
+static bool
 flush_local_reject_map(void)
 {
+	bool                  changed = false;
 	HASH_SEQ_STATUS       iter;
 	LocalRejectMapEntry  *localrejectentry;
 	GlobalRejectMapEntry *rejectentry;
@@ -1211,6 +1218,16 @@ flush_local_reject_map(void)
 	hash_seq_init(&iter, local_disk_quota_reject_map);
 	while ((localrejectentry = hash_seq_search(&iter)) != NULL)
 	{
+		/*
+		 * If localrejectentry->isexceeded is true, and it alredy exists in disk_quota_reject_map,
+		 * that means the reject entry exists in both last loop and current loop, but its segexceeded
+		 * feild may have changed.
+		 *
+		 * If localrejectentry->isexceeded is true, and it doesn't exist in disk_quota_reject_map,
+		 * then it is a new added reject entry in this loop.
+		 *
+		 * Otherwise, it means the reject entry has gone, we need to delete it.
+		 */
 		if (localrejectentry->isexceeded)
 		{
 			rejectentry = (GlobalRejectMapEntry *)hash_search(disk_quota_reject_map, (void *)&localrejectentry->keyitem,
@@ -1220,31 +1237,36 @@ flush_local_reject_map(void)
 				ereport(WARNING, (errmsg("[diskquota] Shared disk quota reject map size limit reached."
 				                         "Some out-of-limit schemas or roles will be lost"
 				                         "in rejectmap.")));
+				continue;
 			}
-			else
+			/* new db objects which exceed quota limit */
+			if (!found)
 			{
-				/* new db objects which exceed quota limit */
-				if (!found)
-				{
-					rejectentry->keyitem.targetoid     = localrejectentry->keyitem.targetoid;
-					rejectentry->keyitem.databaseoid   = MyDatabaseId;
-					rejectentry->keyitem.targettype    = localrejectentry->keyitem.targettype;
-					rejectentry->keyitem.tablespaceoid = localrejectentry->keyitem.tablespaceoid;
-					rejectentry->segexceeded           = localrejectentry->segexceeded;
-				}
+				rejectentry->keyitem.targetoid     = localrejectentry->keyitem.targetoid;
+				rejectentry->keyitem.databaseoid   = MyDatabaseId;
+				rejectentry->keyitem.targettype    = localrejectentry->keyitem.targettype;
+				rejectentry->keyitem.tablespaceoid = localrejectentry->keyitem.tablespaceoid;
+				rejectentry->segexceeded           = localrejectentry->segexceeded;
+				changed                            = true;
 			}
-			rejectentry->segexceeded      = localrejectentry->segexceeded;
+			if (rejectentry->segexceeded != localrejectentry->segexceeded)
+			{
+				rejectentry->segexceeded = localrejectentry->segexceeded;
+				changed                  = true;
+			}
 			localrejectentry->isexceeded  = false;
 			localrejectentry->segexceeded = false;
 		}
 		else
 		{
+			changed = true;
 			/* db objects are removed or under quota limit in the new loop */
 			(void)hash_search(disk_quota_reject_map, (void *)&localrejectentry->keyitem, HASH_REMOVE, NULL);
 			(void)hash_search(local_disk_quota_reject_map, (void *)&localrejectentry->keyitem, HASH_REMOVE, NULL);
 		}
 	}
 	LWLockRelease(diskquota_locks.reject_map_lock);
+	return changed;
 }
 
 /*
