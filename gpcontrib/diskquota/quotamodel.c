@@ -811,8 +811,13 @@ refresh_disk_quota_usage(bool is_init)
 		flush_to_table_size();
 		/* copy local reject map back to shared reject map */
 		bool reject_map_changed = flush_local_reject_map();
-		/* Dispatch rejectmap entries to segments to perform hard-limit. */
-		if (diskquota_hardlimit && (reject_map_changed || hasActiveTable))
+		/*
+		 * Dispatch rejectmap entries to segments to perform hard-limit.
+		 * If the bgworker is in init mode, the rejectmap should be refreshed anyway.
+		 * Otherwise, only when the rejectmap is changed or the active_table_list is
+		 * not empty the rejectmap should be dispatched to segments.
+		 */
+		if (is_init || (diskquota_hardlimit && (reject_map_changed || hasActiveTable)))
 			dispatch_rejectmap(local_active_table_stat_map);
 		hash_destroy(local_active_table_stat_map);
 	}
@@ -1795,7 +1800,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	int16                 elem_width;
 	bool                  elem_type_by_val;
 	char                  elem_alignment_code;
-	int                   count;
+	int                   reject_array_count;
+	int                   active_array_count;
 	HeapTupleHeader       lt;
 	bool                  segexceeded;
 	GlobalRejectMapEntry *rejectmapentry;
@@ -1832,8 +1838,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	local_rejectmap = hash_create("local_rejectmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 	get_typlenbyvalalign(rejectmap_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
 	deconstruct_array(rejectmap_array_type, rejectmap_elem_type, elem_width, elem_type_by_val, elem_alignment_code,
-	                  &datums, &nulls, &count);
-	for (int i = 0; i < count; ++i)
+	                  &datums, &nulls, &reject_array_count);
+	for (int i = 0; i < reject_array_count; ++i)
 	{
 		RejectMapEntry keyitem;
 		bool           isnull;
@@ -1864,8 +1870,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	 */
 	get_typlenbyvalalign(active_oid_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
 	deconstruct_array(active_oid_array_type, active_oid_elem_type, elem_width, elem_type_by_val, elem_alignment_code,
-	                  &datums, &nulls, &count);
-	for (int i = 0; i < count; ++i)
+	                  &datums, &nulls, &active_array_count);
+	for (int i = 0; i < active_array_count; ++i)
 	{
 		Oid       active_oid = InvalidOid;
 		HeapTuple tuple;
@@ -2040,7 +2046,12 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	/* Clear rejectmap entries. */
 	hash_seq_init(&hash_seq, disk_quota_reject_map);
 	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
+	{
+		if (rejectmapentry->keyitem.relfilenode.dbNode != MyDatabaseId &&
+		    rejectmapentry->keyitem.databaseoid != MyDatabaseId)
+			continue;
 		hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_REMOVE, NULL);
+	}
 
 	/* Flush the content of local_rejectmap to the global rejectmap. */
 	hash_seq_init(&hash_seq, local_rejectmap);
@@ -2048,14 +2059,15 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	{
 		bool                  found;
 		GlobalRejectMapEntry *new_entry;
-		new_entry = hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_ENTER_NULL, &found);
+
 		/*
-		 * We don't perform soft-limit on segment servers, so we don't flush the
-		 * rejectmap entry with a valid targetoid to the global rejectmap on segment
-		 * servers.
+		 * Skip soft limit reject entry. We don't perform soft-limit on segment servers, so we don't flush the
+		 * rejectmap entry with a valid targetoid to the global rejectmap on segment servers.
 		 */
-		if (!found && new_entry && !OidIsValid(rejectmapentry->keyitem.targetoid))
-			memcpy(new_entry, rejectmapentry, sizeof(GlobalRejectMapEntry));
+		if (OidIsValid(rejectmapentry->keyitem.targetoid)) continue;
+
+		new_entry = hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_ENTER_NULL, &found);
+		if (!found && new_entry) memcpy(new_entry, rejectmapentry, sizeof(GlobalRejectMapEntry));
 	}
 	LWLockRelease(diskquota_locks.reject_map_lock);
 
