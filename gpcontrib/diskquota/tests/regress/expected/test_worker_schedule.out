@@ -2,6 +2,8 @@
 \c
 DROP DATABASE IF EXISTS t1;
 NOTICE:  database "t1" does not exist, skipping
+DROP DATABASE IF EXISTS t2;
+NOTICE:  database "t2" does not exist, skipping
 DROP DATABASE IF EXISTS t3;
 NOTICE:  database "t3" does not exist, skipping
 DROP DATABASE IF EXISTS t4;

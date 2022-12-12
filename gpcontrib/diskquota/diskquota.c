@@ -100,20 +100,27 @@ static DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
  */
 BackgroundWorkerHandle **bgworker_handles;
 
+typedef enum
+{
+	SUCCESS,
+	INVALID_DB,
+	NO_FREE_WORKER,
+	UNKNOWN,
+} StartWorkerState;
 /* functions of disk quota*/
 void _PG_init(void);
 void _PG_fini(void);
 void disk_quota_worker_main(Datum);
 void disk_quota_launcher_main(Datum);
 
-static void disk_quota_sigterm(SIGNAL_ARGS);
-static void disk_quota_sighup(SIGNAL_ARGS);
-static void define_guc_variables(void);
-static bool start_worker(DiskquotaDBEntry *dbEntry);
-static void create_monitor_db_table(void);
-static void add_dbid_to_database_list(Oid dbid);
-static void del_dbid_from_database_list(Oid dbid);
-static void process_extension_ddl_message(void);
+static void             disk_quota_sigterm(SIGNAL_ARGS);
+static void             disk_quota_sighup(SIGNAL_ARGS);
+static void             define_guc_variables(void);
+static StartWorkerState start_worker(DiskquotaDBEntry *dbEntry);
+static void             create_monitor_db_table(void);
+static void             add_dbid_to_database_list(Oid dbid);
+static void             del_dbid_from_database_list(Oid dbid);
+static void             process_extension_ddl_message(void);
 static void do_process_extension_ddl_message(MessageResult *code, ExtensionDDLMessage local_extension_ddl_message);
 static void terminate_all_workers(void);
 static void on_add_db(Oid dbid, MessageResult *code);
@@ -594,6 +601,7 @@ disk_quota_launcher_main(Datum main_arg)
 	Oid               curDBId        = 0;
 	bool              advance_one_db = true;
 	bool              timeout        = false;
+	int               try_times      = 0;
 	while (!got_sigterm)
 	{
 		int rc;
@@ -601,8 +609,9 @@ disk_quota_launcher_main(Datum main_arg)
 		/* pick a db to run */
 		if (advance_one_db)
 		{
-			curDB   = next_db(curDB);
-			timeout = false;
+			curDB     = next_db(curDB);
+			timeout   = false;
+			try_times = 0;
 			if (curDB != NULL)
 			{
 				curDBId = curDB->dbid;
@@ -728,10 +737,18 @@ disk_quota_launcher_main(Datum main_arg)
 		 */
 		if (TimestampDifferenceExceeds(curDB->next_run_time, GetCurrentTimestamp(), MIN_SLEEPTIME))
 		{
-			bool ret       = start_worker(curDB);
-			advance_one_db = ret;
-			/* has exceeded the next_run_time of current db */
-			timeout = true;
+			StartWorkerState ret = start_worker(curDB);
+			/* when start_worker successfully or db is invalid, pick up next db to run */
+			advance_one_db = (ret == SUCCESS || ret == INVALID_DB) ? true : false;
+			if (!advance_one_db)
+			{
+				/* has exceeded the next_run_time of current db */
+				timeout = true;
+				/* when start_worker return is not 2(no free worker), increase the try_times*/
+				if (ret != NO_FREE_WORKER) try_times++;
+				/* only try to start bgworker for a database at most 3 times */
+				if (try_times >= 3) advance_one_db = true;
+			}
 		}
 		else
 		{
@@ -1237,9 +1254,17 @@ terminate_all_workers(void)
  * Dynamically launch an disk quota worker process.
  * This function is called when launcher process
  * schedules a database's diskquota worker to run.
+ *
+ * return:
+ * SUCCESS means starting the bgworker sucessfully.
+ * INVALID_DB means the database is invalid
+ * NO_FREE_WORKER means there is no avaliable free workers
+ * UNKNOWN means registering or starting the bgworker
+ * failed, maybe there is no free bgworker, or
+ * forking a process failed and so on.
  */
 
-static bool
+static StartWorkerState
 start_worker(DiskquotaDBEntry *dbEntry)
 {
 	BackgroundWorker      worker;
@@ -1247,12 +1272,14 @@ start_worker(DiskquotaDBEntry *dbEntry)
 	DiskQuotaWorkerEntry *dq_worker;
 	MemoryContext         old_ctx;
 	char                 *dbname = NULL;
+	int                   result = SUCCESS;
 
 	dq_worker = next_worker();
 	if (dq_worker == NULL)
 	{
 		elog(DEBUG1, "[diskquota] no free workers");
-		return false;
+		result = NO_FREE_WORKER;
+		return result;
 	}
 	/* free the BackgroundWorkerHandle used by last database */
 	free_bgworker_handle(dq_worker->id);
@@ -1279,7 +1306,11 @@ start_worker(DiskquotaDBEntry *dbEntry)
 	sprintf(worker.bgw_library_name, DISKQUOTA_BINARY_NAME);
 	sprintf(worker.bgw_function_name, "disk_quota_worker_main");
 	dbname = get_db_name(dbEntry->dbid);
-	if (dbname == NULL) goto Failed;
+	if (dbname == NULL)
+	{
+		result = INVALID_DB;
+		goto Failed;
+	}
 	snprintf(worker.bgw_name, sizeof(worker.bgw_name), "%s", dbname);
 	pfree(dbname);
 
@@ -1293,6 +1324,7 @@ start_worker(DiskquotaDBEntry *dbEntry)
 	if (!ret)
 	{
 		elog(WARNING, "Create bgworker failed");
+		result = UNKNOWN;
 		goto Failed;
 	}
 	BgwHandleStatus status;
@@ -1302,6 +1334,7 @@ start_worker(DiskquotaDBEntry *dbEntry)
 	{
 		ereport(WARNING, (errcode(ERRCODE_INSUFFICIENT_RESOURCES), errmsg("could not start background process"),
 		                  errhint("More details may be available in the server log.")));
+		result = UNKNOWN;
 		goto Failed;
 	}
 	if (status == BGWH_POSTMASTER_DIED)
@@ -1309,16 +1342,17 @@ start_worker(DiskquotaDBEntry *dbEntry)
 		ereport(WARNING, (errcode(ERRCODE_INSUFFICIENT_RESOURCES),
 		                  errmsg("cannot start background processes without postmaster"),
 		                  errhint("Kill all remaining database processes and restart the database.")));
+		result = UNKNOWN;
 		goto Failed;
 	}
 
 	Assert(status == BGWH_STARTED);
-	return true;
+	return result;
 Failed:
 
 	elog(DEBUG1, "[diskquota] diskquota, starts diskquota failed");
 	FreeWorker(dq_worker);
-	return false;
+	return result;
 }
 
 /*
@@ -1655,6 +1689,10 @@ next_db(DiskquotaDBEntry *curDB)
 		nextSlot = curDB->id + 1;
 	}
 
+	/*
+	 * SearchSysCache should be run in a transaction
+	 */
+	StartTransactionCommand();
 	LWLockAcquire(diskquota_locks.dblist_lock, LW_SHARED);
 	for (int i = 0; i < MAX_NUM_MONITORED_DB; i++)
 	{
@@ -1662,10 +1700,13 @@ next_db(DiskquotaDBEntry *curDB)
 		DiskquotaDBEntry *dbEntry = &DiskquotaLauncherShmem->dbArray[nextSlot];
 		nextSlot++;
 		if (!dbEntry->in_use || dbEntry->workerId != INVALID_WORKER_ID || dbEntry->dbid == InvalidOid) continue;
+		/* TODO: should release the invalid db related things */
+		if (!is_valid_dbid(dbEntry->dbid)) continue;
 		result = dbEntry;
 		break;
 	}
 	LWLockRelease(diskquota_locks.dblist_lock);
+	CommitTransactionCommand();
 	return result;
 }
 
