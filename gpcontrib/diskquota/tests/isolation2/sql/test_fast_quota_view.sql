@@ -3,10 +3,9 @@ CREATE SCHEMA s2;
 
 CREATE ROLE r LOGIN SUPERUSER;
 
--- start_ignore
 !\retcode mkdir -p /tmp/spc1;
 !\retcode mkdir -p /tmp/spc2;
--- end_ignore
+
 DROP TABLESPACE IF EXISTS spc1;
 CREATE TABLESPACE spc1 LOCATION '/tmp/spc1';
 DROP TABLESPACE IF EXISTS spc2;
@@ -67,9 +66,8 @@ DROP SCHEMA IF EXISTS s1;
 DROP SCHEMA IF EXISTS s2;
 DROP ROLE IF EXISTS r;
 
--- start_ignore
-!\retcode rm -r /tmp/spc1;
-!\retcode rm -r /tmp/spc2;
--- end_ignore
 DROP TABLESPACE IF EXISTS spc1;
 DROP TABLESPACE IF EXISTS spc2;
+
+!\retcode rm -rf /tmp/spc1;
+!\retcode rm -rf /tmp/spc2;
