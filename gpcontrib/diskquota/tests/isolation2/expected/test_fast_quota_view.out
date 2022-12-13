@@ -6,7 +6,6 @@ CREATE
 CREATE ROLE r LOGIN SUPERUSER;
 CREATE
 
--- start_ignore
 !\retcode mkdir -p /tmp/spc1;
 -- start_ignore
 
@@ -17,7 +16,7 @@ CREATE
 
 -- end_ignore
 (exited with code 0)
--- end_ignore
+
 DROP TABLESPACE IF EXISTS spc1;
 DROP
 CREATE TABLESPACE spc1 LOCATION '/tmp/spc1';
@@ -166,19 +165,18 @@ DROP
 DROP ROLE IF EXISTS r;
 DROP
 
--- start_ignore
-!\retcode rm -r /tmp/spc1;
--- start_ignore
-
--- end_ignore
-(exited with code 0)
-!\retcode rm -r /tmp/spc2;
--- start_ignore
-
--- end_ignore
-(exited with code 0)
--- end_ignore
 DROP TABLESPACE IF EXISTS spc1;
 DROP
 DROP TABLESPACE IF EXISTS spc2;
 DROP
+
+!\retcode rm -rf /tmp/spc1;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode rm -rf /tmp/spc2;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
