@@ -428,6 +428,24 @@ select count(distinct a) from t_issue_659;
 select count(distinct a) from t_issue_659;
 reset gp_eager_distinct_dedup;
 reset optimizer_force_three_stage_scalar_dqa;
+
+
+-- fix dqa bug when optimizer_force_multistage_agg is on
+set optimizer_force_multistage_agg = on;
+create table multiagg1(a int, b bigint, c int);
+create table multiagg2(a int, b bigint, c numeric(8, 4));
+insert into multiagg1 values(generate_series(1, 10), generate_series(1, 10), generate_series(1, 10));
+insert into multiagg2 values(generate_series(1, 10), generate_series(1, 10), 555.55);
+analyze multiagg1;
+analyze multiagg2;
+
+explain (verbose, costs off) select count(distinct b), sum(c) from multiagg1;
+select count(distinct b), sum(c) from multiagg1;
+
+explain (verbose, costs off) select count(distinct b), sum(c) from multiagg2;
+select count(distinct b), sum(c) from multiagg2;
+drop table multiagg1;
+drop table multiagg2;
 reset optimizer_force_multistage_agg;
 reset optimizer_enable_use_distribution_in_dqa;
 drop table t_issue_659;
