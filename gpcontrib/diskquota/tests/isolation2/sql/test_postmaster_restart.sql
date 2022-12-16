@@ -49,3 +49,4 @@
 
 1: DROP SCHEMA postmaster_restart_s CASCADE;
 1q:
+!\retcode gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null;
