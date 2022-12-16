@@ -132,3 +132,8 @@ CREATE 1000000
 1: DROP SCHEMA postmaster_restart_s CASCADE;
 DROP
 1q: ... <quitting>
+!\retcode gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
