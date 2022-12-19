@@ -6693,7 +6693,8 @@ fi
     CFLAGS="$CFLAGS -Wno-unused-command-line-argument"
   fi
   # Remove clang 12+'s compound-token-split-by-macro, as this causes a lot
-  # of warnings when building plperl because of usages in the Perl headers.
+  # of warnings when building plperl because of Perl.  Like previously, test
+  # for the positive form and add the negative form
   NOT_THE_CFLAGS=""
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether ${CC} supports -Wcompound-token-split-by-macro, for NOT_THE_CFLAGS" >&5
 $as_echo_n "checking whether ${CC} supports -Wcompound-token-split-by-macro, for NOT_THE_CFLAGS... " >&6; }
