@@ -20939,6 +20939,11 @@ ComputePartitionAttrs(ParseState *pstate, Relation rel, List *partParams, AttrNu
 			}
 		}
 
+		if (strategy == PARTITION_STRATEGY_HASH && type_is_enum(atttype))
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot use ENUM column \"%s\" in PARTITION BY statement for hash partitions", pelem->name)));
+
 		/*
 		 * Apply collation override if any
 		 */
