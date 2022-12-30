@@ -1687,6 +1687,13 @@ aoco_index_build_range_scan(Relation heapRelation,
 	int64 total_blockcount = 0; 
 	BlockNumber lastBlock = start_blockno;
 	int64 blockcounts = 0;
+#if 0
+	bool		need_create_blk_directory = false;
+	List	   *tlist = NIL;
+	List	   *qual = indexInfo->ii_Predicate;
+#endif
+	Oid			blkdirrelid;
+	Oid			blkidxrelid;
 	int64 		previous_blkno = -1;
 
 	/*
@@ -1763,9 +1770,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 	/*
 	 * If block directory is empty, it must also be built along with the index.
 	 */
-	Oid blkdirrelid;
-	Oid blkidxrelid;
-
 	GetAppendOnlyEntryAuxOids(heapRelation, NULL,
 							  &blkdirrelid, &blkidxrelid, NULL, NULL);
 	/*
@@ -1808,7 +1812,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 		 * directory, otherwise we need to scan only the columns projected. So,
 		 * calculate the total blocks accordingly.
 		 */
-
 		if (need_create_blk_directory)
 			fileSegTotals = GetAOCSSSegFilesTotals(heapRelation,
 												   aocoscan->appendOnlyMetaDataSnapshot);
