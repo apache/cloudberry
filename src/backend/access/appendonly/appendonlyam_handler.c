@@ -35,6 +35,7 @@
 #include "catalog/storage_xlog.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbvars.h"
+#include "commands/progress.h"
 #include "commands/vacuum.h"
 #include "commands/progress.h"
 #include "executor/executor.h"
@@ -1555,7 +1556,7 @@ appendonly_index_build_range_scan(Relation heapRelation,
 	FileSegInfo **seginfo = NULL;
 	int segfile_count;
 	int64 total_blockcount = 0;
-	AppendOnlyScanDesc hscan;
+	int64 previous_blkno = -1;
 
 	/*
 	 * sanity checks
@@ -1704,10 +1705,22 @@ appendonly_index_build_range_scan(Relation heapRelation,
 			(numblocks != InvalidBlockNumber && currblockno >= (start_blockno + numblocks)))
 			continue;
 
+		/* Report scan progress, if asked to. */
 		if (progress)
 		{
-			hscan = (AppendOnlyScanDesc) &aoscan->rs_base;
-			pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, hscan->rs_nblocks);
+			int64 current_blkno =
+				RelationGuessNumberOfBlocksFromSize(aoscan->totalBytesRead);
+
+			/* XXX: How can we report for builds with parallel scans? */
+			Assert(!aoscan->rs_base.rs_parallel);
+
+			/* As soon as a new block starts, report it as scanned */
+			if (current_blkno != previous_blkno)
+			{
+				pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
+											 current_blkno);
+				previous_blkno = current_blkno;
+			}
 		}
 
 		aoTupleId = (AOTupleId *) &slot->tts_tid;
@@ -1804,7 +1817,6 @@ appendonly_index_validate_scan(Relation heapRelation,
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			 errmsg("index validate scan - feature not supported on appendoptimized relations")));
-
 }
 
 /* ------------------------------------------------------------------------
