@@ -30,8 +30,6 @@
 #include "utils/sortsupport.h"
 #include "utils/timestamp.h"
 
-#include "utils/float_utils.h"
-
 
 /*
  * Configurable GUC parameter
@@ -382,9 +380,8 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 							const char *type_name, const char *orig_string,
 							bool *have_error)
 {
-	long double		val;
+	double		val;
 	char	   *endptr;
-	bool 		literal_inf = true;
 
 	if (have_error)
 		*have_error = false;
@@ -405,7 +402,7 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 					 have_error);
 
 	errno = 0;
-	val = strtold(num, &endptr);
+	val = strtod(num, &endptr);
 
 	/* did we not see anything that looks like a double? */
 	if (endptr == num || errno != 0)
@@ -427,7 +424,7 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 			val = get_float8_nan();
 			endptr = num + 3;
 		}
-		else if (pg_strncasecmp(num, "Infinity", 8) == 0 || pg_strncasecmp(num, "+Infinity", 9) == 0)
+		else if (pg_strncasecmp(num, "Infinity", 8) == 0)
 		{
 			val = get_float8_infinity();
 			endptr = num + 8;
@@ -505,31 +502,6 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 									 "%s: \"%s\"",
 									 type_name, orig_string))),
 					 have_error);
-
-	/*
-	 * strtod does not support values from 1e-323 to 1e-308 for double datatype in rhel6
-	 * due to changes in glibc. In order to overcome this issue we use strtold to parse
-	 * the string and store it in long double so that we get higher precision. We check if
-	 * this value is within allowed range for double using the below two checks:- 
-	 *
-	 * 1) Overflow - When we try to store a value > 1e308 in a double datatype, it gets represented 
-	 * internally as "inf". Hence in order to check for overflow, we use the isinf() method in order
-	 * to check if (double) val has overflowed. But "inf" is a legitimate value for float8, hence if the
-	 * user entered "inf"/"Infinity" we allow it. Otherwise we treat it as overflow.
-	 *
-	 * 2) Underflow - When we try to store a value < 1e-323, it gets converted to a 0.0. But "0.0" is a 
-	 * legitimate value allowed by float8 datatype. Hence we examine if the val is > 0 or < 0 with higher 
-	 * precision (as long double). Again, 0.0 is allowed for float8. If the user entered 0.0, val will be 0.0
-	 * in both higher precision and when rounded down and we allow it. Otherwise in higher precision, 
-	 * val will be > 0 or < 0 and when rounded down to double it will be 0 which is treated as underflow.
-	 */
-
-	if ( pg_strncasecmp(num, "Infinity", 8) != 0  && pg_strncasecmp(num, "-Infinity", 9) != 0 &&\
-		 pg_strncasecmp(num, "Inf", 3) != 0 && pg_strncasecmp(num, "-Inf", 4) != 0 &&\
-		 pg_strncasecmp(num, "+Infinity", 9) != 0 && pg_strncasecmp(num, "+Inf", 4) != 0 )
-		literal_inf = false;
-
-	CHECKFLOATVAL((double) val, literal_inf, !(val > 0 || val < 0));
 
 	return val;
 }
@@ -1934,6 +1906,7 @@ dcos(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8(result);
 }
 
+
 /*
  *		dcot			- returns the cotangent of arg1 (radians)
  */
@@ -1988,6 +1961,7 @@ dsin(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8(result);
 }
 
+
 /*
  *		dtan			- returns the tangent of arg1 (radians)
  */
@@ -2012,6 +1986,7 @@ dtan(PG_FUNCTION_ARGS)
 
 	PG_RETURN_FLOAT8(result);
 }
+
 
 /* ========== DEGREE-BASED TRIGONOMETRIC FUNCTIONS ========== */
 
