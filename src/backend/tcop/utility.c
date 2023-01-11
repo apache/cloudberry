@@ -4639,6 +4639,15 @@ GetCommandLogLevel(Node *parsetree)
 			}
 			break;
 
+		case T_CreateResourceGroupStmt:
+		case T_AlterResourceGroupStmt:
+		case T_DropResourceGroupStmt:
+		case T_CreateQueueStmt:
+		case T_AlterQueueStmt:
+		case T_DropQueueStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
 		default:
 			elog(WARNING, "unrecognized node type: %d",
 				 (int) nodeTag(parsetree));

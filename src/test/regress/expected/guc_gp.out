@@ -779,3 +779,13 @@ reset optimizer;
 SET statement_mem = '4000MB';
 ERROR:  Invalid input for statement_mem, must be less than max_statement_mem (2048000 kB)
 RESET statement_mem;
+-- Test for resource management commands on log_statement='ddl'
+-- Modify log_statement to 'ddl'.
+SET log_statement = 'ddl';
+-- We don't really modify resources config.
+ALTER RESOURCE GROUP default_group SET concurrency -1;
+ERROR:  concurrency range is [0, 'max_connections']
+ALTER RESOURCE QUEUE pg_default ACTIVE THRESHOLD -10;
+ERROR:  active threshold cannot be less than -1 or equal to 0
+-- Reset
+RESET log_statement;
