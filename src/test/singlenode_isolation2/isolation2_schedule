@@ -90,7 +90,6 @@ test: instr_in_shmem_terminate
 test: invalidated_toast_index
 # test: distributed_snapshot
 # test: gp_collation
-test: ao_upgrade
 # test: bitmap_index_concurrent
 # test: bitmap_index_crash
 # test: bitmap_update_words_backup_block

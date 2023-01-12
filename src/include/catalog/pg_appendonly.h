@@ -118,15 +118,6 @@ static inline void AOSegfileFormatVersion_CheckValid(int version)
 	(version > AOSegfileFormatVersion_Original) \
 )
 
-/*
- * Are numerics stored in old, pre-PostgreSQL 8.3 format, and need converting?
- */
-#define PG82NumericConversionNeeded(version) \
-( \
-	AOSegfileFormatVersion_CheckValid(version), \
-	(version > AOSegfileFormatVersion_Original) \
-)
-
 extern void
 InsertAppendOnlyEntry(Oid relid,
 					  int blocksize,
