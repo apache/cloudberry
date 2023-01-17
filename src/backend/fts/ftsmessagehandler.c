@@ -410,7 +410,8 @@ HandleFtsWalRepPromote(void)
 	 * idempotent way.
 	 */
 	DBState state = GetCurrentDBState();
-	if (state == DB_IN_ARCHIVE_RECOVERY)
+	XLogRecPtr redo = GetRedoRecPtr();
+	if (state == DB_IN_ARCHIVE_RECOVERY && redo != InvalidXLogRecPtr)
 	{
 		/*
 		 * Reset sync_standby_names on promotion. This is to avoid commits
@@ -428,8 +429,12 @@ HandleFtsWalRepPromote(void)
 	}
 	else
 	{
-		elog(LOG, "ignoring promote request, walreceiver not running,"
-			 " DBState = %d", state);
+		/*
+		 * FTS will retry promotion request based on am_mirror reporting
+		 * status.
+		 */
+		elog(LOG, "ignoring promote request, not in archive recovery state,"
+			 " DBState = %d, RedoPtr = %X/%X", state, (uint32) (redo >> 32), (uint32) redo);
 	}
 
 #ifndef USE_INTERNAL_FTS
