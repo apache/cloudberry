@@ -3319,7 +3319,6 @@ ContainsSetReturningFuncOrOp(const CDXLNode *project_list_dxlnode,
 	return false;
 }
 
-// GPDB_12_MERGE_FIXME: this duplicates a check in ExecInitProjectSet
 static bool
 SanityCheckProjectSetTargetList(List *targetlist)
 {
