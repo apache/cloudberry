@@ -1456,12 +1456,11 @@ appendonly_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 			/* Here we are trying to avoid reallocation of temp mtuple */
 			if (mtuple != NULL)
 				pfree(mtuple);
-			mtuple = palloc(len);
+			mtuple = NULL;
 			prev_memtuple_len = len;
 		}
 
-		memtuple_form_to(mt_bind, values, isnull, len, null_save_len, has_nulls,
-					mtuple);
+		mtuple = memtuple_form_to(mt_bind, values, isnull, len, null_save_len, has_nulls, mtuple);
 
 		appendonly_insert(aoInsertDesc, mtuple, &aoTupleId);
 	}
