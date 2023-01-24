@@ -170,10 +170,7 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	conn->streamConn = PQconnectStartParams(keys, vals,
 											 /* expand_dbname = */ true);
 	if (PQstatus(conn->streamConn) == CONNECTION_BAD)
-	{
-		*err = pchomp(PQerrorMessage(conn->streamConn));
-		return NULL;
-	}
+		goto bad_connection_errmsg;
 
 	/*
 	 * Poll connection until we have OK or FAILED status.
@@ -215,10 +212,7 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	} while (status != PGRES_POLLING_OK && status != PGRES_POLLING_FAILED);
 
 	if (PQstatus(conn->streamConn) != CONNECTION_OK)
-	{
-		*err = pchomp(PQerrorMessage(conn->streamConn));
-		return NULL;
-	}
+		goto bad_connection_errmsg;
 
 	if (logical)
 	{
@@ -229,9 +223,9 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 		if (PQresultStatus(res) != PGRES_TUPLES_OK)
 		{
 			PQclear(res);
-			ereport(ERROR,
-					(errmsg("could not clear search path: %s",
-							pchomp(PQerrorMessage(conn->streamConn)))));
+			*err = psprintf(_("could not clear search path: %s"),
+							pchomp(PQerrorMessage(conn->streamConn)));
+			goto bad_connection;
 		}
 		PQclear(res);
 	}
@@ -239,6 +233,16 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	conn->logical = logical;
 
 	return conn;
+
+	/* error path, using libpq's error message */
+bad_connection_errmsg:
+	*err = pchomp(PQerrorMessage(conn->streamConn));
+
+	/* error path, error already set */
+bad_connection:
+	PQfinish(conn->streamConn);
+	pfree(conn);
+	return NULL;
 }
 
 /*
