@@ -1358,9 +1358,7 @@ relation_file_stat(int segno, void *ctx)
 	else
 		snprintf(file_path, MAXPGPATH, "%s.%u", stat_ctx->relation_path, segno);
 	struct stat fst;
-#ifdef DISKQUOTA_FAULT_INJECTOR
 	SIMPLE_FAULT_INJECTOR("diskquota_before_stat_relfilenode");
-#endif
 	if (stat(file_path, &fst) < 0)
 	{
 		if (errno != ENOENT)
