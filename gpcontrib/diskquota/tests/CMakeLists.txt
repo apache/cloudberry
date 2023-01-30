@@ -40,9 +40,14 @@ add_custom_target(install_test_extension
   )
 
 add_custom_target(installcheck)
-add_dependencies(isolation2 install_test_extension)
 add_dependencies(regress install_test_extension)
-add_dependencies(installcheck isolation2 regress)
+
+if(ENABLE_FAULT_INJECTOR)
+  add_dependencies(isolation2 install_test_extension)
+  add_dependencies(installcheck isolation2 regress)
+else()
+  add_dependencies(installcheck regress)
+endif()
 
 # Example to run test_truncate infinite times
 # RegressTarget_Add(regress_config
