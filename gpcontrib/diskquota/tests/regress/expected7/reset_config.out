@@ -1,0 +1,17 @@
+--start_ignore
+\! gpconfig -c diskquota.naptime -v 2
+20230117:13:11:41:2012767 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.naptime -v 2'
+\! gpstop -u
+20230117:13:11:41:2012942 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -u
+20230117:13:11:41:2012942 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
+20230117:13:11:41:2012942 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230117:13:11:41:2012942 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from coordinator...
+20230117:13:11:41:2012942 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.16171.g005ee83c46 build dev'
+20230117:13:11:41:2012942 gpstop:zhrt:zhrt-[INFO]:-Signalling all postmaster processes to reload
+--end_ignore
+SHOW diskquota.naptime;
+ diskquota.naptime 
+-------------------
+ 2
+(1 row)
+

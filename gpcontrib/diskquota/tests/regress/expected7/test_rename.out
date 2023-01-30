@@ -1,0 +1,71 @@
+-- test rename schema
+CREATE SCHEMA srs1;
+SELECT diskquota.set_schema_quota('srs1', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+set search_path to srs1;
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name: srs1
+ALTER SCHEMA srs1 RENAME TO srs2;
+SET search_path TO srs2;
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name: srs2
+-- test rename table
+ALTER TABLE a RENAME TO a2;
+-- expect insert fail
+INSERT INTO a2 SELECT generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name: srs2
+DROP TABLE a2;
+RESET search_path;
+DROP SCHEMA srs2;
+-- test rename role
+CREATE SCHEMA srr1;
+CREATE ROLE srerole NOLOGIN;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SELECT diskquota.set_role_quota('srerole', '1MB');
+ set_role_quota 
+----------------
+ 
+(1 row)
+
+SET search_path TO srr1;
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
+ALTER TABLE a OWNER TO srerole;
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,10);
+ERROR:  role's disk space quota exceeded with name: srerole
+ALTER ROLE srerole RENAME TO srerole2;
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,10);
+ERROR:  role's disk space quota exceeded with name: srerole2
+-- test rename table
+ALTER TABLE a RENAME TO a2;
+-- expect insert fail
+INSERT INTO a2 SELECT generate_series(1,10);
+ERROR:  role's disk space quota exceeded with name: srerole2
+DROP TABLE a2;
+DROP ROLE srerole2;
+RESET search_path;
+DROP SCHEMA srr1;

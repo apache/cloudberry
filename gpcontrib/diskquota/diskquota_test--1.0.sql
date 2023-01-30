@@ -27,7 +27,7 @@ CREATE TYPE diskquota_test.db_status AS (
         "epoch" int8,
         "paused" bool
 );
-CREATE FUNCTION diskquota_test.db_status() RETURNS setof diskquota_test.db_status AS '$libdir/diskquota-2.1.so',  'db_status' LANGUAGE C VOLATILE;
+CREATE FUNCTION diskquota_test.db_status() RETURNS setof diskquota_test.db_status AS '$libdir/diskquota-2.2.so',  'db_status' LANGUAGE C VOLATILE;
 CREATE FUNCTION diskquota_test.cur_db_status() RETURNS diskquota_test.db_status AS $$
 SELECT * from diskquota_test.db_status() where datname = current_database();
 $$ LANGUAGE SQL;
