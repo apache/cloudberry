@@ -1576,9 +1576,9 @@ check_rejectmap_by_relfilenode(RelFileNode relfilenode)
 	bool                  found;
 	RejectMapEntry        keyitem;
 	GlobalRejectMapEntry *entry;
-
+#ifdef DISKQUOTA_FAULT_INJECTOR
 	SIMPLE_FAULT_INJECTOR("check_rejectmap_by_relfilenode");
-
+#endif
 	memset(&keyitem, 0, sizeof(keyitem));
 	memcpy(&keyitem.relfilenode, &relfilenode, sizeof(RelFileNode));
 
@@ -1683,8 +1683,10 @@ quota_check_common(Oid reloid, RelFileNode *relfilenode)
 
 	enable_hardlimit = diskquota_hardlimit;
 
+#ifdef DISKQUOTA_FAULT_INJECTOR
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("enable_check_quota_by_relfilenode") == FaultInjectorTypeSkip) enable_hardlimit = true;
+#endif
 #endif
 	if (relfilenode && enable_hardlimit) return check_rejectmap_by_relfilenode(*relfilenode);
 
