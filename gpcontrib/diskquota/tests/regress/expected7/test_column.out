@@ -1,0 +1,42 @@
+-- Test alter table add column
+CREATE SCHEMA scolumn;
+SELECT diskquota.set_schema_quota('scolumn', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SET search_path TO scolumn;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE TABLE a2(i INT) DISTRIBUTED BY (i);
+-- expect fail
+INSERT INTO a2 SELECT generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect fail
+INSERT INTO a2 SELECT generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name: scolumn
+ALTER TABLE a2 ADD COLUMN j VARCHAR(50);
+UPDATE a2 SET j = 'add value for column j';
+ERROR:  schema's disk space quota exceeded with name: scolumn
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert failed after add column
+INSERT INTO a2 SELECT generate_series(1,10);
+ERROR:  schema's disk space quota exceeded with name: scolumn
+DROP TABLE a2;
+RESET search_path;
+DROP SCHEMA scolumn;

@@ -1,0 +1,113 @@
+-- start_ignore
+\! gpconfig -c diskquota.max_workers -v 10;
+20230117:13:07:03:2006049 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_workers -v 10'
+\! gpconfig -c diskquota.naptime -v 4;
+20230117:13:07:04:2006587 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.naptime -v 4'
+\! gpstop -arf;
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -arf
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from coordinator...
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.16171.g005ee83c46 build dev'
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Coordinator segment instance directory=/home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Terminating processes for segment /home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:13:07:04:2007250 gpstop:zhrt:zhrt-[INFO]:-Stopping coordinator standby host zhrt mode=fast
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown standby process on zhrt
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20230117:13:07:05:2007250 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-   Segments stopped successfully      = 6
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-   Segments with errors during stop   = 0
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-Database successfully shutdown with no errors reported
+20230117:13:07:06:2007250 gpstop:zhrt:zhrt-[INFO]:-Restarting System...
+\c
+DROP DATABASE IF EXISTS t1;
+NOTICE:  database "t1" does not exist, skipping
+DROP DATABASE IF EXISTS t2;
+NOTICE:  database "t2" does not exist, skipping
+--end_ignore
+CREATE DATABASE t1;
+CREATE DATABASE t2;
+\c t1
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\! pgrep -f "[p]ostgres.*bgworker.*t1" | xargs kill;
+\! sleep 0.5 ; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+2
+-- start_ignore
+\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep
+zhrt     2009311 2009263 10 13:09 ?        00:00:00 postgres:  7000, [diskquota] - launcher   
+zhrt     2009361 2009263  1 13:09 ?        00:00:00 postgres:  7000, bgworker: [diskquota] contrib_regression con8 cmd1 
+--end_ignore
+\c contrib_regression
+DROP DATABASE t1;
+\c t2
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\c t2
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c contrib_regression
+DROP DATABASE t2;
+--start_ignore
+\! gpconfig -r diskquota.naptime;
+20230117:13:09:27:2009995 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-r diskquota.naptime'
+\! gpconfig -r diskquota.max_workers;
+20230117:13:09:27:2010164 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-r diskquota.max_workers'
+\! gpstop -arf;
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -arf
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from coordinator...
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.16171.g005ee83c46 build dev'
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20230117:13:09:27:2010416 gpstop:zhrt:zhrt-[INFO]:-Coordinator segment instance directory=/home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-Terminating processes for segment /home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-Stopping coordinator standby host zhrt mode=fast
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown standby process on zhrt
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20230117:13:09:28:2010416 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-   Segments stopped successfully      = 6
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-   Segments with errors during stop   = 0
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-Database successfully shutdown with no errors reported
+20230117:13:09:29:2010416 gpstop:zhrt:zhrt-[INFO]:-Restarting System...
+--end_ignore

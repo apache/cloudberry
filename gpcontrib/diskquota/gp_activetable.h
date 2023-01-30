@@ -46,6 +46,8 @@ extern HTAB *active_tables_map;
 extern HTAB *monitored_dbid_cache;
 extern HTAB *altered_reloid_cache;
 
+#ifndef atooid
 #define atooid(x) ((Oid)strtoul((x), NULL, 10))
+#endif
 
 #endif

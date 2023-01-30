@@ -1,0 +1,523 @@
+-- NOTE: when test this script, you must make sure that there is no diskquota
+-- worker process.
+CREATE DATABASE dbx0 ;
+CREATE DATABASE dbx1 ;
+CREATE DATABASE dbx2 ;
+CREATE DATABASE dbx3 ;
+CREATE DATABASE dbx4 ;
+CREATE DATABASE dbx5 ;
+CREATE DATABASE dbx6 ;
+CREATE DATABASE dbx7 ;
+CREATE DATABASE dbx8 ;
+CREATE DATABASE dbx9 ;
+CREATE DATABASE dbx10 ;
+--start_ignore
+\! gpconfig -c diskquota.max_workers -v 20 --skipvalidation
+20230117:12:50:10:1924108 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_workers -v 20 --skipvalidation'
+\! gpstop -arf
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -arf
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from coordinator...
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.16171.g005ee83c46 build dev'
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Coordinator segment instance directory=/home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Terminating processes for segment /home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:12:50:11:1924636 gpstop:zhrt:zhrt-[INFO]:-Stopping coordinator standby host zhrt mode=fast
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown standby process on zhrt
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-   Segments stopped successfully      = 6
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-   Segments with errors during stop   = 0
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Database successfully shutdown with no errors reported
+20230117:12:50:12:1924636 gpstop:zhrt:zhrt-[INFO]:-Restarting System...
+--end_ignore
+\c
+show max_worker_processes;
+ max_worker_processes 
+----------------------
+ 20
+(1 row)
+
+show diskquota.max_workers;
+ diskquota.max_workers 
+-----------------------
+ 20
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\c dbx0
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx1
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+INSERT INTO SX.a values(generate_series(0, 100000));
+CREATE EXTENSION diskquota;
+WARNING:  [diskquota] diskquota is not ready because current database is not empty
+HINT:  please run 'SELECT diskquota.init_table_size_table();' to initialize diskquota
+SELECT diskquota.init_table_size_table();
+ init_table_size_table 
+-----------------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx2
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx3
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx4
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx5
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx6
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx7
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx8
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+CREATE SCHEMA SX;
+CREATE TABLE SX.a(i int) DISTRIBUTED BY (i);
+SELECT diskquota.set_schema_quota('SX', '1MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 100000));
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO SX.a values(generate_series(0, 10));
+ERROR:  schema's disk space quota exceeded with name: sx
+DROP TABLE SX.a;
+\c dbx9
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\c dbx10
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\c dbx0
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx1
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx2
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx3
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx4
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx5
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx6
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx7
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx8
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx9
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c dbx10
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c contrib_regression
+DROP DATABASE dbx0 ;
+DROP DATABASE dbx1 ;
+DROP DATABASE dbx2 ;
+DROP DATABASE dbx3 ;
+DROP DATABASE dbx4 ;
+DROP DATABASE dbx5 ;
+DROP DATABASE dbx6 ;
+DROP DATABASE dbx7 ;
+DROP DATABASE dbx8 ;
+DROP DATABASE dbx9 ;
+DROP DATABASE dbx10 ;
+--start_ignore
+\! gpconfig -c diskquota.max_workers -v 1 --skipvalidation
+20230117:12:52:37:1941441 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_workers -v 1 --skipvalidation'
+\! gpstop -arf;
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -arf
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from coordinator...
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.16171.g005ee83c46 build dev'
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Coordinator segment instance directory=/home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Terminating processes for segment /home/zhrt/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230117:12:52:37:1941981 gpstop:zhrt:zhrt-[INFO]:-Stopping coordinator standby host zhrt mode=fast
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown standby process on zhrt
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-   Segments stopped successfully      = 6
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-   Segments with errors during stop   = 0
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Database successfully shutdown with no errors reported
+20230117:12:52:38:1941981 gpstop:zhrt:zhrt-[INFO]:-Restarting System...
+--end_ignore
+\c
+show diskquota.max_workers;
+ diskquota.max_workers 
+-----------------------
+ 1
+(1 row)
+

@@ -1,0 +1,34 @@
+-- Test Drop table
+CREATE SCHEMA sdrtbl;
+SELECT diskquota.set_schema_quota('sdrtbl', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SET search_path TO sdrtbl;
+CREATE TABLE a(i INT) DISTRIBUTED BY (i);
+CREATE TABLE a2(i INT) DISTRIBUTED BY (i);
+INSERT INTO a SELECT generate_series(1,100);
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert fail
+INSERT INTO a2 SELECT generate_series(1,100);
+ERROR:  schema's disk space quota exceeded with name: sdrtbl
+DROP TABLE a;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+INSERT INTO a2 SELECT generate_series(1,100);
+DROP TABLE a2;
+RESET search_path;
+DROP SCHEMA sdrtbl;

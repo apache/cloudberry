@@ -1,6 +1,6 @@
 resource_types:
 - name: gcs
-  type: registry-image
+  type: docker-image
   check_every: 1h
   source:
     repository: frodenas/gcs-resource
@@ -55,6 +55,11 @@ resources:
   source:
     branch: 6X_STABLE
     uri: https://github.com/greenplum-db/gpdb.git
+- name: gpdb7_src
+  type: git
+  source:
+    branch: main
+    uri: https://github.com/greenplum-db/gpdb.git
 
 # Image Resources
 # centos6
@@ -105,6 +110,26 @@ resources:
   source:
     repository: gcr.io/data-gpdb-public-images/gpdb6-ubuntu18.04-test
     tag: latest
+# GPDB7
+# build
+- name: rocky8-gpdb7-image-build
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb7-rocky8-build
+    tag: latest
+# test
+- name: rocky8-gpdb7-image-test
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-public-images/gpdb7-rocky8-test
+    tag: latest
+- name: rhel8-gpdb7-image-test
+  type: registry-image
+  source:
+    repository: gcr.io/data-gpdb-private-images/gpdb7-rhel8-test
+    tag: latest
+    username: _json_key
+    password: ((data-gpdb-private-images-container-registry-readonly-service-account-key))
 
 # gpdb binary on gcs is located as different folder for different version
 # Latest build with assertion enabled:
@@ -133,6 +158,13 @@ resources:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/published/gpdb6/server-rc-(.*)-ubuntu18.04_x86_64.debug.tar.gz
+- name: bin_gpdb7_rhel8_debug
+  type: gcs
+  source:
+    bucket: pivotal-gpdb-concourse-resources-prod
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/main/server-rc-(.*)-rhel8_x86_64.debug.tar.gz
+
 # Latest release candidates, no fault-injector, no assertion:
 # --disable-debug-extensions --disable-tap-tests --enable-ic-proxy
 - name: bin_gpdb6_centos6
@@ -159,6 +191,12 @@ resources:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/published/gpdb6/server-rc-(.*)-ubuntu18.04_x86_64.tar.gz
+- name: bin_gpdb7_rhel8
+  type: gcs
+  source:
+    bucket: pivotal-gpdb-concourse-resources-prod
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/main/server-rc-(.*)-rhel8_x86_64.tar.gz
 
 # Diskquota releases
 - name: bin_diskquota_gpdb6_rhel6
@@ -188,6 +226,13 @@ resources:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: diskquota/released/gpdb6/diskquota-(.*)-ubuntu18.04_x86_64.tar.gz
+
+- name: bin_diskquota_gpdb7_rhel8
+  type: gcs
+  source:
+    bucket: pivotal-gpdb-concourse-resources-prod
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb7/diskquota-(.*)-rhel8_x86_64.tar.gz
 
 # For uploading every build to gcs
 # Dev
@@ -219,6 +264,13 @@ resources:
     json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates/diskquota/diskquota_ubuntu18_gpdb6.tar.gz
 
+- name: bin_diskquota_gpdb7_rhel8_intermediates
+  type: gcs
+  source:
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
+    versioned_file: intermediates/diskquota/diskquota_rhel8_gpdb7.tar.gz
+
 # Rel
 - name: bin_diskquota_gpdb6_rhel6_intermediates_rel
   type: gcs
@@ -248,6 +300,13 @@ resources:
     json_key: ((extension/extensions-gcs-service-account-key-dev2))
     versioned_file: intermediates_release/diskquota/diskquota_ubuntu18_gpdb6.tar.gz
 
+- name: bin_diskquota_gpdb7_rhel8_intermediates_rel
+  type: gcs
+  source:
+    bucket: gp-extensions-ci
+    json_key: ((extension/extensions-gcs-service-account-key-dev2))
+    versioned_file: intermediates_release/diskquota/diskquota_rhel8_gpdb7.tar.gz
+
 # For uploading to the release bucket
 - name: bin_diskquota_gpdb6_rhel6_release
   type: gcs
@@ -276,6 +335,13 @@ resources:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: diskquota/released/gpdb6/diskquota-(.*).tar.gz
+
+- name: bin_diskquota_gpdb7_rhel8_release
+  type: gcs
+  source:
+    bucket: pivotal-gpdb-concourse-resources-prod
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: diskquota/released/gpdb7/diskquota-(.*).tar.gz
 
 # Other dependencies
 - name: bin_cmake

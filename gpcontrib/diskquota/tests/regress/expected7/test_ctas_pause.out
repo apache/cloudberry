@@ -1,0 +1,37 @@
+CREATE SCHEMA hardlimit_s;
+SET search_path TO hardlimit_s;
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
+SELECT diskquota.set_schema_quota('hardlimit_s', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- heap table
+CREATE TABLE t1 (i) AS SELECT generate_series(1,10000000) DISTRIBUTED BY (i); -- expect fail
+ERROR:  schema's disk space quota exceeded with name: 40272  (seg0 127.0.0.1:7002 pid=1962803)
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+CREATE TABLE t1 (i) AS SELECT generate_series(1,10000000) DISTRIBUTED BY (i); -- expect succeed
+-- disable hardlimit and do some clean-ups.
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null
+SELECT diskquota.resume();
+ resume 
+--------
+ 
+(1 row)
+
+DROP SCHEMA hardlimit_s CASCADE;
+NOTICE:  drop cascades to table t1

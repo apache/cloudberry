@@ -1,0 +1,127 @@
+-- init
+CREATE OR REPLACE FUNCTION diskquota.check_relation_cache()
+RETURNS boolean
+as $$
+declare t1 oid[];
+declare t2 oid[];
+begin
+t1 := (select array_agg(distinct((a).relid)) from diskquota.show_relation_cache_all_seg() as a where (a).relid != (a).primary_table_oid);
+t2 := (select distinct((a).auxrel_oid) from diskquota.show_relation_cache_all_seg() as a where (a).relid = (a).primary_table_oid);
+return t1 = t2;
+end;
+$$ LANGUAGE plpgsql;
+-- heap table
+begin;
+create table t(i int) DISTRIBUTED BY (i);
+insert into t select generate_series(1, 100000);
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+     3
+(1 row)
+
+commit;
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+     0
+(1 row)
+
+drop table t;
+-- toast table
+begin;
+create table t(t text) DISTRIBUTED BY (t);
+insert into t select array(select * from generate_series(1,1000)) from generate_series(1, 1000);
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+     9
+(1 row)
+
+select diskquota.check_relation_cache();
+ check_relation_cache 
+----------------------
+ t
+(1 row)
+
+commit;
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+     0
+(1 row)
+
+drop table t;
+-- AO table
+begin;
+create table t(a int, b text) with(appendonly=true) DISTRIBUTED BY (a);
+insert into t select generate_series(1,1000) as a, repeat('a', 1000) as b;
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+    18
+(1 row)
+
+select diskquota.check_relation_cache();
+ check_relation_cache 
+----------------------
+ t
+(1 row)
+
+commit;
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+     0
+(1 row)
+
+drop table t;
+-- AOCS table
+begin;
+create table t(a int, b text) with(appendonly=true, orientation=column) DISTRIBUTED BY (a);
+insert into t select generate_series(1,1000) as a, repeat('a', 1000) as b;
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+    12
+(1 row)
+
+select diskquota.check_relation_cache();
+ check_relation_cache 
+----------------------
+ t
+(1 row)
+
+commit;
+select diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+select count(*) from diskquota.show_relation_cache_all_seg();
+ count 
+-------
+     0
+(1 row)
+
+drop table t;
+DROP FUNCTION diskquota.check_relation_cache();

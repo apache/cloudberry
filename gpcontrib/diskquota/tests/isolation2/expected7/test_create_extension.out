@@ -1,0 +1,15 @@
+CREATE EXTENSION diskquota;
+CREATE
+
+SELECT diskquota.init_table_size_table();
+ init_table_size_table 
+-----------------------
+                       
+(1 row)
+
+-- Wait after init so that diskquota.state is clean
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)

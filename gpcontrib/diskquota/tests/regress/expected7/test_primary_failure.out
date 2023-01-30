@@ -1,0 +1,126 @@
+CREATE SCHEMA ftsr;
+SELECT diskquota.set_schema_quota('ftsr', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SET search_path TO ftsr;
+create or replace language plpythonu;
+ERROR:  could not access file "$libdir/plpython2": No such file or directory
+--
+-- pg_ctl:
+--   datadir: data directory of process to target with `pg_ctl`
+--   command: commands valid for `pg_ctl`
+--   command_mode: modes valid for `pg_ctl -m`  
+--
+create or replace function pg_ctl(datadir text, command text, command_mode text default 'immediate')
+returns text as $$
+    import subprocess
+    if command not in ('stop', 'restart'):
+        return 'Invalid command input'
+
+    cmd = 'pg_ctl -l postmaster.log -D %s ' % datadir
+    cmd = cmd + '-W -m %s %s' % (command_mode, command)
+
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+$$ language plpythonu;
+ERROR:  language "plpythonu" does not exist
+HINT:  Use CREATE EXTENSION to load the language into the database.
+create or replace function pg_recoverseg(datadir text, command text)
+returns text as $$
+    import subprocess
+    cmd = 'gprecoverseg -%s -d %s; exit 0; ' % (command, datadir)
+    return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+$$ language plpythonu;
+ERROR:  language "plpythonu" does not exist
+HINT:  Use CREATE EXTENSION to load the language into the database.
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
+INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,100);
+ERROR:  schema's disk space quota exceeded with name: ftsr
+-- now one of primary is down
+select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
+ERROR:  function pg_ctl(text, unknown) does not exist
+LINE 1: select pg_ctl((select datadir from gp_segment_configuration ...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+-- switch mirror to primary
+select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t
+(1 row)
+
+-- check GPDB status
+select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
+ content | preferred_role | role | status | mode 
+---------+----------------+------+--------+------
+       0 | p              | p    | u      | s
+       0 | m              | m    | u      | s
+(2 rows)
+
+-- expect insert fail
+INSERT INTO a SELECT generate_series(1,100);
+ERROR:  schema's disk space quota exceeded with name: ftsr
+-- increase quota
+SELECT diskquota.set_schema_quota('ftsr', '200 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+-- pull up failed primary
+-- start_ignore
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
+ERROR:  function pg_recoverseg(text, unknown) does not exist
+LINE 1: select pg_recoverseg((select datadir from gp_segment_configu...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
+ERROR:  function pg_recoverseg(text, unknown) does not exist
+LINE 1: select pg_recoverseg((select datadir from gp_segment_configu...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
+ERROR:  function pg_recoverseg(text, unknown) does not exist
+LINE 1: select pg_recoverseg((select datadir from gp_segment_configu...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
+ERROR:  function pg_recoverseg(text, unknown) does not exist
+LINE 1: select pg_recoverseg((select datadir from gp_segment_configu...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+-- check GPDB status
+select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
+ content | preferred_role | role | status | mode 
+---------+----------------+------+--------+------
+       0 | p              | p    | u      | s
+       0 | m              | m    | u      | s
+(2 rows)
+
+-- end_ignore
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
+ quota_in_mb | nspsize_in_bytes 
+-------------+------------------
+         200 |          3932160
+(1 row)
+
+INSERT INTO a SELECT generate_series(1,100);
+DROP TABLE a;
+DROP SCHEMA ftsr CASCADE;

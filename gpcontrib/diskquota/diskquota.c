@@ -21,6 +21,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "pgstat.h"
 #include "access/xact.h"
 #include "cdb/cdbgang.h"
 #include "cdb/cdbvars.h"
@@ -140,7 +141,10 @@ static void                    vacuum_db_entry(DiskquotaDBEntry *db);
 static void                    init_bgworker_handles(void);
 static BackgroundWorkerHandle *get_bgworker_handle(uint32 worker_id);
 static void                    free_bgworker_handle(uint32 worker_id);
-static BgwHandleStatus         WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle);
+#if GP_VERSION_NUM < 70000
+/* WaitForBackgroundWorkerShutdown is copied from gpdb7 */
+static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle);
+#endif /* GP_VERSION_NUM */
 
 /*
  * diskquota_launcher_shmem_size
@@ -346,11 +350,16 @@ disk_quota_worker_main(Datum main_arg)
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();
 
+#if GP_VERSION_NUM < 70000
 	/* Connect to our database */
 	BackgroundWorkerInitializeConnection(dbname, NULL);
-
 	set_config_option("application_name", DISKQUOTA_APPLICATION_NAME, PGC_USERSET, PGC_S_SESSION, GUC_ACTION_SAVE, true,
 	                  0);
+#else
+	BackgroundWorkerInitializeConnection(dbname, NULL, 0);
+	set_config_option("application_name", DISKQUOTA_APPLICATION_NAME, PGC_USERSET, PGC_S_SESSION, GUC_ACTION_SAVE, true,
+	                  0, true);
+#endif /* GP_VERSION_NUM */
 
 	/* diskquota worker should has Gp_role as dispatcher */
 	Gp_role = GP_ROLE_DISPATCH;
@@ -372,8 +381,10 @@ disk_quota_worker_main(Datum main_arg)
 		int has_error = worker_spi_get_extension_version(&major, &minor) != 0;
 
 		if (major == DISKQUOTA_MAJOR_VERSION && minor == DISKQUOTA_MINOR_VERSION) break;
+#if GP_VERSION_NUM < 70000
+		/* MemoryAccount has been removed on gpdb7 */
 		MemoryAccounting_Reset();
-
+#endif /* GP_VERSION_NUM */
 		if (has_error)
 		{
 			static char _errfmt[] = "find issues in pg_class.pg_extension check server log. waited %d seconds",
@@ -395,8 +406,8 @@ disk_quota_worker_main(Datum main_arg)
 		           errhint("run alter extension diskquota update to \"%d.%d\"", DISKQUOTA_MAJOR_VERSION,
 		                   DISKQUOTA_MINOR_VERSION)));
 
-		int rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-		                   diskquota_naptime * 1000L);
+		int rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+		                            diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
 		if (rc & WL_POSTMASTER_DEATH)
 		{
@@ -438,13 +449,16 @@ disk_quota_worker_main(Datum main_arg)
 			break;
 		}
 
+#if GP_VERSION_NUM < 70000
 		MemoryAccounting_Reset();
+#endif /* GP_VERSION_NUM */
 		if (is_ready)
 		{
 			update_monitordb_status(MyWorkerInfo->dbEntry->dbid, DB_UNREADY);
 			is_ready = false;
 		}
-		rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, diskquota_naptime * 1000L);
+		rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+		                        diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
 
 		// be nice to scheduler when naptime == 0 and diskquota_is_paused() == true
@@ -489,7 +503,9 @@ disk_quota_worker_main(Datum main_arg)
 		// GPDB6 opend a MemoryAccount for us without asking us.
 		// and GPDB6 did not release the MemoryAccount after SPI finish.
 		// Reset the MemoryAccount although we never create it.
+#if GP_VERSION_NUM < 70000
 		MemoryAccounting_Reset();
+#endif /* GP_VERSION_NUM */
 		if (DiskquotaLauncherShmem->isDynamicWorker)
 		{
 			break;
@@ -502,7 +518,8 @@ disk_quota_worker_main(Datum main_arg)
 		 * necessary, but is awakened if postmaster dies.  That way the
 		 * background process goes away immediately in an emergency.
 		 */
-		rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, diskquota_naptime * 1000L);
+		rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+		                        diskquota_naptime * 1000L);
 		ResetLatch(&MyProc->procLatch);
 
 		// be nice to scheduler when naptime == 0 and diskquota_is_paused() == true
@@ -555,6 +572,13 @@ void
 disk_quota_launcher_main(Datum main_arg)
 {
 	time_t loop_begin, loop_end;
+
+	/* the launcher should exit when the master boots in utility mode */
+	if (Gp_role != GP_ROLE_DISPATCH)
+	{
+		proc_exit(0);
+	}
+
 	MemoryContextSwitchTo(TopMemoryContext);
 	init_bgworker_handles();
 
@@ -573,13 +597,17 @@ disk_quota_launcher_main(Datum main_arg)
 	 * connect to our database 'diskquota'. launcher process will exit if
 	 * 'diskquota' database is not existed.
 	 */
-	BackgroundWorkerInitializeConnection(DISKQUOTA_DB, NULL);
 
+#if GP_VERSION_NUM < 70000
+	/* Connect to our database */
+	BackgroundWorkerInitializeConnection(DISKQUOTA_DB, NULL);
 	set_config_option("application_name", DISKQUOTA_APPLICATION_NAME, PGC_USERSET, PGC_S_SESSION, GUC_ACTION_SAVE, true,
 	                  0);
-
-	/* diskquota launcher should has Gp_role as dispatcher */
-	Gp_role = GP_ROLE_DISPATCH;
+#else
+	BackgroundWorkerInitializeConnection(DISKQUOTA_DB, NULL, 0);
+	set_config_option("application_name", DISKQUOTA_APPLICATION_NAME, PGC_USERSET, PGC_S_SESSION, GUC_ACTION_SAVE, true,
+	                  0, true);
+#endif /* GP_VERSION_NUM */
 
 	/*
 	 * use table diskquota_namespace.database_list to store diskquota enabled
@@ -670,8 +698,8 @@ disk_quota_launcher_main(Datum main_arg)
 		if (nap.tv_sec != 0 || nap.tv_usec != 0)
 		{
 			elog(DEBUG1, "[diskquota] naptime sec:%ld, usec:%ld", nap.tv_sec, nap.tv_usec);
-			rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-			               (nap.tv_sec * 1000L) + (nap.tv_usec / 1000L));
+			rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+			                        (nap.tv_sec * 1000L) + (nap.tv_usec / 1000L));
 			ResetLatch(&MyProc->procLatch);
 
 			/* Emergency bailout if postmaster has died */
@@ -830,8 +858,9 @@ create_monitor_db_table(void)
 		ret_code = SPI_execute(sql, false, 0);
 		if (ret_code != SPI_OK_UTILITY)
 		{
+			int saved_errno = errno;
 			ereport(ERROR, (errmsg("[diskquota launcher] SPI_execute error, sql: \"%s\", reason: %s, ret_code: %d.",
-			                       sql, strerror(errno), ret_code)));
+			                       sql, strerror(saved_errno), ret_code)));
 		}
 	}
 	PG_CATCH();
@@ -878,21 +907,36 @@ init_database_list(void)
 
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
-		ereport(ERROR,
-		        (errmsg("[diskquota launcher] SPI connect error, reason: %s, return code: %d.", strerror(errno), ret)));
+	{
+		int saved_errno = errno;
+		ereport(ERROR, (errmsg("[diskquota launcher] SPI connect error, reason: %s, return code: %d.", strerror(saved_errno), ret)));
+	}
 	ret = SPI_execute("select dbid from diskquota_namespace.database_list;", true, 0);
 	if (ret != SPI_OK_SELECT)
+	{
+		int saved_errno = errno;
 		ereport(ERROR,
 		        (errmsg("[diskquota launcher] 'select diskquota_namespace.database_list', reason: %s, return code: %d.",
-		                strerror(errno), ret)));
+				strerror(saved_errno),
+		                ret)));
+	}
 	tupdesc = SPI_tuptable->tupdesc;
+#if GP_VERSION_NUM < 70000
 	if (tupdesc->natts != 1 || tupdesc->attrs[0]->atttypid != OIDOID)
 	{
 		ereport(LOG, (errmsg("[diskquota launcher], natts/atttypid: %d.",
 		                     tupdesc->natts != 1 ? tupdesc->natts : tupdesc->attrs[0]->atttypid)));
 		ereport(ERROR, (errmsg("[diskquota launcher] table database_list corrupt, launcher will exit. natts: ")));
 	}
+#else
 
+	if (tupdesc->natts != 1 || tupdesc->attrs[0].atttypid != OIDOID)
+	{
+		ereport(LOG, (errmsg("[diskquota launcher], natts/atttypid: %d.",
+		                     tupdesc->natts != 1 ? tupdesc->natts : tupdesc->attrs[0].atttypid)));
+		ereport(ERROR, (errmsg("[diskquota launcher] table database_list corrupt, launcher will exit. natts: ")));
+	}
+#endif /* GP_VERSION_NUM */
 	for (i = 0; i < SPI_processed; i++)
 	{
 		HeapTuple         tup;
@@ -965,7 +1009,9 @@ process_extension_ddl_message()
 	        (errmsg("[diskquota launcher]: received create/drop extension diskquota message, extension launcher")));
 
 	do_process_extension_ddl_message(&code, local_extension_ddl_message);
+#if GP_VERSION_NUM < 70000
 	MemoryAccounting_Reset();
+#endif /* GP_VERSION_NUM */
 
 	/* Send createdrop extension diskquota result back to QD */
 	LWLockAcquire(diskquota_locks.extension_ddl_message_lock, LW_EXCLUSIVE);
@@ -1184,9 +1230,13 @@ add_dbid_to_database_list(Oid dbid)
 	                            true, 0);
 
 	if (ret != SPI_OK_SELECT)
+	{
+		int saved_errno = errno;
 		ereport(ERROR, (errmsg("[diskquota launcher] error occured while checking database_list, "
 		                       " code: %d, reason: %s.",
-		                       ret, strerror(errno))));
+		                       ret,
+				       strerror(saved_errno))));
+	}
 
 	if (SPI_processed == 1)
 	{
@@ -1200,9 +1250,13 @@ add_dbid_to_database_list(Oid dbid)
 	                            0);
 
 	if (ret != SPI_OK_INSERT || SPI_processed != 1)
+	{
+		int saved_errno = errno;
 		ereport(ERROR, (errmsg("[diskquota launcher] error occured while updating database_list, "
 		                       " code: %d, reason: %s.",
-		                       ret, strerror(errno))));
+		                       ret,
+				       strerror(saved_errno))));
+	}
 
 	return;
 }
@@ -1225,10 +1279,12 @@ del_dbid_from_database_list(Oid dbid)
 	                                    ObjectIdGetDatum(dbid),
 	                            },
 	                            NULL, false, 0);
-
-	ereportif(ret != SPI_OK_DELETE, ERROR,
-	          (errmsg("[diskquota launcher] del_dbid_from_database_list: reason: %s, ret_code: %d.", strerror(errno),
-	                  ret)));
+	if (ret != SPI_OK_DELETE)
+	{
+		int saved_errno = errno;
+		ereport(ERROR,
+			(errmsg("[diskquota launcher] del_dbid_from_database_list: reason: %s, ret_code: %d.", strerror(saved_errno), ret)));
+	}
 }
 
 /*
@@ -1482,11 +1538,12 @@ diskquota_status(PG_FUNCTION_ARGS)
 
 	if (SRF_IS_FIRSTCALL())
 	{
+		TupleDesc tupdesc;
 		funcctx = SRF_FIRSTCALL_INIT();
 
 		MemoryContext oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 		{
-			TupleDesc tupdesc = CreateTemplateTupleDesc(2, false);
+			tupdesc = DiskquotaCreateTemplateTupleDesc(2);
 			TupleDescInitEntry(tupdesc, 1, "name", TEXTOID, -1, 0);
 			TupleDescInitEntry(tupdesc, 2, "status", TEXTOID, -1, 0);
 			funcctx->tuple_desc = BlessTupleDesc(tupdesc);
@@ -1801,6 +1858,7 @@ free_bgworker_handle(uint32 worker_id)
 	}
 }
 
+#if GP_VERSION_NUM < 70000
 static BgwHandleStatus
 WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle)
 {
@@ -1816,7 +1874,7 @@ WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle)
 		status = GetBackgroundWorkerPid(handle, &pid);
 		if (status == BGWH_STOPPED) break;
 
-		rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, 0);
+		rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, 0);
 
 		if (rc & WL_POSTMASTER_DEATH)
 		{
@@ -1829,3 +1887,4 @@ WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle)
 
 	return status;
 }
+#endif /* GP_VERSION_NUM */

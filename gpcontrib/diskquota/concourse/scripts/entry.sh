@@ -105,7 +105,6 @@ setup_gpadmin() {
                 ;;
             *) echo "Unknown OS: $test_os"; exit 1 ;;
         esac
-        echo -e "password\npassword" | passwd gpadmin
     fi
     mkdir -p /home/gpadmin
     chown gpadmin:gpadmin /home/gpadmin

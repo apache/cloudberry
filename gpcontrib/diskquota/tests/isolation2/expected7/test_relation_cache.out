@@ -1,0 +1,70 @@
+CREATE DATABASE tempdb1;
+CREATE
+CREATE DATABASE tempdb2;
+CREATE
+
+-- perpare extension
+1:@db_name tempdb1: CREATE EXTENSION diskquota;
+CREATE
+1:@db_name tempdb1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+2:@db_name tempdb2: CREATE EXTENSION diskquota;
+CREATE
+2:@db_name tempdb2: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+
+-- create a table in tempdb1
+1:@db_name tempdb1: BEGIN;
+BEGIN
+1:@db_name tempdb1: CREATE TABLE t(i int);
+CREATE
+1:@db_name tempdb1: INSERT INTO t select generate_series(1, 10000);
+INSERT 10000
+
+-- query relation_cache in tempdb2
+2:@db_name tempdb2: SELECT count(*) from diskquota.show_relation_cache();
+ count 
+-------
+ 0     
+(1 row)
+
+1:@db_name tempdb1: ABORT;
+ABORT
+
+1:@db_name tempdb1: SELECT diskquota.pause();
+ pause 
+-------
+       
+(1 row)
+1:@db_name tempdb1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+1:@db_name tempdb1: DROP EXTENSION diskquota;
+DROP
+2:@db_name tempdb2: SELECT diskquota.pause();
+ pause 
+-------
+       
+(1 row)
+2:@db_name tempdb2: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+2:@db_name tempdb2: DROP EXTENSION diskquota;
+DROP
+1q: ... <quitting>
+2q: ... <quitting>
+
+DROP DATABASE tempdb1;
+DROP
+DROP DATABASE tempdb2;
+DROP
