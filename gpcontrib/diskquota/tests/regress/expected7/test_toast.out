@@ -1,0 +1,31 @@
+-- Test toast
+CREATE SCHEMA s5;
+SELECT diskquota.set_schema_quota('s5', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SET search_path TO s5;
+CREATE TABLE a5 (t text) DISTRIBUTED BY (t);
+INSERT INTO a5
+SELECT (SELECT 
+        string_agg(chr(floor(random() * 26)::int + 65), '')
+        FROM generate_series(1,10000)) 
+FROM generate_series(1,10000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert toast fail
+INSERT INTO a5
+SELECT (SELECT 
+        string_agg(chr(floor(random() * 26)::int + 65), '')
+        FROM generate_series(1,1000)) 
+FROM generate_series(1,1000);
+ERROR:  schema's disk space quota exceeded with name: s5
+DROP TABLE a5;
+RESET search_path;
+DROP SCHEMA s5;

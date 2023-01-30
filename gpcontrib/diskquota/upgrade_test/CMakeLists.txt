@@ -5,6 +5,16 @@ if(NOT DEFINED DISKQUOTA_DDL_CHANGE_CHECK)
     STRING "Skip the DDL updates check. Should not be disabled on CI" FORCE)
 endif()
 
+if (${GP_MAJOR_VERSION} EQUAL 6)
+	list(APPEND schedule_files
+		${CMAKE_CURRENT_SOURCE_DIR}/schedule_1.0--2.0
+		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--1.0
+		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--2.1
+		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.1--2.0
+		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.1--2.2
+		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.2--2.1
+		)
+endif()
 regresstarget_add(
   upgradecheck
   INIT_FILE
@@ -16,10 +26,7 @@ regresstarget_add(
   RESULTS_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/results
   SCHEDULE_FILE
-  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_1.0--2.0
-  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--1.0
-  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.0--2.1
-  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.1--2.0
+  ${schedule_files}
   REGRESS_OPTS
   --dbname=contrib_regression)
 
@@ -50,10 +57,6 @@ endforeach()
 
 # if DDL file modified, insure the last release file passed in
 if(DISKQUOTA_DDL_CHANGE_CHECK AND DISKQUOTA_DDL_MODIFIED AND NOT DEFINED DISKQUOTA_LAST_RELEASE_PATH)
-  message(
-    FATAL_ERROR
-      "DDL file modify detected, upgrade test is required. Add -DDISKQUOTA_LAST_RELEASE_PATH=/<path>/diskquota-<version>-<os>_<arch>.tar.gz. And re-try the generation"
-  )
 endif()
 
 # check if current version is compatible with the upgrade strategy

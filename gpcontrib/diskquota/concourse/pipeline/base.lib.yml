@@ -3,8 +3,15 @@
 #@ def add_res_by_conf(res_map, job_conf):
 #@   for key in job_conf:
 #@     if key.startswith("res_"):
-#@       res_name = job_conf[key]
-#@       res_map[res_name] = True
+#@       val = job_conf[key]
+#@       if type(val) == "list" or type(val) == "yamlfragment":
+#@         for res_name in val:
+#@           res_map[res_name] = True
+#@         end
+#@       else:
+#@         res_name = val
+#@         res_map[res_name] = True
+#@       end
 #@     end
 #@   end
 #@ end

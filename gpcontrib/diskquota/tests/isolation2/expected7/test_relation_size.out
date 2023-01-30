@@ -1,0 +1,87 @@
+--
+-- 1. Test that when a relation is dropped before diskquota.relation_size()
+--    applying stat(2) on the physical file, diskquota.relation_size() consumes
+--    the error and returns 0.
+--
+
+CREATE TABLE t_dropped(i int) DISTRIBUTED BY (i);
+CREATE
+-- Insert a small amount of data to 't_dropped'.
+INSERT INTO t_dropped SELECT generate_series(1, 100);
+INSERT 100
+-- Shows that the size of relfilenode is not zero.
+SELECT diskquota.relation_size('t_dropped');
+ relation_size 
+---------------
+ 98304         
+(1 row)
+
+-- Inject 'suspension' to servers.
+SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'suspend', dbid) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+(3 rows)
+
+-- Session 1 will hang before applying stat(2) to the physical file.
+1&: SELECT diskquota.relation_size('t_dropped');  <waiting ...>
+-- Wait until the fault is triggered to avoid the following race condition:
+-- The 't_dropped' table is dropped before evaluating "SELECT diskquota.relation_size('t_dropped')"
+-- and the query will fail with 'ERROR: relation "t_dropped" does not exist'
+SELECT gp_wait_until_triggered_fault('diskquota_before_stat_relfilenode', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+(3 rows)
+-- Drop the table.
+DROP TABLE t_dropped;
+DROP
+-- Remove the injected 'suspension'.
+SELECT gp_inject_fault_infinite('diskquota_before_stat_relfilenode', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+(3 rows)
+-- Session 1 will continue and returns 0.
+1<:  <... completed>
+ relation_size 
+---------------
+ 0             
+(1 row)
+
+-- 2. Test whether relation size is correct under concurrent writes for AO tables.
+--    Since no row is deleted, diskquota.relation_size() should be equal to
+--    pg_relation_size().
+
+CREATE TABLE t_ao(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
+CREATE
+1: BEGIN;
+BEGIN
+1: INSERT INTO t_ao SELECT generate_series(1, 10000);
+INSERT 10000
+2: BEGIN;
+BEGIN
+2: INSERT INTO t_ao SELECT generate_series(1, 10000);
+INSERT 10000
+1: COMMIT;
+COMMIT
+2: COMMIT;
+COMMIT
+SELECT diskquota.relation_size('t_ao');
+ relation_size 
+---------------
+ 200400        
+(1 row)
+SELECT pg_relation_size('t_ao');
+ pg_relation_size 
+------------------
+ 200400           
+(1 row)
+DROP TABLE t_ao;
+DROP

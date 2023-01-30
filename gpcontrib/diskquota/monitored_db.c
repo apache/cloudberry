@@ -2,6 +2,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "pgstat.h"
 #include "port/atomics.h"
 #include "commands/dbcommands.h"
 #include "storage/proc.h"
@@ -52,7 +53,7 @@ db_status(PG_FUNCTION_ARGS)
 		/* Switch to memory context appropriate for multiple function calls */
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-		tupdesc = CreateTemplateTupleDesc(5, false /*hasoid*/);
+		tupdesc = DiskquotaCreateTemplateTupleDesc(5);
 		TupleDescInitEntry(tupdesc, (AttrNumber)1, "DBID", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
 		TupleDescInitEntry(tupdesc, (AttrNumber)2, "DATNAME", TEXTOID, -1 /*typmod*/, 0 /*attdim*/);
 		TupleDescInitEntry(tupdesc, (AttrNumber)3, "STATUS", TEXTOID, -1 /*typmod*/, 0 /*attdim*/);
@@ -130,7 +131,8 @@ wait_for_worker_new_epoch(PG_FUNCTION_ARGS)
 			PG_RETURN_BOOL(true);
 		}
 		/* Sleep for naptime to reduce CPU usage */
-		(void)WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT, diskquota_naptime ? diskquota_naptime : 1);
+		(void)DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+		                         diskquota_naptime ? diskquota_naptime : 1);
 		ResetLatch(&MyProc->procLatch);
 	}
 	PG_RETURN_BOOL(false);
