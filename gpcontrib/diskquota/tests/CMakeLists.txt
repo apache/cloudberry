@@ -1,13 +1,18 @@
 include(${CMAKE_SOURCE_DIR}/cmake/Regress.cmake)
 
+if (${GP_MAJOR_VERSION} EQUAL 7)
+  set(EXPECTED_DIR_SUFFIX "7")
+endif()
+
+
 RegressTarget_Add(regress
     INIT_FILE
     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/sql
-    EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected
+    EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected${EXPECTED_DIR_SUFFIX}
     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/results
     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
-    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/regress/diskquota_schedule
+    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/regress/diskquota_schedule${EXPECTED_DIR_SUFFIX}
     REGRESS_OPTS
     --load-extension=gp_inject_fault
     --load-extension=diskquota_test
@@ -19,10 +24,10 @@ RegressTarget_Add(isolation2
     INIT_FILE
     ${CMAKE_CURRENT_SOURCE_DIR}/init_file
     SQL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/sql
-    EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/expected
+    EXPECTED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/expected${EXPECTED_DIR_SUFFIX}
     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/results
     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
-    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/isolation2_schedule
+    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/isolation2_schedule${EXPECTED_DIR_SUFFIX}
     REGRESS_OPTS
     --load-extension=gp_inject_fault
     --dbname=isolation2test)

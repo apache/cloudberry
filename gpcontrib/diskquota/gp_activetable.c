@@ -17,6 +17,9 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#if GP_VERSION_NUM >= 70000
+#include "access/relation.h"
+#endif /* GP_VERSION_NUM */
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/objectaccess.h"
@@ -29,6 +32,7 @@
 #include "executor/spi.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
+#include "storage/smgr.h"
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -99,16 +103,14 @@ init_shm_worker_active_tables(void)
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize       = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.entrysize     = sizeof(DiskQuotaActiveTableFileEntry);
-	ctl.hash          = tag_hash;
-	active_tables_map = ShmemInitHash("active_tables", diskquota_max_active_tables, diskquota_max_active_tables, &ctl,
-	                                  HASH_ELEM | HASH_FUNCTION);
+	active_tables_map = DiskquotaShmemInitHash("active_tables", diskquota_max_active_tables,
+	                                           diskquota_max_active_tables, &ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize          = sizeof(Oid);
 	ctl.entrysize        = sizeof(Oid);
-	ctl.hash             = tag_hash;
-	altered_reloid_cache = ShmemInitHash("altered_reloid_cache", diskquota_max_active_tables,
-	                                     diskquota_max_active_tables, &ctl, HASH_ELEM | HASH_FUNCTION);
+	altered_reloid_cache = DiskquotaShmemInitHash("altered_reloid_cache", diskquota_max_active_tables,
+	                                              diskquota_max_active_tables, &ctl, HASH_ELEM, DISKQUOTA_OID_HASH);
 }
 
 /*
@@ -263,8 +265,11 @@ report_relation_cache_helper(Oid relid)
 	{
 		return;
 	}
-
+#if GP_VERSION_NUM < 70000
 	rel = diskquota_relation_open(relid, NoLock);
+#else
+	rel                             = diskquota_relation_open(relid, AccessShareLock);
+#endif /* GP_VERSION_NUM */
 	if (rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE || rel->rd_rel->relkind != RELKIND_COMPOSITE_TYPE ||
 	    rel->rd_rel->relkind != RELKIND_VIEW)
 		update_relation_cache(relid);
@@ -362,10 +367,9 @@ gp_fetch_active_tables(bool is_init)
 	ctl.keysize   = sizeof(TableEntryKey);
 	ctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
 	ctl.hcxt      = CurrentMemoryContext;
-	ctl.hash      = tag_hash;
 
-	local_table_stats_map = hash_create("local active table map with relfilenode info", 1024, &ctl,
-	                                    HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	local_table_stats_map = diskquota_hash_create("local active table map with relfilenode info", 1024, &ctl,
+	                                              HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
 
 	if (is_init)
 	{
@@ -484,7 +488,7 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 		/*
 		 * prepare attribute metadata for next calls that generate the tuple
 		 */
-		tupdesc = CreateTemplateTupleDesc(3, false);
+		tupdesc = DiskquotaCreateTemplateTupleDesc(3);
 		TupleDescInitEntry(tupdesc, (AttrNumber)1, "TABLE_OID", OIDOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber)2, "TABLE_SIZE", INT8OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber)3, "GP_SEGMENT_ID", INT2OID, -1, 0);
@@ -598,9 +602,7 @@ get_active_tables_stats(ArrayType *array)
 	ctl.keysize   = sizeof(TableEntryKey);
 	ctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
 	ctl.hcxt      = CurrentMemoryContext;
-	ctl.hash      = tag_hash;
-
-	local_table = hash_create("local table map", 1024, &ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	local_table   = diskquota_hash_create("local table map", 1024, &ctl, HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
 
 	for (i = 0; i < nitems; i++)
 	{
@@ -668,8 +670,12 @@ is_relation_being_altered(Oid relid)
 {
 	LOCKTAG locktag;
 	SetLocktagRelationOid(&locktag, relid);
-	VirtualTransactionId *vxid_list     = GetLockConflicts(&locktag, AccessShareLock);
-	bool                  being_altered = VirtualTransactionIdIsValid(*vxid_list); /* if vxid_list is empty */
+#if GP_VERSION_NUM < 70000
+	VirtualTransactionId *vxid_list = GetLockConflicts(&locktag, AccessShareLock);
+#else
+	VirtualTransactionId *vxid_list = GetLockConflicts(&locktag, AccessShareLock, NULL);
+#endif                                                            /* GP_VERSION_NUM */
+	bool being_altered = VirtualTransactionIdIsValid(*vxid_list); /* if vxid_list is empty */
 	pfree(vxid_list);
 	return being_altered;
 }
@@ -735,17 +741,15 @@ get_active_tables_oid(void)
 	ctl.keysize                 = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.entrysize               = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.hcxt                    = CurrentMemoryContext;
-	ctl.hash                    = tag_hash;
-	local_active_table_file_map = hash_create("local active table map with relfilenode info", 1024, &ctl,
-	                                          HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	local_active_table_file_map = diskquota_hash_create("local active table map with relfilenode info", 1024, &ctl,
+	                                                    HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
 
 	memset(&ctl, 0, sizeof(ctl));
-	ctl.keysize   = sizeof(Oid);
-	ctl.entrysize = sizeof(Oid);
-	ctl.hcxt      = CurrentMemoryContext;
-	ctl.hash      = tag_hash;
-	local_altered_reloid_cache =
-	        hash_create("local_altered_reloid_cache", 1024, &ctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	ctl.keysize                = sizeof(Oid);
+	ctl.entrysize              = sizeof(Oid);
+	ctl.hcxt                   = CurrentMemoryContext;
+	local_altered_reloid_cache = diskquota_hash_create("local_altered_reloid_cache", 1024, &ctl,
+	                                                   HASH_ELEM | HASH_CONTEXT, DISKQUOTA_OID_HASH);
 
 	/* Move active table from shared memory to local active table map */
 	LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
@@ -773,13 +777,11 @@ get_active_tables_oid(void)
 
 	memset(&ctl, 0, sizeof(ctl));
 	/* only use Oid as key here, segid is not needed */
-	ctl.keysize   = sizeof(Oid);
-	ctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
-	ctl.hcxt      = CurrentMemoryContext;
-	ctl.hash      = oid_hash;
-
-	local_active_table_stats_map = hash_create("local active table map with relfilenode info", 1024, &ctl,
-	                                           HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	ctl.keysize                  = sizeof(Oid);
+	ctl.entrysize                = sizeof(DiskQuotaActiveTableEntry);
+	ctl.hcxt                     = CurrentMemoryContext;
+	local_active_table_stats_map = diskquota_hash_create("local active table map with relfilenode info", 1024, &ctl,
+	                                                     HASH_ELEM | HASH_CONTEXT, DISKQUOTA_OID_HASH);
 
 	remove_committed_relation_from_cache();
 
@@ -926,8 +928,13 @@ load_table_size(HTAB *local_table_stats_map)
 		ereport(ERROR, (errmsg("[diskquota] load_table_size SPI_execute failed: return code %d, error: %m", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
+#if GP_VERSION_NUM < 70000
 	if (tupdesc->natts != 3 || ((tupdesc)->attrs[0])->atttypid != OIDOID ||
 	    ((tupdesc)->attrs[1])->atttypid != INT8OID || ((tupdesc)->attrs[2])->atttypid != INT2OID)
+#else
+	if (tupdesc->natts != 3 || ((tupdesc)->attrs[0]).atttypid != OIDOID || ((tupdesc)->attrs[1]).atttypid != INT8OID ||
+	    ((tupdesc)->attrs[2]).atttypid != INT2OID)
+#endif /* GP_VERSION_NUM */
 	{
 		if (tupdesc->natts != 3)
 		{
@@ -935,8 +942,13 @@ load_table_size(HTAB *local_table_stats_map)
 		}
 		else
 		{
+#if GP_VERSION_NUM < 70000
 			ereport(WARNING, (errmsg("[diskquota] attrs: %d, %d, %d", tupdesc->attrs[0]->atttypid,
 			                         tupdesc->attrs[1]->atttypid, tupdesc->attrs[2]->atttypid)));
+#else
+			ereport(WARNING, (errmsg("[diskquota] attrs: %d, %d, %d", tupdesc->attrs[0].atttypid,
+			                         tupdesc->attrs[1].atttypid, tupdesc->attrs[2].atttypid)));
+#endif /* GP_VERSION_NUM */
 		}
 		ereport(ERROR, (errmsg("[diskquota] table \"table_size\" is corrupted in database \"%s\","
 		                       " please recreate diskquota extension",
@@ -1027,13 +1039,11 @@ pull_active_list_from_seg(void)
 	DiskQuotaActiveTableEntry *entry;
 
 	memset(&ctl, 0, sizeof(ctl));
-	ctl.keysize   = sizeof(Oid);
-	ctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
-	ctl.hcxt      = CurrentMemoryContext;
-	ctl.hash      = oid_hash;
-
-	local_active_table_oid_map = hash_create("local active table map with relfilenode info", 1024, &ctl,
-	                                         HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	ctl.keysize                = sizeof(Oid);
+	ctl.entrysize              = sizeof(DiskQuotaActiveTableEntry);
+	ctl.hcxt                   = CurrentMemoryContext;
+	local_active_table_oid_map = diskquota_hash_create("local active table map with relfilenode info", 1024, &ctl,
+	                                                   HASH_ELEM | HASH_CONTEXT, DISKQUOTA_OID_HASH);
 
 	/* first get all oid of tables which are active table on any segment */
 	sql = "select * from diskquota.diskquota_fetch_table_stat(0, '{}'::oid[])";

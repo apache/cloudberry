@@ -22,6 +22,11 @@
 
 #include "access/aomd.h"
 #include "access/xact.h"
+#include "access/heapam.h"
+#if GP_VERSION_NUM >= 70000
+#include "access/genam.h"
+#include "common/hashfn.h"
+#endif /* GP_VERSION_NUM */
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_authid.h"
@@ -34,6 +39,7 @@
 #include "commands/tablespace.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
+#include "pgstat.h"
 #include "storage/proc.h"
 #include "utils/snapmgr.h"
 #include "utils/builtins.h"
@@ -202,9 +208,13 @@ init_table_size_table(PG_FUNCTION_ARGS)
 static HTAB *
 calculate_all_table_size()
 {
-	Relation                   classRel;
-	HeapTuple                  tuple;
-	HeapScanDesc               relScan;
+	Relation  classRel;
+	HeapTuple tuple;
+#if GP_VERSION_NUM < 70000
+	HeapScanDesc relScan;
+#else
+	TableScanDesc relScan;
+#endif /* GP_VERSION_NUM */
 	Oid                        relid;
 	Oid                        prelid;
 	Size                       tablesize;
@@ -214,18 +224,22 @@ calculate_all_table_size()
 	HASHCTL                    hashctl;
 	DiskQuotaActiveTableEntry *entry;
 	bool                       found;
+	char                       relstorage;
 
 	memset(&hashctl, 0, sizeof(hashctl));
 	hashctl.keysize   = sizeof(TableEntryKey);
 	hashctl.entrysize = sizeof(DiskQuotaActiveTableEntry);
 	hashctl.hcxt      = CurrentMemoryContext;
-	hashctl.hash      = tag_hash;
 
 	local_table_size_map =
-	        hash_create("local_table_size_map", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
-
+	        diskquota_hash_create("local_table_size_map", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
 	classRel = heap_open(RelationRelationId, AccessShareLock);
-	relScan  = heap_beginscan_catalog(classRel, 0, NULL);
+#if GP_VERSION_NUM < 70000
+	relScan = heap_beginscan_catalog(classRel, 0, NULL);
+#else
+	relScan = table_beginscan_catalog(classRel, 0, NULL);
+#endif /* GP_VERSION_NUM */
+
 	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
 	{
 		Form_pg_class classForm = (Form_pg_class)GETSTRUCT(tuple);
@@ -235,7 +249,11 @@ calculate_all_table_size()
 		    classForm->relkind != RELKIND_TOASTVALUE)
 			continue;
 
+#if GP_VERSION_NUM < 70000
 		relid = HeapTupleGetOid(tuple);
+#else
+		relid = classForm->oid;
+#endif /* GP_VERSION_NUM */
 		/* ignore system table */
 		if (relid < FirstNormalObjectId) continue;
 
@@ -243,7 +261,9 @@ calculate_all_table_size()
 		rnode.node.relNode = classForm->relfilenode;
 		rnode.node.spcNode = OidIsValid(classForm->reltablespace) ? classForm->reltablespace : MyDatabaseTableSpace;
 		rnode.backend      = classForm->relpersistence == RELPERSISTENCE_TEMP ? TempRelBackendId : InvalidBackendId;
-		tablesize          = calculate_relation_size_all_forks(&rnode, classForm->relstorage);
+		relstorage         = DiskquotaGetRelstorage(classForm);
+
+		tablesize = calculate_relation_size_all_forks(&rnode, relstorage, classForm->relam);
 
 		keyitem.reloid = relid;
 		keyitem.segid  = GpIdentity.segindex;
@@ -288,8 +308,7 @@ pull_all_table_size(PG_FUNCTION_ARGS)
 
 		/* Switch to memory context appropriate for multiple function calls */
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-		tupdesc = CreateTemplateTupleDesc(3, false /*hasoid*/);
+		tupdesc    = DiskquotaCreateTemplateTupleDesc(3);
 		TupleDescInitEntry(tupdesc, (AttrNumber)1, "TABLEID", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
 		TupleDescInitEntry(tupdesc, (AttrNumber)2, "SIZE", INT8OID, -1 /*typmod*/, 0 /*attdim*/);
 		TupleDescInitEntry(tupdesc, (AttrNumber)3, "SEGID", INT2OID, -1 /*typmod*/, 0 /*attdim*/);
@@ -360,7 +379,7 @@ diskquota_start_worker(PG_FUNCTION_ARGS)
 		while (count-- > 0)
 		{
 			CHECK_FOR_INTERRUPTS();
-			rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L);
+			rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L);
 			if (rc & WL_POSTMASTER_DEATH) break;
 			ResetLatch(&MyProc->procLatch);
 
@@ -488,7 +507,10 @@ is_database_empty(void)
 	        " and relkind not in ('v', 'c', 'f')",
 	        true, 0);
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "cannot select pg_class and pg_namespace table, reason: %s.", strerror(errno));
+	{
+		int saved_errno = errno;
+		elog(ERROR, "cannot select pg_class and pg_namespace table, reason: %s.", strerror(saved_errno));
+	}
 
 	tupdesc = SPI_tuptable->tupdesc;
 	/* check sql return value whether database is empty */
@@ -543,7 +565,7 @@ diskquota_stop_worker(void)
 		while (count-- > 0)
 		{
 			CHECK_FOR_INTERRUPTS();
-			rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L);
+			rc = DiskquotaWaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L);
 			if (rc & WL_POSTMASTER_DEATH) break;
 			ResetLatch(&MyProc->procLatch);
 
@@ -1340,7 +1362,10 @@ relation_file_stat(int segno, void *ctx)
 	if (stat(file_path, &fst) < 0)
 	{
 		if (errno != ENOENT)
-			ereport(WARNING, (errcode_for_file_access(), errmsg("[diskquota] could not stat file %s: %m", file_path)));
+		{
+			int saved_errno = errno;
+			ereport(WARNING, (errcode_for_file_access(), errmsg("[diskquota] could not stat file %s: %s", file_path, strerror(saved_errno))));
+		}
 		return false;
 	}
 	stat_ctx->size += fst.st_size;
@@ -1352,13 +1377,13 @@ relation_file_stat(int segno, void *ctx)
  * This function is following calculate_relation_size()
  */
 int64
-calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
+calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage, Oid relam)
 {
 	int64        totalsize = 0;
 	ForkNumber   forkNum;
 	unsigned int segno = 0;
 
-	if (relstorage == RELSTORAGE_HEAP)
+	if (TableIsHeap(relstorage, relam))
 	{
 		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
 		{
@@ -1373,7 +1398,7 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage)
 		}
 		return totalsize;
 	}
-	else if (relstorage == RELSTORAGE_AOROWS || relstorage == RELSTORAGE_AOCOLS)
+	else if (TableIsAoRows(relstorage, relam) || TableIsAoCols(relstorage, relam))
 	{
 		RelationFileStatCtx ctx = {0};
 		ctx.relation_path       = relpathbackend(rnode->node, rnode->backend, MAIN_FORKNUM);
@@ -1400,6 +1425,7 @@ relation_size_local(PG_FUNCTION_ARGS)
 	Oid                relfilenode    = PG_GETARG_OID(1);
 	char               relpersistence = PG_GETARG_CHAR(2);
 	char               relstorage     = PG_GETARG_CHAR(3);
+	Oid                relam          = PG_GETARG_OID(4);
 	RelFileNodeBackend rnode          = {0};
 	int64              size           = 0;
 
@@ -1408,7 +1434,7 @@ relation_size_local(PG_FUNCTION_ARGS)
 	rnode.node.spcNode = OidIsValid(reltablespace) ? reltablespace : MyDatabaseTableSpace;
 	rnode.backend      = relpersistence == RELPERSISTENCE_TEMP ? TempRelBackendId : InvalidBackendId;
 
-	size = calculate_relation_size_all_forks(&rnode, relstorage);
+	size = calculate_relation_size_all_forks(&rnode, relstorage, relam);
 
 	PG_RETURN_INT64(size);
 }
@@ -1463,7 +1489,7 @@ diskquota_get_index_list(Oid relid)
 		 * HOT-safety decisions. It's unsafe to touch such an index at all
 		 * since its catalog entries could disappear at any instant.
 		 */
-		if (!IndexIsLive(index)) continue;
+		if (!index->indislive) continue;
 
 		/* Add index's OID to result list in the proper order */
 		result = lappend_oid(result, index->indexrelid);
@@ -1608,4 +1634,41 @@ check_role(Oid roleoid, char *rolname, int64 quota_limit_mb)
 	if (roleoid == BOOTSTRAP_SUPERUSERID && quota_limit_mb >= 0)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 		                errmsg("Can not set disk quota for system owner: %s", rolname)));
+}
+
+HTAB *
+diskquota_hash_create(const char *tabname, long nelem, HASHCTL *info, int flags, DiskquotaHashFunction hashFunction)
+{
+#if GP_VERSION_NUM < 70000
+	if (hashFunction == DISKQUOTA_TAG_HASH)
+		info->hash = tag_hash;
+	else if (hashFunction == DISKQUOTA_OID_HASH)
+		info->hash = oid_hash;
+	else
+		info->hash = string_hash;
+	return hash_create(tabname, nelem, info, flags | HASH_FUNCTION);
+#else
+	return hash_create(tabname, nelem, info, flags | HASH_BLOBS);
+#endif /* GP_VERSION_NUM */
+}
+
+HTAB *
+DiskquotaShmemInitHash(const char           *name,       /* table string name for shmem index */
+                       long                  init_size,  /* initial table size */
+                       long                  max_size,   /* max size of the table */
+                       HASHCTL              *infoP,      /* info about key and bucket size */
+                       int                   hash_flags, /* info about infoP */
+                       DiskquotaHashFunction hashFunction)
+{
+#if GP_VERSION_NUM < 70000
+	if (hashFunction == DISKQUOTA_TAG_HASH)
+		infoP->hash = tag_hash;
+	else if (hashFunction == DISKQUOTA_OID_HASH)
+		infoP->hash = oid_hash;
+	else
+		infoP->hash = string_hash;
+	return ShmemInitHash(name, init_size, max_size, infoP, hash_flags | HASH_FUNCTION);
+#else
+	return ShmemInitHash(name, init_size, max_size, infoP, hash_flags | HASH_BLOBS);
+#endif /* GP_VERSION_NUM */
 }
