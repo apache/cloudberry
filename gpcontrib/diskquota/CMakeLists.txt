@@ -168,6 +168,13 @@ BuildInfo_Create(${build_info_PATH}
   CMAKE_BUILD_TYPE)
 # Create build-info end
 
+if(NOT DEFINED ENABLE_FAULT_INJECTOR)
+  set(ENABLE_FAULT_INJECTOR OFF)
+endif()
+if(ENABLE_FAULT_INJECTOR)
+  add_definitions(-DDISKQUOTA_FAULT_INJECTOR)
+endif()
+
 # Add installcheck targets
 add_subdirectory(tests)
 if(NOT DEFINED ENABLE_UPGRADE_TEST)
