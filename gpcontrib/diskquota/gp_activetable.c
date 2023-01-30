@@ -142,9 +142,8 @@ static void
 active_table_hook_smgrcreate(RelFileNodeBackend rnode)
 {
 	if (prev_file_create_hook) (*prev_file_create_hook)(rnode);
-#ifdef DISKQUOTA_FAULT_INJECTOR
+
 	SIMPLE_FAULT_INJECTOR("diskquota_after_smgrcreate");
-#endif
 	report_active_table_helper(&rnode);
 }
 
@@ -220,9 +219,7 @@ object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId,
 			report_relation_cache_helper(objectId);
 			break;
 		case OAT_POST_ALTER:
-#ifdef DISKQUOTA_FAULT_INJECTOR
 			SIMPLE_FAULT_INJECTOR("object_access_post_alter");
-#endif
 			report_altered_reloid(objectId);
 			break;
 		default:
