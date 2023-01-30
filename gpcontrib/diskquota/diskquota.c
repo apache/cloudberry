@@ -484,9 +484,8 @@ disk_quota_worker_main(Datum main_arg)
 	while (!got_sigterm)
 	{
 		int rc;
-#ifdef DISKQUOTA_FAULT_INJECTOR
+
 		SIMPLE_FAULT_INJECTOR("diskquota_worker_main");
-#endif
 		if (!diskquota_is_paused())
 		{
 			/* Refresh quota model with init mode */
