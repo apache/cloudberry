@@ -42,6 +42,8 @@
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbutil.h"
 
+#include <math.h>
+
 /* cluster level max size of rejectmap */
 #define MAX_DISK_QUOTA_REJECT_ENTRIES (1024 * 1024)
 /* cluster level init size of rejectmap */
@@ -404,7 +406,11 @@ init_disk_quota_shmem(void)
 	 */
 	RequestAddinShmemSpace(DiskQuotaShmemSize());
 	/* locks for diskquota refer to init_lwlocks() for details */
+#if GP_VERSION_NUM < 70000
 	RequestAddinLWLocks(DiskQuotaLocksItemNumber);
+#else
+	RequestNamedLWLockTranche("DiskquotaLocks", DiskQuotaLocksItemNumber);
+#endif /* GP_VERSION_NUM */
 
 	/* Install startup hook to initialize our shared memory. */
 	prev_shmem_startup_hook = shmem_startup_hook;
@@ -439,10 +445,9 @@ disk_quota_shmem_startup(void)
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(RejectMapEntry);
 	hash_ctl.entrysize = sizeof(GlobalRejectMapEntry);
-	hash_ctl.hash      = tag_hash;
-
-	disk_quota_reject_map = ShmemInitHash("rejectmap whose quota limitation is reached", INIT_DISK_QUOTA_REJECT_ENTRIES,
-	                                      MAX_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	disk_quota_reject_map =
+	        DiskquotaShmemInitHash("rejectmap whose quota limitation is reached", INIT_DISK_QUOTA_REJECT_ENTRIES,
+	                               MAX_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 
 	init_shm_worker_active_tables();
 
@@ -451,10 +456,9 @@ disk_quota_shmem_startup(void)
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(struct MonitorDBEntryStruct);
-	hash_ctl.hash      = oid_hash;
 
-	monitored_dbid_cache = ShmemInitHash("table oid cache which shoud tracking", MAX_NUM_MONITORED_DB,
-	                                     MAX_NUM_MONITORED_DB, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+	monitored_dbid_cache = DiskquotaShmemInitHash("table oid cache which shoud tracking", MAX_NUM_MONITORED_DB,
+	                                              MAX_NUM_MONITORED_DB, &hash_ctl, HASH_ELEM, DISKQUOTA_OID_HASH);
 	init_launcher_shmem();
 	LWLockRelease(AddinShmemInitLock);
 }
@@ -472,6 +476,7 @@ disk_quota_shmem_startup(void)
 static void
 init_lwlocks(void)
 {
+#if GP_VERSION_NUM < 70000
 	diskquota_locks.active_table_lock          = LWLockAssign();
 	diskquota_locks.reject_map_lock            = LWLockAssign();
 	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
@@ -481,6 +486,18 @@ init_lwlocks(void)
 	diskquota_locks.dblist_lock                = LWLockAssign();
 	diskquota_locks.workerlist_lock            = LWLockAssign();
 	diskquota_locks.altered_reloid_cache_lock  = LWLockAssign();
+#else
+	LWLockPadded *lock_base                    = GetNamedLWLockTranche("DiskquotaLocks");
+	diskquota_locks.active_table_lock          = &lock_base[0].lock;
+	diskquota_locks.reject_map_lock            = &lock_base[1].lock;
+	diskquota_locks.extension_ddl_message_lock = &lock_base[2].lock;
+	diskquota_locks.extension_ddl_lock         = &lock_base[3].lock;
+	diskquota_locks.monitored_dbid_cache_lock  = &lock_base[4].lock;
+	diskquota_locks.relation_cache_lock        = &lock_base[5].lock;
+	diskquota_locks.dblist_lock                = &lock_base[6].lock;
+	diskquota_locks.workerlist_lock            = &lock_base[7].lock;
+	diskquota_locks.altered_reloid_cache_lock  = &lock_base[8].lock;
+#endif /* GP_VERSION_NUM */
 }
 
 static Size
@@ -531,36 +548,32 @@ init_disk_quota_model(uint32 id)
 	StringInfoData str;
 	initStringInfo(&str);
 
+	format_name("TableSizeEntrymap", id, &str);
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(TableSizeEntryKey);
 	hash_ctl.entrysize = sizeof(TableSizeEntry);
-	hash_ctl.hash      = tag_hash;
-
-	format_name("TableSizeEntrymap", id, &str);
-	table_size_map = ShmemInitHash(str.data, INIT_NUM_TABLE_SIZE_ENTRIES, MAX_NUM_TABLE_SIZE_ENTRIES, &hash_ctl,
-	                               HASH_ELEM | HASH_FUNCTION);
+	table_size_map     = DiskquotaShmemInitHash(str.data, INIT_NUM_TABLE_SIZE_ENTRIES, MAX_NUM_TABLE_SIZE_ENTRIES,
+	                                            &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 
 	/* for localrejectmap */
+	/* WARNNING: The max length of name of the map is 48 */
+	format_name("localrejectmap", id, &str);
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(RejectMapEntry);
 	hash_ctl.entrysize = sizeof(LocalRejectMapEntry);
-	hash_ctl.hash      = tag_hash;
-	/* WARNNING: The max length of name of the map is 48 */
-	format_name("localrejectmap", id, &str);
 	local_disk_quota_reject_map =
-	        ShmemInitHash(str.data, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl,
-	                      HASH_ELEM | HASH_FUNCTION);
+	        DiskquotaShmemInitHash(str.data, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES,
+	                               &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 
 	/* for quota_info */
 
 	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 	{
-		memset(&hash_ctl, 0, sizeof(hash_ctl));
-		hash_ctl.entrysize = sizeof(struct QuotaMapEntry);
-		hash_ctl.keysize   = sizeof(struct QuotaMapEntryKey);
-		hash_ctl.hash      = tag_hash;
 		format_name(quota_info[type].map_name, id, &str);
-		quota_info[type].map = ShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+		memset(&hash_ctl, 0, sizeof(hash_ctl));
+		hash_ctl.entrysize   = sizeof(struct QuotaMapEntry);
+		hash_ctl.keysize     = sizeof(struct QuotaMapEntryKey);
+		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 	}
 	pfree(str.data);
 }
@@ -590,14 +603,12 @@ vacuum_disk_quota_model(uint32 id)
 	initStringInfo(&str);
 
 	/* table_size_map */
+	format_name("TableSizeEntrymap", id, &str);
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(TableSizeEntryKey);
 	hash_ctl.entrysize = sizeof(TableSizeEntry);
-	hash_ctl.hash      = tag_hash;
-
-	format_name("TableSizeEntrymap", id, &str);
-	table_size_map = ShmemInitHash(str.data, INIT_NUM_TABLE_SIZE_ENTRIES, MAX_NUM_TABLE_SIZE_ENTRIES, &hash_ctl,
-	                               HASH_ELEM | HASH_FUNCTION);
+	table_size_map     = DiskquotaShmemInitHash(str.data, INIT_NUM_TABLE_SIZE_ENTRIES, MAX_NUM_TABLE_SIZE_ENTRIES,
+	                                            &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 	hash_seq_init(&iter, table_size_map);
 	while ((tsentry = hash_seq_search(&iter)) != NULL)
 	{
@@ -606,15 +617,13 @@ vacuum_disk_quota_model(uint32 id)
 	}
 
 	/* localrejectmap */
+	format_name("localrejectmap", id, &str);
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(RejectMapEntry);
 	hash_ctl.entrysize = sizeof(LocalRejectMapEntry);
-	hash_ctl.hash      = tag_hash;
-	/* WARNNING: The max length of name of the map is 48 */
-	format_name("localrejectmap", id, &str);
 	local_disk_quota_reject_map =
-	        ShmemInitHash(str.data, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, &hash_ctl,
-	                      HASH_ELEM | HASH_FUNCTION);
+	        DiskquotaShmemInitHash(str.data, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES,
+	                               &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 	hash_seq_init(&iter, local_disk_quota_reject_map);
 	while ((localrejectentry = hash_seq_search(&iter)) != NULL)
 	{
@@ -625,12 +634,11 @@ vacuum_disk_quota_model(uint32 id)
 
 	for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
 	{
-		memset(&hash_ctl, 0, sizeof(hash_ctl));
-		hash_ctl.entrysize = sizeof(struct QuotaMapEntry);
-		hash_ctl.keysize   = sizeof(struct QuotaMapEntryKey);
-		hash_ctl.hash      = tag_hash;
 		format_name(quota_info[type].map_name, id, &str);
-		quota_info[type].map = ShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM | HASH_FUNCTION);
+		memset(&hash_ctl, 0, sizeof(hash_ctl));
+		hash_ctl.entrysize   = sizeof(struct QuotaMapEntry);
+		hash_ctl.keysize     = sizeof(struct QuotaMapEntryKey);
+		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 		hash_seq_init(&iter, quota_info[type].map);
 		while ((qentry = hash_seq_search(&iter)) != NULL)
 		{
@@ -711,7 +719,11 @@ do_check_diskquota_state_is_ready(void)
 	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
+#if GP_VERSION_NUM < 70000
 	if (SPI_processed != 1 || tupdesc->natts != 1 || ((tupdesc)->attrs[0])->atttypid != INT4OID)
+#else
+	if (SPI_processed != 1 || tupdesc->natts != 1 || ((tupdesc)->attrs[0]).atttypid != INT4OID)
+#endif /* GP_VERSION_NUM */
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 		                errmsg("[diskquota] \"diskquota.state\" is corrupted in database \"%s\","
@@ -1434,8 +1446,13 @@ do_load_quotas(void)
 		                errmsg("[diskquota] load_quotas SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
+#if GP_VERSION_NUM < 70000
 	if (tupdesc->natts != NUM_QUOTA_CONFIG_ATTRS || ((tupdesc)->attrs[0])->atttypid != OIDOID ||
 	    ((tupdesc)->attrs[1])->atttypid != INT4OID || ((tupdesc)->attrs[2])->atttypid != INT8OID)
+#else
+	if (tupdesc->natts != NUM_QUOTA_CONFIG_ATTRS || ((tupdesc)->attrs[0]).atttypid != OIDOID ||
+	    ((tupdesc)->attrs[1]).atttypid != INT4OID || ((tupdesc)->attrs[2]).atttypid != INT8OID)
+#endif /* GP_VERSION_NUM */
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 		                errmsg("[diskquota] configuration table is corrupted in database \"%s\","
@@ -1728,7 +1745,11 @@ GetUserName(Oid relowner, bool skip_name)
 		pg_ltoa(relowner, namestr.data);
 		return pstrdup(namestr.data);
 	}
+#if GP_VERSION_NUM < 70000
 	return GetUserNameFromId(relowner);
+#else
+	return GetUserNameFromId(relowner, false);
+#endif /* GP_VERSION_NUM */
 }
 
 static void
@@ -1826,7 +1847,6 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	hashctl.keysize   = sizeof(RejectMapEntry);
 	hashctl.entrysize = sizeof(GlobalRejectMapEntry);
 	hashctl.hcxt      = CurrentMemoryContext;
-	hashctl.hash      = tag_hash;
 
 	/*
 	 * Since uncommitted relations' information and the global rejectmap entries
@@ -1835,7 +1855,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	 * entries into the local_rejectmap below and then flush the content of the
 	 * local_rejectmap to the global rejectmap at the end of this UDF.
 	 */
-	local_rejectmap = hash_create("local_rejectmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+	local_rejectmap =
+	        diskquota_hash_create("local_rejectmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
 	get_typlenbyvalalign(rejectmap_elem_type, &elem_width, &elem_type_by_val, &elem_alignment_code);
 	deconstruct_array(rejectmap_array_type, rejectmap_elem_type, elem_width, elem_type_by_val, elem_alignment_code,
 	                  &datums, &nulls, &reject_array_count);
@@ -2103,8 +2124,7 @@ show_rejectmap(PG_FUNCTION_ARGS)
 
 		/* Switch to memory context appropriate for multiple function calls */
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-		tupdesc = CreateTemplateTupleDesc(9, false /*hasoid*/);
+		tupdesc    = DiskquotaCreateTemplateTupleDesc(9);
 		TupleDescInitEntry(tupdesc, (AttrNumber)1, "target_type", TEXTOID, -1 /*typmod*/, 0 /*attdim*/);
 		TupleDescInitEntry(tupdesc, (AttrNumber)2, "target_oid", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
 		TupleDescInitEntry(tupdesc, (AttrNumber)3, "database_oid", OIDOID, -1 /*typmod*/, 0 /*attdim*/);
@@ -2117,16 +2137,15 @@ show_rejectmap(PG_FUNCTION_ARGS)
 
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
+		rejectmap_ctx = (struct RejectMapCtx *)palloc(sizeof(struct RejectMapCtx));
+
 		/* Create a local hash table and fill it with entries from shared memory. */
 		memset(&hashctl, 0, sizeof(hashctl));
-		hashctl.keysize   = sizeof(RejectMapEntry);
-		hashctl.entrysize = sizeof(GlobalRejectMapEntry);
-		hashctl.hcxt      = CurrentMemoryContext;
-		hashctl.hash      = tag_hash;
-
-		rejectmap_ctx = (struct RejectMapCtx *)palloc(sizeof(struct RejectMapCtx));
-		rejectmap_ctx->rejectmap =
-		        hash_create("rejectmap_ctx rejectmap", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+		hashctl.keysize          = sizeof(RejectMapEntry);
+		hashctl.entrysize        = sizeof(GlobalRejectMapEntry);
+		hashctl.hcxt             = CurrentMemoryContext;
+		rejectmap_ctx->rejectmap = diskquota_hash_create("rejectmap_ctx rejectmap", 1024, &hashctl,
+		                                                 HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
 
 		LWLockAcquire(diskquota_locks.reject_map_lock, LW_SHARED);
 		hash_seq_init(&hash_seq, disk_quota_reject_map);

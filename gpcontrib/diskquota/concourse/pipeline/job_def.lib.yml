@@ -13,48 +13,65 @@
 #! Use bin_gpdb_postfix="" to use a release version of gpdb binary
 #@ def centos6_gpdb6_conf(release_build=False):
 res_build_image: centos6-gpdb6-image-build
-res_test_image: centos6-gpdb6-image-test
+res_test_images: [centos6-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_centos6" + ("" if release_build else "_debug")
-res_diskquota_bin: bin_diskquota_gpdb6_rhel6
+#! res_diskquota_bin: bin_diskquota_gpdb6_rhel6
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel6_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel6_release
 os: rhel6
+gpdb_ver: 6
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
 
 #! Job config for centos7
 #@ def centos7_gpdb6_conf(release_build=False):
 res_build_image: centos7-gpdb6-image-build
-res_test_image: centos7-gpdb6-image-test
+res_test_images: [centos7-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_centos7" + ("" if release_build else "_debug")
-res_diskquota_bin: bin_diskquota_gpdb6_rhel7
+#! res_diskquota_bin: bin_diskquota_gpdb6_rhel7
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel7_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel7_release
 os: rhel7
+gpdb_ver: 6
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
 
 #! Job config for rhel8
 #@ def rhel8_gpdb6_conf(release_build=False):
 res_build_image: rhel8-gpdb6-image-build
-res_test_image: rhel8-gpdb6-image-test
+res_test_images: [rhel8-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_rhel8" + ("" if release_build else "_debug")
-res_diskquota_bin: bin_diskquota_gpdb6_rhel8
+#! res_diskquota_bin: bin_diskquota_gpdb6_rhel8
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel8_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel8_release
 os: rhel8
+gpdb_ver: 6
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
 
 #! Job config for ubuntu18
 #@ def ubuntu18_gpdb6_conf(release_build=False):
 res_build_image: ubuntu18-gpdb6-image-build
-res_test_image: ubuntu18-gpdb6-image-test
+res_test_images: [ubuntu18-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_ubuntu18" + ("" if release_build else "_debug")
-res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
+#! res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_ubuntu18_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_ubuntu18_release
 os: ubuntu18.04
+gpdb_ver: 6
+build_type: #@ "Release" if release_build else "Debug"
+#@ end
+
+#! Job config for GPDB7, rhel8
+#@ def rhel8_gpdb7_conf(release_build=False):
+res_build_image: rocky8-gpdb7-image-build
+res_test_images: [rocky8-gpdb7-image-test, rhel8-gpdb7-image-test]
+res_gpdb_bin: #@ "bin_gpdb7_rhel8" + ("" if release_build else "_debug")
+#! res_diskquota_bin: bin_diskquota_gpdb7_rhel8
+res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb7_rhel8_intermediates", release_build)
+release_bin: bin_diskquota_gpdb7_rhel8_release
+os: rhel8
+gpdb_ver: 7
 build_type: #@ "Release" if release_build else "Debug"
 #@ end
 
@@ -164,25 +181,31 @@ params:
 #@ end
 
 #@ def _test_task(conf):
-task: #@ "test_" + conf["os"]
-timeout: 2h
-file: diskquota_src/concourse/tasks/test_diskquota.yml
-image: #@ conf["res_test_image"]
-input_mapping:
-  bin_gpdb: #@ conf["res_gpdb_bin"]
-  bin_diskquota: diskquota_artifacts
-params:
-  DISKQUOTA_OS: #@ conf["os"]
+#@   images = conf['res_test_images']
+in_parallel:
+#@   for image in images:
+#@     test_os = image.split("-")[0]
+  - task: #@ "test_" + test_os
+    timeout: 2h
+    file: diskquota_src/concourse/tasks/test_diskquota.yml
+    image: #@ image
+    input_mapping:
+      bin_gpdb: #@ conf["res_gpdb_bin"]
+      bin_diskquota: diskquota_artifacts
+    params:
+      DISKQUOTA_OS: #@ conf["os"]
+#@   end
 #@ end
 
 #@ def build_test_job_name(conf):
-#@   return "build_test_" + conf["os"]
+#@   return "build_test_gpdb{}_{}".format(conf["gpdb_ver"], conf["os"])
 #@ end
 #@ def build_test_job(param):
 #@   res_map = param["res_map"]
 #@   trigger = param["trigger"]
 #@   conf = param["conf"]
-#@   add_res_by_name(res_map, param["gpdb_src"])
+#@   res_gpdb_src = "gpdb{}_src".format(conf['gpdb_ver'])
+#@   add_res_by_name(res_map, res_gpdb_src)
 #@   add_res_by_name(res_map, "bin_cmake")
 #@   add_res_by_name(res_map, "bin_diskquota_intermediates")
 #@   add_res_by_conf(res_map, conf)
@@ -198,13 +221,15 @@ plan:
 #@   end
 - in_parallel:
   - get: gpdb_src
-    resource: #@ param["gpdb_src"]
+    resource: #@ res_gpdb_src
   - get: bin_cmake
   - get: #@ conf["res_build_image"]
-  - get: #@ conf["res_test_image"]
+#@   for test_image in conf["res_test_images"]:
+  - get: #@ test_image
+#@   end
   - get: #@ conf["res_gpdb_bin"]
-  - get: last_released_diskquota_bin
-    resource: #@ conf["res_diskquota_bin"]
+  #! - get: last_released_diskquota_bin
+  #!   resource: #@ conf["res_diskquota_bin"]
 - #@ _build_task(conf)
 - #@ _test_task(conf)
 - put: #@ conf["res_intermediates_bin"]

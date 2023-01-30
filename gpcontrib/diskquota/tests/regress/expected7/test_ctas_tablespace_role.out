@@ -1,0 +1,78 @@
+-- Test that diskquota is able to cancel a running CTAS query by the tablespace role quota.
+\! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
+\! gpstop -u > /dev/null
+-- start_ignore
+\! mkdir -p /tmp/ctas_rolespc
+-- end_ignore
+-- prepare role and tablespace.
+DROP TABLESPACE IF EXISTS ctas_rolespc;
+NOTICE:  tablespace "ctas_rolespc" does not exist, skipping
+CREATE TABLESPACE ctas_rolespc LOCATION '/tmp/ctas_rolespc';
+CREATE ROLE hardlimit_r;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+GRANT USAGE ON SCHEMA diskquota TO hardlimit_r;
+GRANT ALL ON TABLESPACE ctas_rolespc TO hardlimit_r;
+SELECT diskquota.set_role_tablespace_quota('hardlimit_r', 'ctas_rolespc', '1 MB');
+ set_role_tablespace_quota 
+---------------------------
+ 
+(1 row)
+
+SET default_tablespace = ctas_rolespc;
+SET ROLE hardlimit_r;
+-- heap table
+CREATE TABLE t1 (i) AS SELECT generate_series(1, 100000000) DISTRIBUTED BY (i);
+ERROR:  tablespace: 40497, role: 40498 diskquota exceeded  (seg1 127.0.0.1:7003 pid=1968424)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- toast table
+CREATE TABLE toast_table (i)
+  AS SELECT ARRAY(SELECT generate_series(1,10000)) FROM generate_series(1, 100000) DISTRIBUTED BY (i);
+ERROR:  tablespace: 40497, role: 40498 diskquota exceeded  (seg1 127.0.0.1:7003 pid=1968424)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- ao table
+CREATE TABLE ao_table (i) WITH (appendonly=true) AS SELECT generate_series(1, 100000000) DISTRIBUTED BY (i);
+ERROR:  tablespace: 40497, role: 40498 diskquota exceeded  (seg1 127.0.0.1:7003 pid=1968424)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- aocs table
+CREATE TABLE aocs_table WITH (appendonly=true, orientation=column)
+  AS SELECT i, ARRAY(SELECT generate_series(1,10000)) FROM generate_series(1, 100000) AS i DISTRIBUTED BY (i);
+ERROR:  tablespace: 40497, role: 40498 diskquota exceeded  (seg1 127.0.0.1:7003 pid=1968424)
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- disable hardlimit and do some clean-ups.
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+DROP TABLE IF EXISTS toast_table;
+NOTICE:  table "toast_table" does not exist, skipping
+DROP TABLE IF EXISTS ao_table;
+NOTICE:  table "ao_table" does not exist, skipping
+DROP TABLE IF EXISTS aocs_table;
+NOTICE:  table "aocs_table" does not exist, skipping
+RESET ROLE;
+RESET default_tablespace;
+DROP TABLESPACE ctas_rolespc;
+REVOKE USAGE ON SCHEMA diskquota FROM hardlimit_r;
+DROP ROLE hardlimit_r;
+\! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
+\! gpstop -u > /dev/null
