@@ -690,7 +690,7 @@ CREATE VIEW pg_stat_all_tables_internal AS
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm', 'p')
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M', 'p')
     GROUP BY C.oid, N.nspname, C.relname;
 
 -- Gather data from segments on user tables, and use data on coordinator on system tables.
@@ -722,9 +722,9 @@ SELECT
     s.autoanalyze_count
 FROM
     (SELECT
-         relid,
-         schemaname,
-         relname,
+         allt.relid,
+         allt.schemaname,
+         allt.relname,
          case when d.policytype = 'r' then (sum(seq_scan)/d.numsegments)::bigint else sum(seq_scan) end seq_scan,
          case when d.policytype = 'r' then (sum(seq_tup_read)/d.numsegments)::bigint else sum(seq_tup_read) end seq_tup_read,
          case when d.policytype = 'r' then (sum(idx_scan)/d.numsegments)::bigint else sum(idx_scan) end idx_scan,
@@ -746,10 +746,18 @@ FROM
          max(analyze_count) as analyze_count,
          max(autoanalyze_count) as autoanalyze_count
      FROM
-         gp_dist_random('pg_stat_all_tables_internal'), gp_distribution_policy as d
+         gp_dist_random('pg_stat_all_tables_internal') allt
+         inner join pg_class c
+               on allt.relid = c.oid
+         left outer join gp_distribution_policy d
+              on allt.relid = d.localoid
      WHERE
-             relid >= 16384 and relid = d.localoid
-     GROUP BY relid, schemaname, relname, d.policytype, d.numsegments
+        relid >= 16384
+        and (
+            d.localoid is not null
+            or c.relkind in ('o', 'b', 'M')
+            )
+     GROUP BY allt.relid, allt.schemaname, allt.relname, d.policytype, d.numsegments
 
      UNION ALL
 
@@ -778,12 +786,12 @@ CREATE VIEW pg_stat_xact_all_tables AS
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm', 'p')
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M', 'p')
     GROUP BY C.oid, N.nspname, C.relname;
 
 CREATE VIEW pg_stat_sys_tables AS
     SELECT * FROM pg_stat_all_tables
-    WHERE schemaname IN ('pg_catalog', 'information_schema') OR
+    WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
           schemaname ~ '^pg_toast';
 
 -- In singlenode mode, the result of pg_stat_sys_tables will be messed up,
@@ -796,7 +804,7 @@ CREATE VIEW pg_stat_sys_tables_single_node AS
 
 CREATE VIEW pg_stat_xact_sys_tables AS
     SELECT * FROM pg_stat_xact_all_tables
-    WHERE schemaname IN ('pg_catalog', 'information_schema') OR
+    WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
           schemaname ~ '^pg_toast';
 
 CREATE VIEW pg_stat_user_tables AS
@@ -839,12 +847,12 @@ CREATE VIEW pg_statio_all_tables AS
             pg_class T ON C.reltoastrelid = T.oid LEFT JOIN
             pg_index X ON T.oid = X.indrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm')
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M')
     GROUP BY C.oid, N.nspname, C.relname, T.oid, X.indexrelid;
 
 CREATE VIEW pg_statio_sys_tables AS
     SELECT * FROM pg_statio_all_tables
-    WHERE schemaname IN ('pg_catalog', 'information_schema') OR
+    WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
           schemaname ~ '^pg_toast';
 
 CREATE VIEW pg_statio_user_tables AS
@@ -866,7 +874,7 @@ CREATE VIEW pg_stat_all_indexes_internal AS
             pg_index X ON C.oid = X.indrelid JOIN
             pg_class I ON I.oid = X.indexrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm');
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 -- Gather data from segments on user tables, and use data on coordinator on system tables.
 
@@ -908,7 +916,7 @@ WHERE m.relid = s.relid;
 
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
-    WHERE schemaname IN ('pg_catalog', 'information_schema') OR
+    WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
           schemaname ~ '^pg_toast';
 
 CREATE VIEW pg_stat_user_indexes AS
@@ -930,11 +938,11 @@ CREATE VIEW pg_statio_all_indexes AS
             pg_index X ON C.oid = X.indrelid JOIN
             pg_class I ON I.oid = X.indexrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm');
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 CREATE VIEW pg_statio_sys_indexes AS
     SELECT * FROM pg_statio_all_indexes
-    WHERE schemaname IN ('pg_catalog', 'information_schema') OR
+    WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
           schemaname ~ '^pg_toast';
 
 CREATE VIEW pg_statio_user_indexes AS
