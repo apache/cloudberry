@@ -909,7 +909,8 @@ init_database_list(void)
 	if (ret != SPI_OK_CONNECT)
 	{
 		int saved_errno = errno;
-		ereport(ERROR, (errmsg("[diskquota launcher] SPI connect error, reason: %s, return code: %d.", strerror(saved_errno), ret)));
+		ereport(ERROR, (errmsg("[diskquota launcher] SPI connect error, reason: %s, return code: %d.",
+		                       strerror(saved_errno), ret)));
 	}
 	ret = SPI_execute("select dbid from diskquota_namespace.database_list;", true, 0);
 	if (ret != SPI_OK_SELECT)
@@ -917,8 +918,7 @@ init_database_list(void)
 		int saved_errno = errno;
 		ereport(ERROR,
 		        (errmsg("[diskquota launcher] 'select diskquota_namespace.database_list', reason: %s, return code: %d.",
-				strerror(saved_errno),
-		                ret)));
+		                strerror(saved_errno), ret)));
 	}
 	tupdesc = SPI_tuptable->tupdesc;
 #if GP_VERSION_NUM < 70000
@@ -1234,8 +1234,7 @@ add_dbid_to_database_list(Oid dbid)
 		int saved_errno = errno;
 		ereport(ERROR, (errmsg("[diskquota launcher] error occured while checking database_list, "
 		                       " code: %d, reason: %s.",
-		                       ret,
-				       strerror(saved_errno))));
+		                       ret, strerror(saved_errno))));
 	}
 
 	if (SPI_processed == 1)
@@ -1254,8 +1253,7 @@ add_dbid_to_database_list(Oid dbid)
 		int saved_errno = errno;
 		ereport(ERROR, (errmsg("[diskquota launcher] error occured while updating database_list, "
 		                       " code: %d, reason: %s.",
-		                       ret,
-				       strerror(saved_errno))));
+		                       ret, strerror(saved_errno))));
 	}
 
 	return;
@@ -1282,8 +1280,8 @@ del_dbid_from_database_list(Oid dbid)
 	if (ret != SPI_OK_DELETE)
 	{
 		int saved_errno = errno;
-		ereport(ERROR,
-			(errmsg("[diskquota launcher] del_dbid_from_database_list: reason: %s, ret_code: %d.", strerror(saved_errno), ret)));
+		ereport(ERROR, (errmsg("[diskquota launcher] del_dbid_from_database_list: reason: %s, ret_code: %d.",
+		                       strerror(saved_errno), ret)));
 	}
 }
 
