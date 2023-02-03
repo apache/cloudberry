@@ -1364,7 +1364,8 @@ relation_file_stat(int segno, void *ctx)
 		if (errno != ENOENT)
 		{
 			int saved_errno = errno;
-			ereport(WARNING, (errcode_for_file_access(), errmsg("[diskquota] could not stat file %s: %s", file_path, strerror(saved_errno))));
+			ereport(WARNING, (errcode_for_file_access(),
+			                  errmsg("[diskquota] could not stat file %s: %s", file_path, strerror(saved_errno))));
 		}
 		return false;
 	}
