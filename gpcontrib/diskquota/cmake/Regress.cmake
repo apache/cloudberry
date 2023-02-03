@@ -43,6 +43,9 @@ function(_PGIsolation2Target_Add working_DIR)
 
     add_custom_target(
         pg_isolation2_regress
+        COMMAND
+        make -C ${PG_SRC_DIR}/src/test/isolation2 install
+        COMMAND
         ${CMAKE_COMMAND} -E copy_if_different
         ${PG_SRC_DIR}/src/test/isolation2/sql_isolation_testcase.py ${working_DIR}
     )
