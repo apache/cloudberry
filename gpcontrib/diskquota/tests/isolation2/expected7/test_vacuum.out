@@ -52,6 +52,13 @@ SELECT diskquota.wait_for_worker_new_epoch();
  t                         
 (1 row)
 1&: VACUUM FULL dummy_t1;  <waiting ...>
+SELECT gp_wait_until_triggered_fault('object_access_post_alter', 1, dbid) FROM gp_segment_configuration WHERE role='p' AND content<>-1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+(3 rows)
 -- Wait for the diskquota bgworker 'consumes' the newly created relfilenode from shmem.
 SELECT diskquota.wait_for_worker_new_epoch();
  wait_for_worker_new_epoch 

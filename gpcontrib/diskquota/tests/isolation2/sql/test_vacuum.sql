@@ -26,6 +26,8 @@ SELECT gp_inject_fault_infinite('object_access_post_alter', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content<>-1;
 SELECT diskquota.wait_for_worker_new_epoch();
 1&: VACUUM FULL dummy_t1;
+SELECT gp_wait_until_triggered_fault('object_access_post_alter', 1, dbid)
+  FROM gp_segment_configuration WHERE role='p' AND content<>-1;
 -- Wait for the diskquota bgworker 'consumes' the newly created relfilenode from shmem.
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT gp_inject_fault_infinite('object_access_post_alter', 'reset', dbid)
