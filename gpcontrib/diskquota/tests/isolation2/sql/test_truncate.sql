@@ -14,6 +14,8 @@ SELECT gp_inject_fault_infinite('diskquota_after_smgrcreate', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content<>-1;
 SELECT diskquota.wait_for_worker_new_epoch();
 1&: TRUNCATE dummy_t1;
+SELECT gp_wait_until_triggered_fault('diskquota_after_smgrcreate', 1, dbid)
+  FROM gp_segment_configuration WHERE role='p' AND content<>-1;
 -- Wait for the diskquota bgworker 'consumes' the newly created relfilenode from shmem.
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT gp_inject_fault_infinite('diskquota_after_smgrcreate', 'reset', dbid)

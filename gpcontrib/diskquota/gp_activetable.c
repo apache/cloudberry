@@ -805,7 +805,12 @@ get_active_tables_oid(void)
 		rnode.spcNode = active_table_file_entry->tablespaceoid;
 		relOid        = get_relid_by_relfilenode(rnode);
 
-		if (relOid != InvalidOid)
+		/* skip system catalog tables */
+		if (relOid < FirstNormalObjectId)
+		{
+			hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
+		}
+		else if (relOid != InvalidOid)
 		{
 			prelid             = get_primary_table_oid(relOid, true);
 			active_table_entry = hash_search(local_active_table_stats_map, &prelid, HASH_ENTER, &found);
