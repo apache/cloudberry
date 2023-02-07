@@ -268,12 +268,17 @@ report_relation_cache_helper(Oid relid)
 #if GP_VERSION_NUM < 70000
 	rel = diskquota_relation_open(relid, NoLock);
 #else
-	rel                             = diskquota_relation_open(relid, AccessShareLock);
+	rel = diskquota_relation_open(relid, AccessShareLock);
 #endif /* GP_VERSION_NUM */
-	if (rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE || rel->rd_rel->relkind != RELKIND_COMPOSITE_TYPE ||
+	if (rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE && rel->rd_rel->relkind != RELKIND_COMPOSITE_TYPE &&
 	    rel->rd_rel->relkind != RELKIND_VIEW)
 		update_relation_cache(relid);
+
+#if GP_VERSION_NUM < 70000
 	relation_close(rel, NoLock);
+#else
+	relation_close(rel, AccessShareLock);
+#endif /* GP_VERSION_NUM */
 }
 
 /*
@@ -805,12 +810,15 @@ get_active_tables_oid(void)
 		rnode.spcNode = active_table_file_entry->tablespaceoid;
 		relOid        = get_relid_by_relfilenode(rnode);
 
+		/* If relfilenode is not prepared for some relation, just skip it. */
+		if (!OidIsValid(relOid)) continue;
+
 		/* skip system catalog tables */
 		if (relOid < FirstNormalObjectId)
 		{
 			hash_search(local_active_table_file_map, active_table_file_entry, HASH_REMOVE, NULL);
 		}
-		else if (relOid != InvalidOid)
+		else
 		{
 			prelid             = get_primary_table_oid(relOid, true);
 			active_table_entry = hash_search(local_active_table_stats_map, &prelid, HASH_ENTER, &found);
