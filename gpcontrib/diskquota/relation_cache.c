@@ -166,7 +166,11 @@ update_relation_entry(Oid relid, DiskQuotaRelationCacheEntry *relation_entry, Di
 
 	relation_entry->primary_table_relid = relid;
 
+#if GP_VERSION_NUM < 70000
 	relation_close(rel, NoLock);
+#else
+	relation_close(rel, AccessShareLock);
+#endif /* GP_VERSION_NUM */
 }
 
 void
@@ -235,7 +239,11 @@ parse_primary_table_oid(Oid relid, bool on_bgworker)
 		}
 		namespace = rel->rd_rel->relnamespace;
 		memcpy(relname, rel->rd_rel->relname.data, NAMEDATALEN);
+#if GP_VERSION_NUM < 70000
 		relation_close(rel, NoLock);
+#else
+		relation_close(rel, AccessShareLock);
+#endif /* GP_VERSION_NUM */
 	}
 
 	parsed_oid = diskquota_parse_primary_table_oid(namespace, relname);
