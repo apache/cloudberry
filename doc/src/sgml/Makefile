@@ -44,11 +44,15 @@ endif
 
 XMLINCLUDE = --path .
 
-ifndef XMLLINT
+ifdef XMLLINT
+XMLLINT := $(XMLLINT) --nonet
+else
 XMLLINT = $(missing) xmllint
 endif
 
-ifndef XSLTPROC
+ifdef XSLTPROC
+XSLTPROC := $(XSLTPROC) --nonet
+else
 XSLTPROC = $(missing) xsltproc
 endif
 
