@@ -15,7 +15,7 @@
 res_build_image: centos6-gpdb6-image-build
 res_test_images: [centos6-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_centos6" + ("" if release_build else "_debug")
-#! res_diskquota_bin: bin_diskquota_gpdb6_rhel6
+res_diskquota_bin: bin_diskquota_gpdb6_rhel6
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel6_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel6_release
 os: rhel6
@@ -28,7 +28,7 @@ build_type: #@ "Release" if release_build else "Debug"
 res_build_image: centos7-gpdb6-image-build
 res_test_images: [centos7-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_centos7" + ("" if release_build else "_debug")
-#! res_diskquota_bin: bin_diskquota_gpdb6_rhel7
+res_diskquota_bin: bin_diskquota_gpdb6_rhel7
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel7_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel7_release
 os: rhel7
@@ -41,7 +41,7 @@ build_type: #@ "Release" if release_build else "Debug"
 res_build_image: rhel8-gpdb6-image-build
 res_test_images: [rhel8-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_rhel8" + ("" if release_build else "_debug")
-#! res_diskquota_bin: bin_diskquota_gpdb6_rhel8
+res_diskquota_bin: bin_diskquota_gpdb6_rhel8
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_rhel8_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_rhel8_release
 os: rhel8
@@ -54,7 +54,7 @@ build_type: #@ "Release" if release_build else "Debug"
 res_build_image: ubuntu18-gpdb6-image-build
 res_test_images: [ubuntu18-gpdb6-image-test]
 res_gpdb_bin: #@ "bin_gpdb6_ubuntu18" + ("" if release_build else "_debug")
-#! res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
+res_diskquota_bin: bin_diskquota_gpdb6_ubuntu18
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb6_ubuntu18_intermediates", release_build)
 release_bin: bin_diskquota_gpdb6_ubuntu18_release
 os: ubuntu18.04
@@ -67,7 +67,7 @@ build_type: #@ "Release" if release_build else "Debug"
 res_build_image: rocky8-gpdb7-image-build
 res_test_images: [rocky8-gpdb7-image-test, rhel8-gpdb7-image-test]
 res_gpdb_bin: #@ "bin_gpdb7_rhel8" + ("" if release_build else "_debug")
-#! res_diskquota_bin: bin_diskquota_gpdb7_rhel8
+res_diskquota_bin: bin_diskquota_gpdb7_rhel8
 res_intermediates_bin: #@ inter_bin_name("bin_diskquota_gpdb7_rhel8_intermediates", release_build)
 release_bin: bin_diskquota_gpdb7_rhel8_release
 os: rhel8
@@ -228,8 +228,8 @@ plan:
   - get: #@ test_image
 #@   end
   - get: #@ conf["res_gpdb_bin"]
-  #! - get: last_released_diskquota_bin
-  #!   resource: #@ conf["res_diskquota_bin"]
+  - get: last_released_diskquota_bin
+    resource: #@ conf["res_diskquota_bin"]
 - #@ _build_task(conf)
 #@   if conf["build_type"] != "Release":
 - #@ _test_task(conf)
