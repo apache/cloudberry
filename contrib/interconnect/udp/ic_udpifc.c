@@ -385,6 +385,8 @@ struct SendControlInfo
  * and congestion control.
  */
 static SendControlInfo snd_control_info;
+/* WaitEventSet for the icudp */
+static WaitEventSet *ICWaitSet = NULL;
 
 /*
  * ICGlobalControlInfo
@@ -779,6 +781,8 @@ static inline void logPkt(char *prefix, icpkthdr *pkt);
 static void aggregateStatistics(ChunkTransportStateEntry *pChunkEntry);
 
 static inline bool pollAcks(ChunkTransportState *transportStates, int fd, int timeout);
+static TupleChunkListItem receiveChunksUDPIFCLoop(ChunkTransportState *pTransportStates, ChunkTransportStateEntry *pEntry,
+						int16 *srcRoute, MotionConn *conn, WaitEventSet *waitset, int nevent);
 
 /* #define TRANSFER_PROTOCOL_STATS */
 
@@ -3820,15 +3824,10 @@ static TupleChunkListItem
 receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEntry *pEntry,
 					int16 motNodeID, int16 *srcRoute, MotionConn *mConn)
 {
-	int			retries = 0;
 	bool		directed = false;
 	int 		nFds = 0;
 	int 		*waitFds = NULL;
 	int 		nevent = 0;
-	MotionConn 	*rxconn = NULL;
-	MotionConnUDP 	*udpRXconn = NULL;
-	WaitEvent	*rEvents = NULL;
-	WaitEventSet		*waitset = NULL;
 	TupleChunkListItem	tcItem = NULL;
 	MotionConnUDP *conn = NULL;
 
@@ -3865,17 +3864,53 @@ receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEn
 
 	}
 
-	/* init WaitEventSet */
-	waitset = CreateWaitEventSet(CurrentMemoryContext, nevent);
-	rEvents = palloc(nevent * sizeof(WaitEvent)); /* returned events */
-	AddWaitEventToSet(waitset, WL_LATCH_SET, PGINVALID_SOCKET, &ic_control_info.latch, NULL);
-	AddWaitEventToSet(waitset, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL, NULL);
+	/* reset WaitEventSet */
+	ResetWaitEventSet(&ICWaitSet, TopMemoryContext, nevent);
 
-	for (int i = 0; i < nFds; i++)
+	/*
+	 * Use PG_TRY() - PG_CATCH() to make sure destroy the waiteventset (close the epoll fd)
+	 * The main receive logic is in receiveChunksUDPIFCLoop()
+	 */
+	PG_TRY();
 	{
-		AddWaitEventToSet(waitset, WL_SOCKET_READABLE, waitFds[i], NULL, NULL);
-	}
+		AddWaitEventToSet(ICWaitSet, WL_LATCH_SET, PGINVALID_SOCKET, &ic_control_info.latch, NULL);
+		AddWaitEventToSet(ICWaitSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL, NULL);
+		for (int i = 0; i < nFds; i++)
+		{
+			AddWaitEventToSet(ICWaitSet, WL_SOCKET_READABLE, waitFds[i], NULL, NULL);
+		}
 
+		tcItem = receiveChunksUDPIFCLoop(pTransportStates, pEntry, srcRoute, mConn, ICWaitSet, nevent);
+	}
+	PG_CATCH();
+	{
+		if (waitFds != NULL)
+			pfree(waitFds);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	if (waitFds != NULL)
+		pfree(waitFds);
+
+	return tcItem;
+}
+
+static TupleChunkListItem
+receiveChunksUDPIFCLoop(ChunkTransportState *pTransportStates, ChunkTransportStateEntry *pEntry,
+						int16 *srcRoute, MotionConn *conn, WaitEventSet *waitset, int nevent)
+{
+	TupleChunkListItem	tcItem = NULL;
+	MotionConn 	*rxconn = NULL;
+	MotionConnUDP   *udpRXconn = NULL;
+	int			retries = 0;
+	bool		directed = false;
+	WaitEvent	*rEvents = NULL;
+
+	if (conn != NULL)
+		directed = true;
+
+	rEvents = palloc(nevent * sizeof(WaitEvent)); /* returned events */
 	/* we didn't have any data, so we've got to read it from the network. */
 	for (;;)
 	{
@@ -3905,13 +3940,7 @@ receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEn
 
 			if (!directed)
 				*srcRoute = udpRXconn->route;
-
-			FreeWaitEventSet(waitset);
-			if (rEvents != NULL)
-				pfree(rEvents);
-			if (waitFds != NULL)
-				pfree(waitFds);
-
+			pfree(rEvents);
 			return tcItem;
 		}
 
@@ -3963,7 +3992,7 @@ receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEn
 		}
 
 		/*
-		 * 1. NIC on master (and thus the QD connection) may become bad, check
+		 * 1. NIC on coordinator (and thus the QD connection) may become bad, check
 		 * it. 2. Postmaster may become invalid, check it
 		 */
 		if ((retries & 0x3f) == 0)
@@ -3978,18 +4007,12 @@ receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEn
 		}
 
 		pthread_mutex_lock(&ic_control_info.lock);
-
-	}							/* for (;;) */
-
-	FreeWaitEventSet(waitset);
-	if (rEvents != NULL)
-		pfree(rEvents);
-	if (waitFds != NULL)
-		pfree(waitFds);
+	} /* for (;;) */
 
 	/* We either got data, or get cancelled. We never make it out to here. */
 	return NULL;				/* make GCC behave */
 }
+
 
 TupleChunkListItem
 RecvTupleChunkUDPIFC(MotionConn *conn, ChunkTransportState *transportStates)
