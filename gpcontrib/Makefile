@@ -98,3 +98,4 @@ installcheck:
 	if [ "$(with_quicklz)" = "yes" ]; then $(MAKE) -C quicklz installcheck; fi
 	$(MAKE) -C gp_sparse_vector installcheck
 	$(MAKE) -C gp_toolkit installcheck
+	$(MAKE) -C gp_exttable_fdw installcheck
