@@ -231,9 +231,7 @@ plan:
   - get: last_released_diskquota_bin
     resource: #@ conf["res_diskquota_bin"]
 - #@ _build_task(conf)
-#@   if conf["build_type"] != "Release":
 - #@ _test_task(conf)
-#@   end
 - put: #@ conf["res_intermediates_bin"]
   params:
     file: diskquota_artifacts/diskquota.tar.gz
