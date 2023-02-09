@@ -12,6 +12,7 @@
 #   [REGRESS_OPTS <opt1> <opt2> ...]
 #   [REGRESS_TYPE isolation2/regress]
 #   [RUN_TIMES <times>]
+#   [EXCLUDE_FAULT_INJECT_TEST <ON/OFF>]
 # )
 # All the file path can be the relative path to ${CMAKE_CURRENT_SOURCE_DIR}.
 # A bunch of diff targets will be created as well for comparing the regress results. The diff
@@ -51,11 +52,31 @@ function(_PGIsolation2Target_Add working_DIR)
     )
 endfunction()
 
+# Find all tests in the given directory which uses fault injector, and add them to
+# fault_injector_test_list.
+function(_Find_FaultInjector_Tests sql_DIR)
+    file(GLOB files "${sql_DIR}/*.sql")
+    foreach(f ${files})
+        set(ret 1)
+        execute_process(
+            COMMAND
+            grep gp_inject_fault ${f}
+            OUTPUT_QUIET
+            RESULT_VARIABLE ret)
+        if(ret EQUAL 0)
+            get_filename_component(test_name ${f} NAME_WLE)
+            list(APPEND fault_injector_test_list ${test_name})
+        endif()
+    endforeach()
+
+    set(fault_injector_test_list ${fault_injector_test_list} PARENT_SCOPE)
+endfunction()
+
 function(RegressTarget_Add name)
     cmake_parse_arguments(
         arg
         ""
-        "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE;RUN_TIMES"
+        "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE;RUN_TIMES;EXCLUDE_FAULT_INJECT_TEST"
         "REGRESS;EXCLUDE;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
         ${ARGN})
     if (NOT arg_EXPECTED_DIR)
@@ -85,8 +106,16 @@ function(RegressTarget_Add name)
         endif()
     endif()
 
+    # Find all tests using fault injector
+    if(arg_EXCLUDE_FAULT_INJECT_TEST)
+        _Find_FaultInjector_Tests(${arg_SQL_DIR})
+    endif()
+
     # Set REGRESS test cases
     foreach(r IN LISTS arg_REGRESS)
+        if (arg_EXCLUDE_FAULT_INJECT_TEST AND (r IN_LIST fault_injector_test_list))
+            continue()
+        endif()
         set(regress_arg ${regress_arg} ${r})
     endforeach()
 
@@ -102,12 +131,20 @@ function(RegressTarget_Add name)
     foreach(o IN LISTS arg_EXCLUDE)
         list(APPEND to_exclude ${o})
     endforeach()
+    if(arg_EXCLUDE_FAULT_INJECT_TEST)
+        list(APPEND to_exclude ${fault_injector_test_list})
+    endif()
     if (to_exclude)
         set(exclude_arg "--exclude-tests=${to_exclude}")
         string(REPLACE ";" "," exclude_arg "${exclude_arg}")
         set(regress_opts_arg ${regress_opts_arg} ${exclude_arg})
     endif()
     foreach(o IN LISTS arg_REGRESS_OPTS)
+        # If the fault injection tests are excluded, ignore the --load-extension=gp_inject_fault as
+        # well.
+        if (arg_EXCLUDE_FAULT_INJECT_TEST AND (o MATCHES ".*inject_fault"))
+            continue()
+        endif()
         set(regress_opts_arg ${regress_opts_arg} ${o})
     endforeach()
 
