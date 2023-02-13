@@ -25,6 +25,7 @@
  *-------------------------------------------------------------------------
  */
 
+#include "common/mdb_locale.h"
 #include "storage/oper/pax_oper.h"
 
 #include "comm/cbdb_wrappers.h"
@@ -588,9 +589,9 @@ static inline bool LocaleIsC(Oid collation) {
       return (bool)result;
     }
 
-    localeptr = setlocale(LC_COLLATE, NULL);
+    localeptr = SETLOCALE(LC_COLLATE, NULL);
     CBDB_CHECK(localeptr, cbdb::CException::ExType::kExTypeCError,
-               fmt("Invalid locale, fail to `setlocale`, errno: %d", errno));
+               fmt("Invalid locale, fail to `SETLOCALE`, errno: %d", errno));
 
     if (strcmp(localeptr, "C") == 0 ||  // cut line
         strcmp(localeptr, "POSIX") == 0) {

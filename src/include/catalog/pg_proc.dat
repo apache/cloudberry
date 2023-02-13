@@ -11758,7 +11758,9 @@
 #
 # GPDB ADDITIONS START HERE
 #
-
+{ oid => '16383', descr => 'contains',
+  proname => 'mdb_locale_enabled', prorettype => 'bool',
+  proargtypes => '', prosrc => 'mdb_locale_enabled' },
 { oid => '7178', descr => 'for use by pg_upgrade',
   proname => 'binary_upgrade_set_preassigned_oids', provolatile => 'v',
   proparallel => 'u', prorettype => 'void', proargtypes => '_oid',

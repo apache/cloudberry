@@ -45,6 +45,7 @@
 #include "utils/uuid.h"
 #include "orafce.h"
 #include "builtins.h"
+#include "common/mdb_locale.h"
 
 /*
  * Source code for nlssort is taken from postgresql-nls-string
@@ -322,7 +323,7 @@ _nls_run_strxfrm(text *string, text *locale)
 	 */
 	if (!lc_collate_cache)
 	{
-		if ((lc_collate_cache = setlocale(LC_COLLATE, NULL)))
+		if ((lc_collate_cache = SETLOCALE(LC_COLLATE, NULL)))
 			/* Make a copy of the locale name string. */
 #ifdef _MSC_VER
 			lc_collate_cache = _strdup(lc_collate_cache);
@@ -364,7 +365,7 @@ _nls_run_strxfrm(text *string, text *locale)
 			 * If setlocale failed, we know the default stayed the same,
 			 * co we can safely elog.
 			 */
-			if (!setlocale(LC_COLLATE, locale_str))
+			if (!SETLOCALE(LC_COLLATE, locale_str))
 				elog(ERROR, "failed to set the requested LC_COLLATE value [%s]", locale_str);
 
 			changed_locale = true;
@@ -409,7 +410,7 @@ _nls_run_strxfrm(text *string, text *locale)
 			/*
 			 * Set original locale
 			 */
-			if (!setlocale(LC_COLLATE, lc_collate_cache))
+			if (!SETLOCALE(LC_COLLATE, lc_collate_cache))
 				elog(FATAL, "failed to set back the default LC_COLLATE value [%s]", lc_collate_cache);
 		}
 
@@ -422,7 +423,7 @@ _nls_run_strxfrm(text *string, text *locale)
 		/*
 		 * Set original locale
 		 */
-		if (!setlocale(LC_COLLATE, lc_collate_cache))
+		if (!SETLOCALE(LC_COLLATE, lc_collate_cache))
 			elog(FATAL, "failed to set back the default LC_COLLATE value [%s]", lc_collate_cache);
 		pfree(locale_str);
 	}

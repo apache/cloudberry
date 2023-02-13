@@ -12,6 +12,7 @@
 #include "unittest/gpos/string/CWStringTest.h"
 
 #include <locale.h>
+#include "common/mdb_locale.h"
 
 #include "gpos/base.h"
 #include "gpos/error/CAutoTrace.h"
@@ -177,18 +178,18 @@ CWStringTest::EresUnittest_AppendFormatInvalidLocale()
 	CWStringDynamic *expected =
 		GPOS_NEW(mp) CWStringDynamic(mp, GPOS_WSZ_LIT("UNKNOWN"));
 
-	CHAR *oldLocale = setlocale(LC_CTYPE, nullptr);
+	CHAR *oldLocale = SETLOCALE(LC_CTYPE, nullptr);
 	CWStringDynamic *pstr1 = GPOS_NEW(mp) CWStringDynamic(mp);
 
 	GPOS_RESULT eres = GPOS_OK;
 
-	setlocale(LC_CTYPE, "C");
+	SETLOCALE(LC_CTYPE, "C");
 	pstr1->AppendFormat(GPOS_WSZ_LIT("%s"), (CHAR *) "ÃË", 123);
 
 	pstr1->Equals(expected);
 
 	// cleanup
-	setlocale(LC_CTYPE, oldLocale);
+	SETLOCALE(LC_CTYPE, oldLocale);
 	GPOS_DELETE(pstr1);
 	GPOS_DELETE(expected);
 
