@@ -117,7 +117,8 @@ OBJS = \
 	windowfuncs.o \
 	xid.o \
 	xid8funcs.o \
-	xml.o
+	xml.o \
+	mdb.o
 
 jsonpath_scan.c: FLEXFLAGS = -CF -p -p
 jsonpath_scan.c: FLEX_NO_BACKUP=yes
