@@ -136,10 +136,9 @@ formatOptionsToTextDatum(List *options, char formattype)
 	StringInfoData cfbuf;
 
 	initStringInfo(&cfbuf);
+	bool isfirst = true;
 	if (fmttype_is_text(formattype) || fmttype_is_csv(formattype))
 	{
-		bool isfirst = true;
-
 		/*
 		 * Note: the order of the options should be same with the original
 		 * pg_exttable catalog's fmtopt field.
@@ -177,6 +176,11 @@ formatOptionsToTextDatum(List *options, char formattype)
 			DefElem    *defel = (DefElem *) lfirst(option);
 			char	   *key = defel->defname;
 			char	   *val = (char *) defGetString(defel);
+
+			if (isfirst)
+				isfirst = false;
+			else
+				appendStringInfo(&cfbuf, " ");
 
 			appendStringInfo(&cfbuf, "%s '%s'", key, val);
 		}
