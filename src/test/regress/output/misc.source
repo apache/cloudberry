@@ -613,6 +613,6 @@ CONTEXT:  SQL function "equipment" during startup
 SELECT mdb_locale_enabled();
  mdb_locale_enabled 
 --------------------
- t
+ f
 (1 row)
 
