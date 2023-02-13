@@ -38,6 +38,7 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
+#include "common/mdb_locale.h"
 
 /* define our text domain for translations */
 #undef TEXTDOMAIN
@@ -743,15 +744,15 @@ plperl_init_interp(void)
 			   *save_numeric,
 			   *save_time;
 
-	loc = setlocale(LC_COLLATE, NULL);
+	loc = SETLOCALE(LC_COLLATE, NULL);
 	save_collate = loc ? pstrdup(loc) : NULL;
-	loc = setlocale(LC_CTYPE, NULL);
+	loc = SETLOCALE(LC_CTYPE, NULL);
 	save_ctype = loc ? pstrdup(loc) : NULL;
-	loc = setlocale(LC_MONETARY, NULL);
+	loc = SETLOCALE(LC_MONETARY, NULL);
 	save_monetary = loc ? pstrdup(loc) : NULL;
-	loc = setlocale(LC_NUMERIC, NULL);
+	loc = SETLOCALE(LC_NUMERIC, NULL);
 	save_numeric = loc ? pstrdup(loc) : NULL;
-	loc = setlocale(LC_TIME, NULL);
+	loc = SETLOCALE(LC_TIME, NULL);
 	save_time = loc ? pstrdup(loc) : NULL;
 
 #define PLPERL_RESTORE_LOCALE(name, saved) \
@@ -4167,7 +4168,7 @@ static char *
 setlocale_perl(int category, char *locale)
 {
 	dTHX;
-	char	   *RETVAL = setlocale(category, locale);
+	char	   *RETVAL = SETLOCALE(category, locale);
 
 	if (RETVAL)
 	{
@@ -4182,7 +4183,7 @@ setlocale_perl(int category, char *locale)
 
 #ifdef LC_ALL
 			if (category == LC_ALL)
-				newctype = setlocale(LC_CTYPE, NULL);
+				newctype = SETLOCALE(LC_CTYPE, NULL);
 			else
 #endif
 				newctype = RETVAL;
@@ -4200,7 +4201,7 @@ setlocale_perl(int category, char *locale)
 
 #ifdef LC_ALL
 			if (category == LC_ALL)
-				newcoll = setlocale(LC_COLLATE, NULL);
+				newcoll = SETLOCALE(LC_COLLATE, NULL);
 			else
 #endif
 				newcoll = RETVAL;
@@ -4219,7 +4220,7 @@ setlocale_perl(int category, char *locale)
 
 #ifdef LC_ALL
 			if (category == LC_ALL)
-				newnum = setlocale(LC_NUMERIC, NULL);
+				newnum = SETLOCALE(LC_NUMERIC, NULL);
 			else
 #endif
 				newnum = RETVAL;

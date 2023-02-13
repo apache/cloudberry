@@ -55,25 +55,25 @@ DROP TABLE tmp;
 --
 -- copy
 --
-COPY onek TO '@abs_builddir@/results/onek.data';
+COPY onek TO '/home/xifos/git/cloudberry-gpdb/src/test/regress/results/onek.data';
 
 DELETE FROM onek;
 
-COPY onek FROM '@abs_builddir@/results/onek.data';
+COPY onek FROM '/home/xifos/git/cloudberry-gpdb/src/test/regress/results/onek.data';
 
 SELECT unique1 FROM onek WHERE unique1 < 2 ORDER BY unique1;
 
 DELETE FROM onek2;
 
-COPY onek2 FROM '@abs_builddir@/results/onek.data';
+COPY onek2 FROM '/home/xifos/git/cloudberry-gpdb/src/test/regress/results/onek.data';
 
 SELECT unique1 FROM onek2 WHERE unique1 < 2 ORDER BY unique1;
 
-COPY BINARY stud_emp TO '@abs_builddir@/results/stud_emp.data';
+COPY BINARY stud_emp TO '/home/xifos/git/cloudberry-gpdb/src/test/regress/results/stud_emp.data';
 
 DELETE FROM stud_emp;
 
-COPY BINARY stud_emp FROM '@abs_builddir@/results/stud_emp.data';
+COPY BINARY stud_emp FROM '/home/xifos/git/cloudberry-gpdb/src/test/regress/results/stud_emp.data';
 
 SELECT * FROM stud_emp;
 

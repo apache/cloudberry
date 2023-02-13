@@ -389,6 +389,9 @@
 /* Define to 1 if you have the `m' library (-lm). */
 #undef HAVE_LIBM
 
+/* Define to 1 if you have the `mdblocales' library (-lmdblocales). */
+#undef HAVE_LIBMDBLOCALES
+
 /* Define to 1 if you have the `numa' library (-lnuma). */
 #undef HAVE_LIBNUMA
 
@@ -1037,6 +1040,9 @@
 
 /* Define to 1 to build with LZ4 support. (--with-lz4) */
 #undef USE_LZ4
+
+/* Define to 1 to build with MDB locales. (--with-mdblocales) */
+#undef USE_MDBLOCALES
 
 /* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
 #undef USE_MAPREDUCE
