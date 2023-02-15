@@ -58,6 +58,7 @@
 #include "storage/shmem.h"
 #include "storage/smgr.h"
 #include "storage/spin.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/resowner.h"
@@ -347,6 +348,11 @@ CheckpointerMain(void)
 		/* Clear any already-pending wakeups */
 		ResetLatch(MyLatch);
 
+#ifdef FAULT_INJECTOR
+		if (SIMPLE_FAULT_INJECTOR("ckpt_loop_begin") == FaultInjectorTypeInfiniteLoop)
+			do_checkpoint = true;
+#endif 
+
 		/*
 		 * Process any requests or signals received recently.
 		 */
@@ -510,6 +516,8 @@ CheckpointerMain(void)
 
 		/* Send WAL statistics to the stats collector. */
 		pgstat_send_wal(true);
+
+		SIMPLE_FAULT_INJECTOR("ckpt_loop_end");
 
 		/*
 		 * If any checkpoint flags have been set, redo the loop to handle the
