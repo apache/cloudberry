@@ -2,8 +2,8 @@
 #
 # Usage:
 # RegressTarget_Add(<name>
-#   SQL_DIR <sql_dir>
-#   EXPECTED_DIR <expected_dir>
+#   SQL_DIR <sql_dir> [<sql_dir_2> ...]
+#   EXPECTED_DIR <expected_dir> [<expected_dir_2> ...]
 #   RESULTS_DIR <results_dir>
 #   [INIT_FILE <init_file_1> <init_file_2> ...]
 #   [SCHEDULE_FILE <schedule_file_1> <schedule_file_2> ...]
@@ -24,6 +24,13 @@
 # NOTE: To use this cmake file in another project, below files needs to be placed alongside:
 #  - regress_show_diff.sh
 #  - regress_loop.sh
+#
+# NOTE: If the input sql file extension is ".in.sql" instead of ".sql", the "@VAR@" in the input
+# file will be replaced by the corresponding cmake VAR before tests are executed.
+#
+# NOTE: The directory that comes later in the SQL_DIR/EXPECTED_DIR list has a higher priory. The
+# test case with the same name will be overwritten by the case that comes after in the directory
+# list.t
 #
 # Example:
 # RegressTarget_Add(installcheck_avro_fmt
@@ -55,6 +62,12 @@ endfunction()
 # Find all tests in the given directory which uses fault injector, and add them to
 # fault_injector_test_list.
 function(_Find_FaultInjector_Tests sql_DIR)
+    if (NOT fault_injector_test_list)
+        set(fault_injector_test_list "" PARENT_SCOPE)
+    endif()
+    set(test_list ${fault_injector_test_list})
+
+    get_filename_component(sql_DIR ${sql_DIR} ABSOLUTE)
     file(GLOB files "${sql_DIR}/*.sql")
     foreach(f ${files})
         set(ret 1)
@@ -64,20 +77,38 @@ function(_Find_FaultInjector_Tests sql_DIR)
             OUTPUT_QUIET
             RESULT_VARIABLE ret)
         if(ret EQUAL 0)
-            get_filename_component(test_name ${f} NAME_WLE)
-            list(APPEND fault_injector_test_list ${test_name})
+            get_filename_component(test_name ${f} NAME_WE)
+            if (NOT test_name IN_LIST test_list)
+                list(APPEND test_list ${test_name})
+            endif()
         endif()
     endforeach()
 
-    set(fault_injector_test_list ${fault_injector_test_list} PARENT_SCOPE)
+    set(fault_injector_test_list ${test_list} PARENT_SCOPE)
+endfunction()
+
+# Create symbolic links in the binary dir to input SQL files.
+function(_Link_Test_Files src_DIR dest_DIR suffix)
+    get_filename_component(src_DIR ${src_DIR} ABSOLUTE)
+    file(MAKE_DIRECTORY ${dest_DIR})
+    file(GLOB files "${src_DIR}/*.${suffix}")
+    foreach(f ${files})
+        get_filename_component(file_name ${f} NAME)
+        file(CREATE_LINK ${f} ${dest_DIR}/${file_name} SYMBOLIC)
+    endforeach()
+    file(GLOB files "${src_DIR}/*.in.${suffix}")
+    foreach(f ${files})
+        get_filename_component(file_name ${f} NAME_WE)
+        configure_file(${f} ${dest_DIR}/${file_name}.${suffix})
+    endforeach()
 endfunction()
 
 function(RegressTarget_Add name)
     cmake_parse_arguments(
         arg
         ""
-        "SQL_DIR;EXPECTED_DIR;RESULTS_DIR;DATA_DIR;REGRESS_TYPE;RUN_TIMES;EXCLUDE_FAULT_INJECT_TEST"
-        "REGRESS;EXCLUDE;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
+        "RESULTS_DIR;DATA_DIR;REGRESS_TYPE;RUN_TIMES;EXCLUDE_FAULT_INJECT_TEST"
+        "SQL_DIR;EXPECTED_DIR;REGRESS;EXCLUDE;REGRESS_OPTS;INIT_FILE;SCHEDULE_FILE"
         ${ARGN})
     if (NOT arg_EXPECTED_DIR)
         message(FATAL_ERROR
@@ -106,10 +137,19 @@ function(RegressTarget_Add name)
         endif()
     endif()
 
-    # Find all tests using fault injector
-    if(arg_EXCLUDE_FAULT_INJECT_TEST)
-        _Find_FaultInjector_Tests(${arg_SQL_DIR})
-    endif()
+    # Link input sql files to the build dir
+    foreach(sql_DIR IN LISTS arg_SQL_DIR)
+        _Link_Test_Files(${sql_DIR} ${working_DIR}/sql sql)
+        # Find all tests using fault injector
+        if(arg_EXCLUDE_FAULT_INJECT_TEST)
+            _Find_FaultInjector_Tests(${sql_DIR})
+        endif()
+    endforeach()
+
+    # Link output out files to the build dir
+    foreach(expected_DIR IN LISTS arg_EXPECTED_DIR)
+        _Link_Test_Files(${expected_DIR} ${working_DIR}/expected out)
+    endforeach()
 
     # Set REGRESS test cases
     foreach(r IN LISTS arg_REGRESS)
@@ -148,8 +188,6 @@ function(RegressTarget_Add name)
         set(regress_opts_arg ${regress_opts_arg} ${o})
     endforeach()
 
-    get_filename_component(sql_DIR ${arg_SQL_DIR} ABSOLUTE)
-    get_filename_component(expected_DIR ${arg_EXPECTED_DIR} ABSOLUTE)
     get_filename_component(results_DIR ${arg_RESULTS_DIR} ABSOLUTE)
     if (arg_DATA_DIR)
         get_filename_component(data_DIR ${arg_DATA_DIR} ABSOLUTE)
@@ -171,10 +209,6 @@ function(RegressTarget_Add name)
     add_custom_target(
         ${name}
         WORKING_DIRECTORY ${working_DIR}
-        COMMAND rm -f sql
-        COMMAND ln -s ${sql_DIR} sql
-        COMMAND rm -f expected
-        COMMAND ln -s ${expected_DIR} expected
         COMMAND rm -f results
         COMMAND mkdir -p ${results_DIR}
         COMMAND ln -s ${results_DIR} results

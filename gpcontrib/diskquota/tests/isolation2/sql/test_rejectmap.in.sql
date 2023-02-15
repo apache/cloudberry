@@ -230,7 +230,7 @@ DROP TABLE blocked_t6;
 -- Below are helper functions for testing adding uncommitted relations to rejectmap.
 --
 -- start_ignore
-CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE OR REPLACE LANGUAGE @PLPYTHON_LANG_STR@;
 -- end_ignore
 CREATE TYPE cached_relation_entry AS (
   reloid        oid,
@@ -253,18 +253,27 @@ AS $$
                       """)
     with open(filename, 'wt') as f:
         for v in rv:
-            f.write(v['row'][1:-1] + '\n')
-$$ LANGUAGE plpythonu;
+            row = v['row']
+            # The composite type results are different between GP6 & GP7
+            if isinstance(row, dict):
+                r = "{0},{1},{2},{3},{4},{5},{6}".format(
+                    row['reloid'], row['relname'], row['relowner'],
+                    row['relnamespace'], row['reltablespace'],
+                    row['relfilenode'], row['segid'])
+            else:
+                r = row[1:-1]
+            f.write(r + '\n')
+$$ LANGUAGE @PLPYTHON_LANG_STR@;
 
 -- This function reads relation_cache entries from the given file.
 CREATE OR REPLACE FUNCTION read_relation_cache_from_file(filename text)
   RETURNS SETOF cached_relation_entry
 AS $$
-   with open(filename) as f:
-       for l in f:
-           r = l.split(',')
-	   yield (r[0], r[1], r[2], r[3], r[4], r[5], r[6])
-$$ LANGUAGE plpythonu;
+    with open(filename) as f:
+        for l in f:
+            r = l.split(',')
+            yield (r[0], r[1], r[2], r[3], r[4], r[5], r[6])
+$$ LANGUAGE @PLPYTHON_LANG_STR@;
 
 -- This function replaces the oid appears in the auxiliary relation's name
 -- with the corresponding relname of that oid.
@@ -275,9 +284,9 @@ CREATE OR REPLACE FUNCTION replace_oid_with_relname(given_name text, filename te
       REGEXP_REPLACE(given_name,                                                          /*in func*/
          '^(pg_toast_|pg_aoseg_|pg_aovisimap_|pg_aoblkdir_|pg_aocsseg_)\d+',              /*in func*/
          '\1' ||                                                                          /*in func*/
-	 (SELECT DISTINCT relname FROM read_relation_cache_from_file(filename)            /*in func*/
-          WHERE  REGEXP_REPLACE(given_name, '\D', '', 'g') <> ''
-          AND reloid=REGEXP_REPLACE(given_name, '\D', '', 'g')::oid), 'g'), given_name);/*in func*/
+         (SELECT DISTINCT relname FROM read_relation_cache_from_file(filename)            /*in func*/
+          WHERE  REGEXP_REPLACE(given_name, '\D', '', 'g') <> ''                          /*in func*/
+          AND reloid=REGEXP_REPLACE(given_name, '\D', '', 'g')::oid), 'g'), given_name);  /*in func*/
   END;                                                                                    /*in func*/
 $$ LANGUAGE plpgsql;
 
