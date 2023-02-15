@@ -18,6 +18,8 @@ m/diskquota_utility.c:\d+\)/
 s/diskquota_utility.c:\d+\)/diskquota_utility.c:xxx/
 m/^CONTEXT:*/
 s/^CONTEXT:/DETAIL:/
+m/plpython\du/
+s/plpython\du/plpythonu/
 
 # Remove segment identifiers from error message.
 # E.g., (slice1 XXX.XXX.XXX.XXX:XXXX pid=XXXX)
