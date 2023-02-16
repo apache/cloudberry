@@ -160,13 +160,13 @@ ORDER by
             |                                        |            FROM pg_class                                                                                                                    +
             |                                        |           WHERE (pg_class.oid <= (16384)::oid)) + ( SELECT sum(table_size.size) AS sum                                                      +
             |                                        |            FROM diskquota.table_size                                                                                                        +
-            |                                        |           WHERE (table_size.segid = (-1)))) AS dbsize;
+            |                                        |           WHERE (table_size.segid = '-1'::integer))) AS dbsize;
  diskquota  | show_fast_role_quota_view              |  WITH quota_usage AS (                                                                                                                      +
             |                                        |          SELECT pg_class.relowner,                                                                                                          +
             |                                        |             sum(table_size.size) AS total_size                                                                                              +
             |                                        |            FROM diskquota.table_size,                                                                                                       +
             |                                        |             pg_class                                                                                                                        +
-            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                         +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = '-1'::integer))                                                +
             |                                        |           GROUP BY pg_class.relowner                                                                                                        +
             |                                        |         )                                                                                                                                   +
             |                                        |  SELECT pg_roles.rolname AS role_name,                                                                                                      +
@@ -191,7 +191,7 @@ ORDER by
             |                                        |            FROM diskquota.table_size,                                                                                                       +
             |                                        |             pg_class,                                                                                                                       +
             |                                        |             default_tablespace                                                                                                              +
-            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                         +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = '-1'::integer))                                                +
             |                                        |           GROUP BY pg_class.relowner, pg_class.reltablespace, default_tablespace.dattablespace                                              +
             |                                        |         ), full_quota_config AS (                                                                                                           +
             |                                        |          SELECT target.primaryoid,                                                                                                          +
@@ -216,7 +216,7 @@ ORDER by
             |                                        |             sum(table_size.size) AS total_size                                                                                              +
             |                                        |            FROM diskquota.table_size,                                                                                                       +
             |                                        |             pg_class                                                                                                                        +
-            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                         +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = '-1'::integer))                                                +
             |                                        |           GROUP BY pg_class.relnamespace                                                                                                    +
             |                                        |         )                                                                                                                                   +
             |                                        |  SELECT pg_namespace.nspname AS schema_name,                                                                                                +
@@ -241,7 +241,7 @@ ORDER by
             |                                        |            FROM diskquota.table_size,                                                                                                       +
             |                                        |             pg_class,                                                                                                                       +
             |                                        |             default_tablespace                                                                                                              +
-            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = (-1)))                                                         +
+            |                                        |           WHERE ((table_size.tableid = pg_class.oid) AND (table_size.segid = '-1'::integer))                                                +
             |                                        |           GROUP BY pg_class.relnamespace, pg_class.reltablespace, default_tablespace.dattablespace                                          +
             |                                        |         ), full_quota_config AS (                                                                                                           +
             |                                        |          SELECT target.primaryoid,                                                                                                          +
