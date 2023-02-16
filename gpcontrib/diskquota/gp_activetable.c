@@ -246,6 +246,7 @@ report_relation_cache_helper(Oid relid)
 {
 	bool     found;
 	Relation rel;
+	char     relkind;
 
 	/* We do not collect the active table in mirror segments  */
 	if (IsRoleMirror())
@@ -265,20 +266,19 @@ report_relation_cache_helper(Oid relid)
 	{
 		return;
 	}
-#if GP_VERSION_NUM < 70000
-	rel = diskquota_relation_open(relid, NoLock);
-#else
-	rel = diskquota_relation_open(relid, AccessShareLock);
-#endif /* GP_VERSION_NUM */
-	if (rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE && rel->rd_rel->relkind != RELKIND_COMPOSITE_TYPE &&
-	    rel->rd_rel->relkind != RELKIND_VIEW)
-		update_relation_cache(relid);
 
-#if GP_VERSION_NUM < 70000
-	relation_close(rel, NoLock);
-#else
-	relation_close(rel, AccessShareLock);
-#endif /* GP_VERSION_NUM */
+	rel = diskquota_relation_open(relid);
+	if (rel == NULL)
+	{
+		return;
+	}
+
+	relkind = rel->rd_rel->relkind;
+
+	RelationClose(rel);
+
+	if (relkind != RELKIND_FOREIGN_TABLE && relkind != RELKIND_COMPOSITE_TYPE && relkind != RELKIND_VIEW)
+		update_relation_cache(relid);
 }
 
 /*
