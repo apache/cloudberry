@@ -143,7 +143,7 @@ LockSegnoForWrite(Relation rel, int segno)
 
 	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 	GetAppendOnlyEntryAuxOids(rel,
-							  &segrelid, NULL, NULL, NULL, NULL);
+							  &segrelid, NULL, NULL);
 	/*
 	 * Now pick a segment that is not in use, and is not over the allowed
 	 * size threshold (90% full).
@@ -435,7 +435,7 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 	}
 
 	GetAppendOnlyEntryAuxOids(rel,
-							  &segrelid, NULL, NULL, NULL, NULL);
+							  &segrelid, NULL, NULL);
 
 	/*
 	 * Now pick a segment that is not in use, and is not over the allowed
@@ -695,7 +695,7 @@ choose_new_segfile(Relation rel, bool *used, List *avoid_segnos)
 
 			appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 			GetAppendOnlyEntryAuxOids(rel,
-									  &segrelid, NULL, NULL, NULL, NULL);
+									  &segrelid, NULL, NULL);
 			UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 
 			InsertInitialAOCSFileSegInfo(rel, chosen_segno,

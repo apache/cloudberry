@@ -1389,8 +1389,8 @@ aoco_relation_nontransactional_truncate(Relation rel)
 	/* Also truncate the aux tables */
 	GetAppendOnlyEntryAuxOids(rel,
 	                          &aoseg_relid,
-	                          &aoblkdir_relid, NULL,
-	                          &aovisimap_relid, NULL);
+	                          &aoblkdir_relid,
+	                          &aovisimap_relid);
 
 	heap_truncate_one_relid(aoseg_relid);
 	heap_truncate_one_relid(aoblkdir_relid);
@@ -1702,7 +1702,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 	List	   *tlist = NIL;
 	List	   *qual = indexInfo->ii_Predicate;
 	Oid			blkdirrelid;
-	Oid			blkidxrelid;
 	int64 		previous_blkno = -1;
 	Relation	blkdir;
 
@@ -1748,7 +1747,7 @@ aoco_index_build_range_scan(Relation heapRelation,
 	 * If block directory is empty, it must also be built along with the index.
 	 */
 	GetAppendOnlyEntryAuxOids(heapRelation, NULL,
-							  &blkdirrelid, &blkidxrelid, NULL, NULL);
+							  &blkdirrelid, NULL);
 
 	blkdir = relation_open(blkdirrelid, AccessShareLock);
 
@@ -2138,7 +2137,7 @@ aoco_relation_get_block_sequence(Relation rel,
 {
 	Oid segrelid;
 
-	GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL, NULL);
 	AOSegment_PopulateBlockSequence(sequence, segrelid, AOSegmentGet_segno(blkNum));
 }
 
