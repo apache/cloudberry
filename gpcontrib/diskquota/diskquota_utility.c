@@ -1441,7 +1441,7 @@ relation_size_local(PG_FUNCTION_ARGS)
 }
 
 Relation
-diskquota_relation_open(Oid relid, LOCKMODE mode)
+diskquota_relation_open(Oid relid)
 {
 	Relation rel;
 	bool     success_open               = false;
@@ -1449,8 +1449,8 @@ diskquota_relation_open(Oid relid, LOCKMODE mode)
 
 	PG_TRY();
 	{
-		rel          = relation_open(relid, mode);
-		success_open = true;
+		rel = RelationIdGetRelation(relid);
+		if (rel) success_open = true;
 	}
 	PG_CATCH();
 	{
