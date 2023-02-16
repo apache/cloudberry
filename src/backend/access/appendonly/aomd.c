@@ -643,7 +643,7 @@ ao_rel_get_physical_size(Relation aorel)
 	Assert(RelationStorageIsAO(aorel));
 
 	GetAppendOnlyEntryAuxOids(aorel,
-							  &segrelid, NULL, NULL, NULL, NULL);
+							  &segrelid, NULL, NULL);
 
 	pg_aoseg_rel = heap_open(segrelid, AccessShareLock);
 	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
