@@ -16,6 +16,8 @@ CREATE TABLE b (t TEXT) DISTRIBUTED BY (t);
 SELECT diskquota.wait_for_worker_new_epoch();
 -- Trigger hard limit to dispatch rejectmap for tjmu1
 INSERT INTO b SELECT generate_series(1, 100000000); -- fail
+-- FIXME: Pause to avoid tjmu1's worker clear the active table. Since there are bugs, this might be flaky.
+SELECT diskquota.pause();
 -- The rejectmap should contain entries with dbnode = 0 and dbnode = tjmu1_oid. count = 1
 SELECT COUNT(DISTINCT r.dbnode) FROM (SELECT (diskquota.show_rejectmap()).* FROM gp_dist_random('gp_id')) as r where r.dbnode != 0;
 
@@ -27,6 +29,7 @@ SELECT diskquota.wait_for_worker_new_epoch();
 -- Trigger hard limit to dispatch rejectmap for tjmu2
 INSERT INTO b SELECT generate_series(1, 100000000); -- fail
 SELECT diskquota.wait_for_worker_new_epoch();
+SELECT diskquota.pause();
 
 --\c tjmu1
 -- The rejectmap should contain entris with dbnode = 0 and dbnode = tjmu1_oid and tjmu2_oid. count = 2
