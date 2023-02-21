@@ -26,7 +26,7 @@ RegressTarget_Add(regress
     EXPECTED_DIR ${regress_expected_DIR}
     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/results
     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
-    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/regress/diskquota_schedule${EXPECTED_DIR_SUFFIX}
+    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/regress/diskquota_schedule
     EXCLUDE_FAULT_INJECT_TEST ${exclude_fault_injector}
     REGRESS_OPTS
     --load-extension=gp_inject_fault
