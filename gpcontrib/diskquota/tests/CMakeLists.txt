@@ -50,9 +50,9 @@ RegressTarget_Add(isolation2
 
 add_custom_target(install_test_extension
   COMMAND
-  cmake -E copy ${CMAKE_SOURCE_DIR}/diskquota_test.control ${PG_HOME}/share/postgresql/extension
+  cmake -E copy ${CMAKE_SOURCE_DIR}/control/test/diskquota_test.control ${PG_HOME}/share/postgresql/extension
   COMMAND
-  cmake -E copy ${CMAKE_SOURCE_DIR}/diskquota_test--1.0.sql ${PG_HOME}/share/postgresql/extension
+  cmake -E copy ${CMAKE_SOURCE_DIR}/control/test/diskquota_test--1.0.sql ${PG_HOME}/share/postgresql/extension
   )
 
 add_custom_target(installcheck)
