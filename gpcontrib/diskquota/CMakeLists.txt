@@ -64,31 +64,11 @@ add_compile_definitions(
   DISKQUOTA_PATCH_VERSION=${DISKQUOTA_PATCH_VERSION}
   DISKQUOTA_BINARY_NAME="${DISKQUOTA_BINARY_NAME}")
 
-list(
-  APPEND
-  diskquota_SRC
-  diskquota.c
-  diskquota_utility.c
-  enforcement.c
-  gp_activetable.c
-  quotamodel.c
-  relation_cache.c
-  monitored_db.c)
+set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+file(GLOB diskquota_SRC "${SRC_DIR}/*.c")
 
-list(
-  APPEND
-  diskquota_DDL
-  diskquota.control
-  diskquota--1.0.sql
-  diskquota--1.0--2.0.sql
-  diskquota--2.0.sql
-  diskquota--2.0--1.0.sql
-  diskquota--2.1.sql
-  diskquota--2.0--2.1.sql
-  diskquota--2.1--2.0.sql
-  diskquota--2.2.sql
-  diskquota--2.1--2.2.sql
-  diskquota--2.2--2.1.sql)
+set(DISKQUOTA_DDL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/control/ddl")
+file(GLOB diskquota_DDL "${DISKQUOTA_DDL_DIR}/*")
 
 add_library(diskquota MODULE ${diskquota_SRC})
 
