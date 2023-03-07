@@ -28,7 +28,7 @@
 -- start postmaster
 -- -E needs to be changed to "-c gp_role=dispatch" for GPDB7
 -- See https://github.com/greenplum-db/gpdb/pull/9396
-!\retcode pg_ctl -D $MASTER_DATA_DIRECTORY -w -o "-E" start;
+!\retcode @POSTMASTER_START_CMD@;
 -- Hopefully the bgworker can be started in 5 seconds
 !\retcode sleep 5;
 
