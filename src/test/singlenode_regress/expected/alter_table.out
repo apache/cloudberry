@@ -2575,18 +2575,18 @@ View definition:
    FROM at_view_1 v1;
 
 explain (verbose, costs off) select * from at_view_2;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                        QUERY PLAN                          
+-------------------------------------------------------------
  Seq Scan on public.at_base_table bt
-   Output: bt.id, bt.stuff, to_json(ROW(bt.id, bt.stuff, NULL))
+   Output: bt.id, bt.stuff, to_json(ROW(bt.id, bt.stuff, 4))
  Settings: constraint_exclusion = 'partition'
  Optimizer: Postgres query optimizer
 (4 rows)
 
 select * from at_view_2;
- id | stuff  |                   j                    
-----+--------+----------------------------------------
- 23 | skidoo | {"id":23,"stuff":"skidoo","more":null}
+ id | stuff  |                  j                  
+----+--------+-------------------------------------
+ 23 | skidoo | {"id":23,"stuff":"skidoo","more":4}
 (1 row)
 
 drop view at_view_2;
