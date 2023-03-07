@@ -3,13 +3,14 @@ include(${CMAKE_SOURCE_DIR}/cmake/Regress.cmake)
 list(APPEND isolation2_expected_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/expected)
 list(APPEND regress_expected_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected)
 if (${GP_MAJOR_VERSION} EQUAL 7)
-  set(EXPECTED_DIR_SUFFIX "7")
   list(APPEND isolation2_expected_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/expected7)
   list(APPEND regress_expected_DIR ${CMAKE_CURRENT_SOURCE_DIR}/regress/expected7)
   # PLPYTHON_LANG_STR will be replaced by Regress.cmake
   set(PLPYTHON_LANG_STR "plpython3u")
+  set(POSTMASTER_START_CMD "pg_ctl -D $MASTER_DATA_DIRECTORY -w -o \"-c gp_role=dispatch\" start")
 else()
   set(PLPYTHON_LANG_STR "plpython2u")
+  set(POSTMASTER_START_CMD "pg_ctl -D $MASTER_DATA_DIRECTORY -w -o \"-E\" start")
 endif()
 
 set(exclude_fault_injector OFF)
@@ -42,7 +43,7 @@ RegressTarget_Add(isolation2
     EXPECTED_DIR ${isolation2_expected_DIR}
     RESULTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/results
     DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data
-    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/isolation2_schedule${EXPECTED_DIR_SUFFIX}
+    SCHEDULE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/isolation2/isolation2_schedule
     EXCLUDE_FAULT_INJECT_TEST ${exclude_fault_injector}
     REGRESS_OPTS
     --load-extension=gp_inject_fault
