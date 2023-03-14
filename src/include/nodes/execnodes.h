@@ -2813,6 +2813,8 @@ typedef struct AggState
 	SharedAggInfo *shared_info; /* one entry per worker */
 	Bitmapset	*aggs_used;	/* which aggs are used in this query */
 
+	/* stream entries when out of memory instead of spilling to disk */
+	bool		streaming;
 } AggState;
 
 typedef struct TupleSplitState

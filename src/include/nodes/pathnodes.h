@@ -2226,7 +2226,7 @@ typedef struct AggPath
 	uint64		transitionSpace;	/* for pass-by-ref transition data */
 	List	   *groupClause;	/* a list of SortGroupClause's */
 	List	   *qual;			/* quals (HAVING quals), if any */
-	bool		streaming;
+	bool		streaming;		/* stream entries when out of memory instead of spilling to disk */
 } AggPath;
 
 /*
