@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.18)
-# file(ARCHIVE_EXTRACT foo) need 3.18
+cmake_minimum_required(VERSION 3.20)
+# cmake_path requires 3.20
 
 project(diskquota)
 
