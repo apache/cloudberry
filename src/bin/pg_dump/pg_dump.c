@@ -8298,7 +8298,7 @@ getPartitioningInfo(Archive *fout)
 		tbinfo = findTableByOid(tabrelid);
 		if (tbinfo == NULL)
 			fatal("failed sanity check, table OID %u appearing in pg_partitioned_table not found",
-					 tabrelid);
+				  tabrelid);
 		tbinfo->unsafe_partitions = true;
 	}
 
