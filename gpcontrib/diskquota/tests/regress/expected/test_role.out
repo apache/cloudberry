@@ -2,9 +2,7 @@
 CREATE SCHEMA srole;
 SET search_path TO srole;
 CREATE ROLE u1 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE u2 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE b (t TEXT) DISTRIBUTED BY (t);
 ALTER TABLE b OWNER TO u1;
 CREATE TABLE b2 (t TEXT) DISTRIBUTED BY (t);
@@ -121,7 +119,6 @@ select diskquota.set_role_quota(:'rolname', '-1mb');
 (1 row)
 
 CREATE ROLE "Tn" NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_quota('Tn', '-1 MB'); -- fail
 ERROR:  role "tn" does not exist
 SELECT diskquota.set_role_quota('"tn"', '-1 MB'); -- fail

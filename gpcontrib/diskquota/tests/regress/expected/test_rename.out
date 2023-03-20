@@ -37,7 +37,6 @@ DROP SCHEMA srs2;
 -- test rename role
 CREATE SCHEMA srr1;
 CREATE ROLE srerole NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_quota('srerole', '1MB');
  set_role_quota 
 ----------------

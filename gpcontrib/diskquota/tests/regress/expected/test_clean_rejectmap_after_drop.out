@@ -4,7 +4,6 @@ CREATE EXTENSION diskquota;
 \! gpconfig -c "diskquota.hard_limit" -v "on" > /dev/null
 \! gpstop -u > /dev/null
 CREATE ROLE r;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_quota('r', '1MB');
  set_role_quota 
 ----------------

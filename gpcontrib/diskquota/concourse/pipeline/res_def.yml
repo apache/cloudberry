@@ -158,12 +158,12 @@ resources:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/published/gpdb6/server-rc-(.*)-ubuntu18.04_x86_64.debug.tar.gz
-- name: bin_gpdb7_rhel8_debug
+- name: bin_gpdb7_el8_debug
   type: gcs
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/published/main/server-rc-(.*)-rhel8_x86_64.debug.tar.gz
+    regexp: server/published/main/server-rc-(.*)-el8_x86_64.debug.tar.gz
 
 # Latest release candidates, no fault-injector, no assertion:
 # --disable-debug-extensions --disable-tap-tests --enable-ic-proxy
@@ -191,12 +191,12 @@ resources:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/release-candidates/gpdb6/greenplum-db-server-6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-ubuntu18.04.tar.gz
-- name: bin_gpdb7_rhel8
+- name: bin_gpdb7_el8
   type: gcs
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb7/greenplum-db-server-7\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-rhel8.tar.gz
+    regexp: server/release-candidates/gpdb7/greenplum-db-server-7\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-el8.tar.gz
 
 # Diskquota releases
 - name: bin_diskquota_gpdb6_rhel6
