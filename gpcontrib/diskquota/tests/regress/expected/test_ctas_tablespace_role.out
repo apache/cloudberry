@@ -9,7 +9,6 @@ DROP TABLESPACE IF EXISTS ctas_rolespc;
 NOTICE:  tablespace "ctas_rolespc" does not exist, skipping
 CREATE TABLESPACE ctas_rolespc LOCATION '/tmp/ctas_rolespc';
 CREATE ROLE hardlimit_r;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT USAGE ON SCHEMA diskquota TO hardlimit_r;
 GRANT ALL ON TABLESPACE ctas_rolespc TO hardlimit_r;
 SELECT diskquota.set_role_tablespace_quota('hardlimit_r', 'ctas_rolespc', '1 MB');

@@ -1,7 +1,6 @@
 -- Test temp table restrained by role id
 CREATE SCHEMA strole;
 CREATE ROLE u3temp NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET search_path TO strole;
 SELECT diskquota.set_role_quota('u3temp', '1MB');
  set_role_quota 
