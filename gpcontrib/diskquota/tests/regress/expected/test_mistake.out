@@ -14,7 +14,6 @@ ERROR:  disk quota can not be set to 0 MB
 DROP ROLE IF EXISTS rmistake;
 NOTICE:  role "rmistake" does not exist, skipping
 CREATE ROLE rmistake;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 select diskquota.set_role_quota('rmistake', '0 MB');
 ERROR:  disk quota can not be set to 0 MB
 -- start_ignore

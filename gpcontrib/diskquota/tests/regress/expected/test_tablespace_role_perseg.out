@@ -12,9 +12,7 @@ NOTICE:  role "rolespc_persegu1" does not exist, skipping
 DROP ROLE IF EXISTS rolespc_persegu2;
 NOTICE:  role "rolespc_persegu2" does not exist, skipping
 CREATE ROLE rolespc_persegu1 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE rolespc_persegu2 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE b (t TEXT) TABLESPACE rolespc_perseg DISTRIBUTED BY (t);
 ALTER TABLE b OWNER TO rolespc_persegu1;
 SELECT diskquota.set_role_tablespace_quota('rolespc_persegu1', 'rolespc_perseg', '1 MB');
@@ -213,7 +211,6 @@ DROP TABLESPACE  IF EXISTS "Rolespc_perseg3";
 NOTICE:  tablespace "Rolespc_perseg3" does not exist, skipping
 CREATE TABLESPACE "Rolespc_perseg3" LOCATION '/tmp/rolespc_perseg3';
 CREATE ROLE "Rolespc_persegu3" NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT diskquota.set_role_tablespace_quota('"Rolespc_persegu3"', '"Rolespc_perseg3"', '-1 MB');
  set_role_tablespace_quota 
 ---------------------------

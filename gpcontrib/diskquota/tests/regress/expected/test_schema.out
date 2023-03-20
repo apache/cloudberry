@@ -42,7 +42,6 @@ CREATE SCHEMA badquota;
 DROP ROLE IF EXISTS testbody;
 NOTICE:  role "testbody" does not exist, skipping
 CREATE ROLE testbody;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE badquota.t1(i INT) DISTRIBUTED BY (i);
 ALTER TABLE badquota.t1 OWNER TO testbody;
 INSERT INTO badquota.t1 SELECT generate_series(0, 100000);

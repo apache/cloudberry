@@ -12,9 +12,7 @@ NOTICE:  role "rolespcu1" does not exist, skipping
 DROP ROLE IF EXISTS rolespcu2;
 NOTICE:  role "rolespcu2" does not exist, skipping
 CREATE ROLE rolespcu1 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE rolespcu2 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE b (t TEXT) TABLESPACE rolespc DISTRIBUTED BY (t);
 CREATE TABLE b2 (t TEXT) TABLESPACE rolespc DISTRIBUTED BY (t);
 ALTER TABLE b2 OWNER TO rolespcu1;
@@ -163,7 +161,6 @@ ERROR:  Can not set disk quota for system owner: sa
 DROP ROLE IF EXISTS "Rolespcu3";
 NOTICE:  role "Rolespcu3" does not exist, skipping
 CREATE ROLE "Rolespcu3" NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP TABLESPACE  IF EXISTS "Rolespc3";
 NOTICE:  tablespace "Rolespc3" does not exist, skipping
 CREATE TABLESPACE "Rolespc3" LOCATION '/tmp/rolespc3';

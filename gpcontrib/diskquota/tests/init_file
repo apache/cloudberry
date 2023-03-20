@@ -9,6 +9,7 @@ m/WARNING:  \[diskquota\] worker not found for database.*/
 m/WARNING:  \[diskquota\] database .* not found for getting epoch .*/
 m/^NOTICE:  CREATE TABLE will create partition */
 m/^WARNING:  skipping .* cannot calculate this foreign table size.*/
+m/^NOTICE:  resource queue required -- using default resource queue "pg_default"/
 -- end_matchignore
 
 -- start_matchsubs
