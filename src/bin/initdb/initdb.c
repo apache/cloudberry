@@ -192,6 +192,7 @@ static char *external_fts_files;
 #endif
 static char *system_functions_file;
 static char *system_views_file;
+static char *system_views_gp_file;
 static bool success = false;
 static bool made_new_pgdata = false;
 static bool found_existing_pgdata = false;
@@ -3035,6 +3036,7 @@ setup_data_file_paths(void)
 	set_input(&system_constraints_file, "system_constraints.sql");
 	set_input(&system_functions_file, "system_functions.sql");
 	set_input(&system_views_file, "system_views.sql");
+	set_input(&system_views_gp_file, "system_views_gp.sql");
 
 	set_input(&cdb_init_d_dir, "cdb_init.d");
 
@@ -3068,6 +3070,7 @@ setup_data_file_paths(void)
 #endif
 	check_input(system_functions_file);
 	check_input(system_views_file);
+	check_input(system_views_gp_file);
 }
 
 
@@ -3397,6 +3400,7 @@ initialize_data_directory(void)
 	 */
 
 	setup_run_file(cmdfd, system_views_file);
+	setup_run_file(cmdfd, system_views_gp_file);
 
 	setup_description(cmdfd);
 
