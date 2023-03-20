@@ -18,7 +18,6 @@ insert into s1.a select generate_series(1, 10000000); -- ok, but should fail aft
 -- role quota
 create schema srole;
 create role u1 nologin;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table srole.b (t text) distributed by (t);
 alter table srole.b owner to u1;
 select diskquota.set_role_quota('u1', '1 MB');
