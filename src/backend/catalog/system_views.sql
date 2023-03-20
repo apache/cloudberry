@@ -708,7 +708,6 @@ CREATE VIEW pg_stat_all_tables AS
     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M', 'p')
     GROUP BY C.oid, N.nspname, C.relname;
 
-
 CREATE VIEW pg_stat_xact_all_tables AS
     SELECT
             C.oid AS relid,
@@ -758,6 +757,11 @@ CREATE VIEW pg_stat_user_tables AS
 -- We create a new view for single node mode.
 CREATE VIEW pg_stat_user_tables_single_node AS
     SELECT * FROM pg_stat_all_tables
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
+          schemaname !~ '^pg_toast';
+
+CREATE VIEW gp_stat_user_tables_summary AS
+    SELECT * FROM gp_stat_all_tables_summary
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
@@ -827,7 +831,6 @@ CREATE VIEW pg_stat_all_indexes AS
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
-
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
     WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
@@ -835,6 +838,11 @@ CREATE VIEW pg_stat_sys_indexes AS
 
 CREATE VIEW pg_stat_user_indexes AS
     SELECT * FROM pg_stat_all_indexes
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
+          schemaname !~ '^pg_toast';
+
+CREATE VIEW gp_stat_user_indexes_summary AS
+    SELECT * FROM gp_stat_all_indexes_summary
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
