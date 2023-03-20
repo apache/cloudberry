@@ -657,7 +657,7 @@ REVOKE EXECUTE ON FUNCTION pg_get_backend_memory_contexts() FROM PUBLIC;
 
 -- Statistics views
 
-CREATE VIEW pg_stat_all_tables_internal AS
+CREATE VIEW pg_stat_all_tables AS
     SELECT
             C.oid AS relid,
             N.nspname AS schemaname,
@@ -691,7 +691,7 @@ CREATE VIEW pg_stat_all_tables_internal AS
 
 -- Gather data from segments on user tables, and use data on coordinator on system tables.
 
-CREATE VIEW pg_stat_all_tables AS
+CREATE VIEW gp_stat_all_tables_summary AS
 SELECT
     s.relid,
     s.schemaname,
@@ -742,7 +742,7 @@ FROM
          max(analyze_count) as analyze_count,
          max(autoanalyze_count) as autoanalyze_count
      FROM
-         gp_dist_random('pg_stat_all_tables_internal') allt
+         gp_dist_random('pg_stat_all_tables') allt
          inner join pg_class c
                on allt.relid = c.oid
          left outer join gp_distribution_policy d
@@ -760,9 +760,9 @@ FROM
      SELECT
          *
      FROM
-         pg_stat_all_tables_internal
+         pg_stat_all_tables
      WHERE
-             relid < 16384) m, pg_stat_all_tables_internal s
+             relid < 16384) m, pg_stat_all_tables s
 WHERE m.relid = s.relid;
 
 CREATE VIEW pg_stat_xact_all_tables AS
@@ -812,7 +812,12 @@ CREATE VIEW pg_stat_user_tables AS
 -- since we don't have segments.
 -- We create a new view for single node mode.
 CREATE VIEW pg_stat_user_tables_single_node AS
-    SELECT * FROM pg_stat_all_tables_internal
+    SELECT * FROM pg_stat_all_tables
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
+          schemaname !~ '^pg_toast';
+
+CREATE VIEW gp_stat_user_tables_summary AS
+    SELECT * FROM gp_stat_all_tables_summary
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
@@ -856,7 +861,7 @@ CREATE VIEW pg_statio_user_tables AS
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
-CREATE VIEW pg_stat_all_indexes_internal AS
+CREATE VIEW pg_stat_all_indexes AS
     SELECT
             C.oid AS relid,
             I.oid AS indexrelid,
@@ -874,7 +879,7 @@ CREATE VIEW pg_stat_all_indexes_internal AS
 
 -- Gather data from segments on user tables, and use data on coordinator on system tables.
 
-CREATE VIEW pg_stat_all_indexes AS
+CREATE VIEW gp_stat_all_indexes_summary AS
 SELECT
     s.relid,
     s.indexrelid,
@@ -895,7 +900,7 @@ FROM
          sum(idx_tup_read) as idx_tup_read,
          sum(idx_tup_fetch) as idx_tup_fetch
      FROM
-         gp_dist_random('pg_stat_all_indexes_internal')
+         gp_dist_random('pg_stat_all_indexes')
      WHERE
              relid >= 16384
      GROUP BY relid, indexrelid, schemaname, relname, indexrelname
@@ -905,10 +910,10 @@ FROM
      SELECT
          *
      FROM
-         pg_stat_all_indexes_internal
+         pg_stat_all_indexes
      WHERE
-             relid < 16384) m, pg_stat_all_indexes_internal s
-WHERE m.indexrelid = s.indexrelid;
+             relid < 16384) m, pg_stat_all_indexes s
+WHERE m.relid = s.relid;
 
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
@@ -917,6 +922,11 @@ CREATE VIEW pg_stat_sys_indexes AS
 
 CREATE VIEW pg_stat_user_indexes AS
     SELECT * FROM pg_stat_all_indexes
+    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
+          schemaname !~ '^pg_toast';
+
+CREATE VIEW gp_stat_user_indexes_summary AS
+    SELECT * FROM gp_stat_all_indexes_summary
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
