@@ -2,6 +2,7 @@ override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmi
 override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -ggdb -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -fPIC -I/usr/include/libxml2 -I/usr/local/opt/openssl/include -Iinclude -g -DGPBUILD
 COMMON_CPP_FLAGS := -Isrc -Iinclude
 PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
+SHLIB_LINK += -lprotobuf
 
 PROTOC = protoc
 SRC_DIR = ./src
@@ -17,7 +18,10 @@ $(GEN_DIR)/%.pb.cpp : $(PROTO_DIR)/%.proto
 
 #$(PROTO_GEN_OBJECTS) : $(GEN_DIR)/%.pb.o : $(GEN_DIR)/%.pb.cpp
 
-OBJS			:= $(PROTO_GEN_OBJECTS) $(SRC_DIR)/yagp_hooks_collector.o
+OBJS			:= $(PROTO_GEN_OBJECTS) \
+					$(SRC_DIR)/EventSender.o \
+					$(SRC_DIR)/hook_wrappers.o \
+					$(SRC_DIR)/yagp_hooks_collector.o
 EXTRA_CLEAN     := $(GEN_DIR)
 DATA			:= $(wildcard sql/*--*.sql)
 EXTENSION		:= yagp-hooks-collector
