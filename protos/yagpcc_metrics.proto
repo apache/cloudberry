@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+option java_outer_classname = "SegmentYAGPCCM";
+option go_package = "a.yandex-team.ru/cloud/mdb/yagpcc/api/proto/common;greenplum";
+
+enum QueryStatus {
+    QUERY_STATUS_UNSPECIFIED = 0;
+    QUERY_STATUS_SUBMIT = 1;
+    QUERY_STATUS_START = 2;
+    QUERY_STATUS_DONE = 3;
+    QUERY_STATUS_QUERY_DONE = 4;
+    QUERY_STATUS_ERROR = 5;
+    QUERY_STATUS_CANCELLING = 6;
+    QUERY_STATUS_CANCELED = 7;
+    QUERY_STATUS_END = 8;
+}
+
+enum PlanNodeStatus {
+    PLAN_NODE_STATUS_UNSPECIFIED = 0;
+    PLAN_NODE_STATUS_INITIALIZED = 1;
+    PLAN_NODE_STATUS_EXECUTING = 2;
+    PLAN_NODE_STATUS_FINISHED = 3;
+}
+
+message QueryInfo {
+    PlanGenerator generator = 1;
+    uint64 query_id = 2;
+    uint64 plan_id = 3;
+    string queryText = 4;
+    string planText = 5;
+    SessionInfo sessionInfo = 6;
+}
+
+enum PlanGenerator
+{
+    PLAN_GENERATOR_UNSPECIFIED = 0;
+    PLAN_GENERATOR_PLANNER = 1;         /* plan produced by the planner*/
+    PLAN_GENERATOR_OPTIMIZER = 2;       /* plan produced by the optimizer*/
+}
+
+message GPMetrics {
+    SystemStat systemStat = 1;
+    MetricInstrumentation instrumentation = 2;
+    SpillInfo spill = 3;
+}
+
+message QueryInfoHeader {
+    int32 pid = 1;
+    GpId gpIdentity = 2;
+
+    int32 tmid = 3; /* A time identifier for a particular query. All records associated with the query will have the same tmid. */
+    int32 ssid = 4; /* The session id as shown by gp_session_id. All records associated with the query will have the same ssid */
+    int32 ccnt = 5; /* The command number within this session as shown by gp_command_count. All records associated with the query will have the same ccnt */
+    int32 sliceid = 6; /* slice identificator, 0 means general info for the whole query */
+}
+
+message GpId {
+    int32		dbid = 1;		/* the dbid of this database */
+    int32		segindex = 2;		/* content indicator: -1 for entry database,
+                                                 * 0, ..., n-1 for segment database *
+                                                 * a primary and its mirror have the same segIndex */
+    GpRole gp_role = 3;
+    GpRole gp_session_role = 4;
+}
+
+enum GpRole
+{
+    GP_ROLE_UNSPECIFIED = 0;
+    GP_ROLE_UTILITY = 1;		/* Operating as a simple database engine */
+    GP_ROLE_DISPATCH = 2;		/* Operating as the parallel query dispatcher */
+    GP_ROLE_EXECUTE = 3;		/* Operating as a parallel query executor */
+    GP_ROLE_UNDEFINED = 4;		/* Should never see this role in use */
+}
+
+message SessionInfo {
+    string sql = 1;
+    string userName = 2;
+    string databaseName = 3;
+    string resourceGroup = 4;
+    string applicationName = 5;
+}
+
+message SystemStat {
+    /* CPU stat*/
+    double runningTimeSeconds = 1;
+    double userTimeSeconds = 2;
+    double kernelTimeSeconds = 3;
+
+    /* Memory stat */
+    uint64 vsize = 4;
+    uint64 rss = 5;
+    uint64 VmSizeKb = 6;
+    uint64 VmPeakKb = 7;
+
+   /* Storage stat */
+    uint64 rchar = 8;
+    uint64 wchar = 9;
+    uint64 syscr = 10;
+    uint64 syscw = 11;
+    uint64 read_bytes = 12;
+    uint64 write_bytes = 13;
+    uint64 cancelled_write_bytes = 14;
+}
+
+message MetricInstrumentation {
+    uint64  ntuples     = 1;    /* Total tuples produced */
+    uint64  nloops      = 2;    /* # of run cycles for this node */
+    uint64  tuplecount  = 3;    /* Tuples emitted so far this cycle */
+    double  firsttuple  = 4;    /* Time for first tuple of this cycle */
+    double  startup     = 5;    /* Total startup time (in seconds) */
+    double  total       = 6;    /* Total total time (in seconds) */
+    uint64 shared_blks_hit     = 7; /* shared blocks stats*/
+    uint64 shared_blks_read    = 8;
+    uint64 shared_blks_dirtied = 9;
+    uint64 shared_blks_written = 10;
+    uint64 local_blks_hit      = 11; /* data read from disks */
+    uint64 local_blks_read     = 12;
+    uint64 local_blks_dirtied  = 13;
+    uint64 local_blks_written  = 14;
+    uint64 temp_blks_read      = 15; /* temporary tables read stat */ 
+    uint64 temp_blks_written   = 16;
+    double blk_read_time       = 17; /* measured read/write time */
+    double blk_write_time      = 18;
+}
+
+message SpillInfo {
+    int32 fileCount = 1;
+    int64 totalBytes = 2;
+}

@@ -1,0 +1,33 @@
+override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
+override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -ggdb -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -fPIC -I/usr/include/libxml2 -I/usr/local/opt/openssl/include -Iinclude -g -DGPBUILD
+COMMON_CPP_FLAGS := -Isrc -Iinclude
+PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
+
+PROTOC = protoc
+SRC_DIR = ./src
+GEN_DIR = ./src/protos
+PROTO_DIR = ./protos
+PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o $(GEN_DIR)/yagpcc_set_service.pb.o
+
+$(GEN_DIR)/%.pb.cpp : $(PROTO_DIR)/%.proto
+	sed -i 's/optional //g' $^
+	sed -i 's/cloud\/mdb\/yagpcc\/api\/proto\/common\//\protos\//g' $^
+	$(PROTOC) --cpp_out=$(SRC_DIR) $^
+	mv $(GEN_DIR)/$*.pb.cc $(GEN_DIR)/$*.pb.cpp
+
+#$(PROTO_GEN_OBJECTS) : $(GEN_DIR)/%.pb.o : $(GEN_DIR)/%.pb.cpp
+
+OBJS			:= $(PROTO_GEN_OBJECTS) $(SRC_DIR)/yagp_hooks_collector.o
+EXTRA_CLEAN     := $(GEN_DIR)
+DATA			:= $(wildcard sql/*--*.sql)
+EXTENSION		:= yagp-hooks-collector
+EXTVERSION		:= $(shell grep default_version $(EXTENSION).control | \
+			   	sed -e "s/default_version[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
+MODULE_big		:= yagp-hooks-collector
+PG_CONFIG		:= pg_config
+PGXS			:= $(shell $(PG_CONFIG) --pgxs)
+include $(PGXS)
+
+gen: $(PROTO_GEN_OBJECTS)
+
+.DEFAULT_GOAL := all
