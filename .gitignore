@@ -79,3 +79,8 @@ lib*.pc
 /.cache/
 /install/
 /portlock/
+*.o
+*.so
+src/protos/
+.vscode
+compile_commands.json
