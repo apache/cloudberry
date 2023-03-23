@@ -74,3 +74,8 @@ lib*.pc
 /tmp_install/
 /.cache/
 /install/
+*.o
+*.so
+src/protos/
+.vscode
+compile_commands.json
