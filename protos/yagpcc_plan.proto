@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+package yagpcc;
 option java_outer_classname = "SegmentYAGPCCP";
 option go_package = "a.yandex-team.ru/cloud/mdb/yagpcc/api/proto/common;greenplum";
 

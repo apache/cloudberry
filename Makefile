@@ -1,14 +1,18 @@
 override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
-override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -ggdb -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -fPIC -I/usr/include/libxml2 -I/usr/local/opt/openssl/include -Iinclude -g -DGPBUILD
+override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -ggdb -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -fPIC -Iinclude -Isrc/protos -Isrc -g -DGPBUILD
 COMMON_CPP_FLAGS := -Isrc -Iinclude
 PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
-SHLIB_LINK += -lprotobuf
+SHLIB_LINK += -lprotobuf -lgrpc++
 
 PROTOC = protoc
 SRC_DIR = ./src
 GEN_DIR = ./src/protos
 PROTO_DIR = ./protos
-PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o $(GEN_DIR)/yagpcc_set_service.pb.o
+PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o $(GEN_DIR)/yagpcc_set_service.pb.o \
+					$(GEN_DIR)/yagpcc_set_service.grpc.pb.o
+
+GRPC_CPP_PLUGIN 		:= grpc_cpp_plugin
+GRPC_CPP_PLUGIN_PATH	?= `which $(GRPC_CPP_PLUGIN)`
 
 $(GEN_DIR)/%.pb.cpp : $(PROTO_DIR)/%.proto
 	sed -i 's/optional //g' $^
@@ -16,11 +20,16 @@ $(GEN_DIR)/%.pb.cpp : $(PROTO_DIR)/%.proto
 	$(PROTOC) --cpp_out=$(SRC_DIR) $^
 	mv $(GEN_DIR)/$*.pb.cc $(GEN_DIR)/$*.pb.cpp
 
-#$(PROTO_GEN_OBJECTS) : $(GEN_DIR)/%.pb.o : $(GEN_DIR)/%.pb.cpp
 
-OBJS			:= $(PROTO_GEN_OBJECTS) \
-					$(SRC_DIR)/EventSender.o \
-					$(SRC_DIR)/hook_wrappers.o \
+
+$(GEN_DIR)/yagpcc_set_service.grpc.pb.cpp : $(PROTO_DIR)/yagpcc_set_service.proto
+	$(PROTOC) --grpc_out=$(SRC_DIR) --plugin=protoc-gen-grpc=$(GRPC_CPP_PLUGIN_PATH) $^
+	mv $(GEN_DIR)/yagpcc_set_service.grpc.pb.cc $(GEN_DIR)/yagpcc_set_service.grpc.pb.cpp
+
+OBJS			:= $(PROTO_GEN_OBJECTS)			 		\
+					$(SRC_DIR)/GrpcConnector.o			\
+					$(SRC_DIR)/EventSender.o 			\
+					$(SRC_DIR)/hook_wrappers.o		 	\
 					$(SRC_DIR)/yagp_hooks_collector.o
 EXTRA_CLEAN     := $(GEN_DIR)
 DATA			:= $(wildcard sql/*--*.sql)

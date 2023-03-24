@@ -5,6 +5,7 @@ import "google/protobuf/timestamp.proto";
 import "protos/yagpcc_metrics.proto";
 import "protos/yagpcc_plan.proto";
 
+package yagpcc;
 option java_outer_classname = "SegmentYAGPCCAS";
 option go_package = "a.yandex-team.ru/cloud/mdb/yagpcc/api/proto/agent_segment;greenplum";
 
