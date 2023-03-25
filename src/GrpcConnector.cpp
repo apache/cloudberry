@@ -16,14 +16,13 @@ public:
     yagpcc::MetricResponse setMetricQuery(yagpcc::SetQueryReq req) {
         yagpcc::MetricResponse response;
         grpc::ClientContext context;
-        auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(1);
+        auto deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(50);
         context.set_deadline(deadline);
-        context.set_compression_algorithm(grpc_compression_algorithm::GRPC_COMPRESS_GZIP);
 
         grpc::Status status = (stub->SetMetricQuery)(&context, req, &response);
 
         if (!status.ok()) {
-            response.set_error_text("Connection lost");
+            response.set_error_text("Connection lost: " + status.error_message() + "; " + status.error_details());
             response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR);
         }
 
