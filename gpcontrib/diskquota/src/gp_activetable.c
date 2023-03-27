@@ -430,6 +430,13 @@ diskquota_fetch_table_stat(PG_FUNCTION_ARGS)
 	DiskQuotaSetOFCache       *cache           = NULL;
 	DiskQuotaActiveTableEntry *results_entry   = NULL;
 
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("ereport_warning_from_segment") == FaultInjectorTypeSkip)
+	{
+		ereport(WARNING, (errmsg("[Fault Injector] This is a warning reported from segment")));
+	}
+#endif
+
 	/* Init the container list in the first call and get the results back */
 	if (SRF_IS_FIRSTCALL())
 	{
