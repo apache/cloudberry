@@ -1,0 +1,62 @@
+CREATE SCHEMA efs1;
+CREATE
+SELECT diskquota.set_schema_quota('efs1', '1MB');
+ set_schema_quota 
+------------------
+                  
+(1 row)
+CREATE TABLE efs1.t(i int);
+CREATE
+
+INSERT INTO efs1.t SELECT generate_series(1, 10000);
+INSERT 10000
+-- wait for refresh of diskquota and check the quota size
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+SELECT schema_name, quota_in_mb, nspsize_in_bytes FROM diskquota.show_fast_schema_quota_view WHERE schema_name = 'efs1';
+ schema_name | quota_in_mb | nspsize_in_bytes 
+-------------+-------------+------------------
+ efs1        | 1           | 688128           
+(1 row)
+
+-- Enable check quota by relfilenode on seg0.
+SELECT gp_inject_fault_infinite('ereport_warning_from_segment', 'skip', dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+INSERT INTO efs1.t SELECT generate_series(1, 10000);
+INSERT 10000
+
+-- wait for refresh of diskquota and check whether the quota size changes
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+SELECT schema_name, quota_in_mb, nspsize_in_bytes FROM diskquota.show_fast_schema_quota_view WHERE schema_name = 'efs1';
+ schema_name | quota_in_mb | nspsize_in_bytes 
+-------------+-------------+------------------
+ efs1        | 1           | 1081344          
+(1 row)
+
+DROP TABLE efs1.t;
+DROP
+DROP SCHEMA efs1;
+DROP
+
+-- Reset fault injection points set by us at the top of this test.
+SELECT gp_inject_fault_infinite('ereport_warning_from_segment', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)

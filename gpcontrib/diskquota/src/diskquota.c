@@ -90,7 +90,8 @@ pg_atomic_uint32 *diskquota_table_size_entry_num;
 
 static DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
 
-#define MIN_SLEEPTIME 100 /* milliseconds */
+#define MIN_SLEEPTIME 100         /* milliseconds */
+#define BGWORKER_LOG_TIME 3600000 /* milliseconds */
 
 /*
  * bgworker handles, in launcher local memory,
@@ -322,9 +323,6 @@ disk_quota_worker_main(Datum main_arg)
 {
 	char *dbname = MyBgworkerEntry->bgw_name;
 
-	MyProcPort                = (Port *)calloc(1, sizeof(Port));
-	MyProcPort->database_name = dbname; /* To show the database in the log */
-
 	/* Disable ORCA to avoid fallback */
 	optimizer = false;
 
@@ -480,10 +478,28 @@ disk_quota_worker_main(Datum main_arg)
 	}
 
 	if (!MyWorkerInfo->dbEntry->inited) update_monitordb_status(MyWorkerInfo->dbEntry->dbid, DB_RUNNING);
-	bool is_gang_destroyed = false;
+
+	bool        is_gang_destroyed   = false;
+	TimestampTz log_start_timestamp = GetCurrentTimestamp();
+	TimestampTz log_end_timestamp;
+	ereport(LOG, (errmsg("[diskquota] disk quota worker process is monitoring database:%s", dbname)));
+
 	while (!got_sigterm)
 	{
 		int rc;
+
+		/*
+		 * The log printed from the bgworker does not contain the database name
+		 * but contains the bgworker's pid. We should print the database name
+		 * every BGWORKER_LOG_TIME to ensure that we can find the database name
+		 * by the bgworker's pid in the log file.
+		 */
+		log_end_timestamp = GetCurrentTimestamp();
+		if (TimestampDifferenceExceeds(log_start_timestamp, log_end_timestamp, BGWORKER_LOG_TIME))
+		{
+			ereport(LOG, (errmsg("[diskquota] disk quota worker process is monitoring database:%s", dbname)));
+			log_start_timestamp = log_end_timestamp;
+		}
 
 		SIMPLE_FAULT_INJECTOR("diskquota_worker_main");
 		if (!diskquota_is_paused())
