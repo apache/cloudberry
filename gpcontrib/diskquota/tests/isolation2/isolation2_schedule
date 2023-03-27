@@ -9,5 +9,6 @@ test: test_postmaster_restart
 test: test_worker_timeout
 test: test_per_segment_config
 test: test_relation_cache
+test: test_ereport_from_seg
 test: test_drop_extension
 test: reset_config
