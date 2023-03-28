@@ -130,10 +130,13 @@ void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *queryDesc)
         qi->set_generator(queryDesc->plannedstmt->planGen == PLANGEN_OPTIMIZER
                                 ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
                                 : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
-        set_plan_text(qi->mutable_plantext(), queryDesc);
-        qi->set_plan_id(get_plan_id(queryDesc));
-        qi->set_query_id(queryDesc->plannedstmt->queryId);
+        if (queryDesc->planstate)
+        {
+            set_plan_text(qi->mutable_plantext(), queryDesc);
+            qi->set_plan_id(get_plan_id(queryDesc));
+        }
     }
+    qi->set_query_id(queryDesc->plannedstmt->queryId);
 }
 } // namespace
 
