@@ -22,38 +22,38 @@ extern "C"
 
 namespace
 {
-std::string get_user_name()
+std::string* get_user_name()
 {
     const char *username = GetConfigOption("session_authorization", false, false);
-    return username ? "" : std::string(username);
+    return username ? new std::string(username) : nullptr;
 }
 
-std::string get_db_name()
+std::string* get_db_name()
 {
     char *dbname = get_database_name(MyDatabaseId);
-    std::string result = dbname ? std::string(dbname) : "";
+    std::string* result = dbname ? new std::string(dbname) : nullptr;
     pfree(dbname);
     return result;
 }
 
-std::string get_rg_name()
+std::string* get_rg_name()
 {
     auto userId = GetUserId();
     if (!OidIsValid(userId))
-        return std::string();
+        return nullptr;
     auto groupId = GetResGroupIdForRole(userId);
     if (!OidIsValid(groupId))
-        return std::string();
+        return nullptr;
     char *rgname = GetResGroupNameForId(groupId);
     if (rgname == nullptr)
-        return std::string();
+        return nullptr;
     pfree(rgname);
-    return std::string(rgname);
+    return new std::string(rgname);
 }
 
-std::string get_app_name()
+std::string* get_app_name()
 {
-    return application_name ? std::string(application_name) : "";
+    return application_name ? new std::string(application_name) : nullptr;
 }
 
 int get_cur_slice_id(QueryDesc *desc)
@@ -75,34 +75,30 @@ google::protobuf::Timestamp current_ts()
     return current_ts;
 }
 
-yagpcc::QueryInfoHeader create_header(QueryDesc *queryDesc)
+void set_header(yagpcc::QueryInfoHeader *header, QueryDesc *queryDesc)
 {
-    yagpcc::QueryInfoHeader header;
-    header.set_pid(MyProcPid);
-    auto gpId = header.mutable_gpidentity();
+    header->set_pid(MyProcPid);
+    auto gpId = header->mutable_gpidentity();
     gpId->set_dbid(GpIdentity.dbid);
     gpId->set_segindex(GpIdentity.segindex);
     gpId->set_gp_role(static_cast<yagpcc::GpRole>(Gp_role));
     gpId->set_gp_session_role(static_cast<yagpcc::GpRole>(Gp_session_role));
-    header.set_ssid(gp_session_id);
-    header.set_ccnt(gp_command_count);
-    header.set_sliceid(get_cur_slice_id(queryDesc));
+    header->set_ssid(gp_session_id);
+    header->set_ccnt(gp_command_count);
+    header->set_sliceid(get_cur_slice_id(queryDesc));
     int32 tmid = 0;
     gpmon_gettmid(&tmid);
-    header.set_tmid(tmid);
-    return header;
+    header->set_tmid(tmid);
 }
 
-yagpcc::SessionInfo get_session_info(QueryDesc *queryDesc)
+void set_session_info(yagpcc::SessionInfo *si, QueryDesc *queryDesc)
 {
-    yagpcc::SessionInfo si;
     if (queryDesc->sourceText)
-        *si.mutable_sql() = std::string(queryDesc->sourceText);
-    *si.mutable_applicationname() = get_app_name();
-    *si.mutable_databasename() = get_db_name();
-    *si.mutable_resourcegroup() = get_rg_name();
-    *si.mutable_username() = get_user_name();
-    return si;
+        *si->mutable_sql() = std::string(queryDesc->sourceText);
+    si->set_allocated_applicationname(get_app_name());
+    si->set_allocated_databasename(get_db_name());
+    si->set_allocated_resourcegroup(get_rg_name());
+    si->set_allocated_username(get_user_name());
 }
 
 ExplainState get_explain_state(QueryDesc *queryDesc, bool costs)
@@ -118,28 +114,26 @@ ExplainState get_explain_state(QueryDesc *queryDesc, bool costs)
     return es;
 }
 
-std::string get_plan_text(QueryDesc *queryDesc)
+void set_plan_text(std::string *plan_text, QueryDesc *queryDesc)
 {
     auto es = get_explain_state(queryDesc, true);
-    return std::string(es.str->data, es.str->len);
+    *plan_text = std::string(es.str->data, es.str->len);
 }
 
-yagpcc::QueryInfo create_query_info(QueryDesc *queryDesc)
+void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *queryDesc)
 {
-    yagpcc::QueryInfo qi;
-    *qi.mutable_sessioninfo() = get_session_info(queryDesc);
+    set_session_info(qi->mutable_sessioninfo(), queryDesc);
     if (queryDesc->sourceText)
-        *qi.mutable_querytext() = queryDesc->sourceText;
+        *qi->mutable_querytext() = queryDesc->sourceText;
     if (queryDesc->plannedstmt)
     {
-        qi.set_generator(queryDesc->plannedstmt->planGen == PLANGEN_OPTIMIZER
+        qi->set_generator(queryDesc->plannedstmt->planGen == PLANGEN_OPTIMIZER
                                 ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
                                 : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
+        set_plan_text(qi->mutable_plantext(), queryDesc);
+        qi->set_plan_id(get_plan_id(queryDesc));
+        qi->set_query_id(queryDesc->plannedstmt->queryId);
     }
-    *qi.mutable_plantext() = get_plan_text(queryDesc);
-    qi.set_plan_id(get_plan_id(queryDesc));
-    qi.set_query_id(queryDesc->plannedstmt->queryId);
-    return qi;
 }
 } // namespace
 
@@ -149,8 +143,8 @@ void EventSender::ExecutorStart(QueryDesc *queryDesc, int /* eflags*/)
     yagpcc::SetQueryReq req;
     req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
     *req.mutable_datetime() = current_ts();
-    *req.mutable_header() = create_header(queryDesc);
-    *req.mutable_query_info() = create_query_info(queryDesc);
+    set_header(req.mutable_header(), queryDesc);
+    set_query_info(req.mutable_query_info(), queryDesc);
     auto result = connector->set_metric_query(req);
     if (result.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR)
     {
@@ -169,8 +163,8 @@ void EventSender::ExecutorFinish(QueryDesc *queryDesc)
     yagpcc::SetQueryReq req;
     req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_DONE);
     *req.mutable_datetime() = current_ts();
-    *req.mutable_header() = create_header(queryDesc);
-    *req.mutable_query_info() = create_query_info(queryDesc);
+    set_header(req.mutable_header(), queryDesc);
+    set_query_info(req.mutable_query_info(), queryDesc);
     auto result = connector->set_metric_query(req);
     if (result.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR)
     {
