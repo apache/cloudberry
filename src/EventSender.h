@@ -6,7 +6,8 @@ class GrpcConnector;
 
 struct QueryDesc;
 
-class EventSender {
+class EventSender
+{
 public:
     void ExecutorStart(QueryDesc *queryDesc, int eflags);
     void ExecutorFinish(QueryDesc *queryDesc);

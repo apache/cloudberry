@@ -2,13 +2,14 @@
 
 #include "yagpcc_set_service.pb.h"
 
-class GrpcConnector {
+class GrpcConnector
+{
 public:
     GrpcConnector();
     ~GrpcConnector();
-    yagpcc::MetricResponse setMetricQuery(yagpcc::SetQueryReq req);
+    yagpcc::MetricResponse set_metric_query(yagpcc::SetQueryReq req);
 
 private:
     class Impl;
-    Impl* impl;
+    Impl *impl;
 };

@@ -1,6 +1,6 @@
 override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
 override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -ggdb -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -fPIC -Iinclude -Isrc/protos -Isrc -g -DGPBUILD
-COMMON_CPP_FLAGS := -Isrc -Iinclude
+COMMON_CPP_FLAGS := -Isrc -Iinclude -Isrc/stat_statements_parser
 PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
 SHLIB_LINK += -lprotobuf -lgrpc++
 
@@ -26,7 +26,11 @@ $(GEN_DIR)/yagpcc_set_service.grpc.pb.cpp : $(PROTO_DIR)/yagpcc_set_service.prot
 	$(PROTOC) --grpc_out=$(SRC_DIR) --plugin=protoc-gen-grpc=$(GRPC_CPP_PLUGIN_PATH) $^
 	mv $(GEN_DIR)/yagpcc_set_service.grpc.pb.cc $(GEN_DIR)/yagpcc_set_service.grpc.pb.cpp
 
-OBJS			:= $(PROTO_GEN_OBJECTS)			 		\
+PG_STAT_DIR		:= $(SRC_DIR)/stat_statements_parser
+PG_STAT_OBJS	:= $(PG_STAT_DIR)/pg_stat_statements_ya_parser.o
+
+OBJS			:=	$(PG_STAT_OBJS)						\
+					$(PROTO_GEN_OBJECTS)			 	\
 					$(SRC_DIR)/GrpcConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\
