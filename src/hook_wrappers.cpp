@@ -19,8 +19,8 @@ extern "C"
 static ExecutorStart_hook_type previous_ExecutorStart_hook = nullptr;
 static ExecutorFinish_hook_type previous_ExecutorFinish_hook = nullptr;
 
-static void ya_ExecutorStart_hook(QueryDesc *queryDesc, int eflags);
-static void ya_ExecutorFinish_hook(QueryDesc *queryDesc);
+static void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags);
+static void ya_ExecutorFinish_hook(QueryDesc *query_desc);
 
 #define REPLACE_HOOK(hookName)      \
     previous_##hookName = hookName; \
@@ -56,12 +56,22 @@ void hooks_deinit()
     else                                                                   \
         standard_##hookName(__VA_ARGS__);
 
-void ya_ExecutorStart_hook(QueryDesc *queryDesc, int eflags)
+void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags)
 {
-    CREATE_HOOK_WRAPPER(ExecutorStart, queryDesc, eflags);
+    CREATE_HOOK_WRAPPER(ExecutorStart, query_desc, eflags);
+    PG_TRY();
+    {
+        EventSender::instance()->ExecutorStart(query_desc, eflags);
+    }
+    PG_CATCH();
+    {
+        ereport(WARNING, (errmsg("EventSender failed in ExecutorStart afterhook")));
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
 }
 
-void ya_ExecutorFinish_hook(QueryDesc *queryDesc)
+void ya_ExecutorFinish_hook(QueryDesc *query_desc)
 {
-    CREATE_HOOK_WRAPPER(ExecutorFinish, queryDesc);
+    CREATE_HOOK_WRAPPER(ExecutorFinish, query_desc);
 }

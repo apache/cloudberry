@@ -9,8 +9,8 @@ struct QueryDesc;
 class EventSender
 {
 public:
-    void ExecutorStart(QueryDesc *queryDesc, int eflags);
-    void ExecutorFinish(QueryDesc *queryDesc);
+    void ExecutorStart(QueryDesc *query_desc, int eflags);
+    void ExecutorFinish(QueryDesc *query_desc);
     static EventSender *instance();
 
 private:
