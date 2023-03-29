@@ -27,9 +27,12 @@ message QueryInfo {
     PlanGenerator generator = 1;
     uint64 query_id = 2;
     uint64 plan_id = 3;
-    string queryText = 4;
-    string planText = 5;
-    SessionInfo sessionInfo = 6;
+    string query_text = 4;
+    string plan_text = 5;
+    string temlate_query_text = 6;
+    string temlate_plan_text = 7;
+    string userName = 8;
+    string databaseName = 9;
 }
 
 enum PlanGenerator
@@ -45,40 +48,17 @@ message GPMetrics {
     SpillInfo spill = 3;
 }
 
-message QueryInfoHeader {
-    int32 pid = 1;
-    GpId gpIdentity = 2;
-
-    int32 tmid = 3; /* A time identifier for a particular query. All records associated with the query will have the same tmid. */
-    int32 ssid = 4; /* The session id as shown by gp_session_id. All records associated with the query will have the same ssid */
-    int32 ccnt = 5; /* The command number within this session as shown by gp_command_count. All records associated with the query will have the same ccnt */
-    int32 sliceid = 6; /* slice identificator, 0 means general info for the whole query */
+message QueryKey {
+    int32 tmid = 1; /* A time identifier for a particular query. All records associated with the query will have the same tmid. */
+    int32 ssid = 2; /* The session id as shown by gp_session_id. All records associated with the query will have the same ssid */
+    int32 ccnt = 3; /* The command number within this session as shown by gp_command_count. All records associated with the query will have the same ccnt */
 }
 
-message GpId {
+message SegmentKey {
     int32		dbid = 1;		/* the dbid of this database */
     int32		segindex = 2;		/* content indicator: -1 for entry database,
                                                  * 0, ..., n-1 for segment database *
                                                  * a primary and its mirror have the same segIndex */
-    GpRole gp_role = 3;
-    GpRole gp_session_role = 4;
-}
-
-enum GpRole
-{
-    GP_ROLE_UNSPECIFIED = 0;
-    GP_ROLE_UTILITY = 1;		/* Operating as a simple database engine */
-    GP_ROLE_DISPATCH = 2;		/* Operating as the parallel query dispatcher */
-    GP_ROLE_EXECUTE = 3;		/* Operating as a parallel query executor */
-    GP_ROLE_UNDEFINED = 4;		/* Should never see this role in use */
-}
-
-message SessionInfo {
-    string sql = 1;
-    string userName = 2;
-    string databaseName = 3;
-    string resourceGroup = 4;
-    string applicationName = 5;
 }
 
 message SystemStat {

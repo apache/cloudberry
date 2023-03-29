@@ -27,19 +27,19 @@ enum MetricResponseStatusCode {
 }
 
 message SetQueryReq {
-    QueryStatus query_status = 1;
+    QueryStatus           query_status = 1;
     google.protobuf.Timestamp datetime = 2;
-
-    QueryInfoHeader header = 3;
-    QueryInfo query_info = 4;
-    GPMetrics query_metrics = 5;
-    repeated MetricPlan plan_tree = 6;
+    QueryKey                 query_key = 3;
+    QueryInfo               query_info = 4;
+    GPMetrics            query_metrics = 5;
+    repeated MetricPlan      plan_tree = 6;
 }
 
 message SetPlanNodeReq {
-    PlanNodeStatus node_status = 1;
+    PlanNodeStatus         node_status = 1;
     google.protobuf.Timestamp datetime = 2;
-    QueryInfoHeader header = 3;
-    GPMetrics node_metrics = 4;
-    MetricPlan plan_node = 5;
+    QueryKey                 query_key = 3;
+    SegmentKey             segment_key = 4;
+    GPMetrics             node_metrics = 5;
+    MetricPlan               plan_node = 6;
 }
