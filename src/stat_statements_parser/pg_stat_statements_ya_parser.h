@@ -12,4 +12,5 @@ extern void stat_statements_parser_deinit(void);
 }
 #endif
 
-uint64_t get_plan_id(QueryDesc *queryDesc);
+StringInfo gen_normplan(const char *executionPlan);
+char *gen_normquery(const char *query);

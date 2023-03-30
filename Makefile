@@ -8,8 +8,8 @@ PROTOC = protoc
 SRC_DIR = ./src
 GEN_DIR = ./src/protos
 PROTO_DIR = ./protos
-PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o $(GEN_DIR)/yagpcc_set_service.pb.o \
-					$(GEN_DIR)/yagpcc_set_service.grpc.pb.o
+PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o \
+					$(GEN_DIR)/yagpcc_set_service.pb.o $(GEN_DIR)/yagpcc_set_service.grpc.pb.o
 
 GRPC_CPP_PLUGIN 		:= grpc_cpp_plugin
 GRPC_CPP_PLUGIN_PATH	?= `which $(GRPC_CPP_PLUGIN)`

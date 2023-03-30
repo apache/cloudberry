@@ -6,6 +6,7 @@
 extern "C"
 {
 #include "postgres.h"
+#include "access/hash.h"
 #include "utils/metrics_utils.h"
 #include "utils/elog.h"
 #include "executor/executor.h"
@@ -24,6 +25,7 @@ void get_spill_info(int ssid, int ccid, int32_t* file_count, int64_t* total_byte
 
 namespace
 {
+
 std::string* get_user_name()
 {
     const char *username = GetConfigOption("session_authorization", false, false);
@@ -36,26 +38,6 @@ std::string* get_db_name()
     std::string* result = dbname ? new std::string(dbname) : nullptr;
     pfree(dbname);
     return result;
-}
-
-std::string* get_rg_name()
-{
-    auto user_id = GetUserId();
-    if (!OidIsValid(user_id))
-        return nullptr;
-    auto group_id = GetResGroupIdForRole(user_id);
-    if (!OidIsValid(group_id))
-        return nullptr;
-    char *rgname = GetResGroupNameForId(group_id);
-    if (rgname == nullptr)
-        return nullptr;
-    pfree(rgname);
-    return new std::string(rgname);
-}
-
-std::string* get_app_name()
-{
-    return application_name ? new std::string(application_name) : nullptr;
 }
 
 int get_cur_slice_id(QueryDesc *desc)
@@ -77,30 +59,19 @@ google::protobuf::Timestamp current_ts()
     return current_ts;
 }
 
-void set_header(yagpcc::QueryInfoHeader *header, QueryDesc *query_desc)
+void set_query_key(yagpcc::QueryKey *key, QueryDesc *query_desc)
 {
-    header->set_pid(MyProcPid);
-    auto gpid = header->mutable_gpidentity();
-    gpid->set_dbid(GpIdentity.dbid);
-    gpid->set_segindex(GpIdentity.segindex);
-    gpid->set_gp_role(static_cast<yagpcc::GpRole>(Gp_role));
-    gpid->set_gp_session_role(static_cast<yagpcc::GpRole>(Gp_session_role));
-    header->set_ssid(gp_session_id);
-    header->set_ccnt(gp_command_count);
-    header->set_sliceid(get_cur_slice_id(query_desc));
+    key->set_ccnt(gp_command_count);
+    key->set_ssid(gp_session_id);
     int32 tmid = 0;
     gpmon_gettmid(&tmid);
-    header->set_tmid(tmid);
+    key->set_tmid(tmid);
 }
 
-void set_session_info(yagpcc::SessionInfo *si, QueryDesc *query_desc)
+void set_segment_key(yagpcc::SegmentKey *key, QueryDesc *query_desc)
 {
-    if (query_desc->sourceText)
-        *si->mutable_sql() = std::string(query_desc->sourceText);
-    si->set_allocated_applicationname(get_app_name());
-    si->set_allocated_databasename(get_db_name());
-    si->set_allocated_resourcegroup(get_rg_name());
-    si->set_allocated_username(get_user_name());
+    key->set_dbid(GpIdentity.dbid);
+    key->set_segindex(GpIdentity.segindex);
 }
 
 ExplainState get_explain_state(QueryDesc *query_desc, bool costs)
@@ -122,23 +93,37 @@ void set_plan_text(std::string *plan_text, QueryDesc *query_desc)
     *plan_text = std::string(es.str->data, es.str->len);
 }
 
-void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *query_desc)
+void set_query_plan(yagpcc::QueryInfo *qi, QueryDesc *query_desc)
 {
-    set_session_info(qi->mutable_sessioninfo(), query_desc);
-    if (query_desc->sourceText)
-        *qi->mutable_querytext() = query_desc->sourceText;
-    if (query_desc->plannedstmt)
-    {
-        qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
+    qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
                                 ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
                                 : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
-        if (query_desc->planstate)
-        {
-            set_plan_text(qi->mutable_plantext(), query_desc);
-            qi->set_plan_id(get_plan_id(query_desc));
-        }
+    set_plan_text(qi->mutable_plan_text(), query_desc);
+    StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
+    *qi->mutable_temlate_plan_text() = std::string(norm_plan->data);
+    qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
+    //TODO: free stringinfo?
+}
+
+void set_query_text(yagpcc::QueryInfo *qi, QueryDesc *query_desc)
+{
+    *qi->mutable_query_text() = query_desc->sourceText;
+    char* norm_query = gen_normquery(query_desc->sourceText);
+    *qi->mutable_temlate_query_text() = std::string(norm_query);
+    pfree(norm_query);
+}
+
+void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *query_desc)
+{
+    if (query_desc->sourceText)
+        set_query_text(qi, query_desc);
+    if (query_desc->plannedstmt)
+    {
+        set_query_plan(qi, query_desc);
+        qi->set_query_id(query_desc->plannedstmt->queryId);
     }
-    qi->set_query_id(query_desc->plannedstmt->queryId);
+    qi->set_allocated_username(get_user_name());
+    qi->set_allocated_databasename(get_db_name());
 }
 
 void set_gp_metrics(yagpcc::GPMetrics* metrics, QueryDesc *query_desc)
@@ -157,8 +142,7 @@ void EventSender::ExecutorStart(QueryDesc *query_desc, int /* eflags*/)
     yagpcc::SetQueryReq req;
     req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
     *req.mutable_datetime() = current_ts();
-    set_header(req.mutable_header(), query_desc);
-    set_query_info(req.mutable_query_info(), query_desc);
+    set_query_key(req.mutable_query_key(), query_desc);
     auto result = connector->set_metric_query(req);
     if (result.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR)
     {
@@ -177,7 +161,7 @@ void EventSender::ExecutorFinish(QueryDesc *query_desc)
     yagpcc::SetQueryReq req;
     req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_DONE);
     *req.mutable_datetime() = current_ts();
-    set_header(req.mutable_header(), query_desc);
+    set_query_key(req.mutable_query_key(), query_desc);
     set_query_info(req.mutable_query_info(), query_desc);
     set_gp_metrics(req.mutable_query_metrics(), query_desc);
     auto result = connector->set_metric_query(req);
