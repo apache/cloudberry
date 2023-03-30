@@ -195,6 +195,7 @@ typedef struct ParallelHashJoinBatch
 	size_t		ntuples;		/* number of tuples loaded */
 	size_t		old_ntuples;	/* number of tuples before repartitioning */
 	bool		space_exhausted;
+	bool		skip_unmatched; /* whether to abandon unmatched scan */
 
 	/*
 	 * Variable-sized SharedTuplestore objects follow this struct in memory.
@@ -239,7 +240,7 @@ typedef struct ParallelHashJoinBatchAccessor
 	size_t		estimated_size; /* size of partition on disk */
 	size_t		old_ntuples;	/* how many tuples before repartitioning? */
 	bool		at_least_one_chunk; /* has this backend allocated a chunk? */
-
+	bool		outer_eof;		/* has this process hit end of batch? */
 	bool		done;			/* flag to remember that a batch is done */
 	SharedTuplestoreAccessor *inner_tuples;
 	SharedTuplestoreAccessor *outer_tuples;
@@ -305,7 +306,8 @@ typedef struct ParallelHashJoinState
 #define PHJ_BATCH_ALLOCATING			1
 #define PHJ_BATCH_LOADING				2
 #define PHJ_BATCH_PROBING				3
-#define PHJ_BATCH_DONE					4
+#define PHJ_BATCH_SCAN					4
+#define PHJ_BATCH_FREE					5
 
 /* The phases of batch growth while hashing, for grow_batches_barrier. */
 #define PHJ_GROW_BATCHES_ELECTING		0
