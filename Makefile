@@ -31,6 +31,7 @@ PG_STAT_OBJS	:= $(PG_STAT_DIR)/pg_stat_statements_ya_parser.o
 
 OBJS			:=	$(PG_STAT_OBJS)						\
 					$(PROTO_GEN_OBJECTS)			 	\
+					$(SRC_DIR)/ProcStats.o				\
 					$(SRC_DIR)/SpillInfoWrapper.o		\
 					$(SRC_DIR)/GrpcConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\

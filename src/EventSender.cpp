@@ -1,5 +1,6 @@
 #include "EventSender.h"
 #include "GrpcConnector.h"
+#include "ProcStats.h"
 #include "protos/yagpcc_set_service.pb.h"
 #include <ctime>
 
@@ -126,18 +127,51 @@ void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *query_desc)
     qi->set_allocated_databasename(get_db_name());
 }
 
-void set_gp_metrics(yagpcc::GPMetrics* metrics, QueryDesc *query_desc)
+void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics, QueryDesc *query_desc)
+{
+    auto instrument = query_desc->planstate->instrument;
+    metrics->set_ntuples(instrument->ntuples);
+    metrics->set_nloops(instrument->nloops);
+    metrics->set_tuplecount(instrument->tuplecount);
+    metrics->set_firsttuple(instrument->firsttuple);
+    metrics->set_startup(instrument->startup);
+    metrics->set_total(instrument->total);
+    auto &buffusage = instrument->bufusage;
+    metrics->set_shared_blks_hit(buffusage.shared_blks_hit);
+    metrics->set_shared_blks_read(buffusage.shared_blks_read);
+    metrics->set_shared_blks_dirtied(buffusage.shared_blks_dirtied);
+    metrics->set_shared_blks_written(buffusage.shared_blks_written);
+    metrics->set_local_blks_hit(buffusage.local_blks_hit);
+    metrics->set_local_blks_read(buffusage.local_blks_read);
+    metrics->set_local_blks_dirtied(buffusage.local_blks_dirtied);
+    metrics->set_local_blks_written(buffusage.local_blks_written);
+    metrics->set_temp_blks_read(buffusage.temp_blks_read);
+    metrics->set_temp_blks_written(buffusage.temp_blks_written);
+    metrics->set_blk_read_time(INSTR_TIME_GET_DOUBLE(buffusage.blk_read_time));
+    metrics->set_blk_write_time(INSTR_TIME_GET_DOUBLE(buffusage.blk_write_time));
+}
+
+void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc)
 {
     int32_t n_spill_files = 0;
     int64_t n_spill_bytes = 0;
     get_spill_info(gp_session_id, gp_command_count, &n_spill_files, &n_spill_bytes);
     metrics->mutable_spill()->set_filecount(n_spill_files);
     metrics->mutable_spill()->set_totalbytes(n_spill_bytes);
+    if (query_desc->planstate->instrument)
+        set_metric_instrumentation(metrics->mutable_instrumentation(), query_desc);
+    fill_self_stats(metrics->mutable_systemstat());
 }
+
+
 } // namespace
 
 void EventSender::ExecutorStart(QueryDesc *query_desc, int /* eflags*/)
 {
+    query_desc->instrument_options |= INSTRUMENT_BUFFERS;
+    query_desc->instrument_options |= INSTRUMENT_ROWS;
+    query_desc->instrument_options |= INSTRUMENT_TIMER;
+
     elog(DEBUG1, "Query %s start recording", query_desc->sourceText);
     yagpcc::SetQueryReq req;
     req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
