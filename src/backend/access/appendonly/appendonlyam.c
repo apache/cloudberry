@@ -778,7 +778,7 @@ AppendOnlyExecutorReadBlock_Finish(AppendOnlyExecutorReadBlock *executorReadBloc
 static void
 AppendOnlyExecutorReadBlock_ResetCounts(AppendOnlyExecutorReadBlock *executorReadBlock)
 {
-	executorReadBlock->totalRowsScannned = 0;
+	executorReadBlock->totalRowsScanned = 0;
 }
 
 /*
@@ -1049,7 +1049,7 @@ AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBlock *executorR
 
 				executorReadBlock->currentItemCount++;
 
-				executorReadBlock->totalRowsScannned++;
+				executorReadBlock->totalRowsScanned++;
 
 				if (itemLen > 0)
 				{
@@ -1102,7 +1102,7 @@ AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBlock *executorR
 				executorReadBlock->singleRow = NULL;
 				executorReadBlock->singleRowLen = 0;
 
-				executorReadBlock->totalRowsScannned++;
+				executorReadBlock->totalRowsScanned++;
 
 				if (AppendOnlyExecutorReadBlock_ProcessTuple(
 															 executorReadBlock,
