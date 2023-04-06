@@ -33,6 +33,7 @@
 #include "catalog/namespace.h"
 #include "catalog/indexing.h"
 #include "catalog/gp_fastsequence.h"
+#include "catalog/pg_attribute_encoding.h"
 #include "cdb/cdbvars.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
@@ -1186,6 +1187,8 @@ gp_aocsseg_internal(PG_FUNCTION_ARGS, Oid aocsRelOid)
 
 		int			columnNum;
 		/* 0-based index into columns. */
+
+		FileNumber *fileNums;
 	} Context;
 
 	FuncCallContext *funcctx;
@@ -1264,6 +1267,14 @@ gp_aocsseg_internal(PG_FUNCTION_ARGS, Oid aocsRelOid)
 																		 appendOnlyMetaDataSnapshot,
 																		 &context->totalAocsSegFiles);
 
+		context->fileNums = palloc(sizeof(FileNumber) * context->relnatts);
+		for (int i = 0; i < context->relnatts; ++i)
+		{
+			FileNumber filenum = GetFilenumForAttribute(RelationGetRelid(aocsRel), i + 1);
+			Assert(filenum != InvalidFileNumber);
+			context->fileNums[i] = filenum;
+		}
+
 		heap_close(pg_aocsseg_rel, AccessShareLock);
 		heap_close(aocsRel, AccessShareLock);
 
@@ -1341,7 +1352,7 @@ gp_aocsseg_internal(PG_FUNCTION_ARGS, Oid aocsRelOid)
 		values[0] = Int32GetDatum(GpIdentity.segindex);
 		values[1] = Int32GetDatum(aocsSegfile->segno);
 		values[2] = Int16GetDatum(context->columnNum);
-		values[3] = Int32GetDatum(context->columnNum * AOTupleId_MultiplierSegmentFileNum + aocsSegfile->segno);
+		values[3] = Int32GetDatum((context->fileNums[context->columnNum] - 1) * AOTupleId_MultiplierSegmentFileNum + aocsSegfile->segno);
 		values[4] = Int64GetDatum(aocsSegfile->total_tupcount);
 		values[5] = Int64GetDatum(eof);
 		values[6] = Int64GetDatum(eof_uncompressed);
@@ -1396,6 +1407,8 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
 
 		int			columnNum;
 		/* 0-based index into columns. */
+
+		FileNumber *fileNums;
 	} Context;
 
 	FuncCallContext *funcctx;
@@ -1476,6 +1489,14 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
 																		 SnapshotAny, //Get ALL tuples from pg_aocsseg_ % including aborted and in - progress ones.
 																		 & context->totalAocsSegFiles);
 
+		context->fileNums = palloc(sizeof(FileNumber) * context->relnatts);
+		for (int i = 0; i < context->relnatts; ++i)
+		{
+			FileNumber filenum = GetFilenumForAttribute(RelationGetRelid(aocsRel), i + 1);
+			Assert(filenum != InvalidFileNumber);
+			context->fileNums[i] = filenum;
+		}
+
 		heap_close(pg_aocsseg_rel, AccessShareLock);
 		heap_close(aocsRel, AccessShareLock);
 
@@ -1552,7 +1573,7 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
 		values[0] = Int32GetDatum(GpIdentity.segindex);
 		values[1] = Int32GetDatum(aocsSegfile->segno);
 		values[2] = Int16GetDatum(context->columnNum);
-		values[3] = Int32GetDatum(context->columnNum * AOTupleId_MultiplierSegmentFileNum + aocsSegfile->segno);
+		values[3] = Int32GetDatum((context->fileNums[context->columnNum] - 1) * AOTupleId_MultiplierSegmentFileNum + aocsSegfile->segno);
 		values[4] = Int64GetDatum(aocsSegfile->total_tupcount);
 		values[5] = Int64GetDatum(eof);
 		values[6] = Int64GetDatum(eof_uncompressed);
