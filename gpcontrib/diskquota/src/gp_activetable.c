@@ -936,16 +936,26 @@ get_active_tables_oid(void)
 static void
 load_table_size(HTAB *local_table_stats_map)
 {
-	int                        ret;
 	TupleDesc                  tupdesc;
 	int                        i;
 	bool                       found;
 	TableEntryKey              key;
 	DiskQuotaActiveTableEntry *quota_entry;
+	SPIPlanPtr                 plan;
+	Portal                     portal;
+	char                      *sql = "select tableid, size, segid from diskquota.table_size";
 
-	ret = SPI_execute("select tableid, size, segid from diskquota.table_size", true, 0);
-	if (ret != SPI_OK_SELECT)
-		ereport(ERROR, (errmsg("[diskquota] load_table_size SPI_execute failed: return code %d, error: %m", ret)));
+	if ((plan = SPI_prepare(sql, 0, NULL)) == NULL)
+		ereport(ERROR, (errmsg("[diskquota] SPI_prepare(\"%s\") failed", sql)));
+	if ((portal = SPI_cursor_open(NULL, plan, NULL, NULL, true)) == NULL)
+		ereport(ERROR, (errmsg("[diskquota] SPI_cursor_open(\"%s\") failed", sql)));
+
+	SPI_cursor_fetch(portal, true, 10000);
+
+	if (SPI_tuptable == NULL)
+	{
+		ereport(ERROR, (errmsg("[diskquota] load_table_size SPI_cursor_fetch failed")));
+	}
 
 	tupdesc = SPI_tuptable->tupdesc;
 #if GP_VERSION_NUM < 70000
@@ -975,35 +985,43 @@ load_table_size(HTAB *local_table_stats_map)
 		                       get_database_name(MyDatabaseId))));
 	}
 
-	/* push the table oid and size into local_table_stats_map */
-	for (i = 0; i < SPI_processed; i++)
+	while (SPI_processed > 0)
 	{
-		HeapTuple tup = SPI_tuptable->vals[i];
-		Datum     dat;
-		Oid       reloid;
-		int64     size;
-		int16     segid;
-		bool      isnull;
+		/* push the table oid and size into local_table_stats_map */
+		for (i = 0; i < SPI_processed; i++)
+		{
+			HeapTuple tup = SPI_tuptable->vals[i];
+			Datum     dat;
+			Oid       reloid;
+			int64     size;
+			int16     segid;
+			bool      isnull;
 
-		dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
-		if (isnull) continue;
-		reloid = DatumGetObjectId(dat);
+			dat = SPI_getbinval(tup, tupdesc, 1, &isnull);
+			if (isnull) continue;
+			reloid = DatumGetObjectId(dat);
 
-		dat = SPI_getbinval(tup, tupdesc, 2, &isnull);
-		if (isnull) continue;
-		size = DatumGetInt64(dat);
-		dat  = SPI_getbinval(tup, tupdesc, 3, &isnull);
-		if (isnull) continue;
-		segid      = DatumGetInt16(dat);
-		key.reloid = reloid;
-		key.segid  = segid;
+			dat = SPI_getbinval(tup, tupdesc, 2, &isnull);
+			if (isnull) continue;
+			size = DatumGetInt64(dat);
+			dat  = SPI_getbinval(tup, tupdesc, 3, &isnull);
+			if (isnull) continue;
+			segid      = DatumGetInt16(dat);
+			key.reloid = reloid;
+			key.segid  = segid;
 
-		quota_entry         = (DiskQuotaActiveTableEntry *)hash_search(local_table_stats_map, &key, HASH_ENTER, &found);
-		quota_entry->reloid = reloid;
-		quota_entry->tablesize = size;
-		quota_entry->segid     = segid;
+			quota_entry = (DiskQuotaActiveTableEntry *)hash_search(local_table_stats_map, &key, HASH_ENTER, &found);
+			quota_entry->reloid    = reloid;
+			quota_entry->tablesize = size;
+			quota_entry->segid     = segid;
+		}
+		SPI_freetuptable(SPI_tuptable);
+		SPI_cursor_fetch(portal, true, 10000);
 	}
-	return;
+
+	SPI_freetuptable(SPI_tuptable);
+	SPI_cursor_close(portal);
+	SPI_freeplan(plan);
 }
 
 /*
