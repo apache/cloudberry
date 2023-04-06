@@ -321,7 +321,12 @@ define_guc_variables(void)
 void
 disk_quota_worker_main(Datum main_arg)
 {
-	char *dbname = MyBgworkerEntry->bgw_name;
+	char dbname[NAMEDATALEN];
+
+	MyWorkerInfo = (DiskQuotaWorkerEntry *)DatumGetPointer(MyBgworkerEntry->bgw_main_arg);
+	Assert(MyWorkerInfo != NULL);
+
+	memcpy(dbname, MyWorkerInfo->dbname.data, NAMEDATALEN);
 
 	/* Disable ORCA to avoid fallback */
 	optimizer = false;
@@ -332,8 +337,6 @@ disk_quota_worker_main(Datum main_arg)
 	pqsignal(SIGTERM, disk_quota_sigterm);
 	pqsignal(SIGUSR1, disk_quota_sigusr1);
 
-	MyWorkerInfo = (DiskQuotaWorkerEntry *)DatumGetPointer(MyBgworkerEntry->bgw_main_arg);
-	Assert(MyWorkerInfo != NULL);
 	if (!MyWorkerInfo->dbEntry->inited)
 		ereport(LOG, (errmsg("[diskquota] start disk quota worker process to monitor database:%s", dbname)));
 	/*
@@ -1381,7 +1384,10 @@ start_worker(DiskquotaDBEntry *dbEntry)
 		result = INVALID_DB;
 		goto Failed;
 	}
-	snprintf(worker.bgw_name, sizeof(worker.bgw_name), "%s", dbname);
+	/* We do not need to get lock here, since this entry is not used by other process. */
+	namestrcpy(&(dq_worker->dbname), dbname);
+
+	snprintf(worker.bgw_name, sizeof(worker.bgw_name), "diskquota bgworker %d", dbEntry->dbid);
 	pfree(dbname);
 
 	/* set bgw_notify_pid so that we can use WaitForBackgroundWorkerStartup */
