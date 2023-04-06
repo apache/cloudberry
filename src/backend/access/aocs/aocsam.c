@@ -38,6 +38,7 @@
 #include "executor/executor.h"
 #include "fmgr.h"
 #include "miscadmin.h"
+#include "nodes/altertablenodes.h"
 #include "pgstat.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
@@ -49,7 +50,6 @@
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
-
 
 static AOCSScanDesc aocs_beginscan_internal(Relation relation,
 						AOCSFileSegInfo **seginfo,
@@ -514,7 +514,9 @@ AOCSScanDesc
 aocs_beginrangescan(Relation relation,
 					Snapshot snapshot,
 					Snapshot appendOnlyMetaDataSnapshot,
-					int *segfile_no_arr, int segfile_count)
+					int *segfile_no_arr,
+					int segfile_count,
+					bool *proj)
 {
 	AOCSFileSegInfo **seginfo;
 	int			i;
@@ -533,8 +535,8 @@ aocs_beginrangescan(Relation relation,
 								   segfile_count,
 								   snapshot,
 								   appendOnlyMetaDataSnapshot,
-								   NULL,
-								   NULL,
+								   NULL,	/* parallel_scan */
+								   proj,
 								   0);
 }
 
@@ -1606,7 +1608,7 @@ aocs_insert_values(AOCSInsertDesc idesc, Datum *d, bool *null, AOTupleId *aoTupl
 			void	   *toFree2;
 
 			/* write the block up to this one */
-			datumstreamwrite_block(idesc->ds[i], &idesc->blockDirectory, i, false);
+			datumstreamwrite_block(idesc->ds[i], &idesc->blockDirectory, i);
 			if (itemCount > 0)
 			{
 				/*
@@ -1628,8 +1630,7 @@ aocs_insert_values(AOCSInsertDesc idesc, Datum *d, bool *null, AOTupleId *aoTupl
 				err = datumstreamwrite_lob(idesc->ds[i],
 										   datum,
 										   &idesc->blockDirectory,
-										   i,
-										   false);
+										   i);
 				Assert(err >= 0);
 
 				/*
@@ -1683,7 +1684,7 @@ aocs_insert_finish_guts(AOCSInsertDesc idesc)
 
 	for (i = 0; i < rel->rd_att->natts; ++i)
 	{
-		datumstreamwrite_block(idesc->ds[i], &idesc->blockDirectory, i, false);
+		datumstreamwrite_block(idesc->ds[i], &idesc->blockDirectory, i);
 		datumstreamwrite_close_file(idesc->ds[i]);
 	}
 
@@ -2509,27 +2510,43 @@ aocs_end_headerscan(AOCSHeaderScanDesc hdesc)
 }
 
 /*
- * Initialize one datum stream per new column for writing.
+ * Initialize one datum stream per column for writing new files
+ * in an add col/rewrite col operation.
  */
-AOCSAddColumnDesc
-aocs_addcol_init(Relation rel,
-				 int num_newcols)
+AOCSWriteColumnDesc
+aocs_writecol_init(Relation rel, List *newvals, AOCSWriteColumnOperation op)
 {
 	char	   *ct;
 	int32		clvl;
-	int32		blksz;
-	AOCSAddColumnDesc desc;
-	int			i;
-	int			iattr;
+	int32               blksz;
+	AOCSWriteColumnDesc desc;
+	int                 i;
 	StringInfoData titleBuf;
 	bool        checksum;
+	ListCell    *lc;
 	RelFileLocatorBackend rnode;
 
 	rnode.locator = rel->rd_locator;
 	rnode.backend = rel->rd_backend;
 
-	desc = palloc(sizeof(AOCSAddColumnDescData));
-	desc->num_newcols = num_newcols;
+	desc = palloc(sizeof(AOCSWriteColumnDescData));
+	desc->newcolvals = NULL;
+	desc->op = op;
+
+	/*
+	 * We filter out the tab->newvals which may contain both of
+	 * ADD COLUMN and ALTER COLUMN newcolvals
+	 * into the column descriptor which will only have filtered list
+	 * corresponding to that particular operation
+	 */
+	foreach(lc, newvals)
+	{
+		NewColumnValue *newval = lfirst(lc);
+		if (op == newval->op)
+			desc->newcolvals = lappend(desc->newcolvals, newval);
+	}
+
+	desc->num_cols_to_write = list_length(desc->newcolvals);
 	desc->rel = rel;
 	desc->cur_segno = -1;
 
@@ -2539,7 +2556,7 @@ aocs_addcol_init(Relation rel,
 	 */
 	StdRdOptions **opts = RelationGetAttributeOptions(rel);
 
-	desc->dsw = palloc(sizeof(DatumStreamWrite *) * desc->num_newcols);
+	desc->dsw = palloc(sizeof(DatumStreamWrite *) * desc->num_cols_to_write);
 
     GetAppendOnlyEntryAttributes(rel->rd_id,
                                  NULL,
@@ -2547,20 +2564,23 @@ aocs_addcol_init(Relation rel,
                                  &checksum,
                                  NULL);
 
-	iattr = rel->rd_att->natts - num_newcols;
-
-	for (i = 0; i < num_newcols; ++i, ++iattr)
+	i = 0;
+	foreach(lc, desc->newcolvals)
 	{
-		Form_pg_attribute attr = TupleDescAttr(rel->rd_att, iattr);
+		NewColumnValue *newval = lfirst(lc);
+		AttrNumber attnum = newval->attnum;
+		Form_pg_attribute attr = TupleDescAttr(rel->rd_att, attnum - 1);
 
 		initStringInfo(&titleBuf);
-		appendStringInfo(&titleBuf, "ALTER TABLE ADD COLUMN new segfile");
+		if (op==AOCSADDCOLUMN)
+			appendStringInfo(&titleBuf, "ALTER TABLE ADD COLUMN new segfile");
+		else
+			appendStringInfo(&titleBuf, "ALTER TABLE REWRITE COLUMN new segfile");
 
-		Assert(opts[iattr]);
-		ct = opts[iattr]->compresstype;
-		clvl = opts[iattr]->compresslevel;
-		blksz = opts[iattr]->blocksize;
-
+		Assert(opts[attnum - 1]);
+		ct = opts[attnum - 1]->compresstype;
+		clvl = opts[attnum - 1]->compresslevel;
+		blksz = opts[attnum - 1]->blocksize;
 		desc->dsw[i] = create_datumstreamwrite(ct, clvl, checksum, blksz,
 											   attr, RelationGetRelationName(rel),
 											   RelationGetRelid(rel),
@@ -2568,45 +2588,56 @@ aocs_addcol_init(Relation rel,
 											   XLogIsNeeded() && RelationNeedsWAL(rel),
 											   &rnode,
 											   RelationGetSmgr(rel)->smgr_ao);
+		i++;
 	}
 	return desc;
 }
 
 /*
- * Create new physical segfiles for each newly added column.
+ * Create new physical segfiles for each column being written and initialize
+ * blockDirectory for recording corresponding changes to the table
+ * as part of a column add/rewrite operation.
  */
 void
-aocs_addcol_newsegfile(AOCSAddColumnDesc desc,
-					   AOCSFileSegInfo *seginfo,
-					   char *basepath,
-					   RelFileLocatorBackend relfilenode)
+aocs_writecol_newsegfiles(AOCSWriteColumnDesc desc, AOCSFileSegInfo *seginfo)
 {
 	int32		fileSegNo;
-	char		fn[MAXPGPATH];
 	int			i;
+	ListCell 	*lc;
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+	char 		*basepath = relpathbackend(desc->rel->rd_locator, desc->rel->rd_backend, MAIN_FORKNUM);
+	RelFileLocatorBackend rnode;
 
-	/* Column numbers of newly added columns start from here. */
-	AttrNumber	colno = desc->rel->rd_att->natts - desc->num_newcols;
+	rnode.locator = desc->rel->rd_locator;
+	rnode.backend = desc->rel->rd_backend;
 
 	if (desc->dsw[0]->need_close_file)
 	{
-		aocs_addcol_closefiles(desc);
-		AppendOnlyBlockDirectory_End_addCol(&desc->blockDirectory);
+		aocs_writecol_closefiles(desc);
+		AppendOnlyBlockDirectory_End_writeCols(&desc->blockDirectory,
+											   desc->newcolvals);
 	}
-	AppendOnlyBlockDirectory_Init_addCol(&desc->blockDirectory,
-										 appendOnlyMetaDataSnapshot,
-										 (FileSegInfo *) seginfo,
-										 desc->rel,
-										 seginfo->segno,
-										 desc->num_newcols,
-										 true /* isAOCol */ );
-	for (i = 0; i < desc->num_newcols; ++i, ++colno)
+	AppendOnlyBlockDirectory_Init_writeCols(&desc->blockDirectory,
+											appendOnlyMetaDataSnapshot,
+											(FileSegInfo *) seginfo,
+											desc->rel,
+											seginfo->segno,
+											desc->rel->rd_att->natts,
+											true /* isAOCol */ );
+
+	i = 0;
+	foreach(lc, desc->newcolvals)
 	{
+		char		fn[MAXPGPATH];
 		int			version;
+		FileNumber  filenum;
 
 		/* New filenum for the column */
-		FileNumber  filenum = GetFilenumForAttribute(RelationGetRelid(desc->rel), colno + 1);
+		NewColumnValue *newval = lfirst(lc);
+		if (desc->op == AOCSADDCOLUMN)
+			filenum = GetFilenumForAttribute(RelationGetRelid(desc->rel), newval->attnum);
+		else
+			filenum = GetFilenumForRewriteAttribute(RelationGetRelid(desc->rel), newval->attnum);
 
 		/* Always write in the latest format */
 		version = AOSegfileFormatVersion_GetLatest();
@@ -2616,35 +2647,49 @@ aocs_addcol_newsegfile(AOCSAddColumnDesc desc,
 		Assert(strlen(fn) + 1 <= MAXPGPATH);
 		datumstreamwrite_open_file(desc->dsw[i], fn,
 								   0 /* eof */ , 0 /* eof_uncompressed */ ,
-								   &relfilenode, fileSegNo,
+								   &rnode, fileSegNo,
 								   version);
 		desc->dsw[i]->blockFirstRowNum = 1;
+		i++;
 	}
 	desc->cur_segno = seginfo->segno;
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }
 
+/*
+ * Close segfiles for each column being written
+ * as part of an add/rewrite column operation.
+ */
 void
-aocs_addcol_closefiles(AOCSAddColumnDesc desc)
+aocs_writecol_closefiles(AOCSWriteColumnDesc desc)
 {
-	int			i;
-	AttrNumber	colno = desc->rel->rd_att->natts - desc->num_newcols;
+	int      	colno;
+	ListCell    *lc;
+	int			i = 0;
 
-	for (i = 0; i < desc->num_newcols; ++i)
+	Assert(desc->newcolvals->length == desc->num_cols_to_write);
+
+	foreach(lc, desc->newcolvals)
 	{
-		datumstreamwrite_block(desc->dsw[i], &desc->blockDirectory, i + colno, true);
+		NewColumnValue *newval = lfirst(lc);
+		colno = newval->attnum - 1;
+		datumstreamwrite_block(desc->dsw[i], &desc->blockDirectory, colno);
 		datumstreamwrite_close_file(desc->dsw[i]);
+		i++;
 	}
 	/* Update pg_aocsseg_* with eof of each segfile we just closed. */
-	AOCSFileSegInfoAddVpe(desc->rel, desc->cur_segno, desc,
-						  desc->num_newcols, false /* non-empty VPEntry */ );
+	if (desc->cur_segno >= 0)
+		AOCSFileSegInfoWriteVpe(desc->rel,
+							  desc->cur_segno,
+							  desc,
+							  false /* non-empty VPEntry */ );
 }
 
 void
-aocs_addcol_setfirstrownum(AOCSAddColumnDesc desc, int64 firstRowNum)
+aocs_writecol_setfirstrownum(AOCSWriteColumnDesc desc, int64 firstRowNum)
 {
        int                     i;
-       for (i = 0; i < desc->num_newcols; ++i)
+       for (i = 0; i < desc->num_cols_to_write; ++i)
        {
                /*
                 * Next block's first row number.
@@ -2658,44 +2703,46 @@ aocs_addcol_setfirstrownum(AOCSAddColumnDesc desc, int64 firstRowNum)
  * Force writing new varblock in each segfile open for insert.
  */
 void
-aocs_addcol_endblock(AOCSAddColumnDesc desc, int64 firstRowNum)
+aocs_writecol_endblock(AOCSWriteColumnDesc desc, int64 firstRowNum)
 {
-	int			i;
-	AttrNumber	colno = desc->rel->rd_att->natts - desc->num_newcols;
-
-	for (i = 0; i < desc->num_newcols; ++i)
+	int	i = 0;
+	ListCell *lc;
+	foreach(lc, desc->newcolvals)
 	{
-		datumstreamwrite_block(desc->dsw[i], &desc->blockDirectory, i + colno, true);
+		NewColumnValue *newval = lfirst(lc);
+		int colno = newval->attnum - 1;
+		datumstreamwrite_block(desc->dsw[i], &desc->blockDirectory, colno);
 
 		/*
 		 * Next block's first row number.  In this case, the block being ended
 		 * has less number of rows than its capacity.
 		 */
 		desc->dsw[i]->blockFirstRowNum = firstRowNum;
+		i++;
 	}
 }
 
 /*
- * Insert one new datum for each new column being added.  This is
+ * Insert one new datum for each new column being written.  This is
  * derived from aocs_insert_values().
  */
 void
-aocs_addcol_insert_datum(AOCSAddColumnDesc desc, Datum *d, bool *isnull)
+aocs_writecol_insert_datum(AOCSWriteColumnDesc desc, Datum *datums, bool *isnulls)
 {
 	void	   *toFree1;
 	void	   *toFree2;
-	Datum		datum;
-	int			err;
-	int			i;
-	int			itemCount;
+	ListCell    *lc;
 
-	/* first column's number */
-	AttrNumber	colno = desc->rel->rd_att->natts - desc->num_newcols;
-
-	for (i = 0; i < desc->num_newcols; ++i)
+	int i = 0;
+	foreach(lc, desc->newcolvals)
 	{
-		datum = d[i];
-		err = datumstreamwrite_put(desc->dsw[i], datum, isnull[i], &toFree1);
+		NewColumnValue *newval = lfirst(lc);
+
+		int colno = newval->attnum - 1;
+		Datum datum = datums[colno];
+		bool isnullcol = isnulls[colno];
+		int err = datumstreamwrite_put(desc->dsw[i], datum, isnullcol, &toFree1);
+
 		if (toFree1 != NULL)
 		{
 			/*
@@ -2709,9 +2756,9 @@ aocs_addcol_insert_datum(AOCSAddColumnDesc desc, Datum *d, bool *isnull)
 			 * We have reached max number of datums that can be accommodated
 			 * in current varblock.
 			 */
-			itemCount = datumstreamwrite_nth(desc->dsw[i]);
+			int itemCount = datumstreamwrite_nth(desc->dsw[i]);
 			/* write the block up to this one */
-			datumstreamwrite_block(desc->dsw[i], &desc->blockDirectory, i + colno, true);
+			datumstreamwrite_block(desc->dsw[i], &desc->blockDirectory, colno);
 			if (itemCount > 0)
 			{
 				/* Next block's first row number */
@@ -2719,17 +2766,16 @@ aocs_addcol_insert_datum(AOCSAddColumnDesc desc, Datum *d, bool *isnull)
 			}
 
 			/* now write this new item to the new block */
-			err = datumstreamwrite_put(desc->dsw[i], datum, isnull[i],
-									   &toFree2);
+			err = datumstreamwrite_put(desc->dsw[i], datum, isnullcol, &toFree2);
+
 			Assert(toFree2 == NULL);
 			if (err < 0)
 			{
-				Assert(!isnull[i]);
+				Assert(!isnullcol);
 				err = datumstreamwrite_lob(desc->dsw[i],
 										   datum,
 										   &desc->blockDirectory,
-										   i + colno,
-										   true);
+										   colno);
 				Assert(err >= 0);
 
 				/*
@@ -2742,17 +2788,22 @@ aocs_addcol_insert_datum(AOCSAddColumnDesc desc, Datum *d, bool *isnull)
 		}
 		if (toFree1 != NULL)
 			pfree(toFree1);
+		i++;
 	}
 }
 
 void
-aocs_addcol_finish(AOCSAddColumnDesc desc)
+aocs_writecol_finish(AOCSWriteColumnDesc desc)
 {
 	int			i;
+	Oid         blkdirrelid;
+	GetAppendOnlyEntryAuxOids(desc->rel, NULL, &blkdirrelid, NULL, NULL, NULL);
+	aocs_writecol_closefiles(desc);
 
-	aocs_addcol_closefiles(desc);
-	AppendOnlyBlockDirectory_End_addCol(&desc->blockDirectory);
-	for (i = 0; i < desc->num_newcols; ++i)
+	if (OidIsValid(blkdirrelid))
+		AppendOnlyBlockDirectory_End_writeCols(&desc->blockDirectory,
+											   desc->newcolvals);
+	for (i = 0; i < desc->num_cols_to_write; ++i)
 		destroy_datumstreamwrite(desc->dsw[i]);
 	pfree(desc->dsw);
 	desc->dsw = NULL;
@@ -2781,8 +2832,10 @@ aocs_addcol_emptyvpe(Relation rel,
 			 * VACUUM.  We need to add corresponding tuples with eof=0 for
 			 * each newly added column on QE.
 			 */
-			AOCSFileSegInfoAddVpe(rel, segInfos[i]->segno, NULL,
-								  num_newcols, true /* empty VPEntry */ );
+			AOCSFileSegInfoWriteVpe(rel,
+								  segInfos[i]->segno,
+								  NULL,
+								  true /* empty VPEntry */ );
 		}
 	}
 }
