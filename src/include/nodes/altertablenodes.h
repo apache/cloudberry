@@ -23,6 +23,16 @@
 #define ALTERTABLENODES_H
 
 /*
+ * Which column-level rewrite an AOCO table is performing.  Defined here, not
+ * in cdbaocsam.h, because NewColumnValue below has a field of this type and
+ * gen_node_support.pl only learns about enums from the headers it reads.
+ */
+typedef enum AOCSWriteColumnOperation
+{
+	AOCSADDCOLUMN,				/* ADD COLUMN */
+	AOCSREWRITECOLUMN			/* ALTER COLUMN TYPE */
+} AOCSWriteColumnOperation;
+/*
  * GPDB: Moved here from tablecmds.c
  *
  * State information for ALTER TABLE
@@ -32,7 +42,7 @@
  * plus any child tables that are affected).  We save lists of subcommands
  * to apply to this table (possibly modified by parse transformation steps);
  * these lists will be executed in Phase 2.  If a Phase 3 step is needed,
- * necessary information is stored in the constraints and newvals lists.
+ * necessary information is stored in the constraints and newcolvals lists.
  *
  * Phase 2 is divided into multiple passes; subcommands are executed in
  * a pass determined by subcommand type.
@@ -163,6 +173,7 @@ typedef struct NewColumnValue
 	Expr	   *expr;			/* expression to compute */
 	ExprState  *exprstate pg_node_attr(read_as(NULL), read_write_ignore);		/* execution state */
 	bool		is_generated;	/* is it a GENERATED expression? */
+	AOCSWriteColumnOperation op;/* operation being performed */
 } NewColumnValue;
 
 #endif							/* ALTERTABLENODES_H */
