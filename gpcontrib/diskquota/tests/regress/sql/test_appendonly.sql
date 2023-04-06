@@ -30,9 +30,9 @@ SELECT tableid::regclass, size
 SELECT pg_table_size('t_aoco');
 
 -- 2. Test that we are able to perform quota limit on appendonly tables.
-SELECT diskquota.set_schema_quota('s_appendonly', '1 MB');
+SELECT diskquota.set_schema_quota('s_appendonly', '1.2 MB');
 -- expect success.
-INSERT INTO t_ao SELECT generate_series(1, 1000);
+INSERT INTO t_ao SELECT generate_series(1, 10000);
 
 SELECT diskquota.wait_for_worker_new_epoch();
 
