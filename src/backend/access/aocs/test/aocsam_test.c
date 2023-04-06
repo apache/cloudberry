@@ -66,15 +66,25 @@ test__aocs_begin_headerscan(void **state)
 
 
 static void
-test__aocs_addcol_init(void **state)
+test__aocs_writecol_init(void **state)
 {
-	AOCSAddColumnDesc desc;
+	AOCSWriteColumnDesc desc;
+	NewColumnValue *newval1 = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+	NewColumnValue *newval2 = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
 	RelationData reldata;
 	SMgrRelationData smgrdata;
 	int			nattr = 5;
 	StdRdOptions **opts =
 	(StdRdOptions **) malloc(sizeof(StdRdOptions *) * nattr);
 	wal_level = WAL_LEVEL_REPLICA;
+	List *newvals = NIL;
+
+	newval1->attnum = 4;
+	newval1->op = AOCSADDCOLUMN;
+	newval2->attnum = 5;
+	newval2->op = AOCSADDCOLUMN;
+	newvals = lappend(newvals, newval1);
+	newvals = lappend(newvals, newval2);
 
 	/* 3 existing columns */
 	opts[0] = opts[1] = opts[2] = (StdRdOptions *) NULL;
@@ -134,8 +144,8 @@ test__aocs_addcol_init(void **state)
 	will_be_called(GetAppendOnlyEntryAttributes);
 
 	/* 3 existing columns, 2 new columns */
-	desc = aocs_addcol_init(&reldata, 2);
-	assert_int_equal(desc->num_newcols, 2);
+	desc = aocs_writecol_init(&reldata, newvals, AOCSADDCOLUMN);
+	assert_int_equal(desc->num_cols_to_write, 2);
 	assert_int_equal(desc->cur_segno, -1);
 }
 
@@ -146,7 +156,7 @@ main(int argc, char *argv[])
 
 	const		UnitTest tests[] = {
 		unit_test(test__aocs_begin_headerscan),
-		unit_test(test__aocs_addcol_init)
+		unit_test(test__aocs_writecol_init)
 	};
 
 	MemoryContextInit();
