@@ -185,7 +185,8 @@ struct DiskQuotaWorkerEntry
 {
 	dlist_node node; // the double linked list header
 
-	int               id;      // starts from 0, -1 means invalid
+	int      id;     // starts from 0, -1 means invalid
+	NameData dbname; // the database name. It does not need to be reset, when dbEntry == NULL, dbname is not valid.
 	DiskquotaDBEntry *dbEntry; // pointer to shared memory. DiskquotaLauncherShmem->dbArray
 };
 
