@@ -760,10 +760,6 @@ CREATE VIEW pg_stat_user_tables_single_node AS
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
-CREATE VIEW gp_stat_user_tables_summary AS
-    SELECT * FROM gp_stat_all_tables_summary
-    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
-          schemaname !~ '^pg_toast';
 
 CREATE VIEW pg_stat_xact_user_tables AS
     SELECT * FROM pg_stat_xact_all_tables
@@ -838,11 +834,6 @@ CREATE VIEW pg_stat_sys_indexes AS
 
 CREATE VIEW pg_stat_user_indexes AS
     SELECT * FROM pg_stat_all_indexes
-    WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
-          schemaname !~ '^pg_toast';
-
-CREATE VIEW gp_stat_user_indexes_summary AS
-    SELECT * FROM gp_stat_all_indexes_summary
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
