@@ -53,6 +53,8 @@
 #define MAX_NUM_KEYS_QUOTA_MAP 8
 /* Number of attributes in quota configuration records. */
 #define NUM_QUOTA_CONFIG_ATTRS 6
+/* Number of entries for diskquota.table_size update SQL */
+#define SQL_MAX_VALUES_NUMBER 1000000
 
 /* TableSizeEntry macro function */
 /* Use the top bit of totalsize as a flush flag. If this bit is set, the size should be flushed into
@@ -1122,6 +1124,40 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 	}
 }
 
+static void
+delete_from_table_size_map(char *str)
+{
+	StringInfoData delete_statement;
+	int            ret;
+
+	initStringInfo(&delete_statement);
+	appendStringInfo(&delete_statement,
+	                 "WITH deleted_table AS ( VALUES %s ) "
+	                 "delete from diskquota.table_size "
+	                 "where (tableid, segid) in ( SELECT * FROM deleted_table );",
+	                 str);
+	ret = SPI_execute(delete_statement.data, false, 0);
+	if (ret != SPI_OK_DELETE)
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+		                errmsg("[diskquota] delete_from_table_size_map SPI_execute failed: error code %d", ret)));
+	pfree(delete_statement.data);
+}
+
+static void
+insert_into_table_size_map(char *str)
+{
+	StringInfoData insert_statement;
+	int            ret;
+
+	initStringInfo(&insert_statement);
+	appendStringInfo(&insert_statement, "insert into diskquota.table_size values %s;", str);
+	ret = SPI_execute(insert_statement.data, false, 0);
+	if (ret != SPI_OK_INSERT)
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+		                errmsg("[diskquota] insert_into_table_size_map SPI_execute failed: error code %d", ret)));
+	pfree(insert_statement.data);
+}
+
 /*
  * Flush the table_size_map to user table diskquota.table_size
  * To improve update performance, we first delete all the need_to_flush
@@ -1135,10 +1171,8 @@ flush_to_table_size(void)
 	TableSizeEntry *tsentry = NULL;
 	StringInfoData  delete_statement;
 	StringInfoData  insert_statement;
-	StringInfoData  deleted_table_expr;
-	bool            delete_statement_flag = false;
-	bool            insert_statement_flag = false;
-	int             ret;
+	int             delete_entries_num = 0;
+	int             insert_entries_num = 0;
 
 	/* TODO: Add flush_size_interval to avoid flushing size info in every loop */
 
@@ -1146,12 +1180,7 @@ flush_to_table_size(void)
 	bool old_optimizer = optimizer;
 	optimizer          = false;
 
-	initStringInfo(&deleted_table_expr);
-	appendStringInfo(&deleted_table_expr, "WITH deleted_table AS ( VALUES ");
-
 	initStringInfo(&insert_statement);
-	appendStringInfo(&insert_statement, "insert into diskquota.table_size values ");
-
 	initStringInfo(&delete_statement);
 
 	hash_seq_init(&iter, table_size_map);
@@ -1164,17 +1193,39 @@ flush_to_table_size(void)
 			/* delete dropped table from both table_size_map and table table_size */
 			if (!get_table_size_entry_flag(tsentry, TABLE_EXIST))
 			{
-				appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->key.reloid, i);
-				delete_statement_flag = true;
+				appendStringInfo(&delete_statement, "%s(%u,%d)", (delete_entries_num == 0) ? " " : ", ",
+				                 tsentry->key.reloid, i);
+				delete_entries_num++;
+				if (delete_entries_num > SQL_MAX_VALUES_NUMBER)
+				{
+					delete_from_table_size_map(delete_statement.data);
+					resetStringInfo(&delete_statement);
+					delete_entries_num = 0;
+				}
 			}
 			/* update the table size by delete+insert in table table_size */
 			else if (TableSizeEntryGetFlushFlag(tsentry, i))
 			{
-				appendStringInfo(&deleted_table_expr, "(%u,%d), ", tsentry->key.reloid, i);
-				appendStringInfo(&insert_statement, "(%u,%ld,%d), ", tsentry->key.reloid,
-				                 TableSizeEntryGetSize(tsentry, i), i);
-				delete_statement_flag = true;
-				insert_statement_flag = true;
+				appendStringInfo(&delete_statement, "%s(%u,%d)", (delete_entries_num == 0) ? " " : ", ",
+				                 tsentry->key.reloid, i);
+				appendStringInfo(&insert_statement, "%s(%u,%ld,%d)", (insert_entries_num == 0) ? " " : ", ",
+				                 tsentry->key.reloid, TableSizeEntryGetSize(tsentry, i), i);
+				delete_entries_num++;
+				insert_entries_num++;
+
+				if (delete_entries_num > SQL_MAX_VALUES_NUMBER)
+				{
+					delete_from_table_size_map(delete_statement.data);
+					resetStringInfo(&delete_statement);
+					delete_entries_num = 0;
+				}
+				if (insert_entries_num > SQL_MAX_VALUES_NUMBER)
+				{
+					insert_into_table_size_map(insert_statement.data);
+					resetStringInfo(&insert_statement);
+					insert_entries_num = 0;
+				}
+
 				TableSizeEntryResetFlushFlag(tsentry, i);
 			}
 		}
@@ -1184,36 +1235,14 @@ flush_to_table_size(void)
 			pg_atomic_fetch_sub_u32(diskquota_table_size_entry_num, 1);
 		}
 	}
-	truncateStringInfo(&deleted_table_expr, deleted_table_expr.len - strlen(", "));
-	truncateStringInfo(&insert_statement, insert_statement.len - strlen(", "));
-	appendStringInfo(&deleted_table_expr, ")");
-	appendStringInfo(&insert_statement, ";");
 
-	if (delete_statement_flag)
-	{
-		/* concatenate all the need_to_flush table to SQL string */
-		appendStringInfoString(&delete_statement, (const char *)deleted_table_expr.data);
-		appendStringInfoString(
-		        &delete_statement,
-		        "delete from diskquota.table_size where (tableid, segid) in ( SELECT * FROM deleted_table );");
-		ret = SPI_execute(delete_statement.data, false, 0);
-		if (ret != SPI_OK_DELETE)
-			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-			                errmsg("[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret)));
-	}
-	if (insert_statement_flag)
-	{
-		ret = SPI_execute(insert_statement.data, false, 0);
-		if (ret != SPI_OK_INSERT)
-			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-			                errmsg("[diskquota] flush_to_table_size SPI_execute failed: error code %d", ret)));
-	}
+	if (delete_entries_num) delete_from_table_size_map(delete_statement.data);
+	if (insert_entries_num) insert_into_table_size_map(insert_statement.data);
 
 	optimizer = old_optimizer;
 
 	pfree(delete_statement.data);
 	pfree(insert_statement.data);
-	pfree(deleted_table_expr.data);
 }
 
 /*
