@@ -205,6 +205,13 @@ JumbleRangeTable(pgssJumbleState *jstate, List *rtable)
 			APP_JUMB_STRING(rte->ctename);
 			APP_JUMB(rte->ctelevelsup);
 			break;
+		/* GPDB RTEs */
+		case RTE_VOID:
+			break;
+		case RTE_TABLEFUNCTION:
+			JumbleQuery(jstate, rte->subquery);
+			JumbleExpr(jstate, (Node *)rte->functions);
+			break;
 		default:
 			elog(ERROR, "unrecognized RTE kind: %d", (int)rte->rtekind);
 			break;
@@ -609,6 +616,20 @@ JumbleExpr(pgssJumbleState *jstate, Node *node)
 		JumbleExpr(jstate, rtfunc->funcexpr);
 	}
 	break;
+	/* GPDB nodes */
+	case T_GroupingFunc:
+	{
+		GroupingFunc *grpnode = (GroupingFunc *)node;
+
+		JumbleExpr(jstate, (Node *)grpnode->args);
+	}
+	break;
+	case T_Grouping:
+	case T_GroupId:
+	case T_Integer:
+	case T_Value:
+		// TODO: no idea what to do with those
+		break;
 	default:
 		/* Only a warning, since we can stumble along anyway */
 		elog(WARNING, "unrecognized node type: %d",

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "yagpcc_set_service.pb.h"
+#include "protos/yagpcc_set_service.pb.h"
 
 class GrpcConnector {
 public:
