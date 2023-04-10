@@ -30,9 +30,10 @@ message SetQueryReq {
     QueryStatus           query_status = 1;
     google.protobuf.Timestamp datetime = 2;
     QueryKey                 query_key = 3;
-    QueryInfo               query_info = 4;
-    GPMetrics            query_metrics = 5;
-    repeated MetricPlan      plan_tree = 6;
+    SegmentKey             segment_key = 4;
+    QueryInfo               query_info = 5;
+    GPMetrics            query_metrics = 6;
+    repeated MetricPlan      plan_tree = 7;
 }
 
 message SetPlanNodeReq {
