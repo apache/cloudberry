@@ -1,7 +1,5 @@
-#include "EventSender.h"
 #include "GrpcConnector.h"
 #include "ProcStats.h"
-#include "protos/yagpcc_set_service.pb.h"
 #include <ctime>
 
 extern "C" {
@@ -18,11 +16,13 @@ extern "C" {
 #include "cdb/cdbexplain.h"
 
 #include "tcop/utility.h"
-#include "pg_stat_statements_ya_parser.h"
+#include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 
 void get_spill_info(int ssid, int ccid, int32_t *file_count,
                     int64_t *total_bytes);
 }
+
+#include "EventSender.h"
 
 namespace {
 
@@ -102,16 +102,19 @@ void set_query_text(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
   pfree(norm_query);
 }
 
-void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
-  if (query_desc->sourceText) {
-    set_query_text(qi, query_desc);
+void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *query_desc,
+                    bool with_text, bool with_plan) {
+  if (Gp_session_role == GP_ROLE_DISPATCH) {
+    if (query_desc->sourceText && with_text) {
+      set_query_text(qi, query_desc);
+    }
+    if (query_desc->plannedstmt && with_plan) {
+      set_query_plan(qi, query_desc);
+      qi->set_query_id(query_desc->plannedstmt->queryId);
+    }
+    qi->set_allocated_username(get_user_name());
+    qi->set_allocated_databasename(get_db_name());
   }
-  if (query_desc->plannedstmt) {
-    set_query_plan(qi, query_desc);
-    qi->set_query_id(query_desc->plannedstmt->queryId);
-  }
-  qi->set_allocated_username(get_user_name());
-  qi->set_allocated_databasename(get_db_name());
 }
 
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
@@ -151,41 +154,90 @@ void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc) {
   fill_self_stats(metrics->mutable_systemstat());
 }
 
+yagpcc::SetQueryReq get_query_req(QueryDesc *query_desc,
+                                  yagpcc::QueryStatus status) {
+  yagpcc::SetQueryReq req;
+  req.set_query_status(status);
+  *req.mutable_datetime() = current_ts();
+  set_query_key(req.mutable_query_key(), query_desc);
+  return req;
+}
+
 } // namespace
 
-void EventSender::ExecutorStart(QueryDesc *query_desc, int /* eflags*/) {
+void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
+  switch (status) {
+  case METRICS_PLAN_NODE_INITIALIZE:
+  case METRICS_PLAN_NODE_EXECUTING:
+  case METRICS_PLAN_NODE_FINISHED:
+    // TODO
+    break;
+  case METRICS_QUERY_SUBMIT:
+    collect_query_submit(reinterpret_cast<QueryDesc *>(arg));
+    break;
+  case METRICS_QUERY_START:
+    // no-op: executor_after_start is enough
+    break;
+  case METRICS_QUERY_DONE:
+    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "done");
+    break;
+  case METRICS_QUERY_ERROR:
+    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "error");
+    break;
+  case METRICS_QUERY_CANCELING:
+    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "calcelling");
+    break;
+  case METRICS_QUERY_CANCELED:
+    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "cancelled");
+    break;
+  case METRICS_INNER_QUERY_DONE:
+    // TODO
+    break;
+  default:
+    elog(FATAL, "Unknown query status: %d", status);
+  }
+}
+
+void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
+  elog(DEBUG1, "Query %s started event recording", query_desc->sourceText);
+  auto req = get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
+  set_query_info(req.mutable_query_info(), query_desc, false, true);
+  send_query_info(&req, "started");
+}
+
+void EventSender::collect_query_submit(QueryDesc *query_desc) {
   query_desc->instrument_options |= INSTRUMENT_BUFFERS;
   query_desc->instrument_options |= INSTRUMENT_ROWS;
   query_desc->instrument_options |= INSTRUMENT_TIMER;
 
-  elog(DEBUG1, "Query %s start recording", query_desc->sourceText);
-  yagpcc::SetQueryReq req;
-  req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
-  *req.mutable_datetime() = current_ts();
-  set_query_key(req.mutable_query_key(), query_desc);
-  auto result = connector->set_metric_query(req);
-  if (result.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR) {
-    elog(WARNING, "Query %s start reporting failed with an error %s",
-         query_desc->sourceText, result.error_text().c_str());
-  } else {
-    elog(DEBUG1, "Query %s start successful", query_desc->sourceText);
-  }
+  elog(DEBUG1, "Query %s submit event recording", query_desc->sourceText);
+  auto req =
+      get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
+  set_query_info(req.mutable_query_info(), query_desc, true, false);
+  send_query_info(&req, "submit");
 }
 
-void EventSender::ExecutorFinish(QueryDesc *query_desc) {
-  elog(DEBUG1, "Query %s finish recording", query_desc->sourceText);
-  yagpcc::SetQueryReq req;
-  req.set_query_status(yagpcc::QueryStatus::QUERY_STATUS_DONE);
-  *req.mutable_datetime() = current_ts();
-  set_query_key(req.mutable_query_key(), query_desc);
-  set_query_info(req.mutable_query_info(), query_desc);
+void EventSender::collect_query_done(QueryDesc *query_desc,
+                                     const std::string &status) {
+  elog(DEBUG1, "Query %s %s event recording", query_desc->sourceText,
+       status.c_str());
+  auto req = get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
+  set_query_info(req.mutable_query_info(), query_desc, false, false);
   set_gp_metrics(req.mutable_query_metrics(), query_desc);
-  auto result = connector->set_metric_query(req);
+  send_query_info(&req, status);
+}
+
+void EventSender::send_query_info(yagpcc::SetQueryReq *req,
+                                  const std::string &event) {
+  auto result = connector->set_metric_query(*req);
   if (result.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR) {
-    elog(WARNING, "Query %s finish reporting failed with an error %s",
-         query_desc->sourceText, result.error_text().c_str());
+    elog(WARNING, "Query {%d-%d-%d} %s reporting failed with an error %s",
+         req->query_key().tmid(), req->query_key().ssid(),
+         req->query_key().ccnt(), event.c_str(), result.error_text().c_str());
   } else {
-    elog(DEBUG1, "Query %s finish successful", query_desc->sourceText);
+    elog(DEBUG1, "Query {%d-%d-%d} %s successfully reported",
+         req->query_key().tmid(), req->query_key().ssid(),
+         req->query_key().ccnt(), event.c_str());
   }
 }
 
