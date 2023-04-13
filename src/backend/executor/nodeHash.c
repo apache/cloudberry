@@ -2004,6 +2004,7 @@ retry:
 		/* Store the hash value in the HashJoinTuple header. */
 		hashTuple->hashvalue = hashvalue;
 		memcpy(HJTUPLE_MINTUPLE(hashTuple), tuple, tuple->t_len);
+		HeapTupleHeaderClearMatch(HJTUPLE_MINTUPLE(hashTuple));
 
 		/* Push it onto the front of the bucket's list */
 		ExecParallelHashPushTuple(&hashtable->buckets.shared[bucketno],
