@@ -84,7 +84,7 @@ and their disk usage is isolated between databases.
 
 # Development
 
-[cmake](https://cmake.org) (>= 3.18) needs to be installed.
+[cmake](https://cmake.org) (>= 3.20) needs to be installed.
 
 1. Build & install disk quota
 ```
