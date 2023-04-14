@@ -173,6 +173,9 @@ yagpcc::SetQueryReq get_query_req(QueryDesc *query_desc,
 } // namespace
 
 void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
+  if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
+    return;
+  }
   switch (status) {
   case METRICS_PLAN_NODE_INITIALIZE:
   case METRICS_PLAN_NODE_EXECUTING:
@@ -206,10 +209,10 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
 }
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
-  elog(DEBUG1, "Query %s started event recording", query_desc->sourceText);
-  if (query_desc->planstate) {
-    query_desc->planstate->instrument = nullptr;
+  if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
+    return;
   }
+  elog(DEBUG1, "Query %s started event recording", query_desc->sourceText);
   auto req = get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
   set_query_info(req.mutable_query_info(), query_desc, false, true);
   send_query_info(&req, "started");

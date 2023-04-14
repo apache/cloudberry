@@ -16,8 +16,10 @@ public:
   yagpcc::MetricResponse set_metric_query(yagpcc::SetQueryReq req) {
     yagpcc::MetricResponse response;
     grpc::ClientContext context;
+    // TODO: find a more secure way to send messages than relying on a fixed
+    // timeout
     auto deadline =
-        std::chrono::system_clock::now() + std::chrono::milliseconds(50);
+        std::chrono::system_clock::now() + std::chrono::milliseconds(200);
     context.set_deadline(deadline);
 
     grpc::Status status = (stub->SetMetricQuery)(&context, req, &response);
