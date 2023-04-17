@@ -1237,6 +1237,10 @@ log_newpage_range(Relation rel, ForkNumber forkNum,
 			blkno++;
 		}
 
+		/* Nothing more to do if all remaining blocks were empty. */
+		if (nbufs == 0)
+			break;
+
 		/* Write WAL record for this batch. */
 		XLogBeginInsert();
 
