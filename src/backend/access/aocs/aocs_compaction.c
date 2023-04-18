@@ -231,7 +231,6 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	TupleTableSlot *slot;
 	int			compact_segno;
 	ResultRelInfo *resultRelInfo;
-	MemTupleBinding *mt_bind;
 	EState	   *estate;
 	int64		tupleCount = 0;
 	int64		tuplePerPage = INT_MAX;
@@ -270,8 +269,6 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	tupDesc = RelationGetDescr(aorel);
 	slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsVirtual);
 	slot->tts_tableOid = RelationGetRelid(aorel);
-
-	mt_bind = create_memtuple_binding(tupDesc);
 
 	/*
 	 * We need a ResultRelInfo and an EState so we can use the regular
@@ -371,7 +368,6 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	FreeExecutorState(estate);
 
 	ExecDropSingleTupleTableSlot(slot);
-	destroy_memtuple_binding(mt_bind);
 
 	aocs_endscan(scanDesc);
 
