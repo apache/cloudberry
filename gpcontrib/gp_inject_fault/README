@@ -166,3 +166,7 @@ the warning callback function needs to determine whether the FTS
 process is enabled on the Segment node, we need to synchronize the
 information on whether the FTS on the Master is enabled to the
 corresponding QE process.
+================================
+* We let some background process ignore all but a few faults. If one wants
+to test fault injection in background processese, add the exception in
+checkBgProcessSkipFault().

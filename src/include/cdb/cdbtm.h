@@ -296,9 +296,11 @@ extern slock_t *shmGxidGenLock;
 extern DistributedTransactionId *shmCommittedGxidArray;
 extern volatile int *shmNumCommittedGxacts;
 
-extern const char *DtxStateToString(DtxState state);
-extern const char *DtxProtocolCommandToString(DtxProtocolCommand command);
-extern const char *DtxContextToString(DtxContext context);
+extern bool IsDtxRecoveryProcess(void);
+
+extern char *DtxStateToString(DtxState state);
+extern char *DtxProtocolCommandToString(DtxProtocolCommand command);
+extern char *DtxContextToString(DtxContext context);
 extern void dtxDeformGid(const char	*gid,
 							DistributedTransactionId		*distribXid);
 extern void dtxFormGid(char *gid, DistributedTransactionId gxid);
