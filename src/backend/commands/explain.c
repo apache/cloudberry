@@ -724,6 +724,24 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 		/* run the plan */
 		ExecutorRun(queryDesc, dir, 0L, true);
 
+		/* Wait for completion of all qExec processes. */
+		if (queryDesc->estate->dispatcherState && queryDesc->estate->dispatcherState->primaryResults)
+		{
+			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
+			/*
+			 * If some QE throw errors, we might not receive stats from QEs,
+			 * In ExecutorEnd we will reThrow QE's error, In this situation,
+			 * there is no need to execute ExplainPrintPlan. reThrow error in advance.
+			 */
+			ErrorData  *qeError = NULL;
+			cdbdisp_getDispatchResults(queryDesc->estate->dispatcherState, &qeError);
+			if (qeError)
+			{
+				FlushErrorState();
+				ThrowErrorData(qeError);
+			}
+		}
+
 		/* run cleanup too */
 		ExecutorFinish(queryDesc);
 

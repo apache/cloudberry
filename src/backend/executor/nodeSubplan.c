@@ -1402,7 +1402,7 @@ PG_TRY();
 		{
 			queryDesc->estate->dispatcherState = NULL;
 			FlushErrorState();
-			ReThrowError(qeError);
+			ThrowErrorData(qeError);
 		}
 
 		/* collect pgstat from QEs for current transaction level */

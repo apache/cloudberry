@@ -2054,7 +2054,7 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 		{
 			estate->dispatcherState = NULL;
 			FlushErrorState();
-			ReThrowError(qeError);
+			ThrowErrorData(qeError);
 		}
 
 		if (ProcessDispatchResult_hook)
