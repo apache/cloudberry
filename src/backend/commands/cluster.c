@@ -1346,6 +1346,41 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		elog(ERROR, "cache lookup failed for relation %u", r2);
 	relform2 = (Form_pg_class) GETSTRUCT(reltup2);
 
+	/*
+	 * Take the transient relation's pg_attribute_encoding entries when the
+	 * target is CO: it was built with the new access method, so DefineRelation()
+	 * gave it a complete set of column encodings, which ALTER TABLE ... SET
+	 * ACCESS METHOD cannot derive on its own when no WITH clause was given.
+	 *
+	 * The NoCCI variant is required here.  Making the deletion visible would
+	 * rebuild the relcache entry of a relation whose pg_appendonly tuple has
+	 * already been transferred but whose pg_class.relam has not been swapped
+	 * yet, which fails with "could not find pg_appendonly tuple for relation".
+	 */
+	if (relform2->relam == AO_COLUMN_TABLE_AM_OID)
+	{
+		RemoveAttributeEncodingsByRelidNoCCI(r1);
+		CloneAttributeEncodings(r2, r1, relform2->relnatts);
+	}
+
+	/*
+	 * If we are rewriting an AO row table, remove all of its
+	 * pg_attribute_encoding entries: with fast ADD COLUMN those entries carry
+	 * lastrownums, which the rewrite invalidates.
+	 */
+	if (relform1->relam == AO_ROW_TABLE_AM_OID && relform2->relam == AO_ROW_TABLE_AM_OID)
+		RemoveAttributeEncodingsByRelid(r1);
+	else if (relform1->relam == AO_ROW_TABLE_AM_OID &&
+			 relform2->relam != AO_COLUMN_TABLE_AM_OID)
+	{
+		/*
+		 * Leaving ao_row for something that is not CO: the rewrite gave every
+		 * column a full set of rows, so the lastrownums recorded by fast ADD
+		 * COLUMN no longer describe anything.
+		 */
+		ClearAttributeEncodingLastrownums(r1);
+	}
+
 	if (IsAccessMethodAO(relform1->relam) || IsAccessMethodAO(relform2->relam))
 		ATAOEntries(relform1, relform2, frozenXid, cutoffMulti);
 
@@ -1586,6 +1621,10 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		 * build the new relation descriptor which expects consistent AM and aux
 		 * tables. This shouldn't be needed for other cases as of now, especially
 		 * not for critical catalogs such as pg_attribute.
+		 *
+		 * GPDB_PORT: upstream makes this unconditional.  cbdb does not need to:
+		 * RemoveAttributeEncodingsByRelid() already increments the command
+		 * counter itself after touching pg_attribute_encoding.
 		 */
 		if (relform1->relam != relform2->relam)
 			CommandCounterIncrement();
