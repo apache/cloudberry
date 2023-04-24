@@ -44,6 +44,9 @@ CATALOG(pg_attribute_encoding,6422,AttributeEncodingRelationId)
 	int16	attnum;
 	int16   filenum;
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
+	int64 	lastrownums[1]; 	/* Last row number of each segfile when this attribute is added.
+					   This is populated up to the highest numbered segfile and can
+					   have a max length of MAX_AOREL_CONCURRENCY. */
 	text	attoptions[1];	
 #endif
 } FormData_pg_attribute_encoding;
@@ -67,14 +70,22 @@ extern PGFunction *get_funcs_for_compression(char *compresstype);
 extern StdRdOptions **RelationGetAttributeOptions(Relation rel);
 extern List **RelationGetUntransformedAttributeOptions(Relation rel);
 
-extern void AddRelationAttributeEncodings(Oid relid, List *attr_encodings);
+extern Datum transform_lastrownums(int64 *lastrownums);
+extern void add_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber filenum, Datum lastrownums, Datum attoptions);
+extern void AddCOAttributeEncodings(Oid relid, List *attr_encodings);
 extern void RemoveAttributeEncodingsByRelid(Oid relid);
+extern void RemoveAttributeEncodingsByRelidNoCCI(Oid relid);
 extern void CloneAttributeEncodings(Oid oldrelid, Oid newrelid, AttrNumber max_attno);
 extern void UpdateAttributeEncodings(Oid relid, List *new_attr_encodings);
 extern void UpdateFilenumForAttnum(Oid relid, AttrNumber attnum, FileNumber newfilenum);
+extern void ClearAttributeEncodingLastrownums(Oid relid);
+extern void AddOrUpdateCOAttributeEncodings(Oid relid, List *attr_encodings);
+extern bool AttributeEncodingEntryExists(Oid relid, AttrNumber attnum);
+extern void update_attribute_encoding_attoptions(Oid relid, AttrNumber attnum, Datum newattoptions);
 extern FileNumber GetFilenumForAttribute(Oid relid, AttrNumber attnum);
 extern FileNumber GetFilenumForRewriteAttribute(Oid relid, AttrNumber attnum);
 extern List *GetNextNAvailableFilenums(Oid relid, int n);
+extern int64 *GetAttnumToLastrownumMapping(Oid relid, int natts);
 extern Datum *get_rel_attoptions(Oid relid, AttrNumber max_attno);
 extern List * rel_get_column_encodings(Relation rel);
 

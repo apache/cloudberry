@@ -2392,7 +2392,21 @@ heap_drop_with_catalog(Oid relid)
 		rel->rd_rel->relkind == RELKIND_MATVIEW ||
 		rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
-		RemoveAttributeEncodingsByRelid(relid);
+		/*
+		 * Skip the command counter increment for a directory table: its
+		 * caller is not finished reading the catalog yet.  performDeletion()
+		 * runs DirectoryTableDropStorage() right after this returns, and that
+		 * still has to find the pg_directory_table row this very command just
+		 * deleted above -- a counter increment here would make the deletion
+		 * visible and turn that into "cache lookup failed for directory
+		 * table".  Nothing in the directory table path needs the increment:
+		 * it is there for relations whose pg_attribute_encoding rows get
+		 * touched again later in the same command.
+		 */
+		if (rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
+			RemoveAttributeEncodingsByRelidNoCCI(relid);
+		else
+			RemoveAttributeEncodingsByRelid(relid);
 	}
 
 	/*

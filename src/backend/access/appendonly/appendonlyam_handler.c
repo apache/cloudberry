@@ -1391,7 +1391,7 @@ appendonly_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	slot = table_slot_create(OldHeap, NULL);
 	aoscandesc = appendonly_beginscan(OldHeap, GetActiveSnapshot(), 0, NULL,
 										NULL, 0);
-	mt_bind = create_memtuple_binding(oldTupDesc);
+	mt_bind = create_memtuple_binding(oldTupDesc, oldTupDesc->natts);
 
 	while (appendonly_getnextslot(aoscandesc, ForwardScanDirection, slot))
 	{

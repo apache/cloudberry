@@ -704,6 +704,16 @@ AppendOnlyExecutorReadBlock_GetBlockInfo(AppendOnlyStorageRead *storageRead,
 	executorReadBlock->headerOffsetInFile =
 		AppendOnlyStorageRead_CurrentHeaderOffsetInFile(storageRead);
 
+	/* Start curLargestAttnum from 1, this will be updated in AppendOnlyExecutorReadBlock_BindingInit() */
+	executorReadBlock->curLargestAttnum = 1;
+
+	/* mt_bind should be recreated for the new block */
+	if (executorReadBlock->mt_bind)
+	{
+		destroy_memtuple_binding(executorReadBlock->mt_bind);
+		executorReadBlock->mt_bind = NULL;
+	}
+
 	/* UNDONE: Check blockFirstRowNum */
 
 	return true;
@@ -749,6 +759,10 @@ AppendOnlyExecutorReadBlock_Init(AppendOnlyExecutorReadBlock *executorReadBlock,
 	executorReadBlock->storageRead = storageRead;
 	executorReadBlock->memoryContext = memoryContext;
 
+	Assert(relation); /* should have a valid relation */
+	executorReadBlock->attnum_to_rownum = GetAttnumToLastrownumMapping(RelationGetRelid(relation),
+												RelationGetNumberOfAttributes(relation));
+
 	MemoryContextSwitchTo(oldcontext);
 }
 
@@ -775,6 +789,12 @@ AppendOnlyExecutorReadBlock_Finish(AppendOnlyExecutorReadBlock *executorReadBloc
 		pfree(executorReadBlock->mt_bind);
 		executorReadBlock->mt_bind = NULL;
 	}
+
+	if (executorReadBlock->attnum_to_rownum)
+	{
+		pfree(executorReadBlock->attnum_to_rownum);
+		executorReadBlock->attnum_to_rownum = NULL;
+	}
 }
 
 static void
@@ -783,22 +803,78 @@ AppendOnlyExecutorReadBlock_ResetCounts(AppendOnlyExecutorReadBlock *executorRea
 	executorReadBlock->totalRowsScanned = 0;
 }
 
+/*
+ * Initialize the memtuple attribute bindings.
+ *
+ * Here, we figure out how many attributes are physically stored in the
+ * memtuple based on the row number. Any row with a row number larger than
+ * the pg_attribute_encoding.lastrownums number associated with the attribute
+ * and current segno should have the attribute physically stored in memtuple.
+ * For example, imagine we have this attnum-to-rownum mapping for segno=1:
+ * 	(attnum=1, lastrownums=100)
+ * 	(attnum=2, lastrownums=200)
+ * 	(attnum=3, lastrownums=1000)
+ * 	(attnum=4, lastrownums=2000)
+ * And assume we are reading a memtuple with row number = 1500, we will know that
+ * the first three attribute should be physically stored in the memtuple, but the
+ * fourth attribute and onwards are not.
+ *
+ * So if lastrownum=0 for an attribute and segment pair, it effectively indicates
+ * that all rows in the segment carry that attribute in the on-disk memtuple.
+ *
+ * Note that, the attnum_to_row array is first divided based on attribute numbers,
+ * so the above mapping will be represented in attnum_to_row as (assume there's no
+ * other segno being used):
+ *     [
+ *       0, 100, 0, ...(125 zeroes)...,       <-- for attnum=1
+ *       0, 200, 0, ...(125 zeroes)...,       <-- for attnum=2
+ *       0, 1000, 0, ...(125 zeroes)...,      <-- for attnum=3
+ *       0, 2000, 0, ...(125 zeroes)...,      <-- for attnum=4
+ *       0, ...(all zeroes)...
+ *     ]
+ */
 static void
-AOExecutorReadBlockBindingInit(AppendOnlyExecutorReadBlock *executorReadBlock,
-									   TupleTableSlot *slot)
+AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorReadBlock,
+									   TupleTableSlot *slot,
+									   int64 rowNum)
 {
+	int segno = executorReadBlock->segmentFileNum;
+	int largestAttnum = executorReadBlock->curLargestAttnum;
 	MemoryContext oldContext;
+
+	/* for any row to be read, there's at least one column data in the row */
+	Assert(largestAttnum > 0);
+	Assert(executorReadBlock->attnum_to_rownum != NULL);
+
+	/* Find the first attnum that has a larger lastrownum than rowNum. */
+	while (largestAttnum < slot->tts_tupleDescriptor->natts &&
+			rowNum >= executorReadBlock->attnum_to_rownum[largestAttnum * MAX_AOREL_CONCURRENCY + segno])
+		largestAttnum++;
+
+	/*
+	 * If we already created the bindings and also the largest attnum have not changed, 
+	 * we do not need to recreate the bindings again.
+	 */
+	if (executorReadBlock->mt_bind && largestAttnum == executorReadBlock->curLargestAttnum)
+		return;
+
+	/* Otherwise, we have to create/recreate bindings */
+	oldContext = MemoryContextSwitchTo(executorReadBlock->memoryContext);
+
+	/* destroy the previous bindings */
+	if (executorReadBlock->mt_bind)
+		destroy_memtuple_binding(executorReadBlock->mt_bind);
+
 	/*
 	 * MemTupleBinding should be created from the slot's tuple descriptor
-	 * and not from the tuple descriptor in the relation.  These could be
-	 * different.  One example is alter table rewrite.
+	 * (plus the expected largest attnum that we calculated above). We should
+	 * not using the tuple descriptor in the relation which could be different
+	 * in case like alter table rewrite.
 	 */
-	if (!executorReadBlock->mt_bind)
-	{
-		oldContext = MemoryContextSwitchTo(executorReadBlock->memoryContext);
-		executorReadBlock->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor);
-		MemoryContextSwitchTo(oldContext);
-	}
+	executorReadBlock->mt_bind = create_memtuple_binding(slot->tts_tupleDescriptor, largestAttnum);
+	MemoryContextSwitchTo(oldContext);
+
+	executorReadBlock->curLargestAttnum = largestAttnum;
 }
 
 
@@ -822,14 +898,14 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 
 	AOTupleIdInit(aoTupleId, executorReadBlock->segmentFileNum, rowNum);
 
-	if (slot)
-		AOExecutorReadBlockBindingInit(executorReadBlock, slot);
-
 	/*
 	 * Is it legal to call this function with NULL slot?  The
 	 * HeapKeyTestUsingSlot call below assumes that the slot is not NULL.
 	 */
 	Assert (slot);
+
+	AppendOnlyExecutorReadBlock_BindingInit(executorReadBlock, slot, rowNum);
+
 	{
 		Assert(executorReadBlock->mt_bind);
 
@@ -2885,7 +2961,7 @@ appendonly_insert_init(Relation rel, int segno)
 	 */
 	aoInsertDesc->appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
-	aoInsertDesc->mt_bind = create_memtuple_binding(RelationGetDescr(rel));
+	aoInsertDesc->mt_bind = create_memtuple_binding(RelationGetDescr(rel), RelationGetNumberOfAttributes(rel));
 
 	aoInsertDesc->appendFile = -1;
 	aoInsertDesc->appendFilePathNameMaxLen = AOSegmentFilePathNameLen(rel) + 1;

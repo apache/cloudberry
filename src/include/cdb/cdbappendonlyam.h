@@ -127,6 +127,8 @@ typedef struct AppendOnlyExecutorReadBlock
 
 	AppendOnlyStorageRead	*storageRead;
 
+	AttrNumber 		curLargestAttnum; /* the largest attnum stored in memtuple currently being read */
+	int64 			*attnum_to_rownum; /*attnum to rownum mapping, used in building memtuple binding */
 	MemTupleBinding *mt_bind;
 	/*
 	 * When reading a segfile that's using version < AOSegfileFormatVersion_GP5,

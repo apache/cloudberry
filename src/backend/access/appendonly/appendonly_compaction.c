@@ -447,7 +447,7 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
 	/* Use the slot type the table's access method hands out, not a fixed one. */
 	slot = table_slot_create(aorel, NULL);
 	slot->tts_tableOid = RelationGetRelid(aorel);
-	mt_bind = create_memtuple_binding(tupDesc);
+	mt_bind = create_memtuple_binding(tupDesc, tupDesc->natts);
 
 	/*
 	 * We need a ResultRelInfo and an EState so we can use the regular
