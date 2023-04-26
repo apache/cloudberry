@@ -55,6 +55,8 @@
 #define NUM_QUOTA_CONFIG_ATTRS 6
 /* Number of entries for diskquota.table_size update SQL */
 #define SQL_MAX_VALUES_NUMBER 1000000
+/* Number of entries for hash table in quota_info */
+#define MAX_QUOTA_MAP_ENTRIES (128 * 1024L)
 
 /* TableSizeEntry macro function */
 /* Use the top bit of totalsize as a flush flag. If this bit is set, the size should be flushed into
@@ -508,7 +510,7 @@ diskquota_worker_shmem_size()
 	Size size;
 	size = hash_estimate_size(MAX_NUM_TABLE_SIZE_ENTRIES / MAX_NUM_MONITORED_DB + 100, sizeof(TableSizeEntry));
 	size = add_size(size, hash_estimate_size(MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, sizeof(LocalRejectMapEntry)));
-	size = add_size(size, hash_estimate_size(1024L, sizeof(struct QuotaMapEntry)) * NUM_QUOTA_TYPES);
+	size = add_size(size, hash_estimate_size(MAX_QUOTA_MAP_ENTRIES * NUM_QUOTA_TYPES, sizeof(struct QuotaMapEntry)));
 	return size;
 }
 
@@ -575,7 +577,8 @@ init_disk_quota_model(uint32 id)
 		memset(&hash_ctl, 0, sizeof(hash_ctl));
 		hash_ctl.entrysize   = sizeof(struct QuotaMapEntry);
 		hash_ctl.keysize     = sizeof(struct QuotaMapEntryKey);
-		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
+		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, MAX_QUOTA_MAP_ENTRIES, &hash_ctl, HASH_ELEM,
+		                                              DISKQUOTA_TAG_HASH);
 	}
 	pfree(str.data);
 }
@@ -640,7 +643,8 @@ vacuum_disk_quota_model(uint32 id)
 		memset(&hash_ctl, 0, sizeof(hash_ctl));
 		hash_ctl.entrysize   = sizeof(struct QuotaMapEntry);
 		hash_ctl.keysize     = sizeof(struct QuotaMapEntryKey);
-		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, 1024L, &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
+		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, MAX_QUOTA_MAP_ENTRIES, &hash_ctl, HASH_ELEM,
+		                                              DISKQUOTA_TAG_HASH);
 		hash_seq_init(&iter, quota_info[type].map);
 		while ((qentry = hash_seq_search(&iter)) != NULL)
 		{
