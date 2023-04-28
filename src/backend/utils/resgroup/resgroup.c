@@ -3610,8 +3610,9 @@ ResourceGroupGetQueryMemoryLimit(void)
 
 	Assert(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY);
 
+	/* for bypass query,use statement_mem as the query mem. */
 	if (bypassedGroup)
-		return 0;
+		return stateMem;
 
 	if (gp_resgroup_memory_query_fixed_mem > 0)
 		return (uint64) gp_resgroup_memory_query_fixed_mem * 1024L;
