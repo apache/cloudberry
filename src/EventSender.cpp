@@ -161,12 +161,13 @@ void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
   fill_self_stats(metrics->mutable_systemstat());
 }
 
-yagpcc::SetQueryReq get_query_req(QueryDesc *query_desc,
-                                  yagpcc::QueryStatus status) {
+yagpcc::SetQueryReq create_query_req(QueryDesc *query_desc,
+                                     yagpcc::QueryStatus status) {
   yagpcc::SetQueryReq req;
   req.set_query_status(status);
   *req.mutable_datetime() = current_ts();
   set_query_key(req.mutable_query_key(), query_desc);
+  set_segment_key(req.mutable_segment_key(), query_desc);
   return req;
 }
 
@@ -212,8 +213,8 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
     return;
   }
-  elog(DEBUG1, "Query %s started event recording", query_desc->sourceText);
-  auto req = get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
+  auto req =
+      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
   set_query_info(req.mutable_query_info(), query_desc, false, true);
   send_query_info(&req, "started");
 }
@@ -223,19 +224,16 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
   query_desc->instrument_options |= INSTRUMENT_ROWS;
   query_desc->instrument_options |= INSTRUMENT_TIMER;
 
-  elog(DEBUG1, "Query %s submit event recording", query_desc->sourceText);
   auto req =
-      get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
+      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
   set_query_info(req.mutable_query_info(), query_desc, true, false);
   send_query_info(&req, "submit");
 }
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      const std::string &status) {
-  elog(DEBUG1, "Query %s %s event recording",
-       query_desc->sourceText ? query_desc->sourceText : "<UNKNOWN>",
-       status.c_str());
-  auto req = get_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
+  auto req =
+      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
   set_query_info(req.mutable_query_info(), query_desc, false, false);
   // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to gather
   // it here. It only makes sense when doing regular stat checks.
@@ -251,10 +249,6 @@ void EventSender::send_query_info(yagpcc::SetQueryReq *req,
     elog(WARNING, "Query {%d-%d-%d} %s reporting failed with an error %s",
          req->query_key().tmid(), req->query_key().ssid(),
          req->query_key().ccnt(), event.c_str(), result.error_text().c_str());
-  } else {
-    elog(DEBUG1, "Query {%d-%d-%d} %s successfully reported",
-         req->query_key().tmid(), req->query_key().ssid(),
-         req->query_key().ccnt(), event.c_str());
   }
 }
 
