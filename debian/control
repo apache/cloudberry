@@ -1,0 +1,11 @@
+Source: greenplum-6-yagpcc-hooks-collector-1
+Section: misc
+Priority: optional
+Maintainer: Maxim Smyatkin <smiatkin@yandex-team.ru>
+Build-Depends: make, gcc, g++, debhelper (>=9), greenplum-db-6 (>=6.19.3), protobuf-compiler, protobuf-compiler-grpc
+Standards-Version: 3.9.8
+
+Package: greenplum-6-yagpcc-hooks-collector-1
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}, greenplum-db-6 (>=6.19.3)
+Description: Greenplum extension to send query execution metrics to yandex command center agent
