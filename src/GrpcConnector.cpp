@@ -1,8 +1,8 @@
 #include "GrpcConnector.h"
 #include "yagpcc_set_service.grpc.pb.h"
 
-#include <grpcpp/grpcpp.h>
-#include <grpcpp/channel.h>
+#include <grpc++/grpc++.h>
+#include <grpc++/channel.h>
 #include <string>
 
 class GrpcConnector::Impl {
