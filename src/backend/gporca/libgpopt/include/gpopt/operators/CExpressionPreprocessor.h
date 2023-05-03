@@ -70,7 +70,8 @@ private:
 
 	// eliminate self comparisons
 	static CExpression *PexprEliminateSelfComparison(CMemoryPool *mp,
-													 CExpression *pexpr);
+													 CExpression *pexpr,
+													 CColRefSet *pcrsNotNull);
 
 	// remove CTE Anchor nodes
 	static CExpression *PexprRemoveCTEAnchors(CMemoryPool *mp,

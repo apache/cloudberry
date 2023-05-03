@@ -158,12 +158,6 @@ CXformUtils::ExfpExpandJoinOrder(CExpressionHandle &exprhdl,
 		return CXform::ExfpNone;
 	}
 
-//#ifdef GPOS_DEBUG
-	CAutoMemoryPool amp;
-	GPOS_ASSERT_FIXME(!FJoinPredOnSingleChild(amp.Pmp(), exprhdl) &&
-				"join predicates are not pushed down");
-//#endif	// GPOS_DEBUG
-
 	if (nullptr != exprhdl.Pgexpr())
 	{
 		// if handle is attached to a group expression, transformation is applied
