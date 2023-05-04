@@ -617,6 +617,13 @@ JumbleExpr(pgssJumbleState *jstate, Node *node)
 	}
 	break;
 	/* GPDB nodes */
+	case T_GroupingClause:
+	{
+		GroupingClause *grpnode = (GroupingClause *)node;
+
+		JumbleExpr(jstate, (Node *)grpnode->groupsets);
+	}
+	break;
 	case T_GroupingFunc:
 	{
 		GroupingFunc *grpnode = (GroupingFunc *)node;
@@ -628,7 +635,27 @@ JumbleExpr(pgssJumbleState *jstate, Node *node)
 	case T_GroupId:
 	case T_Integer:
 	case T_Value:
-		// TODO: no idea what to do with those
+		// TODO:seems like nothing to do with it
+		break;
+	/* GPDB-only additions, nothing to do */
+	case T_PartitionBy:
+	case T_PartitionElem:
+	case T_PartitionRangeItem:
+	case T_PartitionBoundSpec:
+	case T_PartitionSpec:
+	case T_PartitionValuesSpec:
+	case T_AlterPartitionId:
+	case T_AlterPartitionCmd:
+	case T_InheritPartitionCmd:
+	case T_CreateFileSpaceStmt:
+	case T_FileSpaceEntry:
+	case T_DropFileSpaceStmt:
+	case T_TableValueExpr:
+	case T_DenyLoginInterval:
+	case T_DenyLoginPoint:
+	case T_AlterTypeStmt:
+	case T_SetDistributionCmd:
+	case T_ExpandStmtSpec:
 		break;
 	default:
 		/* Only a warning, since we can stumble along anyway */
