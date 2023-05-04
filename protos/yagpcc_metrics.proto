@@ -33,6 +33,7 @@ message QueryInfo {
     string temlate_plan_text = 7;
     string userName = 8;
     string databaseName = 9;
+    string rsgname = 10;
 }
 
 enum PlanGenerator
