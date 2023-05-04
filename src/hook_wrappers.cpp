@@ -15,14 +15,18 @@ extern "C" {
 #include "EventSender.h"
 
 static ExecutorStart_hook_type previous_ExecutorStart_hook = nullptr;
+static ExecutorEnd_hook_type previous_ExecutorEnd_hook = nullptr;
 static query_info_collect_hook_type previous_query_info_collect_hook = nullptr;
 
 static void ya_ExecutorAfterStart_hook(QueryDesc *query_desc, int eflags);
+static void ya_ExecutorEnd_hook(QueryDesc *query_desc);
 static void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg);
 
 void hooks_init() {
   previous_ExecutorStart_hook = ExecutorStart_hook;
   ExecutorStart_hook = ya_ExecutorAfterStart_hook;
+  previous_ExecutorEnd_hook = ExecutorEnd_hook;
+  ExecutorEnd_hook = ya_ExecutorEnd_hook;
   previous_query_info_collect_hook = query_info_collect_hook;
   query_info_collect_hook = ya_query_info_collect_hook;
   stat_statements_parser_init();
@@ -30,6 +34,7 @@ void hooks_init() {
 
 void hooks_deinit() {
   ExecutorStart_hook = previous_ExecutorStart_hook;
+  ExecutorEnd_hook = previous_ExecutorEnd_hook;
   query_info_collect_hook = previous_query_info_collect_hook;
   stat_statements_parser_deinit();
 }
@@ -49,6 +54,22 @@ void ya_ExecutorAfterStart_hook(QueryDesc *query_desc, int eflags) {
     PG_RE_THROW();
   }
   PG_END_TRY();
+}
+
+void ya_ExecutorEnd_hook(QueryDesc *query_desc) {
+  PG_TRY();
+  { EventSender::instance()->executor_end(query_desc); }
+  PG_CATCH();
+  {
+    ereport(WARNING, (errmsg("EventSender failed in ya_ExecutorEnd_hook")));
+    PG_RE_THROW();
+  }
+  PG_END_TRY();
+  if (previous_ExecutorEnd_hook) {
+    (*previous_ExecutorEnd_hook)(query_desc);
+  } else {
+    standard_ExecutorEnd(query_desc);
+  }
 }
 
 void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {

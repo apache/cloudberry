@@ -219,6 +219,20 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   send_query_info(&req, "started");
 }
 
+void EventSender::executor_end(QueryDesc *query_desc) {
+  if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
+    return;
+  }
+  auto req =
+      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
+  set_query_info(req.mutable_query_info(), query_desc, false, false);
+  // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to gather
+  // it here. It only makes sense when doing regular stat checks.
+  set_gp_metrics(req.mutable_query_metrics(), query_desc,
+                 /*need_spillinfo*/ false);
+  send_query_info(&req, "ended");
+}
+
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
   query_desc->instrument_options |= INSTRUMENT_BUFFERS;
   query_desc->instrument_options |= INSTRUMENT_ROWS;
@@ -235,10 +249,6 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
   auto req =
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
   set_query_info(req.mutable_query_info(), query_desc, false, false);
-  // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to gather
-  // it here. It only makes sense when doing regular stat checks.
-  set_gp_metrics(req.mutable_query_metrics(), query_desc,
-                 /*need_spillinfo*/ false);
   send_query_info(&req, status);
 }
 

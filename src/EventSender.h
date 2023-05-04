@@ -12,6 +12,7 @@ class SetQueryReq;
 class EventSender {
 public:
   void executor_after_start(QueryDesc *query_desc, int eflags);
+  void executor_end(QueryDesc *query_desc);
   void query_metrics_collect(QueryMetricsStatus status, void *arg);
   static EventSender *instance();
 
