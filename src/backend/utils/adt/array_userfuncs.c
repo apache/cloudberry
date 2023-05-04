@@ -1514,7 +1514,6 @@ array_position_common(FunctionCallInfo fcinfo)
 		PG_RETURN_NULL();
 
 	array = PG_GETARG_ARRAYTYPE_P(0);
-	element_type = ARR_ELEMTYPE(array);
 
 	/*
 	 * We refuse to search for elements in multi-dimensional arrays, since we
@@ -1524,6 +1523,10 @@ array_position_common(FunctionCallInfo fcinfo)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("searching for elements in multidimensional arrays is not supported")));
+
+	/* Searching in an empty array is well-defined, though: it always fails */
+	if (ARR_NDIM(array) < 1)
+		PG_RETURN_NULL();
 
 	if (PG_ARGISNULL(1))
 	{
@@ -1539,6 +1542,7 @@ array_position_common(FunctionCallInfo fcinfo)
 		null_search = false;
 	}
 
+	element_type = ARR_ELEMTYPE(array);
 	position = (ARR_LBOUND(array))[0] - 1;
 
 	/* figure out where to start */
@@ -1664,9 +1668,6 @@ array_positions(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 
 	array = PG_GETARG_ARRAYTYPE_P(0);
-	element_type = ARR_ELEMTYPE(array);
-
-	position = (ARR_LBOUND(array))[0] - 1;
 
 	/*
 	 * We refuse to search for elements in multi-dimensional arrays, since we
@@ -1678,6 +1679,10 @@ array_positions(PG_FUNCTION_ARGS)
 				 errmsg("searching for elements in multidimensional arrays is not supported")));
 
 	astate = initArrayResult(INT4OID, CurrentMemoryContext, false);
+
+	/* Searching in an empty array is well-defined, though: it always fails */
+	if (ARR_NDIM(array) < 1)
+		PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
 
 	if (PG_ARGISNULL(1))
 	{
@@ -1692,6 +1697,9 @@ array_positions(PG_FUNCTION_ARGS)
 		searched_element = PG_GETARG_DATUM(1);
 		null_search = false;
 	}
+
+	element_type = ARR_ELEMTYPE(array);
+	position = (ARR_LBOUND(array))[0] - 1;
 
 	/*
 	 * We arrange to look up type info for array_create_iterator only once per
