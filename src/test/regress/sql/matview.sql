@@ -341,3 +341,20 @@ select count(*) from mv_fast_relfilenode_1 natural join mv_fast_relfilenode_2;
 
 reset gp_enable_refresh_fast_path;
 drop materialized view mv_fast;
+
+-- test REFRESH MATERIALIZED VIEW with 'WITH NO DATA' option can be executed immediately.
+DROP TABLE IF EXISTS mvtest_twn;
+CREATE TABLE mvtest_twn(a int);
+CREATE MATERIALIZED VIEW mat_view_twn as SELECT a.a as p, b.a as q, c.a as x, d.a as y FROM mvtest_twn a, mvtest_twn b, mvtest_twn c, mvtest_twn d;
+INSERT INTO mvtest_twn SELECT i FROM generate_series(1,10000)i;
+-- t1 contains 10000 tuples, after cross join it four times, the output is much too huge
+-- refresh with 'no data' should not actually execute the sql
+set statement_timeout = 5000;
+REFRESH MATERIALIZED VIEW mat_view_twn WITH NO DATA;
+reset statement_timeout;
+SELECT relispopulated FROM pg_class WHERE oid = 'mat_view_twn'::regclass;
+SELECT relispopulated FROM gp_dist_random('pg_class') WHERE oid = 'mat_view_twn'::regclass;
+SELECT * FROM mat_view_twn;
+
+DROP MATERIALIZED VIEW mat_view_twn;
+DROP TABLE mvtest_twn;
