@@ -2002,7 +2002,11 @@ vac_update_datfrozenxid(void)
 
 	/* chicken out if bogus data found */
 	if (bogus)
+	{
+		/* Cherry-pick from GPDB FIXME: is it right for PG14? */
+		UnLockDatabaseFrozenIds(ExclusiveLock);
 		return;
+	}
 
 	Assert(TransactionIdIsNormal(newFrozenXid));
 	Assert(MultiXactIdIsValid(newMinMulti));
