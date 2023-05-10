@@ -22,6 +22,6 @@ OBJS = \
 	portalmem.o \
 	slab.o
 
-OBJS += mpool.o memprot.o vmem_tracker.o redzone_handler.o runaway_cleaner.o idle_tracker.o event_version.o
+OBJS += memprot.o vmem_tracker.o redzone_handler.o runaway_cleaner.o idle_tracker.o event_version.o
 
 include $(top_srcdir)/src/backend/common.mk
