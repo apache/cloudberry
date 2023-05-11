@@ -2296,7 +2296,8 @@ CREATE OR REPLACE VIEW gp_toolkit.__get_expect_files AS
 SELECT s.reltablespace AS tablespace, s.relname, a.amname AS AM,
        (CASE WHEN s.relfilenode != 0 THEN s.relfilenode ELSE pg_relation_filenode(s.oid) END)::text AS filename
 FROM pg_class s
-LEFT JOIN pg_am a ON s.relam = a.oid;
+LEFT JOIN pg_am a ON s.relam = a.oid
+WHERE s.relkind != 'v'; -- view could have valid relfilenode if created from a table, but its relfile is gone
 
 GRANT SELECT ON gp_toolkit.__get_expect_files TO public;
 
@@ -2310,12 +2311,19 @@ GRANT SELECT ON gp_toolkit.__get_expect_files TO public;
 --        the extended data files for AO/CO tables.
 --        But ignore those w/ eof=0. They might be created just for
 --        modcount whereas no data has ever been inserted to the seg.
+--        Or, they could be created when a seg has only aborted rows.
+--        In both cases, we can ignore these segs, because no matter
+--        whether the data files exist or not, the rest of the system
+--        can handle them gracefully.
+--        Also exclude views which could have valid relfilenode if 
+--        created from a table, but their relfiles are gone.
 --
 --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW gp_toolkit.__get_expect_files_ext AS
 SELECT s.reltablespace AS tablespace, s.relname, a.amname AS AM,
        (CASE WHEN s.relfilenode != 0 THEN s.relfilenode ELSE pg_relation_filenode(s.oid) END)::text AS filename
 FROM pg_class s LEFT JOIN pg_am a ON s.relam = a.oid
+WHERE s.relkind != 'v'
 UNION
 -- AO extended files
 SELECT c.reltablespace AS tablespace, c.relname, a.amname AS AM,
@@ -2323,7 +2331,7 @@ SELECT c.reltablespace AS tablespace, c.relname, a.amname AS AM,
 FROM gp_toolkit.__get_ao_segno_list() s
 JOIN pg_class c ON s.relid = c.oid
 LEFT JOIN pg_am a ON c.relam = a.oid
-WHERE s.eof > 0
+WHERE s.eof > 0 AND c.relkind != 'v'
 UNION
 -- CO extended files
 SELECT c.reltablespace AS tablespace, c.relname, a.amname AS AM,
@@ -2331,7 +2339,7 @@ SELECT c.reltablespace AS tablespace, c.relname, a.amname AS AM,
 FROM gp_toolkit.__get_aoco_segno_list() s
 JOIN pg_class c ON s.relid = c.oid
 LEFT JOIN pg_am a ON c.relam = a.oid
-WHERE s.eof > 0;
+WHERE s.eof > 0 AND c.relkind != 'v';
 
 GRANT SELECT ON gp_toolkit.__get_expect_files_ext TO public;
 
