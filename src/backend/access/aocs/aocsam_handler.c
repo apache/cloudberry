@@ -1849,14 +1849,13 @@ aoco_index_build_range_scan(Relation heapRelation,
 	while (aoco_getnextslot(&aocoscan->rs_base, ForwardScanDirection, slot))
 	{
 		bool		tupleIsAlive;
-		BlockNumber		blockno;
 		AOTupleId 	*aoTupleId;
+		BlockNumber currblockno = ItemPointerGetBlockNumber(&slot->tts_tid);
 
 		CHECK_FOR_INTERRUPTS();
-		blockno = ItemPointerGetBlockNumber(&slot->tts_tid);
-		if (blockno != lastBlock)
+		if (currblockno != lastBlock)
 		{
-			lastBlock = blockno;
+			lastBlock = currblockno;
 			++blockcounts;
 		}
 
@@ -1865,8 +1864,8 @@ aoco_index_build_range_scan(Relation heapRelation,
 		 * we scan the whole table, and throw away tuples that are not in the
 		 * range. That's clearly very inefficient.
 		 */
-		if (blockno < start_blockno ||
-			(numblocks != InvalidBlockNumber && blockno >= numblocks))
+		if (currblockno < start_blockno ||
+			(numblocks != InvalidBlockNumber && currblockno >= (start_blockno + numblocks)))
 			continue;
 
 		/* Report scan progress, if asked to. */

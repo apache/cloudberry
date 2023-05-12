@@ -1692,6 +1692,7 @@ appendonly_index_build_range_scan(Relation heapRelation,
 	{
 		bool		tupleIsAlive;
 		AOTupleId 	*aoTupleId;
+		BlockNumber currblockno = ItemPointerGetBlockNumber(&slot->tts_tid);
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -1700,8 +1701,8 @@ appendonly_index_build_range_scan(Relation heapRelation,
 		 * we scan the whole table, and throw away tuples that are not in the
 		 * range. That's clearly very inefficient.
 		 */
-		if (ItemPointerGetBlockNumber(&slot->tts_tid) < start_blockno ||
-			(numblocks != InvalidBlockNumber && ItemPointerGetBlockNumber(&slot->tts_tid) >= numblocks))
+		if (currblockno < start_blockno ||
+			(numblocks != InvalidBlockNumber && currblockno >= (start_blockno + numblocks)))
 			continue;
 
 		if (progress)
