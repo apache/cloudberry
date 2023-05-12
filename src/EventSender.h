@@ -11,9 +11,12 @@ class SetQueryReq;
 
 class EventSender {
 public:
+  void executor_before_start(QueryDesc *query_desc, int eflags);
   void executor_after_start(QueryDesc *query_desc, int eflags);
   void executor_end(QueryDesc *query_desc);
   void query_metrics_collect(QueryMetricsStatus status, void *arg);
+  void incr_depth() { nesting_level++; }
+  void decr_depth() { nesting_level--; }
   static EventSender *instance();
 
 private:
@@ -23,4 +26,6 @@ private:
   EventSender();
   void send_query_info(yagpcc::SetQueryReq *req, const std::string &event);
   std::unique_ptr<GrpcConnector> connector;
+
+  int nesting_level = 0;
 };

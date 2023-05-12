@@ -13,6 +13,7 @@ extern "C" {
 #include "utils/elog.h"
 #include "utils/metrics_utils.h"
 
+#include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
 
@@ -24,6 +25,8 @@ void get_spill_info(int ssid, int ccid, int32_t *file_count,
 }
 
 #include "EventSender.h"
+
+#define need_collect_metrics() (Gp_role == GP_ROLE_DISPATCH && nesting_level == 0)
 
 namespace {
 
@@ -209,35 +212,52 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   }
 }
 
-void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
-  if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
-    return;
+void EventSender::executor_before_start(QueryDesc *query_desc,
+                                        int /* eflags*/) {
+  if (need_collect_metrics()) {
+    instr_time starttime;
+    query_desc->instrument_options |= INSTRUMENT_BUFFERS;
+    query_desc->instrument_options |= INSTRUMENT_ROWS;
+    query_desc->instrument_options |= INSTRUMENT_TIMER;
+    query_desc->instrument_options |= INSTRUMENT_CDB;
+
+    INSTR_TIME_SET_CURRENT(starttime);
+    query_desc->showstatctx =
+        cdbexplain_showExecStatsBegin(query_desc, starttime);
   }
-  auto req =
-      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
-  set_query_info(req.mutable_query_info(), query_desc, false, true);
-  send_query_info(&req, "started");
+}
+
+void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
+  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
+    auto req =
+        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
+    set_query_info(req.mutable_query_info(), query_desc, false, true);
+    send_query_info(&req, "started");
+  }
 }
 
 void EventSender::executor_end(QueryDesc *query_desc) {
-  if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
-    return;
+  if (need_collect_metrics() && query_desc->totaltime) {
+    if (query_desc->estate->dispatcherState &&
+        query_desc->estate->dispatcherState->primaryResults) {
+      cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
+                                  DISPATCH_WAIT_NONE);
+    }
+    InstrEndLoop(query_desc->totaltime);
   }
-  auto req =
-      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
-  set_query_info(req.mutable_query_info(), query_desc, false, false);
-  // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to gather
-  // it here. It only makes sense when doing regular stat checks.
-  set_gp_metrics(req.mutable_query_metrics(), query_desc,
-                 /*need_spillinfo*/ false);
-  send_query_info(&req, "ended");
+  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
+    auto req =
+        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
+    set_query_info(req.mutable_query_info(), query_desc, false, false);
+    // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
+    // gather it here. It only makes sense when doing regular stat checks.
+    set_gp_metrics(req.mutable_query_metrics(), query_desc,
+                   /*need_spillinfo*/ false);
+    send_query_info(&req, "ended");
+  }
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
-  query_desc->instrument_options |= INSTRUMENT_BUFFERS;
-  query_desc->instrument_options |= INSTRUMENT_ROWS;
-  query_desc->instrument_options |= INSTRUMENT_TIMER;
-
   auto req =
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
   set_query_info(req.mutable_query_info(), query_desc, true, false);
