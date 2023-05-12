@@ -298,7 +298,7 @@ brininsert(Relation idxRel, Datum *values, bool *nulls,
 			 */
 			if (!brin_doupdate(idxRel, pagesPerRange, revmap, heapBlk,
 							   buf, off, origtup, origsz, newtup, newsz,
-							   samepage, false))
+							   samepage))
 			{
 				/* no luck; start over */
 				MemoryContextResetAndDeleteChildren(tupcxt);
@@ -906,9 +906,6 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	}
 
 	UnlockReleaseBuffer(meta);
-
-	if (isAo)
-		brin_init_upper_pages(index, BrinGetPagesPerRange(index));
 
 	/*
 	 * Initialize our state, including the deformed tuple state.
@@ -1521,7 +1518,7 @@ summarize_range(IndexInfo *indexInfo, BrinBuildState *state, Relation heapRel,
 		didupdate =
 			brin_doupdate(state->bs_irel, state->bs_pagesPerRange,
 						  state->bs_rmAccess, heapBlk, phbuf, offset,
-						  phtup, phsz, newtup, newsize, samepage, false);
+						  phtup, phsz, newtup, newsize, samepage);
 		brin_free_tuple(phtup);
 		brin_free_tuple(newtup);
 
