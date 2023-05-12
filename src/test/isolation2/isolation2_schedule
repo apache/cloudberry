@@ -320,3 +320,7 @@ test: export_distributed_snapshot
 
 # test TCP interconnect teardown bounded wait
 test: tcp_ic_teardown
+
+# Intensive tests for BRIN
+test: uao/brin_chain_row
+test: uao/brin_chain_column

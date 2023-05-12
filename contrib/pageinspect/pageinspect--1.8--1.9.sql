@@ -135,3 +135,24 @@ CREATE FUNCTION brin_page_items(IN page bytea, IN index_oid regclass,
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'brin_page_items'
 LANGUAGE C STRICT PARALLEL SAFE;
+-- brin_metapage_info()
+--
+DROP FUNCTION brin_metapage_info(IN page bytea, OUT magic text,
+                                 OUT version integer, OUT pagesperrange integer, OUT lastrevmappage bigint);
+CREATE FUNCTION brin_metapage_info(IN page bytea, OUT magic text,
+                                   OUT version integer, OUT pagesperrange integer, OUT lastrevmappage bigint,
+                                   /* GPDB specific for AO/CO tables */
+                                   OUT isAo boolean,
+                                   OUT firstrevmappages bigint[],
+                                   OUT lastrevmappages bigint[],
+                                   OUT lastrevmappagenums bigint[])
+AS 'MODULE_PATHNAME', 'brin_metapage_info'
+LANGUAGE C STRICT PARALLEL SAFE;
+
+--
+-- brin_revmap_chain()
+--
+CREATE FUNCTION brin_revmap_chain(IN page bytea, IN indexrelid regclass, IN segno int)
+    RETURNS bigint[]
+AS 'MODULE_PATHNAME', 'brin_revmap_chain'
+    LANGUAGE C STRICT PARALLEL SAFE;
