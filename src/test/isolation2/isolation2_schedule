@@ -322,5 +322,8 @@ test: export_distributed_snapshot
 # test TCP interconnect teardown bounded wait
 test: tcp_ic_teardown
 
+# test for heap tables with concurrency for BRIN
+test: brin_heap
+
 # Intensive tests for BRIN
 test: uao/brin_chain_row uao/brin_chain_column
