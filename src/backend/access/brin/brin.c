@@ -783,6 +783,8 @@ bringetbitmap(IndexScanDesc scan, Node **bmNodeP)
 				tbm_add_page(tbm, pageno);
 				totalpages++;
 				MemoryContextSwitchTo(perRangeCxt);
+
+				SIMPLE_FAULT_INJECTOR("brin_bitmap_page_added");
 			}
 		}
 	}
