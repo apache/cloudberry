@@ -1599,7 +1599,6 @@ _copyPlanRowMark(const PlanRowMark *from)
 	COPY_SCALAR_FIELD(strength);
 	COPY_SCALAR_FIELD(waitPolicy);
 	COPY_SCALAR_FIELD(isParent);
-	COPY_SCALAR_FIELD(canOptSelectLockingClause);
 
 	return newnode;
 }
