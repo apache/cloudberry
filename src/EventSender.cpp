@@ -228,6 +228,9 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
 }
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
+  if (nesting_level != 0 || query_desc->utilitystmt) {
+    return;
+  }
   if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
@@ -237,6 +240,9 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
 }
 
 void EventSender::executor_end(QueryDesc *query_desc) {
+  if (nesting_level != 0 || query_desc->utilitystmt) {
+    return;
+  }
   if (need_collect_metrics() && query_desc->totaltime) {
     if (query_desc->estate->dispatcherState &&
         query_desc->estate->dispatcherState->primaryResults) {
@@ -258,6 +264,9 @@ void EventSender::executor_end(QueryDesc *query_desc) {
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
+  if (nesting_level != 0 || query_desc->utilitystmt) {
+    return;
+  }
   auto req =
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
   set_query_info(req.mutable_query_info(), query_desc, true, false);
@@ -266,6 +275,9 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      const std::string &status) {
+  if (nesting_level != 0 || query_desc->utilitystmt) {
+    return;
+  }
   auto req =
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
   set_query_info(req.mutable_query_info(), query_desc, false, false);

@@ -2,7 +2,7 @@ Source: greenplum-6-yagpcc-hooks
 Section: misc
 Priority: optional
 Maintainer: Maxim Smyatkin <smiatkin@yandex-team.ru>
-Build-Depends: make, gcc, g++, debhelper (>=9), greenplum-db-6 (>=6.19.3), protobuf-compiler, protobuf-compiler-grpc
+Build-Depends: make, gcc, g++, debhelper (>=9), greenplum-db-6 (>=6.19.3), protobuf-compiler, protobuf-compiler-grpc, libgrpc++1, libgrpc++-dev
 Standards-Version: 3.9.8
 
 Package: greenplum-6-yagpcc-hooks
