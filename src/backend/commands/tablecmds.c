@@ -358,6 +358,9 @@ static void ATController(AlterTableStmt *parsetree,
 static void ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 					  bool recurse, bool recursing, LOCKMODE lockmode,
 					  AlterTableUtilityContext *context);
+static void setupColumnOnlyRewrite(List **wqueue,
+					 const AlteredTableInfo *tab,
+					 AlterTableType ATtype);
 static void ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode,
 							  AlterTableUtilityContext *context);
 static void ATExecCmd(List **wqueue, AlteredTableInfo *tab,
@@ -391,7 +394,7 @@ static ObjectAddress ATExecAddColumn(List **wqueue, AlteredTableInfo *tab,
 									 bool recurse, bool recursing,
 									 LOCKMODE lockmode, int cur_pass,
 									 AlterTableUtilityContext *context);
-static void ATExecSetColumnEncoding(AlteredTableInfo *tab, Relation rel,
+static void ATExecSetColumnEncoding(List **wqueue, AlteredTableInfo *tab, Relation rel,
 									AlterTableCmd *cmd);
 static bool check_for_column_name_collision(Relation rel, const char *colname,
 											bool if_not_exists);
@@ -5050,12 +5053,23 @@ static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOpti
 
 	const TableAmRoutine *tam;
 	TupleDesc 	tupdesc = RelationGetDescr(rel);
+	List 		*current_encodings = rel_get_column_encodings(rel);
 
 	/* Figure out the column definition list. */
 	for (attno = 0; attno < tupdesc->natts; attno++)
 	{
 		Form_pg_attribute 	att = TupleDescAttr(tupdesc, attno);
-		ColumnDef 		*cd = makeColumnDef(NameStr(att->attname),
+		ColumnDef 		*cd;
+
+		/* 
+		 * Skip if it's already in pg_attribute_encoding. 
+		 * This is possible when we do ALTER COLUMN SET ENCODING and 
+		 * SET ACCESS METHOD together and the former takes place first.
+		 */
+		if (find_crsd(NameStr(att->attname), current_encodings))
+			continue;
+
+		cd = makeColumnDef(NameStr(att->attname),
 								att->atttypid, 
 								att->atttypmod,
 								0);
@@ -5621,7 +5635,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		case AT_SetColumnEncoding: /* ALTER COLUMN SET ENCODING */
 			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
 			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
-			pass = AT_PASS_MISC;
+			pass = AT_PASS_SET_ENCODING;
 			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 
@@ -6268,7 +6282,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 									  lockmode, cur_pass, context);
 			break;
 		case AT_SetColumnEncoding:
-			ATExecSetColumnEncoding(tab, rel, cmd);
+			ATExecSetColumnEncoding(wqueue, tab, rel, cmd);
 			break;
 		case AT_ColumnDefault:	/* ALTER COLUMN DEFAULT */
 			address = ATExecColumnDefault(rel, cmd->name, cmd->def, lockmode);
@@ -8380,23 +8394,33 @@ ATPrepAddColumn(List **wqueue, Relation rel, bool recurse, bool recursing,
  * by only manipulating the columns involved in the ALTER operation.
  * For instance, for an ADD COLUMN operation,
  * we can simply add a new column file for CO tables.
- * Also, for CO tables, we can rewrite an existing column solely, if we ALTER it's type.
+ * Also, for CO tables, we can rewrite an existing column solely, if we ALTER it's type or encoding.
  * If we can optimize, then we set AlteredTableInfo->rewrite with the appropriate flag.
  */
 static void
-setupColumnarRewrite(List **wqueue,
+setupColumnOnlyRewrite(List **wqueue,
 					 const AlteredTableInfo *tab,
 					 AlterTableType ATtype)
 {
-	bool columnar_rewrite;
+	bool columnar_rewrite = true;
+
 	/*
-	* ADD COLUMN or ALTER COLUMN TYPE for CO can be optimized only if it is the
-	* only subcommand being performed.
+	* ADD COLUMN, ALTER COLUMN TYPE or ALTER COLUMN SET ENCODING for CO can be optimized
+	* only if there's no other subcommand (except DROP COLUMN) being performed.
 	*/
-	columnar_rewrite = true;
+
+	/* we should be here for these commands only */
+	Assert(ATtype == AT_AddColumn ||
+				ATtype == AT_AlterColumnType ||
+				ATtype == AT_SetColumnEncoding);
+
 	for (int i = 0; i < AT_NUM_PASSES; ++i)
 	{
-		if (i != AT_PASS_ADD_COL && i != AT_PASS_ALTER_TYPE && i != AT_PASS_DROP && tab->subcmds[i])
+		if (i != AT_PASS_SET_ENCODING && 
+					i != AT_PASS_ADD_COL && 
+					i != AT_PASS_ALTER_TYPE && 
+					i != AT_PASS_DROP && 
+					tab->subcmds[i])
 		{
 			columnar_rewrite = false;
 			break;
@@ -8429,8 +8453,10 @@ setupColumnarRewrite(List **wqueue,
 			{
 				if (ATtype == AT_AddColumn)
 					childtab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY;
-				else
+				else if (ATtype == AT_AlterColumnType || ATtype == AT_SetColumnEncoding)
 					childtab->rewrite |= AT_REWRITE_REWRITE_COLUMNS_ONLY;
+				else
+					Assert(false); /* shouldn't reach here */
 			}
 			heap_close(rel, NoLock);
 		}
@@ -9010,7 +9036,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * So, we only need to execute this block on QD.
 	 */
 	if (!recursing && (tab->relkind == RELKIND_PARTITIONED_TABLE || tab->relkind == RELKIND_RELATION) && Gp_role != GP_ROLE_EXECUTE)
-		setupColumnarRewrite(wqueue,
+		setupColumnOnlyRewrite(wqueue,
 							 tab, AT_AddColumn);
 
 	foreach(child, children)
@@ -9142,17 +9168,18 @@ add_column_collation_dependency(Oid relid, int32 attnum, Oid collid)
  * (2) the encoding option isn't really changed (they are the same as the given ones).
  */
 static void
-ATExecSetColumnEncoding(AlteredTableInfo *tab, Relation rel, AlterTableCmd *cmd)
+ATExecSetColumnEncoding(List **wqueue, AlteredTableInfo *tab, Relation rel, AlterTableCmd *cmd)
 {
-	ColumnReferenceStorageDirective *new_crsd;
-	bool is_updated;
+	ColumnReferenceStorageDirective 	*new_crsd;
+	char 					*colName;
+	bool 					is_updated;
 
 	if (OidIsValid(tab->newAccessMethod))
 	{
 		if (tab->newAccessMethod != AO_COLUMN_TABLE_AM_OID)
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				errmsg("ALTER COLUMN SET ENCODING operation is only applicable to AOCO tables"),
-				errdetail("New access method for \"%s\" is not AOCO",
+				errdetail("New access method for \"%s\" is not ao_column",
 						  RelationGetRelationName(rel))));
 	}
 	else if (rel->rd_rel->relam != AO_COLUMN_TABLE_AM_OID)
@@ -9166,17 +9193,100 @@ ATExecSetColumnEncoding(AlteredTableInfo *tab, Relation rel, AlterTableCmd *cmd)
 		tab->new_crsds = rel_get_column_encodings(rel);
 
 	new_crsd = (ColumnReferenceStorageDirective *) cmd->def;
-	is_updated = updateEncodingList(tab->new_crsds, new_crsd);
+	tab->new_crsds = updateEncodingList(tab->new_crsds, new_crsd, &is_updated);
 
-	if (is_updated)
+	/* Nothing needs to be done if we are not really changing the encodings */
+	if (!is_updated)
+		return;
+
+	/*
+	 * Get new encoding from the updated tab->new_crsds and use that to update
+	 * pg_attribute_encoding later. We do not directly transform the new_crsd
+	 * because we could miss existing options in the current relation.
+	 */
+	colName = ((ColumnReferenceStorageDirective *)cmd->def)->column;
+	new_crsd = find_crsd(colName, tab->new_crsds);
+	Assert(new_crsd);
+
+	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
-		if (rel->rd_rel->relkind == RELKIND_RELATION)
-			tab->rewrite = AT_REWRITE_COLUMN_REWRITE;
-		else if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-			UpdateAttributeEncodings(rel->rd_id, tab->new_crsds);
-		else
-			Assert(false); //cannot reach here
+		/*
+		 * No table rewrite nor column rewrite will be performed for partitioned table,
+		 * so we'll just update encoding here. 
+		 *
+		 * Note that we could be altering AM from non-CO to CO as well, so the table may
+		 * not have any existing pg_attribute_encoding entry. Do update-or-add here.
+		 */
+		UpdateOrAddAttributeEncodings(rel, lappend(NIL, new_crsd));
 	}
+	else if (rel->rd_rel->relkind == RELKIND_RELATION)
+	{
+		/* this block is only for preparing stuff in 'tab'. QE gets those from QD */
+		if(Gp_role == GP_ROLE_EXECUTE)
+			return;
+
+		/* decide if we could rewrite column only */
+		setupColumnOnlyRewrite(wqueue, tab, AT_SetColumnEncoding);
+
+		/* if we are going to rewrite column only, prepare tab->newvals */
+		if (tab->rewrite & AT_REWRITE_REWRITE_COLUMNS_ONLY)
+		{
+			NewColumnValue 		*newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
+			HeapTuple 		tup;
+			Form_pg_attribute 	attTup;
+			Node 			*transform;
+			bool 			col_has_rewrite = false;
+			ListCell 		*l;
+
+			/* Find the column tuple so we'll know its attnum */
+			tup = SearchSysCacheAttName(RelationGetRelid(rel), colName);
+			if (!HeapTupleIsValid(tup))
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						errmsg("column \"%s\" of relation \"%s\" does not exist",
+						colName, RelationGetRelationName(rel))));
+			attTup = (Form_pg_attribute) GETSTRUCT(tup);
+
+			/*
+			 * Check if we already did an ALTER COLUMN TYPE on the this column, in which
+			 * case we will not add newval for the same column because we would be rewriting
+			 * that column anyway. So just need to update pg_attribute_encoding in that case.
+			 */
+			foreach(l, tab->newvals)
+			{
+				NewColumnValue *nv = lfirst(l);
+				if (nv->attnum == attTup->attnum && nv->op == AOCSREWRITECOLUMN)
+				{
+					col_has_rewrite = true;
+					nv->new_encoding = new_crsd->encoding;
+					break;
+				}
+			}
+
+			/* No rewrite has been planned for this column, let's plan one now. */
+			if (!col_has_rewrite)
+			{
+				newval->attnum = attTup->attnum;
+				/* no change to the column type */
+				transform = (Node *) makeVar(1, attTup->attnum,
+										 attTup->atttypid, attTup->atttypmod,
+										 attTup->attcollation,
+										 0);
+				newval->expr = expression_planner((Expr*) transform);
+				newval->is_generated = false;
+				newval->op = AOCSREWRITECOLUMN;
+				newval->new_encoding = new_crsd->encoding;
+				tab->newvals = lappend(tab->newvals, newval);
+			}
+
+			ReleaseSysCache(tup);
+		}
+		else
+			/* we are unable to do a column-only rewrite, perform a table rewrite instead */
+			tab->rewrite |= AT_REWRITE_COLUMN_REWRITE;
+	}
+	else
+		Assert(false); /* cannot reach here */
 }
 
 /*
@@ -14887,7 +14997,7 @@ ATExecAlterColumnType(List **wqueue,
 	 * So, we only need to execute this block on QD.
 	 */
 		if ((tab->relkind == RELKIND_PARTITIONED_TABLE || tab->relkind == RELKIND_RELATION) && Gp_role != GP_ROLE_EXECUTE)
-			setupColumnarRewrite(wqueue, tab, AT_AlterColumnType);
+			setupColumnOnlyRewrite(wqueue, tab, AT_AlterColumnType);
 
 
 	attrelation = table_open(AttributeRelationId, RowExclusiveLock);

@@ -119,8 +119,12 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber filenum, D
 	heap_close(rel, RowExclusiveLock);
 }
 
+/*
+ * Update a pg_attribute_encoding entry.
+ * Note that if the value is invalid, we'll skip setting the field instead of setting it to NULL.
+ */
 void
-update_attribute_encoding_attoptions(Oid relid, AttrNumber attnum, Datum newattoptions)
+update_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber newfilenum, Datum newlastrownums, Datum newattoptions)
 {
 	Relation 	rel;
 	SysScanDesc scan;
@@ -154,8 +158,23 @@ update_attribute_encoding_attoptions(Oid relid, AttrNumber attnum, Datum newatto
 
 	heap_deform_tuple(oldtup, RelationGetDescr(rel), values, nulls);
 
-	values[Anum_pg_attribute_encoding_attoptions - 1] = newattoptions;
-	repl[Anum_pg_attribute_encoding_attoptions - 1] = true;
+	if (newfilenum != InvalidFileNumber)
+	{
+		values[Anum_pg_attribute_encoding_filenum - 1] = newfilenum;
+		repl[Anum_pg_attribute_encoding_filenum - 1] = true;
+	}
+
+	if (newlastrownums)
+	{
+		values[Anum_pg_attribute_encoding_lastrownums - 1] = newlastrownums;
+		repl[Anum_pg_attribute_encoding_lastrownums - 1] = true;
+	}
+
+	if (newattoptions)
+	{
+		values[Anum_pg_attribute_encoding_attoptions - 1] = newattoptions;
+		repl[Anum_pg_attribute_encoding_attoptions - 1] = true;
+	}
 
 	newtup = heap_modify_tuple(oldtup, RelationGetDescr(rel), values, nulls, repl);
 
@@ -374,9 +393,32 @@ UpdateAttributeEncodings(Oid relid, List *new_attr_encodings)
 											true,
 											false);
 
-		update_attribute_encoding_attoptions(relid, attnum, newattoptions);
+		update_attribute_encoding_entry(relid, attnum, InvalidFileNumber, 0/*lastrownums*/, newattoptions);
 	}
 	CommandCounterIncrement();
+}
+
+/*
+ * Similar to UpdateAttributeEncodings, but add the entry if it's not
+ * existed in pg_attribute_encoding.
+ */
+void
+UpdateOrAddAttributeEncodings(Relation rel, List *new_attr_encodings)
+{
+	ListCell 	*lc;
+	List 		*current_encodings;
+
+	/* get the current encoding options */
+	current_encodings = rel_get_column_encodings(rel);
+
+	foreach(lc, new_attr_encodings)
+	{
+		ColumnReferenceStorageDirective *c = lfirst(lc);
+		if (find_crsd(c->column, current_encodings))
+			UpdateAttributeEncodings(RelationGetRelid(rel), new_attr_encodings);
+		else
+			AddCOAttributeEncodings(RelationGetRelid(rel), new_attr_encodings);
+	}
 }
 
 List **
@@ -447,13 +489,18 @@ AddCOAttributeEncodings(Oid relid, List *attr_encodings)
 
 	ListCell *lc;
 	ListCell *lc_filenum;
-	List *filenums = GetNextNAvailableFilenums(relid, attr_encodings->length);
+	List *filenums = NIL;
 
-	if (filenums->length != attr_encodings->length)
-		ereport(ERROR,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-					errmsg("filenums exhausted for relid %u", relid),
-					errhint("recreate the table")));
+	if (attr_encodings)
+	{
+		filenums = GetNextNAvailableFilenums(relid, attr_encodings->length);
+
+		if (filenums->length != attr_encodings->length)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("filenums exhausted for relid %u", relid),
+						errhint("recreate the table")));
+	}
 
 	forboth(lc, attr_encodings, lc_filenum, filenums)
 	{
@@ -621,7 +668,10 @@ AddOrUpdateCOAttributeEncodings(Oid relid, List *attr_encodings)
 										 NULL, NULL, true, false);
 
 		if (AttributeEncodingEntryExists(relid, attnum))
-			update_attribute_encoding_attoptions(relid, attnum, attoptions);
+			update_attribute_encoding_entry(relid, attnum,
+											InvalidFileNumber,
+											(Datum) 0 /* keep lastrownums */,
+											attoptions);
 		else
 			add_attribute_encoding_entry(relid, attnum, lfirst_int(lc_filenum),
 										 (Datum) 0 /* lastrownums */, attoptions);
@@ -725,7 +775,10 @@ GetNextNAvailableFilenums(Oid relid, int n)
 	bool        used[MaxFileNumber];
 	List        *newfilenums = NIL;
 
-	Assert(OidIsValid(relid));
+	if(n == 0)
+		return NIL;
+
+	Assert(OidIsValid(relid) && n > 0);
 
 	MemSet(used, false, sizeof(used));
 	rel = heap_open(AttributeEncodingRelationId, AccessShareLock);
@@ -758,57 +811,6 @@ GetNextNAvailableFilenums(Oid relid, int n)
 		}
 	}
 	return newfilenums;
-}
-
-/*
- * Update the filenum value for an entry in pg_attribute_encoding
- */
-void
-UpdateFilenumForAttnum(Oid relid, AttrNumber attnum, FileNumber newfilenum)
-{
-	Relation    rel;
-	SysScanDesc scan;
-	ScanKeyData skey[2];
-	HeapTuple	oldtup;
-	HeapTuple	newtup;
-	Datum	    values[Natts_pg_attribute_encoding];
-	bool	    nulls[Natts_pg_attribute_encoding];
-	bool		repl[Natts_pg_attribute_encoding];
-
-	MemSet(values, 0, sizeof(values));
-	MemSet(nulls, false, sizeof(nulls));
-	MemSet(repl, false, sizeof(repl));
-
-	Assert(OidIsValid(relid));
-	Assert(AttributeNumberIsValid(attnum));
-
-	rel = heap_open(AttributeEncodingRelationId, RowExclusiveLock);
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_attribute_encoding_attrelid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(relid));
-	ScanKeyInit(&skey[1],
-				Anum_pg_attribute_encoding_attnum,
-				BTEqualStrategyNumber, F_INT2EQ,
-				Int16GetDatum(attnum));
-	scan = systable_beginscan(rel, AttributeEncodingAttrelidAttnumIndexId, true,
-							  NULL, 2, skey);
-
-	oldtup = systable_getnext(scan);
-	if (!HeapTupleIsValid(oldtup))
-		elog(ERROR, "invalid tuple found during scan on pg_attribute_encoding");
-
-	values[Anum_pg_attribute_encoding_filenum - 1] = newfilenum;
-	repl[Anum_pg_attribute_encoding_filenum - 1] = true;
-
-	newtup = heap_modify_tuple(oldtup, RelationGetDescr(rel), values, nulls, repl);
-
-	CatalogTupleUpdate(rel, &oldtup->t_self, newtup);
-	heap_freetuple(newtup);
-
-	systable_endscan(scan);
-	heap_close(rel, RowExclusiveLock);
 }
 
 /*
