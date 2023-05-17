@@ -1582,7 +1582,7 @@ transformStorageEncodingClause(List *columnEncoding, bool validate)
  * This is called by transformColumnEncoding() in a loop but stenc should be
  * quite small in practice.
  */
-static ColumnReferenceStorageDirective *
+ColumnReferenceStorageDirective *
 find_crsd(const char *column, List *stenc)
 {
 	ListCell *lc;
@@ -1939,14 +1939,18 @@ ao_amoptions(Datum reloptions, char relkind, bool validate)
  * Update the corresponding ColumnReferenceStorageDirective clause
  * in a list of such clauses: current_encodings.
  *
- * return whether current_encodings was modified
- * (either existing changed or new crsd added for new column)
+ * If anything is really updated (either existing one is changed or
+ * a new crsd is added), set is_updated to true. Otherwise false.
+ *
+ * Return the updated or original current_encodings.
  */
-bool
-updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new_crsd)
+List*
+updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new_crsd, bool *is_updated)
 {
 	ListCell *lc_current;
 	ColumnReferenceStorageDirective *crsd = NULL;
+
+	Assert(is_updated);
 	foreach(lc_current, current_encodings)
 	{
 		ColumnReferenceStorageDirective *current_crsd = (ColumnReferenceStorageDirective *) lfirst(lc_current);
@@ -1962,7 +1966,7 @@ updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new
 	{
 		ListCell *lc1;
 		List *merged_encodings = NIL;
-		bool is_changed = false;
+		*is_updated = false;
 
 		/*
 		 * Create a new list of encodings merging the existing and new values.
@@ -1983,7 +1987,7 @@ updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new
 					(strcmp(defGetString(el1), defGetString(el2)) != 0))
 				{
 					current_updated  = true;
-					is_changed       = true;
+					*is_updated       = true;
 					merged_encodings = lappend(merged_encodings, copyObject(el2));
 				}
 			}
@@ -2004,7 +2008,6 @@ updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new
 		 */
 		list_free_deep(crsd->encoding);
 		crsd->encoding = merged_encodings;
-		return is_changed;
 	}
 	else
 	{
@@ -2012,21 +2015,11 @@ updateEncodingList(List *current_encodings, ColumnReferenceStorageDirective *new
 		 * new_crsd->column not found in current_encodings
 		 * Must be coming from a newly added column
 		 */
-		List	   *appended PG_USED_FOR_ASSERTS_ONLY;
-
 		new_crsd->encoding = transformStorageEncodingClause(new_crsd->encoding, true);
-
-		/*
-		 * current_encodings is never NIL here: the caller seeds it from
-		 * rel_get_column_encodings() on an AOCO table, which always yields one
-		 * entry per column.  lappend() therefore extends the list in place and
-		 * the caller observes the new entry through its own pointer.
-		 */
-		Assert(current_encodings != NIL);
-		appended = lappend(current_encodings, new_crsd);
-		Assert(appended == current_encodings);
-		return true;
+		current_encodings = lappend(current_encodings, new_crsd);
+		*is_updated = true;
 	}
+	return current_encodings;
 }
 
 /*
