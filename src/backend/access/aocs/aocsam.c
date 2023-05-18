@@ -1517,7 +1517,7 @@ aocs_fetch_init(Relation relation,
 	 * rather than all AOTupleId_MultiplierSegmentFileNum ones that introducing
 	 * too many unnecessary calls in most cases.
 	 */
-	memset(aocsFetchDesc->lastSequence, -1, sizeof(aocsFetchDesc->lastSequence));
+	memset(aocsFetchDesc->lastSequence, InvalidAORowNum, sizeof(aocsFetchDesc->lastSequence));
 	for (int i = -1; i < aocsFetchDesc->totalSegfiles; i++)
 	{
 		/* always initailize segment 0 */

@@ -2208,7 +2208,7 @@ appendonly_fetch_init(Relation relation,
 	 * rather than all AOTupleId_MultiplierSegmentFileNum ones that introducing
 	 * too many unnecessary calls in most cases.
 	 */
-	memset(aoFetchDesc->lastSequence, -1, sizeof(aoFetchDesc->lastSequence));
+	memset(aoFetchDesc->lastSequence, InvalidAORowNum, sizeof(aoFetchDesc->lastSequence));
 	for (int i = -1; i < aoFetchDesc->totalSegfiles; i++)
 	{
 		/* always initailize segment 0 */
