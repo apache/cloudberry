@@ -528,6 +528,10 @@ typedef struct ViewOptions
 #define RelationIsAppendOptimized(relation) \
 	AMHandlerIsAO((relation)->rd_amhandler)
 
+#define RelationStorageIsAO(relation) \
+	((RelationIsAoRows(relation) || RelationIsAoCols(relation)) && \
+		relation->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+
 /*
  * FIXME: CBDB should not know the am oid of PAX. We put here because the kernel
  * can't distinguish the PAX and renamed heap(heap_psql) in test `psql`.
@@ -648,7 +652,7 @@ typedef struct ViewOptions
 			smgrsetowner(&((relation)->rd_smgr), \
 						 smgropen((relation)->rd_node, \
 								  (relation)->rd_backend, \
-								  RelationIsAppendOptimized(relation)?SMGR_AO:SMGR_MD, relation)); \
+								  RelationStorageIsAO(relation)?SMGR_AO:SMGR_MD, relation)); \
 	} while (0)
 
 /*

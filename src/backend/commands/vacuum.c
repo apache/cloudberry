@@ -1701,6 +1701,7 @@ vac_update_relstats(Relation relation,
 		{
 			Assert(Gp_role == GP_ROLE_UTILITY);
 			Assert(!IsSystemRelation(relation));
+			Assert(RelationStorageIsAO(relation));
 			num_tuples = 0;
 		}
 
@@ -2514,7 +2515,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	else
 		toast_relid = InvalidOid;
 
-	if (RelationIsAppendOptimized(rel))
+	if (RelationStorageIsAO(rel))
 	{
 		/*
 		 * GPDB: AO tables should never be passed into vacuum_rel if the
@@ -2610,7 +2611,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		return false;
 	}
 
-	is_appendoptimized = RelationIsAppendOptimized(rel);
+	is_appendoptimized = RelationStorageIsAO(rel);
 	is_toast = (rel->rd_rel->relkind == RELKIND_TOASTVALUE);
 
 	if (ao_vacuum_phase && !(is_appendoptimized || is_toast))

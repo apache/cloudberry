@@ -642,7 +642,7 @@ calculate_table_size(Relation rel)
 	if (OidIsValid(rel->rd_rel->reltoastrelid))
 		size += calculate_toast_table_size(rel->rd_rel->reltoastrelid);
 
-	if (RelationIsAppendOptimized(rel))
+	if (RelationStorageIsAO(rel))
 	{
 		Oid	auxRelIds[3];
 		GetAppendOnlyEntryAuxOids(rel, &auxRelIds[0],

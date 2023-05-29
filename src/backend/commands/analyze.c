@@ -1077,7 +1077,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	{
 		BlockNumber relallvisible;
 
-		if (RelationIsAppendOptimized(onerel))
+		if (RelationStorageIsAO(onerel))
 			relallvisible = 0;
 		else
             		relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);

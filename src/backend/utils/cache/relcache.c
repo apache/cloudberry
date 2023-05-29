@@ -1266,7 +1266,7 @@ retry:
 	/*
 	 * If it's an append-only table, get information from pg_appendonly.
 	 */
-	if (RelationIsAppendOptimized(relation))
+	if (RelationStorageIsAO(relation))
 		RelationInitAppendOnlyInfo(relation);
 
 	/* extract reloptions if any */
@@ -1894,7 +1894,7 @@ RelationInitTableAccessMethod(Relation relation)
 		 * Cloudberry: append-optimized relations should not have a valid
 		 * relfrozenxid.
 		 */
-		Assert (!RelationIsAppendOptimized(relation) ||
+		Assert (!RelationStorageIsAO(relation) ||
 				!TransactionIdIsValid(relation->rd_rel->relfrozenxid));
 	}
 

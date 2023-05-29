@@ -675,6 +675,8 @@ rebuild_relation(Relation OldHeap, Oid indexOid, bool verbose)
 	 */
 	bool		is_ao = RelationIsAppendOptimized(OldHeap);
 
+    bool		is_ao = RelationStorageIsAO(OldHeap);
+
 	/* Mark the correct index as clustered */
 	if (OidIsValid(indexOid))
 		mark_index_clustered(OldHeap, indexOid, true);

@@ -143,7 +143,7 @@ AppendOnlyCompaction_ShouldCompact(Relation aoRelation,
     Oid         visimaprelid;
     Oid         visimapidxid;
 
-	Assert(RelationIsAppendOptimized(aoRelation));
+	Assert(RelationStorageIsAO(aoRelation));
     GetAppendOnlyEntryAuxOids(aoRelation,
                               NULL, NULL, NULL,
                               &visimaprelid, &visimapidxid);
@@ -561,7 +561,7 @@ AppendOptimizedCollectDeadSegments(Relation aorel)
 	Oid			segrelid;
 	Bitmapset	*dead_segs = NULL;
 
-	Assert(RelationIsAppendOptimized(aorel));
+	Assert(RelationStorageIsAO(aorel));
 
 	GetAppendOnlyEntryAuxOids(aorel,
 							  &segrelid, NULL, NULL, NULL, NULL);
@@ -714,7 +714,7 @@ AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 	Oid			segrelid;
 
-	Assert(RelationIsAppendOptimized(aorel));
+	Assert(RelationStorageIsAO(aorel));
 
 	relname = RelationGetRelationName(aorel);
 

@@ -3046,7 +3046,7 @@ index_update_stats(Relation rel,
 		 * GPDB: In theory, it is possible to support index only scans with AO
 		 * tables, but disable them for now by setting relallvisible to 0.
 		 */
-		if (rd_rel->relkind != RELKIND_INDEX && !RelationIsAppendOptimized(rel))
+		if (rd_rel->relkind != RELKIND_INDEX && !RelationStorageIsAO(rel))
 			visibilitymap_count(rel, &relallvisible, NULL);
 		else					/* don't bother for indexes */
 			relallvisible = 0;
@@ -4134,7 +4134,7 @@ reindex_relation(Oid relid, int flags, ReindexParams *params)
 			 get_namespace_name(RelationGetNamespace(rel)),
 			 RelationGetRelationName(rel));
 
-	relIsAO = RelationIsAppendOptimized(rel);
+	relIsAO = RelationStorageIsAO(rel);
 
 	toast_relid = rel->rd_rel->reltoastrelid;
 

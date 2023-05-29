@@ -868,7 +868,7 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	BlockNumber pagesPerRange;
 	bool		isAo;
 
-	isAo = RelationIsAppendOptimized(heap);
+	isAo = RelationStorageIsAO(heap);
 	/*
 	 * We expect to be called exactly once for any index relation.
 	 */
@@ -886,7 +886,7 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	LockBuffer(meta, BUFFER_LOCK_EXCLUSIVE);
 
 	brin_metapage_init(BufferGetPage(meta), BrinGetPagesPerRange(index),
-					   BRIN_CURRENT_VERSION, RelationIsAppendOptimized(heap));
+					   BRIN_CURRENT_VERSION, RelationStorageIsAO(heap));
 	MarkBufferDirty(meta);
 
 	if (RelationNeedsWAL(index))
@@ -1107,7 +1107,7 @@ brin_summarize_range_internal(PG_FUNCTION_ARGS)
 		SetUserIdAndSecContext(heapRel->rd_rel->relowner,
 							   save_sec_context | SECURITY_RESTRICTED_OPERATION);
 		save_nestlevel = NewGUCNestLevel();
-		if (RelationIsAppendOptimized(heapRel) && heapBlk64 != BRIN_ALL_BLOCKRANGES)
+		if (RelationStorageIsAO(heapRel) && heapBlk64 != BRIN_ALL_BLOCKRANGES)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1463,7 +1463,7 @@ summarize_range(IndexInfo *indexInfo, BrinBuildState *state, Relation heapRel,
 		 * Fortunately, this should occur infrequently.
 		 */
 
-		if (endblknum != heapNumBlks && RelationIsAppendOptimized(heapRel))
+		if (endblknum != heapNumBlks && RelationStorageIsAO(heapRel))
 		{
 			/*
 			 * GPDB: We bail and don't summarize the final partial range if we
