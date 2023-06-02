@@ -26,7 +26,9 @@ void get_spill_info(int ssid, int ccid, int32_t *file_count,
 
 #include "EventSender.h"
 
-#define need_collect_metrics() (Gp_role == GP_ROLE_DISPATCH && nesting_level == 0)
+#define need_collect()                                                         \
+  (nesting_level == 0 && gp_command_count != 0 &&                              \
+   query_desc->sourceText != nullptr)
 
 namespace {
 
@@ -106,9 +108,10 @@ void set_query_text(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
   pfree(norm_query);
 }
 
-void set_query_info(yagpcc::QueryInfo *qi, QueryDesc *query_desc,
+void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
                     bool with_text, bool with_plan) {
   if (Gp_session_role == GP_ROLE_DISPATCH) {
+    auto qi = req->mutable_query_info();
     if (query_desc->sourceText && with_text) {
       set_query_text(qi, query_desc);
     }
@@ -214,7 +217,7 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
 
 void EventSender::executor_before_start(QueryDesc *query_desc,
                                         int /* eflags*/) {
-  if (need_collect_metrics()) {
+  if (Gp_role == GP_ROLE_DISPATCH && need_collect()) {
     instr_time starttime;
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
@@ -228,22 +231,21 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
 }
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
-  if (nesting_level != 0 || query_desc->utilitystmt) {
-    return;
-  }
-  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
+  if (Gp_role == GP_ROLE_DISPATCH ||
+      Gp_role == GP_ROLE_EXECUTE && need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
-    set_query_info(req.mutable_query_info(), query_desc, false, true);
+    set_query_info(&req, query_desc, false, true);
     send_query_info(&req, "started");
   }
 }
 
 void EventSender::executor_end(QueryDesc *query_desc) {
-  if (nesting_level != 0 || query_desc->utilitystmt) {
+  if (!need_collect() ||
+      (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE)) {
     return;
   }
-  if (need_collect_metrics() && query_desc->totaltime) {
+  if (query_desc->totaltime) {
     if (query_desc->estate->dispatcherState &&
         query_desc->estate->dispatcherState->primaryResults) {
       cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
@@ -251,37 +253,33 @@ void EventSender::executor_end(QueryDesc *query_desc) {
     }
     InstrEndLoop(query_desc->totaltime);
   }
-  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
-    auto req =
-        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
-    set_query_info(req.mutable_query_info(), query_desc, false, false);
-    // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
-    // gather it here. It only makes sense when doing regular stat checks.
-    set_gp_metrics(req.mutable_query_metrics(), query_desc,
-                   /*need_spillinfo*/ false);
-    send_query_info(&req, "ended");
-  }
+  auto req =
+      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
+  set_query_info(&req, query_desc, false, false);
+  // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
+  // gather it here. It only makes sense when doing regular stat checks.
+  set_gp_metrics(req.mutable_query_metrics(), query_desc,
+                 /*need_spillinfo*/ false);
+  send_query_info(&req, "ended");
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
-  if (nesting_level != 0 || query_desc->utilitystmt) {
-    return;
+  if (need_collect()) {
+    auto req =
+        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
+    set_query_info(&req, query_desc, true, false);
+    send_query_info(&req, "submit");
   }
-  auto req =
-      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
-  set_query_info(req.mutable_query_info(), query_desc, true, false);
-  send_query_info(&req, "submit");
 }
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      const std::string &status) {
-  if (nesting_level != 0 || query_desc->utilitystmt) {
-    return;
+  if (need_collect()) {
+    auto req =
+        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
+    set_query_info(&req, query_desc, false, false);
+    send_query_info(&req, status);
   }
-  auto req =
-      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
-  set_query_info(req.mutable_query_info(), query_desc, false, false);
-  send_query_info(&req, status);
 }
 
 void EventSender::send_query_info(yagpcc::SetQueryReq *req,
