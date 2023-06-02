@@ -44,6 +44,21 @@ std::string *get_db_name() {
   return result;
 }
 
+std::string *get_rg_name() {
+  auto userId = GetUserId();
+  if (!OidIsValid(userId))
+    return nullptr;
+  auto groupId = GetResGroupIdForRole(userId);
+  if (!OidIsValid(groupId))
+    return nullptr;
+  char *rgname = GetResGroupNameForId(groupId);
+  if (rgname == nullptr)
+    return nullptr;
+  auto result = new std::string(rgname);
+  pfree(rgname);
+  return result;
+}
+
 int get_cur_slice_id(QueryDesc *desc) {
   if (!desc->estate) {
     return 0;
@@ -121,6 +136,7 @@ void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
     }
     qi->set_allocated_username(get_user_name());
     qi->set_allocated_databasename(get_db_name());
+    qi->set_allocated_rsgname(get_rg_name());
   }
 }
 
@@ -224,6 +240,10 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     query_desc->instrument_options |= INSTRUMENT_TIMER;
     query_desc->instrument_options |= INSTRUMENT_CDB;
 
+    // TODO: there is a PR resolving some memory leak around auto-explain:
+    // https://github.com/greenplum-db/gpdb/pull/15164
+    // Need to check if the memory leak applies here as well and fix it
+    Assert(query_desc->showstatctx == NULL);
     INSTR_TIME_SET_CURRENT(starttime);
     query_desc->showstatctx =
         cdbexplain_showExecStatsBegin(query_desc, starttime);
@@ -232,7 +252,7 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   if (Gp_role == GP_ROLE_DISPATCH ||
-      Gp_role == GP_ROLE_EXECUTE && need_collect()) {
+      (Gp_role == GP_ROLE_EXECUTE && need_collect())) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
     set_query_info(&req, query_desc, false, true);
