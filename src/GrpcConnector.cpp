@@ -1,13 +1,14 @@
 #include "GrpcConnector.h"
+#include "Config.h"
 #include "yagpcc_set_service.grpc.pb.h"
 
-#include <grpc++/grpc++.h>
-#include <grpc++/channel.h>
-#include <string>
 #include <atomic>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
+#include <grpc++/channel.h>
+#include <grpc++/grpc++.h>
+#include <mutex>
+#include <string>
+#include <thread>
 
 extern "C" {
 #include "postgres.h"
@@ -16,7 +17,7 @@ extern "C" {
 
 class GrpcConnector::Impl {
 public:
-  Impl() {
+  Impl() : SOCKET_FILE("unix://" + Config::uds_path()) {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
     channel =
         grpc::CreateChannel(SOCKET_FILE, grpc::InsecureChannelCredentials());
@@ -58,7 +59,7 @@ public:
   }
 
 private:
-  const std::string SOCKET_FILE = "unix:///tmp/yagpcc_agent.sock";
+  const std::string SOCKET_FILE;
   std::unique_ptr<yagpcc::SetQueryInfo::Stub> stub;
   std::shared_ptr<grpc::Channel> channel;
   std::atomic_bool connected;

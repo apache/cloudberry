@@ -1,18 +1,19 @@
 extern "C" {
 #include "postgres.h"
-#include "utils/metrics_utils.h"
-#include "utils/elog.h"
 #include "executor/executor.h"
+#include "utils/elog.h"
+#include "utils/metrics_utils.h"
 
-#include "cdb/cdbvars.h"
 #include "cdb/cdbexplain.h"
+#include "cdb/cdbvars.h"
 
 #include "tcop/utility.h"
 }
 
-#include "stat_statements_parser/pg_stat_statements_ya_parser.h"
-#include "hook_wrappers.h"
+#include "Config.h"
 #include "EventSender.h"
+#include "hook_wrappers.h"
+#include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 
 static ExecutorStart_hook_type previous_ExecutorStart_hook = nullptr;
 static ExecutorRun_hook_type previous_ExecutorRun_hook = nullptr;

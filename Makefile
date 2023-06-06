@@ -33,6 +33,7 @@ OBJS			:=	$(PG_STAT_OBJS)						\
 					$(PROTO_GEN_OBJECTS)			 	\
 					$(SRC_DIR)/ProcStats.o				\
 					$(SRC_DIR)/SpillInfoWrapper.o		\
+					$(SRC_DIR)/Config.o					\
 					$(SRC_DIR)/GrpcConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\

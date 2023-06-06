@@ -1,3 +1,4 @@
+#include "Config.h"
 #include "GrpcConnector.h"
 #include "ProcStats.h"
 #include <ctime>
@@ -28,7 +29,7 @@ void get_spill_info(int ssid, int ccid, int32_t *file_count,
 
 #define need_collect()                                                         \
   (nesting_level == 0 && gp_command_count != 0 &&                              \
-   query_desc->sourceText != nullptr)
+   query_desc->sourceText != nullptr && Config::enable_collector())
 
 namespace {
 
@@ -233,26 +234,29 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
 
 void EventSender::executor_before_start(QueryDesc *query_desc,
                                         int /* eflags*/) {
-  if (Gp_role == GP_ROLE_DISPATCH && need_collect()) {
+  if (Gp_role == GP_ROLE_DISPATCH && need_collect() &&
+      Config::enable_analyze()) {
     instr_time starttime;
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
     query_desc->instrument_options |= INSTRUMENT_TIMER;
-    query_desc->instrument_options |= INSTRUMENT_CDB;
+    if (Config::enable_cdbstats()) {
+      query_desc->instrument_options |= INSTRUMENT_CDB;
 
-    // TODO: there is a PR resolving some memory leak around auto-explain:
-    // https://github.com/greenplum-db/gpdb/pull/15164
-    // Need to check if the memory leak applies here as well and fix it
-    Assert(query_desc->showstatctx == NULL);
-    INSTR_TIME_SET_CURRENT(starttime);
-    query_desc->showstatctx =
-        cdbexplain_showExecStatsBegin(query_desc, starttime);
+      // TODO: there is a PR resolving some memory leak around auto-explain:
+      // https://github.com/greenplum-db/gpdb/pull/15164
+      // Need to check if the memory leak applies here as well and fix it
+      Assert(query_desc->showstatctx == NULL);
+      INSTR_TIME_SET_CURRENT(starttime);
+      query_desc->showstatctx =
+          cdbexplain_showExecStatsBegin(query_desc, starttime);
+    }
   }
 }
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
-  if (Gp_role == GP_ROLE_DISPATCH ||
-      (Gp_role == GP_ROLE_EXECUTE && need_collect())) {
+  if ((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
+      need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
     set_query_info(&req, query_desc, false, true);
@@ -265,7 +269,8 @@ void EventSender::executor_end(QueryDesc *query_desc) {
       (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE)) {
     return;
   }
-  if (query_desc->totaltime) {
+  if (query_desc->totaltime && Config::enable_analyze() &&
+      Config::enable_cdbstats()) {
     if (query_desc->estate->dispatcherState &&
         query_desc->estate->dispatcherState->primaryResults) {
       cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
@@ -317,4 +322,7 @@ EventSender *EventSender::instance() {
   return &sender;
 }
 
-EventSender::EventSender() { connector = std::make_unique<GrpcConnector>(); }
+EventSender::EventSender() {
+  Config::init();
+  connector = std::make_unique<GrpcConnector>();
+}
