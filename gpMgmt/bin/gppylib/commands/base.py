@@ -440,7 +440,7 @@ class LocalExecutionContext(ExecutionContext):
         self.stdin = stdin
         pass
 
-    def execute(self, cmd, wait=True, pickled=False):
+    def execute(self, cmd, wait=True, pickled=False, start_new_session=False):
         # prepend env. variables from ExcecutionContext.propagate_env_map
         # e.g. Given {'FOO': 1, 'BAR': 2}, we'll produce "FOO=1 BAR=2 ..."
 
@@ -490,7 +490,7 @@ class RemoteExecutionContext(LocalExecutionContext):
         else:
             self.gphome = GPHOME
 
-    def execute(self, cmd, pickled=False):
+    def execute(self, cmd, pickled=False, start_new_session=False):
         # prepend env. variables from ExcecutionContext.propagate_env_map
         # e.g. Given {'FOO': 1, 'BAR': 2}, we'll produce "FOO=1 BAR=2 ..."
         self.__class__.trail.add(self.targetHost)
@@ -506,8 +506,8 @@ class RemoteExecutionContext(LocalExecutionContext):
                      "{targethost} \"{gphome} {cmdstr}\"".format(targethost=self.targetHost,
                                                                  gphome=". %s/greenplum_path.sh;" % self.gphome,
                                                                  cmdstr=cmd.cmdStr)
-        LocalExecutionContext.execute(self, cmd, pickled=pickled)
-        if (cmd.get_results().stderr.startswith('ssh_exchange_identification: Connection closed by remote host')):
+        LocalExecutionContext.execute(self, cmd, pickled=pickled, start_new_session=start_new_session)
+        if (cmd.get_stderr().startswith('ssh_exchange_identification: Connection closed by remote host')):
             self.__retry(cmd, 0, pickled)
         pass
 
@@ -528,7 +528,7 @@ class Command(object):
     exec_context = None
     propagate_env_map = {}  # specific environment variables for this command instance
 
-    def __init__(self, name, cmdStr, ctxt=LOCAL, remoteHost=None, stdin=None, gphome=None, pickled=False):
+    def __init__(self, name, cmdStr, ctxt=LOCAL, remoteHost=None, stdin=None, gphome=None, pickled=False, start_new_session=False):
         self.name = name
         self.cmdStr = cmdStr
         self.exec_context = createExecutionContext(ctxt, remoteHost, stdin=stdin,
@@ -536,6 +536,7 @@ class Command(object):
         self.remoteHost = remoteHost
         self.logger = gplog.get_default_logger()
         self.pickled = pickled
+        self.start_new_session = start_new_session
 
     def __str__(self):
         if self.results:
@@ -546,12 +547,12 @@ class Command(object):
     # Start a process that will execute the command but don't wait for
     # it to complete.  Return the Popen object instead.
     def runNoWait(self):
-        self.exec_context.execute(self, wait=False, pickled=self.pickled)
+        self.exec_context.execute(self, wait=False, pickled=self.pickled, start_new_session=self.start_new_session)
         return self.exec_context.proc
 
     def run(self, validateAfter=False):
         self.logger.debug("Running Command: %s" % self.cmdStr)
-        self.exec_context.execute(self, pickled=self.pickled)
+        self.exec_context.execute(self, pickled=self.pickled, start_new_session=self.start_new_session)
 
         if validateAfter:
             self.validate()
