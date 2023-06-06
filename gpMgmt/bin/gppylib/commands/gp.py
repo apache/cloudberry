@@ -1002,7 +1002,7 @@ class GpSegSetupRecovery(Command):
     """
     def __init__(self, name, confinfo, logdir, batchSize, verbose, remoteHost, forceoverwrite):
         cmdStr = _get_cmd_for_recovery_wrapper('gpsegsetuprecovery', confinfo, logdir, batchSize, verbose,forceoverwrite)
-        Command.__init__(self, name, cmdStr, REMOTE, remoteHost)
+        Command.__init__(self, name, cmdStr, REMOTE, remoteHost, start_new_session=True)
 
 
 class GpSegRecovery(Command):
@@ -1011,7 +1011,7 @@ class GpSegRecovery(Command):
     """
     def __init__(self, name, confinfo, logdir, batchSize, verbose, remoteHost, forceoverwrite, era):
         cmdStr = _get_cmd_for_recovery_wrapper('gpsegrecovery', confinfo, logdir, batchSize, verbose, forceoverwrite, era)
-        Command.__init__(self, name, cmdStr, REMOTE, remoteHost)
+        Command.__init__(self, name, cmdStr, REMOTE, remoteHost, start_new_session=True)
 
 
 def _get_cmd_for_recovery_wrapper(wrapper_filename, confinfo, logdir, batchSize, verbose, forceoverwrite, era=None):

@@ -201,6 +201,38 @@ def kill_sequence(pid):
     # all else failed - try SIGABRT
     logandkill(pid, signal.SIGABRT)
 
+"""
+Terminate a process tree (including grandchildren) with signal 'sig'.
+'on_terminate', if specified, is a callback function which is
+called as soon as a child terminates.
+"""
+def terminate_proc_tree(pid, sig=signal.SIGTERM, include_parent=True, timeout=None, on_terminate=None):
+    parent = psutil.Process(pid)
+
+    children = list()
+    terminated = set()
+
+    if include_parent:
+        children.append(parent)
+
+    children.extend(parent.children(recursive=True))
+    while children:
+        process = children.pop()
+        
+        try:
+            # Update the list with any new process spawned after the initial list creation
+            children.extend(process.children(recursive=True))
+            process.send_signal(sig)
+            terminated.add(process)
+        except psutil.NoSuchProcess:
+            pass
+
+    _, alive = psutil.wait_procs(terminated, timeout=timeout, callback=on_terminate)
+
+    # Forcefully terminate any remaining processes
+    for process in alive:
+        process.kill()
+
 
 # ---------------Platform Framework--------------------
 

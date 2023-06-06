@@ -386,10 +386,10 @@ def impl(context, content_ids):
         cmd.run(validateAfter=True)
 
 
-@given('the user {action} the walsender on the {segment} on content {content}')
-@when('the user {action} the walsender on the {segment} on content {content}')
-@then('the user {action} the walsender on the {segment} on content {content}')
-def impl(context, action, segment, content):
+@given('the user {action} the walsender on the {segment} on content {content_ids}')
+@when('the user {action} the walsender on the {segment} on content {content_ids}')
+@then('the user {action} the walsender on the {segment} on content {content_ids}')
+def impl(context, action, segment, content_ids):
     if segment == 'mirror':
         role = "'m'"
     elif segment == 'primary':
@@ -400,7 +400,7 @@ def impl(context, action, segment, content):
     create_fault_query = "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"
     execute_sql('postgres', create_fault_query)
 
-    inject_fault_query = "SELECT gp_inject_fault_infinite('wal_sender_loop', '%s', dbid) FROM gp_segment_configuration WHERE content=%s AND role=%s;" % (action, content, role)
+    inject_fault_query = "SELECT gp_inject_fault_infinite('wal_sender_loop', '%s', dbid) FROM gp_segment_configuration WHERE content IN (%s) AND role=%s;" % (action, content_ids, role)
     execute_sql('postgres', inject_fault_query)
     return
 
@@ -652,26 +652,16 @@ def impl(context, kill_process_name, log_msg, logfile_name):
               "fi; done" % (log_msg, logfile_name, kill_process_name)
     run_async_command(context, command)
 
-@given('the user asynchronously sets up to end {process_name} process with SIGINT')
-@when('the user asynchronously sets up to end {process_name} process with SIGINT')
-@then('the user asynchronously sets up to end {process_name} process with SIGINT')
-def impl(context, process_name):
-    command = "ps ux | grep bin/%s | awk '{print $2}' | xargs kill -2" % (process_name)
-    run_async_command(context, command)
+@given('the user asynchronously sets up to end {process_name} process with {signal_name}')
+@when('the user asynchronously sets up to end {process_name} process with {signal_name}')
+@then('the user asynchronously sets up to end {process_name} process with {signal_name}')
+def impl(context, process_name, signal_name):
+    try:
+        sig = getattr(signal, signal_name)
+    except:
+        raise Exception("Unknown signal: {0}".format(signal_name))
 
-
-@given('the user asynchronously sets up to end {process_name} process with SIGHUP')
-@when('the user asynchronously sets up to end {process_name} process with SIGHUP')
-@then('the user asynchronously sets up to end {process_name} process with SIGHUP')
-def impl(context, process_name):
-    command = "ps ux | grep bin/%s | awk '{print $2}' | xargs kill -9" % (process_name)
-    run_async_command(context, command)
-
-@given('the user asynchronously ends {process_name} process with SIGHUP')
-@when('the user asynchronously ends {process_name} process with SIGHUP')
-@then('the user asynchronously ends {process_name} process with SIGHUP')
-def impl(context, process_name):
-    command = "ps ux | grep %s | awk '{print $2}' | xargs kill -9" % (process_name)
+    command = "ps ux | grep bin/{0} | awk '{{print $2}}' | xargs kill -{1}".format(process_name, sig.value)
     run_async_command(context, command)
 
 @when('the user asynchronously sets up to end gpcreateseg process when it starts')
@@ -2737,6 +2727,21 @@ def impl(context, command, target):
     if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
+
+@then('{command} should print "{target}" regex to logfile')
+def impl(context, command, target):
+    log_dir = _get_gpAdminLogs_directory()
+    filename = glob.glob('%s/%s_*.log' % (log_dir, command))[0]
+    contents = ''
+    with open(filename) as fr:
+        for line in fr:
+            contents += line
+
+    pat = re.compile(target)
+    if not pat.search(contents):
+        raise Exception("cannot find %s in %s" % (target, filename))
+
+
 @given('verify that a role "{role_name}" exists in database "{dbname}"')
 @then('verify that a role "{role_name}" exists in database "{dbname}"')
 def impl(context, role_name, dbname):
@@ -3971,3 +3976,105 @@ def impl(context, contentids):
 
      if not no_basebackup:
          raise Exception("pg_basebackup entry was found for contents %s in gp_stat_replication after %d retries" % (contentids, retries))
+
+
+@given("create event trigger function")
+def impl(context):
+    dbname = "gptest"
+    query = "create or replace function notcie_ddl() returns event_trigger as $$ begin raise notice 'command % is executed.', tg_tag; end $$ language plpgsql"
+
+    with closing(dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)) as conn:
+        dbconn.execSQL(conn, query)
+
+
+@given('running postgres processes are saved in context')
+@when('running postgres processes are saved in context')
+@then('running postgres processes are saved in context')
+def impl(context):
+
+    # Store the pids in a dictionary where key will be the hostname and the
+    # value will be the pids of all the postgres processes running on that host
+    host_to_pid_map = dict()
+    segs = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+    for seg in segs:
+        pids = gp.get_postgres_segment_processes(seg.datadir, seg.hostname)
+        if seg.hostname not in host_to_pid_map:
+            host_to_pid_map[seg.hostname] = pids
+        else:
+            host_to_pid_map[seg.hostname].extend(pids)
+
+    context.host_to_pid_map = host_to_pid_map
+
+
+@given('verify no postgres process is running on all hosts')
+@when('verify no postgres process is running on all hosts')
+@then('verify no postgres process is running on all hosts')
+def impl(context):
+    host_to_pid_map = context.host_to_pid_map
+
+    for host in host_to_pid_map:
+        for pid in host_to_pid_map[host]:
+            if unix.check_pid_on_remotehost(pid, host):
+                raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
+
+
+@then('the database segments are in execute mode')
+def impl(context):
+    # Get all primary segments details
+    # For mirror segments, there's no way to distinguish if in execute mode or utility mode
+    with closing(dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)) as conn:
+        sql = "SELECT dbid, hostname, port  FROM gp_segment_configuration WHERE content > -1 and status = 'u' and role = 'p'"
+        rows = dbconn.query(conn, sql).fetchall()
+
+        if len(rows) <= 0:
+            raise Exception("Found no entries in gp_segment_configuration table")
+    # Check for each segment if the process is in
+    for row in rows:
+        dbid = row[0]
+        hostname = row[1].strip()
+        portnum = row[2]
+        cmd = "psql -d template1 -p {0} -h {1} -c \";\"".format(portnum, hostname)
+        run_command(context, cmd)
+        # If node is in execute mode, psql should return value 2 and the print the following error message:
+        # For a primary segment: "FATAL:  connections to primary segments are not allowed"
+        # For a mirror segment, always prints: "FATAL:  the database system is in recovery mode"
+        if context.ret_code == 2 and \
+           "FATAL:  connections to primary segments are not allowed" in context.error_message:
+            continue
+        else:
+            raise Exception("segment process not running in execute mode for DBID:{0}".format(dbid))
+
+
+@when('the user would run "{command}" and terminate the process with SIGINT and selects "{input}" {delay} delay')
+def impl(context, command, input, delay):
+    p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
+
+    context.execute_steps('''Then verify that pg_basebackup is running for content 0''')
+    p.send_signal(signal.SIGINT)
+
+    if delay == "with":
+        context.execute_steps('''When the user waits until mirror on content 0 is up''')
+
+    p.stdin.write(input.encode("utf-8"))
+    p.stdin.flush()
+
+    if input == "n":
+        context.execute_steps('''Then the user reset the walsender on the primary on content 0''')
+
+    stdout, stderr = p.communicate()
+    context.ret_code = p.returncode
+    context.stdout_message = stdout.decode()
+    context.error_message = stderr.decode()
+
+
+@when('the user would run "{command}" and terminate the process with SIGTERM')
+def impl(context, command):
+    p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
+
+    context.execute_steps('''Then the user just waits until recovery_progress.file is created in gpAdminLogs''')
+    p.send_signal(signal.SIGTERM)
+
+    stdout, stderr = p.communicate()
+    context.ret_code = p.returncode
+    context.stdout_message = stdout.decode()
+    context.error_message = stderr.decode()

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
+import os
+import signal
+
 from gppylib.recoveryinfo import RecoveryErrorType
 from gppylib.commands.pg import PgBaseBackup, PgRewind
 from recovery_base import RecoveryBase, set_recovery_cmd_results
 from gppylib.commands.base import Command
 from gppylib.commands.gp import SegmentStart
 from gppylib.gparray import Segment
+from gppylib.commands.unix import terminate_proc_tree
 
 
 class FullRecovery(Command):
@@ -108,6 +112,17 @@ class SegRecovery(object):
 
     def main(self):
         recovery_base = RecoveryBase(__file__)
+
+        def signal_handler(sig, frame):
+            recovery_base.logger.warning("Recieved termination signal, stopping gpsegrecovery")
+
+            while not recovery_base.pool.isDone():
+
+                # gpsegrecovery will be the parent for all the child processes (pg_basebackup/pg_rewind/rsync)
+                terminate_proc_tree(pid=os.getpid(), include_parent=False)
+
+        signal.signal(signal.SIGTERM, signal_handler)
+
         recovery_base.main(self.get_recovery_cmds(recovery_base.seg_recovery_info_list, recovery_base.options.forceoverwrite,
                                                   recovery_base.logger, recovery_base.options.era))
 
