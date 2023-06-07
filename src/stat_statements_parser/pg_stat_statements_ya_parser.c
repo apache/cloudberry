@@ -213,7 +213,7 @@ JumbleRangeTable(pgssJumbleState *jstate, List *rtable)
 			JumbleExpr(jstate, (Node *)rte->functions);
 			break;
 		default:
-			elog(ERROR, "unrecognized RTE kind: %d", (int)rte->rtekind);
+			ereport(ERROR, (errmsg("unrecognized RTE kind: %d", (int)rte->rtekind)));
 			break;
 		}
 	}
@@ -659,8 +659,8 @@ JumbleExpr(pgssJumbleState *jstate, Node *node)
 		break;
 	default:
 		/* Only a warning, since we can stumble along anyway */
-		elog(WARNING, "unrecognized node type: %d",
-			 (int)nodeTag(node));
+		ereport(WARNING, (errmsg("unrecognized node type: %d",
+			 (int)nodeTag(node))));
 		break;
 	}
 }
