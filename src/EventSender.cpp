@@ -2,6 +2,7 @@
 #include "GrpcConnector.h"
 #include "ProcStats.h"
 #include <ctime>
+#include <chrono>
 
 extern "C" {
 #include "postgres.h"
@@ -168,6 +169,8 @@ void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
   }
 }
 
+decltype(std::chrono::high_resolution_clock::now()) query_start_time;
+
 void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
                     bool need_spillinfo) {
   if (need_spillinfo) {
@@ -182,6 +185,10 @@ void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
     set_metric_instrumentation(metrics->mutable_instrumentation(), query_desc);
   }
   fill_self_stats(metrics->mutable_systemstat());
+  std::chrono::duration<double> elapsed_seconds =
+      std::chrono::high_resolution_clock::now() - query_start_time;
+  metrics->mutable_systemstat()->set_runningtimeseconds(
+      elapsed_seconds.count());
 }
 
 yagpcc::SetQueryReq create_query_req(QueryDesc *query_desc,
@@ -234,8 +241,11 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
 
 void EventSender::executor_before_start(QueryDesc *query_desc,
                                         int /* eflags*/) {
-  if (Gp_role == GP_ROLE_DISPATCH && need_collect() &&
-      Config::enable_analyze()) {
+  if (!need_collect()) {
+    return;
+  }
+  query_start_time = std::chrono::high_resolution_clock::now();
+  if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
     instr_time starttime;
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
