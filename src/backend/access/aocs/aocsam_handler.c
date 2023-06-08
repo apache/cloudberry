@@ -1733,13 +1733,11 @@ aoco_index_build_range_scan(Relation heapRelation,
 	int64 total_blockcount = 0; 
 	BlockNumber lastBlock = start_blockno;
 	int64 blockcounts = 0;
-#if 0
 	bool		need_create_blk_directory = false;
-	List	   *tlist = NIL;
-	List	   *qual = indexInfo->ii_Predicate;
-#endif
 	Oid			blkdirrelid;
 	Oid			blkidxrelid;
+	AppendOnlyBlockDirectory existingBlkdir;
+	bool        partialScanWithBlkdir = false;
 	int64 		previous_blkno = -1;
 
 	/*
@@ -1780,6 +1778,21 @@ aoco_index_build_range_scan(Relation heapRelation,
 	/* Set up execution state for predicate, if any. */
 	predicate = ExecPrepareQual(indexInfo->ii_Predicate, estate);
 
+	/*
+	 * If the block directory is empty, it has to be built along with the index,
+	 * which means scanning every column.  Otherwise we can restrict the scan to
+	 * the indexed columns.  This has to be settled before beginning the scan.
+	 */
+	{
+		Relation	blkdirrel;
+
+		GetAppendOnlyEntryAuxOids(heapRelation, NULL,
+								  &blkdirrelid, &blkidxrelid, NULL, NULL);
+		blkdirrel = relation_open(blkdirrelid, AccessShareLock);
+		need_create_blk_directory = (RelationGetNumberOfBlocks(blkdirrel) == 0);
+		relation_close(blkdirrel, NoLock);
+	}
+
 	if (!scan)
 	{
 		/*
@@ -1791,11 +1804,11 @@ aoco_index_build_range_scan(Relation heapRelation,
 		snapshot = SnapshotAny;
 
 		scan = table_beginscan_strat(heapRelation,	/* relation */
-		                             snapshot,	/* snapshot */
-		                             0, /* number of keys */
-		                             NULL,	/* scan key */
-		                             true,	/* buffer access strategy OK */
-		                             allow_sync);	/* syncscan OK? */
+									 snapshot,	/* snapshot */
+									 0, /* number of keys */
+									 NULL,	/* scan key */
+									 true,	/* buffer access strategy OK */
+									 allow_sync);	/* syncscan OK? */
 	}
 	else
 	{
@@ -1814,10 +1827,45 @@ aoco_index_build_range_scan(Relation heapRelation,
 	aocoscan = (AOCSScanDesc) scan;
 
 	/*
-	 * If block directory is empty, it must also be built along with the index.
+	 * GPDB_PORT: when the block directory already exists we only need the
+	 * columns the index refers to.  Upstream gets this by passing a target list
+	 * to table_beginscan_es(), but cbdb's version of that takes a PlanState, so
+	 * set the scan's column projection directly instead -- it is still NULL
+	 * here and would otherwise be lazily filled in with every column.
+	 *
+	 * Without this an AOCO partial scan positions and reads every column of the
+	 * relation rather than just the indexed ones, which is what the
+	 * CBDB_FIXME below referred to.
 	 */
-	GetAppendOnlyEntryAuxOids(heapRelation, NULL,
-							  &blkdirrelid, &blkidxrelid, NULL, NULL);
+	if (!need_create_blk_directory && aocoscan->columnScanInfo.proj_atts == NULL)
+	{
+		AttrNumber	natts = RelationGetNumberOfAttributes(heapRelation);
+		bool	   *idxproj = palloc0(natts * sizeof(bool));
+
+		for (int i = 0; i < indexInfo->ii_NumIndexAttrs; i++)
+		{
+			AttrNumber attrnum = indexInfo->ii_IndexAttrNumbers[i];
+
+			/* 0 means an expression index: its columns come from ii_Expressions */
+			if (attrnum > 0)
+				idxproj[attrnum - 1] = true;
+		}
+		if (indexInfo->ii_Expressions)
+			extractcolumns_from_node((Node *) indexInfo->ii_Expressions, idxproj, natts);
+		if (indexInfo->ii_Predicate)
+			extractcolumns_from_node((Node *) indexInfo->ii_Predicate, idxproj, natts);
+
+		aocoscan->columnScanInfo.proj_atts =
+			(AttrNumber *) palloc0(natts * sizeof(AttrNumber));
+		aocoscan->columnScanInfo.num_proj_atts = 0;
+		for (AttrNumber i = 0; i < natts; i++)
+		{
+			if (idxproj[i])
+				aocoscan->columnScanInfo.proj_atts[aocoscan->columnScanInfo.num_proj_atts++] = i;
+		}
+		pfree(idxproj);
+	}
+
 	/*
 	 * Note that block directory is created during creation of the first
 	 * index.  If it is found empty, it means the block directory was created
@@ -1827,31 +1875,105 @@ aoco_index_build_range_scan(Relation heapRelation,
 	 * blocked.  We can rest assured of exclusive access to the block
 	 * directory relation.
 	 */
-	Relation blkdir = relation_open(blkdirrelid, AccessShareLock);
-	if (RelationGetNumberOfBlocks(blkdir) == 0)
+	if (need_create_blk_directory)
 	{
 		/*
 		 * Allocate blockDirectory in scan descriptor to let the access method
-		 * know that it needs to also build the block directory while
-		 * scanning.
+		 * know that it needs to also build the block directory while scanning.
 		 */
 		Assert(aocoscan->blockDirectory == NULL);
 		aocoscan->blockDirectory = palloc0(sizeof(AppendOnlyBlockDirectory));
 	}
-	relation_close(blkdir, NoLock);
+	else if (numblocks != InvalidBlockNumber)
+	{
+		/*
+		 * We are performing a partial scan of the base relation. We already
+		 * have a non-empty blkdir to help guide our partial scan.
+		 */
+		bool	*proj;
+		int		relnatts = RelationGetNumberOfAttributes(heapRelation);
+		AppendOnlyBlockDirectoryEntry dirEntry = {0};
 
+		/* The range is contained within one seg. */
+		Assert(AOSegmentGet_segno(start_blockno) ==
+				   AOSegmentGet_segno(start_blockno + numblocks - 1));
+
+		/* Reverse engineer a proj bool array from the scan proj info */
+		proj = palloc0(relnatts * sizeof(bool));
+		for (int i = 0; i < aocoscan->columnScanInfo.num_proj_atts; i++)
+		{
+			AttrNumber colno = aocoscan->columnScanInfo.proj_atts[i];
+			proj[colno] = true;
+		}
+
+		partialScanWithBlkdir = true;
+		AppendOnlyBlockDirectory_Init_forSearch(&existingBlkdir,
+												snapshot,
+												(FileSegInfo **) aocoscan->seginfo,
+												aocoscan->total_seg,
+												heapRelation,
+												relnatts,
+												true,
+												proj);
+
+		for (int colIdx = 0; colIdx < aocoscan->columnScanInfo.num_proj_atts; colIdx++)
+		{
+			int		fsInfoIdx;
+			int 	columnGroupNo = aocoscan->columnScanInfo.proj_atts[colIdx];
+
+			if (AppendOnlyBlockDirectory_GetEntryForPartialScan(&existingBlkdir,
+																start_blockno,
+																columnGroupNo,
+																&dirEntry,
+																&fsInfoIdx))
+			{
+				/*
+				 * Since we found a block directory entry near start_blockno, we
+				 * can use it to position our scan.
+				 */
+				if (!aocs_positionscan(aocoscan, &dirEntry, colIdx, fsInfoIdx))
+				{
+					/*
+					 * If we have failed to position our scan, that can mean that
+					 * the start_blockno does not exist in the segfile.
+					 *
+					 * This could be either because the segfile itself is
+					 * empty/awaiting-drop or the directory entry's fileOffset
+					 * is beyond the seg's eof.
+					 *
+					 * In such a case, we can bail early. There is no need to scan
+					 * this segfile or any others.
+					 */
+					reltuples = 0;
+					goto cleanup;
+				}
+			}
+			else
+			{
+				/*
+				 * We were unable to find a block directory row
+				 * encompassing/preceding the start block. This represents an
+				 * edge case where the start block of the range maps to a hole
+				 * at the very beginning of the segfile (and before the first
+				 * minipage entry of the first minipage corresponding to this
+				 * segfile).
+				 *
+				 * Do nothing in this case. The scan will start anyway from the
+				 * beginning of the segfile (offset = 0), i.e. from the first row
+				 * present in the segfile (see BufferedReadInit()).
+				 * This will ensure that we don't skip the other possibly extant
+				 * blocks in the range.
+				 */
+				break;
+			}
+		}
+	}
 
 	/* Publish number of blocks to scan */
 	if (progress)
 	{
 
-	/* CBDB_FIXME: fixme after block directory support cherry-picked */ 
-#if 0
 		FileSegTotals	*fileSegTotals;
-		BlockNumber		totalBlocks;
-
-		/* XXX: How can we report for builds with parallel scans? */
-		Assert(!aocoscan->rs_base.rs_parallel);
 
 		/*
 		 * We will need to scan the entire table if we need to create a block
@@ -1868,11 +1990,6 @@ aoco_index_build_range_scan(Relation heapRelation,
 														   aocoscan->columnScanInfo.num_proj_atts);
 
 		Assert(fileSegTotals->totalbytes >= 0);
-		totalBlocks = RelationGuessNumberOfBlocksFromSize(fileSegTotals->totalbytes);
-#endif
-		FileSegTotals	*fileSegTotals;
-		fileSegTotals = GetAOCSSSegFilesTotals(heapRelation,
-												   aocoscan->appendOnlyMetaDataSnapshot);
 
 		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL,
 									RelationGuessNumberOfBlocksFromSize(fileSegTotals->totalbytes));
@@ -1907,14 +2024,19 @@ aoco_index_build_range_scan(Relation heapRelation,
 			++blockcounts;
 		}
 
-		/*
-		 * GPDB_12_MERGE_FIXME: How to properly do a partial scan? Currently,
-		 * we scan the whole table, and throw away tuples that are not in the
-		 * range. That's clearly very inefficient.
-		 */
-		if (currblockno < start_blockno ||
-			(numblocks != InvalidBlockNumber && currblockno >= (start_blockno + numblocks)))
+		if (currblockno < start_blockno)
+		{
+			/*
+			 * If the scan returned some tuples lying before the start of our
+			 * desired range, ignore the current tuple, and keep scanning.
+			 */
 			continue;
+		}
+		else if (partialScanWithBlkdir && currblockno >= (start_blockno + numblocks))
+		{
+			/* The scan has gone beyond our range bound. Time to stop. */
+			break;
+		}
 
 		/* Report scan progress, if asked to. */
 		if (progress)
@@ -1989,6 +2111,7 @@ aoco_index_build_range_scan(Relation heapRelation,
 
 	}
 
+cleanup:
 	if (progress)
 	{
 		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
@@ -2000,7 +2123,11 @@ aoco_index_build_range_scan(Relation heapRelation,
 		}
 	}
 
+
 	table_endscan(scan);
+
+	if (partialScanWithBlkdir)
+		AppendOnlyBlockDirectory_End_forSearch(&existingBlkdir);
 
 	ExecDropSingleTupleTableSlot(slot);
 
