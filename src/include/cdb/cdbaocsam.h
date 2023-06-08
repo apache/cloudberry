@@ -420,6 +420,11 @@ extern ExprState * aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 								ExprState *state,
 								ExprContext *ecxt,
 								PlanState *ps);
+extern bool aocs_positionscan(AOCSScanDesc aoscan,
+							  AppendOnlyBlockDirectoryEntry *dirEntry,
+							  int colIdx,
+							  int fsInfoIdx);
+
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
  * update it with the compressed length. If the block was not compressed, update
