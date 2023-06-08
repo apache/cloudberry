@@ -523,6 +523,10 @@ extern bool AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBloc
 										  TupleTableSlot *slot);
 
 extern void AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorReadBlock);
+extern bool appendonly_positionscan(AppendOnlyScanDesc aoscan,
+									AppendOnlyBlockDirectoryEntry *dirEntry,
+									int fsInfoIdx);
+
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
  * update it with the compressed length. If the block was not compressed, update
