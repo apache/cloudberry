@@ -329,12 +329,6 @@ void EventSender::send_query_info(yagpcc::SetQueryReq *req,
   }
 }
 
-EventSender *EventSender::instance() {
-  static EventSender sender;
-  return &sender;
-}
+EventSender::EventSender() { connector = std::make_unique<GrpcConnector>(); }
 
-EventSender::EventSender() {
-  Config::init();
-  connector = std::make_unique<GrpcConnector>();
-}
+EventSender::~EventSender() { connector.release(); }
