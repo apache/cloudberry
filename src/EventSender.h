@@ -17,15 +17,13 @@ public:
   void query_metrics_collect(QueryMetricsStatus status, void *arg);
   void incr_depth() { nesting_level++; }
   void decr_depth() { nesting_level--; }
-  static EventSender *instance();
+  EventSender();
+  ~EventSender();
 
 private:
   void collect_query_submit(QueryDesc *query_desc);
   void collect_query_done(QueryDesc *query_desc, const std::string &status);
-
-  EventSender();
   void send_query_info(yagpcc::SetQueryReq *req, const std::string &event);
   std::unique_ptr<GrpcConnector> connector;
-
   int nesting_level = 0;
 };
