@@ -235,7 +235,7 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
     // TODO
     break;
   default:
-    elog(FATAL, "Unknown query status: %d", status);
+    ereport(FATAL, (errmsg("Unknown query status: %d", status)));
   }
 }
 
@@ -321,9 +321,11 @@ void EventSender::send_query_info(yagpcc::SetQueryReq *req,
                                   const std::string &event) {
   auto result = connector->set_metric_query(*req);
   if (result.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR) {
-    elog(WARNING, "Query {%d-%d-%d} %s reporting failed with an error %s",
-         req->query_key().tmid(), req->query_key().ssid(),
-         req->query_key().ccnt(), event.c_str(), result.error_text().c_str());
+    ereport(WARNING,
+            (errmsg("Query {%d-%d-%d} %s reporting failed with an error %s",
+                    req->query_key().tmid(), req->query_key().ssid(),
+                    req->query_key().ccnt(), event.c_str(),
+                    result.error_text().c_str())));
   }
 }
 
