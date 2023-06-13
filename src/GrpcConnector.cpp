@@ -10,14 +10,17 @@
 #include <string>
 #include <thread>
 
-extern "C" {
+extern "C"
+{
 #include "postgres.h"
 #include "cdb/cdbvars.h"
 }
 
-class GrpcConnector::Impl {
+class GrpcConnector::Impl
+{
 public:
-  Impl() : SOCKET_FILE("unix://" + Config::uds_path()) {
+  Impl() : SOCKET_FILE("unix://" + Config::uds_path())
+  {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
     channel =
         grpc::CreateChannel(SOCKET_FILE, grpc::InsecureChannelCredentials());
@@ -27,15 +30,18 @@ public:
     reconnect_thread = std::thread(&Impl::reconnect, this);
   }
 
-  ~Impl() {
+  ~Impl()
+  {
     done = true;
     cv.notify_one();
     reconnect_thread.join();
   }
 
-  yagpcc::MetricResponse set_metric_query(yagpcc::SetQueryReq req) {
+  yagpcc::MetricResponse set_metric_query(yagpcc::SetQueryReq req)
+  {
     yagpcc::MetricResponse response;
-    if (!connected) {
+    if (!connected)
+    {
       response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR);
       response.set_error_text(
           "Not tracing this query connection to agent has been lost");
@@ -47,7 +53,8 @@ public:
         std::chrono::system_clock::now() + std::chrono::milliseconds(timeout);
     context.set_deadline(deadline);
     grpc::Status status = (stub->SetMetricQuery)(&context, req, &response);
-    if (!status.ok()) {
+    if (!status.ok())
+    {
       response.set_error_text("Connection lost: " + status.error_message() +
                               "; " + status.error_details());
       response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR);
@@ -68,13 +75,16 @@ private:
   std::mutex mtx;
   bool done;
 
-  void reconnect() {
-    while (!done) {
+  void reconnect()
+  {
+    while (!done)
+    {
       {
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock);
       }
-      while (!connected && !done) {
+      while (!connected && !done)
+      {
         auto deadline =
             std::chrono::system_clock::now() + std::chrono::milliseconds(100);
         connected = channel->WaitForConnected(deadline);
@@ -88,6 +98,7 @@ GrpcConnector::GrpcConnector() { impl = new Impl(); }
 GrpcConnector::~GrpcConnector() { delete impl; }
 
 yagpcc::MetricResponse
-GrpcConnector::set_metric_query(yagpcc::SetQueryReq req) {
+GrpcConnector::set_metric_query(yagpcc::SetQueryReq req)
+{
   return impl->set_metric_query(req);
 }
