@@ -1124,6 +1124,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"DYNAMIC TABLE", NULL, NULL, &Query_for_list_of_matviews, THING_NO_ALTER},
 	{"EVENT TRIGGER", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
+	{"EXTERNAL TABLE", NULL, NULL, NULL},
 	{"FOREIGN DATA WRAPPER", NULL, NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL, NULL},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
