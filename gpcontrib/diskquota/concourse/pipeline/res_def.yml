@@ -172,25 +172,25 @@ resources:
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-centos6.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev\.\d+)-.*-centos6.tar.gz
 - name: bin_gpdb6_centos7
   type: gcs
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-centos7.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev\.\d+)-.*-centos7.tar.gz
 - name: bin_gpdb6_rhel8
   type: gcs
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-rhel8.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev\.\d+)-.*-rhel8.tar.gz
 - name: bin_gpdb6_ubuntu18
   type: gcs
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb6/greenplum-db-server-6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-ubuntu18.04.tar.gz
+    regexp: server/release-candidates/gpdb6/greenplum-db-server-(6\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev\.\d+)-.*-ubuntu18.04.tar.gz
 - name: bin_gpdb7_el8
   type: gcs
   source:
