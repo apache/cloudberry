@@ -1514,7 +1514,8 @@ diskquota_status_binary_version()
 static const char *
 diskquota_status_schema_version()
 {
-	int ret = SPI_connect();
+	static char ret_version[64];
+	int         ret = SPI_connect();
 	Assert(ret = SPI_OK_CONNECT);
 
 	ret = SPI_execute("select extversion from pg_extension where extname = 'diskquota'", true, 0);
@@ -1542,8 +1543,10 @@ diskquota_status_schema_version()
 		goto fail;
 	}
 
+	StrNCpy(ret_version, version, sizeof(ret_version) - 1);
+
 	SPI_finish();
-	return version;
+	return ret_version;
 
 fail:
 	SPI_finish();
