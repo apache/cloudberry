@@ -336,3 +336,32 @@ dump_monitored_dbid_cache(long *nitems)
 	Assert(count == 0);
 	return entries;
 }
+
+/*
+ * After primary failure and mirror switching, the monitored_dbid_cache
+ * is lost on segments. We should refresh the monitored_dbid_cache during
+ * every diskquota refresh procedure.
+ */
+void
+refresh_monitored_dbid_cache(void)
+{
+	bool found;
+	Oid  dbid = MyDatabaseId;
+	LWLockAcquire(diskquota_locks.monitored_dbid_cache_lock, LW_EXCLUSIVE);
+	MonitorDBEntry entry = hash_search(monitored_dbid_cache, &dbid, HASH_ENTER_NULL, &found);
+	if (entry == NULL)
+	{
+		ereport(WARNING, (errmsg("can't alloc memory on dbid cache, there are too many databases to monitor")));
+	}
+	else if (!found)
+	{
+		entry->paused = false;
+		pg_atomic_init_u32(&(entry->epoch), 0);
+		pg_atomic_init_u32(&(entry->status), DB_RUNNING);
+		ereport(LOG, (errmsg("the entry in monitored_dbid_cache is lost due to mirror switching and is added back now, "
+		                     "dbid: %d",
+		                     dbid)));
+	}
+
+	LWLockRelease(diskquota_locks.monitored_dbid_cache_lock);
+}

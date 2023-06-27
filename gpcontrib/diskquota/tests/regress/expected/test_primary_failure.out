@@ -36,19 +36,27 @@ returns text as $$
     else:
         return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True, encoding='utf8').replace('.', '')
 $$ language plpython2u;
-CREATE TABLE a(i int) DISTRIBUTED BY (i);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-INSERT INTO a SELECT generate_series(1,100);
-INSERT INTO a SELECT generate_series(1,100000);
+CREATE TABLE a(i int, j int) DISTRIBUTED BY (i);
+-- the entries will be inserted into seg0
+INSERT INTO a SELECT 2, generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100000);
 SELECT diskquota.wait_for_worker_new_epoch();
  wait_for_worker_new_epoch 
 ---------------------------
  t
 (1 row)
 
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'a'::regclass ORDER BY segid;
+ tableid |  size   | segid 
+---------+---------+-------
+ a       | 3735552 |    -1
+ a       | 3735552 |     0
+ a       |       0 |     1
+ a       |       0 |     2
+(4 rows)
+
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name: ftsr
 -- now one of primary is down
 select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
@@ -74,7 +82,7 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 (2 rows)
 
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100);
 ERROR:  schema's disk space quota exceeded with name: ftsr
 -- increase quota
 SELECT diskquota.set_schema_quota('ftsr', '200 MB');
@@ -82,6 +90,31 @@ SELECT diskquota.set_schema_quota('ftsr', '200 MB');
 ------------------
  
 (1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert success
+INSERT INTO a SELECT 2, generate_series(1,10000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- check whether monitored_dbid_cache is refreshed in mirror
+-- diskquota.table_size should be updated
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'a'::regclass ORDER BY segid;
+ tableid |  size   | segid 
+---------+---------+-------
+ a       | 4096000 |    -1
+ a       | 4096000 |     0
+ a       |       0 |     1
+ a       |       0 |     2
+(4 rows)
 
 -- pull up failed primary
 -- start_ignore
@@ -256,10 +289,10 @@ SELECT diskquota.wait_for_worker_new_epoch();
 SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
  quota_in_mb | nspsize_in_bytes 
 -------------+------------------
-         200 |          3932160
+         200 |          4096000
 (1 row)
 
-INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100);
 DROP TABLE a;
 DROP SCHEMA ftsr CASCADE;
 NOTICE:  drop cascades to 2 other objects

@@ -291,4 +291,5 @@ extern HTAB        *diskquota_hash_create(const char *tabname, long nelem, HASHC
                                           DiskquotaHashFunction hashFunction);
 extern HTAB *DiskquotaShmemInitHash(const char *name, long init_size, long max_size, HASHCTL *infoP, int hash_flags,
                                     DiskquotaHashFunction hash_function);
+extern void  refresh_monitored_dbid_cache(void);
 #endif

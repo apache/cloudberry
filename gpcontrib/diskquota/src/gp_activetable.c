@@ -749,6 +749,8 @@ get_active_tables_oid(void)
 
 	Oid relOid;
 
+	refresh_monitored_dbid_cache();
+
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize                 = sizeof(DiskQuotaActiveTableFileEntry);
 	ctl.entrysize               = sizeof(DiskQuotaActiveTableFileEntry);
