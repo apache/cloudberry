@@ -42,6 +42,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
+#include "tcop/pquery.h"
 
 PG_MODULE_MAGIC;
 
@@ -175,6 +176,28 @@ _PG_init(void)
 	/* diskquota.so must be in shared_preload_libraries to init SHM. */
 	if (!process_shared_preload_libraries_in_progress)
 	{
+		/*
+		 * To support the continuous upgrade/downgrade, we should skip the library
+		 * check in _PG_init() during upgrade/downgrade. If the POSTGRES backend
+		 * process is in normal mode and meets one of the following conditions, we
+		 * skip the library check:
+		 * - The backend is not a QD. We only need to check the library on QD.
+		 * - The current command is `ALTER EXTENSION`.
+		 */
+		if (IsNormalProcessingMode())
+		{
+			if (Gp_role != GP_ROLE_DISPATCH)
+			{
+				ereport(WARNING, (errmsg("[diskquota] booting " DISKQUOTA_VERSION ", but " DISKQUOTA_BINARY_NAME
+				                         " not in shared_preload_libraries.")));
+				return;
+			}
+			if (ActivePortal && ActivePortal->sourceTag == T_AlterExtensionStmt)
+			{
+				ereport(LOG, (errmsg("[diskquota] altering diskquota version to " DISKQUOTA_VERSION ".")));
+				return;
+			}
+		}
 		ereport(ERROR, (errmsg("[diskquota] booting " DISKQUOTA_VERSION ", but " DISKQUOTA_BINARY_NAME
 		                       " not in shared_preload_libraries. abort.")));
 	}
