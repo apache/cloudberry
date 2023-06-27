@@ -338,7 +338,13 @@ disk_quota_worker_main(Datum main_arg)
 	pqsignal(SIGUSR1, disk_quota_sigusr1);
 
 	if (!MyWorkerInfo->dbEntry->inited)
+	{
+		MyWorkerInfo->dbEntry->last_log_time = GetCurrentTimestamp();
 		ereport(LOG, (errmsg("[diskquota] start disk quota worker process to monitor database:%s", dbname)));
+	}
+	/* To avoid last_log_time from being uninitialized. */
+	if (MyWorkerInfo->dbEntry->last_log_time > GetCurrentTimestamp())
+		MyWorkerInfo->dbEntry->last_log_time = GetCurrentTimestamp();
 	/*
 	 * The shmem exit hook is registered after registering disk_quota_sigterm.
 	 * So if the SIGTERM arrives before this statement, the shmem exit hook
@@ -482,11 +488,10 @@ disk_quota_worker_main(Datum main_arg)
 
 	if (!MyWorkerInfo->dbEntry->inited) update_monitordb_status(MyWorkerInfo->dbEntry->dbid, DB_RUNNING);
 
-	bool        is_gang_destroyed   = false;
-	TimestampTz log_start_timestamp = GetCurrentTimestamp();
-	TimestampTz log_end_timestamp;
+	bool        is_gang_destroyed    = false;
 	TimestampTz loop_start_timestamp = 0;
 	TimestampTz loop_end_timestamp;
+	TimestampTz log_time;
 	long        sleep_time = diskquota_naptime * 1000;
 	long        secs;
 	int         usecs;
@@ -502,11 +507,11 @@ disk_quota_worker_main(Datum main_arg)
 		 * every BGWORKER_LOG_TIME to ensure that we can find the database name
 		 * by the bgworker's pid in the log file.
 		 */
-		log_end_timestamp = GetCurrentTimestamp();
-		if (TimestampDifferenceExceeds(log_start_timestamp, log_end_timestamp, BGWORKER_LOG_TIME))
+		log_time = GetCurrentTimestamp();
+		if (TimestampDifferenceExceeds(log_time, MyWorkerInfo->dbEntry->last_log_time, BGWORKER_LOG_TIME))
 		{
 			ereport(LOG, (errmsg("[diskquota] disk quota worker process is monitoring database:%s", dbname)));
-			log_start_timestamp = log_end_timestamp;
+			MyWorkerInfo->dbEntry->last_log_time = log_time;
 		}
 
 		/*
