@@ -217,6 +217,8 @@ struct DiskquotaDBEntry
 
 	bool inited; // this entry is inited, will set to true after the worker finish the frist run.
 	bool in_use; // this slot is in using. AKA dbid != 0
+
+	TimestampTz last_log_time; // the last time log current database info.
 };
 
 typedef enum MonitorDBStatus
