@@ -33,12 +33,16 @@ returns text as $$
         return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True, encoding='utf8').replace('.', '')
 $$ language @PLPYTHON_LANG_STR@;
 
-CREATE TABLE a(i int) DISTRIBUTED BY (i);
-INSERT INTO a SELECT generate_series(1,100);
-INSERT INTO a SELECT generate_series(1,100000);
+CREATE TABLE a(i int, j int) DISTRIBUTED BY (i);
+-- the entries will be inserted into seg0
+INSERT INTO a SELECT 2, generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100000);
 SELECT diskquota.wait_for_worker_new_epoch();
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'a'::regclass ORDER BY segid;
+
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100);
 
 -- now one of primary is down
 select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
@@ -50,10 +54,21 @@ select gp_request_fts_probe_scan();
 select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
 
 -- expect insert fail
-INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100);
 
 -- increase quota
 SELECT diskquota.set_schema_quota('ftsr', '200 MB');
+
+SELECT diskquota.wait_for_worker_new_epoch();
+
+-- expect insert success
+INSERT INTO a SELECT 2, generate_series(1,10000);
+
+SELECT diskquota.wait_for_worker_new_epoch();
+
+-- check whether monitored_dbid_cache is refreshed in mirror
+-- diskquota.table_size should be updated
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'a'::regclass ORDER BY segid;
 
 -- pull up failed primary
 -- start_ignore
@@ -67,7 +82,7 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 
 SELECT diskquota.wait_for_worker_new_epoch();
 SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
-INSERT INTO a SELECT generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100);
 
 DROP TABLE a;
 DROP SCHEMA ftsr CASCADE;
