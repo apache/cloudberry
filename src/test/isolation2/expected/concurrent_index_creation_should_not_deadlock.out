@@ -1,9 +1,7 @@
 -- Test to make sure non-first concurrent index creations don't deadlock
 -- Create an append only table, popluated with data
 CREATE TABLE index_deadlocking_test_table (value int) WITH (appendonly=true);
-CREATE
-CREATE INDEX index_deadlocking_test_table_initial_index on index_deadlocking_test_table (value);
-CREATE
+CREATE TABLE
 
 -- Setup a fault to ensure that both sessions pauses while creating an index,
 -- ensuring a concurrent index creation.
@@ -29,6 +27,6 @@ SELECT gp_inject_fault('defineindex_before_acquire_lock', 'reset', 1);
 
 -- Both index creation attempts should succeed
 1<:  <... completed>
-CREATE
+CREATE INDEX
 2<:  <... completed>
-CREATE
+CREATE INDEX

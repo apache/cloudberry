@@ -88,6 +88,17 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
  0       | p              | m    | u      | s    
 (2 rows)
 
+-- set GUCs to speed-up the test
+alter system set gp_fts_probe_retries to 2;
+ALTER SYSTEM
+alter system set gp_fts_probe_timeout to 5;
+ALTER SYSTEM
+select pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)
+
 -- start_ignore
 select dbid from gp_segment_configuration where content = 0 and role = 'p';
  dbid 
@@ -139,9 +150,9 @@ select pg_sleep(2);
 -- start_ignore
 -- reset GUCs
 alter system set gp_fts_probe_retries to default;
-ALTER
+ALTER SYSTEM
 alter system set gp_fts_probe_timeout to default;
-ALTER
+ALTER SYSTEM
 select pg_reload_conf();
  pg_reload_conf 
 ----------------
@@ -169,9 +180,9 @@ select pg_sleep(2);
 -- end_ignore
 (exited with code 0)
 create tablespace mirror_promotion_tablespace location '/tmp/mirror_promotion_tablespace_loc';
-CREATE
+CREATE TABLESPACE
 create table mirror_promotion_tblspc_heap_table (a int) tablespace mirror_promotion_tablespace;
-CREATE
+CREATE TABLE
 
 -- -- now, let's fully recover the mirror
 !\retcode gprecoverseg -aF  --no-progress;
@@ -180,9 +191,9 @@ CREATE
 (exited with code 0)
 
 drop table mirror_promotion_tblspc_heap_table;
-DROP
+DROP TABLE
 drop tablespace mirror_promotion_tablespace;
-DROP
+DROP TABLESPACE
 
 -- loop while segments come in sync
 select wait_until_all_segments_synchronized();

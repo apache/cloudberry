@@ -6,9 +6,9 @@ CREATE FUNCTION set_gp_ic_type(ic_type text) RETURNS VOID as $$ import os cmd = 
 CREATE
 
 CREATE TABLE tcp_ic_teardown(i int);
-CREATE
+CREATE TABLE
 INSERT INTO tcp_ic_teardown SELECT generate_series(1, 5);
-INSERT 5
+INSERT 0 5
 
 -- Save current IC type before we set it to 'tcp', so we can revert it at the
 -- end of the test.
