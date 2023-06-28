@@ -196,7 +196,7 @@ resources:
   source:
     bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/release-candidates/gpdb7/greenplum-db-server-7\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev.*-el8.tar.gz
+    regexp: server/release-candidates/gpdb7/greenplum-db-server-(7\.([0-9]|([1-8][0-9])|(9[0-8]))\..*-dev\.\d+)-.*-el8.tar.gz
 
 # Diskquota releases
 - name: bin_diskquota_gpdb6_rhel6
