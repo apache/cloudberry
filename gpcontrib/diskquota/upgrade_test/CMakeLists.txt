@@ -30,21 +30,24 @@ regresstarget_add(
   REGRESS_OPTS
   --dbname=contrib_regression)
 
-exec_program(
-  git ${CMAKE_SOURCE_DIR} ARGS
-  tag | sort --version-sort -r | head -n 1
+execute_process(
+  COMMAND git describe --tags --abbrev=0
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE latest_tag
+  OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
 # check whether DDL file (*.sql) is modified
-file(GLOB ddl_files ${CMAKE_SOURCE_DIR}/*.sql)
+file(GLOB ddl_files ${DISKQUOTA_DDL_DIR}/*.sql)
 foreach(ddl IN LISTS ddl_files)
   cmake_path(GET ddl FILENAME ddl)
-  exec_program(
-    git ${CMAKE_SOURCE_DIR} ARGS
-    diff ${latest_tag} --exit-code ${ddl}
-    OUTPUT_VARIABLE NULL
-    RETURN_VALUE "${ddl}_modified")
+  execute_process(
+    COMMAND
+    git diff ${latest_tag} --exit-code ${ddl}
+    OUTPUT_QUIET
+    WORKING_DIRECTORY ${DISKQUOTA_DDL_DIR}
+    RESULT_VARIABLE "${ddl}_modified"
+  )
 
   if("${${ddl}_modified}")
     message(
