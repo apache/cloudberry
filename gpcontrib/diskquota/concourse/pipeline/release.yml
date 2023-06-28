@@ -20,7 +20,7 @@
 #@   centos7_gpdb6_conf(release_build=True),
 #@   rhel8_gpdb6_conf(release_build=True),
 #@   ubuntu18_gpdb6_conf(release_build=True),
-#@   rhel8_gpdb7_conf(release_build=True)
+#! #@   rhel8_gpdb7_conf(release_build=True)
 #@ ]
 jobs:
 #@ param = {
