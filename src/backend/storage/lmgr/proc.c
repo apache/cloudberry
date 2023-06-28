@@ -906,7 +906,10 @@ LockErrorCleanup(void)
 	/* Don't try to cancel resource locks.*/
 	if ((Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE()) && IsResQueueEnabled() &&
 		LOCALLOCK_LOCKMETHOD(*lockAwaited) == RESOURCE_LOCKMETHOD)
+	{
+		RESUME_INTERRUPTS();
 		return;
+	}
 
 	/*
 	 * Turn off the deadlock and lock timeout timers, if they are still
