@@ -42,6 +42,9 @@ test_alter_from() {
     gpstop -rai
 
     psql -d diskquota_alter_test -c "ALTER EXTENSION diskquota update to '${to_ver}'"
+    # Sleep wait for bgworker starting, otherwise, we will get a warning
+    # 'cannot remove the database from db list, dbid not found'.
+    sleep 5
     psql -d diskquota_alter_test -c "DROP EXTENSION diskquota"
 }
 
