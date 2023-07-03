@@ -541,7 +541,6 @@ disk_quota_worker_main(Datum main_arg)
 	long        sleep_time = diskquota_naptime * 1000;
 	long        secs;
 	int         usecs;
-	ereport(LOG, (errmsg("[diskquota] disk quota worker process is monitoring database:%s", dbname)));
 
 	while (!got_sigterm)
 	{
