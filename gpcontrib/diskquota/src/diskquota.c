@@ -553,7 +553,7 @@ disk_quota_worker_main(Datum main_arg)
 		 * by the bgworker's pid in the log file.
 		 */
 		log_time = GetCurrentTimestamp();
-		if (TimestampDifferenceExceeds(log_time, MyWorkerInfo->dbEntry->last_log_time, BGWORKER_LOG_TIME))
+		if (TimestampDifferenceExceeds(MyWorkerInfo->dbEntry->last_log_time, log_time, BGWORKER_LOG_TIME))
 		{
 			ereport(LOG, (errmsg("[diskquota] disk quota worker process is monitoring database:%s", dbname)));
 			MyWorkerInfo->dbEntry->last_log_time = log_time;
