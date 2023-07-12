@@ -24,7 +24,7 @@ resources:
   webhook_token: ((extension/diskquota-webhook-token))
   check_every: 24h
   source:
-    disable_forks: false
+    disable_forks: true
     repository: greenplum-db/diskquota
     access_token: ((extension/github-access-token))
 # Commit trigger
