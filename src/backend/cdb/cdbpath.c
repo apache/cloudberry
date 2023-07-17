@@ -2642,12 +2642,6 @@ create_motion_path_for_upddel(PlannerInfo *root, Index rti, GpPolicy *policy,
 			return subpath;
 		else
 		{
-			/* GPDB_96_MERGE_FIXME: avoid creating the Explicit Motion in
-			 * simple cases, where all the input data is already on the
-			 * same segment.
-			 *
-			 * Is "strewn" correct here? Can we do better?
-			 */
 			CdbPathLocus_MakeStrewn(&targetLocus, policy->numsegments, 0);
 			subpath = cdbpath_create_explicit_motion_path(root,
 														  subpath,
