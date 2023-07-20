@@ -132,16 +132,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("COPY single row error handling only available using COPY FROM")));
 
-	/* GPDB_91_MERGE_FIXME: this should probably be done earlier, e.g. in parser */
-	/* Transfer any SREH options to the options list, so that BeginCopy can see them. */
-	if (stmt->sreh)
-	{
-		SingleRowErrorDesc *sreh = (SingleRowErrorDesc *) stmt->sreh;
-
-		options = list_copy(options);
-		options = lappend(options, makeDefElem("sreh", (Node *) sreh, -1));
-	}
-
 	lockmode = is_from ? RowExclusiveLock : AccessShareLock;
 	if (stmt->relation)
 	{
