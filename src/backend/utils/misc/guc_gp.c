@@ -4359,6 +4359,18 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 
+	/**
+	 * In previous code, the default value of dtx_phase2_retry_second is 60s.
+	 * If the command cannot be dispatched successfully within this period, a PANIC happens
+	 * (Details are in doNotifyingCommitPrepared()).
+	 * Then the postmaster will restart and goes into recovery process.
+	 *
+	 * So, a small value may make user confused: why my postmaster restarts; but a big value
+	 * is also not good: the txn keeps retrying in dispatch, it may block other txns.
+	 *
+	 * After a long discussion: https://github.com/greenplum-db/gpdb/pull/15632, we choose a
+	 * compromise default value: 600s(10min) here.
+	 */
 	{
 		{"dtx_phase2_retry_second", PGC_SUSET, GP_ARRAY_TUNING,
 			gettext_noop("Maximum time for which coordinator tries to finish a prepared transaction"),
@@ -4368,7 +4380,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_SUPERUSER_ONLY |  GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_S
 		},
 		&dtx_phase2_retry_second,
-		60, 0, INT_MAX,
+		600, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 
