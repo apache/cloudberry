@@ -16,6 +16,7 @@ Usage: gpcheckcat [<option>] [dbname]
     -R test | 'test1, test2' : run this particular test(s) (quoted, comma seperated list for multiple tests)
     -s test | 'test1, test2' : skip this particular test(s) (quoted, comma seperated list for multiple tests)
     -C catname               : run cross consistency, FK and ACL tests for this catalog table
+    -x                       : set session level GUCs
 
     Test subset options are mutually exclusive, use only one of '-R', '-s', or '-C'.
 
@@ -130,6 +131,7 @@ class Global():
         self.opt['-l'] = False
 
         self.opt['-E'] = False
+        self.opt['-x'] = []
 
         self.coordinator_dbid = None
         self.cfg = None
@@ -234,7 +236,7 @@ def getalldbs():
 def parseCommandLine():
     try:
         # A colon following the flag indicates an argument is expected
-        (options, args) = getopt.getopt(sys.argv[1:], '?p:P:U:B:vg:t:AOS:R:s:C:lE', 'help')
+        (options, args) = getopt.getopt(sys.argv[1:], '?x:p:P:U:B:vg:t:AOS:R:s:C:lE', 'help')
     except Exception as e:
         usage('Error: ' + str(e))
 
@@ -245,6 +247,8 @@ def parseCommandLine():
             GV.opt[switch] = val
         elif switch[1] in 'vtAOlE':
             GV.opt[switch] = True
+        elif switch[1] in 'x':
+            GV.opt[switch].append(val)
 
     def setdef(x, v):
         if not GV.opt[x]:
@@ -328,6 +332,8 @@ def connect(user=None, password=None, host=None, port=None,
     options = '-c search_path='
     if utilityMode:
         options += ' -c gp_role=utility'
+    for val in GV.opt['-x']:
+        options += ' -c {}'.format(val)
 
     if not user: user = GV.opt['-U']
     if not password: password = GV.opt['-P']

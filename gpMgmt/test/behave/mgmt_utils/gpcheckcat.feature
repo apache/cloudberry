@@ -691,3 +691,36 @@ Feature: gpcheckcat tests
 #            | attrname   | tablename     |
 #            | conrelid   | pg_constraint |
 #
+
+
+    Scenario: set multiple GUC at session level in gpcheckcat
+        Given database "all_good" is dropped and recreated
+        Then the user runs "gpcheckcat -x disable_cost=3e15 -x log_min_messages=debug5 -R foreign_key"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should print "foreign_key" to stdout
+        And the user runs "dropdb all_good"
+
+
+    Scenario: set GUC with invalid value at session level in gpcheckcat
+        Given database "all_good" is dropped and recreated
+        Then the user runs "gpcheckcat -x disable_cost=invalid -R foreign_key"
+        Then gpcheckcat should return a return code of 1
+        And gpcheckcat should print ".* invalid value for parameter "disable_cost": "invalid"" to stdout
+        And the user runs "dropdb all_good"
+
+
+    Scenario: validate session GUC passed with -x is set
+        Given the database is not running
+          And the user runs "gpstart -ma"
+          And "gpstart -ma" should return a return code of 0
+         Then the user runs "gpcheckcat -R foreign_key"
+         Then gpcheckcat should return a return code of 1
+          And gpcheckcat should print ".* System was started in single node mode - only utility mode connections are allowed" to stdout
+         Then the user runs "gpcheckcat -x gp_role=utility -R foreign_key"
+         Then gpcheckcat should return a return code of 0
+          And the user runs "gpstop -ma"
+          And "gpstop -m" should return a return code of 0
+          And the user runs "gpstart -a"
+
+
+
