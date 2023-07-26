@@ -19,7 +19,7 @@ for executing this set of commands.
 
 from queue import Queue, Empty
 from threading import Thread
-
+from collections import OrderedDict
 import os
 import signal
 import socket
@@ -654,12 +654,13 @@ def findCmdInPath(cmd):
     CMDPATH = ['/usr/kerberos/bin', '/usr/sfw/bin', '/opt/sfw/bin', '/bin', '/usr/local/bin',
                '/usr/bin', '/sbin', '/usr/sbin', '/usr/ucb', '/sw/bin', '/opt/Navisphere/bin']
     CMDPATH = CMDPATH + os.environ['PATH'].split(os.pathsep)
-    # remove duplicate paths
-    CMDPATH = list(set(CMDPATH))
 
     if GPHOME:
         CMDPATH.append(GPHOME)
 
+    # remove duplicate paths
+    unique_paths = OrderedDict.fromkeys(CMDPATH)
+    CMDPATH = list(unique_paths.keys())
 
     if cmd not in CMD_CACHE:
         for p in CMDPATH:
