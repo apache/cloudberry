@@ -58,6 +58,7 @@ CREATE INDEX grect2ind ON fast_emp4000 USING gist (home_base);
 CREATE INDEX gpolygonind ON polygon_tbl USING gist (f1);
 CREATE INDEX gcircleind ON circle_tbl USING gist (f1);
 INSERT INTO POINT_TBL(f1) VALUES (NULL);
+ANALYZE POINT_TBL;
 CREATE INDEX gpointind ON point_tbl USING gist (f1);
 CREATE TEMP TABLE gpolygon_tbl AS
     SELECT polygon(home_base) AS f1 FROM slow_emp4000;
@@ -651,16 +652,16 @@ SELECT * FROM point_tblv WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 --SELECT * FROM point_tbl WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                                                QUERY PLAN
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Result
-   ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
-         ->  Result
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Index Scan using gpointind on point_tbl
-                           Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
-                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision) AND (f1 <@ '(10,10),(-10,-10)'::box))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: ((f1 <-> '(0,1)'::point))
+         ->  Sort
+               Sort Key: ((f1 <-> '(0,1)'::point))
+               ->  Index Scan using gpointind on point_tbl
+                     Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+                     Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision) AND (f1 <@ '(10,10),(-10,-10)'::box))
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
@@ -766,16 +767,16 @@ SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                                                QUERY PLAN
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Result
-   ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
-         ->  Result
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Index Scan using gpointind on point_tbl
-                           Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
-                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision) AND (f1 <@ '(10,10),(-10,-10)'::box))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: ((f1 <-> '(0,1)'::point))
+         ->  Sort
+               Sort Key: ((f1 <-> '(0,1)'::point))
+               ->  Index Scan using gpointind on point_tbl
+                     Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+                     Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision) AND (f1 <@ '(10,10),(-10,-10)'::box))
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
