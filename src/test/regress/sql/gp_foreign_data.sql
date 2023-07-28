@@ -2,8 +2,15 @@
 -- Test foreign-data wrapper and server management. Cloudberry MPP specific
 --
 
-CREATE FOREIGN DATA WRAPPER dummy;
+-- start_ignore
+DROP SERVER s0 CASCADE;
+DROP SERVER s1 CASCADE;
+DROP FOREIGN DATA WRAPPER dummy CASCADE;
+-- end_ignore
+
+CREATE FOREIGN DATA WRAPPER dummy OPTIONS (mpp_execute 'coordinator');;
 COMMENT ON FOREIGN DATA WRAPPER dummy IS 'useless';
+ALTER FOREIGN DATA WRAPPER dummy OPTIONS (SET mpp_execute 'all segments');
 
 -- CREATE FOREIGN TABLE
 CREATE SERVER s0 FOREIGN DATA WRAPPER dummy;
