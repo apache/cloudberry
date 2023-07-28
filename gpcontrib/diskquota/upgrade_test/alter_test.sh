@@ -48,6 +48,25 @@ test_alter_from() {
     psql -d diskquota_alter_test -c "DROP EXTENSION diskquota"
 }
 
+_determine_gp_major_version() {
+    local includedir="$(pg_config --includedir)"
+    GP_MAJORVERSION=$(grep -oP '.*GP_MAJORVERSION.*"\K[^"]+' "${includedir}/pg_config.h")
+}
+_determine_gp_major_version
+
+compare_versions() {
+     # implementing string manipulation
+     local a=${1%%.*} b=${2%%.*}
+     [[ "10#${a:-0}" -gt "10#${b:-0}" ]] && return 1
+     [[ "10#${a:-0}" -lt "10#${b:-0}" ]] && return 2
+     # re-assigning a and b with greatest of 1 and 2 after manipulation
+     a=${1:${#a} + 1}
+     b=${2:${#b} + 1}
+     # terminal condition for recursion
+     [[ -z $a && -z $b ]] || compare_versions "$a" "$b"
+}
+
+
 # Find all minor versions before current one
 while IFS= read -r ver; do
     if [ "${ver}" = "${CUR_VERSION}" ]; then
@@ -55,6 +74,16 @@ while IFS= read -r ver; do
     fi
     if [ "${ver}" = "0.8" ]; then
         continue
+    fi
+    # The first version of diskquota for GP7 is 2.2
+    if [ "$GP_MAJORVERSION" -eq "7" ]; then
+        set +e
+        compare_versions $ver "2.2"
+        cmp_res=$?
+        set -e
+        if [ $cmp_res -eq "2" ]; then
+            continue
+        fi
     fi
     VERSIONS_TO_TEST+=("${ver}")
 done <<< "$ALL_VERSIONS"
