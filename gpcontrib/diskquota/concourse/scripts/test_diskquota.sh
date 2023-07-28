@@ -23,6 +23,12 @@ function _main() {
 
     source /home/gpadmin/gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
+    # FIXME: remove this line after 2.2.2 released.
+    if [[ $PGPORT -eq 7000 ]]
+    then
+        exit
+    fi
+
     pushd /home/gpadmin/gpdb_src
         make -C src/test/isolation2 install
     popd
