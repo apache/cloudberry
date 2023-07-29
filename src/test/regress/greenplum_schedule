@@ -144,6 +144,8 @@ test: ic
 test: resource_queue
 test: resource_queue_function
 test: disable_autovacuum
+# run separately, because checks for reltuples and results vary in-presence of concurrent transactions
+test: cluster_gp
 # Check for shmem leak for instrumentation slots before gpdb restart
 test: instr_in_shmem_verify
 # 'partition_locking' gets confused if other backends run concurrently and
