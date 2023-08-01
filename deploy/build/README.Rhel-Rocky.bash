@@ -10,6 +10,7 @@ sudo yum --enablerepo=powertools install -y libyaml-devel
 
 sudo yum install -y postgresql
 sudo yum install -y postgresql-devel
+sudo yum install -y python3-psycopg2
 
 pip3.9 install -r ../../python-dependencies.txt
 
