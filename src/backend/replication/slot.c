@@ -45,6 +45,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "replication/slot.h"
+#include "replication/walsender_private.h"
 #include "storage/fd.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
@@ -1346,6 +1347,9 @@ restart:
 	 */
 	if (invalidated)
 	{
+		/* GPDB: Set WalSndCtl state to indicate persistent sync error state */
+		WalSndCtl->error = WALSNDERROR_WALREAD;
+
 		ReplicationSlotsComputeRequiredXmin(false);
 		ReplicationSlotsComputeRequiredLSN();
 	}
