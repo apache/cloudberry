@@ -29,8 +29,8 @@ message QueryInfo {
     uint64 plan_id = 3;
     string query_text = 4;
     string plan_text = 5;
-    string temlate_query_text = 6;
-    string temlate_plan_text = 7;
+    string template_query_text = 6;
+    string template_plan_text = 7;
     string userName = 8;
     string databaseName = 9;
     string rsgname = 10;

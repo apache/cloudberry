@@ -61,13 +61,6 @@ std::string *get_rg_name() {
   return result;
 }
 
-int get_cur_slice_id(QueryDesc *desc) {
-  if (!desc->estate) {
-    return 0;
-  }
-  return LocallyExecutingSliceIndex(desc->estate);
-}
-
 google::protobuf::Timestamp current_ts() {
   google::protobuf::Timestamp current_ts;
   struct timeval tv;
@@ -113,7 +106,7 @@ void set_query_plan(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
                         : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
   set_plan_text(qi->mutable_plan_text(), query_desc);
   StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
-  *qi->mutable_temlate_plan_text() = std::string(norm_plan->data);
+  *qi->mutable_template_plan_text() = std::string(norm_plan->data);
   qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
   // TODO: free stringinfo?
 }
@@ -121,7 +114,7 @@ void set_query_plan(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
 void set_query_text(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
   *qi->mutable_query_text() = query_desc->sourceText;
   char *norm_query = gen_normquery(query_desc->sourceText);
-  *qi->mutable_temlate_query_text() = std::string(norm_query);
+  *qi->mutable_template_query_text() = std::string(norm_query);
   pfree(norm_query);
 }
 
@@ -246,20 +239,18 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   }
   query_start_time = std::chrono::high_resolution_clock::now();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
-    instr_time starttime;
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
     query_desc->instrument_options |= INSTRUMENT_TIMER;
     if (Config::enable_cdbstats()) {
       query_desc->instrument_options |= INSTRUMENT_CDB;
 
-      // TODO: there is a PR resolving some memory leak around auto-explain:
-      // https://github.com/greenplum-db/gpdb/pull/15164
-      // Need to check if the memory leak applies here as well and fix it
-      Assert(query_desc->showstatctx == NULL);
-      INSTR_TIME_SET_CURRENT(starttime);
-      query_desc->showstatctx =
-          cdbexplain_showExecStatsBegin(query_desc, starttime);
+      if (!query_desc->showstatctx) {
+        instr_time starttime;
+        INSTR_TIME_SET_CURRENT(starttime);
+        query_desc->showstatctx =
+            cdbexplain_showExecStatsBegin(query_desc, starttime);
+      }
     }
   }
 }
