@@ -10,11 +10,11 @@
 (exited with code 0)
 -- end_ignore
 CREATE SCHEMA s101;
-CREATE
+CREATE SCHEMA
 DROP TABLESPACE IF EXISTS spc101;
-DROP
+DROP TABLESPACE
 CREATE TABLESPACE spc101 LOCATION '/tmp/spc101';
-CREATE
+CREATE TABLESPACE
 
 --
 -- There is no tablesapce per segment quota configed yet
@@ -53,9 +53,9 @@ SELECT segratio from diskquota.quota_config, pg_tablespace where targetoid = oid
 (1 row)
 -- cleanup
 truncate table diskquota.quota_config;
-TRUNCATE
+TRUNCATE TABLE
 truncate table diskquota.target;
-TRUNCATE
+TRUNCATE TABLE
 
 -- Read commited, first set_schema_tablespace_quota, then set_per_segment_quota,
 1: BEGIN;
@@ -90,9 +90,9 @@ SELECT segratio from diskquota.quota_config, pg_tablespace where targetoid = oid
 (1 row)
 -- cleanup
 truncate table diskquota.quota_config;
-TRUNCATE
+TRUNCATE TABLE
 truncate table diskquota.target;
-TRUNCATE
+TRUNCATE TABLE
 
 --
 -- There is already a tablesapce per segment quota configed
@@ -136,9 +136,9 @@ SELECT segratio from diskquota.quota_config, pg_tablespace where targetoid = oid
 (1 row)
 -- cleanup
 truncate table diskquota.quota_config;
-TRUNCATE
+TRUNCATE TABLE
 truncate table diskquota.target;
-TRUNCATE
+TRUNCATE TABLE
 
 -- Read commited, first set_schema_tablespace_quota, then set_per_segment_quota,
 SELECT diskquota.set_per_segment_quota('spc101', 2);
@@ -178,9 +178,9 @@ SELECT segratio from diskquota.quota_config, pg_tablespace where targetoid = oid
 (1 row)
 -- cleanup
 truncate table diskquota.quota_config;
-TRUNCATE
+TRUNCATE TABLE
 truncate table diskquota.target;
-TRUNCATE
+TRUNCATE TABLE
 
 -- Read commited, first delete per_segment_quota, then set_schema_tablespace_quota
 SELECT diskquota.set_per_segment_quota('spc101', 2);
@@ -219,9 +219,9 @@ SELECT segratio from diskquota.quota_config, pg_tablespace where targetoid = oid
 (0 rows)
 -- cleanup
 truncate table diskquota.quota_config;
-TRUNCATE
+TRUNCATE TABLE
 truncate table diskquota.target;
-TRUNCATE
+TRUNCATE TABLE
 
 -- Read commited, first set_schema_tablespace_quota, then delete tablespace per segment ratio
 SELECT diskquota.set_per_segment_quota('spc101', 2);
@@ -260,10 +260,10 @@ SELECT segratio from diskquota.quota_config, pg_tablespace where targetoid = oid
 (0 rows)
 -- cleanup
 truncate table diskquota.quota_config;
-TRUNCATE
+TRUNCATE TABLE
 truncate table diskquota.target;
-TRUNCATE
+TRUNCATE TABLE
 DROP SCHEMA s101;
-DROP
+DROP SCHEMA
 DROP TABLESPACE spc101;
-DROP
+DROP TABLESPACE

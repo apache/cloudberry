@@ -14,7 +14,14 @@ if (${GP_MAJOR_VERSION} EQUAL 6)
 		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.1--2.2
 		${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.2--2.1
 		)
+  set(EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expected")
+else()
+  set(EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expected7")
 endif()
+list(APPEND schedule_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.2--2.3
+  ${CMAKE_CURRENT_SOURCE_DIR}/schedule_2.3--2.2
+)
 regresstarget_add(
   upgradecheck
   INIT_FILE
@@ -22,7 +29,7 @@ regresstarget_add(
   SQL_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/sql
   EXPECTED_DIR
-  ${CMAKE_CURRENT_SOURCE_DIR}/expected
+  ${EXPECTED_DIR}
   RESULTS_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/results
   SCHEDULE_FILE
