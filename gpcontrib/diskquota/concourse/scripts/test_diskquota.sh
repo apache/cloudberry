@@ -4,13 +4,14 @@ set -exo pipefail
 
 function activate_standby() {
     gpstop -may -M immediate
+    export MASTER_DATA_DIRECTORY=$(readlink /home/gpadmin/gpdb_src)/gpAux/gpdemo/datadirs/standby
     if [[ $PGPORT -eq 6000 ]]
     then
         export PGPORT=6001
     else
         export PGPORT=7001
+        export COORDINATOR_DATA_DIRECTORY=$MASTER_DATA_DIRECTORY
     fi
-    export MASTER_DATA_DIRECTORY=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/standby
     gpactivatestandby -a -f -d $MASTER_DATA_DIRECTORY
 }
 
@@ -32,12 +33,8 @@ function _main() {
     export SHOW_REGRESS_DIFF=1
     time cmake --build . --target installcheck
     # Run test again with standby master
-    # FIXME: enable test for GPDB7
-    if [[ $PGPORT -eq 6000 ]]
-    then
-        activate_standby
-        time cmake --build . --target installcheck
-    fi
+    activate_standby
+    time cmake --build . --target installcheck
     # Run upgrade test (with standby master)
     time cmake --build . --target upgradecheck
     popd
