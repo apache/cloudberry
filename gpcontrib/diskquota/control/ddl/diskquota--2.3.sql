@@ -11,7 +11,7 @@ CREATE TABLE diskquota.quota_config(
 	quotalimitMB int8,
 	segratio float4 DEFAULT 0,
 	PRIMARY KEY(targetOid, quotatype)
-) DISTRIBUTED BY (targetOid, quotatype);
+) WITH (appendonly=false) DISTRIBUTED BY (targetOid, quotatype);
 
 CREATE TABLE diskquota.target (
 	rowId serial,
@@ -19,19 +19,19 @@ CREATE TABLE diskquota.target (
 	primaryOid oid,
 	tablespaceOid oid, --REFERENCES pg_tablespace.oid,
 	PRIMARY KEY (primaryOid, tablespaceOid, quotatype)
-);
+) WITH (appendonly=false);
 
 CREATE TABLE diskquota.table_size(
 	tableid oid,
 	size bigint,
 	segid smallint,
 	PRIMARY KEY(tableid, segid)
-) DISTRIBUTED BY (tableid, segid);
+) WITH (appendonly=false) DISTRIBUTED BY (tableid, segid);
 
 CREATE TABLE diskquota.state(
 	state int,
 	PRIMARY KEY(state)
-) DISTRIBUTED BY (state);
+) WITH (appendonly=false) DISTRIBUTED BY (state);
 
 -- diskquota.quota_config AND diskquota.target is dump-able, other table can be generate on fly
 SELECT pg_catalog.pg_extension_config_dump('diskquota.quota_config', '');
