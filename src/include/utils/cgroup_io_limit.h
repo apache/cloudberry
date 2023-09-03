@@ -107,5 +107,6 @@ extern void io_limit_validate(List *limit_list);
 
 extern List  *get_iostat(Oid groupid, List *io_limit);
 extern int  compare_iostat(const ListCell *ca, const ListCell *cb);
+extern char *io_limit_dump(List *limit_list);
 
 #endif
