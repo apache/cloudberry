@@ -4,6 +4,8 @@
 #include <ctime>
 #include <chrono>
 
+#define typeid __typeid
+#define operator __operator
 extern "C" {
 #include "postgres.h"
 
@@ -14,10 +16,12 @@ extern "C" {
 #include "executor/executor.h"
 #include "utils/elog.h"
 #include "utils/metrics_utils.h"
+#include "utils/workfile_mgr.h"
 
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
+#include "cdb/cdbinterconnect.h"
 
 #include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 #include "tcop/utility.h"
@@ -25,6 +29,8 @@ extern "C" {
 void get_spill_info(int ssid, int ccid, int32_t *file_count,
                     int64_t *total_bytes);
 }
+#undef typeid
+#undef operator
 
 #include "EventSender.h"
 
@@ -160,6 +166,18 @@ void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
     metrics->set_blk_write_time(
         INSTR_TIME_GET_DOUBLE(buffusage.blk_write_time));
   }
+  if (query_desc->estate && query_desc->estate->motionlayer_context) {
+    MotionLayerState *mlstate =
+        (MotionLayerState *)query_desc->estate->motionlayer_context;
+    metrics->mutable_sent()->set_total_bytes(mlstate->stat_total_bytes_sent);
+    metrics->mutable_sent()->set_tuple_bytes(mlstate->stat_tuple_bytes_sent);
+    metrics->mutable_sent()->set_chunks(mlstate->stat_total_chunks_sent);
+    metrics->mutable_received()->set_total_bytes(
+        mlstate->stat_total_bytes_recvd);
+    metrics->mutable_received()->set_tuple_bytes(
+        mlstate->stat_tuple_bytes_recvd);
+    metrics->mutable_received()->set_chunks(mlstate->stat_total_chunks_recvd);
+  }
 }
 
 decltype(std::chrono::high_resolution_clock::now()) query_start_time;
@@ -182,6 +200,8 @@ void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
       std::chrono::high_resolution_clock::now() - query_start_time;
   metrics->mutable_systemstat()->set_runningtimeseconds(
       elapsed_seconds.count());
+  metrics->mutable_spill()->set_filecount(WorkfileTotalFilesCreated());
+  metrics->mutable_spill()->set_totalbytes(WorkfileTotalBytesWritten());
 }
 
 yagpcc::SetQueryReq create_query_req(QueryDesc *query_desc,
@@ -238,6 +258,7 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     return;
   }
   query_start_time = std::chrono::high_resolution_clock::now();
+  WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
@@ -245,12 +266,10 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     if (Config::enable_cdbstats()) {
       query_desc->instrument_options |= INSTRUMENT_CDB;
 
-      if (!query_desc->showstatctx) {
-        instr_time starttime;
-        INSTR_TIME_SET_CURRENT(starttime);
-        query_desc->showstatctx =
-            cdbexplain_showExecStatsBegin(query_desc, starttime);
-      }
+      instr_time starttime;
+      INSTR_TIME_SET_CURRENT(starttime);
+      query_desc->showstatctx =
+          cdbexplain_showExecStatsBegin(query_desc, starttime);
     }
   }
 }
@@ -281,7 +300,6 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   }
   auto req =
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
-  set_query_info(&req, query_desc, false, false);
   // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
   // gather it here. It only makes sense when doing regular stat checks.
   set_gp_metrics(req.mutable_query_metrics(), query_desc,
@@ -303,7 +321,6 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
   if (need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
-    set_query_info(&req, query_desc, false, false);
     send_query_info(&req, status);
   }
 }
@@ -320,6 +337,10 @@ void EventSender::send_query_info(yagpcc::SetQueryReq *req,
   }
 }
 
-EventSender::EventSender() { connector = std::make_unique<GrpcConnector>(); }
+EventSender::EventSender() {
+  if (Config::enable_collector()) {
+    connector = new GrpcConnector();
+  }
+}
 
-EventSender::~EventSender() { connector.release(); }
+EventSender::~EventSender() { delete connector; }
