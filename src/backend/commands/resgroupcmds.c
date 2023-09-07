@@ -552,6 +552,8 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 
 /*
  * Get all the capabilities of one resource group in pg_resgroupcapability.
+ *
+ * Note: the io_limit in ResGroupCaps will be NIL if parse io_limit string failed.
  */
 void
 GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
@@ -634,9 +636,34 @@ GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
 			case RESGROUP_LIMIT_TYPE_IO_LIMIT:
 				if (cgroupOpsRoutine != NULL)
 				{
+					/* if InterruptHoldoffCount doesn't restore in PG_CATCH,
+					 * the catch will failed. */
+					int32 savedholdoffCount = InterruptHoldoffCount;
+
 					oldContext = CurrentMemoryContext;
 					MemoryContextSwitchTo(TopMemoryContext);
-					resgroupCaps->io_limit = cgroupOpsRoutine->parseio(value);
+					/*
+					 * This function will be called in InitResGroups and AlterResourceGroup which
+					 * shoud not be abort. In some circumstances, for example, the directory of a
+					 * tablespace in io_limit be removed, then parseio will throw error. If
+					 * InitResGroups be aborted, the cluster cannot launched. */
+					PG_TRY();
+					{
+						resgroupCaps->io_limit = cgroupOpsRoutine->parseio(value);
+					}
+					PG_CATCH();
+					{
+						resgroupCaps->io_limit = NIL;
+
+						InterruptHoldoffCount = savedholdoffCount;
+
+						if (elog_demote(WARNING))
+						{
+							EmitErrorReport();
+							FlushErrorState();
+						}
+					}
+					PG_END_TRY();
 					MemoryContextSwitchTo(oldContext);
 				}
 				else
