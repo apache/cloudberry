@@ -1,5 +1,4 @@
 #include "postgres.h"
-#include "utils/cgroup_io_limit.h"
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup.h"
@@ -9,6 +8,8 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_resgroup_d.h"
 #include "catalog/pg_resgroupcapability_d.h"
+#include "common/string.h"
+#include "commands/tablespace.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_tablespace_d.h"
 #include "commands/resgroupcmds.h"
@@ -18,11 +19,18 @@
 #include "port.h"
 #include "storage/fd.h"
 #include "utils/cgroup.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #include "utils/palloc.h"
 #include "utils/relcache.h"
 #include "utils/resgroup.h"
+#include "utils/cgroup_io_limit.h"
+#include <utils/cgroup.h>
+
+#ifndef __linux__
+#error  cgroup is only available on linux
+#endif
 
 #include <libgen.h>
 #include <limits.h>
@@ -536,7 +544,10 @@ io_limit_dump(List *limit_list)
 
 		for(i = 0; i < fields_length; i++)
 		{
-			appendStringInfo(result, "%s=%lu", IOconfigFields[i], *(value + i));
+			if (*(value + i) != IO_LIMIT_MAX)
+				appendStringInfo(result, "%s=%lu", IOconfigFields[i], *(value + i));
+			else
+				appendStringInfo(result, "%s=max", IOconfigFields[i]);
 
 			if (i + 1 != fields_length)
 				appendStringInfo(result, ",");
@@ -547,4 +558,48 @@ io_limit_dump(List *limit_list)
 	}
 
 	return result->data;
+}
+
+void
+clear_io_max(Oid groupid)
+{
+	FILE *f;
+	StringInfo line			 = makeStringInfo();
+	StringInfo result		 = makeStringInfo();
+	List	   *result_lines = NIL;
+	ListCell   *cell;
+	char	   path[MAX_CGROUP_PATHLEN];
+	buildPath(groupid, BASEDIR_GPDB, CGROUP_COMPONENT_PLAIN, "io.max", path, MAX_CGROUP_PATHLEN);
+
+	f = AllocateFile(path, "r");
+	/* pg_get_line_buf will reset line each time */
+	while (pg_get_line_buf(f, line))
+	{
+		uint32 maj, min;
+		int i;
+		char *str = line->data;
+
+		sscanf(str, "%u:%u", &maj, &min);
+
+		appendStringInfo(result, "%u:%u", maj, min);
+		for (i = 0; i < lengthof(IOconfigFields); i++)
+			appendStringInfo(result, " %s=max", IOconfigFields[i]);
+
+		result_lines = lappend(result_lines, (void *) pstrdup(result->data));
+
+		resetStringInfo(result);
+	}
+	FreeFile(f);
+	pfree(line->data);
+	pfree(result->data);
+	pfree(line);
+	pfree(result);
+
+	foreach(cell, result_lines)
+	{
+		char *str = (char *)lfirst(cell);
+		writeStr(groupid, BASEDIR_GPDB, CGROUP_COMPONENT_PLAIN, "io.max", str);
+	}
+
+	list_free_deep(result_lines);
 }

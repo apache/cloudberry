@@ -7,11 +7,14 @@
 /* type for linux device id, use libc dev_t now.
  * bdi means backing device info.
  */
+#ifdef __linux__
 typedef dev_t bdi_t;
-
 #define make_bdi(major, minor) makedev(major, minor)
 #define bdi_major(bdi) major(bdi)
 #define bdi_minor(bdi) minor(bdi)
+#else
+typedef uint64 bdi_t;
+#endif
 
 
 #define IO_LIMIT_MAX  (0)
@@ -108,5 +111,6 @@ extern void io_limit_validate(List *limit_list);
 extern List  *get_iostat(Oid groupid, List *io_limit);
 extern int  compare_iostat(const ListCell *ca, const ListCell *cb);
 extern char *io_limit_dump(List *limit_list);
+extern void clear_io_max(Oid groupid);
 
 #endif
