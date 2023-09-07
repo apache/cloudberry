@@ -1,8 +1,0 @@
-#!/bin/bash
-
-set -e
-
-GPADMIN=gpadmin
-GPHOME=/opt/greenplum-db-6
-
-chown -R ${GPADMIN}:${GPADMIN} ${GPHOME}
