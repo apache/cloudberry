@@ -148,7 +148,8 @@ static void                    free_bgworker_handle(uint32 worker_id);
 /* WaitForBackgroundWorkerShutdown is copied from gpdb7 */
 static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle);
 #endif /* GP_VERSION_NUM */
-static bool is_altering_extension(void);
+static bool is_altering_extension_to_default_version(char *version);
+static bool check_alter_extension(void);
 
 /*
  * diskquota_launcher_shmem_size
@@ -166,8 +167,37 @@ diskquota_launcher_shmem_size(void)
 	return size;
 }
 
+/*
+ * Check whether altering the extension to the default version.
+ */
 static bool
-is_altering_extension(void)
+is_altering_extension_to_default_version(char *version)
+{
+	int  spi_ret;
+	bool ret = false;
+	SPI_connect();
+	spi_ret = SPI_execute("select default_version from pg_available_extensions where name ='diskquota'", true, 0);
+	if (spi_ret != SPI_OK_SELECT)
+		elog(ERROR, "[diskquota] failed to select diskquota default version during diskquota update.");
+	if (SPI_processed > 0)
+	{
+		HeapTuple tup = SPI_tuptable->vals[0];
+		Datum     dat;
+		bool      isnull;
+
+		dat = SPI_getbinval(tup, SPI_tuptable->tupdesc, 1, &isnull);
+		if (!isnull)
+		{
+			char *default_version = DatumGetCString(dat);
+			if (strcmp(version, default_version) == 0) ret = true;
+		}
+	}
+	SPI_finish();
+	return ret;
+}
+
+static bool
+check_alter_extension(void)
 {
 	if (ActivePortal == NULL) return false;
 	/* QD: When the sourceTag is T_AlterExtensionStmt, then return true */
@@ -178,25 +208,43 @@ is_altering_extension(void)
 	 * If the sourceText contains 'alter extension diskquota update', we consider it is
 	 * a alter extension query.
 	 */
-	char *query = asc_tolower(ActivePortal->sourceText, strlen(ActivePortal->sourceText));
-	char *pos;
-	bool  match = true;
+	char        *query  = asc_tolower(ActivePortal->sourceText, strlen(ActivePortal->sourceText));
+	char        *pos    = query;
+	bool         ret    = true;
+	static char *regs[] = {"alter", "extension", "diskquota", "update"};
+	int          i;
 
-	pos = strstr(query, "alter");
-	if (pos)
-		pos = strstr(pos, "extension");
-	else
-		match = false;
-	if (pos)
-		pos = strstr(pos, "diskquota");
-	else
-		match = false;
-	if (pos)
-		pos = strstr(pos, "update");
-	else
-		match = false;
+	/* Check whether the sql statement is alter extension. */
+	for (i = 0; i < sizeof(regs) / sizeof(char *); i++)
+	{
+		pos = strstr(pos, regs[i]);
+		if (pos == 0)
+		{
+			ret = false;
+			break;
+		}
+	}
+
+	/*
+	 * If the current version is the final version, which is altered,
+	 * we need to throw an error to the user.
+	 */
+	if (ret)
+	{
+		/*
+		 * If version is set in alter extension statement, then compare the current version
+		 * with the version in this statement. Otherwise, compare the current version with
+		 * the default version of diskquota.
+		 */
+		pos = strstr(pos, "to");
+		if (pos)
+			ret = strstr(pos, DISKQUOTA_VERSION) != 0;
+		else
+			ret = is_altering_extension_to_default_version(DISKQUOTA_VERSION);
+	}
+
 	pfree(query);
-	return match;
+	return ret;
 }
 
 /*
@@ -216,7 +264,7 @@ _PG_init(void)
 		 * To support the continuous upgrade/downgrade, we should skip the library
 		 * check in _PG_init() during upgrade/downgrade.
 		 */
-		if (IsNormalProcessingMode() && is_altering_extension())
+		if (IsNormalProcessingMode() && check_alter_extension())
 		{
 			ereport(LOG, (errmsg("[diskquota] altering diskquota version to " DISKQUOTA_VERSION ".")));
 			return;
