@@ -46,7 +46,6 @@ typedef enum
 } DiskquotaHashFunction;
 
 /* max number of monitored database with diskquota enabled */
-#define MAX_NUM_MONITORED_DB 50
 #define LAUNCHER_SCHEMA "diskquota_utility"
 #define EXTENSION_SCHEMA "diskquota"
 extern int diskquota_worker_timeout;
@@ -194,12 +193,12 @@ typedef struct
 {
 	dlist_head        freeWorkers;    // a list of DiskQuotaWorkerEntry
 	dlist_head        runningWorkers; // a list of DiskQuotaWorkerEntry
-	DiskquotaDBEntry *dbArray;        // size == MAX_NUM_MONITORED_DB
+	DiskquotaDBEntry *dbArray;        // size == diskquota_max_monitored_databases
 	DiskquotaDBEntry *dbArrayTail;
 	volatile bool     isDynamicWorker;
 	/*
 	DiskQuotaWorkerEntry worker[diskquota_max_workers]; // the hidden memory to store WorkerEntry
-	DiskquotaDBEntry     dbentry[MAX_NUM_MONITORED_DB]; // the hidden memory for dbentry
+	DiskquotaDBEntry     dbentry[diskquota_max_monitored_databases]; // the hidden memory for dbentry
 	*/
 } DiskquotaLauncherShmemStruct;
 
