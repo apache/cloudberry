@@ -1,6 +1,6 @@
 --start_ignore
-\! gpconfig -c diskquota.max_database -v 3
-20230905:12:39:55:332748 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_database -v 3'
+\! gpconfig -c diskquota.max_monitored_databases -v 3
+20230905:12:39:55:332748 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_monitored_databases -v 3'
 \! gpstop -ari
 --end_ignore
 \c
@@ -68,8 +68,8 @@ DROP DATABASE test_db1;
 DROP DATABASE test_db2;
 DROP DATABASE test_db3;
 -- start_ignore
-\! gpconfig -r diskquota.max_database
-20230905:12:40:29:350921 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-r diskquota.max_database'
+\! gpconfig -r diskquota.max_monitored_databases
+20230905:12:40:29:350921 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-r diskquota.max_monitored_databases'
 \! gpstop -ari
 20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -ari
 20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
