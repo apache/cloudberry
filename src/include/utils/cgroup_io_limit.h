@@ -17,7 +17,8 @@ typedef uint64 bdi_t;
 #endif
 
 
-#define IO_LIMIT_MAX  (0)
+#define IO_LIMIT_MAX  (PG_UINT64_MAX)
+#define IO_LIMIT_EMPTY (0)
 
 /*
  * IOconfig represents the io.max of cgroup v2 io controller.
@@ -72,7 +73,7 @@ typedef struct IOLimitParserContext
 
 typedef struct IOLimitScannerState
 {
-	void *state;
+	void *buffer;
 	void *scanner;
 } IOLimitScannerState;
 
@@ -107,6 +108,7 @@ extern int fill_bdi_list(TblSpcIOLimit *io_limit);
 extern List *io_limit_parse(const char *limit_str);
 extern void io_limit_free(List *limit_list);
 extern void io_limit_validate(List *limit_list);
+bool io_limit_value_validate(const char *field, const uint64 value, uint64 *max);
 
 extern List  *get_iostat(Oid groupid, List *io_limit);
 extern int  compare_iostat(const ListCell *ca, const ListCell *cb);
