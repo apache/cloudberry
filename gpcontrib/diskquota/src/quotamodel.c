@@ -89,6 +89,7 @@ typedef struct LocalRejectMapEntry  LocalRejectMapEntry;
 int                      SEGCOUNT = 0;
 extern int               diskquota_max_table_segments;
 extern pg_atomic_uint32 *diskquota_table_size_entry_num;
+extern int               diskquota_max_monitored_databases;
 
 /*
  * local cache of table disk size and corresponding schema and owner.
@@ -461,8 +462,9 @@ disk_quota_shmem_startup(void)
 	hash_ctl.keysize   = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(struct MonitorDBEntryStruct);
 
-	monitored_dbid_cache = DiskquotaShmemInitHash("table oid cache which shoud tracking", MAX_NUM_MONITORED_DB,
-	                                              MAX_NUM_MONITORED_DB, &hash_ctl, HASH_ELEM, DISKQUOTA_OID_HASH);
+	monitored_dbid_cache =
+	        DiskquotaShmemInitHash("table oid cache which shoud tracking", diskquota_max_monitored_databases,
+	                               diskquota_max_monitored_databases, &hash_ctl, HASH_ELEM, DISKQUOTA_OID_HASH);
 	init_launcher_shmem();
 	LWLockRelease(AddinShmemInitLock);
 }
@@ -508,7 +510,8 @@ static Size
 diskquota_worker_shmem_size()
 {
 	Size size;
-	size = hash_estimate_size(MAX_NUM_TABLE_SIZE_ENTRIES / MAX_NUM_MONITORED_DB + 100, sizeof(TableSizeEntry));
+	size = hash_estimate_size(MAX_NUM_TABLE_SIZE_ENTRIES / diskquota_max_monitored_databases + 100,
+	                          sizeof(TableSizeEntry));
 	size = add_size(size, hash_estimate_size(MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, sizeof(LocalRejectMapEntry)));
 	size = add_size(size, hash_estimate_size(MAX_QUOTA_MAP_ENTRIES * NUM_QUOTA_TYPES, sizeof(struct QuotaMapEntry)));
 	return size;
@@ -528,14 +531,14 @@ DiskQuotaShmemSize(void)
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelationCacheEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelidCacheEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(Oid)));
-	size = add_size(size, hash_estimate_size(MAX_NUM_MONITORED_DB,
+	size = add_size(size, hash_estimate_size(diskquota_max_monitored_databases,
 	                                         sizeof(struct MonitorDBEntryStruct))); // monitored_dbid_cache
 
 	if (IS_QUERY_DISPATCHER())
 	{
 		size = add_size(size, diskquota_launcher_shmem_size());
 		size = add_size(size, sizeof(pg_atomic_uint32));
-		size = add_size(size, diskquota_worker_shmem_size() * MAX_NUM_MONITORED_DB);
+		size = add_size(size, diskquota_worker_shmem_size() * diskquota_max_monitored_databases);
 	}
 
 	return size;
