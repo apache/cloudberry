@@ -70,12 +70,13 @@ static volatile sig_atomic_t got_sigusr1 = false;
 static volatile sig_atomic_t got_sigusr2 = false;
 
 /* GUC variables */
-int  diskquota_naptime            = 0;
-int  diskquota_max_active_tables  = 0;
-int  diskquota_worker_timeout     = 60; /* default timeout is 60 seconds */
-bool diskquota_hardlimit          = false;
-int  diskquota_max_workers        = 10;
-int  diskquota_max_table_segments = 0;
+int  diskquota_naptime                 = 0;
+int  diskquota_max_active_tables       = 0;
+int  diskquota_worker_timeout          = 60; /* default timeout is 60 seconds */
+bool diskquota_hardlimit               = false;
+int  diskquota_max_workers             = 10;
+int  diskquota_max_table_segments      = 0;
+int  diskquota_max_monitored_databases = 0;
 
 DiskQuotaLocks       diskquota_locks;
 ExtensionDDLMessage *extension_ddl_message = NULL;
@@ -161,9 +162,10 @@ diskquota_launcher_shmem_size(void)
 	Size size;
 
 	size = MAXALIGN(sizeof(DiskquotaLauncherShmemStruct));
-	size = add_size(size, mul_size(diskquota_max_workers,
-	                               sizeof(struct DiskQuotaWorkerEntry))); // hidden memory for DiskQuotaWorkerEntry
-	size = add_size(size, mul_size(MAX_NUM_MONITORED_DB, sizeof(struct DiskquotaDBEntry))); // hidden memory for dbArray
+	// hidden memory for DiskQuotaWorkerEntry
+	size = add_size(size, mul_size(diskquota_max_workers, sizeof(struct DiskQuotaWorkerEntry)));
+	// hidden memory for dbArray
+	size = add_size(size, mul_size(diskquota_max_monitored_databases, sizeof(struct DiskquotaDBEntry)));
 	return size;
 }
 
@@ -401,9 +403,10 @@ define_guc_variables(void)
 	        "Max number of backgroud workers to run diskquota extension, should be less than max_worker_processes.",
 	        NULL, &diskquota_max_workers, 10, 1, 20, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 	DefineCustomIntVariable("diskquota.max_table_segments", "Max number of tables segments on the cluster.", NULL,
-	                        &diskquota_max_table_segments, 10 * 1024 * 1024,
-	                        INIT_NUM_TABLE_SIZE_ENTRIES * MAX_NUM_MONITORED_DB, INT_MAX, PGC_POSTMASTER, 0, NULL, NULL,
-	                        NULL);
+	                        &diskquota_max_table_segments, 10 * 1024 * 1024, INIT_NUM_TABLE_SIZE_ENTRIES * 1024,
+	                        INT_MAX, PGC_POSTMASTER, 0, NULL, NULL, NULL);
+	DefineCustomIntVariable("diskquota.max_monitored_databases", "Max number of database on the cluster.", NULL,
+	                        &diskquota_max_monitored_databases, 50, 1, 1024, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
@@ -1096,10 +1099,10 @@ init_database_list(void)
 		if (dbEntry == NULL) continue;
 		num++;
 		/*
-		 * diskquota only supports to monitor at most MAX_NUM_MONITORED_DB
+		 * diskquota only supports to monitor at most diskquota_max_monitored_databases
 		 * databases
 		 */
-		if (num >= MAX_NUM_MONITORED_DB)
+		if (num >= diskquota_max_monitored_databases)
 		{
 			ereport(LOG, (errmsg("[diskquota launcher] diskquota monitored database limit is reached, database(oid:%u) "
 			                     "will not enable diskquota",
@@ -1109,7 +1112,7 @@ init_database_list(void)
 	}
 	num_db = num;
 	/* As update_monitor_db_mpp needs to execute sql, so can not put in the loop above */
-	for (int i = 0; i < MAX_NUM_MONITORED_DB; i++)
+	for (int i = 0; i < diskquota_max_monitored_databases; i++)
 	{
 		DiskquotaDBEntry *dbEntry = &DiskquotaLauncherShmem->dbArray[i];
 		if (dbEntry->in_use)
@@ -1291,7 +1294,7 @@ do_process_extension_ddl_message(MessageResult *code, ExtensionDDLMessage local_
 static void
 on_add_db(Oid dbid, MessageResult *code)
 {
-	if (num_db >= MAX_NUM_MONITORED_DB)
+	if (num_db >= diskquota_max_monitored_databases)
 	{
 		*code = ERR_EXCEED;
 		ereport(ERROR, (errmsg("[diskquota launcher] too many databases to monitor")));
@@ -1769,7 +1772,7 @@ init_launcher_shmem()
 
 		// get dbArray from the hidden memory
 		DiskquotaDBEntry *dbArray = (DiskquotaDBEntry *)hidden_memory_prt;
-		hidden_memory_prt += mul_size(MAX_NUM_MONITORED_DB, sizeof(struct DiskquotaDBEntry));
+		hidden_memory_prt += mul_size(diskquota_max_monitored_databases, sizeof(struct DiskquotaDBEntry));
 
 		// get the dbArrayTail from the hidden memory
 		DiskquotaDBEntry *dbArrayTail = (DiskquotaDBEntry *)hidden_memory_prt;
@@ -1785,7 +1788,7 @@ init_launcher_shmem()
 		DiskquotaLauncherShmem->dbArray     = dbArray;
 		DiskquotaLauncherShmem->dbArrayTail = dbArrayTail;
 
-		for (int i = 0; i < MAX_NUM_MONITORED_DB; i++)
+		for (int i = 0; i < diskquota_max_monitored_databases; i++)
 		{
 			memset(&DiskquotaLauncherShmem->dbArray[i], 0, sizeof(DiskquotaDBEntry));
 			DiskquotaLauncherShmem->dbArray[i].id       = i;
@@ -1813,7 +1816,7 @@ add_db_entry(Oid dbid)
 
 	LWLockAcquire(diskquota_locks.dblist_lock, LW_EXCLUSIVE);
 	/* if there is already dbEntry's dbid equals dbid, returning the existing one */
-	for (int i = 0; i < MAX_NUM_MONITORED_DB; i++)
+	for (int i = 0; i < diskquota_max_monitored_databases; i++)
 	{
 		DiskquotaDBEntry *dbEntry = &DiskquotaLauncherShmem->dbArray[i];
 		if (!dbEntry->in_use && result == NULL)
@@ -1843,7 +1846,7 @@ static void
 release_db_entry(Oid dbid)
 {
 	DiskquotaDBEntry *db = NULL;
-	for (int i = 0; i < MAX_NUM_MONITORED_DB; i++)
+	for (int i = 0; i < diskquota_max_monitored_databases; i++)
 	{
 		DiskquotaDBEntry *dbEntry = &DiskquotaLauncherShmem->dbArray[i];
 		if (dbEntry->in_use && dbEntry->dbid == dbid)
@@ -1890,9 +1893,9 @@ next_db(DiskquotaDBEntry *curDB)
 	 */
 	StartTransactionCommand();
 	LWLockAcquire(diskquota_locks.dblist_lock, LW_SHARED);
-	for (int i = 0; i < MAX_NUM_MONITORED_DB; i++)
+	for (int i = 0; i < diskquota_max_monitored_databases; i++)
 	{
-		if (nextSlot >= MAX_NUM_MONITORED_DB) nextSlot = 0;
+		if (nextSlot >= diskquota_max_monitored_databases) nextSlot = 0;
 		DiskquotaDBEntry *dbEntry = &DiskquotaLauncherShmem->dbArray[nextSlot];
 		nextSlot++;
 		if (!dbEntry->in_use || dbEntry->workerId != INVALID_WORKER_ID || dbEntry->dbid == InvalidOid) continue;
