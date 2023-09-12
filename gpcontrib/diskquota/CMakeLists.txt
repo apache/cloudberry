@@ -85,6 +85,10 @@ set_target_properties(
              C_STANDARD 99
              LINKER_LANGUAGE "C")
 
+if (${GP_MAJOR_VERSION} STRGREATER_EQUAL "7")
+  TARGET_LINK_LIBRARIES(diskquota ${PG_LIB_DIR}/libpq.so)
+endif()
+
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)
 
