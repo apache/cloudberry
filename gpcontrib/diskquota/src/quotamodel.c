@@ -55,8 +55,11 @@
 #define NUM_QUOTA_CONFIG_ATTRS 6
 /* Number of entries for diskquota.table_size update SQL */
 #define SQL_MAX_VALUES_NUMBER 1000000
+/* Inital number of entries for hash table in quota_info */
+#define INIT_QUOTA_MAP_ENTRIES (128)
+#define AVG_QUOTA_MAP_ENTRIES (diskquota_max_quotas / (diskquota_max_monitored_databases * NUM_QUOTA_TYPES))
 /* Number of entries for hash table in quota_info */
-#define MAX_QUOTA_MAP_ENTRIES (128 * 1024L)
+#define MAX_QUOTA_MAP_ENTRIES (AVG_QUOTA_MAP_ENTRIES < 1024 ? 1024 : AVG_QUOTA_MAP_ENTRIES)
 
 /* TableSizeEntry macro function */
 /* Use the top bit of totalsize as a flush flag. If this bit is set, the size should be flushed into
@@ -90,6 +93,8 @@ int                      SEGCOUNT = 0;
 extern int               diskquota_max_table_segments;
 extern pg_atomic_uint32 *diskquota_table_size_entry_num;
 extern int               diskquota_max_monitored_databases;
+extern int               diskquota_max_quotas;
+extern pg_atomic_uint32 *diskquota_quota_info_entry_num;
 
 /*
  * local cache of table disk size and corresponding schema and owner.
@@ -226,6 +231,7 @@ static void add_quota_to_rejectmap(QuotaType type, Oid targetOid, Oid tablespace
 static void check_quota_map(QuotaType type);
 static void clear_all_quota_maps(void);
 static void transfer_table_for_quota(int64 totalsize, QuotaType type, Oid *old_keys, Oid *new_keys, int16 segid);
+static struct QuotaMapEntry *put_quota_map_entry(HTAB *quota_info_map, struct QuotaMapEntryKey *key, bool *found);
 
 /* functions to refresh disk quota model*/
 static void refresh_disk_quota_usage(bool is_init);
@@ -248,6 +254,43 @@ static bool get_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag 
 static void reset_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag);
 static void set_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag flag);
 
+/*
+ * put QuotaMapEntry into quota_info[type].map and return this entry.
+ * return NULL: no free SHM for quota_info[type].map
+ */
+static struct QuotaMapEntry *
+put_quota_map_entry(HTAB *quota_info_map, struct QuotaMapEntryKey *key, bool *found)
+{
+	struct QuotaMapEntry *entry;
+	uint32                counter = pg_atomic_read_u32(diskquota_quota_info_entry_num);
+	if (counter >= diskquota_max_quotas)
+	{
+		entry = hash_search(quota_info_map, key, HASH_FIND, found);
+		/*
+		 * Too many quotas have been added to the quota_info_map, to avoid diskquota using
+		 * too much shared memory, just return NULL. The diskquota won't work correctly
+		 * anymore.
+		 */
+		if (!found) return NULL;
+	}
+	else
+	{
+		entry = hash_search(quota_info_map, key, HASH_ENTER, found);
+		if (!found)
+		{
+			counter = pg_atomic_add_fetch_u32(diskquota_quota_info_entry_num, 1);
+			if (counter >= diskquota_max_quotas)
+			{
+				ereport(WARNING, (errmsg("[diskquota] the number of quota exceeds the limit, please increase "
+				                         "the GUC value for diskquota.max_quotas. Current "
+				                         "diskquota.max_quotas value: %d",
+				                         diskquota_max_quotas)));
+			}
+		}
+	}
+	return entry;
+}
+
 /* add a new entry quota or update the old entry quota */
 static void
 update_size_for_quota(int64 size, QuotaType type, Oid *keys, int16 segid)
@@ -256,7 +299,9 @@ update_size_for_quota(int64 size, QuotaType type, Oid *keys, int16 segid)
 	struct QuotaMapEntryKey key = {0};
 	memcpy(key.keys, keys, quota_info[type].num_keys * sizeof(Oid));
 	key.segid                   = segid;
-	struct QuotaMapEntry *entry = hash_search(quota_info[type].map, &key, HASH_ENTER, &found);
+	struct QuotaMapEntry *entry = put_quota_map_entry(quota_info[type].map, &key, &found);
+	/* If the number of quota exceeds the limit, entry will be NULL */
+	if (entry == NULL) return;
 	if (!found)
 	{
 		entry->size  = 0;
@@ -277,7 +322,9 @@ update_limit_for_quota(int64 limit, float segratio, QuotaType type, Oid *keys)
 		struct QuotaMapEntryKey key = {0};
 		memcpy(key.keys, keys, quota_info[type].num_keys * sizeof(Oid));
 		key.segid                   = i;
-		struct QuotaMapEntry *entry = hash_search(quota_info[type].map, &key, HASH_ENTER, &found);
+		struct QuotaMapEntry *entry = put_quota_map_entry(quota_info[type].map, &key, &found);
+		/* If the number of quota exceeds the limit, entry will be NULL */
+		if (entry == NULL) continue;
 		if (!found)
 		{
 			entry->size = 0;
@@ -303,6 +350,7 @@ remove_quota(QuotaType type, Oid *keys, int16 segid)
 	memcpy(key.keys, keys, quota_info[type].num_keys * sizeof(Oid));
 	key.segid = segid;
 	hash_search(quota_info[type].map, &key, HASH_REMOVE, NULL);
+	pg_atomic_fetch_sub_u32(diskquota_quota_info_entry_num, 1);
 }
 
 /*
@@ -513,7 +561,6 @@ diskquota_worker_shmem_size()
 	size = hash_estimate_size(MAX_NUM_TABLE_SIZE_ENTRIES / diskquota_max_monitored_databases + 100,
 	                          sizeof(TableSizeEntry));
 	size = add_size(size, hash_estimate_size(MAX_LOCAL_DISK_QUOTA_REJECT_ENTRIES, sizeof(LocalRejectMapEntry)));
-	size = add_size(size, hash_estimate_size(MAX_QUOTA_MAP_ENTRIES * NUM_QUOTA_TYPES, sizeof(struct QuotaMapEntry)));
 	return size;
 }
 
@@ -536,9 +583,13 @@ DiskQuotaShmemSize(void)
 
 	if (IS_QUERY_DISPATCHER())
 	{
+		int num_quota_info_map = diskquota_max_monitored_databases * NUM_QUOTA_TYPES;
+
 		size = add_size(size, diskquota_launcher_shmem_size());
 		size = add_size(size, sizeof(pg_atomic_uint32));
 		size = add_size(size, diskquota_worker_shmem_size() * diskquota_max_monitored_databases);
+		size = add_size(size,
+		                num_quota_info_map * hash_estimate_size(MAX_QUOTA_MAP_ENTRIES, sizeof(struct QuotaMapEntry)));
 	}
 
 	return size;
@@ -580,8 +631,8 @@ init_disk_quota_model(uint32 id)
 		memset(&hash_ctl, 0, sizeof(hash_ctl));
 		hash_ctl.entrysize   = sizeof(struct QuotaMapEntry);
 		hash_ctl.keysize     = sizeof(struct QuotaMapEntryKey);
-		quota_info[type].map = DiskquotaShmemInitHash(str.data, 1024L, MAX_QUOTA_MAP_ENTRIES, &hash_ctl, HASH_ELEM,
-		                                              DISKQUOTA_TAG_HASH);
+		quota_info[type].map = DiskquotaShmemInitHash(str.data, INIT_QUOTA_MAP_ENTRIES, MAX_QUOTA_MAP_ENTRIES,
+		                                              &hash_ctl, HASH_ELEM, DISKQUOTA_TAG_HASH);
 	}
 	pfree(str.data);
 }
@@ -652,6 +703,7 @@ vacuum_disk_quota_model(uint32 id)
 		while ((qentry = hash_seq_search(&iter)) != NULL)
 		{
 			hash_search(quota_info[type].map, &qentry->keys, HASH_REMOVE, NULL);
+			pg_atomic_fetch_sub_u32(diskquota_quota_info_entry_num, 1);
 		}
 	}
 	pfree(str.data);
