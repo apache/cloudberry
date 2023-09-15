@@ -257,6 +257,7 @@ static void set_table_size_entry_flag(TableSizeEntry *entry, TableSizeEntryFlag 
 /*
  * put QuotaMapEntry into quota_info[type].map and return this entry.
  * return NULL: no free SHM for quota_info[type].map
+ * found cannot be NULL
  */
 static struct QuotaMapEntry *
 put_quota_map_entry(HTAB *quota_info_map, struct QuotaMapEntryKey *key, bool *found)
@@ -271,12 +272,12 @@ put_quota_map_entry(HTAB *quota_info_map, struct QuotaMapEntryKey *key, bool *fo
 		 * too much shared memory, just return NULL. The diskquota won't work correctly
 		 * anymore.
 		 */
-		if (!found) return NULL;
+		if (!(*found)) return NULL;
 	}
 	else
 	{
 		entry = hash_search(quota_info_map, key, HASH_ENTER, found);
-		if (!found)
+		if (!(*found))
 		{
 			counter = pg_atomic_add_fetch_u32(diskquota_quota_info_entry_num, 1);
 			if (counter >= diskquota_max_quotas)
