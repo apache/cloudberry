@@ -61,12 +61,13 @@ public:
     reconnect_thread.join();
   }
 
-  yagpcc::MetricResponse set_metric_query(yagpcc::SetQueryReq req) {
+  yagpcc::MetricResponse set_metric_query(const yagpcc::SetQueryReq &req,
+                                          const std::string &event) {
     yagpcc::MetricResponse response;
     if (!connected) {
       response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR);
       response.set_error_text(
-          "Not tracing this query connection to agent has been lost");
+          "Not tracing this query because grpc connection has been lost");
       return response;
     }
     grpc::ClientContext context;
@@ -76,9 +77,13 @@ public:
     context.set_deadline(deadline);
     grpc::Status status = (stub->SetMetricQuery)(&context, req, &response);
     if (!status.ok()) {
-      response.set_error_text("Connection lost: " + status.error_message() +
-                              "; " + status.error_details());
+      response.set_error_text("GRPC error: " + status.error_message() + "; " +
+                              status.error_details());
       response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR);
+      ereport(LOG, (errmsg("Query {%d-%d-%d} %s tracing failed with error %s",
+                           req.query_key().tmid(), req.query_key().ssid(),
+                           req.query_key().ccnt(), event.c_str(),
+                           response.error_text().c_str())));
       connected = false;
       cv.notify_one();
     }
@@ -108,6 +113,9 @@ private:
             std::chrono::system_clock::now() + std::chrono::milliseconds(100);
         connected = channel->WaitForConnected(deadline);
       }
+      if (connected && !done) {
+        ereport(LOG, (errmsg("GRPC connection is restored")));
+      }
     }
   }
 };
@@ -117,6 +125,7 @@ GrpcConnector::GrpcConnector() { impl = new Impl(); }
 GrpcConnector::~GrpcConnector() { delete impl; }
 
 yagpcc::MetricResponse
-GrpcConnector::set_metric_query(yagpcc::SetQueryReq req) {
-  return impl->set_metric_query(req);
+GrpcConnector::set_metric_query(const yagpcc::SetQueryReq &req,
+                                const std::string &event) {
+  return impl->set_metric_query(req, event);
 }

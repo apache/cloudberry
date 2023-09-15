@@ -23,7 +23,6 @@ public:
 private:
   void collect_query_submit(QueryDesc *query_desc);
   void collect_query_done(QueryDesc *query_desc, const std::string &status);
-  void send_query_info(yagpcc::SetQueryReq *req, const std::string &event);
   GrpcConnector *connector;
   int nesting_level = 0;
 };
