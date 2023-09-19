@@ -42,5 +42,6 @@ test: test_tablespace_diff_schema
 test: test_worker_schedule
 test: test_worker_schedule_exception
 test: test_dbname_encoding
+test: test_drop_any_extension
 test: test_drop_extension
 test: reset_config
