@@ -438,6 +438,12 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 
 	/* Load current resource group capabilities */
 	GetResGroupCapabilities(pg_resgroupcapability_rel, groupid, &oldCaps);
+	/* If io_limit not been altered, reset io_limit field to NIL */
+	if (limitType != RESGROUP_LIMIT_TYPE_IO_LIMIT && oldCaps.io_limit != NIL)
+	{
+		cgroupOpsRoutine->freeio(oldCaps.io_limit);
+		oldCaps.io_limit = NIL;
+	}
 	caps = oldCaps;
 
 	switch (limitType)
@@ -479,6 +485,8 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	}
 
 	validateCapabilities(pg_resgroupcapability_rel, groupid, &caps, false);
+	AssertImply(limitType != RESGROUP_LIMIT_TYPE_IO_LIMIT, caps.io_limit == NIL);
+	AssertImply(limitType == RESGROUP_LIMIT_TYPE_IO_LIMIT, caps.io_limit != NIL);
 
 	/* cpuset & cpu_max_percent can not coexist.
 	 * if cpuset is active, then cpu_max_percent must set to CPU_RATE_LIMIT_DISABLED,
@@ -1123,7 +1131,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 	if (callbackCtx->caps.io_limit != NIL)
 		cgroupOpsRoutine->freeio(callbackCtx->caps.io_limit);
 
-	if (callbackCtx->caps.io_limit != NIL)
+	if (callbackCtx->oldCaps.io_limit != NIL)
 		cgroupOpsRoutine->freeio(callbackCtx->oldCaps.io_limit);
 
 	pfree(callbackCtx);
