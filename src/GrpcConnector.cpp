@@ -51,6 +51,7 @@ public:
         grpc::CreateChannel(SOCKET_FILE, grpc::InsecureChannelCredentials());
     stub = yagpcc::SetQueryInfo::NewStub(channel);
     connected = true;
+    reconnected = false;
     done = false;
     reconnect_thread = std::thread(&Impl::reconnect, this);
   }
@@ -69,6 +70,9 @@ public:
       response.set_error_text(
           "Not tracing this query because grpc connection has been lost");
       return response;
+    } else if (reconnected) {
+      reconnected = false;
+      ereport(LOG, (errmsg("GRPC connection is restored")));
     }
     grpc::ClientContext context;
     int timeout = Gp_role == GP_ROLE_DISPATCH ? 500 : 250;
@@ -85,6 +89,7 @@ public:
                            req.query_key().ccnt(), event.c_str(),
                            response.error_text().c_str())));
       connected = false;
+      reconnected = false;
       cv.notify_one();
     }
 
@@ -95,11 +100,10 @@ private:
   const std::string SOCKET_FILE;
   std::unique_ptr<yagpcc::SetQueryInfo::Stub> stub;
   std::shared_ptr<grpc::Channel> channel;
-  std::atomic_bool connected;
+  std::atomic_bool connected, reconnected, done;
   std::thread reconnect_thread;
   std::condition_variable cv;
   std::mutex mtx;
-  bool done;
 
   void reconnect() {
     MaskThreadSignals();
@@ -112,9 +116,7 @@ private:
         auto deadline =
             std::chrono::system_clock::now() + std::chrono::milliseconds(100);
         connected = channel->WaitForConnected(deadline);
-      }
-      if (connected && !done) {
-        ereport(LOG, (errmsg("GRPC connection is restored")));
+        reconnected = true;
       }
     }
   }
