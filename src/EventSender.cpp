@@ -48,7 +48,6 @@ std::string *get_user_name() {
 std::string *get_db_name() {
   char *dbname = get_database_name(MyDatabaseId);
   std::string *result = dbname ? new std::string(dbname) : nullptr;
-  pfree(dbname);
   return result;
 }
 
@@ -63,7 +62,6 @@ std::string *get_rg_name() {
   if (rgname == nullptr)
     return nullptr;
   auto result = new std::string(rgname);
-  pfree(rgname);
   return result;
 }
 
@@ -114,14 +112,12 @@ void set_query_plan(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
   StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
   *qi->mutable_template_plan_text() = std::string(norm_plan->data);
   qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
-  // TODO: free stringinfo?
 }
 
 void set_query_text(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
   *qi->mutable_query_text() = query_desc->sourceText;
   char *norm_query = gen_normquery(query_desc->sourceText);
   *qi->mutable_template_query_text() = std::string(norm_query);
-  pfree(norm_query);
 }
 
 void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
@@ -289,15 +285,16 @@ void EventSender::executor_end(QueryDesc *query_desc) {
       (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE)) {
     return;
   }
-  if (query_desc->totaltime && Config::enable_analyze() &&
-      Config::enable_cdbstats()) {
-    if (query_desc->estate->dispatcherState &&
-        query_desc->estate->dispatcherState->primaryResults) {
-      cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
-                                  DISPATCH_WAIT_NONE);
-    }
-    InstrEndLoop(query_desc->totaltime);
-  }
+  /* TODO: when querying via CURSOR this call freezes. Need to investigate.
+     To reproduce - uncomment it and run installchecks. It will freeze around join test.
+     Needs investigation
+    
+    if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze() &&
+      Config::enable_cdbstats() && query_desc->estate->dispatcherState &&
+      query_desc->estate->dispatcherState->primaryResults) {
+    cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
+                                DISPATCH_WAIT_NONE);
+  }*/
   auto req =
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
   // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
