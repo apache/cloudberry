@@ -33,7 +33,8 @@ extern "C" {
 
 #define need_collect()                                                         \
   (nesting_level == 0 && gp_command_count != 0 &&                              \
-   query_desc->sourceText != nullptr && Config::enable_collector())
+   query_desc->sourceText != nullptr && Config::enable_collector() &&          \
+   !Config::filter_user(get_user_name()))
 
 namespace {
 
@@ -325,7 +326,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
 }
 
 EventSender::EventSender() {
-  if (Config::enable_collector()) {
+  if (Config::enable_collector() && !Config::filter_user(get_user_name())) {
     try {
       connector = new GrpcConnector();
     } catch (const std::exception &e) {
