@@ -23,6 +23,6 @@ public:
 private:
   void collect_query_submit(QueryDesc *query_desc);
   void collect_query_done(QueryDesc *query_desc, const std::string &status);
-  GrpcConnector *connector;
+  GrpcConnector *connector = nullptr;
   int nesting_level = 0;
 };
