@@ -129,7 +129,13 @@ void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
     }
     if (query_desc->plannedstmt && with_plan) {
       set_query_plan(qi, query_desc);
-      qi->set_query_id(query_desc->plannedstmt->queryId);
+      // TODO: For now assume queryid equal to planid, which is wrong. The
+      // reason for doing so this bug
+      // https://github.com/greenplum-db/gpdb/pull/15385 (ORCA loses
+      // pg_stat_statements` queryid during planning phase). Need to fix it
+      // upstream, cherry-pick and bump gp
+      // qi->set_query_id(query_desc->plannedstmt->queryId);
+      qi->set_query_id(qi->plan_id());
     }
     qi->set_allocated_username(get_user_name());
     qi->set_allocated_databasename(get_db_name());
@@ -286,9 +292,9 @@ void EventSender::executor_end(QueryDesc *query_desc) {
     return;
   }
   /* TODO: when querying via CURSOR this call freezes. Need to investigate.
-     To reproduce - uncomment it and run installchecks. It will freeze around join test.
-     Needs investigation
-    
+     To reproduce - uncomment it and run installchecks. It will freeze around
+  join test. Needs investigation
+
     if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze() &&
       Config::enable_cdbstats() && query_desc->estate->dispatcherState &&
       query_desc->estate->dispatcherState->primaryResults) {
