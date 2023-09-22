@@ -1,8 +1,8 @@
 #include "Config.h"
 #include "GrpcConnector.h"
 #include "ProcStats.h"
-#include <ctime>
 #include <chrono>
+#include <ctime>
 
 #define typeid __typeid
 #define operator __operator
@@ -20,14 +20,11 @@ extern "C" {
 
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
-#include "cdb/cdbvars.h"
 #include "cdb/cdbinterconnect.h"
+#include "cdb/cdbvars.h"
 
 #include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 #include "tcop/utility.h"
-
-void get_spill_info(int ssid, int ccid, int32_t *file_count,
-                    int64_t *total_bytes);
 }
 #undef typeid
 #undef operator
@@ -184,16 +181,7 @@ void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
 
 decltype(std::chrono::high_resolution_clock::now()) query_start_time;
 
-void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
-                    bool need_spillinfo) {
-  if (need_spillinfo) {
-    int32_t n_spill_files = 0;
-    int64_t n_spill_bytes = 0;
-    get_spill_info(gp_session_id, gp_command_count, &n_spill_files,
-                   &n_spill_bytes);
-    metrics->mutable_spill()->set_filecount(n_spill_files);
-    metrics->mutable_spill()->set_totalbytes(n_spill_bytes);
-  }
+void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc) {
   if (query_desc->planstate && query_desc->planstate->instrument) {
     set_metric_instrumentation(metrics->mutable_instrumentation(), query_desc);
   }
@@ -256,6 +244,9 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
 
 void EventSender::executor_before_start(QueryDesc *query_desc,
                                         int /* eflags*/) {
+  if (!connector) {
+    return;
+  }
   if (!need_collect()) {
     return;
   }
@@ -277,6 +268,9 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
 }
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
+  if (!connector) {
+    return;
+  }
   if ((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
       need_collect()) {
     auto req =
@@ -287,6 +281,9 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
 }
 
 void EventSender::executor_end(QueryDesc *query_desc) {
+  if (!connector) {
+    return;
+  }
   if (!need_collect() ||
       (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE)) {
     return;
@@ -305,12 +302,14 @@ void EventSender::executor_end(QueryDesc *query_desc) {
       create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
   // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
   // gather it here. It only makes sense when doing regular stat checks.
-  set_gp_metrics(req.mutable_query_metrics(), query_desc,
-                 /*need_spillinfo*/ false);
+  set_gp_metrics(req.mutable_query_metrics(), query_desc);
   connector->set_metric_query(req, "ended");
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
+  if (!connector) {
+    return;
+  }
   if (need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
@@ -321,6 +320,9 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      const std::string &status) {
+  if (!connector) {
+    return;
+  }
   if (need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
@@ -330,7 +332,11 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
 
 EventSender::EventSender() {
   if (Config::enable_collector()) {
-    connector = new GrpcConnector();
+    try {
+      connector = new GrpcConnector();
+    } catch (const std::exception &e) {
+      ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
+    }
   }
 }
 

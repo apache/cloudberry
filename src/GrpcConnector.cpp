@@ -7,10 +7,10 @@
 #include <grpc++/channel.h>
 #include <grpc++/grpc++.h>
 #include <mutex>
+#include <pthread.h>
+#include <signal.h>
 #include <string>
 #include <thread>
-#include <signal.h>
-#include <pthread.h>
 
 extern "C" {
 #include "postgres.h"
@@ -116,7 +116,7 @@ private:
         auto deadline =
             std::chrono::system_clock::now() + std::chrono::milliseconds(100);
         connected = channel->WaitForConnected(deadline);
-        reconnected = true;
+        reconnected = connected.load();
       }
     }
   }
