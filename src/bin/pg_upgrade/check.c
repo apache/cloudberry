@@ -132,6 +132,16 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 905)
 		old_GPDB6_check_for_unsupported_sha256_password_hashes();
 	/*
+	 * PG 12 removed types abstime, reltime, tinterval.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1100)
+	{
+		check_for_removed_data_type_usage(&old_cluster, "12", "abstime");
+		check_for_removed_data_type_usage(&old_cluster, "12", "reltime");
+		check_for_removed_data_type_usage(&old_cluster, "12", "tinterval");
+	}
+
+	/*
 	 * PG 14 changed the function signature of encoding conversion functions.
 	 * Conversions from older versions cannot be upgraded automatically
 	 * because the user-defined functions used by the encoding conversions
@@ -1546,6 +1556,40 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 				"| problem columns, or change them to another data type, and restart\n"
 				"| the upgrade.  A list of the problem columns is in the file:\n"
 				"|    %s\n\n", datatype, datatype, version, output_path);
+	}
+	else
+		check_ok();
+}
+
+/*
+ * check_for_removed_data_type_usage
+ *
+ *	Check for in-core data types that have been removed.  Callers know
+ *	the exact list.
+ */
+static void
+check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
+								  const char *datatype)
+{
+	char		output_path[MAXPGPATH];
+	char		typename[NAMEDATALEN];
+
+	prep_status("Checking for removed \"%s\" data type in user tables",
+				datatype);
+
+	snprintf(output_path, sizeof(output_path), "tables_using_%s.txt",
+			 datatype);
+	snprintf(typename, sizeof(typename), "pg_catalog.%s", datatype);
+
+	if (check_for_data_type_usage(cluster, typename, output_path))
+	{
+		pg_log(PG_REPORT, "fatal");
+		pg_fatal("Your installation contains the \"%s\" data type in user tables.\n"
+				 "The \"%s\" type has been removed in PostgreSQL version %s,\n"
+				 "so this cluster cannot currently be upgraded.  You can drop the\n"
+				 "problem columns, or change them to another data type, and restart\n"
+				 "the upgrade.  A list of the problem columns is in the file:\n"
+				 "    %s\n\n", datatype, datatype, version, output_path);
 	}
 	else
 		check_ok();
