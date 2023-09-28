@@ -48,7 +48,7 @@ bool Config::enable_analyze() { return guc_enable_analyze; }
 bool Config::enable_cdbstats() { return guc_enable_cdbstats; }
 bool Config::enable_collector() { return guc_enable_collector; }
 
-bool Config::filter_user(const std::string &username) {
+bool Config::filter_user(const std::string *username) {
   if (!ignored_users) {
     ignored_users.reset(new std::unordered_set<std::string>());
     if (guc_ignored_users == nullptr || guc_ignored_users[0] == '0') {
@@ -77,5 +77,5 @@ bool Config::filter_user(const std::string &username) {
     pfree(rawstring);
     list_free(elemlist);
   }
-  return ignored_users->find(username) != ignored_users->end();
+  return !username || ignored_users->find(*username) != ignored_users->end();
 }

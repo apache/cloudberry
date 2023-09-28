@@ -9,5 +9,5 @@ public:
   static bool enable_analyze();
   static bool enable_cdbstats();
   static bool enable_collector();
-  static bool filter_user(const std::string &username);
+  static bool filter_user(const std::string *username);
 };
