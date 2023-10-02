@@ -1,7 +1,12 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include <string>
+
+extern "C" {
+#include "utils/metrics_utils.h"
+}
 
 class GrpcConnector;
 struct QueryDesc;
@@ -25,4 +30,8 @@ private:
   void collect_query_done(QueryDesc *query_desc, const std::string &status);
   GrpcConnector *connector = nullptr;
   int nesting_level = 0;
+  // TODO: instead of having a queue here we can make the message incremental in
+  // case of GRPC failures. It would requires adding submit_time, start_time and
+  // end_time fields to protobuf
+  std::queue<yagpcc::SetQueryReq> msg_queue;
 };

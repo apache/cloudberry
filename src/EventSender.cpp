@@ -1,6 +1,6 @@
 #include "Config.h"
-#include "GrpcConnector.h"
 #include "ProcStats.h"
+#include "GrpcConnector.h"
 #include <chrono>
 #include <ctime>
 
@@ -15,7 +15,6 @@ extern "C" {
 #include "commands/resgroupcmds.h"
 #include "executor/executor.h"
 #include "utils/elog.h"
-#include "utils/metrics_utils.h"
 #include "utils/workfile_mgr.h"
 
 #include "cdb/cdbdisp.h"
@@ -251,6 +250,11 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (!need_collect()) {
     return;
   }
+  {
+    connector->report_query(msg_queue, "previous query");
+    std::queue<yagpcc::SetQueryReq> empty;
+    std::swap(msg_queue, empty);
+  }
   query_start_time = std::chrono::high_resolution_clock::now();
   WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
@@ -277,7 +281,8 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
     set_query_info(&req, query_desc, false, true);
-    connector->report_query(req, "started");
+    msg_queue.push(std::move(req));
+    connector->report_query(msg_queue, "started");
   }
 }
 
@@ -304,7 +309,8 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
   // gather it here. It only makes sense when doing regular stat checks.
   set_gp_metrics(req.mutable_query_metrics(), query_desc);
-  connector->report_query(req, "ended");
+  msg_queue.push(std::move(req));
+  connector->report_query(msg_queue, "ended");
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
@@ -315,7 +321,8 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
     set_query_info(&req, query_desc, true, false);
-    connector->report_query(req, "submit");
+    msg_queue.push(std::move(req));
+    connector->report_query(msg_queue, "submit");
   }
 }
 
@@ -327,7 +334,8 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
   if (need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
-    connector->report_query(req, status);
+    msg_queue.push(std::move(req));
+    connector->report_query(msg_queue, status);
   }
 }
 

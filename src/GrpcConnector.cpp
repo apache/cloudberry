@@ -91,6 +91,8 @@ public:
       connected = false;
       reconnected = false;
       cv.notify_one();
+    } else {
+      response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_SUCCESS);
     }
 
     return response;
@@ -127,7 +129,18 @@ GrpcConnector::GrpcConnector() { impl = new Impl(); }
 GrpcConnector::~GrpcConnector() { delete impl; }
 
 yagpcc::MetricResponse
-GrpcConnector::report_query(const yagpcc::SetQueryReq &req,
+GrpcConnector::report_query(std::queue<yagpcc::SetQueryReq> &reqs,
                             const std::string &event) {
-  return impl->report_query(req, event);
+  while (!reqs.empty()) {
+    const auto &req = reqs.front();
+    auto response = impl->report_query(req, event);
+    if (response.error_code() == yagpcc::METRIC_RESPONSE_STATUS_CODE_SUCCESS) {
+      reqs.pop();
+    } else {
+      return response;
+    }
+  }
+  yagpcc::MetricResponse response;
+  response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_SUCCESS);
+  return response;
 }
