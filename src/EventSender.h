@@ -1,9 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include <string>
 
-class GrpcConnector;
+extern "C" {
+#include "utils/metrics_utils.h"
+}
+
+class UDSConnector;
 struct QueryDesc;
 namespace yagpcc {
 class SetQueryReq;
@@ -23,6 +28,7 @@ public:
 private:
   void collect_query_submit(QueryDesc *query_desc);
   void collect_query_done(QueryDesc *query_desc, const std::string &status);
-  GrpcConnector *connector = nullptr;
+  UDSConnector *connector = nullptr;
   int nesting_level = 0;
+  yagpcc::SetQueryReq *query_msg;
 };
