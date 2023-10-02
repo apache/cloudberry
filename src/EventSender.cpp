@@ -1,6 +1,6 @@
 #include "Config.h"
-#include "GrpcConnector.h"
 #include "ProcStats.h"
+#include "UDSConnector.h"
 #include <chrono>
 #include <ctime>
 
@@ -15,7 +15,6 @@ extern "C" {
 #include "commands/resgroupcmds.h"
 #include "executor/executor.h"
 #include "utils/elog.h"
-#include "utils/metrics_utils.h"
 #include "utils/workfile_mgr.h"
 
 #include "cdb/cdbdisp.h"
@@ -102,33 +101,46 @@ void set_plan_text(std::string *plan_text, QueryDesc *query_desc) {
   *plan_text = std::string(es.str->data, es.str->len);
 }
 
-void set_query_plan(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
-  qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
-                        ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
-                        : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
-  set_plan_text(qi->mutable_plan_text(), query_desc);
-  StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
-  *qi->mutable_template_plan_text() = std::string(norm_plan->data);
-  qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
+void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
+  if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->plannedstmt) {
+    auto qi = req->mutable_query_info();
+    qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
+                          ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
+                          : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
+    set_plan_text(qi->mutable_plan_text(), query_desc);
+    StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
+    *qi->mutable_template_plan_text() = std::string(norm_plan->data);
+    qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
+    // TODO: For now assume queryid equal to planid, which is wrong. The
+    // reason for doing so this bug
+    // https://github.com/greenplum-db/gpdb/pull/15385 (ORCA loses
+    // pg_stat_statements` queryid during planning phase). Need to fix it
+    // upstream, cherry-pick and bump gp
+    // qi->set_query_id(query_desc->plannedstmt->queryId);
+    qi->set_query_id(qi->plan_id());
+  }
 }
 
-void set_query_text(yagpcc::QueryInfo *qi, QueryDesc *query_desc) {
-  *qi->mutable_query_text() = query_desc->sourceText;
-  char *norm_query = gen_normquery(query_desc->sourceText);
-  *qi->mutable_template_query_text() = std::string(norm_query);
+void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
+  if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
+    auto qi = req->mutable_query_info();
+    *qi->mutable_query_text() = query_desc->sourceText;
+    char *norm_query = gen_normquery(query_desc->sourceText);
+    *qi->mutable_template_query_text() = std::string(norm_query);
+  }
 }
 
-void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
-                    bool with_text, bool with_plan) {
+void clear_big_fields(yagpcc::SetQueryReq *req) {
   if (Gp_session_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
-    if (query_desc->sourceText && with_text) {
-      set_query_text(qi, query_desc);
-    }
-    if (query_desc->plannedstmt && with_plan) {
-      set_query_plan(qi, query_desc);
-      qi->set_query_id(query_desc->plannedstmt->queryId);
-    }
+    qi->clear_plan_text();
+    qi->clear_query_text();
+  }
+}
+
+void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
+  if (Gp_session_role == GP_ROLE_DISPATCH) {
+    auto qi = req->mutable_query_info();
     qi->set_allocated_username(get_user_name());
     qi->set_allocated_databasename(get_db_name());
     qi->set_allocated_rsgname(get_rg_name());
@@ -245,6 +257,10 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (!need_collect()) {
     return;
   }
+  if (query_msg->has_query_key()) {
+    connector->report_query(*query_msg, "previous query");
+    query_msg->Clear();
+  }
   query_start_time = std::chrono::high_resolution_clock::now();
   WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
@@ -268,10 +284,12 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   }
   if ((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
       need_collect()) {
-    auto req =
-        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
-    set_query_info(&req, query_desc, false, true);
-    connector->set_metric_query(req, "started");
+    query_msg->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
+    *query_msg->mutable_start_time() = current_ts();
+    set_query_plan(query_msg, query_desc);
+    if (connector->report_query(*query_msg, "started")) {
+      clear_big_fields(query_msg);
+    }
   }
 }
 
@@ -284,21 +302,21 @@ void EventSender::executor_end(QueryDesc *query_desc) {
     return;
   }
   /* TODO: when querying via CURSOR this call freezes. Need to investigate.
-     To reproduce - uncomment it and run installchecks. It will freeze around join test.
-     Needs investigation
-    
+     To reproduce - uncomment it and run installchecks. It will freeze around
+  join test. Needs investigation
+
     if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze() &&
       Config::enable_cdbstats() && query_desc->estate->dispatcherState &&
       query_desc->estate->dispatcherState->primaryResults) {
     cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
                                 DISPATCH_WAIT_NONE);
   }*/
-  auto req =
-      create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_END);
-  // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
-  // gather it here. It only makes sense when doing regular stat checks.
-  set_gp_metrics(req.mutable_query_metrics(), query_desc);
-  connector->set_metric_query(req, "ended");
+  query_msg->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_END);
+  *query_msg->mutable_end_time() = current_ts();
+  set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
+  if (connector->report_query(*query_msg, "ended")) {
+    query_msg->Clear();
+  }
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
@@ -306,10 +324,14 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     return;
   }
   if (need_collect()) {
-    auto req =
+    *query_msg =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
-    set_query_info(&req, query_desc, true, false);
-    connector->set_metric_query(req, "submit");
+    *query_msg->mutable_submit_time() = current_ts();
+    set_query_info(query_msg, query_desc);
+    set_query_text(query_msg, query_desc);
+    if (connector->report_query(*query_msg, "submit")) {
+      clear_big_fields(query_msg);
+    }
   }
 }
 
@@ -319,20 +341,25 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
     return;
   }
   if (need_collect()) {
-    auto req =
-        create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
-    connector->set_metric_query(req, status);
+    query_msg->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_DONE);
+    if (connector->report_query(*query_msg, status)) {
+      clear_big_fields(query_msg);
+    }
   }
 }
 
 EventSender::EventSender() {
   if (Config::enable_collector() && !Config::filter_user(get_user_name())) {
+    query_msg = new yagpcc::SetQueryReq();
     try {
-      connector = new GrpcConnector();
+      connector = new UDSConnector();
     } catch (const std::exception &e) {
       ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
     }
   }
 }
 
-EventSender::~EventSender() { delete connector; }
+EventSender::~EventSender() {
+  delete query_msg;
+  delete connector;
+}
