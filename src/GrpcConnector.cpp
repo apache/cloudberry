@@ -62,8 +62,8 @@ public:
     reconnect_thread.join();
   }
 
-  yagpcc::MetricResponse set_metric_query(const yagpcc::SetQueryReq &req,
-                                          const std::string &event) {
+  yagpcc::MetricResponse report_query(const yagpcc::SetQueryReq &req,
+                                      const std::string &event) {
     yagpcc::MetricResponse response;
     if (!connected) {
       response.set_error_code(yagpcc::METRIC_RESPONSE_STATUS_CODE_ERROR);
@@ -127,7 +127,7 @@ GrpcConnector::GrpcConnector() { impl = new Impl(); }
 GrpcConnector::~GrpcConnector() { delete impl; }
 
 yagpcc::MetricResponse
-GrpcConnector::set_metric_query(const yagpcc::SetQueryReq &req,
-                                const std::string &event) {
-  return impl->set_metric_query(req, event);
+GrpcConnector::report_query(const yagpcc::SetQueryReq &req,
+                            const std::string &event) {
+  return impl->report_query(req, event);
 }

@@ -277,7 +277,7 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_START);
     set_query_info(&req, query_desc, false, true);
-    connector->set_metric_query(req, "started");
+    connector->report_query(req, "started");
   }
 }
 
@@ -304,7 +304,7 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   // NOTE: there are no cummulative spillinfo stats AFAIU, so no need to
   // gather it here. It only makes sense when doing regular stat checks.
   set_gp_metrics(req.mutable_query_metrics(), query_desc);
-  connector->set_metric_query(req, "ended");
+  connector->report_query(req, "ended");
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
@@ -315,7 +315,7 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
     set_query_info(&req, query_desc, true, false);
-    connector->set_metric_query(req, "submit");
+    connector->report_query(req, "submit");
   }
 }
 
@@ -327,7 +327,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
   if (need_collect()) {
     auto req =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_DONE);
-    connector->set_metric_query(req, status);
+    connector->report_query(req, status);
   }
 }
 
