@@ -161,18 +161,21 @@ update_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber newfile
 	if (newfilenum != InvalidFileNumber)
 	{
 		values[Anum_pg_attribute_encoding_filenum - 1] = newfilenum;
+		nulls[Anum_pg_attribute_encoding_filenum - 1] = false;
 		repl[Anum_pg_attribute_encoding_filenum - 1] = true;
 	}
 
 	if (newlastrownums)
 	{
 		values[Anum_pg_attribute_encoding_lastrownums - 1] = newlastrownums;
+		nulls[Anum_pg_attribute_encoding_lastrownums - 1] = false;
 		repl[Anum_pg_attribute_encoding_lastrownums - 1] = true;
 	}
 
 	if (newattoptions)
 	{
 		values[Anum_pg_attribute_encoding_attoptions - 1] = newattoptions;
+		nulls[Anum_pg_attribute_encoding_attoptions - 1] = false;
 		repl[Anum_pg_attribute_encoding_attoptions - 1] = true;
 	}
 
@@ -401,9 +404,11 @@ UpdateAttributeEncodings(Oid relid, List *new_attr_encodings)
 /*
  * Similar to UpdateAttributeEncodings, but add the entry if it's not
  * existed in pg_attribute_encoding.
+ * AO tables could have existing pg_attribute_encoding entry
+ * when we want to populate the entries during AO->CO
  */
 void
-UpdateOrAddAttributeEncodings(Relation rel, List *new_attr_encodings)
+UpdateOrAddAttributeEncodingsAttoptionsOnly(Relation rel, List *new_attr_encodings)
 {
 	ListCell 	*lc;
 	List 		*current_encodings;
