@@ -1370,16 +1370,6 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 	 */
 	if (relform1->relam == AO_ROW_TABLE_AM_OID && relform2->relam == AO_ROW_TABLE_AM_OID)
 		RemoveAttributeEncodingsByRelid(r1);
-	else if (relform1->relam == AO_ROW_TABLE_AM_OID &&
-			 relform2->relam != AO_COLUMN_TABLE_AM_OID)
-	{
-		/*
-		 * Leaving ao_row for something that is not CO: the rewrite gave every
-		 * column a full set of rows, so the lastrownums recorded by fast ADD
-		 * COLUMN no longer describe anything.
-		 */
-		ClearAttributeEncodingLastrownums(r1);
-	}
 
 	if (IsAccessMethodAO(relform1->relam) || IsAccessMethodAO(relform2->relam))
 		ATAOEntries(relform1, relform2, frozenXid, cutoffMulti);
