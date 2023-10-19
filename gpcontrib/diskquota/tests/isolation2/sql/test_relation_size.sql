@@ -1,3 +1,6 @@
+SELECT diskquota.pause();
+SELECT diskquota.wait_for_worker_new_epoch();
+
 --
 -- 1. Test that when a relation is dropped before diskquota.relation_size()
 --    applying stat(2) on the physical file, diskquota.relation_size() consumes
@@ -43,3 +46,5 @@ CREATE TABLE t_ao(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
 SELECT diskquota.relation_size('t_ao');
 SELECT pg_relation_size('t_ao');
 DROP TABLE t_ao;
+
+SELECT diskquota.resume();
