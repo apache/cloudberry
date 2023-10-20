@@ -38,6 +38,14 @@
 #define MAX_NUM_TABLE_SIZE_ENTRIES (diskquota_max_table_segments / SEGMENT_SIZE_ARRAY_LENGTH)
 /* length of segment size array in TableSizeEntry */
 #define SEGMENT_SIZE_ARRAY_LENGTH 100
+/* max number of keys in QuotaInfoEntryKey */
+#define MAX_NUM_KEYS_QUOTA_MAP 8
+/* init number of QuotaInfoEntry in quota_info_map */
+#define INIT_QUOTA_MAP_ENTRIES 128
+#define AVG_QUOTA_MAP_ENTRIES (diskquota_max_quotas / diskquota_max_monitored_databases)
+/* max number of QuotaInfoEntry in quota_info_map */
+#define MAX_QUOTA_MAP_ENTRIES (AVG_QUOTA_MAP_ENTRIES < 1024 ? 1024 : AVG_QUOTA_MAP_ENTRIES)
+
 typedef enum
 {
 	DISKQUOTA_TAG_HASH = 0,
@@ -87,6 +95,23 @@ typedef enum
 
 	NUM_QUOTA_TYPES,
 } QuotaType;
+
+/*
+ * table disk size and corresponding schema, owner and tablespace
+ */
+typedef struct QuotaInfoEntryKey
+{
+	QuotaType type;
+	Oid       keys[MAX_NUM_KEYS_QUOTA_MAP];
+	int16     segid;
+} QuotaInfoEntryKey;
+
+typedef struct QuotaInfoEntry
+{
+	QuotaInfoEntryKey key;
+	int64             size;
+	int64             limit;
+} QuotaInfoEntry;
 
 typedef enum
 {

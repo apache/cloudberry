@@ -92,7 +92,7 @@ static int num_db = 0;
 /* how many TableSizeEntry are maintained in all the table_size_map in shared memory*/
 pg_atomic_uint32 *diskquota_table_size_entry_num;
 
-/* how many QuotaMapEntry are maintained in all the quota_info[type].map in shared memory*/
+/* how many QuotaInfoEntry are maintained in all the quota_info_map in shared memory*/
 pg_atomic_uint32 *diskquota_quota_info_entry_num;
 
 static DiskquotaLauncherShmemStruct *DiskquotaLauncherShmem;
@@ -412,7 +412,7 @@ define_guc_variables(void)
 	DefineCustomIntVariable("diskquota.max_monitored_databases", "Max number of database on the cluster.", NULL,
 	                        &diskquota_max_monitored_databases, 50, 1, 1024, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 	DefineCustomIntVariable("diskquota.max_quotas", "Max number of quotas on the cluster.", NULL, &diskquota_max_quotas,
-	                        1024 * 1024, 1024 * NUM_QUOTA_TYPES, INT_MAX, PGC_POSTMASTER, 0, NULL, NULL, NULL);
+	                        1024 * 1024, 1024 * INIT_QUOTA_MAP_ENTRIES, INT_MAX, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
