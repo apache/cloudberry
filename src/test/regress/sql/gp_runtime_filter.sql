@@ -75,6 +75,40 @@ SELECT COUNT(*) FROM fact_rf
 SELECT COUNT(*) FROM dim_rf
     WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2;
 
+-- Test bloom filter pushdown
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed by (c1);
+CREATE TABLE t2(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed REPLICATED;
+
+INSERT INTO t1 VALUES (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+
+ANALYZE;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
 
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;

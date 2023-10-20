@@ -43,15 +43,16 @@ struct ValidateIndexState;
 
 /**
  * Flags represented the supported features of scan.
- * 
+ *
  * The first 8 bits are reserved for kernel expansion of some attributes,
  * and the remaining 24 bits are reserved for custom tableam.
- * 
+ *
  * If you add a new flag, make sure the flag's bit is consecutive with
  * the previous one.
- * 
-*/
+ *
+ */
 #define SCAN_SUPPORT_COLUMN_ORIENTED_SCAN (1 << 0)  /* support column-oriented scanning*/
+#define SCAN_SUPPORT_RUNTIME_FILTER       (1 << 1)  /* support runtime filter scan */
 
 /*
  * Bitmask values for the flags argument to the scan_begin callback.
