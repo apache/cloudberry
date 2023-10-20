@@ -250,6 +250,60 @@ SELECT COUNT(*) FROM dim_rf
   1600
 (1 row)
 
+-- Test bloom filter pushdown
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed by (c1);
+CREATE TABLE t2(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed REPLICATED;
+INSERT INTO t1 VALUES (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+ANALYZE;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+   ->  Hash Join (never executed)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
+         ->  Seq Scan on t1 (actual rows=128 loops=1)
+         ->  Hash (actual rows=32 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4098kB
+               ->  Seq Scan on t2 (actual rows=32 loops=1)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+   ->  Hash Join (never executed)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
+         ->  Seq Scan on t1 (actual rows=1 loops=1)
+         ->  Hash (actual rows=32 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4098kB
+               ->  Seq Scan on t2 (actual rows=32 loops=1)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
 SET optimizer TO default;
