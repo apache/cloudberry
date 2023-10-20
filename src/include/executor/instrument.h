@@ -78,6 +78,7 @@ typedef struct Instrumentation
 	bool		need_bufusage;	/* true if we need buffer usage data */
 	bool		need_walusage;	/* true if we need WAL usage data */
 	bool		async_mode;		/* true if node is in async mode */
+	bool		prf_work;		/* true if pushdown runtime filters really work */
 	/* Info about current plan cycle: */
 	bool		running;		/* true if we've completed first tuple */
 	instr_time	starttime;		/* Start time of current iteration of node */
@@ -94,6 +95,7 @@ typedef struct Instrumentation
 	uint64		nloops;			/* # of run cycles for this node */
 	double		nfiltered1;		/* # tuples removed by scanqual or joinqual */
 	double		nfiltered2;		/* # tuples removed by "other" quals */
+	double		nfilteredPRF;	/* # tuples removed by pushdown runtime filter */
 	BufferUsage	bufusage;		/* Total buffer usage */
 	WalUsage	walusage;		/* total WAL usage */
 

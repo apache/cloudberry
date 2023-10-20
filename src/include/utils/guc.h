@@ -645,6 +645,12 @@ extern bool gp_log_endpoints;
 
 extern bool gp_allow_date_field_width_5digits;
 
+/*
+ * Try to push the hash table of hash join node down to the scan node as
+ * bloom filter for performance.
+ */
+extern bool gp_enable_runtime_filter_pushdown;
+
 typedef enum
 {
 	INDEX_CHECK_NONE,

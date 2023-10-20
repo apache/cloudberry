@@ -1,3 +1,7 @@
+-- start_matchignore
+-- m/^.*Extra Text:.*/
+-- m/^.*Buckets:.*/
+-- end_matchignore
 -- Disable ORCA
 SET optimizer TO off;
 
@@ -75,6 +79,155 @@ SELECT COUNT(*) FROM fact_rf
 SELECT COUNT(*) FROM dim_rf
     WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2;
 
+-- Test bloom filter pushdown
+SET enable_parallel TO off;
+
+-- case 1: join on distribution table and replicated table.
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed by (c1);
+CREATE TABLE t2(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed REPLICATED;
+
+INSERT INTO t1 VALUES (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+
+ANALYZE;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+
+-- case 2: join on partition table and replicated table.
+CREATE TABLE t1 (c1 INT, c2 INT) DISTRIBUTED BY (c1) PARTITION BY RANGE (c2) (START (1) END (100) EVERY (50));
+CREATE TABLE t2 (c1 INT, c2 INT) DISTRIBUTED REPLICATED;
+INSERT INTO t1 SELECT generate_series(1, 99), generate_series(1, 99);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 SELECT generate_series(1, 5), generate_series(1, 5);
+INSERT INTO t2 SELECT generate_series(51, 51), generate_series(51, 51);
+ANALYZE;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+
+-- case 3: bug fix with explain
+DROP TABLE IF EXISTS test_tablesample1;
+CREATE TABLE test_tablesample1 (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
+INSERT INTO test_tablesample1 SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample1 SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample1 SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (COSTS OFF) SELECT id FROM test_tablesample1 TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS test_tablesample1;
+
+-- case 4: show debug info only when gp_enable_runtime_filter_pushdown is on
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+CREATE TABLE t1(c1 int, c2 int);
+CREATE TABLE t2(c1 int, c2 int);
+INSERT INTO t1 SELECT GENERATE_SERIES(1, 1000), GENERATE_SERIES(1, 1000);
+INSERT INTO t2 SELECT * FROM t1;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT count(t1.c2) FROM t1, t2 WHERE t1.c1 = t2.c1;
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+
+-- case 5: hashjoin + result + seqsacn
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+CREATE TABLE t1(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t2(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50));
+INSERT INTO t1 VALUES (5,5,5,5,5), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+ANALYZE;
+
+SET optimizer TO on;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
+
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+
+-- case 6: hashjoin + hashjoin + seqscan
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+CREATE TABLE t1(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t2(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t3(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+INSERT INTO t1 VALUES (1,1,1,1,1), (2,2,2,2,2), (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t3 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t3 select * FROM t3;
+ANALYZE;
+
+SET optimizer TO off;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
+
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+
+RESET enable_parallel;
 
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
