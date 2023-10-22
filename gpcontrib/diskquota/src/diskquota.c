@@ -77,7 +77,7 @@ bool diskquota_hardlimit               = false;
 int  diskquota_max_workers             = 10;
 int  diskquota_max_table_segments      = 0;
 int  diskquota_max_monitored_databases = 0;
-int  diskquota_max_quotas              = 0;
+int  diskquota_max_quota_probes        = 0;
 
 DiskQuotaLocks       diskquota_locks;
 ExtensionDDLMessage *extension_ddl_message = NULL;
@@ -411,8 +411,9 @@ define_guc_variables(void)
 	                        INT_MAX, PGC_POSTMASTER, 0, NULL, NULL, NULL);
 	DefineCustomIntVariable("diskquota.max_monitored_databases", "Max number of database on the cluster.", NULL,
 	                        &diskquota_max_monitored_databases, 50, 1, 1024, PGC_POSTMASTER, 0, NULL, NULL, NULL);
-	DefineCustomIntVariable("diskquota.max_quotas", "Max number of quotas on the cluster.", NULL, &diskquota_max_quotas,
-	                        1024 * 1024, 1024 * INIT_QUOTA_MAP_ENTRIES, INT_MAX, PGC_POSTMASTER, 0, NULL, NULL, NULL);
+	DefineCustomIntVariable("diskquota.max_quota_probes", "Max number of quotas on the cluster.", NULL,
+	                        &diskquota_max_quota_probes, 1024 * 1024, 1024 * INIT_QUOTA_MAP_ENTRIES, INT_MAX,
+	                        PGC_POSTMASTER, 0, NULL, NULL, NULL);
 }
 
 /* ---- Functions for disk quota worker process ---- */
