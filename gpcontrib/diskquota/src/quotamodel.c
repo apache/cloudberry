@@ -87,7 +87,7 @@ int                      SEGCOUNT = 0;
 extern int               diskquota_max_table_segments;
 extern pg_atomic_uint32 *diskquota_table_size_entry_num;
 extern int               diskquota_max_monitored_databases;
-extern int               diskquota_max_quotas;
+extern int               diskquota_max_quota_probes;
 extern pg_atomic_uint32 *diskquota_quota_info_entry_num;
 
 /*
@@ -232,7 +232,7 @@ put_quota_map_entry(QuotaInfoEntryKey *key, bool *found)
 {
 	QuotaInfoEntry *entry;
 	uint32          counter = pg_atomic_read_u32(diskquota_quota_info_entry_num);
-	if (counter >= diskquota_max_quotas)
+	if (counter >= diskquota_max_quota_probes)
 	{
 		entry = hash_search(quota_info_map, key, HASH_FIND, found);
 		/*
@@ -248,12 +248,12 @@ put_quota_map_entry(QuotaInfoEntryKey *key, bool *found)
 		if (!(*found))
 		{
 			counter = pg_atomic_add_fetch_u32(diskquota_quota_info_entry_num, 1);
-			if (counter >= diskquota_max_quotas)
+			if (counter >= diskquota_max_quota_probes)
 			{
-				ereport(WARNING, (errmsg("[diskquota] the number of quota exceeds the limit, please increase "
-				                         "the GUC value for diskquota.max_quotas. Current "
-				                         "diskquota.max_quotas value: %d",
-				                         diskquota_max_quotas)));
+				ereport(WARNING, (errmsg("[diskquota] the number of quota probe exceeds the limit, please "
+				                         "increase the GUC value for diskquota.max_quota_probes. Current "
+				                         "diskquota.max_quota_probes value: %d",
+				                         diskquota_max_quota_probes)));
 			}
 		}
 	}
