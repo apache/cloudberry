@@ -1,6 +1,6 @@
 #include "Config.h"
 #include "ProcStats.h"
-#include "GrpcConnector.h"
+#include "UDSConnector.h"
 #include <chrono>
 #include <ctime>
 
@@ -342,7 +342,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
 EventSender::EventSender() {
   if (Config::enable_collector() && !Config::filter_user(get_user_name())) {
     try {
-      connector = new GrpcConnector();
+      connector = new UDSConnector();
     } catch (const std::exception &e) {
       ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
     }

@@ -9,23 +9,6 @@ package yagpcc;
 option java_outer_classname = "SegmentYAGPCCAS";
 option go_package = "a.yandex-team.ru/cloud/mdb/yagpcc/api/proto/agent_segment;greenplum";
 
-service SetQueryInfo {
-    rpc SetMetricPlanNode (SetPlanNodeReq) returns (MetricResponse) {}
-
-    rpc SetMetricQuery (SetQueryReq) returns (MetricResponse) {}
-}
-
-message MetricResponse {
-    MetricResponseStatusCode error_code = 1;
-    string error_text = 2;
-}
-
-enum MetricResponseStatusCode {
-    METRIC_RESPONSE_STATUS_CODE_UNSPECIFIED = 0;
-    METRIC_RESPONSE_STATUS_CODE_SUCCESS = 1;
-    METRIC_RESPONSE_STATUS_CODE_ERROR = 2;
-}
-
 message SetQueryReq {
     QueryStatus           query_status = 1;
     google.protobuf.Timestamp datetime = 2;
