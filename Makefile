@@ -1,5 +1,5 @@
 override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
-override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -ggdb -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -fPIC -Iinclude -Isrc/protos -Isrc -g -DGPBUILD
+override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -Iinclude -Isrc/protos -Isrc -DGPBUILD
 COMMON_CPP_FLAGS := -Isrc -Iinclude -Isrc/stat_statements_parser
 PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
 SHLIB_LINK += -lprotobuf -lgrpc++
@@ -32,7 +32,7 @@ PG_STAT_OBJS	:= $(PG_STAT_DIR)/pg_stat_statements_ya_parser.o
 OBJS			:=	$(PG_STAT_OBJS)						\
 					$(PROTO_GEN_OBJECTS)			 	\
 					$(SRC_DIR)/ProcStats.o				\
-					$(SRC_DIR)/SpillInfoWrapper.o		\
+					$(SRC_DIR)/Config.o					\
 					$(SRC_DIR)/GrpcConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\

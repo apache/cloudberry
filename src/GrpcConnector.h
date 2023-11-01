@@ -1,12 +1,14 @@
 #pragma once
 
-#include "yagpcc_set_service.pb.h"
+#include "protos/yagpcc_set_service.pb.h"
+#include <queue>
 
 class GrpcConnector {
 public:
   GrpcConnector();
   ~GrpcConnector();
-  yagpcc::MetricResponse set_metric_query(yagpcc::SetQueryReq req);
+  yagpcc::MetricResponse report_query(std::queue<yagpcc::SetQueryReq> &reqs,
+                                      const std::string &event);
 
 private:
   class Impl;

@@ -29,10 +29,11 @@ message QueryInfo {
     uint64 plan_id = 3;
     string query_text = 4;
     string plan_text = 5;
-    string temlate_query_text = 6;
-    string temlate_plan_text = 7;
+    string template_query_text = 6;
+    string template_plan_text = 7;
     string userName = 8;
     string databaseName = 9;
+    string rsgname = 10;
 }
 
 enum PlanGenerator
@@ -83,6 +84,12 @@ message SystemStat {
     uint64 cancelled_write_bytes = 14;
 }
 
+message NetworkStat {
+    uint32 total_bytes  = 1;
+    uint32 tuple_bytes = 2;
+    uint32 chunks = 3;
+}
+
 message MetricInstrumentation {
     uint64  ntuples     = 1;    /* Total tuples produced */
     uint64  nloops      = 2;    /* # of run cycles for this node */
@@ -102,6 +109,8 @@ message MetricInstrumentation {
     uint64 temp_blks_written   = 16;
     double blk_read_time       = 17; /* measured read/write time */
     double blk_write_time      = 18;
+    NetworkStat sent           = 19;
+    NetworkStat received       = 20;
 }
 
 message SpillInfo {

@@ -205,8 +205,15 @@ JumbleRangeTable(pgssJumbleState *jstate, List *rtable)
 			APP_JUMB_STRING(rte->ctename);
 			APP_JUMB(rte->ctelevelsup);
 			break;
+		/* GPDB RTEs */
+		case RTE_VOID:
+			break;
+		case RTE_TABLEFUNCTION:
+			JumbleQuery(jstate, rte->subquery);
+			JumbleExpr(jstate, (Node *)rte->functions);
+			break;
 		default:
-			elog(ERROR, "unrecognized RTE kind: %d", (int)rte->rtekind);
+			ereport(ERROR, (errmsg("unrecognized RTE kind: %d", (int)rte->rtekind)));
 			break;
 		}
 	}
@@ -609,10 +616,51 @@ JumbleExpr(pgssJumbleState *jstate, Node *node)
 		JumbleExpr(jstate, rtfunc->funcexpr);
 	}
 	break;
+	/* GPDB nodes */
+	case T_GroupingClause:
+	{
+		GroupingClause *grpnode = (GroupingClause *)node;
+
+		JumbleExpr(jstate, (Node *)grpnode->groupsets);
+	}
+	break;
+	case T_GroupingFunc:
+	{
+		GroupingFunc *grpnode = (GroupingFunc *)node;
+
+		JumbleExpr(jstate, (Node *)grpnode->args);
+	}
+	break;
+	case T_Grouping:
+	case T_GroupId:
+	case T_Integer:
+	case T_Value:
+		// TODO:seems like nothing to do with it
+		break;
+	/* GPDB-only additions, nothing to do */
+	case T_PartitionBy:
+	case T_PartitionElem:
+	case T_PartitionRangeItem:
+	case T_PartitionBoundSpec:
+	case T_PartitionSpec:
+	case T_PartitionValuesSpec:
+	case T_AlterPartitionId:
+	case T_AlterPartitionCmd:
+	case T_InheritPartitionCmd:
+	case T_CreateFileSpaceStmt:
+	case T_FileSpaceEntry:
+	case T_DropFileSpaceStmt:
+	case T_TableValueExpr:
+	case T_DenyLoginInterval:
+	case T_DenyLoginPoint:
+	case T_AlterTypeStmt:
+	case T_SetDistributionCmd:
+	case T_ExpandStmtSpec:
+		break;
 	default:
 		/* Only a warning, since we can stumble along anyway */
-		elog(WARNING, "unrecognized node type: %d",
-			 (int)nodeTag(node));
+		ereport(WARNING, (errmsg("unrecognized node type: %d",
+			 (int)nodeTag(node))));
 		break;
 	}
 }
