@@ -49,7 +49,7 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
   if (sockfd != -1) {
     if (fcntl(sockfd, F_SETFL, O_NONBLOCK) != -1) {
       if (connect(sockfd, (sockaddr *)&address, sizeof(address)) != -1) {
-        auto data_size = req.ByteSizeLong();
+        auto data_size = req.ByteSize();
         auto total_size = data_size + sizeof(uint32_t);
         uint8_t *buf = (uint8_t *)palloc(total_size);
         uint32_t *size_payload = (uint32_t *)buf;
