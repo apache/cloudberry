@@ -17,6 +17,9 @@ message SetQueryReq {
     QueryInfo               query_info = 5;
     GPMetrics            query_metrics = 6;
     repeated MetricPlan      plan_tree = 7;
+    google.protobuf.Timestamp submit_time = 8;
+    google.protobuf.Timestamp start_time  = 9;
+    google.protobuf.Timestamp end_time    = 10;
 }
 
 message SetPlanNodeReq {
@@ -26,4 +29,7 @@ message SetPlanNodeReq {
     SegmentKey             segment_key = 4;
     GPMetrics             node_metrics = 5;
     MetricPlan               plan_node = 6;
+    google.protobuf.Timestamp submit_time = 7;
+    google.protobuf.Timestamp start_time  = 8;
+    google.protobuf.Timestamp end_time    = 9;
 }

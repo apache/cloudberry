@@ -19,18 +19,6 @@ UDSConnector::UDSConnector() : uds_path("unix://" + Config::uds_path()) {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 }
 
-void UDSConnector::report_query(std::queue<yagpcc::SetQueryReq> &reqs,
-                                const std::string &event) {
-  while (!reqs.empty()) {
-    const auto &req = reqs.front();
-    if (report_query(req, event)) {
-      reqs.pop();
-    } else {
-      break;
-    }
-  }
-}
-
 static void inline log_tracing_failure(const yagpcc::SetQueryReq &req,
                                        const std::string &event) {
   ereport(LOG,

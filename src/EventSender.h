@@ -30,8 +30,5 @@ private:
   void collect_query_done(QueryDesc *query_desc, const std::string &status);
   UDSConnector *connector = nullptr;
   int nesting_level = 0;
-  // TODO: instead of having a queue here we can make the message incremental in
-  // case of GRPC failures. It would requires adding submit_time, start_time and
-  // end_time fields to protobuf
-  std::queue<yagpcc::SetQueryReq> msg_queue;
+  yagpcc::SetQueryReq *query_msg;
 };
