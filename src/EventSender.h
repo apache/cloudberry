@@ -27,7 +27,7 @@ public:
 
 private:
   void collect_query_submit(QueryDesc *query_desc);
-  void collect_query_done(QueryDesc *query_desc, const std::string &status);
+  void collect_query_done(QueryDesc *query_desc, QueryMetricsStatus status);
   UDSConnector *connector = nullptr;
   int nesting_level = 0;
   yagpcc::SetQueryReq *query_msg;
