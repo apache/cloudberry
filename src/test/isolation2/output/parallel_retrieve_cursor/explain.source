@@ -32,22 +32,22 @@ INSERT 100
 
 -- PARALLEL RETRIEVE CURSOR with other options (WITH HOLD/SCROLL) is not supported
 EXPLAIN (COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR WITHOUT HOLD FOR SELECT * FROM t1;
- QUERY PLAN                          
--------------------------------------
- Seq Scan on t1                      
- Endpoint: on all 3 segments         
- Optimizer: Postgres query optimizer 
+ QUERY PLAN                        
+-----------------------------------
+ Seq Scan on t1                    
+ Optimizer: Postgres-based planner 
+ Endpoint: on all 3 segments       
 (3 rows)
 EXPLAIN (COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR WITH HOLD FOR SELECT * FROM t1;
 ERROR:  DECLARE PARALLEL RETRIEVE CURSOR WITH HOLD ... is not supported
 DETAIL:  Holdable cursors can not be parallel
 
 EXPLAIN (COSTS false) DECLARE c1 NO SCROLL PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t1;
- QUERY PLAN                          
--------------------------------------
- Seq Scan on t1                      
- Endpoint: on all 3 segments         
- Optimizer: Postgres query optimizer 
+ QUERY PLAN                        
+-----------------------------------
+ Seq Scan on t1                    
+ Optimizer: Postgres-based planner 
+ Endpoint: on all 3 segments       
 (3 rows)
 EXPLAIN (COSTS false) DECLARE c1 SCROLL PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t1;
 ERROR:  SCROLL is not allowed for the PARALLEL RETRIEVE CURSORs
@@ -55,12 +55,12 @@ DETAIL:  Scrollable cursors can not be parallel
 
 -- Test: explain output: Endpoint info (on coordinator/on some segments/on all segments)
 EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t1;
- QUERY PLAN                          
--------------------------------------
- Seq Scan on public.t1               
-   Output: a                         
- Endpoint: on all 3 segments         
- Optimizer: Postgres query optimizer 
+ QUERY PLAN                        
+-----------------------------------
+ Seq Scan on public.t1             
+   Output: a                       
+ Optimizer: Postgres-based planner 
+ Endpoint: on all 3 segments       
 (4 rows)
 EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t1 ORDER BY a;
  QUERY PLAN                               
@@ -97,12 +97,12 @@ EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * 
 
 -- Test: Locus CdbLocusType_Strewn
 EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t2;
- QUERY PLAN                          
--------------------------------------
- Seq Scan on public.t2               
-   Output: a                         
- Endpoint: on all 3 segments         
- Optimizer: Postgres query optimizer 
+ QUERY PLAN                        
+-----------------------------------
+ Seq Scan on public.t2             
+   Output: a                       
+ Optimizer: Postgres-based planner 
+ Endpoint: on all 3 segments       
 (4 rows)
 
 -- Do some prepatation work in order to obtain correct `reltuples` number.
