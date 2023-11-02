@@ -230,16 +230,10 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
     // no-op: executor_after_start is enough
     break;
   case METRICS_QUERY_DONE:
-    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "done");
-    break;
   case METRICS_QUERY_ERROR:
-    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "error");
-    break;
   case METRICS_QUERY_CANCELING:
-    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "calcelling");
-    break;
   case METRICS_QUERY_CANCELED:
-    collect_query_done(reinterpret_cast<QueryDesc *>(arg), "cancelled");
+    collect_query_done(reinterpret_cast<QueryDesc *>(arg), status);
     break;
   case METRICS_INNER_QUERY_DONE:
     // TODO
@@ -320,10 +314,7 @@ void EventSender::executor_end(QueryDesc *query_desc) {
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
-  if (!connector) {
-    return;
-  }
-  if (need_collect()) {
+  if (connector && need_collect()) {
     *query_msg =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
     *query_msg->mutable_submit_time() = current_ts();
@@ -336,13 +327,33 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
 }
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
-                                     const std::string &status) {
-  if (!connector) {
-    return;
-  }
-  if (need_collect()) {
-    query_msg->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_DONE);
-    if (connector->report_query(*query_msg, status)) {
+                                     QueryMetricsStatus status) {
+  if (connector && need_collect()) {
+    yagpcc::QueryStatus query_status;
+    std::string msg;
+    switch (status) {
+    case METRICS_QUERY_DONE:
+      query_status = yagpcc::QueryStatus::QUERY_STATUS_DONE;
+      msg = "done";
+      break;
+    case METRICS_QUERY_ERROR:
+      query_status = yagpcc::QueryStatus::QUERY_STATUS_ERROR;
+      msg = "error";
+      break;
+    case METRICS_QUERY_CANCELING:
+      query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELLING;
+      msg = "cancelling";
+      break;
+    case METRICS_QUERY_CANCELED:
+      query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELED;
+      msg = "cancelled";
+      break;
+    default:
+      ereport(FATAL, (errmsg("Unexpected query status in query_done hook: %d",
+                             status)));
+    }
+    query_msg->set_query_status(query_status);
+    if (connector->report_query(*query_msg, msg)) {
       clear_big_fields(query_msg);
     }
   }
