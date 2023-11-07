@@ -446,9 +446,6 @@ disk_quota_shmem_startup(void)
 	 * to store out-of-quota rejectmap. active_tables_map is used to store
 	 * active tables whose disk usage is changed.
 	 */
-	extension_ddl_message = ShmemInitStruct("disk_quota_extension_ddl_message", sizeof(ExtensionDDLMessage), &found);
-	if (!found) memset((void *)extension_ddl_message, 0, sizeof(ExtensionDDLMessage));
-
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize   = sizeof(RejectMapEntry);
 	hash_ctl.entrysize = sizeof(GlobalRejectMapEntry);
@@ -467,7 +464,16 @@ disk_quota_shmem_startup(void)
 	monitored_dbid_cache =
 	        DiskquotaShmemInitHash("table oid cache which shoud tracking", diskquota_max_monitored_databases,
 	                               diskquota_max_monitored_databases, &hash_ctl, HASH_ELEM, DISKQUOTA_OID_HASH);
-	init_launcher_shmem();
+
+	/* only initialize ddl_message and launcher memory on master/standby. */
+	if (IS_QUERY_DISPATCHER())
+	{
+		extension_ddl_message =
+		        ShmemInitStruct("disk_quota_extension_ddl_message", sizeof(ExtensionDDLMessage), &found);
+		if (!found) memset((void *)extension_ddl_message, 0, sizeof(ExtensionDDLMessage));
+
+		init_launcher_shmem();
+	}
 	LWLockRelease(AddinShmemInitLock);
 }
 
@@ -525,8 +531,8 @@ diskquota_worker_shmem_size()
 static Size
 DiskQuotaShmemSize(void)
 {
-	Size size;
-	size = sizeof(ExtensionDDLMessage);
+	Size size = 0;
+
 	size = add_size(size, hash_estimate_size(MAX_DISK_QUOTA_REJECT_ENTRIES, sizeof(GlobalRejectMapEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaActiveTableEntry)));
 	size = add_size(size, hash_estimate_size(diskquota_max_active_tables, sizeof(DiskQuotaRelationCacheEntry)));
@@ -537,6 +543,7 @@ DiskQuotaShmemSize(void)
 
 	if (IS_QUERY_DISPATCHER())
 	{
+		size = add_size(size, sizeof(ExtensionDDLMessage));
 		size = add_size(size, diskquota_launcher_shmem_size());
 		size = add_size(size, sizeof(pg_atomic_uint32));
 		size = add_size(size, diskquota_worker_shmem_size() * diskquota_max_monitored_databases);
