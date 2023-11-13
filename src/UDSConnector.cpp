@@ -1,5 +1,6 @@
 #include "UDSConnector.h"
 #include "Config.h"
+#include "YagpStat.h"
 
 #include <string>
 #include <unistd.h>
@@ -15,9 +16,7 @@ extern "C" {
 #include "cdb/cdbvars.h"
 }
 
-UDSConnector::UDSConnector() : uds_path("unix://" + Config::uds_path()) {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-}
+UDSConnector::UDSConnector() { GOOGLE_PROTOBUF_VERIFY_VERSION; }
 
 static void inline log_tracing_failure(const yagpcc::SetQueryReq &req,
                                        const std::string &event) {
@@ -31,7 +30,7 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
                                 const std::string &event) {
   sockaddr_un address;
   address.sun_family = AF_UNIX;
-  strcpy(address.sun_path, uds_path.c_str());
+  strcpy(address.sun_path, Config::uds_path().c_str());
   bool success = true;
   auto sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd != -1) {
@@ -58,12 +57,16 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
         if (sent < 0) {
           log_tracing_failure(req, event);
           success = false;
+          YagpStat::report_bad_send(total_size);
+        } else {
+          YagpStat::report_send(total_size);
         }
         pfree(buf);
       } else {
         // log the error and go on
         log_tracing_failure(req, event);
         success = false;
+        YagpStat::report_bad_connection();
       }
     } else {
       // That's a very important error that should never happen, so make it
@@ -72,12 +75,14 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
               (errmsg("Unable to create non-blocking socket connection %s",
                       strerror(errno))));
       success = false;
+      YagpStat::report_error();
     }
     close(sockfd);
   } else {
     // log the error and go on
     log_tracing_failure(req, event);
     success = false;
+    YagpStat::report_error();
   }
   return success;
 }

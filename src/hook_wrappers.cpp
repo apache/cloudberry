@@ -1,16 +1,17 @@
 extern "C" {
 #include "postgres.h"
+#include "funcapi.h"
 #include "executor/executor.h"
 #include "utils/elog.h"
+#include "utils/builtins.h"
 #include "utils/metrics_utils.h"
-
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
-
 #include "tcop/utility.h"
 }
 
 #include "Config.h"
+#include "YagpStat.h"
 #include "EventSender.h"
 #include "hook_wrappers.h"
 #include "stat_statements_parser/pg_stat_statements_ya_parser.h"
@@ -39,6 +40,7 @@ static inline EventSender *get_sender() {
 
 void hooks_init() {
   Config::init();
+  YagpStat::init();
   previous_ExecutorStart_hook = ExecutorStart_hook;
   ExecutorStart_hook = ya_ExecutorStart_hook;
   previous_ExecutorRun_hook = ExecutorRun_hook;
@@ -62,6 +64,7 @@ void hooks_deinit() {
   if (sender) {
     delete sender;
   }
+  YagpStat::deinit();
 }
 
 void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags) {
@@ -150,4 +153,49 @@ void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {
   if (previous_query_info_collect_hook) {
     (*previous_query_info_collect_hook)(status, arg);
   }
+}
+
+static void check_stats_loaded() {
+  if (!YagpStat::loaded()) {
+    ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+                    errmsg("yagp_hooks_collector must be loaded via "
+                           "shared_preload_libraries")));
+  }
+}
+
+void yagp_functions_reset() {
+  check_stats_loaded();
+  YagpStat::reset();
+}
+
+Datum yagp_functions_get(FunctionCallInfo fcinfo) {
+  const int ATTNUM = 6;
+  check_stats_loaded();
+  auto stats = YagpStat::get_stats();
+  TupleDesc tupdesc = CreateTemplateTupleDesc(ATTNUM, false);
+  TupleDescInitEntry(tupdesc, (AttrNumber)1, "segid", INT4OID, -1 /* typmod */,
+                     0 /* attdim */);
+  TupleDescInitEntry(tupdesc, (AttrNumber)2, "total_messages", INT8OID,
+                     -1 /* typmod */, 0 /* attdim */);
+  TupleDescInitEntry(tupdesc, (AttrNumber)3, "send_failures", INT8OID,
+                     -1 /* typmod */, 0 /* attdim */);
+  TupleDescInitEntry(tupdesc, (AttrNumber)4, "connection_failures", INT8OID,
+                     -1 /* typmod */, 0 /* attdim */);
+  TupleDescInitEntry(tupdesc, (AttrNumber)5, "other_errors", INT8OID,
+                     -1 /* typmod */, 0 /* attdim */);
+  TupleDescInitEntry(tupdesc, (AttrNumber)6, "max_message_size", INT4OID,
+                     -1 /* typmod */, 0 /* attdim */);
+  tupdesc = BlessTupleDesc(tupdesc);
+  Datum values[ATTNUM];
+  bool nulls[ATTNUM];
+  MemSet(nulls, 0, sizeof(nulls));
+  values[0] = Int32GetDatum(GpIdentity.segindex);
+  values[1] = Int64GetDatum(stats.total);
+  values[2] = Int64GetDatum(stats.failed_sends);
+  values[3] = Int64GetDatum(stats.failed_connects);
+  values[4] = Int64GetDatum(stats.failed_other);
+  values[5] = Int32GetDatum(stats.max_message_size);
+  HeapTuple tuple = heap_form_tuple(tupdesc, values, nulls);
+  Datum result = HeapTupleGetDatum(tuple);
+  PG_RETURN_DATUM(result);
 }

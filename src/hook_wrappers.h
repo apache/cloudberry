@@ -6,6 +6,8 @@ extern "C" {
 
 extern void hooks_init();
 extern void hooks_deinit();
+extern void yagp_functions_reset();
+extern Datum yagp_functions_get(FunctionCallInfo fcinfo);
 
 #ifdef __cplusplus
 }
