@@ -24,16 +24,17 @@ OBJS			:=	$(PG_STAT_OBJS)						\
 					$(PROTO_GEN_OBJECTS)			 	\
 					$(SRC_DIR)/ProcStats.o				\
 					$(SRC_DIR)/Config.o					\
+					$(SRC_DIR)/YagpStat.o				\
 					$(SRC_DIR)/UDSConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\
 					$(SRC_DIR)/yagp_hooks_collector.o
 EXTRA_CLEAN     := $(GEN_DIR)
 DATA			:= $(wildcard sql/*--*.sql)
-EXTENSION		:= yagp-hooks-collector
+EXTENSION		:= yagp_hooks_collector
 EXTVERSION		:= $(shell grep default_version $(EXTENSION).control | \
 			   	sed -e "s/default_version[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
-MODULE_big		:= yagp-hooks-collector
+MODULE_big		:= yagp_hooks_collector
 PG_CONFIG		:= pg_config
 PGXS			:= $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
