@@ -251,10 +251,6 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (!need_collect()) {
     return;
   }
-  if (query_msg->has_query_key()) {
-    connector->report_query(*query_msg, "previous query");
-    query_msg->Clear();
-  }
   query_start_time = std::chrono::high_resolution_clock::now();
   WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
@@ -315,6 +311,10 @@ void EventSender::executor_end(QueryDesc *query_desc) {
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
   if (connector && need_collect()) {
+    if (query_msg && query_msg->has_query_key()) {
+      connector->report_query(*query_msg, "previous query");
+      query_msg->Clear();
+    }
     *query_msg =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
     *query_msg->mutable_submit_time() = current_ts();
