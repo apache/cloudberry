@@ -39,12 +39,17 @@ namespace {
 
 std::string *get_user_name() {
   const char *username = GetConfigOption("session_authorization", false, false);
+  // username is not to be freed
   return username ? new std::string(username) : nullptr;
 }
 
 std::string *get_db_name() {
   char *dbname = get_database_name(MyDatabaseId);
-  std::string *result = dbname ? new std::string(dbname) : nullptr;
+  std::string *result = nullptr;
+  if (dbname) {
+    result = new std::string(dbname);
+    pfree(dbname);
+  }
   return result;
 }
 
@@ -58,8 +63,7 @@ std::string *get_rg_name() {
   char *rgname = GetResGroupNameForId(groupId);
   if (rgname == nullptr)
     return nullptr;
-  auto result = new std::string(rgname);
-  return result;
+  return new std::string(rgname);
 }
 
 google::protobuf::Timestamp current_ts() {
@@ -97,8 +101,12 @@ ExplainState get_explain_state(QueryDesc *query_desc, bool costs) {
 }
 
 void set_plan_text(std::string *plan_text, QueryDesc *query_desc) {
+  MemoryContext oldcxt =
+      MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
   auto es = get_explain_state(query_desc, true);
   *plan_text = std::string(es.str->data, es.str->len);
+  pfree(es.str->data);
+  MemoryContextSwitchTo(oldcxt);
 }
 
 void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
@@ -251,10 +259,6 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (!need_collect()) {
     return;
   }
-  if (query_msg->has_query_key()) {
-    connector->report_query(*query_msg, "previous query");
-    query_msg->Clear();
-  }
   query_start_time = std::chrono::high_resolution_clock::now();
   WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
@@ -263,11 +267,12 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     query_desc->instrument_options |= INSTRUMENT_TIMER;
     if (Config::enable_cdbstats()) {
       query_desc->instrument_options |= INSTRUMENT_CDB;
-
-      instr_time starttime;
-      INSTR_TIME_SET_CURRENT(starttime);
-      query_desc->showstatctx =
-          cdbexplain_showExecStatsBegin(query_desc, starttime);
+      if (!query_desc->showstatctx) {
+        instr_time starttime;
+        INSTR_TIME_SET_CURRENT(starttime);
+        query_desc->showstatctx =
+            cdbexplain_showExecStatsBegin(query_desc, starttime);
+      }
     }
   }
 }
@@ -309,12 +314,16 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   *query_msg->mutable_end_time() = current_ts();
   set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
   if (connector->report_query(*query_msg, "ended")) {
-    query_msg->Clear();
+    clear_big_fields(query_msg);
   }
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
   if (connector && need_collect()) {
+    if (query_msg && query_msg->has_query_key()) {
+      connector->report_query(*query_msg, "previous query");
+      query_msg->Clear();
+    }
     *query_msg =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
     *query_msg->mutable_submit_time() = current_ts();
@@ -354,7 +363,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
     }
     query_msg->set_query_status(query_status);
     if (connector->report_query(*query_msg, msg)) {
-      clear_big_fields(query_msg);
+      query_msg->Clear();
     }
   }
 }
