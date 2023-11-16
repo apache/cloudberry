@@ -1337,3 +1337,12 @@ explain (costs off) select * from r where b in (select b from s where c=10 order
 select * from r where b in (select b from s where c=10 order by c);
 explain (costs off) select * from r where b in (select b from s where c=10 order by c limit 2);
 select * from r where b in (select b from s where c=10 order by c limit 2);
+
+-- test cross params of initplan
+-- https://github.com/greenplum-db/gpdb/issues/16268
+create table tmp (a varchar, b varchar, c varchar);
+select (SELECT EXISTS
+                 (SELECT
+                  FROM pg_views
+                  WHERE schemaname = a)) from tmp;
+drop table tmp;
