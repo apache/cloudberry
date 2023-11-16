@@ -305,7 +305,7 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   *query_msg->mutable_end_time() = current_ts();
   set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
   if (connector->report_query(*query_msg, "ended")) {
-    query_msg->Clear();
+    clear_big_fields(query_msg);
   }
 }
 
@@ -354,7 +354,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
     }
     query_msg->set_query_status(query_status);
     if (connector->report_query(*query_msg, msg)) {
-      clear_big_fields(query_msg);
+      query_msg->Clear();
     }
   }
 }
