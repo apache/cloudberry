@@ -49,6 +49,7 @@
 
 #include "access/parallel.h"
 #include "catalog/pg_authid.h"
+#include "cdb/cdbvars.h"
 #include "common/hashfn.h"
 #include "executor/instrument.h"
 #include "funcapi.h"
@@ -1218,6 +1219,13 @@ pgss_store(const char *query, uint64 queryId,
 
 	/* Safety check... */
 	if (!pgss || !pgss_hash)
+		return;
+
+	/* Query Executor does not need to run pgss_store. Because the query string
+	 * is truncated when buildGpQueryString, then the Assert for strlen(query)
+	 * below will fail.
+	 */
+	if (Gp_role != GP_ROLE_DISPATCH)
 		return;
 
 	/*

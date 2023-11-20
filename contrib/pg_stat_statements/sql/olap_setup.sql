@@ -1,0 +1,1 @@
+../../../src/test/regress/sql/olap_setup.sql

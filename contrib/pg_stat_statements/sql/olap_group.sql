@@ -1,0 +1,1 @@
+../../../src/test/regress/sql/olap_group.sql
