@@ -1196,6 +1196,32 @@ CREATE EXTERNAL TABLE gz_multi_chunk_2(
 LOCATION('gpfdist://@hostname@:7070/gpfdist2/gz_multi_chunk_2.tbl.gz') FORMAT 'csv';
 SELECT count(*) FROM gz_multi_chunk_2;
 
+-- test the bug of auto-quote for key words
+-- please refer to issue-16753
+CREATE TABLE test_quote (id bigint, item text, price int);
+CREATE TABLE test_quote_input AS (
+        select id, item, price, 
+        gp_segment_id as segment,
+        current_timestamp as time 
+        from test_quote order by id);
+INSERT INTO test_quote values(1, 'xyz', 1);
+CREATE WRITABLE EXTERNAL TABLE test_quote_writable (LIKE test_quote_input) 
+LOCATION('gpfdist://@hostname@:7070/gpfdist2/test_quote.csv') 
+FORMAT 'CSV' (FORCE QUOTE id, item, price, segment, time);
+INSERT INTO test_quote_writable (
+        select id, item, price, 
+        gp_segment_id as segment,
+        current_timestamp as time 
+        from test_quote order by id);
+CREATE READABLE EXTERNAL TABLE test_quote_readable (LIKE test_quote_input) 
+LOCATION('gpfdist://@hostname@:7070/gpfdist2/test_quote.csv') 
+FORMAT 'CSV' (FORCE NOT NULL id, item, price, segment, time);
+SELECT count(*) FROM test_quote_readable;
+DROP TABLE test_quote;
+DROP TABLE test_quote_input;
+DROP EXTERNAL TABLE test_quote_writable;
+DROP EXTERNAL TABLE test_quote_readable;
+
 -- start_ignore
 select * from gpfdist2_stop;
 -- end_ignore

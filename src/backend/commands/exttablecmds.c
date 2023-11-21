@@ -603,7 +603,7 @@ list_join(List *list, char delimiter)
 		const char *cellval;
 
 		cellval = strVal(lfirst(cell));
-		appendStringInfo(&buf, "%s%c", quote_identifier(cellval), delimiter);
+		appendStringInfo(&buf, "%s%c", cellval, delimiter);
 	}
 
 	/*
