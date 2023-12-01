@@ -6016,6 +6016,8 @@ StartupXLOG(void)
 	 */
 	InRecovery = false;
 
+	SIMPLE_FAULT_INJECTOR("out_of_recovery_in_startupxlog");
+
 	/*
 	 * Hook for plugins to do additional startup works.
 	 *
