@@ -2158,6 +2158,7 @@ performDtxProtocolCommitPrepared(const char *gid, bool raiseErrorIfNotFound)
 	sendWaitGxidsToQD(waitGxids);
 
 	finishDistributedTransactionContext("performDtxProtocolCommitPrepared -- Commit Prepared", false);
+	SIMPLE_FAULT_INJECTOR("finish_commit_prepared");
 }
 
 /**

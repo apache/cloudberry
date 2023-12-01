@@ -90,3 +90,6 @@ installcheck-cbdb-parallel: install
 	export PGOPTIONS='-c optimizer=off -c enable_parallel=true'; \
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule \
 	)
+
+installcheck-hot-standby: install
+	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/hot_standby_schedule --dbname=isolation2-hot-standby
