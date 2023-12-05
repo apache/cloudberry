@@ -259,7 +259,7 @@ $$ LANGUAGE plpython3u;
                                 stdout=subprocess.PIPE, check=True).stdout
         session_pids = stdout.splitlines()
 
-        path = "/sys/fs/cgroup/gpdb/{}/cgroup.procs".format(groupid)
+        path = "/sys/fs/cgroup/gpdb/{}/queries/cgroup.procs".format(groupid)
         stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout
         cgroups_pids = stdout.splitlines()
 
