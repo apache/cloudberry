@@ -39,7 +39,8 @@ extern TupleConversionMap *convert_tuples_by_position(TupleDesc indesc,
 
 extern TupleConversionMap *convert_tuples_by_name(TupleDesc indesc,
 												  TupleDesc outdesc);
-
+extern AttrMap *convert_tuples_by_name_map_missing_ok(TupleDesc indesc,
+											  TupleDesc outdesc);
 extern HeapTuple execute_attr_map_tuple(HeapTuple tuple, TupleConversionMap *map);
 extern TupleTableSlot *execute_attr_map_slot(AttrMap *attrMap,
 											 TupleTableSlot *in_slot,
