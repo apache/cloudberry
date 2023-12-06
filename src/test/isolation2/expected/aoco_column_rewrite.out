@@ -978,6 +978,8 @@ EXECUTE attribute_encoding_check ('alter_column_other');
  alter_column_other | c       | 3       | ['compresstype=none', 'compresslevel=0', 'blocksize=32768'] 
 (3 rows)
 
+-- ALTER TYPE and adding constraint can be done together when rewriting column-only. No table rewrite.
+-- SET DEFAULT is essentially adding a constraint.
 ALTER TABLE alter_column_other ALTER COLUMN b TYPE text, ALTER COLUMN c SET DEFAULT 5;
 ALTER
 
@@ -985,16 +987,16 @@ EXECUTE attribute_encoding_check ('alter_column_other');
  relname            | attname | filenum | attoptions                                                  
 --------------------+---------+---------+-------------------------------------------------------------
  alter_column_other | a       | 1       | ['compresstype=none', 'compresslevel=0', 'blocksize=32768'] 
- alter_column_other | b       | 2       | ['compresstype=none', 'compresslevel=0', 'blocksize=32768'] 
+ alter_column_other | b       | 1602    | ['compresstype=none', 'compresslevel=0', 'blocksize=32768'] 
  alter_column_other | c       | 3       | ['compresstype=none', 'compresslevel=0', 'blocksize=32768'] 
 (3 rows)
 EXECUTE checkrelfilenodediff ('alter_column_other', 'alter_column_other');
  segid | casename           | relname            | rewritten 
 -------+--------------------+--------------------+-----------
- -1    | alter_column_other | alter_column_other | t         
- 0     | alter_column_other | alter_column_other | t         
- 1     | alter_column_other | alter_column_other | t         
- 2     | alter_column_other | alter_column_other | t         
+ -1    | alter_column_other | alter_column_other | f         
+ 0     | alter_column_other | alter_column_other | f         
+ 1     | alter_column_other | alter_column_other | f         
+ 2     | alter_column_other | alter_column_other | f         
 (4 rows)
 SELECT * FROM alter_column_other;
  a | b | c 
@@ -1068,16 +1070,16 @@ EXECUTE checkrelfilenodediff ('alter_column_constraints_col_rewrite', 'alter_col
 
 EXECUTE capturerelfilenodebefore ('alter_column_constraints_fullrewrite', 'alter_column_constraints');
 EXECUTE 4
--- should succeed and relfile changed (not using the column rewrite optimization because there's other command)
+-- should succeed and no table rewrite
 ALTER TABLE alter_column_constraints ADD CONSTRAINT checkb2 CHECK (b < 100), ALTER COLUMN b TYPE int;
 ALTER
 EXECUTE checkrelfilenodediff ('alter_column_constraints_fullrewrite', 'alter_column_constraints');
  segid | casename                             | relname                  | rewritten 
 -------+--------------------------------------+--------------------------+-----------
- -1    | alter_column_constraints_fullrewrite | alter_column_constraints | t         
- 0     | alter_column_constraints_fullrewrite | alter_column_constraints | t         
- 1     | alter_column_constraints_fullrewrite | alter_column_constraints | t         
- 2     | alter_column_constraints_fullrewrite | alter_column_constraints | t         
+ -1    | alter_column_constraints_fullrewrite | alter_column_constraints | f         
+ 0     | alter_column_constraints_fullrewrite | alter_column_constraints | f         
+ 1     | alter_column_constraints_fullrewrite | alter_column_constraints | f         
+ 2     | alter_column_constraints_fullrewrite | alter_column_constraints | f         
 (4 rows)
 
 --------------------------------------------------------------------------------
@@ -1668,7 +1670,6 @@ execute checkrelfilenodediff('set encoding - multiple', 'atsetenc');
 execute attribute_encoding_check('atsetenc');
  relname  | attname                      | filenum | attoptions                                                      
 ----------+------------------------------+---------+-----------------------------------------------------------------
- atsetenc | c8                           | 1608    | ['compresstype=rle_type', 'compresslevel=4', 'blocksize=32768'] 
  atsetenc | c1                           | 1601    | ['compresstype=zlib', 'compresslevel=9', 'blocksize=32768']     
  atsetenc | c2                           | 2       | ['compresstype=zlib', 'compresslevel=1', 'blocksize=32768']     
  atsetenc | c4                           | 1604    | ['compresstype=zlib', 'compresslevel=9', 'blocksize=32768']     
@@ -1676,6 +1677,7 @@ execute attribute_encoding_check('atsetenc');
  atsetenc | c6                           | 6       | ['compresstype=none', 'compresslevel=0', 'blocksize=32768']     
  atsetenc | c7                           | 7       | ['compresstype=rle_type', 'compresslevel=3', 'blocksize=32768'] 
  atsetenc | ........pg.dropped.3........ | 1603    | ['compresstype=zlib', 'compresslevel=9', 'blocksize=32768']     
+ atsetenc | c8                           | 1608    | ['compresstype=rle_type', 'compresslevel=4', 'blocksize=32768'] 
 (8 rows)
 
 -- results all good
@@ -1696,11 +1698,11 @@ INSERT 5
 select * from ataddcolgenerated;
  a | b     
 ---+-------
+ 1 | str_1 
+ 5 | str_5 
  2 | str_2 
  3 | str_3 
  4 | str_4 
- 5 | str_5 
- 1 | str_1 
 (5 rows)
 alter table ataddcolgenerated add column c int generated always as (a * a) stored;
 ALTER
@@ -1759,15 +1761,15 @@ select * from ataddcolgenpart;
  a  | b      | c  
 ----+--------+----
  1  | str_1  | 1  
+ 5  | str_5  | 5  
+ 6  | str_6  | 6  
+ 9  | str_9  | 9  
+ 10 | str_10 | 10 
  2  | str_2  | 2  
  3  | str_3  | 3  
  4  | str_4  | 4  
  7  | str_7  | 7  
  8  | str_8  | 8  
- 5  | str_5  | 5  
- 6  | str_6  | 6  
- 9  | str_9  | 9  
- 10 | str_10 | 10 
 (10 rows)
 alter table ataddcolgenpart add column d text generated always as ('d') stored;
 ALTER
@@ -1779,15 +1781,15 @@ select * from ataddcolgenpart;
  a  | b      | c  | d | e     | f 
 ----+--------+----+---+-------+---
  1  | str_1  | 1  | d | 1,_1  | 2 
+ 5  | str_5  | 5  | d | 5,_5  | 2 
+ 6  | str_6  | 6  | d | 6,_6  | 2 
+ 9  | str_9  | 9  | d | 9,_9  | 2 
+ 10 | str_10 | 10 | d | 10,10 | 2 
  2  | str_2  | 2  | d | 2,_2  | 2 
  3  | str_3  | 3  | d | 3,_3  | 2 
  4  | str_4  | 4  | d | 4,_4  | 2 
  7  | str_7  | 7  | d | 7,_7  | 2 
  8  | str_8  | 8  | d | 8,_8  | 2 
- 5  | str_5  | 5  | d | 5,_5  | 2 
- 6  | str_6  | 6  | d | 6,_6  | 2 
- 9  | str_9  | 9  | d | 9,_9  | 2 
- 10 | str_10 | 10 | d | 10,10 | 2 
 (10 rows)
 -- mixed partitions: case1, parent on ao_column, children on heap, ao_row, ao_column
 drop table if exists aocomixedpart;
@@ -1805,13 +1807,6 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  | d | e     | f 
 ----+--------+----+---+-------+---
- 1  | str_1  | 1  | d | 1,_1  | 2 
- 12 | str_12 | 12 | d | 12,12 | 2 
- 15 | str_15 | 15 | d | 15,15 | 2 
- 20 | str_20 | 20 | d | 20,20 | 2 
- 23 | str_23 | 23 | d | 23,23 | 2 
- 26 | str_26 | 26 | d | 26,26 | 2 
- 30 | str_30 | 30 | d | 30,30 | 2 
  2  | str_2  | 2  | d | 2,_2  | 2 
  3  | str_3  | 3  | d | 3,_3  | 2 
  4  | str_4  | 4  | d | 4,_4  | 2 
@@ -1824,6 +1819,13 @@ select * from aocomixedpart;
  24 | str_24 | 24 | d | 24,24 | 2 
  27 | str_27 | 27 | d | 27,27 | 2 
  29 | str_29 | 29 | d | 29,29 | 2 
+ 1  | str_1  | 1  | d | 1,_1  | 2 
+ 12 | str_12 | 12 | d | 12,12 | 2 
+ 15 | str_15 | 15 | d | 15,15 | 2 
+ 20 | str_20 | 20 | d | 20,20 | 2 
+ 23 | str_23 | 23 | d | 23,23 | 2 
+ 26 | str_26 | 26 | d | 26,26 | 2 
+ 30 | str_30 | 30 | d | 30,30 | 2 
  5  | str_5  | 5  | d | 5,_5  | 2 
  6  | str_6  | 6  | d | 6,_6  | 2 
  9  | str_9  | 9  | d | 9,_9  | 2 
@@ -1853,6 +1855,18 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  
 ----+--------+----
+ 2  | str_2  | 2  
+ 3  | str_3  | 3  
+ 4  | str_4  | 4  
+ 7  | str_7  | 7  
+ 8  | str_8  | 8  
+ 16 | str_16 | 16 
+ 18 | str_18 | 18 
+ 19 | str_19 | 19 
+ 22 | str_22 | 22 
+ 24 | str_24 | 24 
+ 27 | str_27 | 27 
+ 29 | str_29 | 29 
  1  | str_1  | 1  
  12 | str_12 | 12 
  15 | str_15 | 15 
@@ -1871,18 +1885,6 @@ select * from aocomixedpart;
  21 | str_21 | 21 
  25 | str_25 | 25 
  28 | str_28 | 28 
- 2  | str_2  | 2  
- 3  | str_3  | 3  
- 4  | str_4  | 4  
- 7  | str_7  | 7  
- 8  | str_8  | 8  
- 16 | str_16 | 16 
- 18 | str_18 | 18 
- 19 | str_19 | 19 
- 22 | str_22 | 22 
- 24 | str_24 | 24 
- 27 | str_27 | 27 
- 29 | str_29 | 29 
 (30 rows)
 alter table aocomixedpart add column d text generated always as ('d') stored;
 ALTER
@@ -1893,17 +1895,6 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  | d | e     | f 
 ----+--------+----+---+-------+---
- 5  | str_5  | 5  | d | 5,_5  | 2 
- 6  | str_6  | 6  | d | 6,_6  | 2 
- 9  | str_9  | 9  | d | 9,_9  | 2 
- 10 | str_10 | 10 | d | 10,10 | 2 
- 11 | str_11 | 11 | d | 11,11 | 2 
- 13 | str_13 | 13 | d | 13,13 | 2 
- 14 | str_14 | 14 | d | 14,14 | 2 
- 17 | str_17 | 17 | d | 17,17 | 2 
- 21 | str_21 | 21 | d | 21,21 | 2 
- 25 | str_25 | 25 | d | 25,25 | 2 
- 28 | str_28 | 28 | d | 28,28 | 2 
  2  | str_2  | 2  | d | 2,_2  | 2 
  3  | str_3  | 3  | d | 3,_3  | 2 
  4  | str_4  | 4  | d | 4,_4  | 2 
@@ -1923,6 +1914,17 @@ select * from aocomixedpart;
  23 | str_23 | 23 | d | 23,23 | 2 
  26 | str_26 | 26 | d | 26,26 | 2 
  30 | str_30 | 30 | d | 30,30 | 2 
+ 5  | str_5  | 5  | d | 5,_5  | 2 
+ 6  | str_6  | 6  | d | 6,_6  | 2 
+ 9  | str_9  | 9  | d | 9,_9  | 2 
+ 10 | str_10 | 10 | d | 10,10 | 2 
+ 11 | str_11 | 11 | d | 11,11 | 2 
+ 13 | str_13 | 13 | d | 13,13 | 2 
+ 14 | str_14 | 14 | d | 14,14 | 2 
+ 17 | str_17 | 17 | d | 17,17 | 2 
+ 21 | str_21 | 21 | d | 21,21 | 2 
+ 25 | str_25 | 25 | d | 25,25 | 2 
+ 28 | str_28 | 28 | d | 28,28 | 2 
 (30 rows)
 -- mixed partitions: case3, parent on heap, children on heap, ao_row, ao_column, exchange with external partition
 drop table if exists aocomixedpart;
@@ -1978,16 +1980,11 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  | d | e     | f 
 ----+--------+----+---+-------+---
- 2  | str_2  | 2  | d | 2,_2  | 2 
- 3  | str_3  | 3  | d | 3,_3  | 2 
- 4  | str_4  | 4  | d | 4,_4  | 2 
- 7  | str_7  | 7  | d | 7,_7  | 2 
- 8  | str_8  | 8  | d | 8,_8  | 2 
- 16 | str_16 | 16 | d | 16,16 | 2 
- 18 | str_18 | 18 | d | 18,18 | 2 
- 19 | str_19 | 19 | d | 19,19 | 2 
- 22 | str_22 | 22 | d | 22,22 | 2 
- 24 | str_24 | 24 | d | 24,24 | 2 
+ 1  | str_1  | 1  | d | 1,_1  | 2 
+ 12 | str_12 | 12 | d | 12,12 | 2 
+ 15 | str_15 | 15 | d | 15,15 | 2 
+ 20 | str_20 | 20 | d | 20,20 | 2 
+ 23 | str_23 | 23 | d | 23,23 | 2 
  5  | str_5  | 5  | d | 5,_5  | 2 
  6  | str_6  | 6  | d | 6,_6  | 2 
  9  | str_9  | 9  | d | 9,_9  | 2 
@@ -1998,11 +1995,16 @@ select * from aocomixedpart;
  17 | str_17 | 17 | d | 17,17 | 2 
  21 | str_21 | 21 | d | 21,21 | 2 
  25 | str_25 | 25 | d | 25,25 | 2 
- 1  | str_1  | 1  | d | 1,_1  | 2 
- 12 | str_12 | 12 | d | 12,12 | 2 
- 15 | str_15 | 15 | d | 15,15 | 2 
- 20 | str_20 | 20 | d | 20,20 | 2 
- 23 | str_23 | 23 | d | 23,23 | 2 
+ 2  | str_2  | 2  | d | 2,_2  | 2 
+ 3  | str_3  | 3  | d | 3,_3  | 2 
+ 4  | str_4  | 4  | d | 4,_4  | 2 
+ 7  | str_7  | 7  | d | 7,_7  | 2 
+ 8  | str_8  | 8  | d | 8,_8  | 2 
+ 16 | str_16 | 16 | d | 16,16 | 2 
+ 18 | str_18 | 18 | d | 18,18 | 2 
+ 19 | str_19 | 19 | d | 19,19 | 2 
+ 22 | str_22 | 22 | d | 22,22 | 2 
+ 24 | str_24 | 24 | d | 24,24 | 2 
 (25 rows)
 -- multiple sub-commands containing both add-column and rewrite-column
 drop table if exists ataddcolgenerated;
@@ -2026,10 +2028,10 @@ select * from ataddcolgenerated;
  a | b     | c  
 ---+-------+----
  5 | str_5 | 25 
+ 1 | str_1 | 1  
  2 | str_2 | 4  
  3 | str_3 | 9  
  4 | str_4 | 16 
- 1 | str_1 | 1  
 (5 rows)
 alter table ataddcolgenerated add column d text generated always as (a::text || ',' || a::text) stored, alter column c type text;
 ALTER
@@ -2077,6 +2079,7 @@ select * from aocomixedpart;
  23 | str_23 | 23 
  26 | str_26 | 26 
  30 | str_30 | 30 
+ 31 | str_31 | 31 
  5  | str_5  | 5  
  6  | str_6  | 6  
  9  | str_9  | 9  
@@ -2088,7 +2091,6 @@ select * from aocomixedpart;
  21 | str_21 | 21 
  25 | str_25 | 25 
  28 | str_28 | 28 
- 31 | str_31 | 31 
 (31 rows)
 alter table aocomixedpart add column d text generated always as (a) stored;
 ALTER
@@ -2115,6 +2117,7 @@ select * from aocomixedpart;
  21 | str_21 | 21 | 21 | 21,21 
  25 | str_25 | 25 | 25 | 25,25 
  28 | str_28 | 28 | 28 | 28,28 
+ 31 | str_31 | 31 |    |       
  2  | str_2  | 2  | 2  | 2,_2  
  3  | str_3  | 3  | 3  | 3,_3  
  4  | str_4  | 4  | 4  | 4,_4  
@@ -2127,7 +2130,6 @@ select * from aocomixedpart;
  24 | str_24 | 24 | 24 | 24,24 
  27 | str_27 | 27 | 27 | 27,27 
  29 | str_29 | 29 | 29 | 29,29 
- 31 | str_31 | 31 |    |       
 (31 rows)
 -- multiple sub-commands containing both add-column and rewrite-column, pure aoco tables
 drop table if exists ataddcolgenpart;
@@ -2139,7 +2141,6 @@ INSERT 10
 select * from ataddcolgenpart;
  a  | b      | c  
 ----+--------+----
- 1  | str_1  | 1  
  5  | str_5  | 5  
  6  | str_6  | 6  
  9  | str_9  | 9  
@@ -2149,6 +2150,7 @@ select * from ataddcolgenpart;
  4  | str_4  | 4  
  7  | str_7  | 7  
  8  | str_8  | 8  
+ 1  | str_1  | 1  
 (10 rows)
 alter table ataddcolgenpart add column d text generated always as (a) stored;
 ALTER
@@ -2157,16 +2159,16 @@ ALTER
 select * from ataddcolgenpart;
  a  | b      | c  | d  | e  
 ----+--------+----+----+----
- 2  | str_2  | 2  | 2  | 2  
- 3  | str_3  | 3  | 3  | 3  
- 4  | str_4  | 4  | 4  | 4  
- 7  | str_7  | 7  | 7  | 7  
- 8  | str_8  | 8  | 8  | 8  
  1  | str_1  | 1  | 1  | 1  
  5  | str_5  | 5  | 5  | 5  
  6  | str_6  | 6  | 6  | 6  
  9  | str_9  | 9  | 9  | 9  
  10 | str_10 | 10 | 10 | 10 
+ 2  | str_2  | 2  | 2  | 2  
+ 3  | str_3  | 3  | 3  | 3  
+ 4  | str_4  | 4  | 4  | 4  
+ 7  | str_7  | 7  | 7  | 7  
+ 8  | str_8  | 8  | 8  | 8  
 (10 rows)
 
 --
