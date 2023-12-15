@@ -68,6 +68,7 @@ def before_feature(context, feature):
         dbconn.execSQL(context.conn, 'insert into t1 values(1, 2)')
         dbconn.execSQL(context.conn, 'insert into t2 values(1, 3)')
         dbconn.execSQL(context.conn, 'insert into t3 values(1, 4)')
+        dbconn.execSQL(context.conn, 'create or replace function select_one() returns integer as $$ select 1 $$ language sql')
         context.conn.commit()
 
     if 'gppkg' in feature.tags:

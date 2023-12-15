@@ -6997,7 +6997,6 @@ getFuncs(Archive *fout, int *numFuncs)
 
 		/* Decide whether we want to dump it */
 		selectDumpableFunction(&finfo[i]);
-		selectDumpableObject(&(finfo[i].dobj), fout);
 
 		/* Mark whether function has an ACL */
 		if (!PQgetisnull(res, i, i_proacl))
