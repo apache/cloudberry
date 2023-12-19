@@ -15068,3 +15068,20 @@ explain (costs off) select max(s1) from foo inner join bar on j1 = j2 group by g
 drop table foo;
 drop table bar;
 reset optimizer_enable_eageragg;
+DROP TABLE IF EXISTS schema_test_table;
+CREATE TABLE schema_test_table(a numeric, b numeric(5,2), c char(10) NOT NULL) distributed by (a);
+-- In 7x, redundant Result nodes in planned_stmt are being removed by ORCA,
+-- which caused the loss of typmod info of column type in plan.
+-- Below query is used by external libraries to fetch schema of table.
+-- Test that the typmod of column type is correct in explain plan.
+EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM schema_test_table WHERE 1=0;
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: NULL::numeric, NULL::numeric(5,2), NULL::character(10)
+   One-Time Filter: false
+ Optimizer: GPORCA
+ Settings: optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on', optimizer_segments = '3'
+(5 rows)
+
+---------------------------------------------------------------------------------

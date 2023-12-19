@@ -3707,6 +3707,15 @@ INSERT INTO array_coerceviaio values(ARRAY[1, 2, 3]);
 
 EXPLAIN SELECT CAST(a AS TEXT[]) FROM array_coerceviaio;
 SELECT CAST(a AS TEXT[]) FROM array_coerceviaio;
+
+---------------------------------------------------------------------------------
+DROP TABLE IF EXISTS schema_test_table;
+CREATE TABLE schema_test_table(a numeric, b numeric(5,2), c char(10) NOT NULL) distributed by (a);
+-- In 7x, redundant Result nodes in planned_stmt are being removed by ORCA,
+-- which caused the loss of typmod info of column type in plan.
+-- Below query is used by external libraries to fetch schema of table.
+-- Test that the typmod of column type is correct in explain plan.
+EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM schema_test_table WHERE 1=0;
 ---------------------------------------------------------------------------------
 -- Test ALL NULL scalar array compare 
 create table DatumSortedSet_core (a int, b character varying NOT NULL) distributed by (a);
