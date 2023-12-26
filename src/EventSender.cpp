@@ -39,12 +39,17 @@ namespace {
 
 std::string *get_user_name() {
   const char *username = GetConfigOption("session_authorization", false, false);
+  // username is not to be freed
   return username ? new std::string(username) : nullptr;
 }
 
 std::string *get_db_name() {
   char *dbname = get_database_name(MyDatabaseId);
-  std::string *result = dbname ? new std::string(dbname) : nullptr;
+  std::string *result = nullptr;
+  if (dbname) {
+    result = new std::string(dbname);
+    pfree(dbname);
+  }
   return result;
 }
 
@@ -58,8 +63,7 @@ std::string *get_rg_name() {
   char *rgname = GetResGroupNameForId(groupId);
   if (rgname == nullptr)
     return nullptr;
-  auto result = new std::string(rgname);
-  return result;
+  return new std::string(rgname);
 }
 
 google::protobuf::Timestamp current_ts() {
@@ -97,8 +101,12 @@ ExplainState get_explain_state(QueryDesc *query_desc, bool costs) {
 }
 
 void set_plan_text(std::string *plan_text, QueryDesc *query_desc) {
+  MemoryContext oldcxt =
+      MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
   auto es = get_explain_state(query_desc, true);
   *plan_text = std::string(es.str->data, es.str->len);
+  pfree(es.str->data);
+  MemoryContextSwitchTo(oldcxt);
 }
 
 void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
@@ -259,11 +267,12 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     query_desc->instrument_options |= INSTRUMENT_TIMER;
     if (Config::enable_cdbstats()) {
       query_desc->instrument_options |= INSTRUMENT_CDB;
-
-      instr_time starttime;
-      INSTR_TIME_SET_CURRENT(starttime);
-      query_desc->showstatctx =
-          cdbexplain_showExecStatsBegin(query_desc, starttime);
+      if (!query_desc->showstatctx) {
+        instr_time starttime;
+        INSTR_TIME_SET_CURRENT(starttime);
+        query_desc->showstatctx =
+            cdbexplain_showExecStatsBegin(query_desc, starttime);
+      }
     }
   }
 }
