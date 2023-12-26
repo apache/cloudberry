@@ -119,13 +119,7 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
     StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
     *qi->mutable_template_plan_text() = std::string(norm_plan->data);
     qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
-    // TODO: For now assume queryid equal to planid, which is wrong. The
-    // reason for doing so this bug
-    // https://github.com/greenplum-db/gpdb/pull/15385 (ORCA loses
-    // pg_stat_statements` queryid during planning phase). Need to fix it
-    // upstream, cherry-pick and bump gp
-    // qi->set_query_id(query_desc->plannedstmt->queryId);
-    qi->set_query_id(qi->plan_id());
+    qi->set_query_id(query_desc->plannedstmt->queryId);
   }
 }
 
