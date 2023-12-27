@@ -76,4 +76,8 @@ cdbpath_motion_for_parallel_join(PlannerInfo    *root,
 						bool            inner_require_existing_order,
 						bool			parallel_aware);
 
+extern void set_allow_append_initplan_for_function_scan();
+extern void unset_allow_append_initplan_for_function_scan();
+extern bool get_allow_append_initplan_for_function_scan();
+
 #endif   /* CDBPATH_H */

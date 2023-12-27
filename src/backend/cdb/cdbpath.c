@@ -59,6 +59,18 @@ typedef struct
 	bool		isouter;		/* Is at outer table side? */
 } CdbpathMfjRel;
 
+/*
+ * We introduced execute on initplan option for function at
+ * https://github.com/greenplum-db/gpdb/pull/9542, which introduced
+ * a new location option for function: EXECUTE ON INITPLAN and run
+ * the f() on initplan.
+ *
+ * But if f() itself is in initplan, this execution method will cause
+ * problems. Therefore, the variable allow_append_initplan_for_function_scan
+ * is introduced to control this optimization
+ */
+static bool allow_append_initplan_for_function_scan = true;
+
 static bool try_redistribute(PlannerInfo *root, CdbpathMfjRel *g,
 							 CdbpathMfjRel *o, List *redistribution_clauses, bool parallel_aware);
 
@@ -3883,3 +3895,21 @@ fail:							/* can't do this join */
 	CdbPathLocus_MakeNull(&outer.move_to);
 	return outer.move_to;
 }								/* cdbpath_motion_for_parallel_join */
+
+void
+unset_allow_append_initplan_for_function_scan()
+{
+	allow_append_initplan_for_function_scan = false;
+}
+
+void
+set_allow_append_initplan_for_function_scan()
+{
+	allow_append_initplan_for_function_scan = true;
+}
+
+bool
+get_allow_append_initplan_for_function_scan()
+{
+	return allow_append_initplan_for_function_scan;
+}
