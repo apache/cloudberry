@@ -461,6 +461,7 @@ typedef struct _statsExtInfo
 {
 	DumpableObject dobj;
 	const char  *rolname;		/* name of owner, or empty string */
+	TableInfo  *stattable;		/* link to table the stats are for */
 	int			stattarget;		/* statistics target */
 } StatsExtInfo;
 
