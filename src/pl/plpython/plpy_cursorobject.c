@@ -98,7 +98,8 @@ PLy_cursor_query(const char *query)
 	oldcontext = CurrentMemoryContext;
 	oldowner = CurrentResourceOwner;
 
-	PLy_spi_subtransaction_begin(oldcontext, oldowner);
+	if(!PLy_spi_subtransaction_begin(oldcontext, oldowner))
+		return NULL;
 
 	PG_TRY();
 	{
@@ -196,7 +197,8 @@ PLy_cursor_plan(PyObject *ob, PyObject *args)
 	oldcontext = CurrentMemoryContext;
 	oldowner = CurrentResourceOwner;
 
-	PLy_spi_subtransaction_begin(oldcontext, oldowner);
+	if(!PLy_spi_subtransaction_begin(oldcontext, oldowner))
+		return NULL;
 
 	PG_TRY();
 	{
@@ -333,7 +335,8 @@ PLy_cursor_iternext(PyObject *self)
 	oldcontext = CurrentMemoryContext;
 	oldowner = CurrentResourceOwner;
 
-	PLy_spi_subtransaction_begin(oldcontext, oldowner);
+	if(!PLy_spi_subtransaction_begin(oldcontext, oldowner))
+		return NULL;
 
 	PG_TRY();
 	{
@@ -403,7 +406,8 @@ PLy_cursor_fetch(PyObject *self, PyObject *args)
 	oldcontext = CurrentMemoryContext;
 	oldowner = CurrentResourceOwner;
 
-	PLy_spi_subtransaction_begin(oldcontext, oldowner);
+	if(!PLy_spi_subtransaction_begin(oldcontext, oldowner))
+		return NULL;
 
 	PG_TRY();
 	{
