@@ -1419,6 +1419,7 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 					double		dtuples;
 					double		dbuckets;
 					int			new_nbuckets;
+					uint32		max_buckets;
 
 					/*
 					 * We probably also need a smaller bucket array.  How many
@@ -1431,9 +1432,15 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 					 * array.
 					 */
 					dtuples = (old_batch0->ntuples * 2.0) / new_nbatch;
+					/*
+					 * Bound the bucket count before it is rounded up to a
+					 * power of 2, so the resulting allocation stays within
+					 * MaxAllocSize.
+					 */
+					max_buckets = pg_prevpower2_32((uint32)
+												   (MaxAllocSize / sizeof(dsa_pointer_atomic)));
 					dbuckets = ceil(dtuples / gp_hashjoin_tuples_per_bucket);
-					dbuckets = Min(dbuckets,
-								   MaxAllocSize / sizeof(dsa_pointer_atomic));
+					dbuckets = Min(dbuckets, max_buckets);
 					new_nbuckets = (int) dbuckets;
 					new_nbuckets = Max(new_nbuckets, 1024);
 					new_nbuckets = pg_nextpower2_32(new_nbuckets);
