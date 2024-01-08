@@ -798,3 +798,31 @@ execute attribute_encoding_check('atsetencpart_def');
 -- results are expected
 select sum(a), sum(b) from atsetencpart;
 
+
+--------------------------------------------------------------------------------
+-- GPDB_PORT: column rewrite when every segfile is empty.
+--
+-- aocs_writecol_rewrite() enters its loop on nseg >= 1 but skips every segfile
+-- whose total_tupcount is 0, so aocs_writecol_newsegfiles() -- and with it
+-- AppendOnlyBlockDirectory_Init_writeCols() -- is never reached, while
+-- aocs_writecol_finish() still called End_writeCols() on the uninitialised
+-- block directory.  Upstream a48a941012 fixes it; its own test arrived with a
+-- later commit that is not ported yet, so the reproducer is kept here.
+--
+-- Without the fix this crashes the QE: blkdirRel reads 0x7f7f7f7f7f7f7f7f.
+-- The index is what makes blkdirrelid valid, and DELETE+VACUUM is what leaves
+-- segfiles behind with no live tuples.
+--------------------------------------------------------------------------------
+DROP TABLE IF EXISTS rewrite_empty_segfiles;
+CREATE TABLE rewrite_empty_segfiles(a int, b int) USING ao_column DISTRIBUTED BY (a);
+CREATE INDEX rewrite_empty_segfiles_i ON rewrite_empty_segfiles(a);
+INSERT INTO rewrite_empty_segfiles SELECT i,i FROM generate_series(1,10) i;
+DELETE FROM rewrite_empty_segfiles;
+VACUUM rewrite_empty_segfiles;
+-- every segfile is now present but empty
+SELECT sum(tupcount) AS live_tuples FROM gp_toolkit.__gp_aocsseg('rewrite_empty_segfiles'::regclass) WHERE column_num = 0;
+ALTER TABLE rewrite_empty_segfiles ALTER COLUMN b TYPE bigint;
+-- the table is still usable afterwards
+INSERT INTO rewrite_empty_segfiles SELECT i,i FROM generate_series(1,5) i;
+SELECT count(*), pg_typeof(b) FROM rewrite_empty_segfiles GROUP BY 2;
+DROP TABLE rewrite_empty_segfiles;

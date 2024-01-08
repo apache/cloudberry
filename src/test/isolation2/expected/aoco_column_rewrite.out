@@ -1698,11 +1698,11 @@ INSERT 5
 select * from ataddcolgenerated;
  a | b     
 ---+-------
- 1 | str_1 
- 5 | str_5 
  2 | str_2 
  3 | str_3 
  4 | str_4 
+ 5 | str_5 
+ 1 | str_1 
 (5 rows)
 alter table ataddcolgenerated add column c int generated always as (a * a) stored;
 ALTER
@@ -1718,10 +1718,10 @@ ALTER
 select * from ataddcolgenerated;
  a | b     | c  | d   | e  | f 
 ---+-------+----+-----+----+---
- 1 | str_1 | 1  | 1,1 | _1 | 2 
  2 | str_2 | 4  | 2,2 | _2 | 2 
  3 | str_3 | 9  | 3,3 | _3 | 2 
  4 | str_4 | 16 | 4,4 | _4 | 2 
+ 1 | str_1 | 1  | 1,1 | _1 | 2 
  5 | str_5 | 25 | 5,5 | _5 | 2 
 (5 rows)
 -- external table
@@ -1855,6 +1855,17 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  
 ----+--------+----
+ 5  | str_5  | 5  
+ 6  | str_6  | 6  
+ 9  | str_9  | 9  
+ 10 | str_10 | 10 
+ 11 | str_11 | 11 
+ 13 | str_13 | 13 
+ 14 | str_14 | 14 
+ 17 | str_17 | 17 
+ 21 | str_21 | 21 
+ 25 | str_25 | 25 
+ 28 | str_28 | 28 
  2  | str_2  | 2  
  3  | str_3  | 3  
  4  | str_4  | 4  
@@ -1874,17 +1885,6 @@ select * from aocomixedpart;
  23 | str_23 | 23 
  26 | str_26 | 26 
  30 | str_30 | 30 
- 5  | str_5  | 5  
- 6  | str_6  | 6  
- 9  | str_9  | 9  
- 10 | str_10 | 10 
- 11 | str_11 | 11 
- 13 | str_13 | 13 
- 14 | str_14 | 14 
- 17 | str_17 | 17 
- 21 | str_21 | 21 
- 25 | str_25 | 25 
- 28 | str_28 | 28 
 (30 rows)
 alter table aocomixedpart add column d text generated always as ('d') stored;
 ALTER
@@ -1895,18 +1895,6 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  | d | e     | f 
 ----+--------+----+---+-------+---
- 2  | str_2  | 2  | d | 2,_2  | 2 
- 3  | str_3  | 3  | d | 3,_3  | 2 
- 4  | str_4  | 4  | d | 4,_4  | 2 
- 7  | str_7  | 7  | d | 7,_7  | 2 
- 8  | str_8  | 8  | d | 8,_8  | 2 
- 16 | str_16 | 16 | d | 16,16 | 2 
- 18 | str_18 | 18 | d | 18,18 | 2 
- 19 | str_19 | 19 | d | 19,19 | 2 
- 22 | str_22 | 22 | d | 22,22 | 2 
- 24 | str_24 | 24 | d | 24,24 | 2 
- 27 | str_27 | 27 | d | 27,27 | 2 
- 29 | str_29 | 29 | d | 29,29 | 2 
  1  | str_1  | 1  | d | 1,_1  | 2 
  12 | str_12 | 12 | d | 12,12 | 2 
  15 | str_15 | 15 | d | 15,15 | 2 
@@ -1925,6 +1913,18 @@ select * from aocomixedpart;
  21 | str_21 | 21 | d | 21,21 | 2 
  25 | str_25 | 25 | d | 25,25 | 2 
  28 | str_28 | 28 | d | 28,28 | 2 
+ 2  | str_2  | 2  | d | 2,_2  | 2 
+ 3  | str_3  | 3  | d | 3,_3  | 2 
+ 4  | str_4  | 4  | d | 4,_4  | 2 
+ 7  | str_7  | 7  | d | 7,_7  | 2 
+ 8  | str_8  | 8  | d | 8,_8  | 2 
+ 16 | str_16 | 16 | d | 16,16 | 2 
+ 18 | str_18 | 18 | d | 18,18 | 2 
+ 19 | str_19 | 19 | d | 19,19 | 2 
+ 22 | str_22 | 22 | d | 22,22 | 2 
+ 24 | str_24 | 24 | d | 24,24 | 2 
+ 27 | str_27 | 27 | d | 27,27 | 2 
+ 29 | str_29 | 29 | d | 29,29 | 2 
 (30 rows)
 -- mixed partitions: case3, parent on heap, children on heap, ao_row, ao_column, exchange with external partition
 drop table if exists aocomixedpart;
@@ -1980,6 +1980,16 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  | d | e     | f 
 ----+--------+----+---+-------+---
+ 2  | str_2  | 2  | d | 2,_2  | 2 
+ 3  | str_3  | 3  | d | 3,_3  | 2 
+ 4  | str_4  | 4  | d | 4,_4  | 2 
+ 7  | str_7  | 7  | d | 7,_7  | 2 
+ 8  | str_8  | 8  | d | 8,_8  | 2 
+ 16 | str_16 | 16 | d | 16,16 | 2 
+ 18 | str_18 | 18 | d | 18,18 | 2 
+ 19 | str_19 | 19 | d | 19,19 | 2 
+ 22 | str_22 | 22 | d | 22,22 | 2 
+ 24 | str_24 | 24 | d | 24,24 | 2 
  1  | str_1  | 1  | d | 1,_1  | 2 
  12 | str_12 | 12 | d | 12,12 | 2 
  15 | str_15 | 15 | d | 15,15 | 2 
@@ -1995,16 +2005,6 @@ select * from aocomixedpart;
  17 | str_17 | 17 | d | 17,17 | 2 
  21 | str_21 | 21 | d | 21,21 | 2 
  25 | str_25 | 25 | d | 25,25 | 2 
- 2  | str_2  | 2  | d | 2,_2  | 2 
- 3  | str_3  | 3  | d | 3,_3  | 2 
- 4  | str_4  | 4  | d | 4,_4  | 2 
- 7  | str_7  | 7  | d | 7,_7  | 2 
- 8  | str_8  | 8  | d | 8,_8  | 2 
- 16 | str_16 | 16 | d | 16,16 | 2 
- 18 | str_18 | 18 | d | 18,18 | 2 
- 19 | str_19 | 19 | d | 19,19 | 2 
- 22 | str_22 | 22 | d | 22,22 | 2 
- 24 | str_24 | 24 | d | 24,24 | 2 
 (25 rows)
 -- multiple sub-commands containing both add-column and rewrite-column
 drop table if exists ataddcolgenerated;
@@ -2016,33 +2016,33 @@ INSERT 5
 select * from ataddcolgenerated;
  a | b     
 ---+-------
+ 5 | str_5 
  2 | str_2 
  3 | str_3 
  4 | str_4 
  1 | str_1 
- 5 | str_5 
 (5 rows)
 alter table ataddcolgenerated add column c int generated always as (a * a) stored;
 ALTER
 select * from ataddcolgenerated;
  a | b     | c  
 ---+-------+----
- 5 | str_5 | 25 
- 1 | str_1 | 1  
  2 | str_2 | 4  
  3 | str_3 | 9  
  4 | str_4 | 16 
+ 1 | str_1 | 1  
+ 5 | str_5 | 25 
 (5 rows)
 alter table ataddcolgenerated add column d text generated always as (a::text || ',' || a::text) stored, alter column c type text;
 ALTER
 select * from ataddcolgenerated;
  a | b     | c  | d   
 ---+-------+----+-----
- 1 | str_1 | 1  | 1,1 
- 5 | str_5 | 25 | 5,5 
  2 | str_2 | 4  | 2,2 
  3 | str_3 | 9  | 3,3 
  4 | str_4 | 16 | 4,4 
+ 5 | str_5 | 25 | 5,5 
+ 1 | str_1 | 1  | 1,1 
 (5 rows)
 -- multiple sub-commands containing both add-column and rewrite-column, mixed partitioned table
 drop table if exists aocomixedpart;
@@ -2060,6 +2060,25 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  
 ----+--------+----
+ 1  | str_1  | 1  
+ 12 | str_12 | 12 
+ 15 | str_15 | 15 
+ 20 | str_20 | 20 
+ 23 | str_23 | 23 
+ 26 | str_26 | 26 
+ 30 | str_30 | 30 
+ 5  | str_5  | 5  
+ 6  | str_6  | 6  
+ 9  | str_9  | 9  
+ 10 | str_10 | 10 
+ 11 | str_11 | 11 
+ 13 | str_13 | 13 
+ 14 | str_14 | 14 
+ 17 | str_17 | 17 
+ 21 | str_21 | 21 
+ 25 | str_25 | 25 
+ 28 | str_28 | 28 
+ 31 | str_31 | 31 
  2  | str_2  | 2  
  3  | str_3  | 3  
  4  | str_4  | 4  
@@ -2072,25 +2091,6 @@ select * from aocomixedpart;
  24 | str_24 | 24 
  27 | str_27 | 27 
  29 | str_29 | 29 
- 1  | str_1  | 1  
- 12 | str_12 | 12 
- 15 | str_15 | 15 
- 20 | str_20 | 20 
- 23 | str_23 | 23 
- 26 | str_26 | 26 
- 30 | str_30 | 30 
- 31 | str_31 | 31 
- 5  | str_5  | 5  
- 6  | str_6  | 6  
- 9  | str_9  | 9  
- 10 | str_10 | 10 
- 11 | str_11 | 11 
- 13 | str_13 | 13 
- 14 | str_14 | 14 
- 17 | str_17 | 17 
- 21 | str_21 | 21 
- 25 | str_25 | 25 
- 28 | str_28 | 28 
 (31 rows)
 alter table aocomixedpart add column d text generated always as (a) stored;
 ALTER
@@ -2099,6 +2099,19 @@ ALTER
 select * from aocomixedpart;
  a  | b      | c  | d  | e     
 ----+--------+----+----+-------
+ 2  | str_2  | 2  | 2  | 2,_2  
+ 3  | str_3  | 3  | 3  | 3,_3  
+ 4  | str_4  | 4  | 4  | 4,_4  
+ 7  | str_7  | 7  | 7  | 7,_7  
+ 8  | str_8  | 8  | 8  | 8,_8  
+ 16 | str_16 | 16 | 16 | 16,16 
+ 18 | str_18 | 18 | 18 | 18,18 
+ 19 | str_19 | 19 | 19 | 19,19 
+ 22 | str_22 | 22 | 22 | 22,22 
+ 24 | str_24 | 24 | 24 | 24,24 
+ 27 | str_27 | 27 | 27 | 27,27 
+ 29 | str_29 | 29 | 29 | 29,29 
+ 31 | str_31 | 31 |    |       
  1  | str_1  | 1  | 1  | 1,_1  
  12 | str_12 | 12 | 12 | 12,12 
  15 | str_15 | 15 | 15 | 15,15 
@@ -2117,19 +2130,6 @@ select * from aocomixedpart;
  21 | str_21 | 21 | 21 | 21,21 
  25 | str_25 | 25 | 25 | 25,25 
  28 | str_28 | 28 | 28 | 28,28 
- 31 | str_31 | 31 |    |       
- 2  | str_2  | 2  | 2  | 2,_2  
- 3  | str_3  | 3  | 3  | 3,_3  
- 4  | str_4  | 4  | 4  | 4,_4  
- 7  | str_7  | 7  | 7  | 7,_7  
- 8  | str_8  | 8  | 8  | 8,_8  
- 16 | str_16 | 16 | 16 | 16,16 
- 18 | str_18 | 18 | 18 | 18,18 
- 19 | str_19 | 19 | 19 | 19,19 
- 22 | str_22 | 22 | 22 | 22,22 
- 24 | str_24 | 24 | 24 | 24,24 
- 27 | str_27 | 27 | 27 | 27,27 
- 29 | str_29 | 29 | 29 | 29,29 
 (31 rows)
 -- multiple sub-commands containing both add-column and rewrite-column, pure aoco tables
 drop table if exists ataddcolgenpart;
@@ -2141,6 +2141,7 @@ INSERT 10
 select * from ataddcolgenpart;
  a  | b      | c  
 ----+--------+----
+ 1  | str_1  | 1  
  5  | str_5  | 5  
  6  | str_6  | 6  
  9  | str_9  | 9  
@@ -2150,7 +2151,6 @@ select * from ataddcolgenpart;
  4  | str_4  | 4  
  7  | str_7  | 7  
  8  | str_8  | 8  
- 1  | str_1  | 1  
 (10 rows)
 alter table ataddcolgenpart add column d text generated always as (a) stored;
 ALTER
@@ -2246,3 +2246,48 @@ select sum(a), sum(b) from atsetencpart;
  100 | 5050 
 (1 row)
 
+
+--------------------------------------------------------------------------------
+-- GPDB_PORT: column rewrite when every segfile is empty.
+--
+-- aocs_writecol_rewrite() enters its loop on nseg >= 1 but skips every segfile
+-- whose total_tupcount is 0, so aocs_writecol_newsegfiles() -- and with it
+-- AppendOnlyBlockDirectory_Init_writeCols() -- is never reached, while
+-- aocs_writecol_finish() still called End_writeCols() on the uninitialised
+-- block directory.  Upstream a48a941012 fixes it; its own test arrived with a
+-- later commit that is not ported yet, so the reproducer is kept here.
+--
+-- Without the fix this crashes the QE: blkdirRel reads 0x7f7f7f7f7f7f7f7f.
+-- The index is what makes blkdirrelid valid, and DELETE+VACUUM is what leaves
+-- segfiles behind with no live tuples.
+--------------------------------------------------------------------------------
+DROP TABLE IF EXISTS rewrite_empty_segfiles;
+DROP
+CREATE TABLE rewrite_empty_segfiles(a int, b int) USING ao_column DISTRIBUTED BY (a);
+CREATE
+CREATE INDEX rewrite_empty_segfiles_i ON rewrite_empty_segfiles(a);
+CREATE
+INSERT INTO rewrite_empty_segfiles SELECT i,i FROM generate_series(1,10) i;
+INSERT 10
+DELETE FROM rewrite_empty_segfiles;
+DELETE 10
+VACUUM rewrite_empty_segfiles;
+VACUUM
+-- every segfile is now present but empty
+SELECT sum(tupcount) AS live_tuples FROM gp_toolkit.__gp_aocsseg('rewrite_empty_segfiles'::regclass) WHERE column_num = 0;
+ live_tuples 
+-------------
+ 0           
+(1 row)
+ALTER TABLE rewrite_empty_segfiles ALTER COLUMN b TYPE bigint;
+ALTER
+-- the table is still usable afterwards
+INSERT INTO rewrite_empty_segfiles SELECT i,i FROM generate_series(1,5) i;
+INSERT 5
+SELECT count(*), pg_typeof(b) FROM rewrite_empty_segfiles GROUP BY 2;
+ count | pg_typeof 
+-------+-----------
+ 5     | bigint    
+(1 row)
+DROP TABLE rewrite_empty_segfiles;
+DROP
