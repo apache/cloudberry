@@ -83,6 +83,15 @@ typedef struct AOCSInsertDescData
 typedef AOCSInsertDescData *AOCSInsertDesc;
 
 /*
+ * Anchor column is a complete column (i.e. no missing values) that we will use
+ * to scan/fetch before we scan/fetch other columns that might has missing values.
+ *
+ * This macro indicates the position in the projection column array where the
+ * anchor column is in (always the first one).
+ */
+#define ANCHOR_COL_IN_PROJ 0
+
+/*
  * Scan descriptors
  */
 
@@ -105,6 +114,21 @@ enum AOCSScanDescIdentifier
 	AOCSSCANDESCDATA,		/* public */
 	AOCSBITMAPSCANDATA		/* am private */
 };
+
+/*
+ * The type of AOCS column projection in scan/fetch.
+ *
+ * GPDB_PORT: upstream writes "typedef enum AOCSProjectionKind { ... };" with no
+ * name after the closing brace, so the typedef declares nothing; it is used as a
+ * type name below, which only compiles because the tag happens to share the
+ * name.  cbdb builds with -Werror and rejects it as "useless storage class
+ * specifier in empty declaration".  Name the typedef properly.
+ */
+typedef enum AOCSProjectionKind
+{
+	AOCS_PROJ_SOME, 		/* some of the columns, could be all as well */
+	AOCS_PROJ_ALL 		/* all of the columns */
+} AOCSProjectionKind;
 
 /*
  * Used for fetch individual tuples from specified by TID of append only relations
@@ -153,6 +177,9 @@ typedef struct AOCSFetchDescData
 	AppendOnlyVisimap visibilityMap;
 
 	Oid segrelid;
+
+	/* attnum to rownum mapping, used in reading missing column value */
+	int64 		*attnum_to_rownum;
 } AOCSFetchDescData;
 
 typedef AOCSFetchDescData *AOCSFetchDesc;
@@ -245,6 +272,12 @@ typedef struct AOCSScanDescData
 		/* Column numbers (zero based) of columns we need to fetch */
 		AttrNumber		   *proj_atts;
 		AttrNumber			num_proj_atts;
+
+		/* Indicate if we proj some/all of the columns */
+		AOCSProjectionKind 		projKind;
+
+		/* attnum to rownum mapping, used in reading missing column value */
+		int64 			   *attnum_to_rownum;
 
 		struct DatumStreamRead **ds;
 	} columnScanInfo;
@@ -372,6 +405,10 @@ typedef struct AOCSWriteColumnDescData
 } AOCSWriteColumnDescData;
 typedef AOCSWriteColumnDescData *AOCSWriteColumnDesc;
 
+/* function to help find the anchor column to scan */
+extern int 
+get_anchor_col(AOCSFileSegInfo **segInfos, int nseg, int natts, Relation aocsrel, AttrNumber *proj_atts, AttrNumber num_proj_atts);
+
 /* ----------------
  *		function prototypes for appendoptimized columnar access method
  * ----------------
@@ -430,6 +467,8 @@ extern bool aocs_positionscan(AOCSScanDesc aoscan,
 							  AppendOnlyBlockDirectoryEntry *dirEntry,
 							  int colIdx,
 							  int fsInfoIdx);
+extern int aoco_proj_move_anchor_first(AttrNumber *proj_atts, int num_proj_atts, int anchor_colno);
+extern void initscan_with_colinfo(AOCSScanDesc scan);
 
 /*
  * Update total bytes read for the entire scan. If the block was compressed,
