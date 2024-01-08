@@ -1432,6 +1432,7 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 					 * array.
 					 */
 					dtuples = (old_batch0->ntuples * 2.0) / new_nbatch;
+
 					/*
 					 * Bound the bucket count before it is rounded up to a
 					 * power of 2, so the resulting allocation stays within
