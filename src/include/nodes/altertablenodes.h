@@ -30,7 +30,8 @@
 typedef enum AOCSWriteColumnOperation
 {
 	AOCSADDCOLUMN,				/* ADD COLUMN */
-	AOCSREWRITECOLUMN			/* ALTER COLUMN TYPE */
+	AOCSREWRITECOLUMN,			/* ALTER COLUMN TYPE */
+	AOCSADDCOLUMN_MISSINGMODE	/* ADD COLUMN (missing mode) */
 } AOCSWriteColumnOperation;
 /*
  * GPDB: Moved here from tablecmds.c
