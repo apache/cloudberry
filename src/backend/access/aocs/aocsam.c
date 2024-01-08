@@ -2612,8 +2612,7 @@ aocs_writecol_init(Relation rel, List *newvals, AOCSWriteColumnOperation op)
 	rnode.locator = rel->rd_locator;
 	rnode.backend = rel->rd_backend;
 
-	desc = palloc(sizeof(AOCSWriteColumnDescData));
-	desc->newcolvals = NULL;
+	desc = palloc0(sizeof(AOCSWriteColumnDescData));
 	desc->op = op;
 
 	/*
@@ -2903,7 +2902,7 @@ aocs_writecol_finish(AOCSWriteColumnDesc desc)
 	GetAppendOnlyEntryAuxOids(desc->rel, NULL, &blkdirrelid, NULL, NULL, NULL);
 	aocs_writecol_closefiles(desc);
 
-	if (OidIsValid(blkdirrelid))
+	if (OidIsValid(blkdirrelid) && desc->blockDirectory.blkdirRel)
 		AppendOnlyBlockDirectory_End_writeCols(&desc->blockDirectory,
 											   desc->newcolvals);
 	for (i = 0; i < desc->num_cols_to_write; ++i)
