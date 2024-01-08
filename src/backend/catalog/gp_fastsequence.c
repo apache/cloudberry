@@ -382,7 +382,6 @@ void
 RemoveFastSequenceEntry(Oid relid, Oid objid)
 {
 	Relation	rel;
-	HeapTuple	reltup;
 	ScanKeyData scankey;
 	SysScanDesc sscan;
 	HeapTuple	tuple;
@@ -409,26 +408,14 @@ RemoveFastSequenceEntry(Oid relid, Oid objid)
 	table_close(rel, RowExclusiveLock);
 
 	/*
-	 * GPDB_PORT: upstream opens the relation unconditionally here, but this is
-	 * also reached while dropping a table (RemoveAppendonlyEntry()), by which
-	 * point its pg_class entry can already be gone -- an ON COMMIT DROP temp
-	 * table then fails at commit with "could not open relation with OID".
-	 * There is nothing to clear in that case: the relation's
-	 * pg_attribute_encoding rows go away along with it.
+	 * GPDB_PORT: upstream clears unconditionally, but this is also reached
+	 * while dropping a table (RemoveAppendonlyEntry()), by which point its
+	 * pg_class entry can already be gone -- an ON COMMIT DROP temp table then
+	 * fails at commit with "could not open relation with OID".  There is
+	 * nothing to clear in that case: the relation's pg_attribute_encoding rows
+	 * go away along with it.  The ao_row-only check this guard used to carry is
+	 * gone: ao_column uses lastrownums too as of this commit.
 	 */
-	reltup = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
-	if (HeapTupleIsValid(reltup))
-	{
-		Oid			relam = ((Form_pg_class) GETSTRUCT(reltup))->relam;
-
-		ReleaseSysCache(reltup);
-
-		/*
-		 * Currently lastrownums are only used by ao_row tables. Once ao_column
-		 * tables need them (i.e. when the same ADD COLUMN optimization for
-		 * ao_column), we can remove this check.
-		 */
-		if (relam == AO_ROW_TABLE_AM_OID)
-			ClearAttributeEncodingLastrownums(relid);
-	}
+	if (SearchSysCacheExists1(RELOID, ObjectIdGetDatum(relid)))
+		ClearAttributeEncodingLastrownums(relid);
 }
