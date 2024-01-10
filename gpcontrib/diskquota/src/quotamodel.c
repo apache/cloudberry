@@ -2028,6 +2028,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 								memcpy(&blocked_filenode_entry->auxblockinfo, &keyitem, sizeof(RejectMapEntry));
 								blocked_filenode_entry->segexceeded = rejectmapentry->segexceeded;
 							}
+
+							heap_freetuple(curr_tuple);
 						}
 					}
 					/*
@@ -2037,6 +2039,8 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 					break;
 				}
 			}
+
+			heap_freetuple(tuple);
 		}
 		else
 		{
