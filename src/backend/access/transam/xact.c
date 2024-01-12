@@ -2475,11 +2475,10 @@ StartTransaction(void)
 
 	/*
 	 * Transactions may be started while recovery is in progress, if
-	 * hot standby is enabled.  This mode is not supported in
-	 * Cloudberry yet.
+	 * hot standby is enabled.
 	 */
 	AssertImply(DistributedTransactionContext != DTX_CONTEXT_LOCAL_ONLY,
-				!s->startedInRecovery);
+				EnableHotStandby || !s->startedInRecovery);
 	/*
 	 * MPP Modification
 	 *
