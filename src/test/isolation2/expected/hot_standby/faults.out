@@ -218,7 +218,10 @@ select wait_until_all_segments_synchronized();
  Success:                 
 (1 row)
 
--- inject fault to cripple QE right after a QE finished the prepare phase of 2PC
+1: create table tt_hs_dtx(a int);
+CREATE TABLE
+
+-- inject fault to repeatedly fail the COMMIT PREPARE phase of 2PC, which ensures that the dtx cannot finish even by the dtx recovery process.
 select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp_segment_configuration where content=1 and role='p';
  gp_inject_fault_infinite 
 --------------------------
@@ -226,11 +229,7 @@ select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp
 (1 row)
 
 -- session 1 on primary QD tries to commit a DTX, but cannot finish due to the fault on a QE
-1: begin;
-BEGIN
-1: create table tt_hs_dtx(a int);
-CREATE TABLE
-1&: end;  <waiting ...>
+1&: insert into tt_hs_dtx select * from generate_series(1,10);  <waiting ...>
 
 -- inject a panic on primary QD, essentially restarts the primary QD
 2: select gp_inject_fault('before_read_command', 'panic', dbid) from gp_segment_configuration where content=-1 and role='p';
@@ -266,18 +265,49 @@ server closed the connection unexpectedly
  8  
  9  
 (10 rows)
--- XXX: currently it sees the in-doubt DTX but it shouldnt' when we supported DTX isolation.
+-- it cannot see rows from the in-doubt DTX
 -1S: select * from tt_hs_dtx;
  a 
 ---
 (0 rows)
 
--- resets the fault
+-- let the failed dtx be recovered, also make sure the standby replays the forget record which signals the completion of the dtx
+-1S: select gp_inject_fault('redoDistributedForgetCommitRecord', 'skip', dbid) from gp_segment_configuration where content=-1 and role='m';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
 -1S: select gp_inject_fault_infinite('finish_commit_prepared', 'reset', dbid) from gp_segment_configuration where content=1 and role='p';
  gp_inject_fault_infinite 
 --------------------------
  Success:                 
 (1 row)
+-1S: select gp_wait_until_triggered_fault('redoDistributedForgetCommitRecord', 1, dbid) from gp_segment_configuration where content=-1 and role='m';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+-1S: select gp_inject_fault('redoDistributedForgetCommitRecord', 'reset', dbid) from gp_segment_configuration where content=-1 and role='m';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- standby should see the rows from the in-doubt DTX now
+-1S: select * from tt_hs_dtx;
+ a  
+----
+ 1  
+ 2  
+ 3  
+ 4  
+ 7  
+ 8  
+ 5  
+ 6  
+ 9  
+ 10 
+(10 rows)
 
 -1S: select wait_until_all_segments_synchronized();
  wait_until_all_segments_synchronized 
@@ -294,3 +324,4 @@ server closed the connection unexpectedly
 -----------------
  Success:        
 (1 row)
+

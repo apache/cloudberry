@@ -1,7 +1,8 @@
 -- Tests for basic query dispatch on a hot standy.
 
--- must show on
+-- hot standby must show on and the sync mode is remote_apply for the tests to make sense
 -1S: show hot_standby;
+-1S: show synchronous_commit;
 
 -- will be checking if QD/QE info looks good
 -1S: select id, type, content, port from gp_backend_info();
@@ -11,10 +12,19 @@
 ----------------------------------------------------------------
 create table hs_t1(a int);
 create table hs_t2(a int);
-insert into hs_t1 select * from generate_series(1,10);
 
--- standby should see the result
+-- standby should see the results for 2pc immediately.
+insert into hs_t1 select * from generate_series(1,10);
 -1S: select * from hs_t1;
+-- standby won't see results for the last 1pc immediately because the standby QD
+-- isn't aware of of it so its distributed snapshot doesn't include the 1pc, but
+-- as long as another 2pc comes it will be able to see the previous 1pc. Wee 
+-- tolerate this case in the mirrored cluster setup.
+insert into hs_t2 values(1);
+-1S: select * from hs_t2;
+-- any following 2pc will make the 1pc visible
+create temp table tt(a int);
+-1S: select * from hs_t2;
 
 -- we have three QEs launched on the mirror segments.
 -- note that the first QE on a segment is still a "writer" because we

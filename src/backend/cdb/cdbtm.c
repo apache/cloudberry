@@ -1643,7 +1643,7 @@ isDtxQueryDispatcher(void)
 	isSharedLocalSnapshotSlotPresent = (SharedLocalSnapshotSlot != NULL);
 
 	return (Gp_role == GP_ROLE_DISPATCH &&
-			isDtmStarted &&
+			(isDtmStarted || EnableHotStandby) &&
 			isSharedLocalSnapshotSlotPresent);
 }
 
@@ -2046,6 +2046,8 @@ sendDtxExplicitBegin(void)
 static void
 performDtxProtocolPrepare(const char *gid)
 {
+	SIMPLE_FAULT_INJECTOR("qe_start_prepared");
+
 	StartTransactionCommand();
 
 	elog(DTM_DEBUG5, "performDtxProtocolCommand going to call PrepareTransactionBlock for distributed transaction (id = '%s')", gid);
@@ -2125,6 +2127,7 @@ performDtxProtocolCommitOnePhase(const char *gid)
 static void
 performDtxProtocolCommitPrepared(const char *gid, bool raiseErrorIfNotFound)
 {
+	SIMPLE_FAULT_INJECTOR("qe_start_commit_prepared");
 	Assert(Gp_role == GP_ROLE_EXECUTE);
 
 	elog(DTM_DEBUG5,

@@ -89,13 +89,13 @@ select wait_until_all_segments_synchronized();
 -- skip FTS probe to prevent unexpected mirror promotion
 1: select gp_inject_fault_infinite('fts_probe', 'skip', dbid) from gp_segment_configuration where role='p' and content=-1;
 
--- inject fault to cripple QE right after a QE finished the prepare phase of 2PC
+1: create table tt_hs_dtx(a int);
+
+-- inject fault to repeatedly fail the COMMIT PREPARE phase of 2PC, which ensures that the dtx cannot finish even by the dtx recovery process. 
 select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp_segment_configuration where content=1 and role='p';
 
 -- session 1 on primary QD tries to commit a DTX, but cannot finish due to the fault on a QE
-1: begin;
-1: create table tt_hs_dtx(a int);
-1&: end;
+1&: insert into tt_hs_dtx select * from generate_series(1,10);
 
 -- inject a panic on primary QD, essentially restarts the primary QD
 2: select gp_inject_fault('before_read_command', 'panic', dbid) from gp_segment_configuration where content=-1 and role='p';
@@ -107,12 +107,19 @@ select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp
 
 -- standby QD can still run query
 -1S: select * from hs_failover;
--- XXX: currently it sees the in-doubt DTX but it shouldnt' when we supported DTX isolation.
+-- it cannot see rows from the in-doubt DTX
 -1S: select * from tt_hs_dtx;
 
--- resets the fault
+-- let the failed dtx be recovered, also make sure the standby replays the forget record which signals the completion of the dtx
+-1S: select gp_inject_fault('redoDistributedForgetCommitRecord', 'skip', dbid) from gp_segment_configuration where content=-1 and role='m';
 -1S: select gp_inject_fault_infinite('finish_commit_prepared', 'reset', dbid) from gp_segment_configuration where content=1 and role='p';
+-1S: select gp_wait_until_triggered_fault('redoDistributedForgetCommitRecord', 1, dbid) from gp_segment_configuration where content=-1 and role='m';
+-1S: select gp_inject_fault('redoDistributedForgetCommitRecord', 'reset', dbid) from gp_segment_configuration where content=-1 and role='m';
+
+-- standby should see the rows from the in-doubt DTX now
+-1S: select * from tt_hs_dtx;
 
 -1S: select wait_until_all_segments_synchronized();
 1: select gp_inject_fault('before_read_command', 'reset', dbid) from gp_segment_configuration where content=-1 and role='p';
 1: select gp_inject_fault('fts_probe', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
+
