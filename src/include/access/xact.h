@@ -508,7 +508,7 @@ extern void UnregisterXactCallbackOnce(XactCallback callback, void *arg);
 extern void RegisterSubXactCallback(SubXactCallback callback, void *arg);
 extern void UnregisterSubXactCallback(SubXactCallback callback, void *arg);
 
-extern void RecordDistributedForgetCommitted(DistributedTransactionId gxid);
+extern XLogRecPtr RecordDistributedForgetCommitted(DistributedTransactionId gxid);
 extern bool IsSubTransactionAssignmentPending(void);
 extern void MarkSubTransactionAssigned(void);
 

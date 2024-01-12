@@ -1825,17 +1825,23 @@ cleanup:
 /*
  *	RecordDistributedForgetCommitted
  */
-void
+XLogRecPtr
 RecordDistributedForgetCommitted(DistributedTransactionId gxid)
 {
 	xl_xact_distributed_forget xlrec;
+	XLogRecPtr recptr;
 
 	xlrec.gxid = gxid;
 
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xl_xact_distributed_forget));
 
-	XLogInsert(RM_XACT_ID, XLOG_XACT_DISTRIBUTED_FORGET);
+	recptr = XLogInsert(RM_XACT_ID, XLOG_XACT_DISTRIBUTED_FORGET);
+	/* only flush immediately if we want to wait for remote_apply */
+	if (synchronous_commit >= SYNCHRONOUS_COMMIT_REMOTE_APPLY)
+		XLogFlush(recptr);
+
+	return recptr;
 }
 
 /*
