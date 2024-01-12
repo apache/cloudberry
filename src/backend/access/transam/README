@@ -897,3 +897,48 @@ yet simplifies emulation of subtransactions considerably.
 
 Further details on locking mechanics in recovery are given in comments
 with the Lock rmgr code.
+
+Distributed Transaction Emulation during Recovery
+-------------------------------------
+
+In GPDB, the MVCC snapshot also includes distributed transactions (aka dtx). 
+Accordingly, on a hot standby we also emulate running dtx. The way to do that 
+is to re-use the shmCommittedGxidArray which has been used on a primary for dtx
+recovery: it tracks all the 2PC dtx that have their PREPARE phase done, 
+but for which the COMMIT phase hasn't finished (i.e. window between the
+XLOG_XACT_DISTRIBUTED_COMMIT record being written and the 
+XLOG_XACT_DISTRIBUTED_FORGET record being written on the QD). On a hot standby, 
+any dtx shown in that array are regarded as in-progress. The MVCC snapshot does 
+not really need to account for dtx not in that array: for a dtx that hasn't 
+done PREPARE, we know no segment has committed any data yet; for a dtx that 
+hasn't done COMMIT, we know all segments have committed their data.
+
+Note: dtxes that are preparing will not be tracked in this array, and thus will 
+not be included in this snapshot. This is slightly different from a primary QD, 
+where such transactions would have been included in the distributed snapshot's 
+inProgressXidArray (as we construct the inProgressXidArray from the PGXACTs that
+would contain the dummy entries for prepared transactions). However, as 
+mentioned in CreateDistributedSnapshot, including these is not a requirement for
+correctness.
+
+Note: aborted/aborting dtxes are not accounted for by the standby either. Those
+are the dtxes that encountered error during preparing. Same as the previous 
+point, the standby does not need to be aware of them for correctness. Worth also
+noting that if a dtx encountered error after being prepared, it cannot be 
+aborted anymore and must be committed by the dtx recovery process. Until 
+committed, such a dtx will be seen as in-progress to the standby.
+
+For 1PC dtx, however, there is a known limitation where the hot standby won't 
+see the last 1PC (or the last few 1PCs if they are all 1PC). This is because 
+since 1PC does not have any WAL on QD, the standby QD won't advance its 
+latestCompletedGxid, so its distributed snapshot horizon does not include the
+last 1PC - it would view the last 1PC not yet started or at best still in 
+progress. Only if another 2PC comes, the standby would advance its 
+latestCompletedGxid and its distributed snapshot will include the previous 1PC. 
+
+We don't emulate the full architecture of "running transaction" for dtx because
+that is unnecessary, at least ATM. For example, we don't create a dtx-version
+of XLOG_RUNNING_XACTS, because we already have that information as part of the
+extended checkpoint (see TMGXACT_CHECKPOINT). We also don't need to emulate 
+other members in RunningTransactionsData, like subxid or xid-pruning related 
+variables because those do not apply to dtx.

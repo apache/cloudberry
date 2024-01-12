@@ -1529,6 +1529,8 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 	qc.commandTag = GetCommandTagEnum(loggingStr);
 	qc.nprocessed = 1;
 
+	SIMPLE_FAULT_INJECTOR("exec_dtx_protocol_start");
+
 	if (log_statement == LOGSTMT_ALL)
 		elog(LOG,"DTM protocol command '%s' for gid = %s", loggingStr, gid);
 

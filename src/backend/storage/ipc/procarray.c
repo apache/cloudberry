@@ -2530,8 +2530,10 @@ getDtxCheckPointInfo(char **result, int *result_size)
 	gxid_array = &gxact_checkpoint->committedGxidArray[0];
 
 	actual = 0;
+	LWLockAcquire(CommittedGxidArrayLock, LW_SHARED);
 	for (; actual < *shmNumCommittedGxacts; actual++)
 		gxid_array[actual] = shmCommittedGxidArray[actual];
+	LWLockRelease(CommittedGxidArrayLock);
 
 	SIMPLE_FAULT_INJECTOR("checkpoint_dtx_info");
 
@@ -2609,7 +2611,8 @@ CreateDistributedSnapshot(DistributedSnapshot *ds)
 	ProcArrayStruct *arrayP = procArray;
 
 	Assert(LWLockHeldByMe(ProcArrayLock));
-	if (*shmNumCommittedGxacts != 0)
+	/* Hot standby accepts query while constantly replaying dtx, so this ERROR doesn't apply. */
+	if (!IS_HOT_STANDBY_QD() && *shmNumCommittedGxacts != 0)
 		elog(ERROR, "Create distributed snapshot before DTM recovery finish");
 
 	xmin = xmax = ShmemVariableCache->latestCompletedGxid + 1;
@@ -2624,8 +2627,44 @@ CreateDistributedSnapshot(DistributedSnapshot *ds)
 	Assert(ds->inProgressXidArray != NULL);
 
 	/*
+	 * For a hot standby QD, check shmCommittedGxidArray to build the knowledge.
+	 * Need to acquire shared lock to access the committed gxid array as the
+	 * startup process might modify it.
+	 */
+	if (IS_HOT_STANDBY_QD())
+	{
+		LWLockAcquire(CommittedGxidArrayLock, LW_SHARED);
+		for (i = 0; i < *shmNumCommittedGxacts; i++)
+		{
+			DistributedTransactionId gxid;
+
+			gxid = shmCommittedGxidArray[i];
+
+			if (gxid == InvalidDistributedTransactionId || gxid >= xmax)
+				continue;
+
+			if (gxid < xmin)
+				xmin = gxid;
+
+			ds->inProgressXidArray[count++] = gxid;
+		}
+		LWLockRelease(CommittedGxidArrayLock);
+	}
+
+	/*
 	 * Gather up current in-progress global transactions for the distributed
 	 * snapshot.
+	 *
+	 * Note: The inProgressXidArray built below may contain transactions that
+	 * have been prepared on some/all segments, and for which the QD hasn't
+	 * begun the COMMIT phase (by writing a XLOG_XACT_DISTRIBUTED_COMMIT record).
+	 * The gxids of these transactions don't necessarily have to be placed into
+	 * inProgressXidArray, for correctness. This is because for visibility
+	 * checks on the QEs, a state of DISTRIBUTEDSNAPSHOT_COMMITTED_UNKNOWN will
+	 * be encountered for such txs, prompting a local check. The local check will
+	 * always find these txs in progress (due to the dummy PGXACTs being
+	 * recorded for prepared txs). So, hypothetically we could exclude these txs
+	 * here, but we don't currently track them on the QD, so we can't.
 	 */
 	for (i = 0; i < arrayP->numProcs; i++)
 	{
