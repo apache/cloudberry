@@ -213,7 +213,6 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 				old_8_3_create_sequence_script(&old_cluster);
 		}
 
-		old_GPDB5_check_for_unsupported_distribution_key_data_types();
 	}
 
 	/*
