@@ -743,6 +743,17 @@ aocs_positionscan(AOCSScanDesc scan,
 		}
 	}
 
+	if (beginFileOffset == 0)
+	{
+		/* 
+		 * If we intend to position to the 1st varblock in the segfile,
+		 * we are already done, as open_scan_seg() always reads the 1st
+		 * block in the file, so there is no additional positioning
+		 * necessary.
+		 */
+		return true;
+	}
+
 	/* The datum stream array is always of length relnatts */
 	dsIdx = scan->columnScanInfo.proj_atts[colIdx];
 	Assert(dsIdx >= 0 && dsIdx < RelationGetNumberOfAttributes(scan->rs_base.rs_rd));
