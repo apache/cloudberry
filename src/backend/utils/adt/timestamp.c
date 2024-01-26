@@ -2842,8 +2842,16 @@ timestamp_offset_internal(Timestamp timestamp, Interval *span)
 					(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 					 errmsg("timestamp out of range")));
 
-		/* Add days by converting to and from julian */
-		julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday) + span->day;
+		/*
+		 * Add days by converting to and from Julian.  We need an overflow
+		 * check here since j2date expects a non-negative integer input.
+		 */
+		julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+		if (pg_add_s32_overflow(julian, span->day, &julian) ||
+			julian < 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+					 errmsg("timestamp out of range")));
 		j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
 
 		if (tm2timestamp(tm, fsec, NULL, &timestamp) != 0)
@@ -2940,8 +2948,19 @@ timestamptz_offset_internal(TimestampTz timestamp, Interval *span)
 					(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 					 errmsg("timestamp out of range")));
 
-		/* Add days by converting to and from julian */
-		julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday) + span->day;
+		/*
+		 * Add days by converting to and from Julian.  We need an overflow
+		 * check here since j2date expects a non-negative integer input.
+		 * In practice though, it will give correct answers for small
+		 * negative Julian dates; we should allow -1 to avoid
+		 * timezone-dependent failures, as discussed in timestamp.h.
+		 */
+		julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+		if (pg_add_s32_overflow(julian, span->day, &julian) ||
+			julian < -1)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+					 errmsg("timestamp out of range")));
 		j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
 
 		tz = DetermineTimeZoneOffset(tm, session_timezone);
