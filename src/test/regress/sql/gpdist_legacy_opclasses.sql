@@ -169,8 +169,8 @@ explain (costs off) select * from legacy_int a inner join legacy_domain_over_int
 explain (costs off) select * from modern_int a inner join legacy_domain_over_int b on a.id = b.id;
 
 create type colors as enum ('red', 'green', 'blue');
-create table legacy_enum(col1 int, color colors) distributed by(col1);
-insert into legacy_enum values (1, 'red'), (2, 'green'), (3, 'blue');
+create table legacy_enum(color colors) distributed by(color cdbhash_enum_ops);
+insert into legacy_enum values ('red'), ('green'), ('blue');
 
 explain (costs off) select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
 select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
