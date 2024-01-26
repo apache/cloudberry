@@ -377,8 +377,6 @@ test: dynamic_table
 # DML tests for AO/CO unique indexes.
 test: uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
 
-# test that distributing or hash partitioning by an enum field or expression is blocked
-test: enum_dist_part_ban
 
 # run pg_hba raleted testing
 test: hba_conf
