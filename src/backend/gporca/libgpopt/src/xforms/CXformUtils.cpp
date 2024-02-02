@@ -3263,6 +3263,7 @@ CXformUtils::FHasAmbiguousType(CExpression *pexpr, CMDAccessor *md_accessor)
 			case COperator::EopScalarProjectList:
 			case COperator::EopScalarProjectElement:
 			case COperator::EopScalarSwitchCase:
+			case COperator::EopScalarArrayRefIndexList:
 				break;	// these operators do not have valid return type
 
 			default:
