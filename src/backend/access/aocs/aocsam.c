@@ -126,8 +126,9 @@ open_all_datumstreamread_segfiles(AOCSScanDesc scan, AOCSFileSegInfo *segInfo)
 
 		open_datumstreamread_segfile(basepath, rel, segInfo, ds[attno], attno);
 
-		/* skip reading block for ANALYZE */
-		if ((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) != 0)
+		/* skip reading block for ANALYZE/partial scan */
+		if ((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) != 0 ||
+			scan->partialScan)
 			continue;
 
 		datumstreamread_block(ds[attno], blockDirectory, attno);
@@ -627,6 +628,7 @@ aocs_beginscan_internal(Relation relation,
 	scan->seginfo = seginfo;
 	scan->total_seg = total_seg;
 	scan->columnScanInfo.scanCtx = CurrentMemoryContext;
+	scan->partialScan = false;
 
 	/* relationTupleDesc will be inited by the slot when needed */
 	scan->columnScanInfo.relationTupleDesc = NULL;
@@ -741,17 +743,6 @@ aocs_positionscan(AOCSScanDesc scan,
 			/* target segment is empty/awaiting-drop */
 			return false;
 		}
-	}
-
-	if (beginFileOffset == 0)
-	{
-		/* 
-		 * If we intend to position to the 1st varblock in the segfile,
-		 * we are already done, as open_scan_seg() always reads the 1st
-		 * block in the file, so there is no additional positioning
-		 * necessary.
-		 */
-		return true;
 	}
 
 	/* The datum stream array is always of length relnatts */

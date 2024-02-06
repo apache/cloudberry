@@ -282,6 +282,9 @@ typedef struct AOCSScanDescData
 	 * across all columns projected, so far. It is used for scan progress reporting.
 	 */
 	int64		totalBytesRead;
+
+	/* Is this for partial scan? */
+	bool		partialScan;
 } AOCSScanDescData;
 
 typedef AOCSScanDescData *AOCSScanDesc;
