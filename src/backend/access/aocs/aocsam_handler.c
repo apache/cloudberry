@@ -1826,6 +1826,8 @@ aoco_index_build_range_scan(Relation heapRelation,
 
 	aocoscan = (AOCSScanDesc) scan;
 
+	aocoscan->partialScan = true;
+
 	/*
 	 * GPDB_PORT: when the block directory already exists we only need the
 	 * columns the index refers to.  Upstream gets this by passing a target list
