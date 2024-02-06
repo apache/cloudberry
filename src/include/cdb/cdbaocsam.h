@@ -283,7 +283,10 @@ typedef struct AOCSScanDescData
 	 */
 	int64		totalBytesRead;
 
-	/* Is this for partial scan? */
+	/*
+	 * Is this for partial scan? Partial scans involve scanning a subset of the
+	 * CO table, starting at a certain logical heap block and ending in another.
+	 */
 	bool		partialScan;
 } AOCSScanDescData;
 
