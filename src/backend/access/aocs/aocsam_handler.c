@@ -607,6 +607,7 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot, int nkeys, struct
 							  ParallelTableScanDesc parallel_scan,
 							  PlanState *ps, uint32 flags)
 {
+	AOCSProjectionKind projKind = AOCS_PROJ_SOME;
 	AOCSScanDesc	aoscan;
 	AttrNumber		natts = RelationGetNumberOfAttributes(rel);
 	List *targetlist = ps->plan->targetlist;
@@ -622,18 +623,24 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot, int nkeys, struct
 	/*
 	 * In some cases (for example, count(*)), targetlist and qual may be null,
 	 * extractcolumns_walker will return immediately, so no columns are specified.
-	 * We always scan the first column.
+	 * We will pass no proj and defer the choice of the column later.
 	 */
 	if (!found)
-		cols[0] = true;
+	{
+		projKind = AOCS_PROJ_ANY;
+		pfree(cols);
+		cols = NULL;
+	}
 
 	aoscan = aocs_beginscan(rel,
 							snapshot,
 							parallel_scan,
 							cols,
+							projKind,
 							flags);
 
-	pfree(cols);
+	if (cols)
+		pfree(cols);
 
 	if (gp_enable_predicate_pushdown)
 		ps->qual = aocs_predicate_pushdown_prepare(aoscan, qual, ps->qual, ps->ps_ExprContext, ps);
@@ -709,7 +716,8 @@ aoco_beginscan(Relation relation,
 	aoscan = aocs_beginscan(relation,
 							snapshot,
 							pscan,
-							NULL,
+							NULL, /* proj */
+							AOCS_PROJ_ALL,
 							flags);
 
 	return (TableScanDesc) aoscan;
@@ -1553,6 +1561,7 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	scan = aocs_beginscan(OldHeap, GetActiveSnapshot(),
 						  NULL /* parallel_scan */,
 						  NULL /* proj */,
+						  AOCS_PROJ_ALL,
 						  0 /* flags */);
 
 	while (aocs_getnext(scan, ForwardScanDirection, slot))

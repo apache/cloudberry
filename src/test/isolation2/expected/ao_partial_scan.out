@@ -1997,3 +1997,111 @@ SELECT brin_summarize_range('aoco_partial_scan5_j_idx', 33554432);
 
 DROP EXTENSION pageinspect;
 DROP
+
+--------------------------------------------------------------------------------
+-- GPDB_PORT: count(*) on a CO table projects the anchor column
+--
+-- From upstream 86647f449b.  Its own test went into regress/aoco_projection,
+-- a file cbdb does not have (it comes from 764b66e546, which is not part of
+-- this series), so the commit's own 38 lines live here instead -- they are
+-- self-contained and use the same fault point as the rest of this file.
+--
+-- With no target list and no qual the scan used to take the first column;
+-- it now takes the anchor, which is the smallest complete one, so count(*)
+-- reads as many blocks as the smallest column and no more.
+--------------------------------------------------------------------------------
+CREATE TABLE count_proj(a int, b bigint, c int2) USING ao_column;
+CREATE
+INSERT INTO count_proj SELECT i,i,i%32768 FROM generate_series(1,1000000) i;
+INSERT 1000000
+
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(a) FROM count_proj;
+ count   
+---------
+ 1000000 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault                                                                                                                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'AppendOnlyStorageRead_ReadNextBlock_success' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'41' 
+ 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(b) FROM count_proj;
+ count   
+---------
+ 1000000 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault                                                                                                                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'AppendOnlyStorageRead_ReadNextBlock_success' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'82' 
+ 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(c) FROM count_proj;
+ count   
+---------
+ 1000000 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault                                                                                                                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'AppendOnlyStorageRead_ReadNextBlock_success' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'21' 
+ 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- should match count(c), the smallest column
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(*) FROM count_proj;
+ count   
+---------
+ 1000000 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault                                                                                                                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'AppendOnlyStorageRead_ReadNextBlock_success' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'21' 
+ 
+(1 row)
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+DROP TABLE count_proj;
+DROP

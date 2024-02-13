@@ -126,6 +126,7 @@ enum AOCSScanDescIdentifier
  */
 typedef enum AOCSProjectionKind
 {
+	AOCS_PROJ_ANY, 		/* any one column can be used, we'll pick the smallest complete one */
 	AOCS_PROJ_SOME, 		/* some of the columns, could be all as well */
 	AOCS_PROJ_ALL 		/* all of the columns */
 } AOCSProjectionKind;
@@ -419,7 +420,7 @@ aocs_unique_check_col(Relation aocsrel);
  */
 
 extern AOCSScanDesc aocs_beginscan(Relation relation, Snapshot snapshot, ParallelTableScanDesc parallel_scan,
-								   bool *proj, uint32 flags);
+								   bool *proj, AOCSProjectionKind projKind, uint32 flags);
 extern AOCSScanDesc
 aocs_beginrangescan(Relation relation,
 					Snapshot snapshot,
