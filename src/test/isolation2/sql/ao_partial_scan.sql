@@ -609,3 +609,52 @@ SELECT brin_summarize_range('aoco_partial_scan5_j_idx', 33554432);
 1U: SELECT * FROM brin_page_items(get_raw_page('aoco_partial_scan5_j_idx', 2), 'aoco_partial_scan5_j_idx');
 
 DROP EXTENSION pageinspect;
+
+--------------------------------------------------------------------------------
+-- GPDB_PORT: count(*) on a CO table projects the anchor column
+--
+-- From upstream 86647f449b.  Its own test went into regress/aoco_projection,
+-- a file cbdb does not have (it comes from 764b66e546, which is not part of
+-- this series), so the commit's own 38 lines live here instead -- they are
+-- self-contained and use the same fault point as the rest of this file.
+--
+-- With no target list and no qual the scan used to take the first column;
+-- it now takes the anchor, which is the smallest complete one, so count(*)
+-- reads as many blocks as the smallest column and no more.
+--------------------------------------------------------------------------------
+CREATE TABLE count_proj(a int, b bigint, c int2) USING ao_column;
+INSERT INTO count_proj SELECT i,i,i%32768 FROM generate_series(1,1000000) i;
+
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT count(a) FROM count_proj;
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT count(b) FROM count_proj;
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT count(c) FROM count_proj;
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+
+-- should match count(c), the smallest column
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'skip', '', '', '', 1, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT count(*) FROM count_proj;
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'status', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
+DROP TABLE count_proj;
