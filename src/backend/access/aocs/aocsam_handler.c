@@ -2038,17 +2038,7 @@ aoco_index_build_range_scan(Relation heapRelation,
 				Assert(common_start_rownum >= dirEntries[colIdx].range.firstRowNum
 								&& common_start_rownum <= dirEntries[colIdx].range.lastRowNum);
 
-				/*
-				 * read the varblock we've just positioned to
-				 *
-				 * GPDB_PORT: columnScanInfo.ds is indexed by attno, not by the
-				 * projection index -- see aocs_positionscan(), which derives
-				 * dsIdx from proj_atts[colIdx] for exactly this reason.
-				 * Upstream passes ds[colIdx] here and in the
-				 * datumstreamread_find() below; that is only correct while the
-				 * projected columns happen to be the leading ones, which is
-				 * what ao_partial_scan's indexes on (i, j) give it.
-				 */
+				/* read the varblock we've just positioned to */
 				err = datumstreamread_block(aocoscan->columnScanInfo.ds[attno], NULL, attno);
 				Assert(err >= 0); /* since it's a valid block, we must be able to read it */
 
