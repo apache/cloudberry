@@ -52,7 +52,9 @@ end;
 -1S: select * from hs_t1;
 
 ----------------------------------------------------------------
--- Test: other things that a hot standby can do
+-- Test: other things that a hot standby can do.
+--
+-- More refer to regress test 'hs_standby_allowed'.
 ----------------------------------------------------------------
 -- set/reset and show GUC
 -1S: set optimizer = on;
@@ -63,19 +65,14 @@ end;
 -- query catalogs
 -1S: select count(*) from pg_class where relname = 'hs_t1';
 -1S: select dbid,content,role,preferred_role,mode,status from gp_segment_configuration where dbid = current_setting('gp_dbid')::integer;
-
--- Here are the things hot standby in PG can do but currently cannot in GPDB:
--- transaction block BEGIN...END;
--1S: begin;
--1S: end;
--- cursor operation due to not supporting BEGIN...END yet;
-
 -- checkpoint is allowed on standby but a restart point is created instead
 -1S: checkpoint;
 
 ----------------------------------------------------------------
--- Test: things that can't be done on a hot standby in both PG and GDPB:
--- no DML, DDL or anything that generates WAL
+-- Test: things that can't be done on a hot standby:
+-- no DML, DDL or anything that generates WAL.
+--
+-- More refer to regress test 'hs_standby_disallowed'.
 ----------------------------------------------------------------
 -1S: insert into hs_t1 values(1);
 -1S: delete from hs_t1;

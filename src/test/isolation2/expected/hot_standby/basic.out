@@ -163,7 +163,9 @@ COMMIT
 (20 rows)
 
 ----------------------------------------------------------------
--- Test: other things that a hot standby can do
+-- Test: other things that a hot standby can do.
+--
+-- More refer to regress test 'hs_standby_allowed'.
 ----------------------------------------------------------------
 -- set/reset and show GUC
 -1S: set optimizer = on;
@@ -189,22 +191,15 @@ COPY 20
 ------+---------+------+----------------+------+--------
  8    | -1      | m    | m              | s    | u      
 (1 row)
-
--- Here are the things hot standby in PG can do but currently cannot in GPDB:
--- transaction block BEGIN...END;
--1S: begin;
-ERROR:  cannot setup distributed transaction during recovery (cdbtm.c:392)
--1S: end;
-COMMIT
--- cursor operation due to not supporting BEGIN...END yet;
-
 -- checkpoint is allowed on standby but a restart point is created instead
 -1S: checkpoint;
 CHECKPOINT
 
 ----------------------------------------------------------------
--- Test: things that can't be done on a hot standby in both PG and GDPB:
--- no DML, DDL or anything that generates WAL
+-- Test: things that can't be done on a hot standby:
+-- no DML, DDL or anything that generates WAL.
+--
+-- More refer to regress test 'hs_standby_disallowed'.
 ----------------------------------------------------------------
 -1S: insert into hs_t1 values(1);
 ERROR:  cannot execute INSERT in a read-only transaction

@@ -761,7 +761,7 @@ extern GpId GpIdentity;
 #define IS_HOT_STANDBY_QD() (EnableHotStandby && IS_QUERY_DISPATCHER() && RecoveryInProgress())
 
 #define IS_QUERY_EXECUTOR_BACKEND() (Gp_role == GP_ROLE_EXECUTE && gp_session_id > 0)
-#define IS_STANDBY_QE() (EnableHotStandby && IS_QUERY_EXECUTOR_BACKEND() && RecoveryInProgress())
+#define IS_HOT_STANDBY_QE() (EnableHotStandby && IS_QUERY_EXECUTOR_BACKEND() && RecoveryInProgress())
 
 /* Stores the listener port that this process uses to listen for incoming
  * Interconnect connections from other Motion nodes.
