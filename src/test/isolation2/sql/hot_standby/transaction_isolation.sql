@@ -219,6 +219,81 @@
 -1S: select * from hs_rc;
 
 ----------------------------------------------------------------
+-- Repeatable-read isolation: distributed snapshot is created at time of the 
+-- first query in transaction block. All queries in the transaction block 
+-- should only see results committed before the distributed snapshot creation.
+----------------------------------------------------------------
+
+1: create table hs_rr(a int);
+1: insert into hs_rr select * from generate_series(1,10);
+
+-1S: begin isolation level repeatable read;
+-- should see 10
+-1S: select count(*) from hs_rr;
+
+-- do some more INSERT, DELETE and UPDATE
+1: insert into hs_rr select * from generate_series(11,20);
+1: delete from hs_rr where a <= 10;
+1: update hs_rr set a = a + 100;
+
+-- should still the initial rows {1...10}
+-1S: select * from hs_rr;
+-1S: end;
+
+-- should see the results from the INSERT, DELETE and UPDATE
+-1S: begin isolation level repeatable read;
+-1S: select * from hs_rr;
+
+-- standby won't see ongoing or aborted transactions either
+1: begin;
+1: insert into hs_rr select * from generate_series(1,10);
+2: begin;
+2: insert into hs_rr select * from generate_series(1,10);
+2: abort;
+
+-1S: select * from hs_rr;
+
+1: end;
+-1S: end;
+
+----------------------------------------------------------------
+-- Transaction isolation is respected in subtransactions too
+----------------------------------------------------------------
+
+1: create table hs_subtrx(a int);
+
+-- (1) read-committed
+-1S: begin;
+-1S: select count(*) from hs_subtrx;
+-1S: savepoint s1;
+
+1: insert into hs_subtrx select * from generate_series(1,10);
+
+-1S: select count(*) from hs_subtrx;
+-1S: savepoint s2;
+-1S: select count(*) from hs_subtrx;
+-1S: rollback to savepoint s1;
+-1S: select count(*) from hs_subtrx;
+-1S: end;
+
+-- (2) repeatable-read
+-1S: begin isolation level repeatable read;
+-1S: select * from hs_subtrx;
+-1S: savepoint s1;
+
+1: insert into hs_subtrx select * from generate_series(11,20);
+1: delete from hs_subtrx where a <= 10;
+1: update hs_subtrx set a = a + 100;
+
+-1S: select * from hs_subtrx;
+-1S: savepoint s2;
+-1S: select * from hs_subtrx;
+-1S: rollback to savepoint s1;
+-1S: select * from hs_subtrx;
+-1S: end;
+-1S: select * from hs_subtrx;
+
+----------------------------------------------------------------
 -- Various isolation tests that involve AO/CO table.
 ----------------------------------------------------------------
 1: create table hs_ao(a int, id int unique) using ao_row;

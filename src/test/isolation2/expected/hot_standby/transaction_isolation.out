@@ -655,6 +655,235 @@ COMMIT
 (10 rows)
 
 ----------------------------------------------------------------
+-- Repeatable-read isolation: distributed snapshot is created at time of the
+-- first query in transaction block. All queries in the transaction block
+-- should only see results committed before the distributed snapshot creation.
+----------------------------------------------------------------
+
+1: create table hs_rr(a int);
+CREATE TABLE
+1: insert into hs_rr select * from generate_series(1,10);
+INSERT 0 10
+
+-1S: begin isolation level repeatable read;
+BEGIN
+-- should see 10
+-1S: select count(*) from hs_rr;
+ count 
+-------
+ 10    
+(1 row)
+
+-- do some more INSERT, DELETE and UPDATE
+1: insert into hs_rr select * from generate_series(11,20);
+INSERT 0 10
+1: delete from hs_rr where a <= 10;
+DELETE 10
+1: update hs_rr set a = a + 100;
+UPDATE 10
+
+-- should still the initial rows {1...10}
+-1S: select * from hs_rr;
+ a  
+----
+ 2  
+ 3  
+ 4  
+ 7  
+ 8  
+ 1  
+ 5  
+ 6  
+ 9  
+ 10 
+(10 rows)
+-1S: end;
+COMMIT
+
+-- should see the results from the INSERT, DELETE and UPDATE
+-1S: begin isolation level repeatable read;
+BEGIN
+-1S: select * from hs_rr;
+ a   
+-----
+ 115 
+ 120 
+ 118 
+ 113 
+ 114 
+ 112 
+ 116 
+ 119 
+ 111 
+ 117 
+(10 rows)
+
+-- standby won't see ongoing or aborted transactions either
+1: begin;
+BEGIN
+1: insert into hs_rr select * from generate_series(1,10);
+INSERT 0 10
+2: begin;
+BEGIN
+2: insert into hs_rr select * from generate_series(1,10);
+INSERT 0 10
+2: abort;
+ROLLBACK
+
+-1S: select * from hs_rr;
+ a   
+-----
+ 114 
+ 115 
+ 120 
+ 118 
+ 113 
+ 112 
+ 116 
+ 119 
+ 111 
+ 117 
+(10 rows)
+
+1: end;
+COMMIT
+-1S: end;
+COMMIT
+
+----------------------------------------------------------------
+-- Transaction isolation is respected in subtransactions too
+----------------------------------------------------------------
+
+1: create table hs_subtrx(a int);
+CREATE TABLE
+
+-- (1) read-committed
+-1S: begin;
+BEGIN
+-1S: select count(*) from hs_subtrx;
+ count 
+-------
+ 0     
+(1 row)
+-1S: savepoint s1;
+SAVEPOINT
+
+1: insert into hs_subtrx select * from generate_series(1,10);
+INSERT 0 10
+
+-1S: select count(*) from hs_subtrx;
+ count 
+-------
+ 10    
+(1 row)
+-1S: savepoint s2;
+SAVEPOINT
+-1S: select count(*) from hs_subtrx;
+ count 
+-------
+ 10    
+(1 row)
+-1S: rollback to savepoint s1;
+ROLLBACK
+-1S: select count(*) from hs_subtrx;
+ count 
+-------
+ 10    
+(1 row)
+-1S: end;
+COMMIT
+
+-- (2) repeatable-read
+-1S: begin isolation level repeatable read;
+BEGIN
+-1S: select * from hs_subtrx;
+ a  
+----
+ 1  
+ 2  
+ 3  
+ 4  
+ 7  
+ 8  
+ 5  
+ 6  
+ 9  
+ 10 
+(10 rows)
+-1S: savepoint s1;
+SAVEPOINT
+
+1: insert into hs_subtrx select * from generate_series(11,20);
+INSERT 0 10
+1: delete from hs_subtrx where a <= 10;
+DELETE 10
+1: update hs_subtrx set a = a + 100;
+UPDATE 10
+
+-1S: select * from hs_subtrx;
+ a  
+----
+ 2  
+ 3  
+ 4  
+ 7  
+ 8  
+ 1  
+ 5  
+ 6  
+ 9  
+ 10 
+(10 rows)
+-1S: savepoint s2;
+SAVEPOINT
+-1S: select * from hs_subtrx;
+ a  
+----
+ 2  
+ 3  
+ 4  
+ 7  
+ 8  
+ 1  
+ 5  
+ 6  
+ 9  
+ 10 
+(10 rows)
+-1S: rollback to savepoint s1;
+ROLLBACK
+-1S: select * from hs_subtrx;
+ a  
+----
+ 2  
+ 3  
+ 4  
+ 7  
+ 8  
+ 1  
+ 5  
+ 6  
+ 9  
+ 10 
+(10 rows)
+-1S: end;
+COMMIT
+-1S: select * from hs_subtrx;
+ a   
+-----
+ 114 
+ 115 
+ 120 
+ 118 
+ 113 
+ 112 
+ 116 
+ 119 
+ 111 
+ 117 
+(10 rows)
+
+----------------------------------------------------------------
 -- Various isolation tests that involve AO/CO table.
 ----------------------------------------------------------------
 1: create table hs_ao(a int, id int unique) using ao_row;
