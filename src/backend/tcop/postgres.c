@@ -5756,12 +5756,12 @@ PostgresMain(int argc, char *argv[],
 
 					/* check if the message is from standby QD and is expected */
 					is_hs_dispatch = pq_getmsgint(&input_message, 4);
-					if (is_hs_dispatch == 0 && IS_STANDBY_QE())
+					if (is_hs_dispatch == 0 && IS_HOT_STANDBY_QE())
 						ereport(ERROR,
 								(errcode(ERRCODE_PROTOCOL_VIOLATION),
 								 errmsg("mirror segments can only process MPP protocol messages from standby QD"),
 								 errhint("Exit the current session and re-connect.")));
-					else if (is_hs_dispatch != 0 && !IS_STANDBY_QE())
+					else if (is_hs_dispatch != 0 && !IS_HOT_STANDBY_QE())
 						ereport(ERROR,
 								(errcode(ERRCODE_PROTOCOL_VIOLATION),
 								 errmsg("primary segments can only process MPP protocol messages from primary QD"),
