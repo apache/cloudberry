@@ -691,6 +691,9 @@ CheckAttributeType(const char *attname,
 		return;
 	}
 
+	/* since this function recurses, it could be driven to stack overflow */
+	check_stack_depth();
+
 	if (att_typtype == TYPTYPE_PSEUDO)
 	{
 		/*
