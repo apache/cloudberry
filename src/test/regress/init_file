@@ -87,6 +87,11 @@ m/Distributed randomly/
 m/^NOTICE:.*storage user mapping for .* does not exist for storage server/
 m/^DETAIL:.*storage server of storage user mapping for .* on storage server/
 m/^(?:ERROR|NOTICE):.*storage user mapping for .* already exists for storage server/
+
+# Ignore "terminating connection due to administrator command" as the output is
+# not always echoed to the client.
+m/FATAL:  terminating connection due to administrator command/
+
 -- end_matchignore
 
 -- start_matchsubs
