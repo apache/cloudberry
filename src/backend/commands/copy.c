@@ -3146,9 +3146,14 @@ CopyTo(CopyState cstate)
 					proj[attnum-1] = true;
 				}
 
+				/*
+				 * We specifically pass NULL proj if the table has no column, and leave it
+				 * to the underlying CO AM layer to handle it - the behavior should be same
+				 * as SELECT * which is to choose one column to scan.
+				 */
 				scan = aocs_beginscan(rel, GetActiveSnapshot(),
 									  GetActiveSnapshot(),
-									  NULL /* relationTupleDesc */, proj);
+									  NULL /* relationTupleDesc */, cstate->attnumlist ? proj : NULL);
 
 				while (aocs_getnext(scan, ForwardScanDirection, slot))
 				{

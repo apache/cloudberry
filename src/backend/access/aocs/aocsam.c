@@ -492,14 +492,24 @@ aocs_beginscan_internal(Relation relation,
 	 * needed can incur a noticeable overhead in aocs_getnext. So convert it
 	 * into an array of the attribute numbers of the required columns.
 	 */
-	Assert(proj);
 	scan->proj_atts = palloc(scan->relationTupleDesc->natts * sizeof(int));
 
 	scan->num_proj_atts = 0;
-	for (i = 0; i < scan->relationTupleDesc->natts; i++)
+	if (proj != NULL)
 	{
-		if (proj[i])
-			scan->proj_atts[scan->num_proj_atts++] = i;
+		for (i = 0; i < scan->relationTupleDesc->natts; i++)
+		{
+			if (proj[i])
+				scan->proj_atts[scan->num_proj_atts++] = i;
+		}
+	}
+	else if (relationTupleDesc->natts > 0)
+	{
+		/*
+		 * In some cases no columns are specified.
+		 * We always scan the first column.
+		 */
+		scan->proj_atts[scan->num_proj_atts++] = 0;
 	}
 
 	scan->ds = (DatumStreamRead **) palloc0(sizeof(DatumStreamRead *) * nvp);
@@ -682,6 +692,13 @@ ReadNext:
 		/* If necessary, open next seg */
 		if (scan->cur_seg < 0 || err < 0)
 		{
+			/*
+			 * Bail out early if we do not have any column in the projection.
+			 * Placing here in order to have less impact on the hot path.
+			 */
+			if (scan->num_proj_atts == 0)
+				return false;
+
 			err = open_next_scan_seg(scan);
 			if (err < 0)
 			{
@@ -692,6 +709,9 @@ ReadNext:
 			}
 			scan->cur_seg_row = 0;
 		}
+
+		/* We shouldn't have a 0-column projection as we should've bailed out above */
+		Assert(scan->num_proj_atts > 0);
 
 		Assert(scan->cur_seg >= 0);
 		curseginfo = scan->seginfo[scan->cur_seg];
