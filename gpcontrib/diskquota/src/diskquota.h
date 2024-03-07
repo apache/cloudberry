@@ -290,7 +290,7 @@ extern bool  diskquota_hardlimit;
 extern int      SEGCOUNT;
 extern int      worker_spi_get_extension_version(int *major, int *minor);
 extern void     truncateStringInfo(StringInfo str, int nchars);
-extern List    *get_rel_oid_list(void);
+extern List    *get_rel_oid_list(bool is_init);
 extern int64    calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage, Oid relam);
 extern Relation diskquota_relation_open(Oid relid);
 extern bool     get_rel_name_namespace(Oid relid, Oid *nsOid, char *relname);
