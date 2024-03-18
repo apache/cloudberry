@@ -8968,9 +8968,14 @@ TriggerForSpec:
 				}
 			| /* EMPTY */
 				{
-					ereport(ERROR,
-							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg("Triggers for statements are not yet supported")));
+					/* let creation of triggers go through for pg_restore when upgrading from GP6 to GP7 */
+					if (!gp_enable_statement_trigger)
+					{
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("Triggers for statements are not yet supported")));
+					}
+					$$ = false;
 				}
 		;
 
@@ -8983,9 +8988,14 @@ TriggerForType:
 			ROW										{ $$ = true; }
 			| STATEMENT
 			{
+				/* let creation of triggers go through for pg_restore when upgrading from GP6 to GP7 */
+				if (!gp_enable_statement_trigger)
+				{
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("Triggers for statements are not yet supported")));
+				}
+				$$ = false;
 			}
 		;
 
