@@ -1688,18 +1688,15 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
                      Hash Key: a.x
                      ->  Streaming Partial HashAggregate
                            Group Key: a.x
-                           ->  Merge Full Join
-                                 Merge Cond: (a.x = b.y)
-                                 ->  Sort
-                                       Sort Key: a.x
+                           ->  Hash Full Join
+                                 Hash Cond: (b.y = a.x)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Hash Key: b.y
+                                       ->  Seq Scan on pagg_tab2 b
+                                 ->  Hash
                                        ->  Seq Scan on pagg_tab1 a
-                                 ->  Sort
-                                       Sort Key: b.y
-                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                             Hash Key: b.y
-                                             ->  Seq Scan on pagg_tab2 b
- Optimizer: Pivotal Optimizer (GPORCA) version 3.95.0
-(21 rows)
+ Optimizer: GPORCA
+(18 rows)
 
 SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x ORDER BY 1 NULLS LAST;
  x  | sum  
@@ -1731,18 +1728,15 @@ SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GR
          Group Key: a.x, b.y
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: a.x, b.y
-               ->  Merge Full Join
-                     Merge Cond: (a.x = b.y)
-                     ->  Sort
-                           Sort Key: a.x
-                           ->  Seq Scan on pagg_tab1 a
-                     ->  Sort
-                           Sort Key: b.y
+               ->  Hash Full Join
+                     Hash Cond: (a.x = b.y)
+                     ->  Seq Scan on pagg_tab1 a
+                     ->  Hash
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                  Hash Key: b.y
                                  ->  Seq Scan on pagg_tab2 b
- Optimizer: Pivotal Optimizer (GPORCA)
-(16 rows)
+ Optimizer: GPORCA
+(13 rows)
 
 SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, b.y;
  x  | y  | count 

@@ -2544,6 +2544,7 @@ EXPLAIN SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 
 set optimizer_expand_fulljoin = on;
+select disable_xform('CXformFullOuterJoin2HashJoin');
 EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 reset optimizer_expand_fulljoin;

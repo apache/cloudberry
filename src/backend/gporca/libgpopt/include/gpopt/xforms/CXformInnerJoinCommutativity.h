@@ -1,15 +1,15 @@
 //---------------------------------------------------------------------------
 //	Greenplum Database
-//	Copyright (C) 2011 EMC Corp.
+//	Copyright (C) 2024 VMware by Broadcom
 //
 //	@filename:
-//		CXformJoinCommutativity.h
+//		CXformInnerJoinCommutativity.h
 //
 //	@doc:
-//		Transform join by commutativity
+//		Transform inner join by commutativity
 //---------------------------------------------------------------------------
-#ifndef GPOPT_CXformJoinCommutativity_H
-#define GPOPT_CXformJoinCommutativity_H
+#ifndef GPOPT_CXformInnerJoinCommutativity_H
+#define GPOPT_CXformInnerJoinCommutativity_H
 
 #include "gpos/base.h"
 
@@ -21,36 +21,36 @@ using namespace gpos;
 
 //---------------------------------------------------------------------------
 //	@class:
-//		CXformJoinCommutativity
+//		CXformInnerJoinCommutativity
 //
 //	@doc:
 //		Commutative transformation of join
 //
 //---------------------------------------------------------------------------
-class CXformJoinCommutativity : public CXformExploration
+class CXformInnerJoinCommutativity : public CXformExploration
 {
 private:
 public:
-	CXformJoinCommutativity(const CXformJoinCommutativity &) = delete;
+	CXformInnerJoinCommutativity(const CXformInnerJoinCommutativity &) = delete;
 
 	// ctor
-	explicit CXformJoinCommutativity(CMemoryPool *mp);
+	explicit CXformInnerJoinCommutativity(CMemoryPool *mp);
 
 	// dtor
-	~CXformJoinCommutativity() override = default;
+	~CXformInnerJoinCommutativity() override = default;
 
 	// ident accessors
 	EXformId
 	Exfid() const override
 	{
-		return ExfJoinCommutativity;
+		return ExfInnerJoinCommutativity;
 	}
 
 	// return a string for xform name
 	const CHAR *
 	SzId() const override
 	{
-		return "CXformJoinCommutativity";
+		return "CXformInnerJoinCommutativity";
 	}
 
 	// compatibility function
@@ -68,11 +68,11 @@ public:
 	void Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 				   CExpression *pexpr) const override;
 
-};	// class CXformJoinCommutativity
+};	// class CXformInnerJoinCommutativity
 
 }  // namespace gpopt
 
 
-#endif	// !GPOPT_CXformJoinCommutativity_H
+#endif	// !GPOPT_CXformInnerJoinCommutativity_H
 
 // EOF

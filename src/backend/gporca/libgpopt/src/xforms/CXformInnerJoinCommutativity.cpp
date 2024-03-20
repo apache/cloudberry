@@ -1,15 +1,15 @@
 //---------------------------------------------------------------------------
 //	Greenplum Database
-//	Copyright (C) 2011 EMC Corp.
+//	Copyright (C) 2024 VMware by Broadcom
 //
 //	@filename:
-//		CXformJoinCommutativity.cpp
+//		CXformInnerJoinCommutativity.cpp
 //
 //	@doc:
-//		Implementation of commutativity transform
+//		Implementation of inner join commutativity transform
 //---------------------------------------------------------------------------
 
-#include "gpopt/xforms/CXformJoinCommutativity.h"
+#include "gpopt/xforms/CXformInnerJoinCommutativity.h"
 
 #include "gpos/base.h"
 
@@ -24,13 +24,13 @@ using namespace gpopt;
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformJoinCommutativity::CXformJoinCommutativity
+//		CXformInnerJoinCommutativity::CXformInnerJoinCommutativity
 //
 //	@doc:
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CXformJoinCommutativity::CXformJoinCommutativity(CMemoryPool *mp)
+CXformInnerJoinCommutativity::CXformInnerJoinCommutativity(CMemoryPool *mp)
 	: CXformExploration(
 		  // pattern
 		  GPOS_NEW(mp) CExpression(
@@ -48,20 +48,20 @@ CXformJoinCommutativity::CXformJoinCommutativity(CMemoryPool *mp)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformJoinCommutativity::FCompatible
+//		CXformInnerJoinCommutativity::FCompatible
 //
 //	@doc:
 //		Compatibility function for join commutativity
 //
 //---------------------------------------------------------------------------
 BOOL
-CXformJoinCommutativity::FCompatible(CXform::EXformId exfid)
+CXformInnerJoinCommutativity::FCompatible(CXform::EXformId exfid)
 {
 	BOOL fCompatible = true;
 
 	switch (exfid)
 	{
-		case CXform::ExfJoinCommutativity:
+		case CXform::ExfInnerJoinCommutativity:
 			fCompatible = false;
 			break;
 		default:
@@ -74,15 +74,16 @@ CXformJoinCommutativity::FCompatible(CXform::EXformId exfid)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformJoinCommutativity::Transform
+//		CXformInnerJoinCommutativity::Transform
 //
 //	@doc:
 //		Actual transformation
 //
 //---------------------------------------------------------------------------
 void
-CXformJoinCommutativity::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
-								   CExpression *pexpr) const
+CXformInnerJoinCommutativity::Transform(CXformContext *pxfctxt,
+										CXformResult *pxfres,
+										CExpression *pexpr) const
 {
 	GPOS_ASSERT(nullptr != pxfctxt);
 	GPOS_ASSERT(FPromising(pxfctxt->Pmp(), this, pexpr));

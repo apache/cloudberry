@@ -60,8 +60,8 @@ CXformFactoryTest::EresUnittest_Basic()
 	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfGbAgg2HashAgg);
 	GPOS_UNITTEST_ASSERT(CXform::ExfGbAgg2HashAgg == pxf->Exfid());
 
-	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfJoinCommutativity);
-	GPOS_UNITTEST_ASSERT(CXform::ExfJoinCommutativity == pxf->Exfid());
+	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfInnerJoinCommutativity);
+	GPOS_UNITTEST_ASSERT(CXform::ExfInnerJoinCommutativity == pxf->Exfid());
 
 	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfJoinAssociativity);
 	GPOS_UNITTEST_ASSERT(CXform::ExfJoinAssociativity == pxf->Exfid());
