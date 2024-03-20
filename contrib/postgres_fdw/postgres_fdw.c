@@ -6872,6 +6872,29 @@ add_foreign_final_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	fpextra->count_est = extra->count_est;
 	fpextra->offset_est = extra->offset_est;
 
+	/* If mpp_execute = 'all segments', we need to adjust origin count_est and offset_est. */
+	if (final_rel->exec_location == FTEXECLOCATION_ALL_SEGMENTS && fpextra->offset_est > 0)
+	{
+		if (fpextra->count_est > 0)
+		{
+			/*
+			 * When both OFFSET and LIMIT clause are specified,
+			 * we need to fetch tuples from 0 to limitOffset + limitCount from remote servers.
+			 */
+			fpextra->count_est += fpextra->offset_est;
+		}
+		else
+		{
+			/*
+			 * When only OFFSET clasue is specified,
+			 * we need to fetch all tuples from remote servers.
+			 */
+			fpextra->count_est = 0;
+		}
+
+		fpextra->offset_est = 0;
+	}
+
 	/*
 	 * Estimate the costs of performing the final sort and the LIMIT
 	 * restriction remotely.  If has_final_sort is false, we wouldn't need to
