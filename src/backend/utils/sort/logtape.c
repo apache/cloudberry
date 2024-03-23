@@ -1279,15 +1279,5 @@ LogicalTapeTell(LogicalTapeSet *lts, int tapenum,
 long
 LogicalTapeSetBlocks(LogicalTapeSet *lts)
 {
-#if 0
-#ifdef USE_ASSERT_CHECKING
-	for (int i = 0; i < lts->nTapes; i++)
-	{
-		LogicalTape *lt = &lts->tapes[i];
-
-		Assert(!lt->writing || lt->buffer == NULL);
-	}
-#endif
-#endif
 	return lts->nBlocksWritten - lts->nHoleBlocks;
 }
