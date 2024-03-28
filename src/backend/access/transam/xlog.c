@@ -161,7 +161,14 @@ bool		track_wal_io_timing = false;
 int         FileEncryptionEnabled = false;
 
 /* GPDB specific */
-bool gp_pause_on_restore_point_replay = false;
+char *gp_pause_on_restore_point_replay = "";
+
+/*
+ * GPDB: Have we reached a specific continuous recovery target? We set this to
+ * true if WAL replay has found a restore point matching the GPDB-specific GUC
+ * gp_pause_on_restore_point_replay and a promotion has been requested.
+ */
+static bool reachedContinuousRecoveryTarget = false;
 
 #ifdef WAL_DEBUG
 bool		XLOG_DEBUG = false;
@@ -8556,14 +8563,7 @@ xlog_redo(XLogReaderState *record)
 	}
 	else if (info == XLOG_RESTORE_POINT)
 	{
-		/*
-		 * GPDB: Restore point records can act as a point of
-		 * synchronization to ensure cluster-wide consistency during WAL
-		 * replay. WAL replay is paused at each restore point until it is
-		 * explicitly resumed.
-		 */
-		if (gp_pause_on_restore_point_replay)
-			SetRecoveryPause(true);
+		/* nothing to do here */
 	}
 	else if (info == XLOG_FPI || info == XLOG_FPI_FOR_HINT)
 	{
