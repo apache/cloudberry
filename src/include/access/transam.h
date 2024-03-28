@@ -301,7 +301,7 @@ extern int xid_stop_limit;
 extern int xid_warn_limit;
 
 /* GPDB-specific */
-extern bool gp_pause_on_restore_point_replay;
+extern char *gp_pause_on_restore_point_replay;
 
 /* hook for plugins to assign new relfilenode */
 typedef Oid (*NewSegRelfilenode_assign_hook_type)(void);
