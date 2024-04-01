@@ -248,7 +248,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	GpExecIdentity exec_identity;
 	bool		shouldDispatch;
 	bool		needDtx;
-	List 		*toplevelOidCache = NIL;
+	List 		*volatile toplevelOidCache = NIL;
 
 	/* sanity checks: queryDesc must not be started already */
 	Assert(queryDesc != NULL);
