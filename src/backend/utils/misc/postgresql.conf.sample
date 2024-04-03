@@ -547,7 +547,7 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 					# their durations, > 0 logs only
 					# actions running at least this number
 					# of milliseconds.
-#log_checkpoints = off
+#log_checkpoints = on
 #log_connections = off
 #log_disconnections = off
 #log_duration = off
