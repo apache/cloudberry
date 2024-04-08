@@ -293,7 +293,6 @@ public:
 		return gpos::ulong_max;
 	}
 
-#ifdef GPOS_DEBUG
 	// check if array is sorted
 	BOOL
 	IsSorted(CompareFn compare_func) const
@@ -308,7 +307,6 @@ public:
 
 		return true;
 	}
-#endif	// GPOS_DEBUG
 
 	// accessor for n-th element
 	T *

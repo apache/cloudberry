@@ -65,17 +65,17 @@ CPointTest::EresUnittest_CPointInt4()
 	CPoint *point1 = CTestUtils::PpointInt4(mp, 1);
 	CPoint *point2 = CTestUtils::PpointInt4(mp, 2);
 
-	GPOS_RTL_ASSERT_MSG(point1->Equals(point1), "1 == 1");
-	GPOS_RTL_ASSERT_MSG(point1->IsLessThan(point2), "1 < 2");
-	GPOS_RTL_ASSERT_MSG(point2->IsGreaterThan(point1), "2 > 1");
-	GPOS_RTL_ASSERT_MSG(point1->IsLessThanOrEqual(point2), "1 <= 2");
-	GPOS_RTL_ASSERT_MSG(point2->IsGreaterThanOrEqual(point2), "2 >= 2");
+	GPOS_UNITTEST_ASSERT_MSG(point1->Equals(point1), "1 == 1");
+	GPOS_UNITTEST_ASSERT_MSG(point1->IsLessThan(point2), "1 < 2");
+	GPOS_UNITTEST_ASSERT_MSG(point2->IsGreaterThan(point1), "2 > 1");
+	GPOS_UNITTEST_ASSERT_MSG(point1->IsLessThanOrEqual(point2), "1 <= 2");
+	GPOS_UNITTEST_ASSERT_MSG(point2->IsGreaterThanOrEqual(point2), "2 >= 2");
 
 	CDouble dDistance = point2->Distance(point1);
 
 	// should be 1.0
-	GPOS_RTL_ASSERT_MSG(0.99 < dDistance && dDistance < 1.01,
-						"incorrect distance calculation");
+	GPOS_UNITTEST_ASSERT_MSG(0.99 < dDistance && dDistance < 1.01,
+							 "incorrect distance calculation");
 
 	point1->Release();
 	point2->Release();
@@ -96,11 +96,12 @@ CPointTest::EresUnittest_CPointBool()
 	CPoint *point2 = CTestUtils::PpointBool(mp, false);
 
 	// true == true
-	GPOS_RTL_ASSERT_MSG(point1->Equals(point1), "true must be equal to true");
+	GPOS_UNITTEST_ASSERT_MSG(point1->Equals(point1),
+							 "true must be equal to true");
 
 	// true != false
-	GPOS_RTL_ASSERT_MSG(point1->IsNotEqual(point2),
-						"true must not be equal to false");
+	GPOS_UNITTEST_ASSERT_MSG(point1->IsNotEqual(point2),
+							 "true must not be equal to false");
 
 	point1->Release();
 	point2->Release();

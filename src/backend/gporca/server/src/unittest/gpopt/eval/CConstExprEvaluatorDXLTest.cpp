@@ -141,8 +141,8 @@ CConstExprEvaluatorDXLTest::EresUnittest_NestedSubquery()
 	CExpression *pexprSelect =
 		CTestUtils::PexprLogicalSelectWithConstAnySubquery(testsetup.Pmp());
 	CExpression *pexprPredicate = (*pexprSelect)[1];
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny ==
-				pexprPredicate->Pop()->Eopid());
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny ==
+						 pexprPredicate->Pop()->Eopid());
 
 	// this call should raise an exception
 	CExpression *pexprResult = pceeval->PexprEval(pexprPredicate);

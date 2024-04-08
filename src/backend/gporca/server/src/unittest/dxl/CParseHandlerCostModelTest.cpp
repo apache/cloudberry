@@ -116,14 +116,14 @@ Eres_ParseCalibratedCostModel()
 
 	ICostModel *pcm = pphcm->GetCostModel();
 
-	GPOS_RTL_ASSERT(ICostModel::EcmtGPDBCalibrated == pcm->Ecmt());
-	GPOS_RTL_ASSERT(3 == pcm->UlHosts());
+	GPOS_UNITTEST_ASSERT(ICostModel::EcmtGPDBCalibrated == pcm->Ecmt());
+	GPOS_UNITTEST_ASSERT(3 == pcm->UlHosts());
 
 	CAutoRef<CCostModelParamsGPDB> pcpExpected(GPOS_NEW(mp)
 												   CCostModelParamsGPDB(mp));
 	pcpExpected->SetParam(CCostModelParamsGPDB::EcpNLJFactor, 1024.0, 1023.0,
 						  1025.0);
-	GPOS_RTL_ASSERT(pcpExpected->Equals(pcm->GetCostModelParams()));
+	GPOS_UNITTEST_ASSERT(pcpExpected->Equals(pcm->GetCostModelParams()));
 
 
 	return gpos::GPOS_OK;
@@ -156,7 +156,7 @@ Eres_SerializeCalibratedCostModel()
 	CCostModelConfigSerializer cmcSerializer(apcm.Value());
 	cmcSerializer.Serialize(xml_serializer);
 
-	GPOS_RTL_ASSERT(apwsExpected->Equals(&wsActual));
+	GPOS_UNITTEST_ASSERT(apwsExpected->Equals(&wsActual));
 
 	return gpos::GPOS_OK;
 }

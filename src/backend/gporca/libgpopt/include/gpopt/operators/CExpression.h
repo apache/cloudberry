@@ -251,7 +251,6 @@ public:
 	// compare entire expression rooted here
 	BOOL Matches(CExpression *pexpr) const;
 
-#ifdef GPOS_DEBUG
 	// match against given pattern
 	BOOL FMatchPattern(CExpression *pexpr) const;
 
@@ -264,7 +263,6 @@ public:
 	// debug print; for interactive debugging sessions only
 	// prints expression properties as well
 	void DbgPrintWithProperties() const;
-#endif	// GPOS_DEBUG
 
 	// check if the expression satisfies given required properties
 	BOOL FValidPlan(const CReqdPropPlan *prpp, CDrvdPropCtxtPlan *pdpctxtplan);

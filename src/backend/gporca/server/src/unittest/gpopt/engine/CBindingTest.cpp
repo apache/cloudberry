@@ -130,7 +130,7 @@ CBindingTest::EresUnittest_Basic()
 
 	// extract plan
 	CExpression *pexprPlan = eng.PexprExtractPlan();
-	GPOS_ASSERT(nullptr != pexprPlan);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprPlan);
 
 	UlongPtrArray *number_of_bindings = eng.GetNumberOfBindings();
 	ULONG search_stage = 0;

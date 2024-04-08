@@ -59,8 +59,8 @@ CTaskLocalStorageTest::EresUnittest_Basics()
 	ITask::Self()->GetTls().Store(&tobj);
 
 	// assert identiy when looking it up
-	GPOS_ASSERT(&tobj ==
-				ITask::Self()->GetTls().Get(CTaskLocalStorage::EtlsidxTest));
+	GPOS_UNITTEST_ASSERT(
+		&tobj == ITask::Self()->GetTls().Get(CTaskLocalStorage::EtlsidxTest));
 
 	// clean out TLS
 	ITask::Self()->GetTls().Remove(&tobj);
@@ -80,19 +80,19 @@ CTaskLocalStorageTest::EresUnittest_Basics()
 GPOS_RESULT
 CTaskLocalStorageTest::EresUnittest_TraceFlags()
 {
-	GPOS_ASSERT(!GPOS_FTRACE(EtraceTest));
+	GPOS_UNITTEST_ASSERT(!GPOS_FTRACE(EtraceTest));
 
 	GPOS_SET_TRACE(EtraceTest);
 
-	GPOS_ASSERT(GPOS_FTRACE(EtraceTest));
+	GPOS_UNITTEST_ASSERT(GPOS_FTRACE(EtraceTest));
 
 	// test auto trace flag
 	{
 		CAutoTraceFlag atf(EtraceTest, false /*value*/);
 
-		GPOS_ASSERT(!GPOS_FTRACE(EtraceTest));
+		GPOS_UNITTEST_ASSERT(!GPOS_FTRACE(EtraceTest));
 	}
-	GPOS_ASSERT(GPOS_FTRACE(EtraceTest));
+	GPOS_UNITTEST_ASSERT(GPOS_FTRACE(EtraceTest));
 
 #ifdef GPOS_DEBUG
 	// test trace flag iterator
@@ -100,14 +100,14 @@ CTaskLocalStorageTest::EresUnittest_TraceFlags()
 	BOOL fFound = false;
 	while (tfi.Advance())
 	{
-		GPOS_ASSERT_IMP(!fFound, EtraceTest == tfi.Bit());
+		GPOS_UNITTEST_ASSERT_IMP(!fFound, EtraceTest == tfi.Bit());
 		fFound = true;
 	}
 #endif	// GPOS_DEBUG
 
-	GPOS_ASSERT(GPOS_FTRACE(EtraceTest));
+	GPOS_UNITTEST_ASSERT(GPOS_FTRACE(EtraceTest));
 	GPOS_UNSET_TRACE(EtraceTest);
-	GPOS_ASSERT(!GPOS_FTRACE(EtraceTest));
+	GPOS_UNITTEST_ASSERT(!GPOS_FTRACE(EtraceTest));
 
 	return GPOS_OK;
 }

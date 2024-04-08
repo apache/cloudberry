@@ -60,7 +60,7 @@ CSyncListTest::EresUnittest_Basics()
 	{
 		list.Push(&rgelem[i]);
 
-		GPOS_ASSERT(GPOS_OK == list.Find(&rgelem[i]));
+		GPOS_UNITTEST_ASSERT(GPOS_OK == list.Find(&rgelem[i]));
 	}
 
 #ifdef GPOS_DEBUG
@@ -82,16 +82,16 @@ CSyncListTest::EresUnittest_Basics()
 	{
 		SElem *pe GPOS_ASSERTS_ONLY = list.Pop();
 
-		GPOS_ASSERT(pe == &rgelem[GPOS_ARRAY_SIZE(rgelem) - i - 1]);
+		GPOS_UNITTEST_ASSERT(pe == &rgelem[GPOS_ARRAY_SIZE(rgelem) - i - 1]);
 	}
-	GPOS_ASSERT(nullptr == list.Pop());
+	GPOS_UNITTEST_ASSERT(nullptr == list.Pop());
 
 	// insert all elements in reverse order
 	for (ULONG i = GPOS_ARRAY_SIZE(rgelem); i > 0; i--)
 	{
 		list.Push(&rgelem[i - 1]);
 
-		GPOS_ASSERT(GPOS_OK == list.Find(&rgelem[i - 1]));
+		GPOS_UNITTEST_ASSERT(GPOS_OK == list.Find(&rgelem[i - 1]));
 	}
 
 	// pop elements until empty
@@ -99,9 +99,9 @@ CSyncListTest::EresUnittest_Basics()
 	{
 		SElem *pe GPOS_ASSERTS_ONLY = list.Pop();
 
-		GPOS_ASSERT(pe == &rgelem[i]);
+		GPOS_UNITTEST_ASSERT(pe == &rgelem[i]);
 	}
-	GPOS_ASSERT(nullptr == list.Pop());
+	GPOS_UNITTEST_ASSERT(nullptr == list.Pop());
 
 	return GPOS_OK;
 }

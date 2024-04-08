@@ -107,15 +107,13 @@ CStateMachineTest::EresUnittest_Basics()
 	CTestMachine *ptm = GPOS_NEW(mp) CTestMachine;
 	CRandom rand;
 	EEvents rgev[] = {eeOne, eeTwo, eeThree};
-#ifdef GPOS_DEBUG
 	// states are only used for assertions
 	EStates rgst[] = {esOne, esTwo, esThree};
-#endif	// GPOS_DEBUG
 
 	EStates es;
 	// go into state One to start with
 	(void) ptm->Psm()->FTransition(eeOne, es);
-	GPOS_ASSERT(esOne == es);
+	GPOS_UNITTEST_ASSERT(esOne == es);
 
 	for (ULONG i = 0; i < 100; i++)
 	{
@@ -124,8 +122,8 @@ CStateMachineTest::EresUnittest_Basics()
 
 		BOOL fCheck GPOS_ASSERTS_ONLY = ptm->Psm()->FTransition(rgev[ul], es);
 
-		GPOS_ASSERT_IFF(eeThree != rgev[ul], fCheck);
-		GPOS_ASSERT_IFF(eeThree != rgev[ul], rgst[ul] == es);
+		GPOS_UNITTEST_ASSERT_IFF(eeThree != rgev[ul], fCheck);
+		GPOS_UNITTEST_ASSERT_IFF(eeThree != rgev[ul], rgst[ul] == es);
 	}
 
 #ifdef GPOS_DEBUG
@@ -139,7 +137,7 @@ CStateMachineTest::EresUnittest_Basics()
 
 	GPOS_TRACE(str.GetBuffer());
 
-	GPOS_ASSERT(!ptm->Psm()->FReachable(mp));
+	GPOS_UNITTEST_ASSERT(!ptm->Psm()->FReachable(mp));
 #endif	// GPOS_DEBUG
 	GPOS_DELETE(ptm);
 

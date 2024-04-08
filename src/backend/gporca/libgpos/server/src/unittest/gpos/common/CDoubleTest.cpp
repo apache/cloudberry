@@ -69,15 +69,15 @@ CDoubleTest::EresUnittest_Arithmetic()
 	CDouble fpPow(fp1.Pow(fp2));
 	CDouble fpLog2(fp2.Log2());
 
-	GPOS_RTL_ASSERT(fp1.Get() + fp2.Get() == fpAdd.Get());
-	GPOS_RTL_ASSERT(fpAdd.Get() - fp2.Get() == fpSubtract.Get());
-	GPOS_RTL_ASSERT(fp1.Get() == fpSubtract.Get());
-	GPOS_RTL_ASSERT(fp1.Get() * fp2.Get() == fpMultiply.Get());
-	GPOS_RTL_ASSERT(fpMultiply.Get() / fp2.Get() == fpDivide.Get());
-	GPOS_RTL_ASSERT(fp1.Get() == fpDivide.Get());
-	GPOS_RTL_ASSERT(fp1.Get() == fpAbs);
-	GPOS_RTL_ASSERT(1.0 == fpCeil - fpFloor);
-	GPOS_RTL_ASSERT(fpLog2 > 1.0 && fpLog2 < 2.0);
+	GPOS_UNITTEST_ASSERT(fp1.Get() + fp2.Get() == fpAdd.Get());
+	GPOS_UNITTEST_ASSERT(fpAdd.Get() - fp2.Get() == fpSubtract.Get());
+	GPOS_UNITTEST_ASSERT(fp1.Get() == fpSubtract.Get());
+	GPOS_UNITTEST_ASSERT(fp1.Get() * fp2.Get() == fpMultiply.Get());
+	GPOS_UNITTEST_ASSERT(fpMultiply.Get() / fp2.Get() == fpDivide.Get());
+	GPOS_UNITTEST_ASSERT(fp1.Get() == fpDivide.Get());
+	GPOS_UNITTEST_ASSERT(fp1.Get() == fpAbs);
+	GPOS_UNITTEST_ASSERT(1.0 == fpCeil - fpFloor);
+	GPOS_UNITTEST_ASSERT(fpLog2 > 1.0 && fpLog2 < 2.0);
 
 	CDouble fp3(10.0);
 	fp3 = fp1 + fp2;
@@ -119,14 +119,14 @@ CDoubleTest::EresUnittest_Bool()
 	CDouble fp2(3.5);
 	CDouble fp3(3.5);
 
-	GPOS_ASSERT(fp1 < fp2);
-	GPOS_ASSERT(fp1 <= fp2);
-	GPOS_ASSERT(fp1 != fp2);
-	GPOS_ASSERT(fp2 > fp1);
-	GPOS_ASSERT(fp2 >= fp1);
-	GPOS_ASSERT(fp2 == fp3);
-	GPOS_ASSERT(fp2 >= fp3);
-	GPOS_ASSERT(fp2 <= fp3);
+	GPOS_UNITTEST_ASSERT(fp1 < fp2);
+	GPOS_UNITTEST_ASSERT(fp1 <= fp2);
+	GPOS_UNITTEST_ASSERT(fp1 != fp2);
+	GPOS_UNITTEST_ASSERT(fp2 > fp1);
+	GPOS_UNITTEST_ASSERT(fp2 >= fp1);
+	GPOS_UNITTEST_ASSERT(fp2 == fp3);
+	GPOS_UNITTEST_ASSERT(fp2 >= fp3);
+	GPOS_UNITTEST_ASSERT(fp2 <= fp3);
 
 	CAutoTrace trace(mp);
 	IOstream &os(trace.Os());
@@ -196,14 +196,14 @@ CDoubleTest::EresUnittest_Limits()
 	CAutoTrace trace(mp);
 	IOstream &os(trace.Os());
 
-	GPOS_ASSERT(fpZero == fpZero / fpInf);
-	GPOS_ASSERT(fpZero == fpZero / 2);
-	GPOS_ASSERT(fpInf == fpInf / fpZero);
-	GPOS_ASSERT(fpInf == fpInf * fpInf);
-	GPOS_ASSERT(fpInf == fpInf * 2);
-	GPOS_ASSERT(1.0 == fpInf * fpZero);
-	GPOS_ASSERT(1.0 == (fpInf * fpZero) * (fpInf * fpZero));
-	GPOS_ASSERT(1.0 == (fpInf * fpZero) / (fpInf * fpZero));
+	GPOS_UNITTEST_ASSERT(fpZero == fpZero / fpInf);
+	GPOS_UNITTEST_ASSERT(fpZero == fpZero / 2);
+	GPOS_UNITTEST_ASSERT(fpInf == fpInf / fpZero);
+	GPOS_UNITTEST_ASSERT(fpInf == fpInf * fpInf);
+	GPOS_UNITTEST_ASSERT(fpInf == fpInf * 2);
+	GPOS_UNITTEST_ASSERT(1.0 == fpInf * fpZero);
+	GPOS_UNITTEST_ASSERT(1.0 == (fpInf * fpZero) * (fpInf * fpZero));
+	GPOS_UNITTEST_ASSERT(1.0 == (fpInf * fpZero) / (fpInf * fpZero));
 
 	os << "Limits:" << std::endl
 	   << "zero = " << fpZero << std::endl

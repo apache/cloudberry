@@ -108,7 +108,7 @@ CExceptionTest::EresUnittest_StackOverflow()
 	// infinite recursion
 	CExceptionTest::EresUnittest_StackOverflow();
 
-	GPOS_ASSERT(!"Must not return from recursion");
+	GPOS_UNITTEST_ASSERT(!"Must not return from recursion");
 	GPOS_TRACE_FORMAT("%s", szTestData[0]);
 
 	return GPOS_FAILED;
@@ -143,7 +143,7 @@ CExceptionTest::EresUnittest_AdditionOverflow()
 	// addition that throws overflow exception
 	(void) gpos::Add(gpos::ullong_max, 1);
 
-	GPOS_ASSERT(!"Must not add numbers successfully");
+	GPOS_UNITTEST_ASSERT(!"Must not add numbers successfully");
 
 	return GPOS_FAILED;
 }
@@ -177,7 +177,7 @@ CExceptionTest::EresUnittest_MultiplicationOverflow()
 	// multiplication that throws overflow exception
 	(void) gpos::Multiply(gpos::ullong_max - 4, 2);
 
-	GPOS_ASSERT(!"Must not multiply numbers successfully");
+	GPOS_UNITTEST_ASSERT(!"Must not multiply numbers successfully");
 
 	return GPOS_FAILED;
 }
@@ -225,7 +225,7 @@ CExceptionTest::EresUnittest_BasicRethrow()
 GPOS_RESULT
 CExceptionTest::EresUnittest_Assert()
 {
-	GPOS_ASSERT(2 * 2 == 5);
+	GPOS_UNITTEST_ASSERT(2 * 2 == 5);
 
 	return GPOS_FAILED;
 }
@@ -243,12 +243,12 @@ GPOS_RESULT
 CExceptionTest::EresUnittest_AssertImp()
 {
 	// valid implications
-	GPOS_ASSERT_IMP(true, true);
-	GPOS_ASSERT_IMP(false, false);
-	GPOS_ASSERT_IMP(false, true);
+	GPOS_UNITTEST_ASSERT_IMP(true, true);
+	GPOS_UNITTEST_ASSERT_IMP(false, false);
+	GPOS_UNITTEST_ASSERT_IMP(false, true);
 
 	// incorrect implication
-	GPOS_ASSERT_IMP(true, false);
+	GPOS_UNITTEST_ASSERT_IMP(true, false);
 
 	return GPOS_FAILED;
 }
@@ -266,11 +266,11 @@ GPOS_RESULT
 CExceptionTest::EresUnittest_AssertIffLHS()
 {
 	// valid implications
-	GPOS_ASSERT_IFF(true, true);
-	GPOS_ASSERT_IFF(false, false);
+	GPOS_UNITTEST_ASSERT_IFF(true, true);
+	GPOS_UNITTEST_ASSERT_IFF(false, false);
 
 	// failed assertion
-	GPOS_ASSERT_IFF(false, true);
+	GPOS_UNITTEST_ASSERT_IFF(false, true);
 
 	return GPOS_FAILED;
 }
@@ -288,11 +288,11 @@ GPOS_RESULT
 CExceptionTest::EresUnittest_AssertIffRHS()
 {
 	// valid implications
-	GPOS_ASSERT_IFF(true, true);
-	GPOS_ASSERT_IFF(false, false);
+	GPOS_UNITTEST_ASSERT_IFF(true, true);
+	GPOS_UNITTEST_ASSERT_IFF(false, false);
 
 	// failed assertion
-	GPOS_ASSERT_IFF(true, false);
+	GPOS_UNITTEST_ASSERT_IFF(true, false);
 
 	return GPOS_FAILED;
 }

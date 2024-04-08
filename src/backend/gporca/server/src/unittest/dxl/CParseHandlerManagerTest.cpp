@@ -80,22 +80,25 @@ CParseHandlerManagerTest::EresUnittest_Basic()
 		GPOS_NEW(mp) CParseHandlerHashJoin(mp, parse_handler_mgr, pphPlan);
 
 	parse_handler_mgr->ActivateParseHandler(pphPlan);
-	GPOS_ASSERT(pphPlan == parse_handler_mgr->GetCurrentParseHandler());
-	GPOS_ASSERT(pphPlan == parser->getContentHandler());
+	GPOS_UNITTEST_ASSERT(pphPlan ==
+						 parse_handler_mgr->GetCurrentParseHandler());
+	GPOS_UNITTEST_ASSERT(pphPlan == parser->getContentHandler());
 
 	parse_handler_mgr->ActivateParseHandler(pphHJ);
-	GPOS_ASSERT(pphHJ == parse_handler_mgr->GetCurrentParseHandler());
-	GPOS_ASSERT(pphHJ == parser->getContentHandler());
+	GPOS_UNITTEST_ASSERT(pphHJ == parse_handler_mgr->GetCurrentParseHandler());
+	GPOS_UNITTEST_ASSERT(pphHJ == parser->getContentHandler());
 
 
 	parse_handler_mgr->DeactivateHandler();
-	GPOS_ASSERT(pphPlan == parse_handler_mgr->GetCurrentParseHandler());
-	GPOS_ASSERT(pphPlan == parser->getContentHandler());
+	GPOS_UNITTEST_ASSERT(pphPlan ==
+						 parse_handler_mgr->GetCurrentParseHandler());
+	GPOS_UNITTEST_ASSERT(pphPlan == parser->getContentHandler());
 
 	parse_handler_mgr->DeactivateHandler();
 	// no more parse handlers
-	GPOS_ASSERT(nullptr == parse_handler_mgr->GetCurrentParseHandler());
-	GPOS_ASSERT(nullptr == parser->getContentHandler());
+	GPOS_UNITTEST_ASSERT(nullptr ==
+						 parse_handler_mgr->GetCurrentParseHandler());
+	GPOS_UNITTEST_ASSERT(nullptr == parser->getContentHandler());
 
 	// cleanup
 	GPOS_DELETE(parse_handler_mgr);

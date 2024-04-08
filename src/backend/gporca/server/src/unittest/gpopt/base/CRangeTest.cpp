@@ -291,30 +291,31 @@ CRangeTest::TestRangeRelationship(CMemoryPool *mp, CRange *prange1,
 								  CRange *prange2, CRange *prange3,
 								  CRange *prange4, CRange *prange5)
 {
-	GPOS_ASSERT_MSG(!prange4->FDisjointLeft(prange5),
-					"[-10, 10) does not end before [0, 0]");
-	GPOS_ASSERT_MSG(prange4->FDisjointLeft(prange1),
-					"[-10, 10) ends before [10, inf)");
+	GPOS_UNITTEST_ASSERT_MSG(!prange4->FDisjointLeft(prange5),
+							 "[-10, 10) does not end before [0, 0]");
+	GPOS_UNITTEST_ASSERT_MSG(prange4->FDisjointLeft(prange1),
+							 "[-10, 10) ends before [10, inf)");
 
-	GPOS_ASSERT_MSG(!prange1->Contains(prange2),
-					"[10, inf) does not contain (-inf, 20]");
-	GPOS_ASSERT_MSG(prange2->Contains(prange4),
-					"(-inf, 20] contains [-10, 10)");
-	GPOS_ASSERT_MSG(prange3->Contains(prange5), "(-20, 0] contains [0, 0]");
+	GPOS_UNITTEST_ASSERT_MSG(!prange1->Contains(prange2),
+							 "[10, inf) does not contain (-inf, 20]");
+	GPOS_UNITTEST_ASSERT_MSG(prange2->Contains(prange4),
+							 "(-inf, 20] contains [-10, 10)");
+	GPOS_UNITTEST_ASSERT_MSG(prange3->Contains(prange5),
+							 "(-20, 0] contains [0, 0]");
 
-	GPOS_ASSERT_MSG(!prange3->FOverlapsLeft(prange2),
-					"(-20, 0] does not overlap beginning (-inf, 20]");
-	GPOS_ASSERT_MSG(prange2->FOverlapsLeft(prange1),
-					"(-inf, 20] overlaps beginning [10, inf)");
-	GPOS_ASSERT_MSG(prange3->FOverlapsLeft(prange4),
-					"(-20, 0] overlaps beginning [-10, 10)");
+	GPOS_UNITTEST_ASSERT_MSG(!prange3->FOverlapsLeft(prange2),
+							 "(-20, 0] does not overlap beginning (-inf, 20]");
+	GPOS_UNITTEST_ASSERT_MSG(prange2->FOverlapsLeft(prange1),
+							 "(-inf, 20] overlaps beginning [10, inf)");
+	GPOS_UNITTEST_ASSERT_MSG(prange3->FOverlapsLeft(prange4),
+							 "(-20, 0] overlaps beginning [-10, 10)");
 
-	GPOS_ASSERT_MSG(!prange2->FOverlapsRight(prange3),
-					"(-inf, 20] does not overlap end (-20,0]");
-	GPOS_ASSERT_MSG(prange1->FOverlapsRight(prange2),
-					"[10, inf) overlaps end (-inf, 20)");
-	GPOS_ASSERT_MSG(prange4->FOverlapsRight(prange3),
-					"[-10, 10) overlaps end (-20, 0]");
+	GPOS_UNITTEST_ASSERT_MSG(!prange2->FOverlapsRight(prange3),
+							 "(-inf, 20] does not overlap end (-20,0]");
+	GPOS_UNITTEST_ASSERT_MSG(prange1->FOverlapsRight(prange2),
+							 "[10, inf) overlaps end (-inf, 20)");
+	GPOS_UNITTEST_ASSERT_MSG(prange4->FOverlapsRight(prange3),
+							 "[-10, 10) overlaps end (-20, 0]");
 
 	CExpression *pexprGet = CTestUtils::PexprLogicalGet(mp);
 	CColRefSet *pcrs = pexprGet->DeriveOutputColumns();

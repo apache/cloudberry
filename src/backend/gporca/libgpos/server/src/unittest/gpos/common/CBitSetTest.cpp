@@ -64,17 +64,17 @@ CBitSetTest::EresUnittest_Basics()
 		// forces addition of new link
 		pbs->ExchangeSet(i * vector_size);
 	}
-	GPOS_ASSERT(cInserts / 2 == pbs->Size());
+	GPOS_UNITTEST_ASSERT(cInserts / 2 == pbs->Size());
 
 	for (ULONG i = 1; i < cInserts; i += 2)
 	{
 		// new link between existing links
 		pbs->ExchangeSet(i * vector_size);
 	}
-	GPOS_ASSERT(cInserts == pbs->Size());
+	GPOS_UNITTEST_ASSERT(cInserts == pbs->Size());
 
 	CBitSet *pbsCopy = GPOS_NEW(mp) CBitSet(mp, *pbs);
-	GPOS_ASSERT(pbsCopy->Equals(pbs));
+	GPOS_UNITTEST_ASSERT(pbsCopy->Equals(pbs));
 
 	// delete old bitset to make sure we're not accidentally
 	// using any of its memory
@@ -82,7 +82,7 @@ CBitSetTest::EresUnittest_Basics()
 
 	for (ULONG i = 0; i < cInserts; i++)
 	{
-		GPOS_ASSERT(pbsCopy->Get(i * vector_size));
+		GPOS_UNITTEST_ASSERT(pbsCopy->Get(i * vector_size));
 	}
 
 	CWStringDynamic str(mp);
@@ -116,15 +116,15 @@ CBitSetTest::EresUnittest_Removal()
 	CBitSet *pbs = GPOS_NEW(mp) CBitSet(mp, vector_size);
 	CBitSet *pbsEmpty = GPOS_NEW(mp) CBitSet(mp, vector_size);
 
-	GPOS_ASSERT(pbs->Equals(pbsEmpty));
-	GPOS_ASSERT(pbsEmpty->Equals(pbs));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbsEmpty));
+	GPOS_UNITTEST_ASSERT(pbsEmpty->Equals(pbs));
 
 	ULONG cInserts = 10;
 	for (ULONG i = 0; i < cInserts; i++)
 	{
 		pbs->ExchangeSet(i * vector_size);
 
-		GPOS_ASSERT(i + 1 == pbs->Size());
+		GPOS_UNITTEST_ASSERT(i + 1 == pbs->Size());
 	}
 
 	for (ULONG i = 0; i < cInserts; i++)
@@ -132,11 +132,11 @@ CBitSetTest::EresUnittest_Removal()
 		// cleans up empty links
 		pbs->ExchangeClear(i * vector_size);
 
-		GPOS_ASSERT(cInserts - i - 1 == pbs->Size());
+		GPOS_UNITTEST_ASSERT(cInserts - i - 1 == pbs->Size());
 	}
 
-	GPOS_ASSERT(pbs->Equals(pbsEmpty));
-	GPOS_ASSERT(pbsEmpty->Equals(pbs));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbsEmpty));
+	GPOS_UNITTEST_ASSERT(pbsEmpty->Equals(pbs));
 
 	pbs->Release();
 	pbsEmpty->Release();
@@ -177,28 +177,28 @@ CBitSetTest::EresUnittest_SetOps()
 	CBitSet *pbs = GPOS_NEW(mp) CBitSet(mp, vector_size);
 
 	pbs->Union(pbs1);
-	GPOS_ASSERT(pbs->Equals(pbs1));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbs1));
 
 	pbs->Intersection(pbs1);
-	GPOS_ASSERT(pbs->Equals(pbs1));
-	GPOS_ASSERT(pbs->Equals(pbs));
-	GPOS_ASSERT(pbs1->Equals(pbs1));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbs1));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbs));
+	GPOS_UNITTEST_ASSERT(pbs1->Equals(pbs1));
 
 	pbs->Union(pbs2);
-	GPOS_ASSERT(!pbs->Equals(pbs1) && !pbs->Equals(pbs2));
-	GPOS_ASSERT(pbs->ContainsAll(pbs1) && pbs->ContainsAll(pbs2));
+	GPOS_UNITTEST_ASSERT(!pbs->Equals(pbs1) && !pbs->Equals(pbs2));
+	GPOS_UNITTEST_ASSERT(pbs->ContainsAll(pbs1) && pbs->ContainsAll(pbs2));
 
 	pbs->Difference(pbs2);
-	GPOS_ASSERT(pbs->Equals(pbs1));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbs1));
 
 	pbs1->Release();
 
 	pbs->Union(pbs2);
 	pbs->Intersection(pbs2);
-	GPOS_ASSERT(pbs->Equals(pbs2));
-	GPOS_ASSERT(pbs->ContainsAll(pbs2));
+	GPOS_UNITTEST_ASSERT(pbs->Equals(pbs2));
+	GPOS_UNITTEST_ASSERT(pbs->ContainsAll(pbs2));
 
-	GPOS_ASSERT(pbs->Size() == pbs2->Size());
+	GPOS_UNITTEST_ASSERT(pbs->Size() == pbs2->Size());
 
 	pbs2->Release();
 
@@ -213,7 +213,7 @@ CBitSetTest::EresUnittest_SetOps()
 	pbs4->Intersection(pbs5);
 	pbs5->ExchangeClear(10);
 	pbs5->ExchangeClear(50);
-	GPOS_ASSERT(pbs4->Equals(pbs5));
+	GPOS_UNITTEST_ASSERT(pbs4->Equals(pbs5));
 
 	pbs4->Release();
 	pbs5->Release();

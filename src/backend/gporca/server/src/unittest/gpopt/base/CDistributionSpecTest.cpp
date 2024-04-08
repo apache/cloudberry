@@ -84,8 +84,8 @@ CDistributionSpecTest::EresUnittest_Any()
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
 
-	GPOS_RTL_ASSERT(pdsany->FSatisfies(pdsany));
-	GPOS_RTL_ASSERT(pdsany->Matches(pdsany));
+	GPOS_UNITTEST_ASSERT(pdsany->FSatisfies(pdsany));
+	GPOS_UNITTEST_ASSERT(pdsany->Matches(pdsany));
 
 	CAutoTrace at(mp);
 	at.Os() << std::endl;
@@ -129,27 +129,29 @@ CDistributionSpecTest::EresUnittest_Random()
 	CDistributionSpecRandom *pdsRandomNonDuplicateSensitive =
 		GPOS_NEW(mp) CDistributionSpecRandom();
 
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		pdsRandomDuplicateSensitive->FSatisfies(pdsRandomDuplicateSensitive));
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		pdsRandomDuplicateSensitive->Matches(pdsRandomDuplicateSensitive));
-	GPOS_RTL_ASSERT(pdsRandomDuplicateSensitive->FSatisfies(
+	GPOS_UNITTEST_ASSERT(pdsRandomDuplicateSensitive->FSatisfies(
 		pdsRandomNonDuplicateSensitive));
-	GPOS_RTL_ASSERT(!pdsRandomNonDuplicateSensitive->FSatisfies(
+	GPOS_UNITTEST_ASSERT(!pdsRandomNonDuplicateSensitive->FSatisfies(
 		pdsRandomDuplicateSensitive));
 
 	// random and universal
 	CDistributionSpecUniversal *pdsUniversal =
 		GPOS_NEW(mp) CDistributionSpecUniversal();
-	GPOS_RTL_ASSERT(pdsUniversal->FSatisfies(pdsRandomNonDuplicateSensitive));
-	GPOS_RTL_ASSERT(!pdsUniversal->FSatisfies(pdsRandomDuplicateSensitive));
+	GPOS_UNITTEST_ASSERT(
+		pdsUniversal->FSatisfies(pdsRandomNonDuplicateSensitive));
+	GPOS_UNITTEST_ASSERT(
+		!pdsUniversal->FSatisfies(pdsRandomDuplicateSensitive));
 
 	// random and any
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
 
-	GPOS_RTL_ASSERT(!pdsany->FSatisfies(pdsRandomDuplicateSensitive));
-	GPOS_RTL_ASSERT(pdsRandomDuplicateSensitive->FSatisfies(pdsany));
+	GPOS_UNITTEST_ASSERT(!pdsany->FSatisfies(pdsRandomDuplicateSensitive));
+	GPOS_UNITTEST_ASSERT(pdsRandomDuplicateSensitive->FSatisfies(pdsany));
 
 	CAutoTrace at(mp);
 	at.Os() << std::endl;
@@ -190,21 +192,21 @@ CDistributionSpecTest::EresUnittest_Replicated()
 	CDistributionSpecReplicated *pdsreplicated = GPOS_NEW(mp)
 		CDistributionSpecReplicated(CDistributionSpec::EdtStrictReplicated);
 
-	GPOS_RTL_ASSERT(pdsreplicated->FSatisfies(pdsreplicated));
-	GPOS_RTL_ASSERT(pdsreplicated->Matches(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(pdsreplicated->FSatisfies(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(pdsreplicated->Matches(pdsreplicated));
 
 	// replicated and random
 	CDistributionSpecRandom *pdsrandom = GPOS_NEW(mp) CDistributionSpecRandom();
 
-	GPOS_RTL_ASSERT(!pdsrandom->FSatisfies(pdsreplicated));
-	GPOS_RTL_ASSERT(pdsreplicated->FSatisfies(pdsrandom));
+	GPOS_UNITTEST_ASSERT(!pdsrandom->FSatisfies(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(pdsreplicated->FSatisfies(pdsrandom));
 
 	// replicated and any
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
 
-	GPOS_RTL_ASSERT(!pdsany->FSatisfies(pdsreplicated));
-	GPOS_RTL_ASSERT(pdsreplicated->FSatisfies(pdsany));
+	GPOS_UNITTEST_ASSERT(!pdsany->FSatisfies(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(pdsreplicated->FSatisfies(pdsany));
 
 	CAutoTrace at(mp);
 	at.Os() << std::endl;
@@ -246,38 +248,38 @@ CDistributionSpecTest::EresUnittest_Singleton()
 	CDistributionSpecSingleton *pdssMaster = GPOS_NEW(mp)
 		CDistributionSpecSingleton(CDistributionSpecSingleton::EstMaster);
 
-	GPOS_RTL_ASSERT(pdssMaster->FSatisfies(pdssMaster));
-	GPOS_RTL_ASSERT(pdssMaster->Matches(pdssMaster));
+	GPOS_UNITTEST_ASSERT(pdssMaster->FSatisfies(pdssMaster));
+	GPOS_UNITTEST_ASSERT(pdssMaster->Matches(pdssMaster));
 
-	GPOS_RTL_ASSERT(pdssSegment->FSatisfies(pdssSegment));
-	GPOS_RTL_ASSERT(pdssSegment->Matches(pdssSegment));
+	GPOS_UNITTEST_ASSERT(pdssSegment->FSatisfies(pdssSegment));
+	GPOS_UNITTEST_ASSERT(pdssSegment->Matches(pdssSegment));
 
-	GPOS_RTL_ASSERT(!pdssMaster->FSatisfies(pdssSegment) &&
-					!pdssSegment->FSatisfies(pdssMaster));
+	GPOS_UNITTEST_ASSERT(!pdssMaster->FSatisfies(pdssSegment) &&
+						 !pdssSegment->FSatisfies(pdssMaster));
 
 	// singleton and replicated
 	CDistributionSpecReplicated *pdsreplicated = GPOS_NEW(mp)
 		CDistributionSpecReplicated(CDistributionSpec::EdtStrictReplicated);
 
-	GPOS_RTL_ASSERT(pdsreplicated->FSatisfies(pdssSegment));
-	GPOS_RTL_ASSERT(!pdsreplicated->FSatisfies(pdssMaster));
+	GPOS_UNITTEST_ASSERT(pdsreplicated->FSatisfies(pdssSegment));
+	GPOS_UNITTEST_ASSERT(!pdsreplicated->FSatisfies(pdssMaster));
 
-	GPOS_RTL_ASSERT(!pdssSegment->FSatisfies(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(!pdssSegment->FSatisfies(pdsreplicated));
 
 	// singleton and random
 	CDistributionSpecRandom *pdsrandom = GPOS_NEW(mp) CDistributionSpecRandom();
 
-	GPOS_RTL_ASSERT(!pdsrandom->FSatisfies(pdssSegment));
-	GPOS_RTL_ASSERT(!pdsrandom->FSatisfies(pdssMaster));
-	GPOS_RTL_ASSERT(!pdssSegment->FSatisfies(pdsrandom));
-	GPOS_RTL_ASSERT(!pdssMaster->FSatisfies(pdsrandom));
+	GPOS_UNITTEST_ASSERT(!pdsrandom->FSatisfies(pdssSegment));
+	GPOS_UNITTEST_ASSERT(!pdsrandom->FSatisfies(pdssMaster));
+	GPOS_UNITTEST_ASSERT(!pdssSegment->FSatisfies(pdsrandom));
+	GPOS_UNITTEST_ASSERT(!pdssMaster->FSatisfies(pdsrandom));
 
 	// singleton and any
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
 
-	GPOS_RTL_ASSERT(!pdsany->FSatisfies(pdssSegment));
-	GPOS_RTL_ASSERT(pdssSegment->FSatisfies(pdsany));
+	GPOS_UNITTEST_ASSERT(!pdsany->FSatisfies(pdssSegment));
+	GPOS_UNITTEST_ASSERT(pdssSegment->FSatisfies(pdsany));
 
 	CAutoTrace at(mp);
 	at.Os() << std::endl;
@@ -320,31 +322,31 @@ CDistributionSpecTest::EresUnittest_Universal()
 	CDistributionSpecUniversal *pdsuniversal =
 		GPOS_NEW(mp) CDistributionSpecUniversal();
 
-	GPOS_RTL_ASSERT(pdsuniversal->FSatisfies(pdsuniversal));
-	GPOS_RTL_ASSERT(pdsuniversal->Matches(pdsuniversal));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->FSatisfies(pdsuniversal));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->Matches(pdsuniversal));
 
 	// universal and singleton
 	CDistributionSpecSingleton *pdssSegment = GPOS_NEW(mp)
 		CDistributionSpecSingleton(CDistributionSpecSingleton::EstSegment);
 
-	GPOS_RTL_ASSERT(pdsuniversal->FSatisfies(pdssSegment));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->FSatisfies(pdssSegment));
 
 	// universal and replicated
 	CDistributionSpecReplicated *pdsreplicated = GPOS_NEW(mp)
 		CDistributionSpecReplicated(CDistributionSpec::EdtStrictReplicated);
 
-	GPOS_RTL_ASSERT(pdsuniversal->FSatisfies(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->FSatisfies(pdsreplicated));
 
 	// universal and random
 	CDistributionSpecRandom *pdsrandom = GPOS_NEW(mp) CDistributionSpecRandom();
 
-	GPOS_RTL_ASSERT(pdsuniversal->FSatisfies(pdsrandom));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->FSatisfies(pdsrandom));
 
 	// universal and any
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
 
-	GPOS_RTL_ASSERT(pdsuniversal->FSatisfies(pdsany));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->FSatisfies(pdsany));
 
 	CAutoTrace at(mp);
 	at.Os() << std::endl;
@@ -460,39 +462,39 @@ CDistributionSpecTest::EresUnittest_Hashed()
 	poptctxt->MarkDMLQuery(false /*fDMLQuery*/);
 	CDistributionSpecHashed *pdshashed1 = GPOS_NEW(mp)
 		CDistributionSpecHashed(prgpexpr1, true /* fNullsCollocated */);
-	GPOS_RTL_ASSERT(pdshashed1->FSatisfies(pdshashed1));
-	GPOS_RTL_ASSERT(pdshashed1->Matches(pdshashed1));
+	GPOS_UNITTEST_ASSERT(pdshashed1->FSatisfies(pdshashed1));
+	GPOS_UNITTEST_ASSERT(pdshashed1->Matches(pdshashed1));
 
 	// pdshashed2: HD{A}, true, duplicate sensitive
 	poptctxt->MarkDMLQuery(true /*fDMLQuery*/);
 	CDistributionSpecHashed *pdshashed2 = GPOS_NEW(mp)
 		CDistributionSpecHashed(prgpexpr2, true /* fNullsCollocated */);
-	GPOS_RTL_ASSERT(pdshashed2->FSatisfies(pdshashed2));
-	GPOS_RTL_ASSERT(pdshashed2->Matches(pdshashed2));
+	GPOS_UNITTEST_ASSERT(pdshashed2->FSatisfies(pdshashed2));
+	GPOS_UNITTEST_ASSERT(pdshashed2->Matches(pdshashed2));
 
 	// pdshashed3: HD{A}, false
 	prgpexpr2->AddRef();
 	CDistributionSpecHashed *pdshashed3 = GPOS_NEW(mp)
 		CDistributionSpecHashed(prgpexpr2, false /* fNullsCollocated */);
-	GPOS_RTL_ASSERT(pdshashed3->FSatisfies(pdshashed3));
-	GPOS_RTL_ASSERT(pdshashed3->Matches(pdshashed3));
+	GPOS_UNITTEST_ASSERT(pdshashed3->FSatisfies(pdshashed3));
+	GPOS_UNITTEST_ASSERT(pdshashed3->Matches(pdshashed3));
 
 	// Test satisfaction
 	// ({A,B}, true, true) does not satisfy ({A}, true, false)
-	GPOS_RTL_ASSERT(!pdshashed1->FMatchSubset(pdshashed2));
-	GPOS_RTL_ASSERT(!pdshashed1->FSatisfies(pdshashed2));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FMatchSubset(pdshashed2));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FSatisfies(pdshashed2));
 
 	// ({A}, true) satisfies ({A, B}, true)
-	GPOS_RTL_ASSERT(pdshashed2->FMatchSubset(pdshashed1));
-	GPOS_RTL_ASSERT(pdshashed2->FSatisfies(pdshashed1));
+	GPOS_UNITTEST_ASSERT(pdshashed2->FMatchSubset(pdshashed1));
+	GPOS_UNITTEST_ASSERT(pdshashed2->FSatisfies(pdshashed1));
 
 	// ({A}, true) satisfies ({A}, false)
-	GPOS_RTL_ASSERT(pdshashed2->FMatchSubset(pdshashed3));
-	GPOS_RTL_ASSERT(pdshashed2->FSatisfies(pdshashed3));
+	GPOS_UNITTEST_ASSERT(pdshashed2->FMatchSubset(pdshashed3));
+	GPOS_UNITTEST_ASSERT(pdshashed2->FSatisfies(pdshashed3));
 
 	// ({A}, false) does not satisfy ({A}, true)
-	GPOS_RTL_ASSERT(!pdshashed1->FMatchSubset(pdshashed3));
-	GPOS_RTL_ASSERT(!pdshashed1->FSatisfies(pdshashed3));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FMatchSubset(pdshashed3));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FSatisfies(pdshashed3));
 
 	// pdshashed4: HD{B}, true
 	poptctxt->MarkDMLQuery(true /*fDMLQuery*/);
@@ -512,54 +514,59 @@ CDistributionSpecTest::EresUnittest_Hashed()
 	// pdshashed7: {C} false -> {A} true
 	CDistributionSpecHashed *pdshashed7 = pdshashed2->Combine(mp, pdshashed5);
 
-	GPOS_RTL_ASSERT(false == pdshashed7->FNullsColocated());
-	GPOS_RTL_ASSERT(true == pdshashed7->PdshashedEquiv()->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(false == pdshashed7->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(true ==
+						 pdshashed7->PdshashedEquiv()->FNullsColocated());
 
 	// Combine {D} false, {B} true
 	// pdshashed8: {B} true -> {D} false
 	CDistributionSpecHashed *pdshashed8 = pdshashed6->Combine(mp, pdshashed4);
 
-	GPOS_RTL_ASSERT(true == pdshashed8->FNullsColocated());
-	GPOS_RTL_ASSERT(false == pdshashed8->PdshashedEquiv()->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(true == pdshashed8->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(false ==
+						 pdshashed8->PdshashedEquiv()->FNullsColocated());
 
 	// Combine {C} false -> {A} true, {B} true -> {D} false
 	// pdshashed9: {D} false -> {B} true -> {A} true -> {C} false
 	CDistributionSpecHashed *pdshashed9 = pdshashed7->Combine(mp, pdshashed8);
 
-	GPOS_RTL_ASSERT(pdshashed9->FMatchHashedDistribution(pdshashed6));
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(pdshashed9->FMatchHashedDistribution(pdshashed6));
+	GPOS_UNITTEST_ASSERT(
 		pdshashed9->PdshashedEquiv()->FMatchHashedDistribution(pdshashed4));
-	GPOS_RTL_ASSERT(pdshashed9->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed2));
-	GPOS_RTL_ASSERT(pdshashed9->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed5));
+	GPOS_UNITTEST_ASSERT(pdshashed9->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed2));
+	GPOS_UNITTEST_ASSERT(pdshashed9->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed5));
 
 	// Test Copy
 	// Copy {C} false -> {A} true
 	// pdshashed10: {C} false -> {A} true
 	CDistributionSpecHashed *pdshashed10 = pdshashed7->Copy(mp);
 
-	GPOS_RTL_ASSERT(false == pdshashed10->FNullsColocated());
-	GPOS_RTL_ASSERT(true == pdshashed10->PdshashedEquiv()->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(false == pdshashed10->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(true ==
+						 pdshashed10->PdshashedEquiv()->FNullsColocated());
 
 	// Copy {C} false -> {A} true
 	// Overwrite nulls colocation -> true
 	// pdshashed11: {C} false -> {A} true
 	CDistributionSpecHashed *pdshashed11 = pdshashed7->Copy(mp, true);
 
-	GPOS_RTL_ASSERT(true == pdshashed11->FNullsColocated());
-	GPOS_RTL_ASSERT(true == pdshashed11->PdshashedEquiv()->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(true == pdshashed11->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(true ==
+						 pdshashed11->PdshashedEquiv()->FNullsColocated());
 
 	// Copy {B} true -> {D} false
 	// Overwrite nulls colocation -> false
 	// pdshashed12: {B} false -> {D} false
 	CDistributionSpecHashed *pdshashed12 = pdshashed8->Copy(mp, false);
 
-	GPOS_RTL_ASSERT(false == pdshashed12->FNullsColocated());
-	GPOS_RTL_ASSERT(false == pdshashed12->PdshashedEquiv()->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(false == pdshashed12->FNullsColocated());
+	GPOS_UNITTEST_ASSERT(false ==
+						 pdshashed12->PdshashedEquiv()->FNullsColocated());
 
 	// Test 3+ node Combine
 	// This is to ensure Combine doesn't just swap the head and tail node,
@@ -589,34 +596,34 @@ CDistributionSpecTest::EresUnittest_Hashed()
 	// Combine {D} false -> {B} true -> {A} true -> {C} false, {E} true -> {F} true -> {G} true
 	// pdshashed18: {G} true -> {F} true -> {E} true -> {C} false -> {A} true -> {B} true -> {D} false
 	CDistributionSpecHashed *pdshashed18 = pdshashed9->Combine(mp, pdshashed17);
-	GPOS_RTL_ASSERT(pdshashed18->FMatchHashedDistribution(pdshashed15));
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(pdshashed18->FMatchHashedDistribution(pdshashed15));
+	GPOS_UNITTEST_ASSERT(
 		pdshashed18->PdshashedEquiv()->FMatchHashedDistribution(pdshashed14));
-	GPOS_RTL_ASSERT(pdshashed18->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed13));
-	GPOS_RTL_ASSERT(pdshashed18->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed5));
-	GPOS_RTL_ASSERT(pdshashed18->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed2));
-	GPOS_RTL_ASSERT(pdshashed18->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed4));
-	GPOS_RTL_ASSERT(pdshashed18->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->PdshashedEquiv()
-						->FMatchHashedDistribution(pdshashed6));
+	GPOS_UNITTEST_ASSERT(pdshashed18->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed13));
+	GPOS_UNITTEST_ASSERT(pdshashed18->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed5));
+	GPOS_UNITTEST_ASSERT(pdshashed18->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed2));
+	GPOS_UNITTEST_ASSERT(pdshashed18->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed4));
+	GPOS_UNITTEST_ASSERT(pdshashed18->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->PdshashedEquiv()
+							 ->FMatchHashedDistribution(pdshashed6));
 
 	// Summary
 	// pdshashed1: {A, B}, true
@@ -642,34 +649,34 @@ CDistributionSpecTest::EresUnittest_Hashed()
 	CDistributionSpecUniversal *pdsuniversal =
 		GPOS_NEW(mp) CDistributionSpecUniversal();
 
-	GPOS_RTL_ASSERT(pdsuniversal->FSatisfies(pdshashed1));
+	GPOS_UNITTEST_ASSERT(pdsuniversal->FSatisfies(pdshashed1));
 
 	// hashed and singleton
 	CDistributionSpecSingleton *pdssSegment = GPOS_NEW(mp)
 		CDistributionSpecSingleton(CDistributionSpecSingleton::EstSegment);
 
-	GPOS_RTL_ASSERT(!pdshashed1->FSatisfies(pdssSegment));
-	GPOS_RTL_ASSERT(!pdssSegment->Matches(pdshashed1));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FSatisfies(pdssSegment));
+	GPOS_UNITTEST_ASSERT(!pdssSegment->Matches(pdshashed1));
 
 	// hashed and replicated
 	CDistributionSpecReplicated *pdsreplicated = GPOS_NEW(mp)
 		CDistributionSpecReplicated(CDistributionSpec::EdtStrictReplicated);
 
-	GPOS_RTL_ASSERT(pdsreplicated->FSatisfies(pdshashed1));
-	GPOS_RTL_ASSERT(!pdshashed1->FSatisfies(pdsreplicated));
+	GPOS_UNITTEST_ASSERT(pdsreplicated->FSatisfies(pdshashed1));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FSatisfies(pdsreplicated));
 
 	// hashed and random
 	CDistributionSpecRandom *pdsrandom = GPOS_NEW(mp) CDistributionSpecRandom();
 
-	GPOS_RTL_ASSERT(!pdsrandom->FSatisfies(pdshashed1));
-	GPOS_RTL_ASSERT(!pdshashed1->FSatisfies(pdsrandom));
+	GPOS_UNITTEST_ASSERT(!pdsrandom->FSatisfies(pdshashed1));
+	GPOS_UNITTEST_ASSERT(!pdshashed1->FSatisfies(pdsrandom));
 
 	// hashed and any
 	CDistributionSpecAny *pdsany =
 		GPOS_NEW(mp) CDistributionSpecAny(COperator::EopSentinel);
 
-	GPOS_RTL_ASSERT(!pdsany->FSatisfies(pdshashed1));
-	GPOS_RTL_ASSERT(pdshashed1->FSatisfies(pdsany));
+	GPOS_UNITTEST_ASSERT(!pdsany->FSatisfies(pdshashed1));
+	GPOS_UNITTEST_ASSERT(pdshashed1->FSatisfies(pdsany));
 
 	CAutoTrace at(mp);
 	at.Os() << std::endl;

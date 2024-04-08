@@ -120,8 +120,9 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 			CJobGroupOptimization::EState *pestate = nullptr;
 			ULONG size = 0;
 			pjgo->Unreachable(mp, &pestate, &size);
-			GPOS_ASSERT(size == 1 &&
-						pestate[0] == CJobGroupOptimization::estInitialized);
+			GPOS_UNITTEST_ASSERT(size == 1 &&
+								 pestate[0] ==
+									 CJobGroupOptimization::estInitialized);
 
 			GPOS_DELETE_ARRAY(pestate);
 		}
@@ -131,10 +132,10 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 		{
 			CGroupProxy gp(pgroup);
 			pgexprLogical = gp.PgexprNextLogical(nullptr /*pgexpr*/);
-			GPOS_ASSERT(nullptr != pgexprLogical);
+			GPOS_UNITTEST_ASSERT(nullptr != pgexprLogical);
 
 			pgexprPhysical = gp.PgexprSkipLogical(nullptr /*pgexpr*/);
-			GPOS_ASSERT(nullptr != pgexprPhysical);
+			GPOS_UNITTEST_ASSERT(nullptr != pgexprPhysical);
 		}
 
 		{
@@ -152,8 +153,9 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 			CJobGroupImplementation::EState *pestate = nullptr;
 			ULONG size = 0;
 			jgi.Unreachable(mp, &pestate, &size);
-			GPOS_ASSERT(size == 1 &&
-						pestate[0] == CJobGroupImplementation::estInitialized);
+			GPOS_UNITTEST_ASSERT(size == 1 &&
+								 pestate[0] ==
+									 CJobGroupImplementation::estInitialized);
 
 			GPOS_DELETE_ARRAY(pestate);
 		}
@@ -173,8 +175,9 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 			CJobGroupExploration::EState *pestate = nullptr;
 			ULONG size = 0;
 			jge.Unreachable(mp, &pestate, &size);
-			GPOS_ASSERT(size == 1 &&
-						pestate[0] == CJobGroupExploration::estInitialized);
+			GPOS_UNITTEST_ASSERT(size == 1 &&
+								 pestate[0] ==
+									 CJobGroupExploration::estInitialized);
 
 			GPOS_DELETE_ARRAY(pestate);
 		}
@@ -195,9 +198,9 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 			CJobGroupExpressionOptimization::EState *pestate = nullptr;
 			ULONG size = 0;
 			jgeo.Unreachable(mp, &pestate, &size);
-			GPOS_ASSERT(size == 1 &&
-						pestate[0] ==
-							CJobGroupExpressionOptimization::estInitialized);
+			GPOS_UNITTEST_ASSERT(
+				size == 1 &&
+				pestate[0] == CJobGroupExpressionOptimization::estInitialized);
 
 			GPOS_DELETE_ARRAY(pestate);
 		}
@@ -218,9 +221,10 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 			CJobGroupExpressionImplementation::EState *pestate = nullptr;
 			ULONG size = 0;
 			jgei.Unreachable(mp, &pestate, &size);
-			GPOS_ASSERT(size == 1 &&
-						pestate[0] ==
-							CJobGroupExpressionImplementation::estInitialized);
+			GPOS_UNITTEST_ASSERT(
+				size == 1 &&
+				pestate[0] ==
+					CJobGroupExpressionImplementation::estInitialized);
 
 			GPOS_DELETE_ARRAY(pestate);
 		}
@@ -241,9 +245,9 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 			CJobGroupExpressionExploration::EState *pestate = nullptr;
 			ULONG size = 0;
 			jgee.Unreachable(mp, &pestate, &size);
-			GPOS_ASSERT(size == 1 &&
-						pestate[0] ==
-							CJobGroupExpressionExploration::estInitialized);
+			GPOS_UNITTEST_ASSERT(
+				size == 1 &&
+				pestate[0] == CJobGroupExpressionExploration::estInitialized);
 
 			GPOS_DELETE_ARRAY(pestate);
 		}
@@ -271,8 +275,9 @@ COptimizationJobsTest::EresUnittest_StateMachine()
 				CJobTransformation::EState *pestate = nullptr;
 				ULONG size = 0;
 				jt.Unreachable(mp, &pestate, &size);
-				GPOS_ASSERT(size == 1 &&
-							pestate[0] == CJobTransformation::estInitialized);
+				GPOS_UNITTEST_ASSERT(size == 1 &&
+									 pestate[0] ==
+										 CJobTransformation::estInitialized);
 
 				GPOS_DELETE_ARRAY(pestate);
 			}

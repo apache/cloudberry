@@ -102,7 +102,7 @@ CDatumTest::EresUnittest_Basics()
 			IDatum *datum = rgpf[ul1](mp, is_null);
 			IDatum *pdatumCopy = datum->MakeCopy(mp);
 
-			GPOS_ASSERT(datum->Matches(pdatumCopy));
+			GPOS_UNITTEST_ASSERT(datum->Matches(pdatumCopy));
 
 			const CWStringConst *pstrDatum = datum->GetStrRepr(mp);
 

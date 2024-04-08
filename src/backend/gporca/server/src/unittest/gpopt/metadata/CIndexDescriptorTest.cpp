@@ -73,7 +73,7 @@ CIndexDescriptorTest::EresUnittest_Basic()
 
 	// get the index associated with the table
 	const IMDRelation *pmdrel = mda.RetrieveRel(ptabdesc->MDId());
-	GPOS_ASSERT(0 < pmdrel->IndexCount());
+	GPOS_UNITTEST_ASSERT(0 < pmdrel->IndexCount());
 
 	// create an index descriptor
 	IMDId *pmdidIndex = pmdrel->IndexMDidAt(0);	 // get the first index

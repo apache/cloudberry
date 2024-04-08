@@ -67,7 +67,7 @@ CMessageTableTest::EresUnittest_Basic()
 
 #ifdef GPOS_DEBUG
 			CMessage *pmsgLookedup = pmt->LookupMessage(pmsg->m_exception);
-			GPOS_ASSERT(pmsg == pmsgLookedup && "Lookup failed");
+			GPOS_UNITTEST_ASSERT(pmsg == pmsgLookedup && "Lookup failed");
 #endif	// GPOS_DEBUG
 		}
 	}

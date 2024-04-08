@@ -77,11 +77,11 @@ CCostTest::EresUnittest_Arithmetic()
 	CCost costAdd(cost1 + cost2);
 	CCost costMultiply(cost1 * cost2);
 
-	GPOS_ASSERT(costAdd > cost3);
-	GPOS_ASSERT(costAdd < cost4);
+	GPOS_UNITTEST_ASSERT(costAdd > cost3);
+	GPOS_UNITTEST_ASSERT(costAdd < cost4);
 
-	GPOS_ASSERT(costMultiply > cost5);
-	GPOS_ASSERT(costMultiply < cost6);
+	GPOS_UNITTEST_ASSERT(costMultiply > cost5);
+	GPOS_UNITTEST_ASSERT(costMultiply < cost6);
 
 	CAutoTrace at(mp);
 	IOstream &os(at.Os());
@@ -111,8 +111,8 @@ CCostTest::EresUnittest_Bool()
 	CCost cost1(2.5);
 	CCost cost2(3.5);
 
-	GPOS_ASSERT(cost1 < cost2);
-	GPOS_ASSERT(cost2 > cost1);
+	GPOS_UNITTEST_ASSERT(cost1 < cost2);
+	GPOS_UNITTEST_ASSERT(cost2 > cost1);
 
 	CAutoTrace at(mp);
 	IOstream &os(at.Os());
@@ -188,14 +188,14 @@ CCostTest::TestParams(CMemoryPool *mp)
 	os << "Hash Factor: " << dHashFactor1 << std::endl;
 	os << "Default Cost: " << dDefaultCost1 << std::endl;
 
-	GPOS_ASSERT(dSeqIOBandwidth == dSeqIOBandwidth1);
-	GPOS_ASSERT(dRandomIOBandwidth == dRandomIOBandwidth1);
-	GPOS_ASSERT(dTupProcBandwidth == dTupProcBandwidth1);
-	GPOS_ASSERT(dNetBandwidth == dNetBandwidth1);
-	GPOS_ASSERT(dSegments == dSegments1);
-	GPOS_ASSERT(dNLJFactor == dNLJFactor1);
-	GPOS_ASSERT(dHashFactor == dHashFactor1);
-	GPOS_ASSERT(dDefaultCost == dDefaultCost1);
+	GPOS_UNITTEST_ASSERT(dSeqIOBandwidth == dSeqIOBandwidth1);
+	GPOS_UNITTEST_ASSERT(dRandomIOBandwidth == dRandomIOBandwidth1);
+	GPOS_UNITTEST_ASSERT(dTupProcBandwidth == dTupProcBandwidth1);
+	GPOS_UNITTEST_ASSERT(dNetBandwidth == dNetBandwidth1);
+	GPOS_UNITTEST_ASSERT(dSegments == dSegments1);
+	GPOS_UNITTEST_ASSERT(dNLJFactor == dNLJFactor1);
+	GPOS_UNITTEST_ASSERT(dHashFactor == dHashFactor1);
+	GPOS_UNITTEST_ASSERT(dDefaultCost == dDefaultCost1);
 }
 
 
@@ -327,7 +327,7 @@ CCostTest::EresUnittest_SetParams()
 
 		// extract plan
 		pexprPlan1 = eng.PexprExtractPlan();
-		GPOS_ASSERT(nullptr != pexprPlan1);
+		GPOS_UNITTEST_ASSERT(nullptr != pexprPlan1);
 
 		GPOS_DELETE(pqc);
 	}
@@ -356,7 +356,7 @@ CCostTest::EresUnittest_SetParams()
 
 		// extract plan
 		pexprPlan2 = eng.PexprExtractPlan();
-		GPOS_ASSERT(nullptr != pexprPlan2);
+		GPOS_UNITTEST_ASSERT(nullptr != pexprPlan2);
 
 		GPOS_DELETE(pqc);
 	}
@@ -368,7 +368,7 @@ CCostTest::EresUnittest_SetParams()
 		at.Os() << "\n\nPLAN2: \n" << *pexprPlan2;
 		at.Os() << "\nNLJ Cost2: " << (*pexprPlan2)[0]->Cost();
 	}
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		(*pexprPlan2)[0]->Cost() >= (*pexprPlan1)[0]->Cost() * dNLJFactor &&
 		"expected NLJ cost in PLAN2 to be larger than NLJ cost in PLAN1");
 

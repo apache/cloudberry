@@ -92,7 +92,7 @@ CJoinCardinalityTest::EresUnittest_JoinNDVRemain()
 			mp, num_of_buckets, dNDVPerBucket, fNullFreq, num_NDV_remain);
 		BOOL result GPOS_ASSERTS_ONLY =
 			col_histogram_mapping->Insert(GPOS_NEW(mp) ULONG(ul1), histogram);
-		GPOS_ASSERT(result);
+		GPOS_UNITTEST_ASSERT(result);
 	}
 
 	SStatsJoinNDVRemainTestCase rgjoinndvrtc[] = {
@@ -262,8 +262,8 @@ CJoinCardinalityTest::EresUnittest_Join()
 				mp, md_accessor, dxl_derived_rel_stats_array);
 		dxl_derived_rel_stats_array->Release();
 
-		GPOS_ASSERT(nullptr != pdrgpstatBefore);
-		GPOS_ASSERT(2 == pdrgpstatBefore->Size());
+		GPOS_UNITTEST_ASSERT(nullptr != pdrgpstatBefore);
+		GPOS_UNITTEST_ASSERT(2 == pdrgpstatBefore->Size());
 		CStatistics *pstats1 = (*pdrgpstatBefore)[0];
 		CStatistics *pstats2 = (*pdrgpstatBefore)[1];
 
@@ -271,7 +271,7 @@ CJoinCardinalityTest::EresUnittest_Join()
 
 		// generate the join conditions
 		FnPdrgpstatjoin *pf = elem.m_pf;
-		GPOS_ASSERT(nullptr != pf);
+		GPOS_UNITTEST_ASSERT(nullptr != pf);
 		CStatsPredJoinArray *join_preds_stats = pf(mp);
 
 		// calculate the output stats
@@ -286,7 +286,7 @@ CJoinCardinalityTest::EresUnittest_Join()
 			pstatsOutput =
 				pstats1->CalcInnerJoinStats(mp, pstats2, join_preds_stats);
 		}
-		GPOS_ASSERT(nullptr != pstatsOutput);
+		GPOS_UNITTEST_ASSERT(nullptr != pstatsOutput);
 
 		CStatisticsArray *pdrgpstatOutput = GPOS_NEW(mp) CStatisticsArray(mp);
 		pdrgpstatOutput->Append(CStatistics::CastStats(pstatsOutput));

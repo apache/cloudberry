@@ -136,8 +136,8 @@ CTreeMapTest::Pnd(CMemoryPool *mp, ULONG *pul, CNodeArray *pdrgpnd,
 				  BOOL *fTestTrue)
 {
 	// The test passes 'true' to PrUnrank and the rehydrate function expects to find it here.
-	GPOS_ASSERT(nullptr != fTestTrue);
-	GPOS_ASSERT(*fTestTrue && "Flag is expected to be true");
+	GPOS_UNITTEST_ASSERT(nullptr != fTestTrue);
+	GPOS_UNITTEST_ASSERT(*fTestTrue && "Flag is expected to be true");
 	*fTestTrue = true;
 	return GPOS_NEW(mp) CNode(mp, pul, pdrgpnd);
 }
@@ -231,7 +231,7 @@ CTreeMapTest::EresUnittest_Basic()
 
 	// create blank map
 	ptmap = GPOS_NEW(mp) TestMap(mp, &Pnd);
-	GPOS_ASSERT(0 == ptmap->UllCount());
+	GPOS_UNITTEST_ASSERT(0 == ptmap->UllCount());
 	GPOS_DELETE(ptmap);
 
 	// create map with test data
@@ -370,7 +370,7 @@ CTreeMapTest::EresUnittest_Memo()
 
 		// extract plan
 		pexprPlan = peng->PexprExtractPlan();
-		GPOS_ASSERT(nullptr != pexprPlan);
+		GPOS_UNITTEST_ASSERT(nullptr != pexprPlan);
 
 		peng->Trace();
 		{
@@ -380,7 +380,7 @@ CTreeMapTest::EresUnittest_Memo()
 			// test resetting map and re-creating it
 			peng->ResetTreeMap();
 			ULLONG ullCount2 = peng->Pmemotmap()->UllCount();
-			GPOS_ASSERT(ullCount == ullCount2);
+			GPOS_UNITTEST_ASSERT(ullCount == ullCount2);
 #endif	// GPOS_DEBUG
 
 			for (ULONG ulRank = 0; ulRank < ullCount; ulRank++)

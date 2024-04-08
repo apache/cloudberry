@@ -67,7 +67,7 @@ CBitVectorTest::EresUnittest_Basics()
 	ULONG cSize = 129;
 
 	CBitVector bv(mp, cSize);
-	GPOS_ASSERT(bv.IsEmpty());
+	GPOS_UNITTEST_ASSERT(bv.IsEmpty());
 
 	for (ULONG i = 0; i < cSize; i++)
 	{
@@ -76,13 +76,13 @@ CBitVectorTest::EresUnittest_Basics()
 		{
 			return GPOS_FAILED;
 		}
-		GPOS_ASSERT(bv.Get(i));
+		GPOS_UNITTEST_ASSERT(bv.Get(i));
 
 		CBitVector bvCopy(mp, bv);
 		for (ULONG j = 0; j <= i; j++)
 		{
 			BOOL fSetAlt = bvCopy.Get(j);
-			GPOS_ASSERT(fSetAlt);
+			GPOS_UNITTEST_ASSERT(fSetAlt);
 
 			if (true != fSetAlt)
 			{
@@ -92,13 +92,13 @@ CBitVectorTest::EresUnittest_Basics()
 			// clear and check
 			bvCopy.ExchangeClear(j);
 			fSetAlt = bvCopy.Get(j);
-			GPOS_ASSERT(!fSetAlt);
+			GPOS_UNITTEST_ASSERT(!fSetAlt);
 		}
 
-		GPOS_ASSERT(bvCopy.CountSetBits() == 0);
+		GPOS_UNITTEST_ASSERT(bvCopy.CountSetBits() == 0);
 	}
 
-	GPOS_ASSERT(bv.CountSetBits() == cSize);
+	GPOS_UNITTEST_ASSERT(bv.CountSetBits() == cSize);
 
 	return GPOS_OK;
 }
@@ -128,28 +128,28 @@ CBitVectorTest::EresUnittest_SetOps()
 	{
 		bvEven.ExchangeSet(i);
 	}
-	GPOS_ASSERT(bvEven.ContainsAll(&bvEmpty));
+	GPOS_UNITTEST_ASSERT(bvEven.ContainsAll(&bvEmpty));
 
 	CBitVector bvOdd(mp, cSize);
 	for (ULONG i = 1; i < cSize; i += 2)
 	{
 		bvOdd.ExchangeSet(i);
 	}
-	GPOS_ASSERT(bvOdd.ContainsAll(&bvEmpty));
-	GPOS_ASSERT(bvOdd.IsDisjoint(&bvEven));
+	GPOS_UNITTEST_ASSERT(bvOdd.ContainsAll(&bvEmpty));
+	GPOS_UNITTEST_ASSERT(bvOdd.IsDisjoint(&bvEven));
 
-	GPOS_ASSERT(!bvEven.ContainsAll(&bvOdd));
-	GPOS_ASSERT(!bvOdd.ContainsAll(&bvEven));
+	GPOS_UNITTEST_ASSERT(!bvEven.ContainsAll(&bvOdd));
+	GPOS_UNITTEST_ASSERT(!bvOdd.ContainsAll(&bvEven));
 
 	CBitVector bv(mp, bvOdd);
 
 	bv.Or(&bvEven);
 	bv.And(&bvOdd);
-	GPOS_ASSERT(bv.Equals(&bvOdd));
+	GPOS_UNITTEST_ASSERT(bv.Equals(&bvOdd));
 
 	bv.Or(&bvEven);
 	bv.And(&bvEven);
-	GPOS_ASSERT(bv.Equals(&bvEven));
+	GPOS_UNITTEST_ASSERT(bv.Equals(&bvEven));
 
 	return GPOS_OK;
 }
@@ -180,7 +180,7 @@ CBitVectorTest::EresUnittest_Cursor()
 	bv.GetNextSetBit(0, ulCursor);
 	while (bv.GetNextSetBit(ulCursor + 1, ulCursor))
 	{
-		GPOS_ASSERT(ulCursor == ((ulCursor / 3) * 3));
+		GPOS_UNITTEST_ASSERT(ulCursor == ((ulCursor / 3) * 3));
 	}
 
 	return GPOS_OK;
@@ -214,7 +214,7 @@ CBitVectorTest::EresUnittest_Random()
 	for (ULONG i = 0; i < cTotal * 0.2; i++)
 	{
 		ULONG index = rand.Next() % (cTotal - 1);
-		GPOS_ASSERT(index < cTotal);
+		GPOS_UNITTEST_ASSERT(index < cTotal);
 		rg[index] = 1;
 	}
 
@@ -229,16 +229,16 @@ CBitVectorTest::EresUnittest_Random()
 		}
 	}
 
-	GPOS_ASSERT(cElements == bv.CountSetBits());
+	GPOS_UNITTEST_ASSERT(cElements == bv.CountSetBits());
 
 	ULONG ulCursor = 0;
 	while (bv.GetNextSetBit(ulCursor + 1, ulCursor))
 	{
-		GPOS_ASSERT(1 == rg[ulCursor]);
+		GPOS_UNITTEST_ASSERT(1 == rg[ulCursor]);
 		cElements--;
 	}
 
-	GPOS_ASSERT(0 == cElements);
+	GPOS_UNITTEST_ASSERT(0 == cElements);
 	GPOS_DELETE_ARRAY(rg);
 
 	return GPOS_OK;

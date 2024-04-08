@@ -46,7 +46,7 @@ CConstExprEvaluatorDefaultTest::EresUnittest()
 
 	CConstExprEvaluatorDefault *pceevaldefault =
 		GPOS_NEW(mp) CConstExprEvaluatorDefault();
-	GPOS_ASSERT(!pceevaldefault->FCanEvalExpressions());
+	GPOS_UNITTEST_ASSERT(!pceevaldefault->FCanEvalExpressions());
 
 	// setup a file-based provider
 	CMDProviderMemory *pmdp = CTestUtils::m_pmdpf;
@@ -66,7 +66,7 @@ CConstExprEvaluatorDefaultTest::EresUnittest()
 		CScalarConst *pscalarconstUl = CScalarConst::PopConvert(pexprUl->Pop());
 		CScalarConst *pscalarconstUlResult =
 			CScalarConst::PopConvert(pexprUlResult->Pop());
-		GPOS_ASSERT(pscalarconstUl->Matches(pscalarconstUlResult));
+		GPOS_UNITTEST_ASSERT(pscalarconstUl->Matches(pscalarconstUlResult));
 		pexprUlResult->Release();
 #endif	// GPOS_DEBUG
 		pexprUl->Release();
@@ -81,7 +81,7 @@ CConstExprEvaluatorDefaultTest::EresUnittest()
 		CExpression *pexprResult = pceevaldefault->PexprEval(pexprIsNull);
 		gpopt::CScalarNullTest *pscalarnulltest =
 			CScalarNullTest::PopConvert(pexprIsNull->Pop());
-		GPOS_ASSERT(pscalarnulltest->Matches(pexprResult->Pop()));
+		GPOS_UNITTEST_ASSERT(pscalarnulltest->Matches(pexprResult->Pop()));
 		pexprResult->Release();
 #endif	// GPOS_DEBUG
 		pexprIsNull->Release();

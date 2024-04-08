@@ -69,11 +69,11 @@ CAutoPTest::EresUnittest_Basics()
 	// accessor
 #ifdef GPOS_DEBUG
 	CHAR *szBack = asz3.Value();
-	GPOS_ASSERT(szBack == sz2);
+	GPOS_UNITTEST_ASSERT(szBack == sz2);
 #endif	// GPOS_DEBUG
 
 	// deref
-	GPOS_ASSERT(*sz2 == *asz3);
+	GPOS_UNITTEST_ASSERT(*sz2 == *asz3);
 
 	// wipe out asz2 to prevent double free
 	asz2 = nullptr;
@@ -88,7 +88,7 @@ CAutoPTest::EresUnittest_Basics()
 	aelem = pelem;
 
 	// deref
-	GPOS_ASSERT(pelem->m_ul == aelem->m_ul);
+	GPOS_UNITTEST_ASSERT(pelem->m_ul == aelem->m_ul);
 
 	// c'tor
 	CAutoP<CHAR> asz4(GPOS_NEW(mp) CHAR);

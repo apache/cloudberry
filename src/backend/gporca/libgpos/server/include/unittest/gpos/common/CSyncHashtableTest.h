@@ -123,13 +123,11 @@ private:
 
 		SElem &operator=(const SElem &) = default;
 
-#ifdef GPOS_DEBUG
 		static BOOL
 		IsValid(const ULONG &ulKey)
 		{
 			return !FEqualKeys(m_ulInvalid, ulKey);
 		}
-#endif	// GPOS_DEBUG
 
 		// dummy ctor
 		SElem() = default;

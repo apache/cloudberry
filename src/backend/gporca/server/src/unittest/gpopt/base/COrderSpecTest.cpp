@@ -88,8 +88,8 @@ COrderSpecTest::EresUnittest_Basics()
 	pos1->Append(pmdidInt4LT, pcr1, COrderSpec::EntFirst);
 	pos1->Append(pmdidInt4LT, pcr2, COrderSpec::EntLast);
 
-	GPOS_ASSERT(pos1->Matches(pos1));
-	GPOS_ASSERT(pos1->FSatisfies(pos1));
+	GPOS_UNITTEST_ASSERT(pos1->Matches(pos1));
+	GPOS_UNITTEST_ASSERT(pos1->FSatisfies(pos1));
 
 	COrderSpec *pos2 = GPOS_NEW(mp) COrderSpec(mp);
 	pmdidInt4LT->AddRef();
@@ -103,26 +103,26 @@ COrderSpecTest::EresUnittest_Basics()
 	(void) pos1->HashValue();
 	(void) pos2->HashValue();
 
-	GPOS_ASSERT(pos2->Matches(pos2));
-	GPOS_ASSERT(pos2->FSatisfies(pos2));
+	GPOS_UNITTEST_ASSERT(pos2->Matches(pos2));
+	GPOS_UNITTEST_ASSERT(pos2->FSatisfies(pos2));
 
 
-	GPOS_ASSERT(!pos1->Matches(pos2));
-	GPOS_ASSERT(!pos2->Matches(pos1));
+	GPOS_UNITTEST_ASSERT(!pos1->Matches(pos2));
+	GPOS_UNITTEST_ASSERT(!pos2->Matches(pos1));
 
-	GPOS_ASSERT(pos2->FSatisfies(pos1));
-	GPOS_ASSERT(!pos1->FSatisfies(pos2));
+	GPOS_UNITTEST_ASSERT(pos2->FSatisfies(pos1));
+	GPOS_UNITTEST_ASSERT(!pos1->FSatisfies(pos2));
 
 	// iterate over the components of the order spec
 	for (ULONG ul = 0; ul < pos1->UlSortColumns(); ul++)
 	{
 		const CColRef *colref GPOS_ASSERTS_ONLY = pos1->Pcr(ul);
 
-		GPOS_ASSERT(nullptr != colref);
+		GPOS_UNITTEST_ASSERT(nullptr != colref);
 
 		const IMDId *mdid GPOS_ASSERTS_ONLY = pos1->GetMdIdSortOp(ul);
 
-		GPOS_ASSERT(mdid->IsValid());
+		GPOS_UNITTEST_ASSERT(mdid->IsValid());
 
 		(void) pos1->Ent(ul);
 	}

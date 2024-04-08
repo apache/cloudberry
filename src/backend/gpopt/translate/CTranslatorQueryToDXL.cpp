@@ -1482,7 +1482,7 @@ CTranslatorQueryToDXL::UpdatedColumnMapping()
 
 	ListCell *lc = nullptr;
 	ULONG ul = 0;
-	ULONG output_columns = 0;
+	ULONG output_columns GPOS_ASSERTS_ONLY = 0;
 	ForEach(lc, m_query->targetList)
 	{
 		TargetEntry *target_entry = (TargetEntry *) lfirst(lc);

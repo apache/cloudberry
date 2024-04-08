@@ -56,12 +56,12 @@ CAutoRefTest::EresUnittest_Basics()
 	CElem *pelem = GPOS_NEW(mp) CElem(0);
 	aelem = pelem;
 
-	GPOS_ASSERT(aelem->m_ul == pelem->m_ul);
-	GPOS_ASSERT(&aelem->m_ul == &pelem->m_ul);
+	GPOS_UNITTEST_ASSERT(aelem->m_ul == pelem->m_ul);
+	GPOS_UNITTEST_ASSERT(&aelem->m_ul == &pelem->m_ul);
 
 #ifdef GPOS_DEBUG
 	CElem *pelem2 = &(*pelem);
-	GPOS_ASSERT(pelem2 == pelem);
+	GPOS_UNITTEST_ASSERT(pelem2 == pelem);
 #endif	// GPOS_DEBUG
 
 	// hand reference over to other auto ref count
@@ -70,7 +70,7 @@ CAutoRefTest::EresUnittest_Basics()
 
 	// c'tor
 	CAutoRef<CElem> aelem3(GPOS_NEW(mp) CElem(10));
-	GPOS_ASSERT(aelem3->m_ul == ULONG(10));
+	GPOS_UNITTEST_ASSERT(aelem3->m_ul == ULONG(10));
 
 	return GPOS_OK;
 }

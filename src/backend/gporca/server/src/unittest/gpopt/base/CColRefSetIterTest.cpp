@@ -83,19 +83,19 @@ CColRefSetIterTest::EresUnittest_Basics()
 			col_factory->PcrCreate(pmdtypeint4, default_type_modifier, name);
 		pcrs->Include(colref);
 
-		GPOS_ASSERT(pcrs->FMember(colref));
+		GPOS_UNITTEST_ASSERT(pcrs->FMember(colref));
 	}
 
-	GPOS_ASSERT(pcrs->Size() == num_cols);
+	GPOS_UNITTEST_ASSERT(pcrs->Size() == num_cols);
 
 	ULONG count = 0;
 	CColRefSetIter crsi(*pcrs);
 	while (crsi.Advance())
 	{
-		GPOS_ASSERT((BOOL) crsi);
+		GPOS_UNITTEST_ASSERT((BOOL) crsi);
 
 		CColRef *colref = crsi.Pcr();
-		GPOS_ASSERT(colref->Name().Equals(name));
+		GPOS_UNITTEST_ASSERT(colref->Name().Equals(name));
 
 		// to avoid unused variable warnings
 		(void) colref->Id();
@@ -103,8 +103,8 @@ CColRefSetIterTest::EresUnittest_Basics()
 		count++;
 	}
 
-	GPOS_ASSERT(num_cols == count);
-	GPOS_ASSERT(!((BOOL) crsi));
+	GPOS_UNITTEST_ASSERT(num_cols == count);
+	GPOS_UNITTEST_ASSERT(!((BOOL) crsi));
 
 	pcrs->Release();
 

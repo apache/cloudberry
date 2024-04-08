@@ -72,13 +72,13 @@ CHashSetTest::EresUnittest_Basic()
 	for (ULONG ul = 0; ul < ulCnt; ul++)
 	{
 		BOOL fSuccess GPOS_ASSERTS_ONLY = phs->Insert(&rgul[ul]);
-		GPOS_ASSERT(fSuccess);
+		GPOS_UNITTEST_ASSERT(fSuccess);
 	}
-	GPOS_ASSERT(ulCnt == phs->Size());
+	GPOS_UNITTEST_ASSERT(ulCnt == phs->Size());
 
 	for (ULONG ul = 0; ul < ulCnt; ul++)
 	{
-		GPOS_ASSERT(phs->Contains(&rgul[ul]));
+		GPOS_UNITTEST_ASSERT(phs->Contains(&rgul[ul]));
 	}
 
 	phs->Release();
@@ -115,11 +115,11 @@ CHashSetTest::EresUnittest_Ownership()
 
 		BOOL fSuccess GPOS_ASSERTS_ONLY = phs->Insert(pulp);
 
-		GPOS_ASSERT(fSuccess);
-		GPOS_ASSERT(phs->Contains(pulp));
+		GPOS_UNITTEST_ASSERT(fSuccess);
+		GPOS_UNITTEST_ASSERT(phs->Contains(pulp));
 
 		// can't insert existing keys
-		GPOS_ASSERT(!phs->Insert(pulp));
+		GPOS_UNITTEST_ASSERT(!phs->Insert(pulp));
 	}
 
 	phs->Release();

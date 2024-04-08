@@ -92,8 +92,8 @@ CFunctionalDependencyTest::EresUnittest_Basics()
 	CFunctionalDependency *pfdSnd =
 		GPOS_NEW(mp) CFunctionalDependency(pcrsLeft, pcrsRight);
 
-	GPOS_ASSERT(pfdFst->Equals(pfdSnd));
-	GPOS_ASSERT(pfdFst->HashValue() == pfdSnd->HashValue());
+	GPOS_UNITTEST_ASSERT(pfdFst->Equals(pfdSnd));
+	GPOS_UNITTEST_ASSERT(pfdFst->HashValue() == pfdSnd->HashValue());
 
 	CFunctionalDependencyArray *pdrgpfd =
 		GPOS_NEW(mp) CFunctionalDependencyArray(mp);
@@ -101,7 +101,7 @@ CFunctionalDependencyTest::EresUnittest_Basics()
 	pdrgpfd->Append(pfdFst);
 	pfdSnd->AddRef();
 	pdrgpfd->Append(pfdSnd);
-	GPOS_ASSERT(CFunctionalDependency::Equals(pdrgpfd, pdrgpfd));
+	GPOS_UNITTEST_ASSERT(CFunctionalDependency::Equals(pdrgpfd, pdrgpfd));
 
 	CColRefArray *colref_array =
 		CFunctionalDependency::PdrgpcrKeys(mp, pdrgpfd);
@@ -109,8 +109,8 @@ CFunctionalDependencyTest::EresUnittest_Basics()
 	pcrs->Include(colref_array);
 	CColRefSet *pcrsKeys = CFunctionalDependency::PcrsKeys(mp, pdrgpfd);
 
-	GPOS_ASSERT(pcrsLeft->Equals(pcrs));
-	GPOS_ASSERT(pcrsKeys->Equals(pcrs));
+	GPOS_UNITTEST_ASSERT(pcrsLeft->Equals(pcrs));
+	GPOS_UNITTEST_ASSERT(pcrsKeys->Equals(pcrs));
 
 	CAutoTrace at(mp);
 	at.Os() << "FD1:" << *pfdFst << std::endl << "FD2:" << *pfdSnd << std::endl;

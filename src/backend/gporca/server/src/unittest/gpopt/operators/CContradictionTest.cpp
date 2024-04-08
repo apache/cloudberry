@@ -106,7 +106,7 @@ CContradictionTest::EresUnittest_Constraint()
 		CExpression *pexpr = rgpf[i](mp);
 
 		// self-match
-		GPOS_ASSERT(pexpr->FMatchDebug(pexpr));
+		GPOS_UNITTEST_ASSERT(pexpr->FMatchDebug(pexpr));
 
 		// debug print
 		CWStringDynamic str(mp, GPOS_WSZ_LIT("\n"));

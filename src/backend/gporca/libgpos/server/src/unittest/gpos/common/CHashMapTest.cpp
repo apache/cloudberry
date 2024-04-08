@@ -58,7 +58,7 @@ CHashMapTest::EresUnittest_Basic()
 	CHAR rgsz[][5] = {"abc",  "def", "ghi", "qwe", "wer",
 					  "wert", "dfg", "xcv", "zxc"};
 
-	GPOS_ASSERT(GPOS_ARRAY_SIZE(rgul) == GPOS_ARRAY_SIZE(rgsz));
+	GPOS_UNITTEST_ASSERT(GPOS_ARRAY_SIZE(rgul) == GPOS_ARRAY_SIZE(rgsz));
 	const ULONG ulCnt = GPOS_ARRAY_SIZE(rgul);
 
 	using UlongPtrToCharMap =
@@ -70,14 +70,14 @@ CHashMapTest::EresUnittest_Basic()
 	{
 		BOOL fSuccess GPOS_ASSERTS_ONLY =
 			phm->Insert(&rgul[i], (CHAR *) rgsz[i]);
-		GPOS_ASSERT(fSuccess);
+		GPOS_UNITTEST_ASSERT(fSuccess);
 
 		for (ULONG j = 0; j <= i; ++j)
 		{
-			GPOS_ASSERT(rgsz[j] == phm->Find(&rgul[j]));
+			GPOS_UNITTEST_ASSERT(rgsz[j] == phm->Find(&rgul[j]));
 		}
 	}
-	GPOS_ASSERT(ulCnt == phm->Size());
+	GPOS_UNITTEST_ASSERT(ulCnt == phm->Size());
 
 	// test replacing entry values of existing keys
 	CHAR rgszNew[][10] = {"abc_",  "def_", "ghi_", "qwe_", "wer_",
@@ -85,20 +85,17 @@ CHashMapTest::EresUnittest_Basic()
 	for (ULONG i = 0; i < ulCnt; ++i)
 	{
 		BOOL fSuccess GPOS_ASSERTS_ONLY = phm->Replace(&rgul[i], rgszNew[i]);
-		GPOS_ASSERT(fSuccess);
+		GPOS_UNITTEST_ASSERT(fSuccess);
 
-#ifdef GPOS_DEBUG
-		fSuccess =
-#endif	// GPOS_DEBUG
-			phm->Replace(&rgul[i], rgsz[i]);
-		GPOS_ASSERT(fSuccess);
+		fSuccess = phm->Replace(&rgul[i], rgsz[i]);
+		GPOS_UNITTEST_ASSERT(fSuccess);
 	}
-	GPOS_ASSERT(ulCnt == phm->Size());
+	GPOS_UNITTEST_ASSERT(ulCnt == phm->Size());
 
 	// test replacing entry value of a non-existing key
 	ULONG_PTR ulp = 0;
 	BOOL fSuccess GPOS_ASSERTS_ONLY = phm->Replace(&ulp, rgsz[0]);
-	GPOS_ASSERT(!fSuccess);
+	GPOS_UNITTEST_ASSERT(!fSuccess);
 
 	phm->Release();
 
@@ -112,25 +109,17 @@ CHashMapTest::EresUnittest_Basic()
 	ULONG *pulVal1 = GPOS_NEW(mp) ULONG(2);
 	ULONG *pulVal2 = GPOS_NEW(mp) ULONG(3);
 
-#ifdef GPOS_DEBUG
-	fSuccess =
-#endif	// GPOS_DEBUG
-		phm2->Insert(pulKey, pulVal1);
-	GPOS_ASSERT(fSuccess);
+	fSuccess = phm2->Insert(pulKey, pulVal1);
+	GPOS_UNITTEST_ASSERT(fSuccess);
 
-#ifdef GPOS_DEBUG
 	ULONG *pulVal = phm2->Find(pulKey);
-	GPOS_ASSERT(*pulVal == 2);
+	GPOS_UNITTEST_ASSERT(*pulVal == 2);
 
-	fSuccess =
-#endif	// GPOS_DEBUG
-		phm2->Replace(pulKey, pulVal2);
-	GPOS_ASSERT(fSuccess);
+	fSuccess = phm2->Replace(pulKey, pulVal2);
+	GPOS_UNITTEST_ASSERT(fSuccess);
 
-#ifdef GPOS_DEBUG
 	pulVal = phm2->Find(pulKey);
-	GPOS_ASSERT(*pulVal == 3);
-#endif	// GPOS_DEBUG
+	GPOS_UNITTEST_ASSERT(*pulVal == 3);
 
 	phm2->Release();
 
@@ -167,11 +156,11 @@ CHashMapTest::EresUnittest_Ownership()
 
 		BOOL fSuccess GPOS_ASSERTS_ONLY = phm->Insert(pulp, sz);
 
-		GPOS_ASSERT(fSuccess);
-		GPOS_ASSERT(sz == phm->Find(pulp));
+		GPOS_UNITTEST_ASSERT(fSuccess);
+		GPOS_UNITTEST_ASSERT(sz == phm->Find(pulp));
 
 		// can't insert existing keys
-		GPOS_ASSERT(!phm->Insert(pulp, sz));
+		GPOS_UNITTEST_ASSERT(!phm->Insert(pulp, sz));
 	}
 
 	phm->Release();

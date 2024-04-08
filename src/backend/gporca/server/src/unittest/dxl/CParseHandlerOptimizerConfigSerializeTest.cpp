@@ -59,8 +59,8 @@ static void
 SerializeOptimizerConfig(CMemoryPool *mp, COptimizerConfig *optimizer_config,
 						 COstream &oos, BOOL indentation)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(nullptr != optimizer_config);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != optimizer_config);
 
 	CXMLSerializer xml_serializer(mp, oos, indentation);
 
@@ -105,7 +105,7 @@ CParseHandlerOptimizerConfigSerializeTest::EresUnittest()
 	COptimizerConfig *poc =
 		CDXLUtils::ParseDXLToOptimizerConfig(mp, dxl_string, szValidationPath);
 
-	GPOS_ASSERT(nullptr != poc);
+	GPOS_UNITTEST_ASSERT(nullptr != poc);
 
 	GPOS_CHECK_ABORT;
 
@@ -118,7 +118,7 @@ CParseHandlerOptimizerConfigSerializeTest::EresUnittest()
 	CWStringDynamic strExpected(mp);
 	strExpected.AppendFormat(GPOS_WSZ_LIT("%s"), dxl_string);
 
-	GPOS_ASSERT(strExpected.Equals(&str));
+	GPOS_UNITTEST_ASSERT(strExpected.Equals(&str));
 
 	poc->Release();
 

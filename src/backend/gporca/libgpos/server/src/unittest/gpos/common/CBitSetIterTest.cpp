@@ -71,14 +71,15 @@ CBitSetIterTest::EresUnittest_Basics()
 	CBitSetIter bsi(*pbs);
 	while (bsi.Advance())
 	{
-		GPOS_ASSERT(bsi.Bit() == (bsi.Bit() / vector_size) * vector_size);
-		GPOS_ASSERT((BOOL) bsi);
+		GPOS_UNITTEST_ASSERT(bsi.Bit() ==
+							 (bsi.Bit() / vector_size) * vector_size);
+		GPOS_UNITTEST_ASSERT((BOOL) bsi);
 
 		cCount++;
 	}
-	GPOS_ASSERT(cInserts == cCount);
+	GPOS_UNITTEST_ASSERT(cInserts == cCount);
 
-	GPOS_ASSERT(!((BOOL) bsi));
+	GPOS_UNITTEST_ASSERT(!((BOOL) bsi));
 
 	pbs->Release();
 

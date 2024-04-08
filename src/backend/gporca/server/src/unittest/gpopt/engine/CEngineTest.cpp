@@ -106,7 +106,7 @@ CEngineTest::EresUnittest_Basic()
 
 	// extract plan
 	CExpression *pexprPlan = eng.PexprExtractPlan();
-	GPOS_ASSERT(nullptr != pexprPlan);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprPlan);
 
 	// clean up
 	pexpr->Release();
@@ -138,10 +138,10 @@ CEngineTest::EresOptimize(
 		pbs	 // if a bit is set, the corresponding join expression will be optimized
 )
 {
-	GPOS_ASSERT(nullptr != pfopt);
-	GPOS_ASSERT(nullptr != str);
-	GPOS_ASSERT(nullptr != pul);
-	GPOS_ASSERT(nullptr != pbs);
+	GPOS_UNITTEST_ASSERT(nullptr != pfopt);
+	GPOS_UNITTEST_ASSERT(nullptr != str);
+	GPOS_UNITTEST_ASSERT(nullptr != pul);
+	GPOS_UNITTEST_ASSERT(nullptr != pbs);
 
 	CAutoMemoryPool amp;
 	CMemoryPool *mp = amp.Pmp();
@@ -400,7 +400,7 @@ CEngineTest::BuildMemoRecursive(CMemoryPool *mp, CExpression *pexprInput,
 	GPOS_CHECK_ABORT;
 
 	CExpression *pexprPlan = eng.PexprExtractPlan();
-	GPOS_ASSERT(nullptr != pexprPlan);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprPlan);
 
 	os << std::endl << std::endl;
 	os << "OUTPUT PLAN:" << std::endl;

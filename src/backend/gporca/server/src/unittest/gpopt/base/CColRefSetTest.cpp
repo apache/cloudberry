@@ -82,13 +82,13 @@ CColRefSetTest::EresUnittest_Basics()
 			col_factory->PcrCreate(pmdtypeint4, default_type_modifier, name);
 		pcrs->Include(colref);
 
-		GPOS_ASSERT(pcrs->FMember(colref));
+		GPOS_UNITTEST_ASSERT(pcrs->FMember(colref));
 	}
 
-	GPOS_ASSERT(pcrs->Size() == num_cols);
+	GPOS_UNITTEST_ASSERT(pcrs->Size() == num_cols);
 
 	CColRefSet *pcrsTwo = GPOS_NEW(mp) CColRefSet(mp, *pcrs);
-	GPOS_ASSERT(pcrsTwo->Size() == num_cols);
+	GPOS_UNITTEST_ASSERT(pcrsTwo->Size() == num_cols);
 
 	pcrsTwo->Release();
 	pcrs->Release();
