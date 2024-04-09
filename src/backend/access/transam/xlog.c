@@ -7245,7 +7245,10 @@ CreateCheckPoint(int flags)
 	 * recovery we don't need to write running xact data.
 	 */
 	if (!shutdown && XLogStandbyInfoActive())
+	{
 		LogStandbySnapshot();
+
+	}
 
 	SIMPLE_FAULT_INJECTOR("checkpoint_after_redo_calculated");
 
