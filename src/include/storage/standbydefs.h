@@ -34,6 +34,7 @@ extern void standby_desc_invalidations(StringInfo buf,
 #define XLOG_STANDBY_LOCK			0x00
 #define XLOG_RUNNING_XACTS			0x10
 #define XLOG_INVALIDATIONS			0x20
+#define XLOG_LATESTCOMPLETED_GXID   0xF0
 
 typedef struct xl_standby_locks
 {

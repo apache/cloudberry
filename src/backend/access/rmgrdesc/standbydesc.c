@@ -66,6 +66,14 @@ standby_desc(StringInfo buf, XLogReaderState *record)
 								   xlrec->dbId, xlrec->tsId,
 								   xlrec->relcacheInitFileInval);
 	}
+	else if (info == XLOG_LATESTCOMPLETED_GXID)
+	{
+		DistributedTransactionId gxid;
+
+		gxid = *((DistributedTransactionId *) rec);
+		appendStringInfo(buf, UINT64_FORMAT, gxid);
+	}
+
 }
 
 const char *
@@ -83,6 +91,9 @@ standby_identify(uint8 info)
 			break;
 		case XLOG_INVALIDATIONS:
 			id = "INVALIDATIONS";
+			break;
+		case XLOG_LATESTCOMPLETED_GXID:
+			id = "XLOG_LATESTCOMPLETED_GXID";
 			break;
 	}
 
