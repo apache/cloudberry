@@ -6055,7 +6055,7 @@ pauseRecoveryOnRestorePoint(XLogReaderState *record)
 							timestamptz_to_str(recordRestorePointData->rp_time))));
 
 			SetRecoveryPause(true);
-			recoveryPausesHere();
+			recoveryPausesHere(false);
 
 			/*
 			 * If we've unpaused and there is a promotion request, then we've
@@ -9870,7 +9870,10 @@ CreateCheckPoint(int flags)
 	 * recovery we don't need to write running xact data.
 	 */
 	if (!shutdown && XLogStandbyInfoActive())
+	{
 		LogStandbySnapshot();
+
+	}
 
 	SIMPLE_FAULT_INJECTOR("checkpoint_after_redo_calculated");
 
