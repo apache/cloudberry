@@ -94,17 +94,6 @@ public:
 		return PpcDeriveConstraintFromPredicates(mp, exprhdl);
 	}
 
-	// derive table descriptor
-	CTableDescriptorHashSet *
-	DeriveTableDescriptor(CMemoryPool *,  // mp
-						  CExpressionHandle &exprhdl) const override
-	{
-		CTableDescriptorHashSet *table_descriptor_set =
-			exprhdl.DeriveTableDescriptor(0);
-		table_descriptor_set->AddRef();
-		return table_descriptor_set;
-	}
-
 	//-------------------------------------------------------------------------------------
 	// Transformations
 	//-------------------------------------------------------------------------------------

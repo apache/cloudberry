@@ -263,3 +263,94 @@ EXPLAIN SELECT t1.a, t2.a FROM my_table AS t1, your_table AS t2, our_table AS t3
                            ->  Seq Scan on my_table t1  (cost=xxx..xxx rows=33 width=xxx)
  Optimizer: Postgres query optimizer
 
+--------------------------------------------------------------------
+-- Test Semi/AntiSemi Joins with RowHints
+--------------------------------------------------------------------
+\o results/pg_hint_plan.tmpout
+/*+ 
+Rows(t1 t2 #123) 
+*/ 
+EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a IN (SELECT t2.a FROM our_table t2);
+\o
+\! sql/maskout.sh results/pg_hint_plan.tmpout
+  QUERY PLAN
+----------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=xxx..xxx rows=123 width=xxx)
+   ->  Hash Semi Join  (cost=xxx..xxx rows=41 width=xxx)
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on my_table t1  (cost=xxx..xxx rows=33 width=xxx)
+         ->  Hash  (cost=xxx..xxx rows=34 width=xxx)
+               ->  Append  (cost=xxx..xxx rows=34 width=xxx)
+                     ->  Seq Scan on our_table_1_prt_p1_1 t2  (cost=xxx..xxx rows=6 width=xxx)
+                     ->  Seq Scan on our_table_1_prt_p1_2 t2_1  (cost=xxx..xxx rows=7 width=xxx)
+                     ->  Seq Scan on our_table_1_prt_p1_3 t2_2  (cost=xxx..xxx rows=7 width=xxx)
+                     ->  Seq Scan on our_table_1_prt_p1_4 t2_3  (cost=xxx..xxx rows=7 width=xxx)
+                     ->  Seq Scan on our_table_1_prt_p1_5 t2_4  (cost=xxx..xxx rows=7 width=xxx)
+                     ->  Seq Scan on our_table_1_prt_p1_6 t2_5  (cost=xxx..xxx rows=1 width=xxx)
+ Optimizer: Postgres-based planner
+
+\o results/pg_hint_plan.tmpout
+/*+ 
+Rows(t1 t2 #123) 
+*/
+EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a NOT IN (SELECT t2.a FROM our_table t2);
+ERROR:  unrecognized join type: 6 (make_join_rel.c:385)
+\o
+\! sql/maskout.sh results/pg_hint_plan.tmpout
+---------------------------------------------------------------------------------------------
+-- Test case where we disable InnerJoin alternatives so that Stats for the join group are
+-- derived from LeftSemi/LeftAntiSemiJoin operators instead of CLogicalJoin operator.
+---------------------------------------------------------------------------------------------
+SELECT disable_xform('CXformLeftSemiJoin2InnerJoin');
+              disable_xform               
+------------------------------------------
+ CXformLeftSemiJoin2InnerJoin is disabled
+(1 row)
+
+\o results/pg_hint_plan.tmpout
+/*+
+Rows(t1 t2 #123)
+*/
+EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a NOT IN (SELECT t2.a FROM our_table t2);
+ERROR:  unrecognized join type: 6 (make_join_rel.c:385)
+\o
+\! sql/maskout.sh results/pg_hint_plan.tmpout
+SELECT enable_xform('CXformLeftSemiJoin2InnerJoin');
+              enable_xform               
+-----------------------------------------
+ CXformLeftSemiJoin2InnerJoin is enabled
+(1 row)
+
+--------------------------------------------------------------------
+-- Test Joins from project sub queries with RowHints
+--------------------------------------------------------------------
+CREATE TABLE foo(a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE bar(a int, b int) DISTRIBUTED BY (a);
+INSERT INTO bar SELECT i, i+3 FROM generate_series(1,5) i;
+-- Insert single row
+INSERT INTO foo values (-2, 34);
+ANALYZE foo;
+ANALYZE bar;
+-- Nested Loop Left Join operator estimates 41 rows(per segment for 3 segment cluster)
+-- honoring the specified RowHint. However, Gather Motion estimates total number of
+-- rows as 5 because the outer table bar only has 5 rows and ComputeScalar is being smart
+-- about it and estimates 5 rows.
+\o results/pg_hint_plan.tmpout
+/*+
+Rows(f b #123)
+*/
+EXPLAIN SELECT (SELECT a FROM foo AS f) FROM bar AS b;
+\o
+\! sql/maskout.sh results/pg_hint_plan.tmpout
+  QUERY PLAN
+----------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=xxx..xxx rows=5 width=xxx)
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=xxx..xxx rows=1 width=xxx)
+           ->  Seq Scan on foo f  (cost=xxx..xxx rows=1 width=xxx)
+   ->  Seq Scan on bar b  (cost=xxx..xxx rows=2 width=xxx)
+ Optimizer: Postgres-based planner
+
+-- Clean Up
+DROP TABLE foo;
+DROP TABLE bar;

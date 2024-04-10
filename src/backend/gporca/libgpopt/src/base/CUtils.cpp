@@ -2189,14 +2189,15 @@ CUtils::PexprLogicalSelect(CMemoryPool *mp, CExpression *pexpr,
 	GPOS_ASSERT(nullptr != pexprPredicate);
 
 	CTableDescriptor *ptabdesc = nullptr;
-	if (pexpr->Pop()->Eopid() == CLogical::EopLogicalSelect ||
-		pexpr->Pop()->Eopid() == CLogical::EopLogicalGet ||
+	if (pexpr->Pop()->Eopid() == CLogical::EopLogicalGet ||
 		pexpr->Pop()->Eopid() == CLogical::EopLogicalDynamicGet)
 	{
 		ptabdesc = pexpr->DeriveTableDescriptor()->First();
-		// there are some cases where we don't populate LogicalSelect currently
-		GPOS_ASSERT_IMP(pexpr->Pop()->Eopid() != CLogical::EopLogicalSelect,
-						nullptr != ptabdesc);
+		GPOS_ASSERT(nullptr != ptabdesc);
+	}
+	else if (pexpr->Pop()->Eopid() == CLogical::EopLogicalSelect)
+	{
+		ptabdesc = CLogicalSelect::PopConvert(pexpr->Pop())->Ptabdesc();
 	}
 	return GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CLogicalSelect(mp, ptabdesc), pexpr, pexprPredicate);

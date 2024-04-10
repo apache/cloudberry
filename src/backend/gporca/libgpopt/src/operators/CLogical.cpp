@@ -932,19 +932,6 @@ CLogical::DeriveFunctionProperties(CMemoryPool *mp,
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CLogical::DeriveTableDescriptor
-//
-//	@doc:
-//		Derive table descriptor for tables used by operator
-//
-//---------------------------------------------------------------------------
-CTableDescriptorHashSet *
-CLogical::DeriveTableDescriptor(CMemoryPool *mp, CExpressionHandle &) const
-{
-	return GPOS_NEW(mp) CTableDescriptorHashSet(mp);
-}
-//---------------------------------------------------------------------------
-//	@function:
 //		CLogical::PfpDeriveFromScalar
 //
 //	@doc:
