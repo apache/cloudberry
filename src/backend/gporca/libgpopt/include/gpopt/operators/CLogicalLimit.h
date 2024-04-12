@@ -14,6 +14,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/COrderSpec.h"
+#include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CLogical.h"
 #include "naucrates/md/IMDId.h"
 
@@ -191,6 +192,17 @@ public:
 		GPOS_ASSERT(EopLogicalLimit == pop->Eopid());
 
 		return dynamic_cast<CLogicalLimit *>(pop);
+	}
+
+	CTableDescriptorHashSet *
+	DeriveTableDescriptor(CMemoryPool *,
+						  CExpressionHandle &exprhdl) const override
+	{
+		// Index 0 contains any relation(s) used to produce output
+		CTableDescriptorHashSet *table_descriptor_set =
+			exprhdl.DeriveTableDescriptor(0);
+		table_descriptor_set->AddRef();
+		return table_descriptor_set;
 	}
 
 };	// class CLogicalLimit
