@@ -16,6 +16,7 @@ explain insert into CoordinatorOnly select * from distributedtable order by 1;
           <dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/>
         </dxl:CostParams>
       </dxl:CostModelConfig>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,101001,102024,102025,102115,102116,102117,102119,102121,103014,103015"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

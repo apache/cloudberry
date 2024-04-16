@@ -94,7 +94,10 @@ CPlanHint::GetScanHint(const CWStringBase *name)
 CRowHint *
 CPlanHint::GetRowHint(CTableDescriptorHashSet *ptabdescs)
 {
-	GPOS_ASSERT(ptabdescs->Size() > 0);
+	if (ptabdescs->Size() == 0)
+	{
+		return nullptr;
+	}
 
 	StringPtrArray *aliases = GPOS_NEW(m_mp) StringPtrArray(m_mp);
 	CTableDescriptorHashSetIter hsiter(ptabdescs);

@@ -26,6 +26,7 @@ select a1, a2 from foo_a UNION ALL (select x1, x2 FROM (select b3, b2, b1 from f
           <dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/>
         </dxl:CostParams>
       </dxl:CostModelConfig>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,101013,102120,103001,103014,103015,103022,103023,105000"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

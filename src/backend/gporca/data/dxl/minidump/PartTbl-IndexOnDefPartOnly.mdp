@@ -36,6 +36,7 @@ SELECT * FROM pt_lt_tab WHERE col2 = 15 ORDER BY col2,col3 LIMIT 5;
           <dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/>
         </dxl:CostParams>
       </dxl:CostModelConfig>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,102024,102025,102115,102116,102119,102120,102128,102131,102132,102133,103001,103014,103015"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

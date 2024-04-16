@@ -23,6 +23,7 @@ select * from pt, t where pt.k = t.t1;
           <dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/>
         </dxl:CostParams>
       </dxl:CostModelConfig>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="102120,103001,103014,103015,103022"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

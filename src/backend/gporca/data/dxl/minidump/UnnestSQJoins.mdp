@@ -28,6 +28,7 @@ WHERE
         </dxl:CostParams>
       </dxl:CostModelConfig>
       <dxl:Hint JoinArityForAssociativityCommutativity="18" ArrayExpansionThreshold="100" JoinOrderDynamicProgThreshold="10" BroadcastThreshold="100000" EnforceConstraintsOnDML="false" PushGroupByBelowSetopThreshold="10"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="102001,102002,102003,102144,103001,103026,103027,103033"/>
     </dxl:OptimizerConfig>
     <dxl:Stacktrace/>

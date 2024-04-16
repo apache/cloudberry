@@ -19,6 +19,7 @@ select count(*) from (select unnest(string_to_array(c, '|')) i, d from foo) t;
         </dxl:CostParams>
       </dxl:CostModelConfig>
       <dxl:Hint MinNumOfPartsToRequireSortOnInsert="1000000"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,101013,102120,103001,103014,103015,103022,104004,104005,105000"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

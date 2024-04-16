@@ -18,6 +18,7 @@ EXPLAIN SELECT xmin FROM foo UNION ALL SELECT xmin FROM bar;
         </dxl:CostParams>
       </dxl:CostModelConfig>
       <dxl:Hint JoinArityForAssociativityCommutativity="2147483647" ArrayExpansionThreshold="25" JoinOrderDynamicProgThreshold="10"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,102120,103001,103014,103015,103022,103025,104004,104005,105000"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

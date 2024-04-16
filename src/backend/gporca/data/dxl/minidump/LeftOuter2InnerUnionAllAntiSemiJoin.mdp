@@ -27,6 +27,7 @@ and ei.entity_id  = i.ad_id;
       <dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.010000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/>
       <dxl:CTEConfig CTEInliningCutoff="0"/> 
       <dxl:WindowOids RowNumber="7000" Rank="7001"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,102024,102025,102045,102046,102115,102116,102117,102119,102121,103017"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

@@ -24,6 +24,7 @@ select count(*) from x10, y10 where (x10.i > y10.j AND x10.j <= y10.i);
           <dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/>
         </dxl:CostParams>
       </dxl:CostModelConfig>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,101013,102115,102116,102128,103001,103014,103015"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">
