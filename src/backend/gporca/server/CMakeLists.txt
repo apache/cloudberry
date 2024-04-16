@@ -538,12 +538,7 @@ add_orca_test(CMinidumpWithConstExprEvaluatorTest)
 add_orca_test(CParseHandlerManagerTest)
 add_orca_test(CParseHandlerTest)
 add_orca_test(CParseHandlerCostModelTest)
-# FIXME: this following test was first introduced (but as a typo) in
-# greenplum-db/gporca#355. I've corrected the typo but it's not clear whether
-# it ever passed, but we should give it a best-effort resurrection.
-if (FALSE)
 add_orca_test(CParseHandlerOptimizerConfigSerializeTest)
-endif()
 add_orca_test(CStatisticsTest)
 add_orca_test(CPointTest)
 add_orca_test(CBucketTest)
