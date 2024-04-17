@@ -36,7 +36,8 @@ CCTEInfo::CCTEInfoEntry::CCTEInfoEntry(CMemoryPool *mp,
 	: m_mp(mp),
 	  m_pexprCTEProducer(pexprCTEProducer),
 	  m_phmcrulConsumers(nullptr),
-	  m_fUsed(true)
+	  m_fUsed(true),
+	  m_hasOuterReferences(false)
 {
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(nullptr != pexprCTEProducer);
@@ -59,7 +60,8 @@ CCTEInfo::CCTEInfoEntry::CCTEInfoEntry(CMemoryPool *mp,
 	: m_mp(mp),
 	  m_pexprCTEProducer(pexprCTEProducer),
 	  m_phmcrulConsumers(nullptr),
-	  m_fUsed(fUsed)
+	  m_fUsed(fUsed),
+	  m_hasOuterReferences(false)
 {
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(nullptr != pexprCTEProducer);
@@ -430,6 +432,37 @@ CCTEInfo::FUsed(ULONG ulCTEId) const
 	return pcteinfoentry->FUsed();
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CCTEInfo::HasOuterReferences
+//
+//	@doc:
+//		Check if given CTE has outer reference
+//
+//---------------------------------------------------------------------------
+BOOL
+CCTEInfo::HasOuterReferences(ULONG ulCTEId) const
+{
+	CCTEInfoEntry *pcteinfoentry = m_phmulcteinfoentry->Find(&ulCTEId);
+	GPOS_ASSERT(nullptr != pcteinfoentry);
+	return pcteinfoentry->HasOuterReferences();
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCTEInfo::SetHasOuterReferences
+//
+//	@doc:
+//		Check if given CTE has outer reference
+//
+//---------------------------------------------------------------------------
+void
+CCTEInfo::SetHasOuterReferences(ULONG ulCTEId)
+{
+	CCTEInfoEntry *pcteinfoentry = m_phmulcteinfoentry->Find(&ulCTEId);
+	GPOS_ASSERT(nullptr != pcteinfoentry);
+	pcteinfoentry->SetHasOuterReferences();
+}
 
 //---------------------------------------------------------------------------
 //	@function:

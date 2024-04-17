@@ -49,7 +49,9 @@ CXformInlineCTEConsumer::Exfp(CExpressionHandle &exprhdl) const
 	const ULONG id = CLogicalCTEConsumer::PopConvert(exprhdl.Pop())->UlCTEId();
 	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
 
-	if ((pcteinfo->FEnableInlining() || 1 == pcteinfo->UlConsumers(id)) &&
+	// Also inline if subtree of CTE contains outer reference since we disable CXformCTEAnchor2Sequence if cte contains outer refs
+	if ((pcteinfo->FEnableInlining() || 1 == pcteinfo->UlConsumers(id) ||
+		 pcteinfo->HasOuterReferences(id)) &&
 		CXformUtils::FInlinableCTE(id))
 	{
 		return CXform::ExfpHigh;

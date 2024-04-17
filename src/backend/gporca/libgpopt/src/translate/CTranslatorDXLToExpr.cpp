@@ -1254,6 +1254,21 @@ CTranslatorDXLToExpr::PexprLogicalCTEAnchor(const CDXLNode *dxlnode)
 	// translate the child dxl node
 	CExpression *pexprChild = PexprLogical((*dxlnode)[0]);
 
+	// if the cte subtree below the CTE anchor
+	// contains an outer reference, then when constructing a sequence of a
+	// producer/consumer, Orca won't be able to generate a valid plan.  The
+	// subtree will need to be executed multiple times, but the Sequence
+	// operator derives not rewindable, causing a material to be added
+	// above the sequence. This creates a contradiction leading to no
+	// valid plan being generated. Even if we relax this restriction,
+	// additional fixes in the executor are needed to get this working. For
+	// now, we mark the CTE as containing an outer ref and attempt to
+	// inline it instead
+
+	if (pexprChild->DeriveOuterReferences()->Size() > 0)
+	{
+		COptCtxt::PoctxtFromTLS()->Pcteinfo()->SetHasOuterReferences(id);
+	}
 	return GPOS_NEW(m_mp) CExpression(
 		m_mp, GPOS_NEW(m_mp) CLogicalCTEAnchor(m_mp, id), pexprChild);
 }

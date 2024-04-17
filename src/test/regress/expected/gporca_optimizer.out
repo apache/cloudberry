@@ -8830,8 +8830,6 @@ select foo.b+1, sum((with cte as (select * from jazz) select 1 from cte where ct
 
 -- ctes inside aggs
 select foo.b+1, sum((with cte as (select * from jazz) select 1 from cte cte1, cte cte2 where cte1.h = foo.b)) as t FROM foo GROUP BY foo.b;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
  ?column? | t 
 ----------+---
         3 | 1
