@@ -192,35 +192,50 @@ class Session(cmd.Cmd):
         good_list = []
         print_lock = threading.Lock()
 
-        def connect_host(hostname, p):
-            self.hostList.append(hostname)
-            try:
-                # The sync_multiplier value is passed onto pexpect.pxssh which is used to determine timeout
-                # values for prompt verification after an ssh connection is established.
-                p.login(hostname, self.userName, sync_multiplier=sync_multiplier)
-                p.x_peer = hostname
-                p.x_pid = p.pid
-                good_list.append(p)
-                if self.verbose:
+        def connect_host(hostname):
+            retry_login = True
+
+            while True:
+                # create a new PxsshWrapper object for each retry to avoid using the
+                # same object which can cause unexpected behaviours
+                p = gppxssh_wrapper.PxsshWrapper(delaybeforesend=delaybeforesend,
+                                                 sync_retries=sync_retries,
+                                                 options={"StrictHostKeyChecking": "no",
+                                                          "BatchMode": "yes"})
+
+                try:
+                    # The sync_multiplier value is passed onto pexpect.pxssh which is used to determine timeout
+                    # values for prompt verification after an ssh connection is established.
+                    p.login(hostname, self.userName, sync_multiplier=sync_multiplier)
+                    p.x_peer = hostname
+                    p.x_pid = p.pid
+                    good_list.append(p)
+                    if self.verbose:
+                        with print_lock:
+                            print('[INFO] login %s' % hostname)
+                except Exception as e:
+                    # some logins fail due to the clearing of the TERM env variable
+                    # retry by restoring the TERM variable to see if it succeeds or else error out
+                    if origTERM and retry_login:
+                        retry_login = False
+                        os.putenv('TERM', origTERM)
+                        continue
+
                     with print_lock:
-                        print('[INFO] login %s' % hostname)
-            except Exception as e:
-                with print_lock:
-                    print('[ERROR] unable to login to %s' % hostname)
-                    if type(e) is pxssh.ExceptionPxssh:
-                        print(e)
-                    elif type(e) is pxssh.EOF:
-                        print('Could not acquire connection.')
-                    else:
-                        print('hint: use gpssh-exkeys to setup public-key authentication between hosts')
+                        print('[ERROR] unable to login to %s' % hostname)
+                        if type(e) is pxssh.ExceptionPxssh:
+                            print(e)
+                        elif type(e) is pxssh.EOF:
+                            print('Could not acquire connection.')
+                            print(e)
+                        else:
+                            print('hint: use gpssh-exkeys to setup public-key authentication between hosts')
+
+                break
 
         thread_list = []
         for host in hostList:
-            p = gppxssh_wrapper.PxsshWrapper(delaybeforesend=delaybeforesend,
-                                             sync_retries=sync_retries,
-                                             options={"StrictHostKeyChecking": "no",
-                                                      "BatchMode": "yes"})
-            t = threading.Thread(target=connect_host, args=(host, p))
+            t = threading.Thread(target=connect_host, args=[host])
             t.start()
             thread_list.append(t)
 
