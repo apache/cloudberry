@@ -876,6 +876,11 @@ datumstreamread_close_file(DatumStreamRead * ds)
 {
 	AppendOnlyStorageRead_CloseFile(&ds->ao_read);
 
+	/*
+	 * Reset blockRowCount as file being closed,
+	 * which also helps to direct to next segfile
+	 * reading in sampling scenario.
+	 */
 	ds->blockRowCount = 0;
 	ds->need_close_file = false;
 }
