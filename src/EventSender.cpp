@@ -54,10 +54,7 @@ std::string *get_db_name() {
 }
 
 std::string *get_rg_name() {
-  auto userId = GetUserId();
-  if (!OidIsValid(userId))
-    return nullptr;
-  auto groupId = GetResGroupIdForRole(userId);
+  auto groupId = ResGroupGetGroupIdBySessionId(MySessionState->sessionId);
   if (!OidIsValid(groupId))
     return nullptr;
   char *rgname = GetResGroupNameForId(groupId);
