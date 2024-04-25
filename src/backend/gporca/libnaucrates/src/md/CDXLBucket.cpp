@@ -130,12 +130,12 @@ CDXLBucket::Serialize(CXMLSerializer *xml_serializer) const
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
 		CDXLTokens::GetDXLTokenStr(EdxltokenColumnStatsBucket));
 
+	xml_serializer->SetFullPrecision(true);
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenStatsFrequency), m_frequency);
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenStatsDistinct), m_distinct);
 
-	xml_serializer->SetFullPrecision(true);
 	SerializeBoundaryValue(
 		xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenStatsBucketLowerBound),

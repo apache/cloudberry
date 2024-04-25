@@ -960,9 +960,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsBasicsFromDXLNumeric()
 		CStatsPredConj *pred_stats =
 			GPOS_NEW(mp) CStatsPredConj(pdrgpstatspred);
 		GPOS_RESULT eres = EresUnittest_CStatisticsCompare(
-			mp, md_accessor, pdrgpstatBefore, pred_stats, szDXLOutput,
-			true /*fApplyTwice*/
-		);
+			mp, md_accessor, pdrgpstatBefore, pred_stats, szDXLOutput);
 
 		// clean up
 		pdrgpstatBefore->Release();
@@ -1071,7 +1069,7 @@ GPOS_RESULT
 CFilterCardinalityTest::EresUnittest_CStatisticsCompare(
 	CMemoryPool *mp, CMDAccessor *md_accessor,
 	CStatisticsArray *pdrgpstatBefore, CStatsPred *pred_stats,
-	const CHAR *szDXLOutput, BOOL fApplyTwice)
+	const CHAR *szDXLOutput)
 {
 	CWStringDynamic str(mp);
 	COstreamString oss(&str);
@@ -1118,32 +1116,6 @@ CFilterCardinalityTest::EresUnittest_CStatisticsCompare(
 	);
 	GPOS_TRACE(str.GetBuffer());
 	str.Reset();
-
-	if (fApplyTwice && GPOS_OK == eres)
-	{
-		CStatistics *pstatsOutput2 = CFilterStatsProcessor::MakeStatsFilter(
-			mp, pstatsOutput, pred_stats, true /* do_cap_NDVs */);
-		pstatsOutput2->Rows();
-		GPOS_TRACE(GPOS_WSZ_LIT("Statistics after another filter"));
-		CCardinalityTestUtils::PrintStats(mp, pstatsOutput2);
-
-		// output array of stats objects
-		CStatisticsArray *pdrgpstatOutput2 = GPOS_NEW(mp) CStatisticsArray(mp);
-		pdrgpstatOutput2->Append(pstatsOutput2);
-
-		CWStringDynamic *pstrOutput2 = CDXLUtils::SerializeStatistics(
-			mp, md_accessor, pdrgpstatOutput2, true /*serialize_header_footer*/,
-			true /*indentation*/
-		);
-		eres = CTestUtils::EresCompare(
-			oss, pstrOutput2, &dstrExpected, false /* ignore mismatch */
-		);
-		GPOS_TRACE(str.GetBuffer());
-		str.Reset();
-
-		pdrgpstatOutput2->Release();
-		GPOS_DELETE(pstrOutput2);
-	}
 
 	pdrgpstatOutput->Release();
 	GPOS_DELETE(pstrOutput);

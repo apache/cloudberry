@@ -3,11 +3,11 @@
   <dxl:Statistics>
     <dxl:DerivedRelationStats Rows="900.000000" EmptyRelation="false">
       <dxl:DerivedColumnStats ColId="1" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000">
-        <dxl:StatsBucket Frequency="0.111111" DistinctValues="2.000000">
+        <dxl:StatsBucket Frequency="0.11111111111111112" DistinctValues="2.00000000000000000">
           <dxl:LowerBound Closed="true" TypeMdid="0.23.1.0" Value="0"/>
           <dxl:UpperBound Closed="false" TypeMdid="0.23.1.0" Value="10"/>
         </dxl:StatsBucket>
-        <dxl:StatsBucket Frequency="0.888889" DistinctValues="1.000000">
+        <dxl:StatsBucket Frequency="0.88888888888888895" DistinctValues="1.00000000000000000">
           <dxl:LowerBound Closed="true" TypeMdid="0.23.1.0" Value="10"/>
           <dxl:UpperBound Closed="false" TypeMdid="0.23.1.0" Value="20"/>
         </dxl:StatsBucket>
