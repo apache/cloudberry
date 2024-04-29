@@ -45,3 +45,13 @@ clean: clean-symlinks
 
 clean-symlinks:
 	rm -f link-canary.c
+
+# For postgres_fdw test
+export PG_PORT=5432
+installcheck: install prep_postgres
+clean: clean_postgres
+prep_postgres:
+	./postgres_setup.bash
+clean_postgres:
+	./postgres_clean.bash
+.PHONY: prep_postgres clean_postgres
