@@ -35,6 +35,7 @@
 #include "access/tableam.h"
 #include "access/tupdesc.h"
 #include "access/visibilitymap.h"
+#include "catalog/pg_type.h"
 #include "cdb/cdbvars.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIndexonlyscan.h"
@@ -42,13 +43,14 @@
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
 #include "storage/predicate.h"
+#include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 
 
 static TupleTableSlot *IndexOnlyNext(IndexOnlyScanState *node);
-static void StoreIndexTuple(TupleTableSlot *slot, IndexTuple itup,
-							TupleDesc itupdesc);
+static void StoreIndexTuple(IndexOnlyScanState *node, TupleTableSlot *slot,
+							IndexTuple itup, TupleDesc itupdesc);
 
 
 /* ----------------------------------------------------------------
@@ -209,7 +211,7 @@ IndexOnlyNext(IndexOnlyScanState *node)
 			ExecForceStoreHeapTuple(scandesc->xs_hitup, slot, false);
 		}
 		else if (scandesc->xs_itup)
-			StoreIndexTuple(slot, scandesc->xs_itup, scandesc->xs_itupdesc);
+			StoreIndexTuple(node, slot, scandesc->xs_itup, scandesc->xs_itupdesc);
 		else
 			elog(ERROR, "no data returned for index-only scan");
 
@@ -267,7 +269,8 @@ IndexOnlyNext(IndexOnlyScanState *node)
  * right now we don't need it elsewhere.
  */
 static void
-StoreIndexTuple(TupleTableSlot *slot, IndexTuple itup, TupleDesc itupdesc)
+StoreIndexTuple(IndexOnlyScanState *node, TupleTableSlot *slot,
+				IndexTuple itup, TupleDesc itupdesc)
 {
 	/*
 	 * Note: we must use the tupdesc supplied by the AM in index_deform_tuple,
@@ -280,6 +283,37 @@ StoreIndexTuple(TupleTableSlot *slot, IndexTuple itup, TupleDesc itupdesc)
 
 	ExecClearTuple(slot);
 	index_deform_tuple(itup, itupdesc, slot->tts_values, slot->tts_isnull);
+
+	/*
+	 * Copy all name columns stored as cstrings back into a NAMEDATALEN byte
+	 * sized allocation.  We mark this branch as unlikely as generally "name"
+	 * is used only for the system catalogs and this would have to be a user
+	 * query running on those or some other user table with an index on a name
+	 * column.
+	 */
+	if (unlikely(node->ioss_NameCStringAttNums != NULL))
+	{
+		int			attcount = node->ioss_NameCStringCount;
+
+		for (int idx = 0; idx < attcount; idx++)
+		{
+			int			attnum = node->ioss_NameCStringAttNums[idx];
+			Name		name;
+
+			/* skip null Datums */
+			if (slot->tts_isnull[attnum])
+				continue;
+
+			/* allocate the NAMEDATALEN and copy the datum into that memory */
+			name = (Name) MemoryContextAlloc(node->ss.ps.ps_ExprContext->ecxt_per_tuple_memory,
+											 NAMEDATALEN);
+
+			/* use namestrcpy to zero-pad all trailing bytes */
+			namestrcpy(name, DatumGetCString(slot->tts_values[attnum]));
+			slot->tts_values[attnum] = NameGetDatum(name);
+		}
+	}
+
 	ExecStoreVirtualTuple(slot);
 }
 
@@ -507,8 +541,11 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 								  Relation currentRelation, Oid indexid)
 {
 	IndexOnlyScanState *indexstate;
+	Relation	indexRelation;
 	LOCKMODE	lockmode;
 	TupleDesc	tupDesc;
+	int			indnkeyatts;
+	int			namecount;
 
 	/*
 	 * create state structure
@@ -576,7 +613,8 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 
 	/* Open the index relation. */
 	lockmode = exec_rt_fetch(node->scan.scanrelid, estate)->rellockmode;
-	indexstate->ioss_RelationDesc = index_open(indexid, lockmode);
+	indexRelation = index_open(indexid, lockmode);
+	indexstate->ioss_RelationDesc = indexRelation;
 
 	/*
 	 * Initialize index-specific scan state
@@ -589,7 +627,7 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 	 * build the index scan keys from the index qualification
 	 */
 	ExecIndexBuildScanKeys((PlanState *) indexstate,
-						   indexstate->ioss_RelationDesc,
+						   indexRelation,
 						   node->indexqual,
 						   false,
 						   &indexstate->ioss_ScanKeys,
@@ -603,7 +641,7 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 	 * any ORDER BY exprs have to be turned into scankeys in the same way
 	 */
 	ExecIndexBuildScanKeys((PlanState *) indexstate,
-						   indexstate->ioss_RelationDesc,
+						   indexRelation,
 						   node->indexorderby,
 						   true,
 						   &indexstate->ioss_OrderByKeys,
@@ -631,6 +669,49 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 	{
 		indexstate->ioss_RuntimeContext = NULL;
 	}
+
+	indexstate->ioss_NameCStringAttNums = NULL;
+	indnkeyatts = indexRelation->rd_index->indnkeyatts;
+	namecount = 0;
+
+	/*
+	 * The "name" type for btree uses text_ops which results in storing
+	 * cstrings in the indexed keys rather than names.  Here we detect that in
+	 * a generic way in case other index AMs want to do the same optimization.
+	 * Check for opclasses with an opcintype of NAMEOID and an index tuple
+	 * descriptor with CSTRINGOID.  If any of these are found, create an array
+	 * marking the index attribute number of each of them.  StoreIndexTuple()
+	 * handles copying the name Datums into a NAMEDATALEN-byte allocation.
+	 */
+
+	/* First, count the number of such index keys */
+	for (int attnum = 0; attnum < indnkeyatts; attnum++)
+	{
+		if (indexRelation->rd_att->attrs[attnum].atttypid == CSTRINGOID &&
+			indexRelation->rd_opcintype[attnum] == NAMEOID)
+			namecount++;
+	}
+
+	if (namecount > 0)
+	{
+		int			idx = 0;
+
+		/*
+		 * Now create an array to mark the attribute numbers of the keys that
+		 * need to be converted from cstring to name.
+		 */
+		indexstate->ioss_NameCStringAttNums = (AttrNumber *)
+									palloc(sizeof(AttrNumber) * namecount);
+
+		for (int attnum = 0; attnum < indnkeyatts; attnum++)
+		{
+			if (indexRelation->rd_att->attrs[attnum].atttypid == CSTRINGOID &&
+				indexRelation->rd_opcintype[attnum] == NAMEOID)
+				indexstate->ioss_NameCStringAttNums[idx++] = (AttrNumber) attnum;
+		}
+	}
+
+	indexstate->ioss_NameCStringCount = namecount;
 
 	/*
 	 * all done.
