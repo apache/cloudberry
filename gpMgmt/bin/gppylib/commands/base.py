@@ -22,6 +22,7 @@ from threading import Thread
 
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -502,14 +503,19 @@ class RemoteExecutionContext(LocalExecutionContext):
 
         # Escape \ and  " for remote execution
         cmd.cmdStr = cmd.cmdStr.replace('\\','\\\\').replace('"', '\\"')
-        cmd.cmdStr = "ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 " \
-                     "{targethost} \"{gphome} {cmdstr}\"".format(targethost=self.targetHost,
-                                                                 gphome=". %s/greenplum_path.sh;" % self.gphome,
-                                                                 cmdstr=cmd.cmdStr)
+
+        localhost = socket.gethostname()
+        if localhost != self.targetHost:
+            cmd.cmdStr = "ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 " \
+                         "{targethost} \"{gphome} {cmdstr}\"".format(targethost=self.targetHost,
+                                                                     gphome=". %s/greenplum_path.sh;" % self.gphome,
+                                                                     cmdstr=cmd.cmdStr)
+        else:
+            cmd.cmdStr = "bash -c \"{gphome} {cmdstr}\"".format(gphome=". %s/greenplum_path.sh;" % self.gphome,
+                                                                cmdstr=cmd.cmdStr)
         LocalExecutionContext.execute(self, cmd, pickled=pickled, start_new_session=start_new_session)
         if (cmd.get_stderr().startswith('ssh_exchange_identification: Connection closed by remote host')):
             self.__retry(cmd, 0, pickled)
-        pass
 
     def __retry(self, cmd, count, pickled):
         if count == SSH_MAX_RETRY:
