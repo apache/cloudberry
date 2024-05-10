@@ -274,3 +274,171 @@ EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
     Leading(((t3 t2) t1))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
+
+
+--------------------------------------------------------------------
+-- Test join type hints can be applied
+--
+-- Join types can be HashJoin, NestLoop, or MergeJoin
+--
+-- NOTE: An index-nestloop join is a combination of NestLoop and IndexScan
+--------------------------------------------------------------------
+
+CREATE INDEX i1 ON t1(a);
+CREATE INDEX i2 ON t2(a);
+CREATE INDEX i3 ON t3(a);
+CREATE INDEX i4 ON t4(a);
+CREATE INDEX i5 ON t5(a);
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+
+/*+
+    NoHashJoin(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+
+/*+
+    NestLoop(t1 t2)
+    SeqScan(t1)
+    SeqScan(t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+
+/*+
+    NestLoop(t1 t2)
+    IndexScan(t1)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+
+/*+
+    NestLoop(t1 t2)
+    IndexScan(t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+
+/*+
+    NoNestLoop(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+
+/*+
+    NoHashJoin(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+
+/*+
+    NoHashJoin(t2 t3)
+    NoHashJoin(t1 t3)
+    NoHashJoin(t1 t2)
+    NoHashJoin(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+
+/*+
+    NoNestLoop(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+
+/*+
+    NoNestLoop(t2 t3)
+    NoNestLoop(t1 t3)
+    NoNestLoop(t1 t2)
+    NoNestLoop(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+
+
+--
+-- Test nest loop join type hints
+--
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+
+-- XXX: ORCA doesn't support nest join on full join
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+
+
+--
+-- Test merge join type hints
+--
+-- XXX: ORCA doesn't support merge join on left join
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+
+-- XXX: ORCA doesn't support merge join on right join
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+
+-- XXX: ORCA doesn't support merge join on semi-join
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+
+-- XXX: ORCA doesn't support merge join on anti-semi-join
+-- FIXME: PLANNER doesn't recognize node type!
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+
+
+--
+-- Test hash join type hints
+--
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);

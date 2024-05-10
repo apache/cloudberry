@@ -58,7 +58,7 @@ than one hint per relation.
 
 How does it work?
 
-In exploration phase, transfoms add logical plan alternatives. If scan hints
+In exploration phase, transforms add logical plan alternatives. If scan hints
 are specified, then the transformed operators must satisfy the hints in order
 to be considered as a valid alternative.
 
@@ -84,8 +84,8 @@ In CLogicalJoin stats derive, if the children aliases matches a specified row
 hint, then update the row estimate accordingly.
 
 
-Join Hints
-----------
+Join Order Hints
+----------------
 
 How is it represented?
 
@@ -111,6 +111,20 @@ check wether a corresponding join hint exists. If it does, then transform the
 child expressions into inner joins that satisfy the join order hints.
 
 
+Join Type Hints
+---------------
+
+How is it represented?
+
+CJoinTypeHint contains join type for a set of relations.
+
+How does it work?
+
+In implementation phase, transforms add physical plan alternatives. If join type
+hints are specified, then the transformed operators must satisfy the hints in
+order to be considered as a valid alternative.
+
+
 Motion Hints
 ------------
 TODO
@@ -128,18 +142,18 @@ Supported Hints
   NoBitmapScan
   Leading
   Rows
-
-
-Unsupported Hints
------------------
-  TidScan
-  NoTidScan
   NestLoop
   NoNestLoop
   HashJoin
   NoHashJoin
   MergeJoin,
   NoMergeJoin
+
+
+Unsupported Hints
+-----------------
+  TidScan
+  NoTidScan
   Parallel
 
 [1] https://github.com/pivotal/pg_hint_plan/tree/PG12

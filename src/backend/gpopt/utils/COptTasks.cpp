@@ -739,6 +739,68 @@ COptTasks::GetPlanHints(CMemoryPool *mp, Query *query)
 		}
 	}
 
+	for (int hint_index = 0;
+		 hint_index < hintstate->num_hints[HINT_TYPE_JOIN_METHOD]; hint_index++)
+	{
+		JoinMethodHint *joinmethod_hint =
+			(JoinMethodHint *) hintstate->join_hints[hint_index];
+		StringPtrArray *aliasnames = GPOS_NEW(mp) StringPtrArray(mp);
+		for (int relname_index = 0; relname_index < joinmethod_hint->nrels;
+			 relname_index++)
+		{
+			aliasnames->Append(GPOS_NEW(mp) CWStringConst(
+				mp, joinmethod_hint->relnames[relname_index]));
+		}
+
+		CJoinTypeHint::JoinType type = CJoinTypeHint::SENTINEL;
+		switch (joinmethod_hint->base.hint_keyword)
+		{
+			case HINT_KEYWORD_NESTLOOP:
+			{
+				type = CJoinTypeHint::HINT_KEYWORD_NESTLOOP;
+				break;
+			}
+			case HINT_KEYWORD_MERGEJOIN:
+			{
+				type = CJoinTypeHint::HINT_KEYWORD_MERGEJOIN;
+				break;
+			}
+			case HINT_KEYWORD_HASHJOIN:
+			{
+				type = CJoinTypeHint::HINT_KEYWORD_HASHJOIN;
+				break;
+			}
+			case HINT_KEYWORD_NONESTLOOP:
+			{
+				type = CJoinTypeHint::HINT_KEYWORD_NONESTLOOP;
+				break;
+			}
+			case HINT_KEYWORD_NOMERGEJOIN:
+			{
+				type = CJoinTypeHint::HINT_KEYWORD_NOMERGEJOIN;
+				break;
+			}
+			case HINT_KEYWORD_NOHASHJOIN:
+			{
+				type = CJoinTypeHint::HINT_KEYWORD_NOHASHJOIN;
+				break;
+			}
+			default:
+			{
+				CWStringDynamic *error_message = GPOS_NEW(mp) CWStringDynamic(
+					mp, GPOS_WSZ_LIT("Unsupported plan hint: "));
+				error_message->AppendFormat(GPOS_WSZ_LIT("%s"),
+											joinmethod_hint->base.keyword);
+
+				GPOS_RAISE(gpopt::ExmaGPOPT, gpopt::ExmiUnsupportedOp,
+						   error_message->GetBuffer());
+				break;
+			}
+		}
+		CJoinTypeHint *hint = GPOS_NEW(mp) CJoinTypeHint(mp, type, aliasnames);
+		plan_hints->AddHint(hint);
+	}
+
 	return plan_hints;
 }
 

@@ -129,10 +129,7 @@ private:
 	CMemoryPool *m_mp;
 
 	// stores specified join order
-	JoinNode *m_join_node;
-
-	// sorted list of alias names.
-	StringPtrArray *m_aliases{nullptr};
+	JoinNode *m_join_node{nullptr};
 
 public:
 	CJoinHint(CMemoryPool *mp, JoinNode *join_pair);
@@ -140,10 +137,7 @@ public:
 	~CJoinHint() override
 	{
 		m_join_node->Release();
-		CRefCount::SafeRelease(m_aliases);
 	}
-
-	const StringPtrArray *GetAliasNames();
 
 	const CJoinHint::JoinNode *
 	GetJoinNode() const

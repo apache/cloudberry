@@ -42,9 +42,17 @@ public:
 	static BOOL SatisfiesPlanHints(CScalarBitmapIndexProbe *pop,
 								   CPlanHint *plan_hint);
 
+	// Check if CExpression satisfies join type hints
+	static BOOL SatisfiesJoinTypeHints(CMemoryPool *mp, CExpression *pexpr,
+									   CPlanHint *plan_hint);
+
 	static const WCHAR *ScanHintEnumToString(CScanHint::EType type);
 
 	static CScanHint::EType ScanHintStringToEnum(const WCHAR *type);
+
+	static const WCHAR *JoinTypeHintEnumToString(CJoinTypeHint::JoinType type);
+
+	static CJoinTypeHint::JoinType JoinTypeHintStringToEnum(const WCHAR *type);
 
 	// Get set of aliases from table descriptor set
 	static StringPtrArray *GetAliasesFromTableDescriptors(

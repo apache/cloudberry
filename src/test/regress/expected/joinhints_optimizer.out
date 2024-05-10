@@ -1002,3 +1002,447 @@ EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
  Optimizer: GPORCA
 (11 rows)
 
+--------------------------------------------------------------------
+-- Test join type hints can be applied
+--
+-- Join types can be HashJoin, NestLoop, or MergeJoin
+--
+-- NOTE: An index-nestloop join is a combination of NestLoop and IndexScan
+--------------------------------------------------------------------
+CREATE INDEX i1 ON t1(a);
+CREATE INDEX i2 ON t2(a);
+CREATE INDEX i3 ON t3(a);
+CREATE INDEX i4 ON t4(a);
+CREATE INDEX i5 ON t5(a);
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    NoHashJoin(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Seq Scan on t1
+         ->  Index Scan using i2 on t2
+               Index Cond: (a = t1.a)
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    NestLoop(t1 t2)
+    SeqScan(t1)
+    SeqScan(t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Seq Scan on t2
+ Optimizer: GPORCA
+(6 rows)
+
+/*+
+    NestLoop(t1 t2)
+    IndexScan(t1)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Seq Scan on t2
+         ->  Index Scan using i1 on t1
+               Index Cond: (a = t2.a)
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    NestLoop(t1 t2)
+    IndexScan(t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Seq Scan on t1
+         ->  Index Scan using i2 on t2
+               Index Cond: (a = t1.a)
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    NoNestLoop(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    NoHashJoin(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on t1
+               ->  Index Scan using i2 on t2
+                     Index Cond: (a = t1.a)
+         ->  Index Scan using i3 on t3
+               Index Cond: (a = t1.a)
+ Optimizer: GPORCA
+(11 rows)
+
+/*+
+    NoHashJoin(t2 t3)
+    NoHashJoin(t1 t3)
+    NoHashJoin(t1 t2)
+    NoHashJoin(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on t1
+               ->  Index Scan using i2 on t2
+                     Index Cond: (a = t1.a)
+         ->  Index Scan using i3 on t3
+               Index Cond: (a = t1.a)
+ Optimizer: GPORCA
+(11 rows)
+
+/*+
+    NoNestLoop(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Nested Loop
+               Join Filter: true
+               ->  Seq Scan on t1
+               ->  Index Scan using i3 on t3
+                     Index Cond: (a = t1.a)
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(11 rows)
+
+/*+
+    NoNestLoop(t2 t3)
+    NoNestLoop(t1 t3)
+    NoNestLoop(t1 t2)
+    NoNestLoop(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on t2
+         ->  Hash
+               ->  Hash Join
+                     Hash Cond: (t1.a = t3.a)
+                     ->  Seq Scan on t1
+                     ->  Hash
+                           ->  Seq Scan on t3
+ Optimizer: GPORCA
+(11 rows)
+
+--
+-- Test nest loop join type hints
+--
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on t1
+         ->  Index Scan using i2 on t2
+               Index Cond: (a = t1.a)
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on t2
+         ->  Index Scan using i1 on t1
+               Index Cond: (a = t2.a)
+ Optimizer: GPORCA
+(7 rows)
+
+-- XXX: ORCA doesn't support nest join on full join
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Full Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(7 rows)
+
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  GroupAggregate
+               Group Key: t2.a
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Seq Scan on t2
+         ->  Index Scan using i1 on t1
+               Index Cond: (a = t2.a)
+ Optimizer: GPORCA
+(11 rows)
+
+/*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+                                                                                                                                                                 QUERY PLAN                                                                                                                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Filter: (SubPlan 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t1
+   SubPlan 1
+     ->  Result
+           Filter: ((CASE WHEN (sum((CASE WHEN (t1.a = t2.a) THEN 1 ELSE 0 END)) IS NULL) THEN true WHEN (sum((CASE WHEN (t2.a IS NULL) THEN 1 ELSE 0 END)) > '0'::bigint) THEN NULL::boolean WHEN (t1.a IS NULL) THEN NULL::boolean WHEN (sum((CASE WHEN (t1.a = t2.a) THEN 1 ELSE 0 END)) = '0'::bigint) THEN true ELSE false END) = true)
+           ->  Aggregate
+                 ->  Result
+                       ->  Materialize
+                             ->  Gather Motion 3:1  (slice2; segments: 3)
+                                   ->  Seq Scan on t2
+ Optimizer: GPORCA
+(13 rows)
+
+--
+-- Test merge join type hints
+--
+-- XXX: ORCA doesn't support merge join on left join
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(7 rows)
+
+-- XXX: ORCA doesn't support merge join on right join
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t2.a = t1.a)
+         ->  Index Scan using i2 on t2
+         ->  Materialize
+               ->  Index Scan using i1 on t1
+ Optimizer: Postgres-based planner
+(7 rows)
+
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Full Join
+         Merge Cond: (t2.a = t1.a)
+         ->  Sort
+               Sort Key: t2.a
+               ->  Seq Scan on t2
+         ->  Sort
+               Sort Key: t1.a
+               ->  Seq Scan on t1
+ Optimizer: GPORCA
+(10 rows)
+
+-- XXX: ORCA doesn't support merge join on semi-join
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Sort
+               Sort Key: t2.a
+               ->  HashAggregate
+                     Group Key: t2.a
+                     ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(10 rows)
+
+-- XXX: ORCA doesn't support merge join on anti-semi-join
+-- FIXME: PLANNER doesn't recognize node type!
+/*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+ERROR:  unrecognized join type: 6 (make_join_rel.c:385)
+--
+-- Test hash join type hints
+--
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on t2
+         ->  Hash
+               ->  Seq Scan on t1
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Full Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Semi Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(7 rows)
+
+/*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+                      QUERY PLAN                      
+------------------------------------------------------
+ Hash Left Anti Semi (Not-In) Join
+   Hash Cond: (t1.a = t2.a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t1
+   ->  Hash
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(8 rows)
+

@@ -151,6 +151,41 @@ CHintUtils::SatisfiesPlanHints(CScalarBitmapIndexProbe *pop,
 		   scan_hint->SatisfiesOperator(pop);
 }
 
+BOOL
+CHintUtils::SatisfiesJoinTypeHints(CMemoryPool *mp, CExpression *pexpr,
+								   CPlanHint *plan_hint)
+{
+	GPOS_ASSERT(nullptr != pexpr);
+
+	if (plan_hint == nullptr)
+	{
+		return true;
+	}
+
+	StringPtrArray *aliases = GPOS_NEW(mp) StringPtrArray(mp);
+
+	CTableDescriptorHashSet *ptabs = pexpr->DeriveTableDescriptor();
+	CTableDescriptorHashSetIter hsiter(ptabs);
+	while (hsiter.Advance())
+	{
+		CTableDescriptor *tabdesc =
+			const_cast<CTableDescriptor *>(hsiter.Get());
+		aliases->Append(GPOS_NEW(mp) CWStringConst(
+			mp, tabdesc->Name().Pstr()->GetBuffer()));
+	}
+
+	CJoinTypeHint *join_hint = plan_hint->GetJoinTypeHint(aliases);
+	if (join_hint == nullptr)
+	{
+		// no matched hint, so everything goes...
+		aliases->Release();
+		return true;
+	}
+
+	aliases->Release();
+	return join_hint->SatisfiesOperator(pexpr->Pop());
+}
+
 const WCHAR *
 CHintUtils::ScanHintEnumToString(CScanHint::EType type)
 {
@@ -239,6 +274,78 @@ CHintUtils::ScanHintStringToEnum(const WCHAR *type)
 		return CScanHint::NoBitmapScan;
 	}
 	return CScanHint::Sentinal;
+}
+
+const WCHAR *
+CHintUtils::JoinTypeHintEnumToString(CJoinTypeHint::JoinType type)
+{
+	switch (type)
+	{
+		case CJoinTypeHint::HINT_KEYWORD_NESTLOOP:
+		{
+			return GPOS_WSZ_LIT("NestedLoopJoin");
+		}
+		case CJoinTypeHint::HINT_KEYWORD_MERGEJOIN:
+		{
+			return GPOS_WSZ_LIT("MergeJoin");
+		}
+		case CJoinTypeHint::HINT_KEYWORD_HASHJOIN:
+		{
+			return GPOS_WSZ_LIT("HashJoin");
+		}
+		case CJoinTypeHint::HINT_KEYWORD_NONESTLOOP:
+		{
+			return GPOS_WSZ_LIT("NoNestedLoopJoin");
+		}
+		case CJoinTypeHint::HINT_KEYWORD_NOMERGEJOIN:
+		{
+			return GPOS_WSZ_LIT("NoMergeJoin");
+		}
+		case CJoinTypeHint::HINT_KEYWORD_NOHASHJOIN:
+		{
+			return GPOS_WSZ_LIT("NoHashJoin");
+		}
+		default:
+		{
+			return nullptr;
+		}
+	}
+}
+
+CJoinTypeHint::JoinType
+CHintUtils::JoinTypeHintStringToEnum(const WCHAR *type)
+{
+	if (0 == clib::Wcsncmp(type, GPOS_WSZ_LIT("NestedLoopJoin"),
+						   gpos::clib::Wcslen(type)))
+	{
+		return CJoinTypeHint::HINT_KEYWORD_NESTLOOP;
+	}
+	if (0 == clib::Wcsncmp(type, GPOS_WSZ_LIT("NoNestedLoopJoin"),
+						   gpos::clib::Wcslen(type)))
+	{
+		return CJoinTypeHint::HINT_KEYWORD_NONESTLOOP;
+	}
+	if (0 == clib::Wcsncmp(type, GPOS_WSZ_LIT("MergeJoin"),
+						   gpos::clib::Wcslen(type)))
+	{
+		return CJoinTypeHint::HINT_KEYWORD_MERGEJOIN;
+	}
+	if (0 == clib::Wcsncmp(type, GPOS_WSZ_LIT("NoMergeJoin"),
+						   gpos::clib::Wcslen(type)))
+	{
+		return CJoinTypeHint::HINT_KEYWORD_NOMERGEJOIN;
+	}
+	if (0 ==
+		clib::Wcsncmp(type, GPOS_WSZ_LIT("HashJoin"), gpos::clib::Wcslen(type)))
+	{
+		return CJoinTypeHint::HINT_KEYWORD_HASHJOIN;
+	}
+	if (0 == clib::Wcsncmp(type, GPOS_WSZ_LIT("NoHashJoin"),
+						   gpos::clib::Wcslen(type)))
+	{
+		return CJoinTypeHint::HINT_KEYWORD_NOHASHJOIN;
+	}
+	return CJoinTypeHint::SENTINEL;
 }
 
 //---------------------------------------------------------------------------

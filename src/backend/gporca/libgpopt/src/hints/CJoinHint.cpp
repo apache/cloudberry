@@ -83,26 +83,6 @@ CJoinHint::CJoinHint(CMemoryPool *mp, JoinNode *join_pair)
 }
 
 
-//---------------------------------------------------------------------------
-//	@function:
-//		CJoinHint::GetAliasNames
-//
-//	@doc:
-//		Returns a sorted array containing all table (alias) names specified in
-//		the hint.
-//---------------------------------------------------------------------------
-const StringPtrArray *
-CJoinHint::GetAliasNames()
-{
-	if (nullptr == m_aliases)
-	{
-		m_aliases = CHintUtils::GetAliasesFromHint(m_mp, m_join_node);
-		m_aliases->Sort(CWStringBase::Compare);
-	}
-	return m_aliases;
-}
-
-
 IOstream &
 CJoinHint::OsPrint(IOstream &os) const
 {
@@ -126,12 +106,6 @@ CJoinHint::Serialize(CXMLSerializer *xml_serializer)
 	xml_serializer->OpenElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
 		CDXLTokens::GetDXLTokenStr(EdxltokenJoinHint));
-
-	CWStringDynamic *aliases =
-		CDXLUtils::SerializeToCommaSeparatedString(m_mp, GetAliasNames());
-	xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenAlias),
-								 aliases);
-	GPOS_DELETE(aliases);
 
 	CWStringDynamic *dxl_string = SerializeJoinOrderHint(m_mp, GetJoinNode());
 	xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenLeading),

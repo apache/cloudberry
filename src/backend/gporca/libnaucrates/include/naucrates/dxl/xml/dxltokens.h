@@ -62,6 +62,7 @@ enum Edxltoken
 	EdxltokenScanHint,
 	EdxltokenRowHint,
 	EdxltokenJoinHint,
+	EdxltokenJoinTypeHint,
 	EdxltokenLeading,
 	EdxltokenJoinArityForAssociativityCommutativity,
 	EdxltokenArrayExpansionThreshold,
@@ -86,6 +87,10 @@ enum Edxltoken
 	EdxltokenSysid,
 
 	EdxltokenThread,
+
+	EdxltokenNoPhysicalHashJoin,
+	EdxltokenNoPhysicalNLJoin,
+	EdxltokenNoPhysicalMergeJoin,
 
 	EdxltokenPhysical,
 

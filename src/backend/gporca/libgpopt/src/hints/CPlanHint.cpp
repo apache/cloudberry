@@ -27,7 +27,8 @@ CPlanHint::CPlanHint(CMemoryPool *mp)
 	: m_mp(mp),
 	  m_scan_hints(GPOS_NEW(mp) ScanHintList(mp)),
 	  m_row_hints(GPOS_NEW(mp) RowHintList(mp)),
-	  m_join_hints(GPOS_NEW(mp) JoinHintList(mp))
+	  m_join_hints(GPOS_NEW(mp) JoinHintList(mp)),
+	  m_join_type_hints(GPOS_NEW(mp) JoinTypeHintList(mp))
 {
 }
 
@@ -36,6 +37,7 @@ CPlanHint::~CPlanHint()
 	m_scan_hints->Release();
 	m_row_hints->Release();
 	m_join_hints->Release();
+	m_join_type_hints->Release();
 }
 
 void
@@ -56,6 +58,11 @@ CPlanHint::AddHint(CJoinHint *hint)
 	m_join_hints->Append(hint);
 }
 
+void
+CPlanHint::AddHint(CJoinTypeHint *hint)
+{
+	m_join_type_hints->Append(hint);
+}
 
 CScanHint *
 CPlanHint::GetScanHint(const char *relname)
@@ -401,6 +408,33 @@ CPlanHint::GetJoinHint(CExpression *pexpr)
 	return nullptr;
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPlanHint::GetJoinHint
+//
+//	@doc:
+//		Given a list of aliases, find a matching CJoinHint. A match means that
+//		the hint contains every alias in the aliases list.
+//
+//---------------------------------------------------------------------------
+CJoinTypeHint *
+CPlanHint::GetJoinTypeHint(StringPtrArray *aliases)
+{
+	aliases->Sort(CWStringBase::Compare);
+
+	for (ULONG i = 0; i < m_join_type_hints->Size(); i++)
+	{
+		CJoinTypeHint *hint = (*m_join_type_hints)[i];
+
+		if (aliases->Equals(hint->GetAliasNames()))
+		{
+			return hint;
+		}
+	}
+	return nullptr;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CPlanHint::HasJoinHintWithDirection
@@ -486,6 +520,12 @@ CPlanHint::OsPrint(IOstream &os) const
 		os << "  ";
 		(*m_join_hints)[ul]->OsPrint(os) << "\n";
 	}
+
+	for (ULONG ul = 0; ul < m_join_type_hints->Size(); ul++)
+	{
+		os << "  ";
+		(*m_join_type_hints)[ul]->OsPrint(os) << "\n";
+	}
 	os << "]";
 	return os;
 }
@@ -506,6 +546,11 @@ CPlanHint::Serialize(CXMLSerializer *xml_serializer) const
 	for (ULONG ul = 0; ul < m_join_hints->Size(); ul++)
 	{
 		(*m_join_hints)[ul]->Serialize(xml_serializer);
+	}
+
+	for (ULONG ul = 0; ul < m_join_type_hints->Size(); ul++)
+	{
+		(*m_join_type_hints)[ul]->Serialize(xml_serializer);
 	}
 }
 
