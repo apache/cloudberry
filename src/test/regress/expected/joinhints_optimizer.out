@@ -1359,14 +1359,24 @@ DETAIL:  Falling back to Postgres-based planner because no plan has been compute
 (10 rows)
 
 -- XXX: ORCA doesn't support merge join on anti-semi-join
--- FIXME: PLANNER doesn't recognize node type!
 /*+
     MergeJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
-ERROR:  unrecognized join type: 6 (make_join_rel.c:385)
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Anti Join
+         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+         ->  Seq Scan on t1
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(8 rows)
+
 --
 -- Test hash join type hints
 --

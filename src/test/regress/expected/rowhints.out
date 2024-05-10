@@ -267,9 +267,9 @@ EXPLAIN SELECT t1.a, t2.a FROM my_table AS t1, your_table AS t2, our_table AS t3
 -- Test Semi/AntiSemi Joins with RowHints
 --------------------------------------------------------------------
 \o results/pg_hint_plan.tmpout
-/*+ 
-Rows(t1 t2 #123) 
-*/ 
+/*+
+Rows(t1 t2 #123)
+*/
 EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a IN (SELECT t2.a FROM our_table t2);
 \o
 \! sql/maskout.sh results/pg_hint_plan.tmpout
@@ -290,13 +290,29 @@ EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a IN (SELECT t2.a FROM our_table t
  Optimizer: Postgres-based planner
 
 \o results/pg_hint_plan.tmpout
-/*+ 
-Rows(t1 t2 #123) 
+/*+
+Rows(t1 t2 #123)
 */
 EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a NOT IN (SELECT t2.a FROM our_table t2);
-ERROR:  unrecognized join type: 6 (make_join_rel.c:385)
 \o
 \! sql/maskout.sh results/pg_hint_plan.tmpout
+  QUERY PLAN
+----------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost={inf}..{inf} rows=123 width=xxx)
+   ->  Nested Loop Anti Join  (cost={inf}..{inf} rows=41 width=xxx)
+         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+         ->  Seq Scan on my_table t1  (cost=xxx..xxx rows=33 width=xxx)
+         ->  Materialize  (cost=xxx..xxx rows=102 width=xxx)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=xxx..xxx rows=102 width=xxx)
+                     ->  Append  (cost=xxx..xxx rows=34 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_1 t2  (cost=xxx..xxx rows=6 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_2 t2_1  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_3 t2_2  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_4 t2_3  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_5 t2_4  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_6 t2_5  (cost=xxx..xxx rows=1 width=xxx)
+ Optimizer: Postgres-based planner
+
 ---------------------------------------------------------------------------------------------
 -- Test case where we disable InnerJoin alternatives so that Stats for the join group are
 -- derived from LeftSemi/LeftAntiSemiJoin operators instead of CLogicalJoin operator.
@@ -312,9 +328,25 @@ SELECT disable_xform('CXformLeftSemiJoin2InnerJoin');
 Rows(t1 t2 #123)
 */
 EXPLAIN SELECT * FROM my_table AS t1 WHERE t1.a NOT IN (SELECT t2.a FROM our_table t2);
-ERROR:  unrecognized join type: 6 (make_join_rel.c:385)
 \o
 \! sql/maskout.sh results/pg_hint_plan.tmpout
+  QUERY PLAN
+----------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost={inf}..{inf} rows=123 width=xxx)
+   ->  Nested Loop Anti Join  (cost={inf}..{inf} rows=41 width=xxx)
+         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+         ->  Seq Scan on my_table t1  (cost=xxx..xxx rows=33 width=xxx)
+         ->  Materialize  (cost=xxx..xxx rows=102 width=xxx)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=xxx..xxx rows=102 width=xxx)
+                     ->  Append  (cost=xxx..xxx rows=34 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_1 t2  (cost=xxx..xxx rows=6 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_2 t2_1  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_3 t2_2  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_4 t2_3  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_5 t2_4  (cost=xxx..xxx rows=7 width=xxx)
+                           ->  Seq Scan on our_table_1_prt_p1_6 t2_5  (cost=xxx..xxx rows=1 width=xxx)
+ Optimizer: Postgres-based planner
+
 SELECT enable_xform('CXformLeftSemiJoin2InnerJoin');
               enable_xform               
 -----------------------------------------

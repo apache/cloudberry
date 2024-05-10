@@ -408,7 +408,6 @@ EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
 
 -- XXX: ORCA doesn't support merge join on anti-semi-join
--- FIXME: PLANNER doesn't recognize node type!
 /*+
     MergeJoin(t1 t2)
  */
