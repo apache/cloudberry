@@ -21,7 +21,7 @@ FORCE_GENERATE_DBGSTR(CScanHint);
 
 
 BOOL
-CScanHint::SatisfiesOperator(COperator *op) const
+CScanHint::SatisfiesOperator(COperator *op)
 {
 	BOOL is_satisfied = true;
 
@@ -91,6 +91,10 @@ CScanHint::SatisfiesOperator(COperator *op) const
 						   error_message->GetBuffer());
 			}
 		}
+	}
+	if (is_satisfied)
+	{
+		this->SetHintStatus(IHint::HINT_STATE_USED);
 	}
 	return is_satisfied;
 }

@@ -42,6 +42,14 @@ EXPLAIN (costs off) SELECT t1.a, t2.a, t3.a FROM my_table AS t1 JOIN your_table 
 --
 --------------------------------------------------------------------
 
+SET client_min_messages TO log;
+SET pg_hint_plan.debug_print TO ON;
+
+-- Replace timestamp while logging with static string
+-- start_matchsubs
+-- m/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/
+-- s/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/YYYY-MM-DD HH:MM:SS:MSMSMS TMZ/
+-- end_matchsubs
 /*+
     SeqScan(t1)
     SeqScan(t2)
@@ -558,3 +566,16 @@ EXPLAIN (costs off) SELECT t1.a, t1.b FROM my_table AS t1 WHERE EXISTS (SELECT 1
     SeqScan(t2) SeqScan(t1)
  */
 EXPLAIN (costs off) SELECT t1.a, t1.b FROM my_table AS t1 WHERE NOT EXISTS (SELECT 1 FROM your_table AS t2 WHERE t1.a = t2.a);
+-- Missing alias in query to test Un-used Hint logging
+/*+
+    NoIndexScan(z) SeqScan(y)
+ */
+EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
+-- Invalid Scan type to test Hint logging behavior
+/*+
+ NoBitmap(t1)
+*/
+EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
+
+RESET client_min_messages;
+RESET pg_hint_plan.debug_print;

@@ -21,7 +21,7 @@ using namespace gpopt;
 FORCE_GENERATE_DBGSTR(CJoinTypeHint);
 
 BOOL
-CJoinTypeHint::SatisfiesOperator(COperator *op) const
+CJoinTypeHint::SatisfiesOperator(COperator *op)
 {
 	BOOL is_satisfied = true;
 
@@ -62,6 +62,10 @@ CJoinTypeHint::SatisfiesOperator(COperator *op) const
 			// join type not specified
 			break;
 		}
+	}
+	if (is_satisfied)
+	{
+		this->SetHintStatus(IHint::HINT_STATE_USED);
 	}
 	return is_satisfied;
 }

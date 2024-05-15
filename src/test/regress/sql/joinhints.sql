@@ -17,6 +17,14 @@ CREATE TABLE t3(a int, b int);
 CREATE TABLE t4(a int, b int);
 CREATE TABLE t5(a int, b int);
 
+SET client_min_messages TO log;
+SET pg_hint_plan.debug_print TO ON;
+-- Replace timestamp while logging with static string
+-- start_matchsubs
+-- m/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/
+-- s/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/YYYY-MM-DD HH:MM:SS:MSMSMS TMZ/
+-- end_matchsubs
+
 -- Test that join order hint for every tree shape is applied.
 --
 -- These check that every possible order on 3 relations. There are 12 possible
@@ -441,3 +449,20 @@ EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
     HashJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+
+-- Test planhints logging for JoinTypeHints
+
+-- Missing alias in hint to test 'not used' hints logging
+/*+
+    HashJoin(y z)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+
+-- Invalid JoinHint type to test Hint logging behavior
+/*+
+  InvalidJoinTypeHint(t1)
+*/
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+
+RESET client_min_messages;
+RESET pg_hint_plan.debug_print;

@@ -234,6 +234,7 @@ static unsigned int qno = 0;
 static unsigned int msgqno = 0;
 static char qnostr[32];
 static const char *current_hint_str = NULL;
+static HintState *hstate = NULL;
 
 /*
  * However we usually take a hint stirng in post_parse_analyze_hook, we still
@@ -386,6 +387,7 @@ struct HintState
 	GucContext		context;			/* which GUC parameters can we set? */
 	RowsHint	  **rows_hints;			/* parsed Rows hints */
 	ParallelHint  **parallel_hints;		/* parsed Parallel hints */
+	int				log_level;		/* debug_print log level */
 };
 
 /*
@@ -1054,6 +1056,7 @@ HintStateCreate(void)
 	hstate->set_hints = NULL;
 	hstate->rows_hints = NULL;
 	hstate->parallel_hints = NULL;
+	hstate->log_level = 0;
 
 	return hstate;
 }
@@ -3119,7 +3122,6 @@ pg_hint_plan_planner(Query *parse, const char *query_string,
 {
 	int				save_nestlevel;
 	PlannedStmt	   *result;
-	HintState	   *hstate;
 	const char 	   *prev_hint_str = NULL;
 
 	/*
@@ -3266,11 +3268,15 @@ pg_hint_plan_planner(Query *parse, const char *query_string,
 		current_hint_retrieved = false;
 	}
 
-	/* Print hint in debug mode. */
-	if (debug_level == 1)
-		HintStateDump(current_hint_state);
-	else if (debug_level > 1)
-		HintStateDump2(current_hint_state);
+	/* Print hint logs if Planner is used */
+	if (result->planGen == PLANGEN_PLANNER)
+	{
+		/* Print hint in debug mode. */
+		if (debug_level == 1)
+			HintStateDump(current_hint_state);
+		else if (debug_level > 1)
+			HintStateDump2(current_hint_state);
+	}
 
 	/*
 	 * Rollback changes of GUC parameters, and pop current hint context from
@@ -5240,8 +5246,6 @@ void plpgsql_query_erase_callback(ResourceReleasePhase phase,
 static void *
 external_plan_hint_hook(Query *parse)
 {
-	HintState *hstate;
-
 	if (parse == NULL)
 		return NULL;
 
@@ -5251,7 +5255,8 @@ external_plan_hint_hook(Query *parse)
 	if (!current_hint_str)
 		return NULL;
 
-	hstate = create_hintstate(parse, pstrdup(current_hint_str));
+	if(hstate)
+		hstate->log_level = debug_level;
 	return hstate;
 }
 #endif

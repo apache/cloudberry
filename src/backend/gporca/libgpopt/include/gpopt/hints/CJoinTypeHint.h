@@ -67,7 +67,7 @@ public:
 
 	const StringPtrArray *GetAliasNames() const;
 
-	BOOL SatisfiesOperator(COperator *op) const;
+	BOOL SatisfiesOperator(COperator *op);
 
 	IOstream &OsPrint(IOstream &os) const;
 

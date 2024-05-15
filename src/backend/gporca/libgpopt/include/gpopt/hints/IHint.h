@@ -17,6 +17,28 @@ using namespace gpos;
 
 class IHint : public CRefCount
 {
+public:
+	enum HintStatus
+	{
+		HINT_STATE_NOTUSED = 0, /* specified relation not used in query */
+		HINT_STATE_USED,		/* hint is used */
+	};
+
+private:
+	HintStatus hint_status{HINT_STATE_NOTUSED};
+
+public:
+	void
+	SetHintStatus(HintStatus status)
+	{
+		hint_status = status;
+	}
+
+	HintStatus
+	GetHintStatus()
+	{
+		return hint_status;
+	}
 };
 
 

@@ -12,6 +12,14 @@ CREATE TABLE t2(a int, b int);
 CREATE TABLE t3(a int, b int);
 CREATE TABLE t4(a int, b int);
 CREATE TABLE t5(a int, b int);
+SET client_min_messages TO log;
+SET pg_hint_plan.debug_print TO ON;
+LOG:  statement: SET pg_hint_plan.debug_print TO ON;
+-- Replace timestamp while logging with static string
+-- start_matchsubs
+-- m/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/
+-- s/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/YYYY-MM-DD HH:MM:SS:MSMSMS TMZ/
+-- end_matchsubs
 -- Test that join order hint for every tree shape is applied.
 --
 -- These check that every possible order on 3 relations. There are 12 possible
@@ -27,7 +35,16 @@ CREATE TABLE t5(a int, b int);
     Leading((t1 (t2 t3)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:562633 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t1 (t2 t3))
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -47,7 +64,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading((t1 (t3 t2)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t1 (t3 t2)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:569103 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t1 (t3 t2))
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -67,7 +93,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t2 t3) t1))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t2 t3) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:573925 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t2 t3) t1)
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -87,7 +122,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t3 t2) t1))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:578503 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t3 t2) t1)
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -107,7 +151,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t1 t3) t2))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t1 t3) t2))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:582665 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t1 t3) t2)
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -127,7 +180,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t3 t1) t2))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t3 t1) t2))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:587113 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t3 t1) t2)
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -147,7 +209,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading((t2 (t1 t3)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t2 (t1 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:591667 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t2 (t1 t3))
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -167,7 +238,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading((t2 (t3 t1)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t2 (t3 t1)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:596315 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t2 (t3 t1))
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -187,7 +267,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t1 t2) t3))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t1 t2) t3))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:600797 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t1 t2) t3)
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -207,7 +296,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t2 t1) t3))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t2 t1) t3))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:604699 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t2 t1) t3)
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -227,7 +325,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading((t3 (t1 t2)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t3 (t1 t2)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:609033 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t3 (t1 t2))
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -247,7 +354,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading((t3 (t2 t1)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t3 (t2 t1)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:615511 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t3 (t2 t1))
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -271,7 +387,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading((t2 (t1 t3)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, (SELECT * FROM t3 LIMIT 42) AS q;
-                                        QUERY PLAN                                        
+LOG:  statement: /*+
+    Leading((t2 (t1 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, (SELECT * FROM t3 LIMIT 42) AS q;
+LOG:  2024-05-07 18:38:22:621632 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t2 (t1 t3))
+not used hint:
+]",
+                                        QUERY PLAN
 ------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -295,7 +420,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, (SELECT * FROM t3 LIMIT 42) AS q;
     Leading(((t5 (t4 t3)) (t1 t2)))
  */
 EXPLAIN (costs off) SELECT * FROM (SELECT t1.a FROM t1, t2 LIMIT 42) AS q, t3, t4, t5;
-                                         QUERY PLAN                                          
+LOG:  statement: /*+
+    Leading(((t5 (t4 t3)) (t1 t2)))
+ */
+EXPLAIN (costs off) SELECT * FROM (SELECT t1.a FROM t1, t2 LIMIT 42) AS q, t3, t4, t5;
+LOG:  2024-05-07 18:38:22:630341 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t5 (t4 t3)) (t1 t2))
+not used hint:
+]",
+                                         QUERY PLAN
 ---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -327,7 +461,16 @@ EXPLAIN (costs off) SELECT * FROM (SELECT t1.a FROM t1, t2 LIMIT 42) AS q, t3, t
   Leading((t1 (t2 t5)))
 */
 EXPLAIN (costs off) SELECT * FROM (SELECT * FROM t1, t2, t5 LIMIT 42) q, t4, t3;
-                                      QUERY PLAN                                       
+LOG:  statement: /*+
+  Leading((t1 (t2 t5)))
+*/
+EXPLAIN (costs off) SELECT * FROM (SELECT * FROM t1, t2, t5 LIMIT 42) q, t4, t3;
+LOG:  2024-05-07 18:38:22:645375 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t1 (t2 t5))
+not used hint:
+]",
+                                      QUERY PLAN
 ---------------------------------------------------------------------------------------
  Nested Loop
    Join Filter: true
@@ -357,7 +500,16 @@ EXPLAIN (costs off) SELECT * FROM (SELECT * FROM t1, t2, t5 LIMIT 42) q, t4, t3;
     Leading((((t1 t2) t3) t4))
  */
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT t1.a, t2.a FROM t1, t2, t3 GROUP BY t1.a, t2.a) AS q, t4;
-                                      QUERY PLAN                                       
+LOG:  statement: /*+
+    Leading((((t1 t2) t3) t4))
+ */
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT t1.a, t2.a FROM t1, t2, t3 GROUP BY t1.a, t2.a) AS q, t4;
+LOG:  2024-05-07 18:38:22:655490 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(((t1 t2) t3) t4)
+not used hint:
+]",
+                                      QUERY PLAN
 ---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -386,7 +538,17 @@ EXPLAIN (COSTS OFF) SELECT * FROM (SELECT t1.a, t2.a FROM t1, t2, t3 GROUP BY t1
  */
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT g1_t1.a, g1_t2.a FROM t1 AS g1_t1, t2 AS g1_t2, t3 AS g1_t3 GROUP BY g1_t1.a, g1_t2.a) AS q1,
                                   (SELECT g2_t1.a, g2_t2.a FROM t1 AS g2_t1, t2 AS g2_t2, t3 AS g2_t3 GROUP BY g2_t1.a, g2_t2.a) AS q2, t4, t5;
-                                                  QUERY PLAN                                                   
+LOG:  statement: /*+
+    Leading(((((g2_t1 g2_t2) g2_t3) t4) (g1_t1 (g1_t3 g1_t2))))
+ */
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT g1_t1.a, g1_t2.a FROM t1 AS g1_t1, t2 AS g1_t2, t3 AS g1_t3 GROUP BY g1_t1.a, g1_t2.a) AS q1,
+                                  (SELECT g2_t1.a, g2_t2.a FROM t1 AS g2_t1, t2 AS g2_t2, t3 AS g2_t3 GROUP BY g2_t1.a, g2_t2.a) AS q2, t4, t5;
+LOG:  2024-05-07 18:38:22:675973 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((((g2_t1 g2_t2) g2_t3) t4) (g1_t1 (g1_t3 g1_t2)))
+not used hint:
+]",
+                                                  QUERY PLAN
 ---------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -443,7 +605,23 @@ WITH cte AS
     SELECT * FROM t1, t2, t3
 )
 SELECT * FROM cte, t4, t5;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+    Leading((t5 t4))
+ */
+EXPLAIN (COSTS OFF)
+WITH cte AS
+(
+    SELECT * FROM t1, t2, t3
+)
+SELECT * FROM cte, t4, t5;
+LOG:  2024-05-07 18:38:22:685870 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t3 t2) t1)
+JoinHint:(t5 t4)
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -477,7 +655,16 @@ SELECT * FROM cte, t4, t5;
     Leading((t1 t3))
  */
 EXPLAIN (costs off) SELECT * FROM (SELECT t1.a FROM t1, t2 LIMIT 42) AS q, t3, t4, t5;
-                                         QUERY PLAN                                          
+LOG:  statement: /*+
+    Leading((t1 t3))
+ */
+EXPLAIN (costs off) SELECT * FROM (SELECT t1.a FROM t1, t2 LIMIT 42) AS q, t3, t4, t5;
+LOG:  2024-05-07 18:38:22:708144 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinHint:(t1 t3)
+]",
+                                         QUERY PLAN
 ---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -510,7 +697,16 @@ EXPLAIN (costs off) SELECT * FROM (SELECT t1.a FROM t1, t2 LIMIT 42) AS q, t3, t
     Leading((t2 t3))
  */
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT t1.a, t2.a FROM t1, t2 GROUP BY t1.a, t2.a) AS q, t3;
-                                   QUERY PLAN                                    
+LOG:  statement: /*+
+    Leading((t2 t3))
+ */
+EXPLAIN (COSTS OFF) SELECT * FROM (SELECT t1.a, t2.a FROM t1, t2 GROUP BY t1.a, t2.a) AS q, t3;
+LOG:  2024-05-07 18:38:22:721274 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinHint:(t2 t3)
+]",
+                                   QUERY PLAN
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -534,13 +730,18 @@ EXPLAIN (COSTS OFF) SELECT * FROM (SELECT t1.a, t2.a FROM t1, t2 GROUP BY t1.a, 
     Leading(((t1 t2)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2;
+LOG:  statement: /*+
+    Leading(((t1 t2)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2;
 INFO:  pg_hint_plan: hint syntax error at or near "Leading(((t1 t2)))
  "
 DETAIL:  Leading hint requires two sets of relations when parentheses nests.
-INFO:  pg_hint_plan: hint syntax error at or near "Leading(((t1 t2)))
- "
-DETAIL:  Leading hint requires two sets of relations when parentheses nests.
-                       QUERY PLAN                        
+LOG:  2024-05-07 18:38:22:725788 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+]",
+                       QUERY PLAN
 ---------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -556,13 +757,18 @@ DETAIL:  Leading hint requires two sets of relations when parentheses nests.
     Leading((t1 (t2 t3 t4)))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3, t4;
+LOG:  statement: /*+
+    Leading((t1 (t2 t3 t4)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3, t4;
 INFO:  pg_hint_plan: hint syntax error at or near "Leading((t1 (t2 t3 t4)))
  "
 DETAIL:  Leading hint requires two sets of relations when parentheses nests.
-INFO:  pg_hint_plan: hint syntax error at or near "Leading((t1 (t2 t3 t4)))
- "
-DETAIL:  Leading hint requires two sets of relations when parentheses nests.
-                             QUERY PLAN                              
+LOG:  2024-05-07 18:38:22:746565 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+]",
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -592,7 +798,16 @@ DETAIL:  Leading hint requires two sets of relations when parentheses nests.
   Leading(((t1 t5) (t2 t4)))
 */
 EXPLAIN (costs off) SELECT * FROM t1, (SELECT * FROM t2, t3, t4 LIMIT 42) AS q, t5;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+  Leading(((t1 t5) (t2 t4)))
+*/
+EXPLAIN (costs off) SELECT * FROM t1, (SELECT * FROM t2, t3, t4 LIMIT 42) AS q, t5;
+LOG:  2024-05-07 18:38:22:769904 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinHint:((t1 t5) (t2 t4))
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Nested Loop
    Join Filter: true
@@ -626,7 +841,16 @@ EXPLAIN (costs off) SELECT * FROM t1, (SELECT * FROM t2, t3, t4 LIMIT 42) AS q, 
   Leading(((t1 t3) (t2 t4)))
 */
 EXPLAIN (costs off) SELECT * FROM t1, (SELECT * FROM t2, t3, t4 LIMIT 42) AS q, t5;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+  Leading(((t1 t3) (t2 t4)))
+*/
+EXPLAIN (costs off) SELECT * FROM t1, (SELECT * FROM t2, t3, t4 LIMIT 42) AS q, t5;
+LOG:  2024-05-07 18:38:22:789581 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinHint:((t1 t3) (t2 t4))
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Nested Loop
    Join Filter: true
@@ -661,7 +885,18 @@ EXPLAIN (costs off) SELECT * FROM t1, (SELECT * FROM t2, t3, t4 LIMIT 42) AS q, 
   Leading((t2 t1))
 */
 EXPLAIN (costs off) SELECT * FROM t1, t2;
-                       QUERY PLAN                        
+LOG:  statement: /*+
+  Leading((t1 t2))
+  Leading((t2 t1))
+*/
+EXPLAIN (costs off) SELECT * FROM t1, t2;
+LOG:  2024-05-07 18:38:22:793904 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t1 t2)
+not used hint:
+JoinHint:(t2 t1)
+]",
+                       QUERY PLAN
 ---------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -676,7 +911,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2;
     Leading((((t5 t4) (t1 t3)) t2))
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1, t2, t3, t4, t5;
-                                   QUERY PLAN                                    
+LOG:  statement: /*+
+    Leading((((t5 t4) (t1 t3)) t2))
+ */
+EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1, t2, t3, t4, t5;
+LOG:  2024-05-07 18:38:22:799394 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(((t5 t4) (t1 t3)) t2)
+not used hint:
+]",
+                                   QUERY PLAN
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -704,7 +948,16 @@ EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1, t2, t3, t4, t5;
     Leading(((t5 t4) (t1 t3)))
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1, t2, t3, t4, t5;
-                                   QUERY PLAN                                    
+LOG:  statement: /*+
+    Leading(((t5 t4) (t1 t3)))
+ */
+EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1, t2, t3, t4, t5;
+LOG:  2024-05-07 18:38:22:809330 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:((t5 t4) (t1 t3))
+not used hint:
+]",
+                                   QUERY PLAN
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -732,7 +985,16 @@ EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1, t2, t3, t4, t5;
     Leading((t2 t1))
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3.a=t1.a, t4, t5;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3.a=t1.a, t4, t5;
+LOG:  2024-05-07 18:38:22:830917 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t2 t1)
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
@@ -761,7 +1023,16 @@ EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3
     Leading((t5 (((t4 t3) t2) t1)))
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3.a=t1.a, t4, t5;
-                                   QUERY PLAN                                    
+LOG:  statement: /*+
+    Leading((t5 (((t4 t3) t2) t1)))
+ */
+EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3.a=t1.a, t4, t5;
+LOG:  2024-05-07 18:38:22:842164 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t5 (((t4 t3) t2) t1))
+not used hint:
+]",
+                                   QUERY PLAN
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -789,7 +1060,16 @@ EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3
     Leading((t5 (((t4 t3) t2) t1)))
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3.a=t1.a+1 AND t3.a>42, t4, t5;
-                                      QUERY PLAN                                       
+LOG:  statement: /*+
+    Leading((t5 (((t4 t3) t2) t1)))
+ */
+EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3.a=t1.a+1 AND t3.a>42, t4, t5;
+LOG:  2024-05-07 18:38:22:856438 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t5 (((t4 t3) t2) t1))
+not used hint:
+]",
+                                      QUERY PLAN
 ---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -824,7 +1104,18 @@ EXPLAIN (costs off) SELECT t1.a, t2.a FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t3
   Leading((t1 (t2 t5)))
 */
 EXPLAIN (costs off) SELECT * FROM t4, t3, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
-                                      QUERY PLAN                                       
+LOG:  statement: /*+
+  Leading((t3 t4))
+  Leading((t1 (t2 t5)))
+*/
+EXPLAIN (costs off) SELECT * FROM t4, t3, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
+LOG:  2024-05-07 18:38:22:866486 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t3 t4)
+JoinHint:(t1 (t2 t5))
+not used hint:
+]",
+                                      QUERY PLAN
 ---------------------------------------------------------------------------------------
  Nested Loop
    Join Filter: true
@@ -856,7 +1147,18 @@ EXPLAIN (costs off) SELECT * FROM t4, t3, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
   Leading(t1 t2 t5)
 */
 EXPLAIN (costs off) SELECT * FROM t4, t3, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
-                                QUERY PLAN                                 
+LOG:  statement: /*+
+  Leading((t3 t4))
+  Leading(t1 t2 t5)
+*/
+EXPLAIN (costs off) SELECT * FROM t4, t3, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
+LOG:  2024-05-07 18:38:22:878402 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t3 t4)
+JoinHint:t1 t2 t5
+not used hint:
+]",
+                                QUERY PLAN
 ---------------------------------------------------------------------------
  Nested Loop
    Join Filter: true
@@ -887,7 +1189,18 @@ EXPLAIN (costs off) SELECT * FROM t4, t3, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
   Leading((t1 (t2 t5)))
 */
 EXPLAIN (costs off) SELECT * FROM (SELECT * FROM t4, t3 LIMIT 1) p, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
-                                      QUERY PLAN                                       
+LOG:  statement: /*+
+  Leading((t3 t4))
+  Leading((t1 (t2 t5)))
+*/
+EXPLAIN (costs off) SELECT * FROM (SELECT * FROM t4, t3 LIMIT 1) p, (SELECT * FROM t1, t2, t5 LIMIT 42) q;
+LOG:  2024-05-07 18:38:22:890434 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:(t3 t4)
+JoinHint:(t1 (t2 t5))
+not used hint:
+]",
+                                      QUERY PLAN
 ---------------------------------------------------------------------------------------
  Nested Loop
    Join Filter: true
@@ -927,7 +1240,16 @@ EXPLAIN (costs off) SELECT * FROM (SELECT * FROM t4, t3 LIMIT 1) p, (SELECT * FR
     Leading(t1 t2 t3)
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:897127 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:t1 t2 t3
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -947,7 +1269,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(t3 t2 t1)
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(t3 t2 t1)
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
+LOG:  2024-05-07 18:38:22:902750 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinHint:t3 t2 t1
+not used hint:
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -968,7 +1299,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
     Leading(((t3 t2) t1))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  2024-05-07 18:38:22:908415 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinHint:((t3 t2) t1)
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Left Join
@@ -987,7 +1327,16 @@ EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
     Leading(((t3 t2) t1))
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
-                          QUERY PLAN                           
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
+LOG:  2024-05-07 18:38:22:914193 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinHint:((t3 t2) t1)
+]",
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Left Join
@@ -1010,15 +1359,29 @@ EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
 -- NOTE: An index-nestloop join is a combination of NestLoop and IndexScan
 --------------------------------------------------------------------
 CREATE INDEX i1 ON t1(a);
+LOG:  statement: CREATE INDEX i1 ON t1(a);
 CREATE INDEX i2 ON t2(a);
+LOG:  statement: CREATE INDEX i2 ON t2(a);
 CREATE INDEX i3 ON t3(a);
+LOG:  statement: CREATE INDEX i3 ON t3(a);
 CREATE INDEX i4 ON t4(a);
+LOG:  statement: CREATE INDEX i4 ON t4(a);
 CREATE INDEX i5 ON t5(a);
+LOG:  statement: CREATE INDEX i5 ON t5(a);
 /*+
     HashJoin(t1 t2)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+LOG:  2024-05-13 21:02:08:459587 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:HashJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
@@ -1033,7 +1396,16 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
     NoHashJoin(t1 t2)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NoHashJoin(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+LOG:  2024-05-13 21:02:08:465181 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NoHashJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1050,7 +1422,20 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
     SeqScan(t2)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+    SeqScan(t1)
+    SeqScan(t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+LOG:  2024-05-13 21:02:08:468568 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+ScanHint: t1[indexes: types:SeqScan]
+ScanHint: t2[indexes: types:SeqScan]
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1065,7 +1450,18 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
     IndexScan(t1)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+    IndexScan(t1)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+LOG:  2024-05-13 21:02:08:472654 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+ScanHint: t1[indexes: types:IndexScan]
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1081,7 +1477,18 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
     IndexScan(t2)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+    IndexScan(t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+LOG:  2024-05-13 21:02:08:476605 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+ScanHint: t2[indexes: types:IndexScan]
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1096,7 +1503,16 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
     NoNestLoop(t1 t2)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NoNestLoop(t1 t2)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
+LOG:  2024-05-13 21:02:08:480493 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NoNestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
@@ -1111,7 +1527,16 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a;
     NoHashJoin(t1 t2 t3)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
-                 QUERY PLAN                  
+LOG:  statement: /*+
+    NoHashJoin(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+LOG:  2024-05-13 21:02:08:502313 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2,t3 type:NoHashJoin
+not used hint:
+]",
+                 QUERY PLAN
 ---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1133,7 +1558,22 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
     NoHashJoin(t1 t2 t3)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
-                 QUERY PLAN                  
+LOG:  statement: /*+
+    NoHashJoin(t2 t3)
+    NoHashJoin(t1 t3)
+    NoHashJoin(t1 t2)
+    NoHashJoin(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+LOG:  2024-05-13 21:02:08:520553 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NoHashJoin
+JoinTypeHint: aliases:t1,t3 type:NoHashJoin
+JoinTypeHint: aliases:t2,t3 type:NoHashJoin
+JoinTypeHint: aliases:t1,t2,t3 type:NoHashJoin
+not used hint:
+]",
+                 QUERY PLAN
 ---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1152,7 +1592,16 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
     NoNestLoop(t1 t2 t3)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
-                 QUERY PLAN                  
+LOG:  statement: /*+
+    NoNestLoop(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+LOG:  2024-05-13 21:02:08:541870 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2,t3 type:NoNestedLoopJoin
+not used hint:
+]",
+                 QUERY PLAN
 ---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
@@ -1174,7 +1623,22 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
     NoNestLoop(t1 t2 t3)
  */
 EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
-                  QUERY PLAN                  
+LOG:  statement: /*+
+    NoNestLoop(t2 t3)
+    NoNestLoop(t1 t3)
+    NoNestLoop(t1 t2)
+    NoNestLoop(t1 t2 t3)
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
+LOG:  2024-05-13 21:02:08:557158 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NoNestedLoopJoin
+JoinTypeHint: aliases:t1,t3 type:NoNestedLoopJoin
+JoinTypeHint: aliases:t2,t3 type:NoNestedLoopJoin
+JoinTypeHint: aliases:t1,t2,t3 type:NoNestedLoopJoin
+not used hint:
+]",
+                  QUERY PLAN
 ----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
@@ -1196,7 +1660,16 @@ EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a JOIN t3 ON t1.a=t3.a;
     NestLoop(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:560832 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
@@ -1211,7 +1684,16 @@ EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
     NestLoop(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:564077 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
@@ -1227,9 +1709,21 @@ EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
     NestLoop(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:568336 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
+2024-05-13 21:02:08:568805 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
-                 QUERY PLAN                  
+LOG:  pg_hint_plan:
+used hint:
+NestLoop(t1 t2)
+not used hint:
+duplication hint:
+error hint:
+                 QUERY PLAN
 ---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Full Join
@@ -1244,7 +1738,16 @@ DETAIL:  Falling back to Postgres-based planner because no plan has been compute
     NestLoop(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
-                QUERY PLAN                
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:579148 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -1263,7 +1766,16 @@ EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
     NestLoop(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
-                                                                                                                                                                 QUERY PLAN                                                                                                                                                                  
+LOG:  statement: /*+
+    NestLoop(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:584528 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:NestedLoopJoin
+not used hint:
+]",
+                                                                                                                                                                 QUERY PLAN
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Result
    Filter: (SubPlan 1)
@@ -1288,9 +1800,21 @@ EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
     MergeJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+LOG:  statement: /*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:587990 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
+2024-05-13 21:02:08:588478 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
-                 QUERY PLAN                  
+LOG:  pg_hint_plan:
+used hint:
+MergeJoin(t1 t2)
+not used hint:
+duplication hint:
+error hint:
+                 QUERY PLAN
 ---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Left Join
@@ -1306,9 +1830,21 @@ DETAIL:  Falling back to Postgres-based planner because no plan has been compute
     MergeJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+LOG:  statement: /*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:592166 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
+2024-05-13 21:02:08:592658 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
-                 QUERY PLAN                  
+LOG:  pg_hint_plan:
+used hint:
+MergeJoin(t1 t2)
+not used hint:
+duplication hint:
+error hint:
+                 QUERY PLAN
 ---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Left Join
@@ -1323,7 +1859,16 @@ DETAIL:  Falling back to Postgres-based planner because no plan has been compute
     MergeJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:598574 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:MergeJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Full Join
@@ -1342,9 +1887,21 @@ EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
     MergeJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+LOG:  statement: /*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:603533 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
+2024-05-13 21:02:08:604007 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
-                QUERY PLAN                
+LOG:  pg_hint_plan:
+used hint:
+MergeJoin(t1 t2)
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Join
@@ -1363,9 +1920,21 @@ DETAIL:  Falling back to Postgres-based planner because no plan has been compute
     MergeJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+LOG:  statement: /*+
+    MergeJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:608367 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
+2024-05-13 21:02:08:608818 CDT,THD000,ERROR,"Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA",
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
-                          QUERY PLAN                           
+LOG:  pg_hint_plan:
+used hint:
+MergeJoin(t1 t2)
+not used hint:
+duplication hint:
+error hint:
+                          QUERY PLAN
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Anti Join
@@ -1384,7 +1953,16 @@ DETAIL:  Falling back to Postgres-based planner because no plan has been compute
     HashJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:612906 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:HashJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Left Join
@@ -1399,7 +1977,16 @@ EXPLAIN (COSTS off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
     HashJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:616265 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:HashJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Left Join
@@ -1414,7 +2001,16 @@ EXPLAIN (COSTS off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a = t2.a;
     HashJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
-                QUERY PLAN                
+LOG:  statement: /*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
+LOG:  2024-05-13 21:02:08:621265 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:HashJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Full Join
@@ -1429,7 +2025,16 @@ EXPLAIN (COSTS off) SELECT * FROM t1 FULL JOIN t2 ON t1.a = t2.a;
     HashJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
-                QUERY PLAN                
+LOG:  statement: /*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:628414 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:HashJoin
+not used hint:
+]",
+                QUERY PLAN
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Semi Join
@@ -1444,7 +2049,16 @@ EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
     HashJoin(t1 t2)
  */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
-                      QUERY PLAN                      
+LOG:  statement: /*+
+    HashJoin(t1 t2)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:632578 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+JoinTypeHint: aliases:t1,t2 type:HashJoin
+not used hint:
+]",
+                      QUERY PLAN
 ------------------------------------------------------
  Hash Left Anti Semi (Not-In) Join
    Hash Cond: (t1.a = t2.a)
@@ -1456,3 +2070,60 @@ EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
  Optimizer: GPORCA
 (8 rows)
 
+-- Test planhints logging for JoinTypeHints
+-- Missing alias in hint to test 'not used' hints logging
+/*+
+    HashJoin(y z)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+LOG:  statement: /*+
+    HashJoin(y z)
+ */
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
+LOG:  2024-05-13 21:02:08:636679 CDT,THD000,TRACE,"PlanHint: [
+used hint:
+not used hint:
+JoinTypeHint: aliases:y,z type:HashJoin
+]",
+                      QUERY PLAN
+------------------------------------------------------
+ Hash Left Anti Semi (Not-In) Join
+   Hash Cond: (t1.a = t2.a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t1
+   ->  Hash
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Seq Scan on t2
+ Optimizer: GPORCA
+(8 rows)
+
+-- Invalid JoinHint type to test Hint logging behavior
+/*+
+  InvalidJoinTypeHint(t1)
+*/
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+LOG:  statement: /*+
+  InvalidJoinTypeHint(t1)
+*/
+EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+INFO:  pg_hint_plan: hint syntax error at or near "InvalidJoinTypeHint(t1)
+"
+DETAIL:  Unrecognized hint keyword "InvalidJoinTypeHint".
+                QUERY PLAN
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  GroupAggregate
+               Group Key: t2.a
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Seq Scan on t2
+         ->  Index Scan using i1 on t1
+               Index Cond: (a = t2.a)
+ Optimizer: GPORCA
+(11 rows)
+
+RESET client_min_messages;
+LOG:  statement: RESET client_min_messages;
+RESET pg_hint_plan.debug_print;

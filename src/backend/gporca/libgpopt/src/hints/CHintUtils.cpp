@@ -49,7 +49,7 @@ CHintUtils::SatisfiesPlanHints(CLogicalGet *pop, CPlanHint *plan_hint)
 		return true;
 	}
 
-	// If opertor matches hint operator _or_ it doesn't match and is a not.
+	// If operator matches hint operator _or_ it doesn't match and is a not.
 	return scan_hint->SatisfiesOperator(pop);
 }
 
@@ -70,7 +70,7 @@ CHintUtils::SatisfiesPlanHints(CLogicalIndexGet *pop, CPlanHint *plan_hint)
 		if (pop->Pindexdesc()->Name().Pstr()->Equals(
 				(*scan_hint->GetIndexNames())[ul]))
 		{
-			// If opertor matches hint operator and index matches hint index.
+			// If operator matches hint operator and index matches hint index.
 			return scan_hint->SatisfiesOperator(pop);
 		}
 	}
@@ -114,7 +114,7 @@ CHintUtils::SatisfiesPlanHints(CLogicalDynamicIndexGet *pop,
 		if (pop->Pindexdesc()->Name().Pstr()->Equals(
 				(*scan_hint->GetIndexNames())[ul]))
 		{
-			// If opertor matches hint operator and index matches hint index.
+			// If operator matches hint operator and index matches hint index.
 			return scan_hint->SatisfiesOperator(pop);
 		}
 	}
@@ -142,7 +142,7 @@ CHintUtils::SatisfiesPlanHints(CScalarBitmapIndexProbe *pop,
 		if (pop->Pindexdesc()->Name().Pstr()->Equals(
 				(*scan_hint->GetIndexNames())[ul]))
 		{
-			// If opertor matches hint operator and index matches hint index.
+			// If operator matches hint operator and index matches hint index.
 			return scan_hint->SatisfiesOperator(pop);
 		}
 	}

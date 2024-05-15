@@ -37,6 +37,15 @@ ANALYZE my_table, your_table, our_table;
 -- Baseline no hints
 EXPLAIN SELECT t1.a, t2.a FROM my_table AS t1, your_table AS t2, our_table AS t3;
 
+SET client_min_messages TO log;
+SET pg_hint_plan.debug_print TO ON;
+
+-- Replace timestamp while logging with static string
+-- start_matchsubs
+-- m/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/
+-- s/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/YYYY-MM-DD HH:MM:SS:MSMSMS TMZ/
+-- end_matchsubs
+
 \o results/pg_hint_plan.tmpout
 /*+
     Rows(t1 t2 t3 #123)
@@ -186,6 +195,17 @@ EXPLAIN SELECT (SELECT a FROM foo AS f) FROM bar AS b;
 \o
 \! sql/maskout.sh results/pg_hint_plan.tmpout
 
+-- Missing alias in query to test Un-used Hint logging
+\o results/pg_hint_plan.tmpout
+/*+
+Rows(y z #123)
+*/
+EXPLAIN SELECT t1.a, t2.a FROM my_table AS t1, your_table AS t2, our_table AS t3;
+\o
+\! sql/maskout.sh results/pg_hint_plan.tmpout
+
+RESET client_min_messages;
+RESET pg_hint_plan.debug_print;
 -- Clean Up
 DROP TABLE foo;
 DROP TABLE bar;
