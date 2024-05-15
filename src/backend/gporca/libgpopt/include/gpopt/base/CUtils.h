@@ -1021,6 +1021,12 @@ public:
 
 	static CTableDescriptorHashSet *RemoveDuplicateMdids(
 		CMemoryPool *mp, CTableDescriptorHashSet *tabdescs);
+
+	static CExpression *ReplaceColrefWithProjectExpr(CMemoryPool *mp,
+													 CExpression *pexpr,
+													 CColRef *pcolref,
+													 CExpression *pprojExpr);
+
 };	// class CUtils
 
 // hash set from expressions

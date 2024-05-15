@@ -3012,59 +3012,6 @@ CExpressionPreprocessor::PcnstrFromChildPartition(
 	return cnstr;
 }
 
-// Collapse a select over a project and update column reference.
-CExpression *
-CExpressionPreprocessor::CollapseSelectAndReplaceColref(CMemoryPool *mp,
-														CExpression *pexpr,
-														CColRef *pcolref,
-														CExpression *pprojExpr)
-{
-	// remove the logical project
-	//
-	// Input:
-	// +--CLogicalSelect (x = 'meh')
-	//    +--CLogicalProject (col1...n, expr as x)
-	//       +-- CLogicalNAryJoin
-	// Output:
-	// +--CLogicalSelect (expr = 'meh')
-	//    +-- CLogicalNAryJoin
-	if (pexpr->Pop()->Eopid() == COperator::EopLogicalSelect &&
-		(*pexpr)[0]->Pop()->Eopid() == COperator::EopLogicalProject &&
-		(*(*pexpr)[0])[0]->Pop()->Eopid() == COperator::EopLogicalNAryJoin)
-	{
-		(*(*pexpr)[0])[0]->AddRef();
-		CExpression *pexprCollapsedSelect = GPOS_NEW(mp)
-			CExpression(mp, GPOS_NEW(mp) CLogicalSelect(mp), (*(*pexpr)[0])[0],
-						CollapseSelectAndReplaceColref(mp, (*pexpr)[1], pcolref,
-													   pprojExpr));
-
-		CExpression *pexprTransposed =
-			PexprTransposeSelectAndProject(mp, pexprCollapsedSelect);
-		pexprCollapsedSelect->Release();
-		return pexprTransposed;
-	}
-
-	// replace reference
-	if (pexpr->Pop()->Eopid() == COperator::EopScalarIdent &&
-		CColRef::Equals(CScalarIdent::PopConvert(pexpr->Pop())->Pcr(), pcolref))
-	{
-		pprojExpr->AddRef();
-		return pprojExpr;
-	}
-
-	// recurse to children
-	CExpressionArray *pdrgpexprChildren = GPOS_NEW(mp) CExpressionArray(mp);
-	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
-	{
-		pdrgpexprChildren->Append(CollapseSelectAndReplaceColref(
-			mp, (*pexpr)[ul], pcolref, pprojExpr));
-	}
-
-	COperator *pop = pexpr->Pop();
-	pop->AddRef();
-	return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexprChildren);
-}
-
 // Transpose a select over a project
 //
 // This preprocessing step enables additional opportunities for predicate push
@@ -3144,9 +3091,8 @@ CExpressionPreprocessor::PexprTransposeSelectAndProject(CMemoryPool *mp,
 	{
 		CExpression *pproject = (*pexpr)[0];
 		CExpression *pprojectList = (*pproject)[1];
-		CExpression *pselectNew = pexpr;
-
 		CExpressionArray *pdrgpexpr = GPOS_NEW(mp) CExpressionArray(mp);
+		// Return same pexpr if transpose is not possible
 		for (ULONG ul = 0; ul < pprojectList->Arity(); ul++)
 		{
 			CExpression *pprojexpr =
@@ -3173,25 +3119,66 @@ CExpressionPreprocessor::PexprTransposeSelectAndProject(CMemoryPool *mp,
 				pexpr->AddRef();
 				return pexpr;
 			}
-
-			// TODO: In order to support mixed pushable and non-pushable
-			//       predicates we need to be able to deconstruct a select
-			//       conjunction constraint into pushable and non-pushable
-			//       parts.
-			//
-			//       NB: JoinOnViewWithMixOfPushableAndNonpushablePredicates.mdp
-			CExpression *prevpselectNew = pselectNew;
-			pselectNew = CollapseSelectAndReplaceColref(
-				mp, prevpselectNew,
-				CUtils::PNthProjectElement(pproject, ul)->Pcr(),
-				CUtils::PNthProjectElementExpr(pproject, ul));
-			if (pexpr != prevpselectNew)
-			{
-				prevpselectNew->Release();
-			}
 		}
-		pdrgpexpr->Append(pselectNew);
+		// TODO: In order to support mixed pushable and non-pushable
+		//       predicates we need to be able to deconstruct a select
+		//       conjunction constraint into pushable and non-pushable
+		//       parts.
+		//
+		//       NB: JoinOnViewWithMixOfPushableAndNonpushablePredicates.mdp
 
+
+		// Transpose new select containing predicate with updated colrefs and NaryJoin recursively
+		// remove the logical project
+		//
+		// Input of step:
+		// +--CLogicalSelect (x = 'meh')
+		//    +--CLogicalProject (col1...n, expr as x)
+		//       +-- CLogicalNAryJoin
+		// Output of step:
+		// +--CLogicalSelect (expr = 'meh')
+		//    +-- CLogicalNAryJoin
+
+		// Replace colref's of the columns projected in the project list in the Select's predicate expr.
+		CExpression *pexprSelectPred = (*pexpr)[1];
+		pexprSelectPred->AddRef();
+		for (ULONG ul = 0; ul < pprojectList->Arity(); ul++)
+		{
+			CExpression *pprojexpr =
+				CUtils::PNthProjectElementExpr(pproject, ul);
+			gpopt::CColRef *pcolref =
+				CUtils::PNthProjectElement(pproject, ul)->Pcr();
+			CExpression *pexprSelectPredTemp =
+				CUtils::ReplaceColrefWithProjectExpr(mp, pexprSelectPred,
+													 pcolref, pprojexpr);
+			pexprSelectPred->Release();
+			pexprSelectPred = pexprSelectPredTemp;
+		}
+
+		// Transpose Select's Relation expr so it can be used to create collpased select
+		CExpression *pexprSelectRelNew =
+			PexprTransposeSelectAndProject(mp, (*(*pexpr)[0])[0]);
+
+		// Transpose Select's Predicate expr so it can be used to create collpased select
+		CExpression *pexprSelectPredNew =
+			PexprTransposeSelectAndProject(mp, pexprSelectPred);
+		pexprSelectPred->Release();
+
+		// Create collapsed select from updated Select children
+		CExpression *pexprCollapsedSelect =
+			GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CLogicalSelect(mp),
+									 pexprSelectRelNew, pexprSelectPredNew);
+
+		// Re-add the CLogicalProject on top of collapsed select
+		// Input of step:
+		// +--CLogicalSelect (x = 'meh')
+		//    +--CLogicalProject (col1...n, expr as x)
+		//       +-- CLogicalNAryJoin
+		// Output of step:
+		// +--CLogicalProject (col1...n, expr as x)
+		//    +--CLogicalSelect (expr = 'meh')
+		//       +-- CLogicalNAryJoin
+		pdrgpexpr->Append(pexprCollapsedSelect);
 		CExpressionArray *pdrgpprojelems = GPOS_NEW(mp) CExpressionArray(mp);
 		for (ULONG ul = 0; ul < pprojectList->Arity(); ul++)
 		{
