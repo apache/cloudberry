@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <queue>
+#include <unordered_map>
 #include <string>
 
 extern "C" {
@@ -26,9 +26,31 @@ public:
   ~EventSender();
 
 private:
+  enum QueryState { UNKNOWN, SUBMIT, START, END, DONE };
+
+  struct QueryItem {
+    QueryState state = QueryState::UNKNOWN;
+    yagpcc::SetQueryReq *message = nullptr;
+
+    QueryItem(QueryState st, yagpcc::SetQueryReq *msg);
+  };
+
+  struct pair_hash {
+    std::size_t operator()(const std::pair<int, int> &p) const {
+      auto h1 = std::hash<int>{}(p.first);
+      auto h2 = std::hash<int>{}(p.second);
+      return h1 ^ h2;
+    }
+  };
+
+  void update_query_state(QueryDesc *query_desc, QueryItem *query,
+                          QueryState new_state, bool success = true);
+  QueryItem *get_query_message(QueryDesc *query_desc);
   void collect_query_submit(QueryDesc *query_desc);
   void collect_query_done(QueryDesc *query_desc, QueryMetricsStatus status);
+  void cleanup_messages();
+
   UDSConnector *connector = nullptr;
   int nesting_level = 0;
-  yagpcc::SetQueryReq *query_msg;
+  std::unordered_map<std::pair<int, int>, QueryItem, pair_hash> query_msgs;
 };
