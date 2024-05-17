@@ -29,6 +29,7 @@ extern "C" {
 #include "gpos/error/CException.h"
 #include "gpos/io/COstreamString.h"
 #include "gpos/memory/CAutoMemoryPool.h"
+#include "gpos/memory/set.h"
 #include "gpos/task/CAutoTraceFlag.h"
 
 #include "gpdbcost/CCostModelGPDB.h"
@@ -484,7 +485,8 @@ COptTasks::GetCostModel(CMemoryPool *mp, ULONG num_segments)
 //		Converts OuterInnerRels into a JoinNode structure
 //---------------------------------------------------------------------------
 CJoinHint::JoinNode *
-GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner)
+GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner,
+				  gpos::set<std::string> &aliases)
 {
 	if (nullptr == outer_inner)
 	{
@@ -495,12 +497,19 @@ GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner)
 
 	if (outer_inner->relation != nullptr)
 	{
-		// outer_inner leaf node
+		// Base case: processing outer_inner leaf node
 		char *str_buffer =
 			GPOS_NEW_ARRAY(mp, char, strlen(outer_inner->relation) + 1);
 		memcpy(str_buffer, outer_inner->relation,
 			   strlen(outer_inner->relation));
 		str_buffer[strlen(outer_inner->relation)] = '\0';
+
+		if (aliases.count(std::string(str_buffer)) > 0)
+		{
+			// invalid leading hint if alias is specified more than once
+			return nullptr;
+		}
+		aliases.insert(std::string(str_buffer));
 
 		CWStringConst *alias = GPOS_NEW(mp)
 			CWStringConst(mp, str_buffer /*outer_inner->relation*/);
@@ -511,14 +520,17 @@ GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner)
 	}
 	else if (2 == list_length(outer_inner->outer_inner_pair))
 	{
-		// outer_inner branch node
+		// Recursive case: processing outer_inner branch node
 		CJoinHint::JoinNode *left_joinnode = GenerateJoinNodes(
-			mp, (OuterInnerRels *) lfirst(
-					list_head(outer_inner->outer_inner_pair)));
+			mp,
+			(OuterInnerRels *) lfirst(list_head(outer_inner->outer_inner_pair)),
+			aliases);
 
 		CJoinHint::JoinNode *right_joinnode = GenerateJoinNodes(
-			mp, (OuterInnerRels *) lfirst(
-					lnext(list_head(outer_inner->outer_inner_pair))));
+			mp,
+			(OuterInnerRels *) lfirst(
+				lnext(list_head(outer_inner->outer_inner_pair))),
+			aliases);
 
 		if (nullptr == left_joinnode || nullptr == right_joinnode)
 		{
@@ -531,6 +543,12 @@ GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner)
 		pair = GPOS_NEW(mp) CJoinHint::JoinNode(left_joinnode, right_joinnode,
 												/*is_directed*/ true);
 	}
+	else
+	{
+		// bad user input
+		//
+		// Example: "Leading(((t1 t2)))"
+	}
 
 	return pair;
 }
@@ -542,17 +560,39 @@ GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner)
 //
 //	@doc:
 //		Converts List of relation names into a JoinNode structure
+//
+//		Example:
+//			List: [t1 t2 t3 t4]
+//
+//			JoinNode:       .
+//			      x         .
+//			     / \        .
+//			    x  t4       .
+//			   / \          .
+//			  x   t3        .
+//			 / \            .
+//			t2 t1
 //---------------------------------------------------------------------------
 CJoinHint::JoinNode *
 GenerateJoinNodes(CMemoryPool *mp, List *relations)
 {
 	CJoinHint::JoinNode *pair = nullptr;
 
+	gpos::set<std::string> aliases(mp);
+
 	ListCell *l;
 	int count = 0;
 	foreach_with_count(l, relations, count)
 	{
 		char *relation = (char *) lfirst(l);
+		if (aliases.count(std::string(relation)) > 0)
+		{
+			pair->Release();
+			// invalid leading hint if alias is specified more than once
+			return nullptr;
+		}
+		aliases.insert(std::string(relation));
+
 		CWStringConst *alias = GPOS_NEW(mp) CWStringConst(mp, relation);
 
 		if (count == 0)
@@ -726,7 +766,9 @@ COptTasks::GetPlanHints(CMemoryPool *mp, Query *query)
 		if (nullptr != leading_hint->outer_inner)
 		{
 			// is directed
-			joinnode = GenerateJoinNodes(mp, leading_hint->outer_inner);
+			gpos::set<std::string> aliases(mp);
+			joinnode =
+				GenerateJoinNodes(mp, leading_hint->outer_inner, aliases);
 			if (nullptr != joinnode)
 			{
 				plan_hints->AddHint(GPOS_NEW(mp) CJoinHint(mp, joinnode));

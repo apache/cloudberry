@@ -18,8 +18,6 @@
 # test for builtin namespace pg_ext_aux
 test: pg_ext_aux
 
-test: planhints rowhints joinhints
-
 test: pg_dump_binary_upgrade
 
 test: gp_dispatch_keepalives
@@ -164,6 +162,7 @@ test: bfv_partition_plans
 # 'gp_covering_index' concurrent vacuum (e.g. autovacuum) can effect plan due
 # to race-condition fetching relallvisible.
 test: gp_covering_index
+test: planhints rowhints joinhints
 test: qp_indexscan
 test: gp_index_costing
 test: pgstat_qd_tabstat

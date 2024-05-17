@@ -2538,6 +2538,27 @@ CUtils::FScalarIdentNullTest(CExpression *pexpr)
 			CUtils::FScalarIdent((*pexpr)[0]));
 }
 
+// checks to see if expression contains a NullTest check on a column (ex: col IS NULL)
+BOOL
+CUtils::FContainsScalarIdentNullTest(CExpression *pexpr)
+{
+	GPOS_ASSERT(nullptr != pexpr);
+
+	if (CUtils::FScalarIdentNullTest(pexpr))
+	{
+		return true;
+	}
+	for (ULONG i = 0; i < pexpr->Arity(); i++)
+	{
+		if (FContainsScalarIdentNullTest((*pexpr)[i]))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 // checks to see if the expression is a scalar const TRUE
 BOOL
 CUtils::FScalarConstTrue(CExpression *pexpr)

@@ -35,12 +35,12 @@ private:
 	// array has as many entries as there are logical children of the NAry
 	// join. For each logical child i, if that child i is part of an inner join
 	// or the outer table of an LOJ, then the corresponding entry
-	// (*m_lojChildPredIndexes)[i] in this array is 0
+	// (*m_lojChildPred)[i] in this array is 0
 	// (GPOPT_ZERO_INNER_JOIN_PRED_INDEX). If the logical child is the right table
 	// of an LOJ, the corresponding index indicates the child index of the
 	// CScalarNAryJoinPredList expression that contains the ON predicate for the
 	// LOJ.
-	ULongPtrArray *m_lojChildPredIndexes;
+	ULongPtrArray *m_lojChildPred;
 
 public:
 	CLogicalNAryJoin(const CLogicalNAryJoin &) = delete;
@@ -53,7 +53,7 @@ public:
 	// dtor
 	~CLogicalNAryJoin() override
 	{
-		CRefCount::SafeRelease(m_lojChildPredIndexes);
+		CRefCount::SafeRelease(m_lojChildPred);
 	}
 
 	// ident accessors
@@ -125,20 +125,20 @@ public:
 	BOOL
 	HasOuterJoinChildren() const
 	{
-		return (nullptr != m_lojChildPredIndexes);
+		return (nullptr != m_lojChildPred);
 	}
 
 	BOOL
 	IsInnerJoinChild(ULONG child_num) const
 	{
-		return (nullptr == m_lojChildPredIndexes ||
-				*((*m_lojChildPredIndexes)[child_num]) == 0);
+		return (nullptr == m_lojChildPred ||
+				*((*m_lojChildPred)[child_num]) == 0);
 	}
 
 	ULongPtrArray *
 	GetLojChildPredIndexes() const
 	{
-		return m_lojChildPredIndexes;
+		return m_lojChildPred;
 	}
 
 	CExpression *
@@ -158,13 +158,13 @@ public:
 							  ULONG child_num) const
 	{
 		GPOS_ASSERT(nary_join_expr->Pop() == this);
-		GPOS_ASSERT(0 < *(*m_lojChildPredIndexes)[child_num]);
+		GPOS_ASSERT(0 < *(*m_lojChildPred)[child_num]);
 
-		// m_lojChildPredIndexes stores the index in the child of the scalar argument
+		// m_lojChildPred stores the index in the child of the scalar argument
 		// (a CScalarNAryJoinPredList) that has our ON predicate
 		//     |------ the scalar child of the NAry join ------|  |- grandchild corresponding to LOJ-|
 		return (*((*nary_join_expr)[nary_join_expr->Arity() - 1]))[*(
-			*m_lojChildPredIndexes)[child_num]];
+			*m_lojChildPred)[child_num]];
 	}
 
 	// get the true inner join predicates, excluding predicates that use ColRefs

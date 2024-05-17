@@ -1019,6 +1019,8 @@ public:
 
 	static BOOL FScalarIdentNullTest(CExpression *pexpr);
 
+	static BOOL FContainsScalarIdentNullTest(CExpression *pexpr);
+
 	static CTableDescriptorHashSet *RemoveDuplicateMdids(
 		CMemoryPool *mp, CTableDescriptorHashSet *tabdescs);
 

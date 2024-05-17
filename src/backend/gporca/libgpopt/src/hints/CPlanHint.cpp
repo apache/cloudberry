@@ -239,9 +239,10 @@ IsAliasHintSubtreeOrDisjoint(StringPtr2dArray *subtrees,
 //		CPlanHint::GetJoinHint
 //
 //	@doc:
-//		Given a join expression, find a matching CJoinHint. A match means that
-//		every alias in the hint is covered in the expression and at least one
-//		alias is a direct child of the join.
+//		Given a join expression, find a matching hint. A match means that every
+//		alias in the hint is covered in the expression and at least one alias
+//		is a direct child of the join. A direct child means the child has only
+//		one relation.
 //
 //		For example, let's say the query/hint is:
 //
@@ -284,36 +285,6 @@ CPlanHint::GetJoinHint(CExpression *pexpr)
 {
 	if (COperator::EopLogicalNAryJoin != pexpr->Pop()->Eopid() &&
 		COperator::EopLogicalInnerJoin != pexpr->Pop()->Eopid())
-	{
-		return nullptr;
-	}
-
-	// Disable join order hints on LEFT/RIGHT JOINS. There's some trickiness to
-	// this because some reorders are not valid. Before enabling, extra checks
-	// need to be added.
-	//
-	// For example:
-	//
-	//    T1 LOJ T2 LOJ T3
-	//
-	// *cannot* reorder to ..
-	//
-	//    T1 LOJ (T2 LOJ T3)
-	//
-	// without risking wrong results. Consider if tables have values:
-	//
-	//    T1 values (42)
-	//    T2 values (43)
-	//    T3 values (42)
-	//
-	// Then (T1 LOJ T2) LOJ T3 produces... (42, NULL, 42)
-	// Whereas T1 LOJ (T2 LOJ T3) produces... (42, NULL, NULL)
-	//
-	// Also, unlike inner joins the join condition of LOJ and ROJ cannot be
-	// split otherwise it can produce wrong results.
-	if (COperator::EopLogicalNAryJoin == pexpr->Pop()->Eopid() &&
-		COperator::EopScalarNAryJoinPredList ==
-			(*pexpr)[pexpr->Arity() - 1]->Pop()->Eopid())
 	{
 		return nullptr;
 	}
@@ -439,17 +410,18 @@ CPlanHint::GetJoinTypeHint(StringPtrArray *aliases)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CPlanHint::HasJoinHintWithDirection
+//		CPlanHint::WasCreatedViaDirectedHint
 //
 //	@doc:
-//		Given an expression, check if there exists a hint that covers the
-//		expression.
+//		Check whether an expression was created using a directed hint.
 //
 //---------------------------------------------------------------------------
 bool
-CPlanHint::HasJoinHintWithDirection(CExpression *pexpr)
+CPlanHint::WasCreatedViaDirectedHint(CExpression *pexpr)
 {
-	GPOS_ASSERT(COperator::EopLogicalInnerJoin == pexpr->Pop()->Eopid());
+	GPOS_ASSERT(COperator::EopLogicalInnerJoin == pexpr->Pop()->Eopid() ||
+				COperator::EopLogicalLeftOuterJoin == pexpr->Pop()->Eopid() ||
+				COperator::EopLogicalRightOuterJoin == pexpr->Pop()->Eopid());
 
 	CTableDescriptorHashSet *ptabdesc = pexpr->DeriveTableDescriptor();
 	StringPtrArray *pexprAliases =
@@ -463,6 +435,12 @@ CPlanHint::HasJoinHintWithDirection(CExpression *pexpr)
 
 		// skip directed-less hints
 		if (!hint->GetJoinNode()->IsDirected())
+		{
+			continue;
+		}
+
+		// skip hints not used
+		if (IHint::HINT_STATE_USED != hint->GetHintStatus())
 		{
 			continue;
 		}

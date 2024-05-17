@@ -78,8 +78,8 @@ public:
 	// Get a join type hint that covers an expression
 	CJoinTypeHint *GetJoinTypeHint(StringPtrArray *aliases);
 
-	// Check if there is a directed join hint that covers the expression
-	bool HasJoinHintWithDirection(CExpression *pexpr);
+	// Check whether an expression was created using a directed hint.
+	bool WasCreatedViaDirectedHint(CExpression *pexpr);
 
 	IOstream &OsPrint(IOstream &os) const;
 

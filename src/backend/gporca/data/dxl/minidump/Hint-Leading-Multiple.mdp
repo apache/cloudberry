@@ -410,7 +410,7 @@
         <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
       </dxl:LogicalJoin>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="396">
+    <dxl:Plan Id="0" SpaceSize="612">
       <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false" OuterRefAsParam="false">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="2778504966911.535156" Rows="1.000000" Width="48"/>

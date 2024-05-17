@@ -110,7 +110,7 @@ CXformInnerJoinCommutativity::Transform(CXformContext *pxfctxt,
 	// commutativity alternatives.
 	CPlanHint *planhint =
 		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint();
-	if (nullptr != planhint && planhint->HasJoinHintWithDirection(pexprAlt))
+	if (nullptr != planhint && planhint->WasCreatedViaDirectedHint(pexprAlt))
 	{
 		pexprAlt->Release();
 		return;

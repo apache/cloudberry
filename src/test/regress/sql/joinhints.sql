@@ -271,18 +271,6 @@ EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
  */
 EXPLAIN (costs off) SELECT * FROM t1, t2, t3;
 
--- Test join order hints on non-inner join queries
-
-/*+
-    Leading(((t3 t2) t1))
- */
-EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
-
-/*+
-    Leading(((t3 t2) t1))
- */
-EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
-
 
 --------------------------------------------------------------------
 -- Test join type hints can be applied
@@ -463,6 +451,460 @@ EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a NOT IN (SELECT t2.a FROM t2);
   InvalidJoinTypeHint(t1)
 */
 EXPLAIN (COSTS off) SELECT * FROM t1 WHERE t1.a IN (SELECT t2.a FROM t2);
+
+
+-- Test join order hints on non-inner join queries
+--
+-- Following queries exercise LOJ and ROJ
+
+/*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a AND t3.a>40;
+
+/*+
+    Leading(((t1 t4) (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 on t1.a=t4.a;
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a;
+
+-- Bad LOJ/ROJ hints
+--
+-- Notice that the join condition does not allow the following hint to be
+-- applied. This is because, unlike inner join, the join predicates of LOJ/ROJ
+-- are not transitive.
+/*+
+    Leading(((t1 t4) (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 on t2.a=t4.a;
+
+-- Again, the join condition does not allow the following hint to be applied.
+-- Here t3 join condition requires t1, it is illegal to join t2 and t3 first.
+/*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+-- Again, the join condition does not allow the following hint to be applied.
+-- Here t3 join condition requires t1, it is illegal to join t2 and t3 first.
+/*+
+    Leading((t1 (t2 t3)))
+*/
+EXPLAIN (costs off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a=t2.a RIGHT JOIN t3 ON t1.a=t3.a;
+
+-- Make sure we generate the same plan when hints are not used.
+EXPLAIN (costs off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a=t2.a RIGHT JOIN t3 ON t1.a=t3.a;
+
+-- Tables (t2 and t3) of INNER JOIN on the inner side of a LEFT JOIN cannot be
+-- reordered with the tables (t1) on the outer side.
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN (t2 INNER JOIN t3 ON t2.a = t3.a) ON t1.a = t2.a;
+
+-- Tables (t2 and t3) of INNER JOIN on the outer side of a RIGHT JOIN cannot be
+-- reordered with the tables (t1) on the inner side.
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off) SELECT * FROM t2 INNER JOIN t3 ON t2.a = t3.a RIGHT JOIN t1 ON t1.a=t2.a;
+
+
+-- Test that only *valid* join order hint shapes are applied for LOJ.
+--
+-- These check that every possible order on 3 relations. There are 12 possible
+-- orders:
+--
+-- T1 T2 T3   =>   (T1 T2) T3,  T1 (T2 T3)
+-- T1 T3 T2   =>   (T1 T3) T2,  T1 (T3 T2)
+-- T2 T1 T3   =>   (T2 T1) T3,  T2 (T1 T3)
+-- T2 T3 T1   =>   (T2 T3) T1,  T2 (T3 T1)
+-- T3 T1 T2   =>   (T3 T1) T2,  T3 (T1 T2)
+-- T3 T2 T1   =>   (T3 T2) T1,  T3 (T2 T1)
+--
+-- Note that not every order is a valid plan! And that regardless of the hint,
+-- the query should produce the same results.
+
+INSERT INTO t1 VALUES (50, 50), (51, 51), (NULL, NULL);
+INSERT INTO t2 VALUES (50, 50), (52, 52), (NULL, NULL);
+INSERT INTO t3 VALUES (50, 50), (53, 53), (NULL, NULL);
+INSERT INTO t4 VALUES (50, 50), (54, 54), (NULL, NULL);
+INSERT INTO t5 VALUES (50, 50), (55, 55), (NULL, NULL);
+
+/*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading((t1 (t2 t3)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading((t1 (t3 t2)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading((t1 (t3 t2)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading(((t2 t3) t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading(((t2 t3) t1))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading(((t3 t2) t1))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading(((t1 t3) t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading(((t1 t3) t2))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading(((t3 t1) t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading(((t3 t1) t2))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading((t2 (t1 t3)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading((t2 (t1 t3)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading((t2 (t3 t1)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading((t2 (t3 t1)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading(((t1 t2) t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading(((t1 t2) t3))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading(((t2 t1) t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading(((t2 t1) t3))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading((t3 (t1 t2)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading((t3 (t1 t2)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading((t3 (t2 t1)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+/*+
+    Leading((t3 (t2 t1)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+
+/*+
+    Leading((t1 t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+/*+
+    Leading((t1 t2))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+/*+
+    Leading((t2 t1))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading((t2 t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+/*+
+    Leading((t2 t3))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading((t3 t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+/*+
+    Leading((t3 t2))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading((t1 t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+/*+
+    Leading((t1 t3))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+/*+
+    Leading((t3 t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+/*+
+    Leading((t3 t1))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+
+
+-- Test LOJ cases where middle joins are applied first
+--
+-- For example, if query is:
+--
+--    T1 LOJ T2 LOJ T3 LOJ T4 LOJ T5
+--
+-- Then if hint is Leading((T2 T3)), then query should generate correct results.
+/*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+/*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+
+/*+
+    Leading((t3 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+/*+
+    Leading((t3 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+
+/*+
+    Leading((t4 (t3 t2)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+/*+
+    Leading((t4 (t3 t2)))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+
+
+-- Test LOJ cases with NULL aware predicates
+--
+-- Join order cannot be reordered if a join predicate is satisified when the
+-- column of a table is NULL. This is because the number of NULLs can change
+-- based on the order the join is executed.
+--
+-- For example,
+--
+--   Table Data:
+--     T1      T2     T3
+--     --      --     --
+--      1    NULL      1
+--
+--   Order #1:
+--     (T1 LOJ T2 ON T1.a=T2.a) LOJ T3 ON t2.a IS NULL
+--     T1 | T2 |T3
+--     ---+----+---
+--      1 |    |1
+--
+--   Order #2:
+--     T1 LOJ (T2 LOJ T3 ON t2.a IS NULL) ON T1.a=T2.a
+--     T1 | T2 |T3
+--     ---+----+---
+--      1 |    |
+/*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+/*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+
+/*+
+    Leading((t1 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+/*+
+    Leading((t1 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+/*+
+    Leading((t1 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+
+/*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+/*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+
+/*+
+    Leading((t1 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+/*+
+    Leading((t1 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+/*+
+    Leading((t1 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+
+
+-- Test LOJ with subquery
+--
+-- Test various combinations
+
+--
+-- 1. LOJ outside subquery
+--
+
+/*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1, t2 ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON t3.a=q.a, t4, t5;
+
+/*+
+    Leading((((t1 t2) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1, t2 ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON t3.a=q.a, t4, t5;
+
+--
+-- 2. LOJ inside subquery
+--
+
+/*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q, t3, t4, t5;
+
+/*+
+    Leading((((t2 t1) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q, t3, t4, t5;
+
+--
+-- 2. LOJ inside/outside subquery
+--
+
+/*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON q.a=t3.a, t4, t5;
+
+/*+
+    Leading((((t2 t1) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON q.a=t3.a, t4, t5;
 
 RESET client_min_messages;
 RESET pg_hint_plan.debug_print;

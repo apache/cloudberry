@@ -1316,65 +1316,6 @@ error hint:
  Optimizer: Postgres-based planner
 (11 rows)
 
--- Test join order hints on non-inner join queries
-/*+
-    Leading(((t3 t2) t1))
- */
-EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
-LOG:  statement: /*+
-    Leading(((t3 t2) t1))
- */
-EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
-LOG:  pg_hint_plan:
-used hint:
-Leading(((t3 t2) t1))
-not used hint:
-duplication hint:
-error hint:
-                       QUERY PLAN
----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on t1
-         ->  Materialize
-               ->  Hash Right Join
-                     Hash Cond: (t3.a = t2.a)
-                     ->  Seq Scan on t3
-                     ->  Hash
-                           ->  Seq Scan on t2
- Optimizer: Postgres-based planner
-(11 rows)
-
-/*+
-    Leading(((t3 t2) t1))
- */
-EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
-LOG:  statement: /*+
-    Leading(((t3 t2) t1))
- */
-EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
-LOG:  pg_hint_plan:
-used hint:
-Leading(((t3 t2) t1))
-not used hint:
-duplication hint:
-error hint:
-                       QUERY PLAN
----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on t1
-         ->  Materialize
-               ->  Hash Left Join
-                     Hash Cond: (t3.a = t2.a)
-                     ->  Seq Scan on t3
-                     ->  Hash
-                           ->  Seq Scan on t2
- Optimizer: Postgres-based planner
-(11 rows)
-
 --------------------------------------------------------------------
 -- Test join type hints can be applied
 --
@@ -2136,6 +2077,2187 @@ DETAIL:  Unrecognized hint keyword "InvalidJoinTypeHint".
                      ->  Seq Scan on t2
  Optimizer: Postgres-based planner
 (9 rows)
+
+-- Test join order hints on non-inner join queries
+--
+-- Following queries exercise LOJ and ROJ
+/*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a AND t3.a>40;
+LOG:  statement: /*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a AND t3.a>40;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+                    QUERY PLAN                    
+--------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on t1
+         ->  Hash
+               ->  Hash Left Join
+                     Hash Cond: (t2.a = t3.a)
+                     ->  Seq Scan on t2
+                     ->  Hash
+                           ->  Seq Scan on t3
+                                 Filter: (a > 40)
+ Optimizer: Postgres-based planner
+(12 rows)
+
+/*+
+    Leading(((t1 t4) (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 on t1.a=t4.a;
+LOG:  statement: /*+
+    Leading(((t1 t4) (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 on t1.a=t4.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t1 t4) (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Hash Left Join
+               Hash Cond: (t1.a = t4.a)
+               ->  Seq Scan on t1
+               ->  Hash
+                     ->  Seq Scan on t4
+         ->  Hash
+               ->  Hash Left Join
+                     Hash Cond: (t2.a = t3.a)
+                     ->  Seq Scan on t2
+                     ->  Hash
+                           ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(15 rows)
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t2) t1))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t2.a = t1.a)
+         ->  Hash Right Join
+               Hash Cond: (t3.a = t2.a)
+               ->  Seq Scan on t3
+               ->  Hash
+                     ->  Seq Scan on t2
+         ->  Hash
+               ->  Seq Scan on t1
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t2) t1))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t1
+         ->  Materialize
+               ->  Hash Right Join
+                     Hash Cond: (t3.a = t2.a)
+                     ->  Seq Scan on t3
+                     ->  Hash
+                           ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1, t2 RIGHT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t2) t1))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t1
+         ->  Materialize
+               ->  Hash Left Join
+                     Hash Cond: (t3.a = t2.a)
+                     ->  Seq Scan on t3
+                     ->  Hash
+                           ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a;
+LOG:  statement: /*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t1))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on t2
+         ->  Hash
+               ->  Seq Scan on t1
+ Optimizer: Postgres-based planner
+(7 rows)
+
+-- Bad LOJ/ROJ hints
+--
+-- Notice that the join condition does not allow the following hint to be
+-- applied. This is because, unlike inner join, the join predicates of LOJ/ROJ
+-- are not transitive.
+/*+
+    Leading(((t1 t4) (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 on t2.a=t4.a;
+LOG:  statement: /*+
+    Leading(((t1 t4) (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 on t2.a=t4.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t1 t4) (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Merge Left Join
+                     Merge Cond: (t2.a = t4.a)
+                     ->  Sort
+                           Sort Key: t2.a
+                           ->  Hash Left Join
+                                 Hash Cond: (t2.a = t3.a)
+                                 ->  Seq Scan on t2
+                                 ->  Hash
+                                       ->  Seq Scan on t3
+                     ->  Sort
+                           Sort Key: t4.a
+                           ->  Seq Scan on t4
+ Optimizer: Postgres-based planner
+(18 rows)
+
+-- Again, the join condition does not allow the following hint to be applied.
+-- Here t3 join condition requires t1, it is illegal to join t2 and t3 first.
+/*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t1.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Merge Left Join
+                     Merge Cond: (t1.a = t2.a)
+                     ->  Index Scan using i1 on t1
+                     ->  Materialize
+                           ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+-- Again, the join condition does not allow the following hint to be applied.
+-- Here t3 join condition requires t1, it is illegal to join t2 and t3 first.
+/*+
+    Leading((t1 (t2 t3)))
+*/
+EXPLAIN (costs off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a=t2.a RIGHT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 (t2 t3)))
+*/
+EXPLAIN (costs off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a=t2.a RIGHT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t3.a = t1.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t1.a = t2.a)
+                     ->  Index Scan using i1 on t1
+                     ->  Materialize
+                           ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+-- Make sure we generate the same plan when hints are not used.
+EXPLAIN (costs off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a=t2.a RIGHT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: EXPLAIN (costs off) SELECT * FROM t1 RIGHT JOIN t2 ON t1.a=t2.a RIGHT JOIN t3 ON t1.a=t3.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t1.a = t3.a)
+         ->  Hash Join
+               Hash Cond: (t1.a = t2.a)
+               ->  Seq Scan on t1
+               ->  Hash
+                     ->  Seq Scan on t2
+         ->  Hash
+               ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+-- Tables (t2 and t3) of INNER JOIN on the inner side of a LEFT JOIN cannot be
+-- reordered with the tables (t1) on the outer side.
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN (t2 INNER JOIN t3 ON t2.a = t3.a) ON t1.a = t2.a;
+LOG:  statement: /*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off) SELECT * FROM t1 LEFT JOIN (t2 INNER JOIN t3 ON t2.a = t3.a) ON t1.a = t2.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t2.a = t3.a)
+                     ->  Index Scan using i2 on t2
+                     ->  Materialize
+                           ->  Index Scan using i3 on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+-- Tables (t2 and t3) of INNER JOIN on the outer side of a RIGHT JOIN cannot be
+-- reordered with the tables (t1) on the inner side.
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off) SELECT * FROM t2 INNER JOIN t3 ON t2.a = t3.a RIGHT JOIN t1 ON t1.a=t2.a;
+LOG:  statement: /*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off) SELECT * FROM t2 INNER JOIN t3 ON t2.a = t3.a RIGHT JOIN t1 ON t1.a=t2.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t2.a = t3.a)
+                     ->  Index Scan using i2 on t2
+                     ->  Materialize
+                           ->  Index Scan using i3 on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+-- Test that only *valid* join order hint shapes are applied for LOJ.
+--
+-- These check that every possible order on 3 relations. There are 12 possible
+-- orders:
+--
+-- T1 T2 T3   =>   (T1 T2) T3,  T1 (T2 T3)
+-- T1 T3 T2   =>   (T1 T3) T2,  T1 (T3 T2)
+-- T2 T1 T3   =>   (T2 T1) T3,  T2 (T1 T3)
+-- T2 T3 T1   =>   (T2 T3) T1,  T2 (T3 T1)
+-- T3 T1 T2   =>   (T3 T1) T2,  T3 (T1 T2)
+-- T3 T2 T1   =>   (T3 T2) T1,  T3 (T2 T1)
+--
+-- Note that not every order is a valid plan! And that regardless of the hint,
+-- the query should produce the same results.
+INSERT INTO t1 VALUES (50, 50), (51, 51), (NULL, NULL);
+LOG:  statement: INSERT INTO t1 VALUES (50, 50), (51, 51), (NULL, NULL);
+INSERT INTO t2 VALUES (50, 50), (52, 52), (NULL, NULL);
+LOG:  statement: INSERT INTO t2 VALUES (50, 50), (52, 52), (NULL, NULL);
+INSERT INTO t3 VALUES (50, 50), (53, 53), (NULL, NULL);
+LOG:  statement: INSERT INTO t3 VALUES (50, 50), (53, 53), (NULL, NULL);
+INSERT INTO t4 VALUES (50, 50), (54, 54), (NULL, NULL);
+LOG:  statement: INSERT INTO t4 VALUES (50, 50), (54, 54), (NULL, NULL);
+INSERT INTO t5 VALUES (50, 50), (55, 55), (NULL, NULL);
+LOG:  statement: INSERT INTO t5 VALUES (50, 50), (55, 55), (NULL, NULL);
+/*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 (t2 t3)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t1.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t1.a = t2.a)
+                     ->  Index Scan using i1 on t1
+                     ->  Materialize
+                           ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t1 (t2 t3)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 (t2 t3)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t2 t3)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading((t1 (t3 t2)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 (t3 t2)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t3 t2)))
+not used hint:
+duplication hint:
+error hint:
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t1.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t1.a = t2.a)
+                     ->  Index Scan using i1 on t1
+                     ->  Materialize
+                           ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t1 (t3 t2)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 (t3 t2)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 (t3 t2)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading(((t2 t3) t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t2 t3) t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t2 t3) t1))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t1.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t1.a = t2.a)
+                     ->  Index Scan using i1 on t1
+                     ->  Materialize
+                           ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t2 t3) t1))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t2 t3) t1))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t2 t3) t1))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t2) t1))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t1.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Merge Join
+                     Merge Cond: (t1.a = t2.a)
+                     ->  Index Scan using i1 on t1
+                     ->  Materialize
+                           ->  Index Scan using i2 on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t3 t2) t1))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t2) t1))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t2) t1))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading(((t1 t3) t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t1 t3) t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t1 t3) t2))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Hash Left Join
+               Hash Cond: (t1.a = t3.a)
+               ->  Seq Scan on t1
+               ->  Hash
+                     ->  Seq Scan on t3
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t1 t3) t2))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t1 t3) t2))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t1 t3) t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading(((t3 t1) t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t1) t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t1) t2))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Hash Right Join
+               Hash Cond: (t3.a = t1.a)
+               ->  Seq Scan on t3
+               ->  Hash
+                     ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t3 t1) t2))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t3 t1) t2))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t3 t1) t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading((t2 (t1 t3)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 (t1 t3)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 (t1 t3)))
+not used hint:
+duplication hint:
+error hint:
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on t2
+         ->  Hash
+               ->  Hash Left Join
+                     Hash Cond: (t1.a = t3.a)
+                     ->  Seq Scan on t1
+                     ->  Hash
+                           ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t2 (t1 t3)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 (t1 t3)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 (t1 t3)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading((t2 (t3 t1)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 (t3 t1)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 (t3 t1)))
+not used hint:
+duplication hint:
+error hint:
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on t2
+         ->  Hash
+               ->  Hash Right Join
+                     Hash Cond: (t3.a = t1.a)
+                     ->  Seq Scan on t3
+                     ->  Hash
+                           ->  Seq Scan on t1
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t2 (t3 t1)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 (t3 t1)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 (t3 t1)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading(((t1 t2) t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t1 t2) t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t1 t2) t3))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t1.a = t3.a)
+         ->  Hash Join
+               Hash Cond: (t1.a = t2.a)
+               ->  Seq Scan on t1
+               ->  Hash
+                     ->  Seq Scan on t2
+         ->  Hash
+               ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t1 t2) t3))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t1 t2) t3))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t1 t2) t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading(((t2 t1) t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t2 t1) t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t2 t1) t3))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t1.a = t3.a)
+         ->  Hash Join
+               Hash Cond: (t2.a = t1.a)
+               ->  Seq Scan on t2
+               ->  Hash
+                     ->  Seq Scan on t1
+         ->  Hash
+               ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading(((t2 t1) t3))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading(((t2 t1) t3))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading(((t2 t1) t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading((t3 (t1 t2)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 (t1 t2)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 (t1 t2)))
+not used hint:
+duplication hint:
+error hint:
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t3.a = t1.a)
+         ->  Seq Scan on t3
+         ->  Hash
+               ->  Hash Join
+                     Hash Cond: (t1.a = t2.a)
+                     ->  Seq Scan on t1
+                     ->  Hash
+                           ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t3 (t1 t2)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 (t1 t2)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 (t1 t2)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading((t3 (t2 t1)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 (t2 t1)))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 (t2 t1)))
+not used hint:
+duplication hint:
+error hint:
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t3.a = t1.a)
+         ->  Seq Scan on t3
+         ->  Hash
+               ->  Hash Join
+                     Hash Cond: (t2.a = t1.a)
+                     ->  Seq Scan on t2
+                     ->  Hash
+                           ->  Seq Scan on t1
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t3 (t2 t1)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 (t2 t1)))
+ */
+SELECT * FROM t1 JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t1.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 (t2 t1)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+(1 row)
+
+/*+
+    Leading((t1 t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t2.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.a
+                           ->  Hash Left Join
+                                 Hash Cond: (t1.a = t2.a)
+                                 ->  Seq Scan on t1
+                                 ->  Hash
+                                       ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(15 rows)
+
+/*+
+    Leading((t1 t2))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 t2))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 51 | 51 |    |    |    |   
+    |    |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+/*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t1))
+not used hint:
+duplication hint:
+error hint:
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Right Join
+         Merge Cond: (t3.a = t2.a)
+         ->  Index Scan using i3 on t3
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.a
+                           ->  Hash Right Join
+                                 Hash Cond: (t2.a = t1.a)
+                                 ->  Seq Scan on t2
+                                 ->  Hash
+                                       ->  Seq Scan on t1
+ Optimizer: Postgres-based planner
+(15 rows)
+
+/*+
+    Leading((t2 t1))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 t1))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t1))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+    |    |    |    |    |   
+ 51 | 51 |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+/*+
+    Leading((t2 t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Hash Left Join
+                           Hash Cond: (t2.a = t3.a)
+                           ->  Seq Scan on t2
+                           ->  Hash
+                                 ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t2 t3))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t2 t3))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+ 51 | 51 |    |    |    |   
+    |    |    |    |    |   
+(3 rows)
+
+/*+
+    Leading((t3 t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 t2))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 t2))
+not used hint:
+duplication hint:
+error hint:
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Hash Right Join
+                           Hash Cond: (t3.a = t2.a)
+                           ->  Seq Scan on t3
+                           ->  Hash
+                                 ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t3 t2))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 t2))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 50 | 50 | 50 | 50 | 50 | 50
+ 51 | 51 |    |    |    |   
+    |    |    |    |    |   
+(3 rows)
+
+/*+
+    Leading((t1 t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 t3))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t3))
+not used hint:
+duplication hint:
+error hint:
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Merge Left Join
+                     Merge Cond: (t2.a = t3.a)
+                     ->  Index Scan using i2 on t2
+                     ->  Materialize
+                           ->  Index Scan using i3 on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t1 t3))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t1 t3))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 51 | 51 |    |    |    |   
+    |    |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+/*+
+    Leading((t3 t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 t1))
+ */
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 t1))
+not used hint:
+duplication hint:
+error hint:
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Index Scan using i1 on t1
+         ->  Materialize
+               ->  Merge Left Join
+                     Merge Cond: (t2.a = t3.a)
+                     ->  Index Scan using i2 on t2
+                     ->  Materialize
+                           ->  Index Scan using i3 on t3
+ Optimizer: Postgres-based planner
+(11 rows)
+
+/*+
+    Leading((t3 t1))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  statement: /*+
+    Leading((t3 t1))
+ */
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 t1))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+ 51 | 51 |    |    |    |   
+    |    |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+-- Test LOJ cases where middle joins are applied first
+--
+-- For example, if query is:
+--
+--    T1 LOJ T2 LOJ T3 LOJ T4 LOJ T5
+--
+-- Then if hint is Leading((T2 T3)), then query should generate correct results.
+/*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  statement: /*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Merge Left Join
+               Merge Cond: (t1.a = t5.a)
+               ->  Index Scan using i1 on t1
+               ->  Materialize
+                     ->  Index Scan using i5 on t5
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.a
+                           ->  Merge Right Join
+                                 Merge Cond: (t4.a = t3.a)
+                                 ->  Index Scan using i4 on t4
+                                 ->  Materialize
+                                       ->  Sort
+                                             Sort Key: t3.a
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                   Hash Key: t3.a
+                                                   ->  Hash Left Join
+                                                         Hash Cond: (t2.a = t3.a)
+                                                         ->  Seq Scan on t2
+                                                         ->  Hash
+                                                               ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(27 rows)
+
+/*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  statement: /*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----+----+----+----+----
+ 51 | 51 |    |    |    |    |    |    |    |   
+    |    |    |    |    |    |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+/*+
+    Leading((t3 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  statement: /*+
+    Leading((t3 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 t2))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Merge Left Join
+               Merge Cond: (t1.a = t5.a)
+               ->  Index Scan using i1 on t1
+               ->  Materialize
+                     ->  Index Scan using i5 on t5
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.a
+                           ->  Merge Right Join
+                                 Merge Cond: (t4.a = t3.a)
+                                 ->  Index Scan using i4 on t4
+                                 ->  Materialize
+                                       ->  Sort
+                                             Sort Key: t3.a
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                   Hash Key: t3.a
+                                                   ->  Hash Right Join
+                                                         Hash Cond: (t3.a = t2.a)
+                                                         ->  Seq Scan on t3
+                                                         ->  Hash
+                                                               ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(27 rows)
+
+/*+
+    Leading((t3 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  statement: /*+
+    Leading((t3 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t3 t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----+----+----+----+----
+ 51 | 51 |    |    |    |    |    |    |    |   
+    |    |    |    |    |    |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+/*+
+    Leading((t4 (t3 t2)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  statement: /*+
+    Leading((t4 (t3 t2)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t4 (t3 t2)))
+not used hint:
+duplication hint:
+error hint:
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Merge Left Join
+         Merge Cond: (t1.a = t2.a)
+         ->  Merge Left Join
+               Merge Cond: (t1.a = t5.a)
+               ->  Index Scan using i1 on t1
+               ->  Materialize
+                     ->  Index Scan using i5 on t5
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t2.a
+                     ->  Hash Right Join
+                           Hash Cond: (t4.a = t3.a)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on t4
+                           ->  Hash
+                                 ->  Hash Right Join
+                                       Hash Cond: (t3.a = t2.a)
+                                       ->  Seq Scan on t3
+                                       ->  Hash
+                                             ->  Seq Scan on t2
+ Optimizer: Postgres-based planner
+(22 rows)
+
+/*+
+    Leading((t4 (t3 t2)))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  statement: /*+
+    Leading((t4 (t3 t2)))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.a LEFT JOIN t3 ON t2.a=t3.a LEFT JOIN t4 ON t3.a=t4.a LEFT JOIN t5 ON t1.a=t5.a;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t4 (t3 t2)))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a  | b  | a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----+----+----+----+----
+ 51 | 51 |    |    |    |    |    |    |    |   
+    |    |    |    |    |    |    |    |    |   
+ 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50 | 50
+(3 rows)
+
+-- Test LOJ cases with NULL aware predicates
+--
+-- Join order cannot be reordered if a join predicate is satisified when the
+-- column of a table is NULL. This is because the number of NULLs can change
+-- based on the order the join is executed.
+--
+-- For example,
+--
+--   Table Data:
+--     T1      T2     T3
+--     --      --     --
+--      1    NULL      1
+--
+--   Order #1:
+--     (T1 LOJ T2 ON T1.a=T2.a) LOJ T3 ON t2.a IS NULL
+--     T1 | T2 |T3
+--     ---+----+---
+--      1 |    |1
+--
+--   Order #2:
+--     T1 LOJ (T2 LOJ T3 ON t2.a IS NULL) ON T1.a=T2.a
+--     T1 | T2 |T3
+--     ---+----+---
+--      1 |    |
+/*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  statement: /*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.a IS NULL)
+         ->  Nested Loop Left Join
+               ->  Seq Scan on t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t2
+                                 Filter: (a > 53)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  statement: /*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a | b | a  | b  
+----+----+---+---+----+----
+ 50 | 50 |   |   | 53 | 53
+ 50 | 50 |   |   |    |   
+ 50 | 50 |   |   | 50 | 50
+ 51 | 51 |   |   | 53 | 53
+ 51 | 51 |   |   |    |   
+ 51 | 51 |   |   | 50 | 50
+    |    |   |   | 53 | 53
+    |    |   |   |    |   
+    |    |   |   | 50 | 50
+(9 rows)
+
+/*+
+    Leading((t1 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  statement: /*+
+    Leading((t1 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t3))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.a IS NULL)
+         ->  Nested Loop Left Join
+               ->  Seq Scan on t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t2
+                                 Filter: (a > 53)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t1 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  statement: /*+
+    Leading((t1 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a | b | a  | b  
+----+----+---+---+----+----
+ 51 | 51 |   |   | 50 | 50
+ 51 | 51 |   |   | 53 | 53
+ 51 | 51 |   |   |    |   
+    |    |   |   | 50 | 50
+    |    |   |   | 53 | 53
+    |    |   |   |    |   
+ 50 | 50 |   |   | 50 | 50
+ 50 | 50 |   |   | 53 | 53
+ 50 | 50 |   |   |    |   
+(9 rows)
+
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  statement: /*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.a IS NULL)
+         ->  Nested Loop Left Join
+               ->  Seq Scan on t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t2
+                                 Filter: (a > 53)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t1 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  statement: /*+
+    Leading((t1 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON t2.a IS NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a | b | a  | b  
+----+----+---+---+----+----
+ 51 | 51 |   |   | 50 | 50
+ 51 | 51 |   |   | 53 | 53
+ 51 | 51 |   |   |    |   
+    |    |   |   | 50 | 50
+    |    |   |   | 53 | 53
+    |    |   |   |    |   
+ 50 | 50 |   |   | 50 | 50
+ 50 | 50 |   |   | 53 | 53
+ 50 | 50 |   |   |    |   
+(9 rows)
+
+/*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  statement: /*+
+    Leading((t2 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.a IS NULL)
+         ->  Nested Loop Left Join
+               ->  Seq Scan on t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t2
+                                 Filter: (a > 53)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  statement: /*+
+    Leading((t2 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t2 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a | b | a  | b  
+----+----+---+---+----+----
+ 51 | 51 |   |   | 53 | 53
+ 51 | 51 |   |   |    |   
+ 51 | 51 |   |   | 50 | 50
+    |    |   |   | 53 | 53
+    |    |   |   |    |   
+    |    |   |   | 50 | 50
+ 50 | 50 |   |   | 53 | 53
+ 50 | 50 |   |   |    |   
+ 50 | 50 |   |   | 50 | 50
+(9 rows)
+
+/*+
+    Leading((t1 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  statement: /*+
+    Leading((t1 t3))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t3))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.a IS NULL)
+         ->  Nested Loop Left Join
+               ->  Seq Scan on t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t2
+                                 Filter: (a > 53)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t1 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  statement: /*+
+    Leading((t1 t3))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t3))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a | b | a  | b  
+----+----+---+---+----+----
+ 50 | 50 |   |   | 53 | 53
+ 50 | 50 |   |   |    |   
+ 50 | 50 |   |   | 50 | 50
+ 51 | 51 |   |   | 53 | 53
+ 51 | 51 |   |   |    |   
+ 51 | 51 |   |   | 50 | 50
+    |    |   |   | 53 | 53
+    |    |   |   |    |   
+    |    |   |   | 50 | 50
+(9 rows)
+
+/*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  statement: /*+
+    Leading((t1 t2))
+*/
+EXPLAIN (costs off)
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.a IS NULL)
+         ->  Nested Loop Left Join
+               ->  Seq Scan on t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on t2
+                                 Filter: (a > 53)
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(13 rows)
+
+/*+
+    Leading((t1 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  statement: /*+
+    Leading((t1 t2))
+*/
+SELECT * FROM t1 LEFT JOIN t2 ON t2.a>53 LEFT JOIN t3 ON NOT t2.a IS NOT NULL;
+LOG:  pg_hint_plan:
+used hint:
+Leading((t1 t2))
+not used hint:
+duplication hint:
+error hint:
+ a  | b  | a | b | a  | b  
+----+----+---+---+----+----
+ 50 | 50 |   |   | 53 | 53
+ 50 | 50 |   |   |    |   
+ 50 | 50 |   |   | 50 | 50
+ 51 | 51 |   |   | 53 | 53
+ 51 | 51 |   |   |    |   
+ 51 | 51 |   |   | 50 | 50
+    |    |   |   | 53 | 53
+    |    |   |   |    |   
+    |    |   |   | 50 | 50
+(9 rows)
+
+-- Test LOJ with subquery
+--
+-- Test various combinations
+--
+-- 1. LOJ outside subquery
+--
+/*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1, t2 ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON t3.a=q.a, t4, t5;
+LOG:  statement: /*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1, t2 ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON t3.a=q.a, t4, t5;
+LOG:  pg_hint_plan:
+used hint:
+not used hint:
+Leading(((t5 t4) (t3 (t1 t2))))
+duplication hint:
+error hint:
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t3.a = t1.a)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t3
+         ->  Hash
+               ->  Nested Loop
+                     ->  Broadcast Motion 1:3  (slice3; segments: 1)
+                           ->  Limit
+                                 ->  Gather Motion 3:1  (slice4; segments: 3)
+                                       Merge Key: t1.a
+                                       ->  Limit
+                                             ->  Nested Loop
+                                                   ->  Index Only Scan using i1 on t1
+                                                   ->  Materialize
+                                                         ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                                               ->  Seq Scan on t2
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Seq Scan on t4
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice6; segments: 3)
+                                             ->  Seq Scan on t5
+ Optimizer: Postgres-based planner
+(24 rows)
+
+/*+
+    Leading((((t1 t2) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1, t2 ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON t3.a=q.a, t4, t5;
+LOG:  statement: /*+
+    Leading((((t1 t2) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1, t2 ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON t3.a=q.a, t4, t5;
+LOG:  pg_hint_plan:
+used hint:
+not used hint:
+Leading((((t1 t2) t3) (t4 t5)))
+duplication hint:
+error hint:
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t3.a = t1.a)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t3
+         ->  Hash
+               ->  Nested Loop
+                     ->  Broadcast Motion 1:3  (slice3; segments: 1)
+                           ->  Limit
+                                 ->  Gather Motion 3:1  (slice4; segments: 3)
+                                       Merge Key: t1.a
+                                       ->  Limit
+                                             ->  Nested Loop
+                                                   ->  Index Only Scan using i1 on t1
+                                                   ->  Materialize
+                                                         ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                                               ->  Seq Scan on t2
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Seq Scan on t4
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice6; segments: 3)
+                                             ->  Seq Scan on t5
+ Optimizer: Postgres-based planner
+(24 rows)
+
+--
+-- 2. LOJ inside subquery
+--
+/*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q, t3, t4, t5;
+LOG:  statement: /*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q, t3, t4, t5;
+LOG:  pg_hint_plan:
+used hint:
+not used hint:
+Leading(((t5 t4) (t3 (t1 t2))))
+duplication hint:
+error hint:
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t5
+         ->  Materialize
+               ->  Nested Loop
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on t4
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Broadcast Motion 1:3  (slice4; segments: 1)
+                                       ->  Limit
+                                             ->  Gather Motion 3:1  (slice5; segments: 3)
+                                                   Merge Key: t1.a
+                                                   ->  Limit
+                                                         ->  Sort
+                                                               Sort Key: t1.a
+                                                               ->  Hash Left Join
+                                                                     Hash Cond: (t1.a = t2.a)
+                                                                     ->  Seq Scan on t1
+                                                                     ->  Hash
+                                                                           ->  Seq Scan on t2
+                                 ->  Materialize
+                                       ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(25 rows)
+
+/*+
+    Leading((((t2 t1) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q, t3, t4, t5;
+LOG:  statement: /*+
+    Leading((((t2 t1) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q, t3, t4, t5;
+LOG:  pg_hint_plan:
+used hint:
+not used hint:
+Leading((((t2 t1) t3) (t4 t5)))
+duplication hint:
+error hint:
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t5
+         ->  Materialize
+               ->  Nested Loop
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on t4
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Broadcast Motion 1:3  (slice4; segments: 1)
+                                       ->  Limit
+                                             ->  Gather Motion 3:1  (slice5; segments: 3)
+                                                   Merge Key: t1.a
+                                                   ->  Limit
+                                                         ->  Sort
+                                                               Sort Key: t1.a
+                                                               ->  Hash Left Join
+                                                                     Hash Cond: (t1.a = t2.a)
+                                                                     ->  Seq Scan on t1
+                                                                     ->  Hash
+                                                                           ->  Seq Scan on t2
+                                 ->  Materialize
+                                       ->  Seq Scan on t3
+ Optimizer: Postgres-based planner
+(25 rows)
+
+--
+-- 2. LOJ inside/outside subquery
+--
+/*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON q.a=t3.a, t4, t5;
+LOG:  statement: /*+
+    Leading(((t5 t4) (t3 (t1 t2))))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON q.a=t3.a, t4, t5;
+LOG:  pg_hint_plan:
+used hint:
+not used hint:
+Leading(((t5 t4) (t3 (t1 t2))))
+duplication hint:
+error hint:
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t3.a = t1.a)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t3
+         ->  Hash
+               ->  Nested Loop
+                     ->  Broadcast Motion 1:3  (slice3; segments: 1)
+                           ->  Limit
+                                 ->  Gather Motion 3:1  (slice4; segments: 3)
+                                       Merge Key: t1.a
+                                       ->  Limit
+                                             ->  Sort
+                                                   Sort Key: t1.a
+                                                   ->  Hash Left Join
+                                                         Hash Cond: (t1.a = t2.a)
+                                                         ->  Seq Scan on t1
+                                                         ->  Hash
+                                                               ->  Seq Scan on t2
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Seq Scan on t4
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                             ->  Seq Scan on t5
+ Optimizer: Postgres-based planner
+(26 rows)
+
+/*+
+    Leading((((t2 t1) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON q.a=t3.a, t4, t5;
+LOG:  statement: /*+
+    Leading((((t2 t1) t3) (t4 t5)))
+*/
+EXPLAIN (costs off)
+SELECT * FROM (SELECT t1.a FROM t1 LEFT JOIN t2 ON t1.a=t2.a ORDER BY 1 LIMIT 42) AS q LEFT JOIN t3 ON q.a=t3.a, t4, t5;
+LOG:  pg_hint_plan:
+used hint:
+not used hint:
+Leading((((t2 t1) t3) (t4 t5)))
+duplication hint:
+error hint:
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t3.a = t1.a)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on t3
+         ->  Hash
+               ->  Nested Loop
+                     ->  Broadcast Motion 1:3  (slice3; segments: 1)
+                           ->  Limit
+                                 ->  Gather Motion 3:1  (slice4; segments: 3)
+                                       Merge Key: t1.a
+                                       ->  Limit
+                                             ->  Sort
+                                                   Sort Key: t1.a
+                                                   ->  Hash Left Join
+                                                         Hash Cond: (t1.a = t2.a)
+                                                         ->  Seq Scan on t1
+                                                         ->  Hash
+                                                               ->  Seq Scan on t2
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Seq Scan on t4
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                             ->  Seq Scan on t5
+ Optimizer: Postgres-based planner
+(26 rows)
 
 RESET client_min_messages;
 LOG:  statement: RESET client_min_messages;

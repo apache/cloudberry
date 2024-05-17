@@ -30,14 +30,14 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CLogicalNAryJoin::CLogicalNAryJoin(CMemoryPool *mp)
-	: CLogicalJoin(mp), m_lojChildPredIndexes(nullptr)
+	: CLogicalJoin(mp), m_lojChildPred(nullptr)
 {
 	GPOS_ASSERT(nullptr != mp);
 }
 
 CLogicalNAryJoin::CLogicalNAryJoin(CMemoryPool *mp,
 								   ULongPtrArray *lojChildIndexes)
-	: CLogicalJoin(mp), m_lojChildPredIndexes(lojChildIndexes)
+	: CLogicalJoin(mp), m_lojChildPred(lojChildIndexes)
 {
 	GPOS_ASSERT(nullptr != mp);
 }
@@ -281,7 +281,7 @@ CLogicalNAryJoin::GetTrueInnerJoinPreds(CMemoryPool *mp,
 		// check whether the predicate uses any ColRefs that come from a non-inner join child
 		for (ULONG c = 0; c < exprhdl.Arity() - 1; c++)
 		{
-			if (0 < *(*m_lojChildPredIndexes)[c])
+			if (0 < *(*m_lojChildPred)[c])
 			{
 				// this is a right child of a non-inner join
 				CColRefSet *nijOutputCols = exprhdl.DeriveOutputColumns(c);
@@ -330,7 +330,7 @@ CLogicalNAryJoin::ReplaceInnerJoinPredicates(
 
 	if (EopScalarNAryJoinPredList == pop->Eopid())
 	{
-		GPOS_ASSERT(nullptr != m_lojChildPredIndexes);
+		GPOS_ASSERT(nullptr != m_lojChildPred);
 		// this requires a bit of surgery, make a new copy of the
 		// CScalarNAryJoinPredList with the first child replaced
 		CExpressionArray *new_children = GPOS_NEW(mp) CExpressionArray(mp);
@@ -352,7 +352,7 @@ CLogicalNAryJoin::ReplaceInnerJoinPredicates(
 
 	// with all inner joins it's a total replacement, just return the inner join preds
 	// (caller should have passed us a ref count which they now get back from us)
-	GPOS_ASSERT(nullptr == m_lojChildPredIndexes);
+	GPOS_ASSERT(nullptr == m_lojChildPred);
 
 	return new_inner_join_preds;
 }
@@ -371,19 +371,19 @@ CLogicalNAryJoin::OsPrint(IOstream &os) const
 {
 	os << SzId();
 
-	if (nullptr != m_lojChildPredIndexes)
+	if (nullptr != m_lojChildPred)
 	{
 		// print out the indexes of the logical children that correspond to
 		// the scalar child entries below the CScalarNAryJoinPredList
 		os << " [";
-		ULONG size = m_lojChildPredIndexes->Size();
+		ULONG size = m_lojChildPred->Size();
 		for (ULONG ul = 0; ul < size; ul++)
 		{
 			if (0 < ul)
 			{
 				os << ", ";
 			}
-			os << *((*m_lojChildPredIndexes)[ul]);
+			os << *((*m_lojChildPred)[ul]);
 		}
 		os << "]";
 	}
