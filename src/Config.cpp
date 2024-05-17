@@ -13,6 +13,7 @@ static char *guc_uds_path = nullptr;
 static bool guc_enable_analyze = true;
 static bool guc_enable_cdbstats = true;
 static bool guc_enable_collector = true;
+static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
 static std::unique_ptr<std::unordered_set<std::string>> ignored_users = nullptr;
 
@@ -36,6 +37,11 @@ void Config::init() {
       &guc_enable_cdbstats, true, PGC_SUSET,
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
 
+  DefineCustomBoolVariable(
+      "yagpcc.report_nested_queries", "Collect stats on nested queries", 0LL,
+      &guc_report_nested_queries, true, PGC_SUSET,
+      GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
+
   DefineCustomStringVariable(
       "yagpcc.ignored_users_list",
       "Make yagpcc ignore queries issued by given users", 0LL,
@@ -47,6 +53,7 @@ std::string Config::uds_path() { return guc_uds_path; }
 bool Config::enable_analyze() { return guc_enable_analyze; }
 bool Config::enable_cdbstats() { return guc_enable_cdbstats; }
 bool Config::enable_collector() { return guc_enable_collector; }
+bool Config::report_nested_queries() { return guc_report_nested_queries; }
 
 bool Config::filter_user(const std::string *username) {
   if (!ignored_users) {

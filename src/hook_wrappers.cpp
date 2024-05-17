@@ -56,9 +56,9 @@ void hooks_init() {
 
 void hooks_deinit() {
   ExecutorStart_hook = previous_ExecutorStart_hook;
+  ExecutorEnd_hook = previous_ExecutorEnd_hook;
   ExecutorRun_hook = previous_ExecutorRun_hook;
   ExecutorFinish_hook = previous_ExecutorFinish_hook;
-  ExecutorEnd_hook = previous_ExecutorEnd_hook;
   query_info_collect_hook = previous_query_info_collect_hook;
   stat_statements_parser_deinit();
   if (sender) {
