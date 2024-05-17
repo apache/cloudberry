@@ -10,6 +10,7 @@ extern "C" {
 #include "postgres.h"
 
 #include "access/hash.h"
+#include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "commands/explain.h"
 #include "commands/resgroupcmds.h"
@@ -29,11 +30,6 @@ extern "C" {
 #undef operator
 
 #include "EventSender.h"
-
-#define need_collect()                                                         \
-  (nesting_level == 0 && gp_command_count != 0 &&                              \
-   query_desc->sourceText != nullptr && Config::enable_collector() &&          \
-   !Config::filter_user(get_user_name()))
 
 namespace {
 
@@ -146,6 +142,11 @@ void set_query_info(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
   }
 }
 
+void set_qi_nesting_level(yagpcc::SetQueryReq *req, int nesting_level) {
+  auto aqi = req->mutable_add_info();
+  aqi->set_nested_level(nesting_level);
+}
+
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
                                 QueryDesc *query_desc) {
   auto instrument = query_desc->planstate->instrument;
@@ -210,6 +211,19 @@ yagpcc::SetQueryReq create_query_req(QueryDesc *query_desc,
   return req;
 }
 
+inline bool is_top_level_query(QueryDesc *query_desc, int nesting_level) {
+  return (query_desc->gpmon_pkt &&
+          query_desc->gpmon_pkt->u.qexec.key.tmid == 0) ||
+         nesting_level == 0;
+}
+
+inline bool need_collect(QueryDesc *query_desc, int nesting_level) {
+  return (Config::report_nested_queries() ||
+          is_top_level_query(query_desc, nesting_level)) &&
+         gp_command_count != 0 && query_desc->sourceText != nullptr &&
+         Config::enable_collector() && !Config::filter_user(get_user_name());
+}
+
 } // namespace
 
 void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
@@ -223,7 +237,8 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
     // TODO
     break;
   case METRICS_QUERY_SUBMIT:
-    collect_query_submit(reinterpret_cast<QueryDesc *>(arg));
+    // don't collect anything here. We will fake this call in ExecutorStart as
+    // it really makes no difference. Just complicates things
     break;
   case METRICS_QUERY_START:
     // no-op: executor_after_start is enough
@@ -232,10 +247,8 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   case METRICS_QUERY_ERROR:
   case METRICS_QUERY_CANCELING:
   case METRICS_QUERY_CANCELED:
-    collect_query_done(reinterpret_cast<QueryDesc *>(arg), status);
-    break;
   case METRICS_INNER_QUERY_DONE:
-    // TODO
+    collect_query_done(reinterpret_cast<QueryDesc *>(arg), status);
     break;
   default:
     ereport(FATAL, (errmsg("Unknown query status: %d", status)));
@@ -247,9 +260,10 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (!connector) {
     return;
   }
-  if (!need_collect()) {
+  if (!need_collect(query_desc, nesting_level)) {
     return;
   }
+  collect_query_submit(query_desc);
   query_start_time = std::chrono::high_resolution_clock::now();
   WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
@@ -273,8 +287,10 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
     return;
   }
   if ((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
-      need_collect()) {
-    query_msg->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
+      need_collect(query_desc, nesting_level)) {
+    auto *query = get_query_message(query_desc);
+    update_query_state(query_desc, query, QueryState::START);
+    auto query_msg = query->message;
     *query_msg->mutable_start_time() = current_ts();
     set_query_plan(query_msg, query_desc);
     if (connector->report_query(*query_msg, "started")) {
@@ -287,7 +303,7 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   if (!connector) {
     return;
   }
-  if (!need_collect() ||
+  if (!need_collect(query_desc, nesting_level) ||
       (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE)) {
     return;
   }
@@ -301,7 +317,13 @@ void EventSender::executor_end(QueryDesc *query_desc) {
     cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
                                 DISPATCH_WAIT_NONE);
   }*/
-  query_msg->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_END);
+  auto *query = get_query_message(query_desc);
+  if (query->state == UNKNOWN && !Config::report_nested_queries()) {
+    // COMMIT/ROLLBACK of a nested query. Happens in top-level
+    return;
+  }
+  update_query_state(query_desc, query, QueryState::END);
+  auto query_msg = query->message;
   *query_msg->mutable_end_time() = current_ts();
   set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
   if (connector->report_query(*query_msg, "ended")) {
@@ -310,15 +332,15 @@ void EventSender::executor_end(QueryDesc *query_desc) {
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
-  if (connector && need_collect()) {
-    if (query_msg && query_msg->has_query_key()) {
-      connector->report_query(*query_msg, "previous query");
-      query_msg->Clear();
-    }
+  if (connector && need_collect(query_desc, nesting_level)) {
+    auto *query = get_query_message(query_desc);
+    query->state = QueryState::SUBMIT;
+    auto query_msg = query->message;
     *query_msg =
         create_query_req(query_desc, yagpcc::QueryStatus::QUERY_STATUS_SUBMIT);
     *query_msg->mutable_submit_time() = current_ts();
     set_query_info(query_msg, query_desc);
+    set_qi_nesting_level(query_msg, query_desc->gpmon_pkt->u.qexec.key.tmid);
     set_query_text(query_msg, query_desc);
     if (connector->report_query(*query_msg, "submit")) {
       clear_big_fields(query_msg);
@@ -328,11 +350,12 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      QueryMetricsStatus status) {
-  if (connector && need_collect()) {
+  if (connector && need_collect(query_desc, nesting_level)) {
     yagpcc::QueryStatus query_status;
     std::string msg;
     switch (status) {
     case METRICS_QUERY_DONE:
+    case METRICS_INNER_QUERY_DONE:
       query_status = yagpcc::QueryStatus::QUERY_STATUS_DONE;
       msg = "done";
       break;
@@ -352,16 +375,26 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
       ereport(FATAL, (errmsg("Unexpected query status in query_done hook: %d",
                              status)));
     }
-    query_msg->set_query_status(query_status);
-    if (connector->report_query(*query_msg, msg)) {
-      query_msg->Clear();
+    auto *query = get_query_message(query_desc);
+    if (query->state != UNKNOWN || Config::report_nested_queries()) {
+      update_query_state(query_desc, query, QueryState::DONE,
+                         query_status ==
+                             yagpcc::QueryStatus::QUERY_STATUS_DONE);
+      auto query_msg = query->message;
+      query_msg->set_query_status(query_status);
+      connector->report_query(*query_msg, msg);
+    } else {
+      // otherwise it`s a nested query being committed/aborted at top level
+      // and we should ignore it
     }
+    query_msgs.erase({query_desc->gpmon_pkt->u.qexec.key.ccnt,
+                      query_desc->gpmon_pkt->u.qexec.key.tmid});
+    pfree(query_desc->gpmon_pkt);
   }
 }
 
 EventSender::EventSender() {
   if (Config::enable_collector() && !Config::filter_user(get_user_name())) {
-    query_msg = new yagpcc::SetQueryReq();
     try {
       connector = new UDSConnector();
     } catch (const std::exception &e) {
@@ -371,6 +404,59 @@ EventSender::EventSender() {
 }
 
 EventSender::~EventSender() {
-  delete query_msg;
   delete connector;
+  for (auto iter = query_msgs.begin(); iter != query_msgs.end(); ++iter) {
+    delete iter->second.message;
+  }
 }
+
+// That's basically a very simplistic state machine to fix or highlight any bugs
+// coming from GP
+void EventSender::update_query_state(QueryDesc *query_desc, QueryItem *query,
+                                     QueryState new_state, bool success) {
+  if (query->state == UNKNOWN) {
+    collect_query_submit(query_desc);
+  }
+  switch (new_state) {
+  case QueryState::SUBMIT:
+    Assert(false);
+    break;
+  case QueryState::START:
+    if (query->state == QueryState::SUBMIT) {
+      query->message->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_START);
+    } else {
+      Assert(false);
+    }
+    break;
+  case QueryState::END:
+    Assert(query->state == QueryState::START || IsAbortInProgress());
+    query->message->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_END);
+    break;
+  case QueryState::DONE:
+    Assert(query->state == QueryState::END || !success);
+    query->message->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_DONE);
+    break;
+  default:
+    Assert(false);
+  }
+  query->state = new_state;
+}
+
+EventSender::QueryItem *EventSender::get_query_message(QueryDesc *query_desc) {
+  if (query_desc->gpmon_pkt == nullptr ||
+      query_msgs.find({query_desc->gpmon_pkt->u.qexec.key.ccnt,
+                       query_desc->gpmon_pkt->u.qexec.key.tmid}) ==
+          query_msgs.end()) {
+    query_desc->gpmon_pkt = (gpmon_packet_t *)palloc0(sizeof(gpmon_packet_t));
+    query_desc->gpmon_pkt->u.qexec.key.ccnt = gp_command_count;
+    query_desc->gpmon_pkt->u.qexec.key.tmid = nesting_level;
+    query_msgs.insert({{gp_command_count, nesting_level},
+                       QueryItem(UNKNOWN, new yagpcc::SetQueryReq())});
+  }
+  return &query_msgs.at({query_desc->gpmon_pkt->u.qexec.key.ccnt,
+                         query_desc->gpmon_pkt->u.qexec.key.tmid});
+}
+
+EventSender::QueryItem::QueryItem(EventSender::QueryState st,
+                                  yagpcc::SetQueryReq *msg)
+    : state(st), message(msg) {}
