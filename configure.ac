@@ -936,6 +936,15 @@ AC_MSG_RESULT([checking whether to build with PAX support ... $enable_pax])
 AC_SUBST(enable_pax)
 
 #
+# perfmon support
+#
+PGAC_ARG_BOOL(enable, perfmon, no,
+              [enable perfmon support],
+              [AC_DEFINE(USE_PERFMON, 1,
+                         [Define to 1 to support perfmon])])
+AC_MSG_RESULT([checking whether to build with perfmon support ... $enable_perfmon])
+AC_SUBST(enable_perfmon)
+
 # Include directories
 #
 ac_save_IFS=$IFS
@@ -2882,6 +2891,10 @@ if test "$with_python" = yes; then
   CPPFLAGS=$ac_save_CPPFLAGS
 fi
 
+# check for apr
+if test "$enable_perfmon" = yes; then
+  AC_CHECK_HEADER(apr_getopt.h, [], [AC_MSG_ERROR([header file <apr_getopt.h> is required for perfmon])])
+fi
 #
 # Check for documentation-building tools
 #
