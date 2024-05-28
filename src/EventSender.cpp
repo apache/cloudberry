@@ -93,11 +93,15 @@ ExplainState get_explain_state(QueryDesc *query_desc, bool costs) {
   return es;
 }
 
+inline std::string char_to_trimmed_str(const char *str, size_t len) {
+  return std::string(str, std::min(len, Config::max_text_size()));
+}
+
 void set_plan_text(std::string *plan_text, QueryDesc *query_desc) {
   MemoryContext oldcxt =
       MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
   auto es = get_explain_state(query_desc, true);
-  *plan_text = std::string(es.str->data, es.str->len);
+  *plan_text = char_to_trimmed_str(es.str->data, es.str->len);
   pfree(es.str->data);
   MemoryContextSwitchTo(oldcxt);
 }
@@ -119,9 +123,11 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
 void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
   if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
     auto qi = req->mutable_query_info();
-    *qi->mutable_query_text() = query_desc->sourceText;
+    *qi->mutable_query_text() = char_to_trimmed_str(
+        query_desc->sourceText, strlen(query_desc->sourceText));
     char *norm_query = gen_normquery(query_desc->sourceText);
-    *qi->mutable_template_query_text() = std::string(norm_query);
+    *qi->mutable_template_query_text() =
+        char_to_trimmed_str(norm_query, strlen(norm_query));
   }
 }
 
