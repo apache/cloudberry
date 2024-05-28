@@ -153,6 +153,12 @@ void set_qi_nesting_level(yagpcc::SetQueryReq *req, int nesting_level) {
   aqi->set_nested_level(nesting_level);
 }
 
+void set_qi_error_message(yagpcc::SetQueryReq *req) {
+  auto aqi = req->mutable_add_info();
+  auto error = elog_message();
+  *aqi->mutable_error_message() = char_to_trimmed_str(error, strlen(error));
+}
+
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
                                 QueryDesc *query_desc) {
   auto instrument = query_desc->planstate->instrument;
@@ -249,9 +255,13 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   case METRICS_QUERY_START:
     // no-op: executor_after_start is enough
     break;
+  case METRICS_QUERY_CANCELING:
+    // it appears we're unly interested in the actual CANCELED event.
+    // for now we will ignore CANCELING state unless otherwise requested from
+    // end users
+    break;
   case METRICS_QUERY_DONE:
   case METRICS_QUERY_ERROR:
-  case METRICS_QUERY_CANCELING:
   case METRICS_QUERY_CANCELED:
   case METRICS_INNER_QUERY_DONE:
     collect_query_done(reinterpret_cast<QueryDesc *>(arg), status);
@@ -370,6 +380,9 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
       msg = "error";
       break;
     case METRICS_QUERY_CANCELING:
+      // at the moment we don't track this event, but I`ll leave this code here
+      // just in case
+      Assert(false);
       query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELLING;
       msg = "cancelling";
       break;
@@ -382,12 +395,21 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
                              status)));
     }
     auto *query = get_query_message(query_desc);
+    auto prev_state = query->state;
     if (query->state != UNKNOWN || Config::report_nested_queries()) {
       update_query_state(query_desc, query, QueryState::DONE,
                          query_status ==
                              yagpcc::QueryStatus::QUERY_STATUS_DONE);
       auto query_msg = query->message;
       query_msg->set_query_status(query_status);
+      if (status == METRICS_QUERY_ERROR) {
+        set_qi_error_message(query_msg);
+      }
+      if (prev_state == START) {
+        // We've missed ExecutorEnd call due to query cancel or error. It's
+        // fine, but now we need to collect and report execution stats
+        set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
+      }
       connector->report_query(*query_msg, msg);
     } else {
       // otherwise it`s a nested query being committed/aborted at top level
@@ -435,7 +457,9 @@ void EventSender::update_query_state(QueryDesc *query_desc, QueryItem *query,
     }
     break;
   case QueryState::END:
-    Assert(query->state == QueryState::START || IsAbortInProgress());
+    // Example of below assert triggering: CURSOR closes before ever being
+    // executed Assert(query->state == QueryState::START ||
+    // IsAbortInProgress());
     query->message->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_END);
     break;
   case QueryState::DONE:
