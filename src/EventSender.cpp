@@ -153,6 +153,12 @@ void set_qi_nesting_level(yagpcc::SetQueryReq *req, int nesting_level) {
   aqi->set_nested_level(nesting_level);
 }
 
+void set_qi_error_message(yagpcc::SetQueryReq *req) {
+  auto aqi = req->mutable_add_info();
+  auto error = elog_message();
+  *aqi->mutable_error_message() = char_to_trimmed_str(error, strlen(error));
+}
+
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
                                 QueryDesc *query_desc) {
   auto instrument = query_desc->planstate->instrument;
@@ -388,6 +394,9 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
                              yagpcc::QueryStatus::QUERY_STATUS_DONE);
       auto query_msg = query->message;
       query_msg->set_query_status(query_status);
+      if (status == METRICS_QUERY_ERROR) {
+        set_qi_error_message(query_msg);
+      }
       connector->report_query(*query_msg, msg);
     } else {
       // otherwise it`s a nested query being committed/aborted at top level
