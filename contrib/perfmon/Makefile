@@ -1,10 +1,7 @@
 NAME = gpperfmon
 top_builddir = ../../
-REGRESS = guc_config query
 
-PG_CONFIG ?= pg_config
-PGXS := $(shell $(PG_CONFIG) --pgxs)
-include $(PGXS)
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
@@ -39,4 +36,3 @@ install:  installdirs
 	mkdir -p '$(DESTDIR)$(libdir)/$(NAME)'
 	$(INSTALL_SCRIPT) $(NAME).sql '$(DESTDIR)$(libdir)/$(NAME)'
 	$(INSTALL_SCRIPT) $(NAME).conf '$(DESTDIR)$(libdir)/$(NAME)'
-

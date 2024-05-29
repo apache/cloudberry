@@ -236,7 +236,7 @@ struct gpmon_hello_t {
 #define GPMON_MAGIC     0x78ab928d
 
 /*
- *  This version must match the most significant digit of the greenplum system version.
+ *  This version must match the most significant digit of the cloudberrydb system version.
  */
 #define GPMON_PACKET_VERSION   1
 #define GPMMON_PACKET_VERSION_STRING "gpmmon packet version 1\n"
