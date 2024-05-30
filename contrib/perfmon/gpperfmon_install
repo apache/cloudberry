@@ -22,6 +22,7 @@ USAGE:   gpperfmon_install --port CBDB_PORT [--enable --password GPMON_PASSWORD]
 
 import os, sys, time, re
 from subprocess import Popen
+from subprocess import PIPE
 
 try:
     from optparse import Option, OptionParser
@@ -181,11 +182,20 @@ if __name__ == '__main__':
         cmd = Command("""echo "local    gpperfmon         gpmon         md5" >> %s""" % pg_hba, showOutput=True)
         commands.append(cmd)
 
-        cmd = Command("""echo "host     all         gpmon         0.0.0.0/0    md5" >> %s""" % pg_hba, showOutput=True)
+        cmd = Command("""echo "host     all         gpmon         127.0.0.1/28    md5" >> %s""" % pg_hba, showOutput=True)
         commands.append(cmd)
 
-        cmd = Command("""echo "host     all         gpmon         ::0/0    md5" >> %s""" % pg_hba, showOutput=True)
+        cmd = Command("""echo "host     all         gpmon         ::1/128    md5" >> %s""" % pg_hba, showOutput=True)
         commands.append(cmd)
+
+        # get ip of the host
+        process = Popen("ifconfig | awk '$1==\"inet\"{print $2}'", shell=True,  executable="/bin/bash", stdout=PIPE)
+        out = process.stdout.readlines()
+        for ip in out:
+            ip = ip.strip().decode('ascii')
+            if ip != "127.0.0.1":
+                cmd = Command("""echo "host     all         gpmon         %s/32    md5" >> %s""" % (ip, pg_hba), showOutput=True)
+                commands.append(cmd)
 
         ################################################
         # these commands add a new line to the top of .pgpass and save a copy of old .pgpass
@@ -195,7 +205,7 @@ if __name__ == '__main__':
         cmd = Command("""mv -f %s %s""" % (pg_pass, old_pg_pass))
         commands.append(cmd)
 
-        cmd = Command("""echo "*:%d:gpperfmon:gpmon:%s" >> %s""" % (options.port, options.password, pg_pass), showOutput=True)
+        cmd = Command("""echo "*:%d:*:gpmon:%s" >> %s""" % (options.port, options.password, pg_pass), showOutput=True)
         commands.append(cmd)
 
         cmd = Command("""cat %s >> %s""" % (old_pg_pass, pg_pass), showOutput=True)
