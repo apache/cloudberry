@@ -255,9 +255,13 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   case METRICS_QUERY_START:
     // no-op: executor_after_start is enough
     break;
+  case METRICS_QUERY_CANCELING:
+    // it appears we're unly interested in the actual CANCELED event.
+    // for now we will ignore CANCELING state unless otherwise requested from
+    // end users
+    break;
   case METRICS_QUERY_DONE:
   case METRICS_QUERY_ERROR:
-  case METRICS_QUERY_CANCELING:
   case METRICS_QUERY_CANCELED:
   case METRICS_INNER_QUERY_DONE:
     collect_query_done(reinterpret_cast<QueryDesc *>(arg), status);
@@ -376,6 +380,9 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
       msg = "error";
       break;
     case METRICS_QUERY_CANCELING:
+      // at the moment we don't track this event, but I`ll leave this code here
+      // just in case
+      Assert(false);
       query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELLING;
       msg = "cancelling";
       break;
