@@ -395,6 +395,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
                              status)));
     }
     auto *query = get_query_message(query_desc);
+    auto prev_state = query->state;
     if (query->state != UNKNOWN || Config::report_nested_queries()) {
       update_query_state(query_desc, query, QueryState::DONE,
                          query_status ==
@@ -403,6 +404,11 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
       query_msg->set_query_status(query_status);
       if (status == METRICS_QUERY_ERROR) {
         set_qi_error_message(query_msg);
+      }
+      if (prev_state == START) {
+        // We've missed ExecutorEnd call due to query cancel or error. It's
+        // fine, but now we need to collect and report execution stats
+        set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
       }
       connector->report_query(*query_msg, msg);
     } else {
@@ -451,7 +457,9 @@ void EventSender::update_query_state(QueryDesc *query_desc, QueryItem *query,
     }
     break;
   case QueryState::END:
-    Assert(query->state == QueryState::START || IsAbortInProgress());
+    // Example of below assert triggering: CURSOR closes before ever being
+    // executed Assert(query->state == QueryState::START ||
+    // IsAbortInProgress());
     query->message->set_query_status(yagpcc::QueryStatus::QUERY_STATUS_END);
     break;
   case QueryState::DONE:
