@@ -41,7 +41,7 @@ void Config::init() {
 
   DefineCustomBoolVariable(
       "yagpcc.report_nested_queries", "Collect stats on nested queries", 0LL,
-      &guc_report_nested_queries, true, PGC_SUSET,
+      &guc_report_nested_queries, true, PGC_USERSET,
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
 
   DefineCustomStringVariable(
