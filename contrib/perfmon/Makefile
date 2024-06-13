@@ -1,29 +1,34 @@
 NAME = gpperfmon
-top_builddir = ../../
 
+REGRESS = pre_run_check guc_config query post_run
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
+top_builddir = ../../
 subdir = contrib/perfmon
 include $(top_builddir)/src/Makefile.global
+include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
-clean distclean:
+.PHONY: clean_perfmon
+clean_perfmon:
 	$(MAKE) -C src/gpmon clean
 	$(MAKE) -C src/gpmmon clean
 	$(MAKE) -C src/gpsmon clean
 	rm -rf gpmon.so
 	rm -rf gpsmon
 	rm -rf gpperfmon.so
+clean distclean: clean_perfmon
 
 all:
 	$(MAKE) -C src/gpmon all
 	$(MAKE) -C src/gpmmon all
 	$(MAKE) -C src/gpsmon all
 
+.PHONY: installdirs
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(bindir)/../sbin'
 install:  installdirs
@@ -36,3 +41,7 @@ install:  installdirs
 	mkdir -p '$(DESTDIR)$(libdir)/$(NAME)'
 	$(INSTALL_SCRIPT) $(NAME).sql '$(DESTDIR)$(libdir)/$(NAME)'
 	$(INSTALL_SCRIPT) $(NAME).conf '$(DESTDIR)$(libdir)/$(NAME)'
+
+.PHONY: icw_test
+	icw_test:
+	    make -C $(REGRESS_DIR) icw_test

@@ -87,7 +87,7 @@ partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVE
 
 create external web table public.queries_now (
         like public.queries_history
-) execute 'python $GPHOME/sbin/gpmon_catqrynow.py 2> /dev/null || true' on master format 'csv' (delimiter '|' NULL as 'null');
+) execute 'python3 $GPHOME/sbin/gpmon_catqrynow.py 2> /dev/null || true' on master format 'csv' (delimiter '|' NULL as 'null');
 
 create external web table public.queries_now_fast (
        ctime timestamptz(0),
@@ -149,7 +149,7 @@ create external web table public._database_tail (
 
 
 create external web table public.master_data_dir (hostname text, dir text)
-execute E'python -c "import socket, os; print socket.gethostname() + \\"|\\" + os.getcwd()"' on master
+execute E'python3 -c "import socket, os; print(socket.gethostname(), \\"|\\", os.getcwd())"' on master
 format 'csv' (delimiter '|');
 
 

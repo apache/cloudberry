@@ -1,0 +1,51 @@
+-- start_ignore
+drop database if exists gpperfmon;
+\! gpperfmon_install --enable --port $PGPORT --password 123
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-createdb gpperfmon >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 psql -f /home/gpadmin/install/gpdb/lib/gpperfmon/gpperfmon.sql gpperfmon >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 psql template1 -c "DROP ROLE IF EXISTS gpmon"  >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 psql template1 -c "CREATE ROLE gpmon WITH SUPERUSER CREATEDB LOGIN ENCRYPTED PASSWORD '********'"  >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-echo "local    gpperfmon         gpmon         md5" >> /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-echo "host     all         gpmon         127.0.0.1/28    md5" >> /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-echo "host     all         gpmon         ::1/128    md5" >> /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-echo "host     all         gpmon         172.17.0.1/32    md5" >> /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-echo "host     all         gpmon         192.168.176.231/32    md5" >> /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-touch /home/gpadmin/.pgpass >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-mv -f /home/gpadmin/.pgpass /home/gpadmin/.pgpass.1717553812 >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-echo "*:7000:*:gpmon:123" >> /home/gpadmin/.pgpass
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-cat /home/gpadmin/.pgpass.1717553812 >> /home/gpadmin/.pgpass
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-chmod 0600 /home/gpadmin/.pgpass >& /dev/null
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-cp /home/gpadmin/install/gpdb/lib/gpperfmon/gpperfmon.conf /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/gpperfmon/conf
+20240605:10:16:52:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 gpconfig -c perfmon.enable -v on >& /dev/null
+20240605:10:16:53:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 gpconfig -c perfmon.port -v 8888 >& /dev/null
+20240605:10:16:54:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 gpconfig -c gp_external_enable_exec -v on --masteronly >& /dev/null
+20240605:10:16:54:017713 gpperfmon_install:xx:gpadmin-[INFO]:-gpperfmon will be enabled after a full restart of cloudberrydb
+-- end_ignore
+-- check cluster state
+\c postgres
+select pg_sleep(10);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT sync_state FROM pg_stat_get_wal_senders();
+ sync_state 
+------------
+ sync
+(1 row)
+
+\c contrib_regression
+select
+	case
+		when setting = 'on'  then 'perfmon is running'
+	else
+		'perfmon is not running'
+	end
+from pg_settings
+where name='perfmon.enable';
+        case        
+--------------------
+ perfmon is running
+(1 row)
+
