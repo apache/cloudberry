@@ -1,7 +1,6 @@
 #include "Config.h"
 #include "ProcStats.h"
 #include "UDSConnector.h"
-#include <chrono>
 #include <ctime>
 
 #define typeid __typeid
@@ -198,19 +197,17 @@ void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
   }
 }
 
-decltype(std::chrono::high_resolution_clock::now()) query_start_time;
-
 void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc) {
   if (query_desc->planstate && query_desc->planstate->instrument) {
     set_metric_instrumentation(metrics->mutable_instrumentation(), query_desc);
   }
   fill_self_stats(metrics->mutable_systemstat());
-  std::chrono::duration<double> elapsed_seconds =
-      std::chrono::high_resolution_clock::now() - query_start_time;
   metrics->mutable_systemstat()->set_runningtimeseconds(
-      elapsed_seconds.count());
-  metrics->mutable_spill()->set_filecount(WorkfileTotalFilesCreated());
-  metrics->mutable_spill()->set_totalbytes(WorkfileTotalBytesWritten());
+      time(NULL) - metrics->mutable_systemstat()->runningtimeseconds());
+  metrics->mutable_spill()->set_filecount(
+      WorkfileTotalFilesCreated() - metrics->mutable_spill()->filecount());
+  metrics->mutable_spill()->set_totalbytes(
+      WorkfileTotalBytesWritten() - metrics->mutable_spill()->totalbytes());
 }
 
 yagpcc::SetQueryReq create_query_req(QueryDesc *query_desc,
@@ -280,8 +277,6 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     return;
   }
   collect_query_submit(query_desc);
-  query_start_time = std::chrono::high_resolution_clock::now();
-  WorkfileResetBackendStats();
   if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
@@ -309,9 +304,12 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
     auto query_msg = query->message;
     *query_msg->mutable_start_time() = current_ts();
     set_query_plan(query_msg, query_desc);
+    yagpcc::GPMetrics stats;
+    std::swap(stats, *query_msg->mutable_query_metrics());
     if (connector->report_query(*query_msg, "started")) {
       clear_big_fields(query_msg);
     }
+    std::swap(stats, *query_msg->mutable_query_metrics());
   }
 }
 
@@ -361,6 +359,9 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     if (connector->report_query(*query_msg, "submit")) {
       clear_big_fields(query_msg);
     }
+    // take initial metrics snapshot so that we can safely take diff afterwards
+    // in END or DONE events.
+    set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
   }
 }
 

@@ -92,9 +92,7 @@ void fill_status_stats(yagpcc::SystemStat *stats) {
 } // namespace
 
 void fill_self_stats(yagpcc::SystemStat *stats) {
-  static yagpcc::SystemStat prev_stats;
-  fill_io_stats(&prev_stats);
-  fill_cpu_stats(&prev_stats);
-  fill_status_stats(&prev_stats);
-  *stats = prev_stats;
+  fill_io_stats(stats);
+  fill_cpu_stats(stats);
+  fill_status_stats(stats);
 }
