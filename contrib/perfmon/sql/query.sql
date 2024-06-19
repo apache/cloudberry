@@ -6,6 +6,10 @@ select pg_sleep(30);
 
 \c gpperfmon
 select pg_sleep(100);
+analyze system_history;
+analyze database_history;
+analyze diskspace_history;
+analyze queries_history;
 select count(*) from system_now;
 select count(*) from database_now;
 select count(*) from diskspace_now;

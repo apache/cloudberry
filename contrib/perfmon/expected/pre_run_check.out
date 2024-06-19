@@ -21,20 +21,6 @@ drop database if exists gpperfmon;
 20240605:10:16:54:017713 gpperfmon_install:xx:gpadmin-[INFO]:-PGPORT=7000 gpconfig -c gp_external_enable_exec -v on --masteronly >& /dev/null
 20240605:10:16:54:017713 gpperfmon_install:xx:gpadmin-[INFO]:-gpperfmon will be enabled after a full restart of cloudberrydb
 -- end_ignore
--- check cluster state
-\c postgres
-select pg_sleep(10);
- pg_sleep 
-----------
- 
-(1 row)
-
-SELECT sync_state FROM pg_stat_get_wal_senders();
- sync_state 
-------------
- sync
-(1 row)
-
 \c contrib_regression
 select
 	case

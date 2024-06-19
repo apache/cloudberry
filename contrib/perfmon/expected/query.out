@@ -20,6 +20,10 @@ select pg_sleep(100);
  
 (1 row)
 
+analyze system_history;
+analyze database_history;
+analyze diskspace_history;
+analyze queries_history;
 select count(*) from system_now;
  count 
 -------
@@ -39,32 +43,24 @@ select count(*) from diskspace_now;
 (1 row)
 
 select count(*) > 0 from system_history;
-NOTICE:  One or more columns in the following table(s) do not have statistics: system_history
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ?column? 
 ----------
  t
 (1 row)
 
 select count(*) > 0 from database_history;
-NOTICE:  One or more columns in the following table(s) do not have statistics: database_history
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ?column? 
 ----------
  t
 (1 row)
 
 select count(*) > 0 from diskspace_history;
-NOTICE:  One or more columns in the following table(s) do not have statistics: diskspace_history
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  ?column? 
 ----------
  t
 (1 row)
 
 select status, query_text from queries_history where ssid = :sess_id;
-NOTICE:  One or more columns in the following table(s) do not have statistics: queries_history
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  status |      query_text      
 --------+----------------------
  done   | select pg_sleep(30);

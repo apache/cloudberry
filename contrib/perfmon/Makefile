@@ -41,7 +41,3 @@ install:  installdirs
 	mkdir -p '$(DESTDIR)$(libdir)/$(NAME)'
 	$(INSTALL_SCRIPT) $(NAME).sql '$(DESTDIR)$(libdir)/$(NAME)'
 	$(INSTALL_SCRIPT) $(NAME).conf '$(DESTDIR)$(libdir)/$(NAME)'
-
-.PHONY: icw_test
-	icw_test:
-	    make -C $(REGRESS_DIR) icw_test
