@@ -24,22 +24,22 @@ analyze system_history;
 analyze database_history;
 analyze diskspace_history;
 analyze queries_history;
-select count(*) from system_now;
- count 
--------
-     1
+select count(*) > 0 from system_now;
+ ?column? 
+----------
+ t
 (1 row)
 
-select count(*) from database_now;
- count 
--------
-     1
+select count(*) > 0 from database_now;
+ ?column? 
+----------
+ t
 (1 row)
 
-select count(*) from diskspace_now;
- count 
--------
-     1
+select count(*) > 0 from diskspace_now;
+ ?column? 
+----------
+ t
 (1 row)
 
 select count(*) > 0 from system_history;

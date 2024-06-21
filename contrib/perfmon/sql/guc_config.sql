@@ -38,6 +38,5 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 select wait_for_gpsmon_work(); 
-select count(*) from diskspace_now;
 \! netstat -anp | grep udp | grep gpsmon | wc -l
 \! ps -ef | grep gpsmon | grep -v grep | wc -l

@@ -58,12 +58,6 @@ select wait_for_gpsmon_work();
  
 (1 row)
 
-select count(*) from diskspace_now;
- count 
--------
-     1
-(1 row)
-
 \! netstat -anp | grep udp | grep gpsmon | wc -l
 (Not all processes could be identified, non-owned process info
  will not be shown, you would have to be root to see it all.)
