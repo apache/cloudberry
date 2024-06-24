@@ -44,6 +44,7 @@ static struct
 	// The timeout in seconds for smon to restart if no requests
 	// come during that period.
 	apr_uint64_t terminate_timeout;
+	const char*	hostname;
 } opt = { 0 };
 
 int verbose = 0; /* == opt.v */
@@ -1373,19 +1374,25 @@ static void setup_udp()
 
 static const char* get_and_allocate_hostname()
 {
-	char hname[256] = { 0 };
-
-	if (gethostname(hname, sizeof(hname) - 1))
+	if (opt.hostname)
 	{
-		gx.hostname = strdup("unknown");
-		gpmon_warningx(FLINE, 0, "gethostname failed");
+		gx.hostname = strdup(opt.hostname);
 	}
 	else
 	{
-		hname[sizeof(hname) - 1] = 0;
-		gx.hostname = strdup(hname);
-	}
+		char hname[256] = { 0 };
 
+		if (gethostname(hname, sizeof(hname) - 1))
+		{
+			gx.hostname = strdup("unknown");
+			gpmon_warningx(FLINE, 0, "gethostname failed");
+		}
+		else
+		{
+			hname[sizeof(hname) - 1] = 0;
+			gx.hostname = strdup(hname);
+		}
+	}
 	return gx.hostname;
 }
 
@@ -1643,6 +1650,7 @@ static void usage(const char* msg)
 	fprintf(stdout, "\t-t:\tterminate timeout\n"),
 	fprintf(stdout, "\t-a:\titerator aggregate\n");
 	fprintf(stdout, "\t-i:\tignore qexec packet\n");
+	fprintf(stdout, "\t-h:\thostname for this machine\n");
 	if (msg)
 		fprintf(stdout, "%s\n\n", msg);
 
@@ -1666,6 +1674,7 @@ static void parse_command_line(int argc, const char* const argv[])
 	{ NULL, 't', 1, "terminate timeout" },
 	{ NULL, 'a', 0, "iterator aggregate" },
 	{ NULL, 'i', 0, "ignore qexec packet" },
+	{ NULL, 'h', 1, "hostname for this machine" },
 	{ NULL, 0, 0, NULL } };
 	apr_pool_t* pool;
 
@@ -1711,6 +1720,9 @@ static void parse_command_line(int argc, const char* const argv[])
 			break;
 		case 't':
 			opt.terminate_timeout = apr_atoi64(arg);
+			break;
+		case 'h':
+			opt.hostname = strdup(arg); 
 			break;
 		}
 	}
