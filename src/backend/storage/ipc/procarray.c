@@ -1190,7 +1190,7 @@ ProcArrayApplyRecoveryInfo(RunningTransactions running)
 		 * If the snapshot isn't overflowed or if its empty we can reset our
 		 * pending state and use this snapshot instead.
 		 */
-		if (!running->subxid_overflow || running->xcnt == 0)
+		if (running->subxid_status != SUBXIDS_MISSING || running->xcnt == 0)
 		{
 			/*
 			 * If we have already collected known assigned xids, we need to
@@ -1342,7 +1342,7 @@ ProcArrayApplyRecoveryInfo(RunningTransactions running)
 	 * missing, so conservatively assume the last one is latestObservedXid.
 	 * ----------
 	 */
-	if (running->subxid_overflow)
+	if (running->subxid_status == SUBXIDS_MISSING)
 	{
 		standbyState = STANDBY_SNAPSHOT_PENDING;
 
@@ -1354,6 +1354,18 @@ ProcArrayApplyRecoveryInfo(RunningTransactions running)
 		standbyState = STANDBY_SNAPSHOT_READY;
 
 		standbySnapshotPendingXmin = InvalidTransactionId;
+
+		/*
+		 * If the 'xids' array didn't include all subtransactions, we have to
+		 * mark any snapshots taken as overflowed.
+		 */
+		if (running->subxid_status == SUBXIDS_IN_SUBTRANS)
+			procArray->lastOverflowedXid = latestObservedXid;
+		else
+		{
+			Assert(running->subxid_status == SUBXIDS_IN_ARRAY);
+			procArray->lastOverflowedXid = InvalidTransactionId;
+		}
 	}
 
 	/*
@@ -3800,7 +3812,7 @@ GetRunningTransactionData(void)
 
 	CurrentRunningXacts->xcnt = count - subcount;
 	CurrentRunningXacts->subxcnt = subcount;
-	CurrentRunningXacts->subxid_overflow = suboverflowed;
+	CurrentRunningXacts->subxid_status = suboverflowed ? SUBXIDS_IN_SUBTRANS : SUBXIDS_IN_ARRAY;
 	CurrentRunningXacts->nextXid = XidFromFullTransactionId(ShmemVariableCache->nextXid);
 	CurrentRunningXacts->oldestRunningXid = oldestRunningXid;
 	CurrentRunningXacts->latestCompletedXid = latestCompletedXid;
