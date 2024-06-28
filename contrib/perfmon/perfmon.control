@@ -1,0 +1,5 @@
+comment = 'data type for storing sets of (key, value) pairs'
+default_version = '1.0.0'
+module_pathname = '$libdir/perfmon'
+relocatable = true
+trusted = true

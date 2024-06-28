@@ -130,7 +130,7 @@ if __name__ == '__main__':
     cmd = Command("createdb gpperfmon")
     commands.append(cmd)
 
-    cmd = Command("PGPORT=%d psql -f %s/lib/gpperfmon/gpperfmon.sql gpperfmon" % (options.port, gphome))
+    cmd = Command("PGPORT=%d psql -c 'create extension perfmon' gpperfmon" % (options.port))
     commands.append(cmd)
 
     if options.enable:
@@ -140,7 +140,7 @@ if __name__ == '__main__':
         home_dir = os.getenv('HOME')
         gpperfmon_conf_dir = "%s/gpperfmon/conf" % coordinatordata_dir
         gpperfmon_conf_file = "%s/gpperfmon.conf" % gpperfmon_conf_dir
-        gpperfmon_conf_file_src = "%s/lib/gpperfmon/gpperfmon.conf" % gphome
+        gpperfmon_conf_file_src = "%s/share/postgresql/gpperfmon.conf" % gphome
 
         if not coordinatordata_dir:
             logger.error("COORDINATOR_DATA_DIRECTORY must be set")
@@ -170,7 +170,7 @@ if __name__ == '__main__':
         #    sys.exit(1)
 
         if not os.path.isfile(gpperfmon_conf_file_src):
-            logger.error(" gpperfmon.conf doesn't exist in %s/lib/gpperfmon" % gphome) 
+            logger.error(" gpperfmon.conf doesn't exist in %s/share/postgresql" % gphome) 
             sys.exit(1)
 
         cmd = Command("""PGPORT=%d psql template1 -c "DROP ROLE IF EXISTS gpmon" """ % options.port)

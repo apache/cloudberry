@@ -1,6 +1,7 @@
 -- Disable perfmon.enable
 -- start_ignore
 \! gpconfig -c perfmon.enable -v false
+\! pkill gpsmon
 \! gpstop -ari
 -- end_ignore
 \! ps -ef | grep '\[gpmmon\]' | wc -l

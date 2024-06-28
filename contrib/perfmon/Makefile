@@ -1,6 +1,7 @@
-NAME = gpperfmon
+NAME = perfmon
+EXTVERSION = 1.0.0
 
-REGRESS = pre_run_check guc_config query post_run
+REGRESS = pre_run_check guc_config query extension_test post_run
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config
@@ -13,6 +14,9 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
+$(NAME)--$(EXTVERSION).sql: $(NAME).sql
+	    cp $< $@
+
 .PHONY: clean_perfmon
 clean_perfmon:
 	$(MAKE) -C src/gpmon clean
@@ -23,12 +27,12 @@ clean_perfmon:
 	rm -rf gpperfmon.so
 clean distclean: clean_perfmon
 
-all:
+all: $(NAME)--$(EXTVERSION).sql
 	$(MAKE) -C src/gpmon all
 	$(MAKE) -C src/gpmmon all
 	$(MAKE) -C src/gpsmon all
 
-.PHONY: installdirs
+.dir)/extension/PHONY: installdirs
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(bindir)/../sbin'
 install:  installdirs
@@ -38,6 +42,6 @@ install:  installdirs
 	$(INSTALL_SCRIPT) gpperfmon_install '$(bindir)'
 	$(INSTALL_SCRIPT) gpperfmoncat.sh '$(DESTDIR)$(bindir)'
 	$(INSTALL_SCRIPT) gpmon_catqrynow.py '$(DESTDIR)$(bindir)/../sbin/'
-	mkdir -p '$(DESTDIR)$(libdir)/$(NAME)'
-	$(INSTALL_SCRIPT) $(NAME).sql '$(DESTDIR)$(libdir)/$(NAME)'
-	$(INSTALL_SCRIPT) $(NAME).conf '$(DESTDIR)$(libdir)/$(NAME)'
+	$(INSTALL_SCRIPT) gpperfmon.conf '$(DESTDIR)$(datadir)'
+	$(INSTALL_SCRIPT) $(NAME)--$(EXTVERSION).sql '$(DESTDIR)$(datadir)/extension/'
+	$(INSTALL_SCRIPT) $(NAME).control '$(DESTDIR)$(datadir)/extension/'

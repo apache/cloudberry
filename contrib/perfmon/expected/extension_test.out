@@ -1,0 +1,16 @@
+create extension perfmon;
+ERROR:  "perfmon" extension can only be created in gpperfmon database
+CONTEXT:  PL/pgSQL function checkdbname() line 7 at RAISE
+select count(*) from pg_extension where extname = 'perfmon';
+ count 
+-------
+     0
+(1 row)
+
+\c gpperfmon
+select count(*) from pg_extension where extname = 'perfmon';
+ count 
+-------
+     1
+(1 row)
+

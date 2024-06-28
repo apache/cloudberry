@@ -1,3 +1,20 @@
+-- Only can be installed in gpperfmon databse
+CREATE OR REPLACE FUNCTION checkdbname() 
+RETURNS void
+AS $$
+DECLARE 
+dbname varchar; 
+BEGIN 
+	select current_database()  into strict dbname;
+	IF dbname != 'gpperfmon' THEN 
+		    RAISE EXCEPTION '"perfmon" extension can only be created in gpperfmon database'; 
+	END IF; 
+END;
+$$
+LANGUAGE plpgsql;
+
+select checkdbname();
+
 --  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 --  Gpperfmon Schema
 
@@ -11,7 +28,6 @@
 --  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 --  system
 --
-\c gpperfmon;
 
 create table public.system_history (
        ctime timestamptz(0) not null, -- record creation time
