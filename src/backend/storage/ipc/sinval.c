@@ -17,6 +17,7 @@
 #include "access/xact.h"
 #include "commands/async.h"
 #include "miscadmin.h"
+#include "nodes/memnodes.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "storage/sinvaladt.h"
@@ -200,6 +201,7 @@ ProcessCatchupInterrupt(void)
 		 * can just call AcceptInvalidationMessages() to do this.  If we
 		 * aren't, we start and immediately end a transaction; the call to
 		 * AcceptInvalidationMessages() happens down inside transaction start.
+		 * Be sure to preserve caller's memory context when we do that.
 		 *
 		 * It is awfully tempting to just call AcceptInvalidationMessages()
 		 * without the rest of the xact start/stop overhead, and I think that
@@ -213,6 +215,8 @@ ProcessCatchupInterrupt(void)
 		}
 		else
 		{
+			MemoryContext oldcontext = CurrentMemoryContext;
+
 			elog(DEBUG4, "ProcessCatchupEvent outside transaction");
 
 			/*
@@ -229,6 +233,9 @@ ProcessCatchupInterrupt(void)
 			CommitTransactionCommand();
 
 			setDistributedTransactionContext(saveDistributedTransactionContext);
+			/* Caller's context had better not have been transaction-local */
+			Assert(MemoryContextIsValid(oldcontext));
+			MemoryContextSwitchTo(oldcontext);
 		}
 
 		in_process_catchup_event = 0;
