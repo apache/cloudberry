@@ -12,6 +12,7 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
     line = line.split('|')
     (tmid, xid, cid) = line[1:4]
     qrytxt = ''
+    plan = ''
     appname = ''
     rsqname = ''
     priority = ''
@@ -23,7 +24,12 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
 
         newline = fp.readline()
         meta = fp.readline().split(' ')
+        plan = fp.read(int(meta[0])).strip()
+
+        newline = fp.readline()
+        meta = fp.readline().split(' ')
         appname = fp.read(int(meta[0])).strip()
+
         
         newline = fp.readline()
         meta = fp.readline().split(' ')
@@ -34,6 +40,7 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
         priority = fp.read(int(meta[0])).strip()
 
         fp.close()
+
     except:
         qrytxt = "Query text unavailable"
         if fp: fp.close()
@@ -42,6 +49,8 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
     if qrytxt:
         qrytxt = '""'.join(qrytxt.split('"'))
         line[-5] = '"' + qrytxt + '"'
+        plan = '""'.join(plan.split('"'))
+        line[-4] = '"' + plan + '"'
         line[-3] = '"' + appname + '"'
         line[-2] = '"' + rsqname + '"'
         line[-1] = '"' + priority + '"'

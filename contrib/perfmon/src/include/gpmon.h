@@ -48,9 +48,11 @@ for example SCHEMA.RELATION\0
 extern void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket);
 extern void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 		const char *queryText,
+		const char *plan,
 		const char *appName,
 		const char *resqName,
-		const char *resqPriority);
+		const char *resqPriority,
+		int status);
 extern void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket);
 extern void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket);
 extern void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket);

@@ -266,6 +266,9 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	if (query_info_collect_hook)
 		(*query_info_collect_hook)(METRICS_QUERY_START, queryDesc);
 
+	/**
+	 * Distribute memory to operators.
+	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
 		if (!IsResManagerMemoryPolicyNone() &&

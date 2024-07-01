@@ -5,3 +5,4 @@
 ./src/gpmmon/gpmmon.so
 ./src/gpmon/gpmon.so
 ./gpperfmon--?.?.?.sql
+./results

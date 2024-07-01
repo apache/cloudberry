@@ -25,6 +25,7 @@
 #include "utils/metrics_utils.h"
 #include "utils/metrics_utils.h"
 #include "utils/snapmgr.h"
+#include "commands/explain.h"
 
 PG_MODULE_MAGIC;
 static int32 init_tmid = -1;;
@@ -50,6 +51,8 @@ static void gpmon_query_info_collect_hook(QueryMetricsStatus status, void *query
 
 static gpmon_packet_t* gpmon_qlog_packet_init();
 static void init_gpmon_hooks(void);
+static char* get_plan(QueryDesc *queryDesc);
+static char* get_query_text(QueryDesc *queryDesc);
 
 struct  {
     int    gxsock;
@@ -255,11 +258,6 @@ void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket)
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_SUBMIT;
 	gpmonPacket->u.qlog.tsubmit = tv.tv_sec;
 	
-	//gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
-	//		gpmonPacket->u.qlog.key.ssid,
-	//		gpmonPacket->u.qlog.key.ccnt,
-	//		gpmonPacket->u.qlog.status);
-	//
 	gpmon_send(gpmonPacket);
 }
 
@@ -285,15 +283,18 @@ static const char* gpmon_null_subst(const char* input)
 
 void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 		const char *queryText,
+		const char *plan,
 		const char *appName,
 		const char *resqName,
-		const char *resqPriority)
+		const char *resqPriority,
+		int status)
 {
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 	char fname[GPMON_DIR_MAX_PATH];
 	FILE* fp;
 
 	queryText = gpmon_null_subst(queryText);
+	plan = gpmon_null_subst(plan);
 	appName = gpmon_null_subst(appName);
 	resqName = gpmon_null_subst(resqName);
 	resqPriority = gpmon_null_subst(resqPriority);
@@ -304,23 +305,22 @@ void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 	Assert(resqPriority);
 
 
-	snprintf(fname, GPMON_DIR_MAX_PATH, "%sq%d-%d-%d.txt", GPMON_DIR, 
+	snprintf(fname, GPMON_DIR_MAX_PATH, "%sq%d-%d-%d.txt", GPMON_DIR,
 										gpmonPacket->u.qlog.key.tmid,
 										gpmonPacket->u.qlog.key.ssid,
 										gpmonPacket->u.qlog.key.ccnt);
+	fp = fopen(fname, "w+");
 
-	fp = fopen(fname, "a");
 	if (!fp)
 		return;
+
 	gpmon_record_kv_with_file("qtext", queryText, false, fp);
-
+	gpmon_record_kv_with_file("plan", plan, false, fp);
 	gpmon_record_kv_with_file("appname", appName, false, fp);
-
 	gpmon_record_kv_with_file("resqname", resqName, false, fp);
-
 	gpmon_record_kv_with_file("priority", resqPriority, true, fp);
+	fprintf(fp, "%d", status);
 
-	fprintf(fp, "%d", GPMON_QLOG_STATUS_SUBMIT);
 	fclose(fp);
 
 }
@@ -338,12 +338,10 @@ void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket)
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_START;
 	gpmonPacket->u.qlog.tstart = tv.tv_sec;
-	
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
 			gpmonPacket->u.qlog.key.ssid,
 			gpmonPacket->u.qlog.key.ccnt,
 			gpmonPacket->u.qlog.status);
-	
 	gpmon_send(gpmonPacket);
 }
 
@@ -412,6 +410,7 @@ static void
 gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 {
 	char *query_text;
+	char *plan;
 	QueryDesc *qd = (QueryDesc *)queryDesc;
 	if (perfmon_enabled
 			&& Gp_role == GP_ROLE_DISPATCH && qd != NULL)
@@ -426,21 +425,14 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 					gpmon_qlog_query_start(gpmonPacket);
 					break;
 				case METRICS_QUERY_SUBMIT:
-					/* convert to UTF8 which is encoding for gpperfmon database */
-					query_text = (char *)qd->sourceText;
-					/**
-					 * When client encoding and server encoding are different, do apply the conversion.
-					 */
-					if (GetDatabaseEncoding() != pg_get_client_encoding())
-					{
-						query_text = (char *)pg_do_encoding_conversion((unsigned char*)qd->sourceText,
-								strlen(qd->sourceText), GetDatabaseEncoding(), PG_UTF8);
-					}
+					query_text = get_query_text(qd);
 					gpmon_qlog_query_text(gpmonPacket,
 							query_text,
+							NULL,
 							application_name,
 							NULL,
-							NULL);
+							NULL,
+							GPMON_QLOG_STATUS_SUBMIT);
 					gpmon_qlog_query_submit(gpmonPacket);
 					break;
 				case METRICS_QUERY_DONE:
@@ -453,6 +445,18 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 				case METRICS_QUERY_ERROR:
 				case METRICS_QUERY_CANCELED:
 					gpmon_qlog_query_error(gpmonPacket);
+					break;
+				case METRICS_PLAN_NODE_INITIALIZE:
+					query_text = get_query_text(qd);
+					plan = get_plan(qd);
+					gpmon_qlog_query_text(gpmonPacket,
+							query_text,
+							plan,
+							application_name,
+							NULL,
+							NULL,
+							GPMON_QLOG_STATUS_START);
+					pfree(plan);
 					break;
 				default:
 					break;
@@ -510,3 +514,50 @@ _PG_init(void)
 void
 _PG_fini(void)
 {}
+
+static
+char* get_plan(QueryDesc *queryDesc)
+{
+	char *plan;
+	ExplainState *es = NewExplainState();
+
+	es->analyze = false;
+	es->verbose = true;
+	es->buffers = true;
+	es->wal = true;
+	es->timing = true;
+	es->summary = es->analyze;
+	es->format = EXPLAIN_FORMAT_JSON;
+	es->settings = true;
+
+	ExplainBeginOutput(es);
+	ExplainPrintPlan(es, queryDesc);
+	ExplainEndOutput(es);
+
+	/* Remove last line break */
+	if (es->str->len > 0 && es->str->data[es->str->len - 1] == '\n')
+		es->str->data[--es->str->len] = '\0';
+
+	/* Fix JSON to output an object */
+	es->str->data[0] = '{';
+	es->str->data[es->str->len - 1] = '}';
+	plan = es->str->data;
+	pfree(es);
+	return plan;
+}
+
+static
+char* get_query_text(QueryDesc *qd)
+{
+		/* convert to UTF8 which is encoding for gpperfmon database */
+		char *query_text = (char *)qd->sourceText;
+		/**
+		 * When client encoding and server encoding are different, do apply the conversion.
+		 */
+		if (GetDatabaseEncoding() != pg_get_client_encoding())
+		{
+				query_text = (char *)pg_do_encoding_conversion((unsigned char*)qd->sourceText,
+								strlen(qd->sourceText), GetDatabaseEncoding(), PG_UTF8);
+		}
+		return query_text;
+}

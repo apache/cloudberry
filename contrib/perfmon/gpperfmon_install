@@ -165,9 +165,9 @@ if __name__ == '__main__':
             logger.error("can not find $HOME")
             sys.exit(1)
 
-        #if os.path.isfile(gpperfmon_conf_file):
-        #    logger.error(" gpperfmon.conf already exists %s" % gpperfmon_conf_file) 
-        #    sys.exit(1)
+        if os.path.isfile(gpperfmon_conf_file):
+            logger.error(" gpperfmon.conf already exists %s" % gpperfmon_conf_file)
+            sys.exit(1)
 
         if not os.path.isfile(gpperfmon_conf_file_src):
             logger.error(" gpperfmon.conf doesn't exist in %s/share/postgresql" % gphome) 

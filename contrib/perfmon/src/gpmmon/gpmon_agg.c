@@ -509,6 +509,14 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		apr_int32_t age = newagg->generation - dp->last_updated_generation - 1;
 		if (age > 0)
 		{
+			if (status == GPMON_QLOG_STATUS_DONE &&
+					((dp->qlog.tfin - dp->qlog.tstart) < min_query_time ))
+			{
+				TR2(("agg_dup: skip short query %d.%d.%d generation %d, current generation %d, recorded %d\n",
+							dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt,
+							(int) dp->last_updated_generation, (int) newagg->generation, dp->recorded));
+				continue;
+			}
 			if (  (status != GPMON_QLOG_STATUS_SUBMIT
 			       && status != GPMON_QLOG_STATUS_CANCELING
 			       && status != GPMON_QLOG_STATUS_START)
@@ -1509,7 +1517,7 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
 	    fprintf(fp, "|");
         bytes_written++;
 
-        if (!all_good || iter == 1){
+        if (!all_good){
             // we have no data for query plan
             // if we failed once already don't bother trying to parse query file
             continue;
