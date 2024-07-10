@@ -313,3 +313,53 @@ revoke all on database gpperfmon from public;
 -- for web ui auth everyone needs connect permissions
 grant connect on database gpperfmon to public;
 -- END
+-- for web ui
+create schema cbui;
+set search_path to cbui;
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    registration_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    last_login_date TIMESTAMP WITHOUT TIME ZONE
+);
+INSERT INTO users (username, registration_date, last_login_date)
+SELECT usename, CURRENT_TIMESTAMP, NULL
+FROM pg_user;
+
+CREATE TABLE worksheet_item_types (
+    type_id SERIAL PRIMARY KEY,
+    type_name VARCHAR(255) NOT NULL
+);
+
+INSERT INTO worksheet_item_types (type_id, type_name)
+VALUES
+(1, 'SQL'),
+(2, 'PYTHON');
+
+CREATE TABLE worksheet_items (
+    item_id SERIAL PRIMARY KEY,
+    parent_id INTEGER REFERENCES worksheet_items,
+    user_id INTEGER REFERENCES users,
+    type_id INTEGER REFERENCES worksheet_item_types,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    creation_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    last_modified_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    is_shared BOOLEAN NOT NULL,
+    shared_link VARCHAR(255)
+);
+
+CREATE TABLE worksheet_versions (
+    version_id SERIAL PRIMARY KEY,
+    version_name VARCHAR(255) NOT NULL,
+    item_id INTEGER REFERENCES worksheet_items,
+    content TEXT NOT NULL,
+    version_number INTEGER NOT NULL,
+    creation_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    db_name VARCHAR(255) DEFAULT 'gpadmin',
+    database_id INTEGER DEFAULT -1,
+    schema_name VARCHAR(255) DEFAULT 'public',
+    schema_id INTEGER DEFAULT -1 ,
+    uuid VARCHAR(1000) DEFAULT '-1'
+);
+RESET search_path;
