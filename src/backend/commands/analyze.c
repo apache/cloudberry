@@ -1100,7 +1100,11 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		else
 			relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
 
-		/* Update pg_class for table relation */
+		/*
+		 * Update pg_class for table relation.  CCI first, in case acquirefunc
+		 * updated pg_class.
+		 */
+		CommandCounterIncrement();
 		vac_update_relstats(onerel,
 							relpages,
 							totalrows,
@@ -1189,6 +1193,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		 * Partitioned tables don't have storage, so we don't set any fields
 		 * in their pg_class entries except for reltuples and relhasindex.
 		 */
+		CommandCounterIncrement();
 		vac_update_relstats(onerel, -1, totalrows,
 							0, hasindex, InvalidTransactionId,
 							InvalidMultiXactId,
