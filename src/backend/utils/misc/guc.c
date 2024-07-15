@@ -5877,8 +5877,8 @@ guc_var_name_compare(const void *key, const void *generic)
 static int
 guc_var_compare(const void *a, const void *b)
 {
-	const char *namea = **(const char ** const *) a;
-	const char *nameb = **(const char ** const *) b;
+	const char *namea = **(const char **const *) a;
+	const char *nameb = **(const char **const *) b;
 
 	return guc_name_compare(namea, nameb);
 }
