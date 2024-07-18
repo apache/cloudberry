@@ -3,7 +3,7 @@
 -- are flowing from different segments in different order. Mask those
 -- differences by setting 'extra_float_digits'. This isn't enough for all of
 -- the queries, so a few also use TO_CHAR() to truncate the results further.
-set extra_float_digits=0;
+set extra_float_digits=-1;
 
 drop table if exists dqa_t1;
 drop table if exists dqa_t2;
