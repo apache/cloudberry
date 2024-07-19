@@ -19,13 +19,15 @@
 #include "access/xact.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
+#include "commands/explain.h"
 #include "executor/executor.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "utils/metrics_utils.h"
 #include "utils/metrics_utils.h"
 #include "utils/snapmgr.h"
-#include "commands/explain.h"
+
+#include "pg_query_state.h"
 
 PG_MODULE_MAGIC;
 static int32 init_tmid = -1;;
@@ -380,7 +382,7 @@ void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket)
 /**
  * Call this method when query finishes executing.
  */
-void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket)
+void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, bool updateRecord)
 {
 	struct timeval tv;
 
@@ -391,12 +393,12 @@ void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket)
 	gpmonPacket->u.qlog.tsubmit = tsubmit;
 	gpmonPacket->u.qlog.tstart = tstart;
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
-	
-	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
-			gpmonPacket->u.qlog.key.ssid,
-			gpmonPacket->u.qlog.key.ccnt,
-			gpmonPacket->u.qlog.status);
-	
+	if (updateRecord)
+		gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
+							gpmonPacket->u.qlog.key.ssid,
+							gpmonPacket->u.qlog.key.ccnt,
+							gpmonPacket->u.qlog.status);
+
 	gpmon_send(gpmonPacket);
 }
 
@@ -450,6 +452,7 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 	char *query_text;
 	char *plan;
 	QueryDesc *qd = (QueryDesc *)queryDesc;
+	bool updateRecord = true;
 	if (perfmon_enabled && qd != NULL)
 	{
 		gpmon_packet_t *gpmonPacket = NULL;
@@ -475,7 +478,21 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 					gpmon_qlog_query_submit(gpmonPacket);
 					break;
 				case METRICS_QUERY_DONE:
-					gpmon_qlog_query_end(gpmonPacket);
+					if (enable_qs_runtime() && CachedQueryStateInfo != NULL &&
+						CachedQueryStateInfo->gp_command_count == gp_command_count)
+					{
+						query_text = get_query_text(qd);
+						plan = (char *)CachedQueryStateInfo->data;
+						gpmon_qlog_query_text(gpmonPacket,
+											  query_text,
+											  plan,
+											  application_name,
+											  NULL,
+											  NULL,
+											  GPMON_QLOG_STATUS_DONE);
+						updateRecord = false;
+					}
+					gpmon_qlog_query_end(gpmonPacket, updateRecord);
 					break;
 					/* TODO: no GPMON_QLOG_STATUS for METRICS_QUERY_CANCELED */
 				case METRICS_QUERY_CANCELING:
@@ -486,16 +503,19 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 					gpmon_qlog_query_error(gpmonPacket);
 					break;
 				case METRICS_PLAN_NODE_INITIALIZE:
-					query_text = get_query_text(qd);
-					plan = get_plan(qd);
-					gpmon_qlog_query_text(gpmonPacket,
-							query_text,
-							plan,
-							application_name,
-							NULL,
-							NULL,
-							GPMON_QLOG_STATUS_START);
-					pfree(plan);
+					if (!enable_qs_runtime())
+					{
+						query_text = get_query_text(qd);
+						plan = get_plan(qd);
+						gpmon_qlog_query_text(gpmonPacket,
+											  query_text,
+											  plan,
+											  application_name,
+											  NULL,
+											  NULL,
+											  GPMON_QLOG_STATUS_START);
+						pfree(plan);
+					}
 					break;
 				default:
 					break;
@@ -563,6 +583,7 @@ _PG_init(void)
 	}
 	init_tmid = t;
 	gpmon_init();
+	init_pg_query_state();
 }
 
 void
@@ -583,8 +604,8 @@ char* get_plan(QueryDesc *queryDesc)
 	es->summary = es->analyze;
 	es->format = EXPLAIN_FORMAT_JSON;
 	es->settings = true;
-
 	ExplainBeginOutput(es);
+	ExplainQueryText(es, queryDesc);
 	ExplainPrintPlan(es, queryDesc);
 	ExplainEndOutput(es);
 

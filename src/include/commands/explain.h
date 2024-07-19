@@ -70,6 +70,8 @@ typedef struct ExplainState
 	bool		hide_workers;	/* set if we find an invisible Gather */
 	/* state related to the current plan node */
 	ExplainWorkersState *workers_state; /* needed if parallel plan */
+	bool		runtime;		/* print intermediate state of query execution,
+								   not after completion */
 } ExplainState;
 
 /* Hook for plugins to get control in ExplainOneQuery() */

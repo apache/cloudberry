@@ -1,4 +1,7 @@
--- Only can be installed in gpperfmon databse
+-- complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION perfmon" to load this file. \quit
+
+-- Only can be installed in gpperfmon database
 CREATE OR REPLACE FUNCTION checkdbname() 
 RETURNS void
 AS $$
@@ -367,3 +370,47 @@ CREATE TABLE worksheet_versions (
     uuid VARCHAR(1000) DEFAULT '-1'
 );
 RESET search_path;
+
+CREATE FUNCTION pg_query_state(pid               integer
+				, verbose	boolean = FALSE
+				, costs 	boolean = FALSE
+				, timing 	boolean = FALSE
+				, buffers 	boolean = FALSE
+				, triggers	boolean = FALSE
+				, format	text = 'text')
+	RETURNS TABLE (pid integer
+				 , frame_number integer
+				 , query_text text
+				 , plan text
+				 , leader_pid integer)
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C STRICT VOLATILE;
+
+CREATE TYPE gp_segment_pid AS (
+    "segid" int4,
+    "TABLE_SIZE" int4
+);
+
+CREATE FUNCTION cbdb_mpp_query_state(gp_segment_pid[])
+	RETURNS void
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C STRICT VOLATILE;
+
+CREATE FUNCTION query_state_pause()
+	RETURNS void
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C STRICT VOLATILE;
+
+CREATE FUNCTION query_state_resume()
+	RETURNS void
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C STRICT VOLATILE;
+CREATE FUNCTION query_state_pause_command()
+	RETURNS void
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C STRICT VOLATILE;
+
+CREATE FUNCTION query_state_resume_command()
+	RETURNS void
+	AS 'MODULE_PATHNAME'
+	LANGUAGE C STRICT VOLATILE;

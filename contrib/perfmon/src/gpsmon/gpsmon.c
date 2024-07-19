@@ -860,7 +860,6 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 			ppkt->u.qlog.p_metrics.cpu_pct = pidrec->p_metrics.cpu_pct;
 			ppkt->u.qlog.p_metrics.fd_cnt = pidrec->p_metrics.fd_cnt;
 			ppkt->u.qlog.p_metrics.mem = pidrec->p_metrics.mem;
-			ppkt->u.qlog.pid = pidrec->pid;
 
 			TR2(("%s: SEND %d-%d-%d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
 				FLINE, ppkt->u.qlog.key.tmid, ppkt->u.qlog.key.ssid, ppkt->u.qlog.key.ccnt,
