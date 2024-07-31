@@ -473,5 +473,13 @@ SELECT 1 FROM tenk1_vw_sec
 
 rollback;
 
+-- test that a newly-created session role propagates to workers.
+begin;
+create role regress_parallel_worker;
+set session authorization regress_parallel_worker;
+select current_setting('session_authorization');
+set force_parallel_mode = 1;
+select current_setting('session_authorization');
+rollback;
 reset enable_parallel;
 reset optimizer;
