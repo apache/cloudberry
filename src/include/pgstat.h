@@ -34,27 +34,26 @@
 #define PG_STAT_TMP_DIR		"pg_stat_tmp"
 
 /* The types of statistics entries */
-typedef enum PgStat_Kind
-{
-	/* use 0 for INVALID, to catch zero-initialized data */
-	PGSTAT_KIND_INVALID = 0,
+#define PgStat_Kind uint32
 
-	/* stats for variable-numbered objects */
-	PGSTAT_KIND_DATABASE,		/* database-wide statistics */
-	PGSTAT_KIND_RELATION,		/* per-table statistics */
-	PGSTAT_KIND_FUNCTION,		/* per-function statistics */
-	PGSTAT_KIND_REPLSLOT,		/* per-slot statistics */
-	PGSTAT_KIND_SUBSCRIPTION,	/* per-subscription statistics */
-	PGSTAT_KIND_RESQUEUE,		/* per-resource-queue statistics */
+/* use 0 for INVALID, to catch zero-initialized data */
+#define PGSTAT_KIND_INVALID 0
 
-	/* stats for fixed-numbered objects */
-	PGSTAT_KIND_ARCHIVER,
-	PGSTAT_KIND_BGWRITER,
-	PGSTAT_KIND_CHECKPOINTER,
-	PGSTAT_KIND_IO,
-	PGSTAT_KIND_SLRU,
-	PGSTAT_KIND_WAL,
-} PgStat_Kind;
+/* stats for variable-numbered objects */
+#define PGSTAT_KIND_DATABASE	1	/* database-wide statistics */
+#define PGSTAT_KIND_RELATION	2	/* per-table statistics */
+#define PGSTAT_KIND_FUNCTION	3	/* per-function statistics */
+#define PGSTAT_KIND_REPLSLOT	4	/* per-slot statistics */
+#define PGSTAT_KIND_SUBSCRIPTION	5	/* per-subscription statistics */
+#define PGSTAT_KIND_RESQUEUE	6	/* per-resource-queue statistics */
+
+/* stats for fixed-numbered objects */
+#define PGSTAT_KIND_ARCHIVER	7
+#define PGSTAT_KIND_BGWRITER	8
+#define PGSTAT_KIND_CHECKPOINTER	9
+#define PGSTAT_KIND_IO	10
+#define PGSTAT_KIND_SLRU	11
+#define PGSTAT_KIND_WAL	12
 
 #define PGSTAT_KIND_FIRST_VALID PGSTAT_KIND_DATABASE
 #define PGSTAT_KIND_LAST PGSTAT_KIND_WAL

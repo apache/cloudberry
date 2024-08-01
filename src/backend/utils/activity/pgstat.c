@@ -189,7 +189,7 @@ static void pgstat_prep_snapshot(void);
 static void pgstat_build_snapshot(void);
 static void pgstat_build_snapshot_fixed(PgStat_Kind kind);
 
-static inline bool pgstat_is_kind_valid(int ikind);
+static inline bool pgstat_is_kind_valid(PgStat_Kind kind);
 
 
 /* ----------
@@ -1113,7 +1113,7 @@ pgstat_build_snapshot(void)
 	/*
 	 * Build snapshot of all fixed-numbered stats.
 	 */
-	for (int kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
+	for (PgStat_Kind kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
 	{
 		const PgStat_KindInfo *kind_info = pgstat_get_kind_info(kind);
 
@@ -1310,7 +1310,7 @@ pgstat_flush_pending_entries(bool nowait)
 PgStat_Kind
 pgstat_get_kind_from_str(char *kind_str)
 {
-	for (int kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
+	for (PgStat_Kind kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
 	{
 		if (pg_strcasecmp(kind_str, pgstat_kind_infos[kind].name) == 0)
 			return kind;
@@ -1323,9 +1323,9 @@ pgstat_get_kind_from_str(char *kind_str)
 }
 
 static inline bool
-pgstat_is_kind_valid(int ikind)
+pgstat_is_kind_valid(PgStat_Kind kind)
 {
-	return ikind >= PGSTAT_KIND_FIRST_VALID && ikind <= PGSTAT_KIND_LAST;
+	return kind >= PGSTAT_KIND_FIRST_VALID && kind <= PGSTAT_KIND_LAST;
 }
 
 const PgStat_KindInfo *
@@ -1410,7 +1410,7 @@ pgstat_write_statsfile(void)
 	write_chunk_s(fpout, &format_id);
 
 	/* Write various stats structs for fixed number of objects */
-	for (int kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
+	for (PgStat_Kind kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
 	{
 		char	   *ptr;
 		const PgStat_KindInfo *info = pgstat_get_kind_info(kind);
@@ -1729,7 +1729,7 @@ pgstat_reset_after_failure(void)
 	TimestampTz ts = GetCurrentTimestamp();
 
 	/* reset fixed-numbered stats */
-	for (int kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
+	for (PgStat_Kind kind = PGSTAT_KIND_FIRST_VALID; kind <= PGSTAT_KIND_LAST; kind++)
 	{
 		const PgStat_KindInfo *kind_info = pgstat_get_kind_info(kind);
 
