@@ -1129,7 +1129,8 @@ static void gpmmon_main(void)
 				{
 					update_mmonlog_filename();
 					apr_thread_mutex_lock(logfile_mutex);
-					freopen(mmon_log_filename, "w", stdout);
+					if (!freopen(mmon_log_filename, "w", stdout))
+						gpmon_fatal(FLINE, "failed to open gpmmon log file : \"%s\"", mmon_log_filename);
 					apr_thread_mutex_unlock(logfile_mutex);
 				}
 			}

@@ -348,7 +348,12 @@ apr_int32_t get_query_status(apr_int32_t tmid, apr_int32_t ssid,
 		fclose(fp);
 		return GPMON_QLOG_STATUS_INVALID;
 	}
-	fscanf(fp, "%d", &status);
+	if (fscanf(fp, "%d", &status) != 1)
+	{
+		fclose(fp);
+		return GPMON_QLOG_STATUS_INVALID;
+	}
+
 	fclose(fp);
 	return status;
 }
