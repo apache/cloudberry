@@ -1608,7 +1608,7 @@ pgstat_read_statsfile(void)
 
 					if (!pgstat_is_kind_valid(kind))
 					{
-						elog(WARNING, "invalid stats kind %d for entry of type %c",
+						elog(WARNING, "invalid stats kind %u for entry of type %c",
 							 kind, t);
 						goto error;
 					}
@@ -1617,7 +1617,7 @@ pgstat_read_statsfile(void)
 
 					if (!info->fixed_amount)
 					{
-						elog(WARNING, "invalid fixed_amount in stats kind %d for entry of type %c",
+						elog(WARNING, "invalid fixed_amount in stats kind %u for entry of type %c",
 							 kind, t);
 						goto error;
 					}
@@ -1628,7 +1628,7 @@ pgstat_read_statsfile(void)
 
 					if (!read_chunk(fpin, ptr, info->shared_data_len))
 					{
-						elog(WARNING, "could not read data of stats kind %d for entry of type %c with size %u",
+						elog(WARNING, "could not read data of stats kind %u for entry of type %c with size %u",
 							 kind, t, info->shared_data_len);
 						goto error;
 					}
@@ -1655,7 +1655,7 @@ pgstat_read_statsfile(void)
 
 						if (!pgstat_is_kind_valid(key.kind))
 						{
-							elog(WARNING, "invalid stats kind for entry %d/%u/%u of type %c",
+							elog(WARNING, "invalid stats kind for entry %u/%u/%u of type %c",
 								 key.kind, key.dboid, key.objoid, t);
 							goto error;
 						}
@@ -1674,13 +1674,13 @@ pgstat_read_statsfile(void)
 						}
 						if (!read_chunk_s(fpin, &name))
 						{
-							elog(WARNING, "could not read name of stats kind %d for entry of type %c",
+							elog(WARNING, "could not read name of stats kind %u for entry of type %c",
 								 kind, t);
 							goto error;
 						}
 						if (!pgstat_is_kind_valid(kind))
 						{
-							elog(WARNING, "invalid stats kind %d for entry of type %c",
+							elog(WARNING, "invalid stats kind %u for entry of type %c",
 								 kind, t);
 							goto error;
 						}
@@ -1689,7 +1689,7 @@ pgstat_read_statsfile(void)
 
 						if (!kind_info->from_serialized_name)
 						{
-							elog(WARNING, "invalid from_serialized_name in stats kind %d for entry of type %c",
+							elog(WARNING, "invalid from_serialized_name in stats kind %u for entry of type %c",
 								 kind, t);
 							goto error;
 						}
@@ -1699,7 +1699,7 @@ pgstat_read_statsfile(void)
 							/* skip over data for entry we don't care about */
 							if (fseek(fpin, pgstat_get_entry_len(kind), SEEK_CUR) != 0)
 							{
-								elog(WARNING, "could not seek \"%s\" of stats kind %d for entry of type %c",
+								elog(WARNING, "could not seek \"%s\" of stats kind %u for entry of type %c",
 									 NameStr(name), kind, t);
 								goto error;
 							}
@@ -1721,7 +1721,7 @@ pgstat_read_statsfile(void)
 					if (found)
 					{
 						dshash_release_lock(pgStatLocal.shared_hash, p);
-						elog(WARNING, "found duplicate stats entry %d/%u/%u of type %c",
+						elog(WARNING, "found duplicate stats entry %u/%u/%u of type %c",
 							 key.kind, key.dboid, key.objoid, t);
 						goto error;
 					}
@@ -1733,7 +1733,7 @@ pgstat_read_statsfile(void)
 									pgstat_get_entry_data(key.kind, header),
 									pgstat_get_entry_len(key.kind)))
 					{
-						elog(WARNING, "could not read data for entry %d/%u/%u of type %c",
+						elog(WARNING, "could not read data for entry %u/%u/%u of type %c",
 							 key.kind, key.dboid, key.objoid, t);
 						goto error;
 					}
