@@ -2020,6 +2020,21 @@ CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
 CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
 ERROR:  "tt28" is already a view
 ROLLBACK;
+-- test restriction on non-system view expansion.
+create table tt27v_tbl (a int);
+create view tt27v as select a from tt27v_tbl;
+set restrict_nonsystem_relation_kind to 'view';
+select a from tt27v where a > 0; -- Error
+ERROR:  access to non-system view "tt27v" is restricted
+insert into tt27v values (1); -- Error
+ERROR:  access to non-system view "tt27v" is restricted
+select viewname from pg_views where viewname = 'tt27v'; -- Ok to access a system view.
+ viewname 
+----------
+ tt27v
+(1 row)
+
+reset restrict_nonsystem_relation_kind;
 -- test display negative operator of const-folder expression
 create table tdis(a int, b int, c int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -2067,7 +2082,7 @@ drop cascades to view aliased_view_2
 drop cascades to view aliased_view_3
 drop cascades to view aliased_view_4
 DROP SCHEMA testviewschm2 CASCADE;
-NOTICE:  drop cascades to 77 other objects
+NOTICE:  drop cascades to 79 other objects
 DETAIL:  drop cascades to table t1
 drop cascades to view temporal1
 drop cascades to view temporal2
@@ -2143,5 +2158,7 @@ drop cascades to view tt24v
 drop cascades to view tt25v
 drop cascades to view tt26v
 drop cascades to table tt26
+drop cascades to table tt27v_tbl
+drop cascades to view tt27v
 drop cascades to table tdis
 drop cascades to view tdis_v1

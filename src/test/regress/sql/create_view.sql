@@ -714,6 +714,16 @@ CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
 CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
 ROLLBACK;
 
+
+-- test restriction on non-system view expansion.
+create table tt27v_tbl (a int);
+create view tt27v as select a from tt27v_tbl;
+set restrict_nonsystem_relation_kind to 'view';
+select a from tt27v where a > 0; -- Error
+insert into tt27v values (1); -- Error
+select viewname from pg_views where viewname = 'tt27v'; -- Ok to access a system view.
+reset restrict_nonsystem_relation_kind;
+
 -- test display negative operator of const-folder expression
 create table tdis(a int, b int, c int);
 create view tdis_v1 as select a,b,c, -1::int from tdis group by 1,2,3,4;
