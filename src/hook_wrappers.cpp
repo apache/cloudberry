@@ -38,6 +38,15 @@ static inline EventSender *get_sender() {
   return sender;
 }
 
+template <typename T, typename R, typename... Args>
+R cpp_call(T *obj, R (T::*func)(Args...), Args... args) {
+  try {
+    return (obj->*func)(args...);
+  } catch (const std::exception &e) {
+    ereport(FATAL, (errmsg("Unexpected exception in yagpcc %s", e.what())));
+  }
+}
+
 void hooks_init() {
   Config::init();
   YagpStat::init();
@@ -68,27 +77,15 @@ void hooks_deinit() {
 }
 
 void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags) {
-  PG_TRY();
-  { get_sender()->executor_before_start(query_desc, eflags); }
-  PG_CATCH();
-  {
-    ereport(WARNING,
-            (errmsg("EventSender failed in ya_ExecutorBeforeStart_hook")));
-  }
-  PG_END_TRY();
+  cpp_call(get_sender(), &EventSender::executor_before_start, query_desc,
+           eflags);
   if (previous_ExecutorStart_hook) {
     (*previous_ExecutorStart_hook)(query_desc, eflags);
   } else {
     standard_ExecutorStart(query_desc, eflags);
   }
-  PG_TRY();
-  { get_sender()->executor_after_start(query_desc, eflags); }
-  PG_CATCH();
-  {
-    ereport(WARNING,
-            (errmsg("EventSender failed in ya_ExecutorAfterStart_hook")));
-  }
-  PG_END_TRY();
+  cpp_call(get_sender(), &EventSender::executor_after_start, query_desc,
+           eflags);
 }
 
 void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
@@ -129,11 +126,7 @@ void ya_ExecutorFinish_hook(QueryDesc *query_desc) {
 }
 
 void ya_ExecutorEnd_hook(QueryDesc *query_desc) {
-  PG_TRY();
-  { get_sender()->executor_end(query_desc); }
-  PG_CATCH();
-  { ereport(WARNING, (errmsg("EventSender failed in ya_ExecutorEnd_hook"))); }
-  PG_END_TRY();
+  cpp_call(get_sender(), &EventSender::executor_end, query_desc);
   if (previous_ExecutorEnd_hook) {
     (*previous_ExecutorEnd_hook)(query_desc);
   } else {
@@ -142,14 +135,7 @@ void ya_ExecutorEnd_hook(QueryDesc *query_desc) {
 }
 
 void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {
-  PG_TRY();
-  { get_sender()->query_metrics_collect(status, arg); }
-  PG_CATCH();
-  {
-    ereport(WARNING,
-            (errmsg("EventSender failed in ya_query_info_collect_hook")));
-  }
-  PG_END_TRY();
+  cpp_call(get_sender(), &EventSender::query_metrics_collect, status, arg);
   if (previous_query_info_collect_hook) {
     (*previous_query_info_collect_hook)(status, arg);
   }
