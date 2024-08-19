@@ -1692,7 +1692,7 @@ get_collation_actual_version(char collprovider, const char *collcollate)
 		locale_t	loc;
 
 		/* Look up FreeBSD collation version. */
-		loc = NEWLOCALE(LC_COLLATE, collcollate, NULL);
+		loc = NEWLOCALE(LC_COLLATE_MASK, collcollate, NULL);
 		if (loc)
 		{
 			collversion =
