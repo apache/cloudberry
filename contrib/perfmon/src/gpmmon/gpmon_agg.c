@@ -504,12 +504,13 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 
 		/* skip all entries that weren't updated recently and aren't waiting in a queue */
 		/* Read status from query text as this is reliable */
+		/* Todo Why read status from query text instead of dp?*/
 		status = get_query_status(dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt);
 
 		apr_int32_t age = newagg->generation - dp->last_updated_generation - 1;
 		if (age > 0)
 		{
-			if (status == GPMON_QLOG_STATUS_DONE &&
+			if (status == GPMON_QLOG_STATUS_DONE && dp->qlog.tfin >= dp->qlog.tstart &&
 					((dp->qlog.tfin - dp->qlog.tstart) < min_query_time ))
 			{
 				TR2(("agg_dup: skip short query %d.%d.%d generation %d, current generation %d, recorded %d\n",
