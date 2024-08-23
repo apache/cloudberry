@@ -17,9 +17,11 @@
 #include "access/htup_details.h"
 #include "access/table.h"
 #include "access/genam.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/gp_matview_aux.h"
 #include "catalog/gp_matview_tables.h"
+#include "catalog/partition.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_type.h"
 #include "catalog/indexing.h"
@@ -103,6 +105,7 @@ GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 	 * outside CBDB, let them decide with aqumv_allow_foreign_table.
 	 */
 	if (relkind != RELKIND_RELATION &&
+		relkind != RELKIND_PARTITIONED_TABLE &&
 		relkind != RELKIND_FOREIGN_TABLE)
 		return NIL;
 
@@ -111,10 +114,8 @@ GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 
 	/*
 	 * inherit tables are not supported.
-	 * FIXME: left a door for partition table which will be supported soon.
 	 */
-	bool can_be_partition = (get_rel_relkind(rte->relid) == RELKIND_PARTITIONED_TABLE) ||
-								get_rel_relispartition(rte->relid);
+	bool can_be_partition = (relkind == RELKIND_PARTITIONED_TABLE) || get_rel_relispartition(rte->relid);
 
 	if (!can_be_partition &&
 		(has_superclass(rte->relid) || has_subclass(rte->relid)))
@@ -186,6 +187,8 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 
 	table_close(mvauxRel, RowExclusiveLock);
 
+	CommandCounterIncrement();
+
 	return;
 }
 
@@ -249,6 +252,8 @@ RemoveMatviewAuxEntry(Oid mvoid)
 
 	table_close(mvauxRel, RowExclusiveLock);
 
+	CommandCounterIncrement();
+
 	return;
 }
 
@@ -285,33 +290,57 @@ RemoveMatviewTablesEntries(Oid mvoid)
  * the underlying table's data is changed.
  */
 void
-SetRelativeMatviewAuxStatus(Oid relid, char status)
+SetRelativeMatviewAuxStatus(Oid relid, char status, char direction)
 {
 	Relation	mvauxRel;
 	Relation	mtRel;
 	HeapTuple	tup;
 	ScanKeyData key;
 	SysScanDesc desc;
+	List		*base_oids;
+	ListCell   *cell;
 
 	mvauxRel = table_open(GpMatviewAuxId, RowExclusiveLock);
 
 	/* Find all mvoids have relid */
 	mtRel = table_open(GpMatviewTablesId, AccessShareLock);
-	ScanKeyInit(&key,
-		Anum_gp_matview_tables_relid,
-		BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relid));
-	desc = systable_beginscan(mtRel,
-								  GpMatviewTablesRelIndexId,
-								  true,
-								  NULL, 1, &key);
-	while (HeapTupleIsValid(tup = systable_getnext(desc)))
+
+	/*
+	 * For partitioned table, transfer status to children.
+	 * For patition, transfer status to all ancestors.
+	 */
+	if (get_rel_relkind(relid) == RELKIND_PARTITIONED_TABLE &&
+		(MV_DATA_STATUS_TRANSFER_DIRECTION_ALL == direction ||
+		MV_DATA_STATUS_TRANSFER_DIRECTION_DOWN == direction))
+		base_oids = find_all_inheritors(relid, NoLock, NULL);
+	else
+		base_oids = list_make1_oid(relid);
+
+	if (get_rel_relispartition(relid) &&
+		(MV_DATA_STATUS_TRANSFER_DIRECTION_ALL == direction ||
+		MV_DATA_STATUS_TRANSFER_DIRECTION_UP == direction))
+		base_oids = list_concat(base_oids, get_partition_ancestors(relid));
+
+	foreach(cell, base_oids)
 	{
-		Form_gp_matview_tables mt = (Form_gp_matview_tables) GETSTRUCT(tup);
-		/* Update mv aux status. */
-		SetMatviewAuxStatus_guts(mt->mvoid, status);
+		Oid base_oid = lfirst_oid(cell);
+		ScanKeyInit(&key,
+			Anum_gp_matview_tables_relid,
+			BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(base_oid));
+		desc = systable_beginscan(mtRel,
+									  GpMatviewTablesRelIndexId,
+									  true,
+									  NULL, 1, &key);
+		while (HeapTupleIsValid(tup = systable_getnext(desc)))
+		{
+			Form_gp_matview_tables mt = (Form_gp_matview_tables) GETSTRUCT(tup);
+			/* Update mv aux status. */
+			SetMatviewAuxStatus_guts(mt->mvoid, status);
+		}
+
+		systable_endscan(desc);
 	}
 
-	systable_endscan(desc);
 	table_close(mtRel, AccessShareLock);
 	table_close(mvauxRel, RowExclusiveLock);
 }
@@ -435,6 +464,9 @@ SetMatviewAuxStatus_guts(Oid mvoid, char status)
 	CatalogTupleUpdate(mvauxRel, &newtuple->t_self, newtuple);
 	heap_freetuple(newtuple);
 	table_close(mvauxRel, NoLock);
+
+	/* For partitioned table, we may insert into same rel multiple times. */
+	CommandCounterIncrement();
 }
 
 /*

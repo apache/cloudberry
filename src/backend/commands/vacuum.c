@@ -2688,7 +2688,9 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		 * FIXME: for auto vacuum process on segments, it's in utility mode,
 		 * we can't handle it yet. But it's not a problem for SERVERLESS.
 		 */
-		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_UP_REORGANIZED);
+		SetRelativeMatviewAuxStatus(relid,
+									MV_DATA_STATUS_UP_REORGANIZED,
+									MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 	}
 
 	/* Roll back any GUC changes executed by index functions */

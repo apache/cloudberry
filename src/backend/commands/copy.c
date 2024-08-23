@@ -453,7 +453,9 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			 */
 			if (IS_QD_OR_SINGLENODE() && *processed > 0)
 			{
-				SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED_INSERT_ONLY);
+				SetRelativeMatviewAuxStatus(relid,
+											MV_DATA_STATUS_EXPIRED_INSERT_ONLY,
+											MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 			}
 		}
 		PG_CATCH();

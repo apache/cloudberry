@@ -54,13 +54,17 @@ DECLARE_INDEX(gp_matview_aux_datastatus_index, 7149, on gp_matview_aux using btr
 #define		MV_DATA_STATUS_EXPIRED					'e'	/* data is expired */
 #define		MV_DATA_STATUS_EXPIRED_INSERT_ONLY		'i'	/* expired but has only INSERT operation since latest REFRESH */
 
+#define		MV_DATA_STATUS_TRANSFER_DIRECTION_UP	'u'	/* set status recursivly up to the top. */
+#define		MV_DATA_STATUS_TRANSFER_DIRECTION_DOWN	'd'	/* set status recursivly down to the leaf. */
+#define		MV_DATA_STATUS_TRANSFER_DIRECTION_ALL	'a'	/* set status recursivly up and down */
+
 extern void InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata);
 
 extern void RemoveMatviewAuxEntry(Oid mvoid);
 
 extern List* GetViewBaseRelids(const Query *viewQuery, bool *has_foreign);
 
-extern void SetRelativeMatviewAuxStatus(Oid relid, char status);
+extern void SetRelativeMatviewAuxStatus(Oid relid, char status, char direction);
 
 extern void SetMatviewAuxStatus(Oid mvoid, char status);
 

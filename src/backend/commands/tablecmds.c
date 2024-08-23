@@ -1437,6 +1437,24 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	/* Store inheritance information for new rel. */
 	StoreCatalogInheritance(relationId, inheritOids, stmt->partbound != NULL);
 
+	if (IS_QD_OR_SINGLENODE() && stmt->partbound != NULL)
+	{
+		/*
+		 * Update parent relation's view status.
+		 * We just want to tranasfer status up to the top.
+		 */
+		Assert(list_length(inheritOids) == 1);
+		Oid parent = linitial_oid(inheritOids);
+		/*
+		 * FIXME: A new partition means data insertion for parent.
+		 * But DeltaScan can't handle it yet, so mark it as expired
+		 * to disable Append Agg for now.
+		 */
+		SetRelativeMatviewAuxStatus(parent,
+									MV_DATA_STATUS_EXPIRED,
+									MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+	}
+	
 	/*
 	 * Process the partitioning specification (if any) and store the partition
 	 * key information into the catalog.
@@ -2572,7 +2590,9 @@ ExecuteTruncateGuts(List *explicit_rels,
 
 			/* update view info */
 			if (IS_QD_OR_SINGLENODE())
-				SetRelativeMatviewAuxStatus(RelationGetRelid(rel), MV_DATA_STATUS_EXPIRED);
+				SetRelativeMatviewAuxStatus(RelationGetRelid(rel),
+											MV_DATA_STATUS_EXPIRED,
+											MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 
 			heap_relid = RelationGetRelid(rel);
 
@@ -21411,6 +21431,20 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd,
 
 	/* OK to create inheritance.  Rest of the checks performed there */
 	CreateInheritance(attachrel, rel);
+	/*
+	 * Update status of parent relative views.
+	 * FIXME: Attach a partition means insert data into parent.
+	 * But DeltaScan can't handle it yet, so mark it as expired
+	 * to disable Append Agg for now.
+	 */
+	if (IS_QD_OR_SINGLENODE())
+	{
+		/* to see its parent */
+		CommandCounterIncrement();
+		SetRelativeMatviewAuxStatus(RelationGetRelid(rel),
+									MV_DATA_STATUS_EXPIRED,
+									MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+	}
 
 	/* Update the pg_class entry. */
 	StorePartitionBound(attachrel, rel, cmd->bound);
@@ -21939,7 +21973,19 @@ ATExecDetachPartition(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * non-concurrent mode) or just set the inhdetachpending flag.
 	 */
 	if (!concurrent)
+	{
+		/*
+		 * Update status of parent relative views.
+		 * We must do this before RemoveInheritance.
+		 * Detach a partition means delete data from parent.
+		 */
+		if (IS_QD_OR_SINGLENODE())
+			SetRelativeMatviewAuxStatus(RelationGetRelid(rel),
+										MV_DATA_STATUS_EXPIRED,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+
 		RemoveInheritance(partRel, rel, false);
+	}
 	else
 		MarkInheritDetached(partRel, rel);
 
@@ -22075,6 +22121,16 @@ DetachPartitionFinalize(Relation rel, Relation partRel, bool concurrent,
 
 	if (concurrent)
 	{
+		/*
+		 * Update status of parent relative views.
+		 * We must do this before RemoveInheritance.
+		 * Detach a partition means delete data from parent.
+		 */
+		if (IS_QD_OR_SINGLENODE())
+			SetRelativeMatviewAuxStatus(RelationGetRelid(rel),
+										MV_DATA_STATUS_EXPIRED,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+
 		/*
 		 * We can remove the pg_inherits row now. (In the non-concurrent case,
 		 * this was already done).

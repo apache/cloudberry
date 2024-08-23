@@ -1065,9 +1065,13 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 			List		*rtable = queryDesc->plannedstmt->rtable;
 			int			length = list_length(rtable);
 			ListCell	*lc;
-			foreach(lc, queryDesc->plannedstmt->resultRelations)
+			List		*unique_result_relations = list_concat_unique_int(NIL, queryDesc->plannedstmt->resultRelations);
+
+			foreach(lc, unique_result_relations)
 			{
+
 				int varno = lfirst_int(lc);
+				RangeTblEntry *rte = rt_fetch(varno, rtable);
 
 				/* Avoid crash in case we don't find a rte. */
 				if (varno > length + 1)
@@ -1075,24 +1079,26 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 					ereport(WARNING, (errmsg("could not find rte of varno: %u ", varno)));
 					continue;
 				}
-
-				RangeTblEntry *rte = rt_fetch(varno, rtable);
+					
 				switch (operation)
 				{
 					case CMD_INSERT:
-						SetRelativeMatviewAuxStatus(rte->relid, MV_DATA_STATUS_EXPIRED_INSERT_ONLY);
+						SetRelativeMatviewAuxStatus(rte->relid,
+													MV_DATA_STATUS_EXPIRED_INSERT_ONLY,
+													MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 						break;
 					case CMD_UPDATE:
 					case CMD_DELETE:
-						SetRelativeMatviewAuxStatus(rte->relid, MV_DATA_STATUS_EXPIRED);
+						SetRelativeMatviewAuxStatus(rte->relid,
+													MV_DATA_STATUS_EXPIRED,
+													MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 						break;
 					default:
-					{
 						/* If there were writable CTE, just mark it as expired. */
 						if (queryDesc->plannedstmt->hasModifyingCTE)
-							SetRelativeMatviewAuxStatus(rte->relid, MV_DATA_STATUS_EXPIRED);
+							SetRelativeMatviewAuxStatus(rte->relid, MV_DATA_STATUS_EXPIRED,
+														MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 						break;
-					}
 				}
 			}
 		}

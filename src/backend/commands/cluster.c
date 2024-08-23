@@ -232,7 +232,9 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 			 * to distint the pages instead, since latest relative materialized
 			 * view REFRESH.
 			 */
-			SetRelativeMatviewAuxStatus(tableOid, MV_DATA_STATUS_UP_REORGANIZED);
+			SetRelativeMatviewAuxStatus(tableOid,
+										MV_DATA_STATUS_UP_REORGANIZED,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 
 		}
 	}
@@ -302,7 +304,9 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 			}
 			/* See comments above. */
 			if (IS_QD_OR_SINGLENODE())
-				SetRelativeMatviewAuxStatus(rvtc->tableOid, MV_DATA_STATUS_UP_REORGANIZED);
+				SetRelativeMatviewAuxStatus(rvtc->tableOid,
+											MV_DATA_STATUS_UP_REORGANIZED,
+											MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 
 			PopActiveSnapshot();
 			CommitTransactionCommand();

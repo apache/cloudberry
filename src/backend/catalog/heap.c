@@ -2424,6 +2424,14 @@ heap_drop_with_catalog(Oid relid)
 		LockRelationOid(parentOid, AccessExclusiveLock);
 
 		/*
+		 * Now we could update view status of parent.
+		 * Drop a partiton means delete data from parent.
+		 */
+		SetRelativeMatviewAuxStatus(parentOid,
+									MV_DATA_STATUS_EXPIRED,
+									MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+
+		/*
 		 * If this is not the default partition, dropping it will change the
 		 * default partition's partition constraint, so we must lock it.
 		 */
@@ -3992,7 +4000,9 @@ heap_truncate_one_rel(Relation rel)
 
 	/* update view info */
 	if (IS_QD_OR_SINGLENODE())
-		SetRelativeMatviewAuxStatus(RelationGetRelid(rel), MV_DATA_STATUS_EXPIRED);
+		SetRelativeMatviewAuxStatus(RelationGetRelid(rel),
+									MV_DATA_STATUS_EXPIRED,
+									MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 
 	/* If there is a toast table, truncate that too */
 	toastrelid = rel->rd_rel->reltoastrelid;

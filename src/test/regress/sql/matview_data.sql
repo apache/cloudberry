@@ -158,6 +158,98 @@ with mod1 as (insert into t_cte_issue_582 values(1, 1) returning *) select * fro
 select mvname, datastatus from gp_matview_aux where mvname = 'mv_t_cte_issue_582';
 abort;
 
+-- test partitioned tables
+create table par(a int, b int, c int) partition by range(b)
+    subpartition by range(c) subpartition template (start (1) end (3) every (1))
+    (start(1) end(3) every(1));
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+create materialized view mv_par as select * from par;
+create materialized view mv_par1 as select * from  par_1_prt_1;
+create materialized view mv_par1_1 as select * from par_1_prt_1_2_prt_1;
+create materialized view mv_par1_2 as select * from par_1_prt_1_2_prt_2;
+create materialized view mv_par2 as select * from  par_1_prt_2;
+create materialized view mv_par2_2 as select * from  par_1_prt_2_2_prt_1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+insert into par_1_prt_1 values (1, 1, 1);
+-- mv_par1* shoud be updated
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+insert into par values (1, 2, 2);
+-- mv_par* should be updated
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+
+refresh materialized view mv_par;
+refresh materialized view mv_par1;
+refresh materialized view mv_par1_1;
+refresh materialized view mv_par1_2;
+refresh materialized view mv_par2;
+refresh materialized view mv_par2_2;
+begin;
+insert into par_1_prt_2_2_prt_1 values (1, 2, 1);
+-- mv_par1* should not be updated
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+truncate par_1_prt_2;
+-- mv_par1* should not be updated
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+truncate par_1_prt_2;
+-- mv_par1* should not be updated
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+
+refresh materialized view mv_par;
+refresh materialized view mv_par1;
+refresh materialized view mv_par1_1;
+refresh materialized view mv_par1_2;
+refresh materialized view mv_par2;
+refresh materialized view mv_par2_2;
+vacuum full par_1_prt_1_2_prt_1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+
+refresh materialized view mv_par;
+refresh materialized view mv_par1;
+refresh materialized view mv_par1_1;
+refresh materialized view mv_par1_2;
+refresh materialized view mv_par2;
+refresh materialized view mv_par2_2;
+vacuum full par;
+-- all should be updated.
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+
+refresh materialized view mv_par;
+refresh materialized view mv_par1;
+refresh materialized view mv_par1_1;
+refresh materialized view mv_par1_2;
+refresh materialized view mv_par2;
+refresh materialized view mv_par2_2;
+begin;
+create table par_1_prt_1_2_prt_3  partition of par_1_prt_1 for values from  (3) to (4);
+-- update status when partition of
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+drop table par_1_prt_1 cascade;
+-- update status when drop table 
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+alter table par_1_prt_1 detach partition par_1_prt_1_2_prt_1;
+-- update status when detach
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+create table new_par(a int, b int, c int);
+-- update status when attach
+alter table par_1_prt_1 attach partition new_par for values from (4) to (5);
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+--start_ignore
 drop schema matview_data_schema cascade;
+--end_ignore
 reset enable_answer_query_using_materialized_views;
 reset optimizer;
