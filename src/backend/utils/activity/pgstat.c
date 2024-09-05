@@ -1791,6 +1791,12 @@ pgstat_read_statsfile(void)
 					}
 
 					info = pgstat_get_kind_info(kind);
+					if (!info)
+					{
+						elog(WARNING, "could not find information of kind %u for entry of type %c",
+							 kind, t);
+						goto error;
+					}
 
 					if (!info->fixed_amount)
 					{
@@ -1871,6 +1877,12 @@ pgstat_read_statsfile(void)
 						}
 
 						kind_info = pgstat_get_kind_info(kind);
+						if (!kind_info)
+						{
+							elog(WARNING, "could not find information of kind %u for entry of type %c",
+								 kind, t);
+							goto error;
+						}
 
 						if (!kind_info->from_serialized_name)
 						{
