@@ -94,7 +94,11 @@ create table public.queries_history (
        query_plan text not null default '', -- query plan (not implemented)
        application_name varchar(64), -- from 4.2 onwards
        rsqname varchar(64),          -- from 4.2 onwards
-       rqppriority varchar(16)       -- from 4.2 onwards
+       rqppriority varchar(16),    -- from 4.2 onwards
+       mem_peak  bigint not null,  -- memory peak for all processes executing query
+       spill_file_size bigint not null,   -- query spill files size
+       disk_read  bigint not null,  -- disk read for all processes executing query
+       disk_write bigint not null   -- disk write for all processes executing query
 )
 with (fillfactor=100)
 distributed by (ctime)

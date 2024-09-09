@@ -8,6 +8,7 @@
 #include "apr_strings.h"
 #include "apr_file_io.h"
 #include "time.h"
+#include "gpmon_agg.h"
 
 int gpdb_exec_search_for_at_least_one_row(const char*, PGconn*);
 apr_status_t empty_harvest_file(const char*, apr_pool_t*, PGconn*);
@@ -233,7 +234,7 @@ Oid gpdb_gpperfmon_dbid(void)
 		rowcount = PQntuples(result);
 		if (rowcount > 0)
 		{
-			dbid = DatumGetObjectId(CStringGetDatum(PQgetvalue(result, 0, 0)));
+                        sscanf(PQgetvalue(result, 0, 0), "%u", &dbid);
 		}
 	}
 	PQclear(result);
@@ -715,6 +716,48 @@ void gpdb_get_single_string_from_query(const char* QUERY, char** resultstring, a
 	PQfinish(conn);
 
 	*resultstring = tmpoutput;
+}
+
+void gpdb_get_spill_file_size_from_query(qdnode_t *qdnode)
+{
+        char query[100];
+        snprintf(query, sizeof(query), "select sum(size) from gp_toolkit.gp_workfile_usage_per_query where sess_id=%d And command_cnt=%d;",
+                 qdnode->qlog.key.ssid,qdnode->qlog.key.ccnt);
+
+        PGconn* conn = 0;
+        PGresult* result = 0;
+        char* tmpoutput = 0;
+        int rowcount;
+        const char* errmsg = gpdb_exec(&conn, &result, query);
+        if (errmsg)
+        {
+            gpmon_warning(FLINE, "GPDB error %s\n\tquery: %s\n", errmsg, query);
+        }
+        else
+        {
+            rowcount = PQntuples(result);
+            if (rowcount == 1)
+            {
+                tmpoutput = PQgetvalue(result, 0, 0);
+            }
+            else if (rowcount > 1)
+            {
+                gpmon_warning(FLINE, "unexpected number of rows returned from query %s", query);
+            }
+        }
+
+        PQclear(result);
+        PQfinish(conn);
+
+        if (tmpoutput)
+        {
+                uint64_t temp_result;
+                sscanf(tmpoutput, "%lu", &temp_result);
+                if (temp_result > 0)
+                {
+                        qdnode->qlog.p_metrics.spill_files_size = temp_result;
+                }
+        }
 }
 
 

@@ -1,5 +1,5 @@
 NAME = perfmon
-EXTVERSION = 1.0.0
+EXTVERSION = 1.1.0
 
 REGRESS = pre_run_check guc_config query extension_test post_run
 
@@ -43,5 +43,5 @@ install:  installdirs
 	$(INSTALL_SCRIPT) gpperfmoncat.sh '$(DESTDIR)$(bindir)'
 	$(INSTALL_SCRIPT) gpmon_catqrynow.py '$(DESTDIR)$(bindir)/../sbin/'
 	$(INSTALL_SCRIPT) gpperfmon.conf '$(DESTDIR)$(datadir)'
-	$(INSTALL_SCRIPT) $(NAME)--$(EXTVERSION).sql '$(DESTDIR)$(datadir)/extension/'
+	$(INSTALL_SCRIPT) $(wildcard $(NAME)*--*.sql) '$(DESTDIR)$(datadir)/extension/'
 	$(INSTALL_SCRIPT) $(NAME).control '$(DESTDIR)$(datadir)/extension/'

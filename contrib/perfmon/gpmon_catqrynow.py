@@ -48,10 +48,10 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
     # escape all " with ""
     if qrytxt:
         qrytxt = '""'.join(qrytxt.split('"'))
-        line[-5] = '"' + qrytxt + '"'
+        line[-9] = '"' + qrytxt + '"'
         plan = '""'.join(plan.split('"'))
-        line[-4] = '"' + plan + '"'
-        line[-3] = '"' + appname + '"'
-        line[-2] = '"' + rsqname + '"'
-        line[-1] = '"' + priority + '"'
+        line[-8] = '"' + plan + '"'
+        line[-7] = '"' + appname + '"'
+        line[-6] = '"' + rsqname + '"'
+        line[-5] = '"' + priority + '"'
     print('|'.join(line).strip())

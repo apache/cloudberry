@@ -50,15 +50,6 @@ typedef struct mmon_query_seginfo_t
 	apr_uint64_t				sum_measures_rows_out;
 } mmon_query_seginfo_t;  //The agg value at segment level for query
 
-typedef struct qdnode_t {
-	apr_int64_t last_updated_generation;
-	int recorded;
-	int num_metrics_packets;
-	gpmon_qlog_t qlog;
-	apr_hash_t* qexec_hash;
-	apr_hash_t*	query_seginfo_hash;
-} qdnode_t;
-
 struct agg_t
 {
 	apr_int64_t generation;
@@ -83,6 +74,7 @@ extern apr_queue_t* message_queue;
 extern void incremement_tail_bytes(apr_uint64_t bytes);
 static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
 			apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool);
+void gpdb_get_spill_file_size_from_query(qdnode_t *qdnode);
 
 /**
  * Disk space check helper function
@@ -294,43 +286,46 @@ static apr_status_t agg_put_metrics(agg_t* agg, const gpmon_metrics_t* met)
 	return 0;
 }
 
-static apr_status_t agg_put_segment(agg_t* agg, const gpmon_seginfo_t* seg)
-{
-	gpmon_seginfo_t* rec;
+// static apr_status_t agg_put_segment(agg_t* agg, const gpmon_seginfo_t* seg)
+// {
+// 	gpmon_seginfo_t* rec;
 
-	rec = apr_hash_get(agg->stab, &seg->dbid, sizeof(seg->dbid));
-	if (rec)
-	{
-		*rec = *seg;
-	}
-	else
-	{
-		rec = apr_palloc(agg->pool, sizeof(*rec));
-		if (!rec)
-		{
-			return APR_ENOMEM;
-		}
-		*rec = *seg;
-		apr_hash_set(agg->stab, &rec->dbid, sizeof(rec->dbid), rec);
-	}
-	return 0;
-}
+// 	rec = apr_hash_get(agg->stab, &seg->dbid, sizeof(seg->dbid));
+// 	if (rec)
+// 	{
+// 		*rec = *seg;
+// 	}
+// 	else
+// 	{
+// 		rec = apr_palloc(agg->pool, sizeof(*rec));
+// 		if (!rec)
+// 		{
+// 			return APR_ENOMEM;
+// 		}
+// 		*rec = *seg;
+// 		apr_hash_set(agg->stab, &rec->dbid, sizeof(rec->dbid), rec);
+// 	}
+// 	return 0;
+// }
 
 static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation)
 {
 	qdnode_t* node;
 
 	node = apr_hash_get(agg->qtab, &qlog->key, sizeof(qlog->key));
-	if (!node) {
-		gpmon_qlogkey_t new_key = qlog->key;
-		new_key.ccnt = 0;
-		node = apr_hash_get(agg->qtab, &new_key, sizeof(new_key));
-	}
+        if (!node) {
+                gpmon_warning(FLINE, "put query metrics can not find qdnode from qtab, queryID :%d-%d-%d", qlog->key.tmid,qlog->key.ssid,qlog->key.ccnt);
+        }
 	if (node)
 	{
 		// here update the stats for the query
 		node->qlog.cpu_elapsed += qlog->cpu_elapsed;
 		node->qlog.p_metrics.cpu_pct += qlog->p_metrics.cpu_pct;
+		node->qlog.p_metrics.fd_cnt  += qlog->p_metrics.fd_cnt;
+		if (qlog->p_metrics.mem.size > node->qlog.p_metrics.mem.size)
+		{
+                        node->qlog.p_metrics.mem.size = qlog->p_metrics.mem.size;
+		};
 		node->last_updated_generation = generation;
 		node->num_metrics_packets++;
 		TR2(("Query Metrics: (host %s ssid %d ccnt %d) (cpuelapsed %d cpupct %f) / %d\n",
@@ -343,12 +338,18 @@ static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, 
 static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 				 apr_int64_t generation)
 {
-	qdnode_t* node;
+        if (qlog->dbid == gpperfmon_dbid) {
+                TR2(("agg_put_qlog:(%d.%d.%d) ignore gpperfmon sql\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt));
+                return 0;
+        }
 
+        qdnode_t* node;
 	node = apr_hash_get(agg->qtab, &qlog->key, sizeof(qlog->key));
 	if (node) {
-		//node->qlog = *qlog;
-		merge_qlog(&node->qlog, qlog);
+		node->qlog.status = qlog->status;
+		node->qlog.tstart = qlog->tstart;
+		node->qlog.tsubmit = qlog->tsubmit;
+		node->qlog.tfin = qlog->tfin;
 		if (qlog->dbid != gpperfmon_dbid) {
 			TR2(("agg_put_qlog: found %d.%d.%d generation %d recorded %d\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, (int) generation, node->recorded));
 		}
@@ -360,7 +361,10 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 		node->qlog = *qlog;
 		node->recorded = 0;
 		node->qlog.cpu_elapsed = 0;
-		node->qlog.p_metrics.cpu_pct = 0.0;
+		node->qlog.p_metrics.cpu_pct = 0.0f;
+		node->qlog.p_metrics.fd_cnt = 0;
+		node->qlog.p_metrics.cpu_skew = 0.0f;
+		node->qlog.p_metrics.mem.size = 0;
 		node->num_metrics_packets = 0;
 
 		node->qexec_hash = apr_hash_make(agg->pool);
@@ -386,48 +390,48 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 }
 
 
-static apr_status_t agg_put_qexec(agg_t* agg, const qexec_packet_t* qexec_packet, apr_int64_t generation)
-{
-	qdnode_t* dp;
-	gpmon_qlogkey_t key;
-	mmon_qexec_t* mmon_qexec_existing = 0;
+// static apr_status_t agg_put_qexec(agg_t* agg, const qexec_packet_t* qexec_packet, apr_int64_t generation)
+// {
+// 	qdnode_t* dp;
+// 	gpmon_qlogkey_t key;
+// 	mmon_qexec_t* mmon_qexec_existing = 0;
 
-	/* find qdnode of this qexec */
-	key.tmid = qexec_packet->data.key.tmid;
-	key.ssid = qexec_packet->data.key.ssid;
-	key.ccnt = qexec_packet->data.key.ccnt;
-	dp = apr_hash_get(agg->qtab, &key, sizeof(key));
+// 	/* find qdnode of this qexec */
+// 	key.tmid = qexec_packet->data.key.tmid;
+// 	key.ssid = qexec_packet->data.key.ssid;
+// 	key.ccnt = qexec_packet->data.key.ccnt;
+// 	dp = apr_hash_get(agg->qtab, &key, sizeof(key));
 
-	if (!dp) { /* not found, internal SPI query.  Ignore. */
-		return 0;
-	}
+// 	if (!dp) { /* not found, internal SPI query.  Ignore. */
+// 		return 0;
+// 	}
 
-	mmon_qexec_existing = apr_hash_get(dp->qexec_hash, &qexec_packet->data.key.hash_key, sizeof(qexec_packet->data.key.hash_key));
+// 	mmon_qexec_existing = apr_hash_get(dp->qexec_hash, &qexec_packet->data.key.hash_key, sizeof(qexec_packet->data.key.hash_key));
 
-	/* if found, replace it */
-	if (mmon_qexec_existing) {
-		mmon_qexec_existing->key.ccnt = qexec_packet->data.key.ccnt;
-		mmon_qexec_existing->key.ssid = qexec_packet->data.key.ssid;
-		mmon_qexec_existing->key.tmid = qexec_packet->data.key.tmid;
-		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
-		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
-		mmon_qexec_existing->rowsout = qexec_packet->data.rowsout;
-	}
-	else {
-		/* not found, make new hash entry */
-		if (! (mmon_qexec_existing = apr_palloc(agg->pool, sizeof(mmon_qexec_t))))
-			return APR_ENOMEM;		
+// 	/* if found, replace it */
+// 	if (mmon_qexec_existing) {
+// 		mmon_qexec_existing->key.ccnt = qexec_packet->data.key.ccnt;
+// 		mmon_qexec_existing->key.ssid = qexec_packet->data.key.ssid;
+// 		mmon_qexec_existing->key.tmid = qexec_packet->data.key.tmid;
+// 		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
+// 		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
+// 		mmon_qexec_existing->rowsout = qexec_packet->data.rowsout;
+// 	}
+// 	else {
+// 		/* not found, make new hash entry */
+// 		if (! (mmon_qexec_existing = apr_palloc(agg->pool, sizeof(mmon_qexec_t))))
+// 			return APR_ENOMEM;		
 
-		memcpy(&mmon_qexec_existing->key, &qexec_packet->data.key, sizeof(gpmon_qexeckey_t));
-		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
-		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
-		mmon_qexec_existing->rowsout = qexec_packet->data.rowsout;
-		apr_hash_set(dp->qexec_hash, &mmon_qexec_existing->key.hash_key, sizeof(mmon_qexec_existing->key.hash_key), mmon_qexec_existing);
-	}
+// 		memcpy(&mmon_qexec_existing->key, &qexec_packet->data.key, sizeof(gpmon_qexeckey_t));
+// 		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
+// 		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
+// 		mmon_qexec_existing->rowsout = qexec_packet->data.rowsout;
+// 		apr_hash_set(dp->qexec_hash, &mmon_qexec_existing->key.hash_key, sizeof(mmon_qexec_existing->key.hash_key), mmon_qexec_existing);
+// 	}
 
-	dp->last_updated_generation = generation;
-	return 0;
-}
+// 	dp->last_updated_generation = generation;
+// 	return 0;
+// }
 
 
 apr_status_t agg_create(agg_t** retagg, apr_int64_t generation, apr_pool_t* parent_pool, apr_hash_t* fsinfotab)
@@ -510,8 +514,7 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		apr_int32_t age = newagg->generation - dp->last_updated_generation - 1;
 		if (age > 0)
 		{
-			if (status == GPMON_QLOG_STATUS_DONE && dp->qlog.tfin >= dp->qlog.tstart &&
-					((dp->qlog.tfin - dp->qlog.tstart) < min_query_time ))
+			if (status == GPMON_QLOG_STATUS_DONE  && dp->qlog.tfin > 0 && ((dp->qlog.tfin - dp->qlog.tstart) < min_query_time ))
 			{
 				TR2(("agg_dup: skip short query %d.%d.%d generation %d, current generation %d, recorded %d\n",
 							dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt,
@@ -533,6 +536,10 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 				continue;
 			}
 		}
+                else if (dp->qlog.status == GPMON_QLOG_STATUS_DONE && status == GPMON_QLOG_STATUS_INVALID)
+                {
+                        continue;
+                }
 
 		/* check if we missed a status change */
 		if (dp->qlog.status != status)
@@ -550,28 +557,28 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 
 		*newdp = *dp;
 
-		newdp->qexec_hash = apr_hash_make(newagg->pool);
-		if (!newdp->qexec_hash) {
-			agg_destroy(newagg);
-			return APR_ENOMEM;
-		}
+		// newdp->qexec_hash = apr_hash_make(newagg->pool);
+		// if (!newdp->qexec_hash) {
+		// 	agg_destroy(newagg);
+		// 	return APR_ENOMEM;
+		// }
 
-		cnt = 0;
-		// Copy the qexec hash table
-		for (hj = apr_hash_first(newagg->pool, dp->qexec_hash); hj; hj = apr_hash_next(hj)) {
-			mmon_qexec_t* new_qexec;
-			apr_hash_this(hj, 0, 0, &vptr);
+		// cnt = 0;
+		// // Copy the qexec hash table
+		// for (hj = apr_hash_first(newagg->pool, dp->qexec_hash); hj; hj = apr_hash_next(hj)) {
+		// 	mmon_qexec_t* new_qexec;
+		// 	apr_hash_this(hj, 0, 0, &vptr);
 
-			//allocate the packet
-			if (!(new_qexec = apr_pcalloc(newagg->pool, sizeof(mmon_qexec_t)))) {
-				agg_destroy(newagg);
-				return APR_ENOMEM;
-			}
-			*new_qexec = *((mmon_qexec_t*)vptr);
+		// 	//allocate the packet
+		// 	if (!(new_qexec = apr_pcalloc(newagg->pool, sizeof(mmon_qexec_t)))) {
+		// 		agg_destroy(newagg);
+		// 		return APR_ENOMEM;
+		// 	}
+		// 	*new_qexec = *((mmon_qexec_t*)vptr);
 
-			apr_hash_set(newdp->qexec_hash, &(new_qexec->key.hash_key), sizeof(new_qexec->key.hash_key), new_qexec);
-			TR2( ("\t    %d: (%d, %d)\n", ++cnt, new_qexec->key.hash_key.segid, new_qexec->key.hash_key.nid));
-		}
+		// 	apr_hash_set(newdp->qexec_hash, &(new_qexec->key.hash_key), sizeof(new_qexec->key.hash_key), new_qexec);
+		// 	TR2( ("\t    %d: (%d, %d)\n", ++cnt, new_qexec->key.hash_key.segid, new_qexec->key.hash_key.nid));
+		// }
 
 		newdp->query_seginfo_hash = apr_hash_make(newagg->pool);
 		if (!newdp->query_seginfo_hash) {
@@ -595,11 +602,6 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 			TR2( ("\t    %d: (%d)\n", ++cnt, new_query_seginfo->key.segid));
 		}
 
-		// reset metrics that are accumulated each quantum
-		newdp->qlog.cpu_elapsed = 0;
-		newdp->qlog.p_metrics.cpu_pct = 0.0;
-		newdp->num_metrics_packets = 0;
-
 		apr_hash_set(newagg->qtab, &newdp->qlog.key, sizeof(newdp->qlog.key), newdp);
 	}
 
@@ -618,10 +620,13 @@ apr_status_t agg_put(agg_t* agg, const gp_smon_to_mmon_packet_t* pkt)
 		return agg_put_metrics(agg, &pkt->u.metrics);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QLOG)
 		return agg_put_qlog(agg, &pkt->u.qlog, agg->generation);
+	/*
+	hashdata-lightning not use
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QEXEC)
 		return agg_put_qexec(agg, &pkt->u.qexec_packet, agg->generation);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_SEGINFO)
 		return agg_put_segment(agg, &pkt->u.seginfo);
+	*/
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QUERY_HOST_METRICS)
 		return agg_put_query_metrics(agg, &pkt->u.qlog, agg->generation);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_FSINFO)
@@ -647,7 +652,7 @@ static apr_uint32_t write_system(agg_t* agg, const char* nowstr);
 static apr_uint32_t write_segmentinfo(agg_t* agg, char* nowstr);
 static apr_uint32_t write_dbmetrics(dbmetrics_t* dbmetrics, char* nowstr);
 static apr_uint32_t write_qlog(FILE* fp, qdnode_t *qdnode, const char* nowstr, apr_uint32_t done);
-static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nowstr);
+static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nowstr, apr_pool_t* pool);
 
 apr_status_t agg_dump(agg_t* agg)
 {
@@ -719,7 +724,7 @@ apr_status_t agg_dump(agg_t* agg)
 				TR1(("queries_tail: %p add query %d.%d.%d, status %d, generation %d, recorded %d\n",
 					 agg->qtab, qdnode->qlog.key.tmid, qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt, qdnode->qlog.status, (int) qdnode->last_updated_generation, qdnode->recorded));
 
-				temp_bytes_written += write_qlog_full(fp_queries_tail, qdnode, nowstr);
+				temp_bytes_written += write_qlog_full(fp_queries_tail, qdnode, nowstr, agg->pool);
 				incremement_tail_bytes(temp_bytes_written);
 
 				qdnode->recorded = 1;
@@ -1088,27 +1093,27 @@ static apr_uint32_t write_system(agg_t* agg, const char* nowstr)
 	return bytes_written;
 }
 
-static apr_int64_t get_rowsout(qdnode_t* qdnode)
-{
+// static apr_int64_t get_rowsout(qdnode_t* qdnode)
+// {
 
-	apr_hash_index_t *hi;
-	//qenode_t* pqe = NULL;
-	apr_int64_t rowsout = 0;
-	void* valptr;
-	mmon_query_seginfo_t *query_seginfo;
+// 	apr_hash_index_t *hi;
+// 	//qenode_t* pqe = NULL;
+// 	apr_int64_t rowsout = 0;
+// 	void* valptr;
+// 	mmon_query_seginfo_t *query_seginfo;
 
-	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
-	{
-		apr_hash_this(hi, 0, 0, &valptr);
-		query_seginfo = (mmon_query_seginfo_t*) valptr;
-		if (query_seginfo->final_rowsout != -1)
-		{
-			rowsout = query_seginfo->final_rowsout;
-			break;
-		}
-	}
-	return rowsout;
-}
+// 	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
+// 	{
+// 		apr_hash_this(hi, 0, 0, &valptr);
+// 		query_seginfo = (mmon_query_seginfo_t*) valptr;
+// 		if (query_seginfo->final_rowsout != -1)
+// 		{
+// 			rowsout = query_seginfo->final_rowsout;
+// 			break;
+// 		}
+// 	}
+// 	return rowsout;
+// }
 
 
 static void _get_sum_seg_info(apr_hash_t* segtab, apr_int64_t* total_data_out, int* segcount_out)
@@ -1227,87 +1232,87 @@ static double get_cpu_skew(qdnode_t* qdnode)
 	return coefficient_of_variation;
 }
 
-static double get_row_skew(qdnode_t* qdnode)
-{
-	apr_pool_t* tmp_pool;
-	apr_hash_t* segtab;
-	apr_hash_index_t *hi;
-
-	apr_int64_t total_row_out = 0;
-	apr_int64_t total_deviation_squared = 0;
-	double variance = 0.0f;
-	double standard_deviation = 0;
-	double coefficient_of_variation = 0;
-	apr_int64_t row_out_avg = 0;
-	apr_int64_t* seg_row_out_sum = NULL;
-	void* valptr;
-
-	int segcnt = 0;
-	int e;
-
-	if (!qdnode)
-		return 0.0f;
-
-	if (0 != (e = apr_pool_create_alloc(&tmp_pool, 0)))
-	{
-		gpmon_warningx(FLINE, e, "apr_pool_create_alloc failed");
-		return 0.0f;
-	}
-
-	segtab = apr_hash_make(tmp_pool);
-	if (!segtab)
-	{
-		gpmon_warning(FLINE, "Out of memory");
-		return 0.0f;
-	}
-
-	/* Calc rows in sum per segment */
-	TR2(("Calc rows in sum  per segment\n"));
-	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
-	{
-		mmon_query_seginfo_t	*rec;
-		apr_hash_this(hi, 0, 0, &valptr);
-		rec = (mmon_query_seginfo_t*) valptr;
-
-		if (rec->key.segid == -1)
-			continue;
-
-		seg_row_out_sum = apr_hash_get(segtab, &rec->key.segid, sizeof(rec->key.segid));
-
-		if (!seg_row_out_sum) {
-			seg_row_out_sum = apr_palloc(tmp_pool, sizeof(apr_int64_t));
-			*seg_row_out_sum = 0;
-		}
-		*seg_row_out_sum += rec->sum_measures_rows_out;
-		apr_hash_set(segtab, &rec->key.segid, sizeof(rec->key.segid), seg_row_out_sum);
-	}
-
-	_get_sum_seg_info(segtab, &total_row_out, &segcnt);
-
-	if (!segcnt) {
-		TR2(("No segments for Rows skew calculation\n"));
-		apr_pool_destroy(tmp_pool);
-		return 0.0f;
-	}
-
-	row_out_avg = total_row_out / segcnt;
-
-	TR2(("(SKEW) Avg rows out: %" FMT64 "\n", row_out_avg));
-
-	_get_sum_deviation_squared(segtab, row_out_avg, &total_deviation_squared);
-
-	variance = total_deviation_squared / (double)segcnt;
-	standard_deviation = sqrt(variance);
-
-	TR2(("(SKEW) Rows in standard deviaton: %f\n", standard_deviation));
-
-	coefficient_of_variation = row_out_avg ? standard_deviation/(double)row_out_avg : 0.0f;
-
-	apr_pool_destroy(tmp_pool);
-	TR2(("(SKEW) Rows out skew: %f\n", coefficient_of_variation));
-
-	return coefficient_of_variation;
-}
+// static double get_row_skew(qdnode_t* qdnode)
+// {
+// 	apr_pool_t* tmp_pool;
+// 	apr_hash_t* segtab;
+// 	apr_hash_index_t *hi;
+//
+// 	apr_int64_t total_row_out = 0;
+// 	apr_int64_t total_deviation_squared = 0;
+// 	double variance = 0.0f;
+// 	double standard_deviation = 0;
+// 	double coefficient_of_variation = 0;
+// 	apr_int64_t row_out_avg = 0;
+// 	apr_int64_t* seg_row_out_sum = NULL;
+// 	void* valptr;
+//
+// 	int segcnt = 0;
+// 	int e;
+//
+// 	if (!qdnode)
+// 		return 0.0f;
+//
+// 	if (0 != (e = apr_pool_create_alloc(&tmp_pool, 0)))
+// 	{
+// 		gpmon_warningx(FLINE, e, "apr_pool_create_alloc failed");
+// 		return 0.0f;
+// 	}
+//
+// 	segtab = apr_hash_make(tmp_pool);
+// 	if (!segtab)
+// 	{
+// 		gpmon_warning(FLINE, "Out of memory");
+// 		return 0.0f;
+// 	}
+//
+// 	/* Calc rows in sum per segment */
+// 	TR2(("Calc rows in sum  per segment\n"));
+// 	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
+// 	{
+// 		mmon_query_seginfo_t	*rec;
+// 		apr_hash_this(hi, 0, 0, &valptr);
+// 		rec = (mmon_query_seginfo_t*) valptr;
+//
+// 		if (rec->key.segid == -1)
+// 			continue;
+//
+// 		seg_row_out_sum = apr_hash_get(segtab, &rec->key.segid, sizeof(rec->key.segid));
+//
+// 		if (!seg_row_out_sum) {
+// 			seg_row_out_sum = apr_palloc(tmp_pool, sizeof(apr_int64_t));
+// 			*seg_row_out_sum = 0;
+// 		}
+// 		*seg_row_out_sum += rec->sum_measures_rows_out;
+// 		apr_hash_set(segtab, &rec->key.segid, sizeof(rec->key.segid), seg_row_out_sum);
+// 	}
+//
+// 	_get_sum_seg_info(segtab, &total_row_out, &segcnt);
+//
+// 	if (!segcnt) {
+// 		TR2(("No segments for Rows skew calculation\n"));
+// 		apr_pool_destroy(tmp_pool);
+// 		return 0.0f;
+// 	}
+//
+// 	row_out_avg = total_row_out / segcnt;
+//
+// 	TR2(("(SKEW) Avg rows out: %" FMT64 "\n", row_out_avg));
+//
+// 	_get_sum_deviation_squared(segtab, row_out_avg, &total_deviation_squared);
+//
+// 	variance = total_deviation_squared / (double)segcnt;
+// 	standard_deviation = sqrt(variance);
+//
+// 	TR2(("(SKEW) Rows in standard deviaton: %f\n", standard_deviation));
+//
+// 	coefficient_of_variation = row_out_avg ? standard_deviation/(double)row_out_avg : 0.0f;
+//
+// 	apr_pool_destroy(tmp_pool);
+// 	TR2(("(SKEW) Rows out skew: %f\n", coefficient_of_variation));
+//
+// 	return coefficient_of_variation;
+// }
 
 
 static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const char* nowstr, apr_uint32_t done)
@@ -1320,10 +1325,22 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 	int query_hash = 0;
 	apr_int64_t rowsout = 0;
 	float cpu_current;
+	int   fd_cnt;
 	cpu_skew = get_cpu_skew(qdnode);
-	row_skew = get_row_skew(qdnode);
-	rowsout = get_rowsout(qdnode);
-	gpmon_datetime((time_t)qdnode->qlog.tsubmit, timsubmitted);
+	qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
+	//row_skew = get_row_skew(qdnode);
+	//rowsout = get_rowsout(qdnode);
+        // get spill file size
+        gpdb_get_spill_file_size_from_query(qdnode);
+
+	if (qdnode->qlog.tsubmit)
+	{
+		gpmon_datetime((time_t)qdnode->qlog.tsubmit, timsubmitted);
+	}
+	else
+	{
+		snprintf(timsubmitted, GPMON_DATE_BUF_SIZE, "null");
+	}
 
 	if (qdnode->qlog.tstart)
 	{
@@ -1334,26 +1351,31 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 		snprintf(timstarted, GPMON_DATE_BUF_SIZE, "null");
 	}
 
-	if (done)
+	if (done && qdnode->qlog.tfin)
 	{
-		cpu_current = 0.0f;
 		gpmon_datetime((time_t)qdnode->qlog.tfin, timfinished);
 	}
 	else
 	{
-		if (qdnode->num_metrics_packets)
-		{
-			// average cpu_pct per reporting machine
-			cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
-		}
-		else
-		{
-			cpu_current = 0.0f;
-		}
 		snprintf(timfinished, GPMON_DATE_BUF_SIZE,  "null");
 	}
 
-	snprintf(line, line_size, "%s|%d|%d|%d|%d|%s|%u|%d|%s|%s|%s|%s|%" FMT64 "|%" FMT64 "|%.4f|%.2f|%.2f|%d",
+
+	if (qdnode->num_metrics_packets)
+	{
+		// average cpu_pct per reporting machine
+		cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
+		fd_cnt = qdnode->qlog.p_metrics.fd_cnt / qdnode->num_metrics_packets;
+		cpu_skew = qdnode->qlog.p_metrics.cpu_skew / qdnode->num_metrics_packets;
+	}
+	else
+	{
+		cpu_current = 0.0f;
+		fd_cnt  = 0;
+		cpu_skew = 0.0f;
+	}
+
+	snprintf(line, line_size, "%s|%d|%d|%d|%d|%s|%u|%d|%s|%s|%s|%s|%" FMT64 "|%" FMT64 "|%.4f|%.2f|%.2f|%d||||||%" FMTU64 "|%" FMTU64 "|%d|%d",
 		nowstr,
 		qdnode->qlog.key.tmid,
 		qdnode->qlog.key.ssid,
@@ -1371,7 +1393,12 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 		cpu_current,
 		cpu_skew,
 		row_skew,
-		query_hash);
+		query_hash,
+                qdnode->qlog.p_metrics.mem.size,
+                qdnode->qlog.p_metrics.spill_files_size,
+                0,
+                0
+                );
 }
 
 
@@ -1391,13 +1418,12 @@ static apr_uint32_t write_qlog(FILE* fp, qdnode_t *qdnode, const char* nowstr, a
 	}
 	else
 	{
-		/* Query text "joined" by python script */
-		fprintf(fp, "%s|||||\n", line);
+		fprintf(fp, "%s\n", line);
 		return bytes_written;
 	}
 }
 
-static int get_and_print_next_query_file_kvp(FILE* outfd, FILE* queryfd, char* qfname, apr_uint32_t* bytes_written)
+static int get_query_file_next_kvp(FILE* queryfd, char* qfname, char** str, apr_pool_t* pool, apr_uint32_t* bytes_written)
 {
     const int line_size = 1024;
     char line[line_size];
@@ -1435,103 +1461,205 @@ static int get_and_print_next_query_file_kvp(FILE* outfd, FILE* queryfd, char* q
             return APR_NOTFOUND;
     }
 
-    fprintf(outfd, "\"");
-    (*bytes_written)++;
-
-    while (field_len > 0) {
-	    int max, n;
-        char* q;
-        max = field_len > sizeof(line) ? sizeof(line) : field_len;
-        n = fread(line, 1, max, queryfd);
-        for (p = line, q = line + n; p < q; p++)
-        {
-            if (*p == '"')
-            {
-                fputc('\"', outfd);
-                (*bytes_written)++;
-            }
-
-            fputc(*p, outfd);
-
-            (*bytes_written)++;
-
-        }
-        field_len -= n;
-        if (n < max) break;
+    *str = apr_palloc(pool,(field_len + 1) * sizeof(char));
+    memset(*str, 0, field_len+1);
+    (*str)[field_len] = '\0';
+    int n = fread(*str, 1, field_len, queryfd);
+    if (n!= field_len)
+    {
+            gpmon_warning(FLINE, "missing expected bytes in file: %s", qfname);
+            return APR_NOTFOUND;
     }
 
-	fprintf(outfd, "\"");
-	(*bytes_written)++;
-
-    int n = fread(line, 1, 1, queryfd);
+    n = fread(line, 1, 1, queryfd);
     if (n != 1)
     {
 	    gpmon_warning(FLINE, "missing expected newline in file: %s", qfname);
         return APR_NOTFOUND;
     }
 
+    *bytes_written += field_len;
+
     return APR_SUCCESS;
 }
 
-static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nowstr)
+static  apr_uint32_t  get_query_info(FILE* qfptr, char qfname[], char* array[], apr_pool_t* pool)
 {
-	const int line_size = 1024;
-	const int qfname_size = 256;
-    char line[line_size];
-    char qfname[qfname_size];
-    FILE* qfptr = 0;
-    apr_uint32_t bytes_written = 0;
+        // 0 add query text
+        // 1 add query plan
+        // 2 add application name
+        // 3 add rsqname
+        // 4 add priority
+        int total_iterations = 5;
+        int all_good = 1;
+        int iter;
+        apr_uint32_t bytes_written = 0;
+        int retCode = APR_SUCCESS;
+        for (iter = 0; iter < total_iterations; ++iter)
+        {
+                if (!all_good){
+                        // we have no data for query plan
+                        // if we failed once already don't bother trying to parse query file
+                        continue;
+                }
 
-    fmt_qlog(line, line_size, qdnode, nowstr, 1);
-    bytes_written = strlen(line) + 1;
-	if (bytes_written == line_size)
-	{
-		gpmon_warning(FLINE, "qlog line too long ... ignored: %s", line);
-		return 0;
-	}
-
-	fprintf(fp, "%s", line);
-
-	snprintf(qfname, qfname_size, GPMON_DIR "q%d-%d-%d.txt", qdnode->qlog.key.tmid,
-            qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);
-
-	qfptr = fopen(qfname, "r");
-    if (!qfptr)
-    {
-	    fprintf(fp, "|||||\n");
-	    bytes_written += 6;
-	    return bytes_written;
-    }
-
-    // 0 add query text
-    // 1 add query plan
-    // 2 add application name
-    // 3 add rsqname
-    // 4 add priority
-
-    int total_iterations = 5;
-    int all_good = 1;
-    int iter;
-    int retCode = APR_SUCCESS;
-    for (iter = 0; iter < total_iterations; ++iter)
-    {
-	    fprintf(fp, "|");
-        bytes_written++;
-
-        if (!all_good){
-            // we have no data for query plan
-            // if we failed once already don't bother trying to parse query file
-            continue;
+                retCode = get_query_file_next_kvp(qfptr, qfname, &array[iter], pool, &bytes_written);
+                if (retCode != APR_SUCCESS)
+                        all_good = 0;
         }
 
-        retCode = get_and_print_next_query_file_kvp(fp, qfptr, qfname, &bytes_written);
-        if (retCode != APR_SUCCESS)
-            all_good = 0;
+        fclose(qfptr);
+        return bytes_written;
+}
+
+static char* replaceQuotes(char *str, apr_pool_t* pool, int* size) {
+    int len = strlen(str);
+    int newLen = len;
+    int quoteCount = 0;
+
+    // count the number of quotes
+    for (int i = 0; i < len; i++) {
+        if (str[i] == '"') {
+            quoteCount++;
+        }
     }
 
-    fprintf(fp, "\n");
-    fclose(qfptr);
-	return bytes_written;
+    *size += quoteCount;
+
+    newLen += quoteCount;
+    char* newStr = apr_palloc(pool,(newLen + 1) * sizeof(char));
+    int j = 0;
+    for (int i = 0; i < len; i++) {
+        if (str[i] == '"') {
+            newStr[j++] = '"';
+            newStr[j++] = '"';
+        } else {
+            newStr[j++] = str[i];
+        }
+    }
+    newStr[j] = '\0';
+    return newStr;
+}
+
+static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nowstr, apr_pool_t* pool)
+{
+        char timsubmitted[GPMON_DATE_BUF_SIZE];
+        char timstarted[GPMON_DATE_BUF_SIZE];
+        char timfinished[GPMON_DATE_BUF_SIZE];
+        double cpu_skew = 0.0f;
+        double row_skew = 0.0f;
+        int query_hash = 0;
+        apr_int64_t rowsout = 0;
+        float cpu_current;
+        int   fd_cnt;
+        cpu_skew = get_cpu_skew(qdnode);
+        qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
+        //row_skew = get_row_skew(qdnode);
+        //rowsout = get_rowsout(qdnode);
+
+        // get spill file size
+        gpdb_get_spill_file_size_from_query(qdnode);
+
+        if (qdnode->qlog.tsubmit)
+        {
+                gpmon_datetime((time_t)qdnode->qlog.tsubmit, timsubmitted);
+        }
+        else
+        {
+                snprintf(timsubmitted, GPMON_DATE_BUF_SIZE, "null");
+        }
+
+        if (qdnode->qlog.tstart)
+        {
+                gpmon_datetime((time_t)qdnode->qlog.tstart, timstarted);
+        }
+        else
+        {
+                snprintf(timstarted, GPMON_DATE_BUF_SIZE, "null");
+        }
+
+        if (qdnode->qlog.tfin)
+        {
+                gpmon_datetime((time_t)qdnode->qlog.tfin, timfinished);
+        }
+        else
+        {
+                snprintf(timfinished, GPMON_DATE_BUF_SIZE,  "null");
+        }
+
+
+        if (qdnode->num_metrics_packets)
+        {
+                // average cpu_pct per reporting machine
+                cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
+                fd_cnt = qdnode->qlog.p_metrics.fd_cnt / qdnode->num_metrics_packets;
+                cpu_skew = qdnode->qlog.p_metrics.cpu_skew / qdnode->num_metrics_packets;
+        }
+        else
+        {
+                cpu_current = 0.0f;
+                fd_cnt  = 0;
+                cpu_skew = 0.0f;
+        }
+
+
+        // get query text、plan
+        char* array[5] = {"", "", "", "", ""};
+        const int qfname_size = 256;
+        char qfname[qfname_size];
+        int size = 0;
+        FILE* qfptr = 0;
+        snprintf(qfname, qfname_size, GPMON_DIR "q%d-%d-%d.txt", qdnode->qlog.key.tmid,
+                 qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);
+        qfptr = fopen(qfname, "r");
+        if (qfptr)
+        {
+                // array[0] query text
+                // array[1] query plan
+                // array[2] application name
+                // array[3] add rsqname
+                // array[4] add priority
+                size = get_query_info(qfptr, qfname, array, pool);
+                array[0] = replaceQuotes(array[0], pool, &size);
+                array[1] = replaceQuotes(array[1], pool, &size);
+        }
+
+        int line_size = (1024+size)*sizeof(char);
+        char* line = apr_palloc(pool,line_size);
+        memset(line,0,line_size);
+        snprintf(line, line_size, "%s|%d|%d|%d|%d|%s|%u|%d|%s|%s|%s|%s|%" FMT64 "|%" FMT64 "|%.4f|%.2f|%.2f|%d|\"%s\"|\"%s\"|\"%s\"|\"%s\"|\"%s\"|%" FMTU64 "|%" FMTU64 "|%d|%d",
+                nowstr,
+                qdnode->qlog.key.tmid,
+                qdnode->qlog.key.ssid,
+                qdnode->qlog.key.ccnt,
+                qdnode->qlog.pid,
+                qdnode->qlog.user,
+                qdnode->qlog.dbid,
+                qdnode->qlog.cost,
+                timsubmitted,
+                timstarted,
+                timfinished,
+                gpmon_qlog_status_string(qdnode->qlog.status),
+                rowsout,
+                qdnode->qlog.cpu_elapsed,
+                cpu_current,
+                cpu_skew,
+                row_skew,
+                query_hash,
+                array[0],
+                array[1],
+                array[2],
+                array[3],
+                array[4],
+                qdnode->qlog.p_metrics.mem.size,
+                qdnode->qlog.p_metrics.spill_files_size,
+                0,
+                0
+        );
+
+        fprintf(fp, "%s\n", line);
+        apr_uint32_t bytes_written = strlen(line) + 1;
+        return bytes_written;
 }
 
 static void bloom_init(bloom_t* bloom)

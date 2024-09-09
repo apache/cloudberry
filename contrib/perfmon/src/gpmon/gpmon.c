@@ -53,6 +53,8 @@ static gpmon_packet_t* gpmon_qlog_packet_init();
 static void init_gpmon_hooks(void);
 static char* get_plan(QueryDesc *queryDesc);
 static char* get_query_text(QueryDesc *queryDesc);
+static int32 tstart = 0;
+static int32 tsubmit = 0;
 
 struct  {
     int    gxsock;
@@ -243,6 +245,34 @@ gpmon_qlog_packet_init()
 	return gpmonPacket;
 }
 
+
+/**
+ * Create and init a qexec packet
+ *
+ * It is called by gpmon_query_info_collect_hook each time
+ */
+static gpmon_packet_t*
+gpmon_qexec_packet_init()
+{
+	gpmon_packet_t *gpmonPacket = NULL;
+	gpmonPacket = (gpmon_packet_t *) palloc(sizeof(gpmon_packet_t));
+	memset(gpmonPacket, 0, sizeof(gpmon_packet_t));
+
+	Assert(perfmon_enabled && Gp_role == GP_ROLE_EXECUTE);
+	Assert(gpmonPacket);
+	
+	gpmonPacket->magic = GPMON_MAGIC;
+	gpmonPacket->version = GPMON_PACKET_VERSION;
+	gpmonPacket->pkttype = GPMON_PKTTYPE_QEXEC;
+
+	gpmon_gettmid(&gpmonPacket->u.qexec.key.tmid);
+	gpmonPacket->u.qexec.key.ssid = gp_session_id;
+	gpmonPacket->u.qexec.key.ccnt = gp_command_count;
+	gpmonPacket->u.qexec.key.hash_key.segid = GpIdentity.segindex;
+	gpmonPacket->u.qexec.key.hash_key.pid = MyProcPid;
+	return gpmonPacket;
+}
+
 /**
  * Call this method when query is submitted.
  */
@@ -254,9 +284,9 @@ void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket)
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 
 	gettimeofday(&tv, 0);
-	
+	tsubmit = tv.tv_sec;
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_SUBMIT;
-	gpmonPacket->u.qlog.tsubmit = tv.tv_sec;
+	gpmonPacket->u.qlog.tsubmit = tsubmit;
 	
 	gpmon_send(gpmonPacket);
 }
@@ -335,9 +365,11 @@ void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket)
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 
 	gettimeofday(&tv, 0);
+	tstart = tv.tv_sec;
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_START;
-	gpmonPacket->u.qlog.tstart = tv.tv_sec;
+	gpmonPacket->u.qlog.tsubmit = tsubmit;
+	gpmonPacket->u.qlog.tstart = tstart;
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
 			gpmonPacket->u.qlog.key.ssid,
 			gpmonPacket->u.qlog.key.ccnt,
@@ -356,6 +388,8 @@ void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket)
 	gettimeofday(&tv, 0);
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_DONE;
+	gpmonPacket->u.qlog.tsubmit = tsubmit;
+	gpmonPacket->u.qlog.tstart = tstart;
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
 	
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
@@ -378,6 +412,8 @@ void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket)
 	gettimeofday(&tv, 0);
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_ERROR;
+	gpmonPacket->u.qlog.tsubmit = tsubmit;
+	gpmonPacket->u.qlog.tstart = tstart;
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
 	
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
@@ -397,6 +433,8 @@ gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket)
 {
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_CANCELING;
+	gpmonPacket->u.qlog.tsubmit = tsubmit;
+	gpmonPacket->u.qlog.tstart = tstart;
 	
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
 			gpmonPacket->u.qlog.key.ssid,
@@ -412,11 +450,12 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 	char *query_text;
 	char *plan;
 	QueryDesc *qd = (QueryDesc *)queryDesc;
-	if (perfmon_enabled
-			&& Gp_role == GP_ROLE_DISPATCH && qd != NULL)
+	if (perfmon_enabled && qd != NULL)
 	{
 		gpmon_packet_t *gpmonPacket = NULL;
 		PG_TRY();
+		{
+		if (Gp_role == GP_ROLE_DISPATCH)
 		{
 			gpmonPacket = gpmon_qlog_packet_init();
 			switch (status)
@@ -462,6 +501,21 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 					break;
 			}
 			pfree(gpmonPacket);
+		}
+		else if (Gp_role == GP_ROLE_EXECUTE)
+		{
+                        gpmonPacket = gpmon_qexec_packet_init();
+                        switch (status)
+                        {
+                                case METRICS_QUERY_START:
+                                case METRICS_PLAN_NODE_EXECUTING:
+                                        gpmon_send(gpmonPacket);
+                                        break;
+                                default:
+                                        break;
+                        }
+                        pfree(gpmonPacket);
+		}
 		}
 		PG_CATCH();
 		{
