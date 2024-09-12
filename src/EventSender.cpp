@@ -96,26 +96,24 @@ inline std::string char_to_trimmed_str(const char *str, size_t len) {
   return std::string(str, std::min(len, Config::max_text_size()));
 }
 
-void set_plan_text(std::string *plan_text, QueryDesc *query_desc) {
-  MemoryContext oldcxt =
-      MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
-  auto es = get_explain_state(query_desc, true);
-  *plan_text = char_to_trimmed_str(es.str->data, es.str->len);
-  pfree(es.str->data);
-  MemoryContextSwitchTo(oldcxt);
-}
-
 void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
   if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->plannedstmt) {
     auto qi = req->mutable_query_info();
     qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
                           ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
                           : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
-    set_plan_text(qi->mutable_plan_text(), query_desc);
-    StringInfo norm_plan = gen_normplan(qi->plan_text().c_str());
-    *qi->mutable_template_plan_text() = std::string(norm_plan->data);
+    MemoryContext oldcxt =
+        MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
+    auto es = get_explain_state(query_desc, true);
+    MemoryContextSwitchTo(oldcxt);
+    *qi->mutable_plan_text() = char_to_trimmed_str(es.str->data, es.str->len);
+    StringInfo norm_plan = gen_normplan(es.str->data);
+    *qi->mutable_template_plan_text() =
+        char_to_trimmed_str(norm_plan->data, norm_plan->len);
     qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
     qi->set_query_id(query_desc->plannedstmt->queryId);
+    pfree(es.str->data);
+    pfree(norm_plan->data);
   }
 }
 
