@@ -1,11 +1,16 @@
 --
 -- HOROLOGY
 --
-SET DateStyle = 'Postgres, MDY';
-SHOW TimeZone;  -- Many of these tests depend on the prevailing setting
- TimeZone 
-----------
- PST8PDT
+SHOW TimeZone;  -- Many of these tests depend on the prevailing settings
+      TimeZone       
+---------------------
+ America/Los_Angeles
+(1 row)
+
+SHOW DateStyle;
+   DateStyle   
+---------------
+ Postgres, MDY
 (1 row)
 
 --
