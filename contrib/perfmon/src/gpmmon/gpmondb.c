@@ -720,7 +720,7 @@ void gpdb_get_single_string_from_query(const char* QUERY, char** resultstring, a
 
 void gpdb_get_spill_file_size_from_query(qdnode_t *qdnode)
 {
-        char query[100];
+        char query[200];
         snprintf(query, sizeof(query), "select sum(size) from gp_toolkit.gp_workfile_usage_per_query where sess_id=%d And command_cnt=%d;",
                  qdnode->qlog.key.ssid,qdnode->qlog.key.ccnt);
 
@@ -751,9 +751,9 @@ void gpdb_get_spill_file_size_from_query(qdnode_t *qdnode)
 
         if (tmpoutput)
         {
-                uint64_t temp_result;
+                uint64_t temp_result = 0;
                 sscanf(tmpoutput, "%lu", &temp_result);
-                if (temp_result > 0)
+                if (temp_result > 0 && temp_result > qdnode->qlog.p_metrics.spill_files_size)
                 {
                         qdnode->qlog.p_metrics.spill_files_size = temp_result;
                 }

@@ -365,6 +365,7 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 		node->qlog.p_metrics.fd_cnt = 0;
 		node->qlog.p_metrics.cpu_skew = 0.0f;
 		node->qlog.p_metrics.mem.size = 0;
+                node->qlog.p_metrics.spill_files_size = 0;
 		node->num_metrics_packets = 0;
 
 		node->qexec_hash = apr_hash_make(agg->pool);

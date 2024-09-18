@@ -62,6 +62,8 @@ struct pidrec_t
 	gpmon_proc_metrics_t p_metrics;
 	apr_uint64_t cpu_elapsed;
 	gpmon_qlogkey_t query_key;
+        gpmon_query_seginfo_key_t qseg_key;
+        gpmon_qexec_hash_key_t hash_key;
 };
 
 typedef struct gx_t gx_t;
@@ -96,9 +98,9 @@ struct gx_t
 	const char* hostname; /* my hostname */
 
 	/* hash tables */
-	apr_hash_t* qexectab; /* stores qexec packets hashdata-lightning not use*/
+	//apr_hash_t* qexectab; /* stores qexec packets hashdata-lightning not use*/
 	apr_hash_t* qlogtab; /* stores qlog packets */
-	apr_hash_t* segmenttab; /* stores segment packets hashdata-lightning not use*/
+	//apr_hash_t* segmenttab; /* stores segment packets hashdata-lightning not use*/
 	apr_hash_t* pidtab; /* key=pid, value=pidrec_t */
 	apr_hash_t* querysegtab; /* stores gpmon_query_seginfo_t */
 };
@@ -250,7 +252,7 @@ static void send_smon_to_mon_pkt(SOCKET sock, gp_smon_to_mmon_packet_t* pkt)
 	TR2(("Sent packet of type %d to mmon\n", pkt->header.pkttype));
 }
 
-static void get_pid_metrics(apr_int32_t pid, apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt)
+static void get_pid_metrics(gpmon_qexec_hash_key_t key, apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt)
 {
 	apr_int32_t status;
 	sigar_proc_cpu_t cpu;
@@ -260,7 +262,7 @@ static void get_pid_metrics(apr_int32_t pid, apr_int32_t tmid, apr_int32_t ssid,
 	pidrec_t* rec;
 	apr_pool_t* pool = apr_hash_pool_get(gx.pidtab);
 
-	rec = apr_hash_get(gx.pidtab, &pid, sizeof(pid));
+	rec = apr_hash_get(gx.pidtab, &key.pid, sizeof(key.pid));
 	if (rec && rec->updated_tick == gx.tick)
 		return; /* updated in current cycle */
 
@@ -268,7 +270,7 @@ static void get_pid_metrics(apr_int32_t pid, apr_int32_t tmid, apr_int32_t ssid,
 	memset(&mem, 0, sizeof(mem));
 	memset(&fd, 0, sizeof(fd));
 
-	TR2(("--------------------- starting %d\n", pid));
+	TR2(("--------------------- starting %d\n", key.pid));
 
 	if (!rec)
 	{
@@ -279,13 +281,22 @@ static void get_pid_metrics(apr_int32_t pid, apr_int32_t tmid, apr_int32_t ssid,
 		rec = apr_pcalloc(pool, sizeof(*rec));
 		CHECKMEM(rec);
 
-		rec->pid = pid;
+                gpmon_query_seginfo_key_t	qseg_key;
+                qseg_key.qkey.tmid = tmid;
+                qseg_key.qkey.ssid = ssid;
+                qseg_key.qkey.ccnt = ccnt;
+                qseg_key.segid = key.segid;
+
+
+		rec->pid = key.pid;
 		rec->query_key.tmid = tmid;
 		rec->query_key.ssid = ssid;
 		rec->query_key.ccnt = ccnt;
+                rec->qseg_key = qseg_key;
+                rec->hash_key = key;
 
 		rec->pname = rec->cwd = 0;
-		if (0 == sigar_proc_exe_get(gx.sigar, pid, &exe))
+		if (0 == sigar_proc_exe_get(gx.sigar, key.pid, &exe))
 		{
 			rec->pname = apr_pstrdup(pool, exe.name);
 			rec->cwd = apr_pstrdup(pool, exe.root);
@@ -298,30 +309,30 @@ static void get_pid_metrics(apr_int32_t pid, apr_int32_t tmid, apr_int32_t ssid,
 		apr_hash_set(gx.pidtab, &rec->pid, sizeof(rec->pid), rec);
 	}
 
-	status = sigar_proc_mem_get(gx.sigar, pid, &mem);
+	status = sigar_proc_mem_get(gx.sigar, key.pid, &mem);
 	/* ESRCH is error 3: (No such process) */
 	if (status != SIGAR_OK)
 	{
 		if (status != ESRCH) {
-			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), pid));
+			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), key.pid));
 		}
 		return;
 	}
 
-	status = sigar_proc_cpu_get(gx.sigar, pid, &cpu);
+	status = sigar_proc_cpu_get(gx.sigar, key.pid, &cpu);
 	if (status != SIGAR_OK)
 	{
 		if (status != ESRCH) {
-			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), pid));
+			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), key.pid));
 		}
 		return;
 	}
 
-	status = sigar_proc_fd_get(gx.sigar, pid, &fd);
+	status = sigar_proc_fd_get(gx.sigar, key.pid, &fd);
 	if (status != SIGAR_OK)
 	{
 		if (status != ESRCH) {
-			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), pid));
+			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), key.pid));
 		}
 		return;
 	}
@@ -331,7 +342,7 @@ static void get_pid_metrics(apr_int32_t pid, apr_int32_t tmid, apr_int32_t ssid,
 	{
 		if (status != ESRCH)
                 {
-			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), pid));
+			TR2(("[WARNING] %s. PID: %d\n", sigar_strerror(gx.sigar, status), key.pid));
 		}
 		return;
 	}
@@ -650,10 +661,8 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 	char dump;
 	int n, e;
 	apr_pool_t* oldpool;
-	apr_hash_t* qetab;
 	apr_hash_t* qdtab;
 	apr_hash_t* pidtab;
-	apr_hash_t* segtab;
 	if (event & EV_TIMEOUT) // didn't get command from gpmmon, quit
 	{
 		if(gx.tcp_sock)
@@ -678,13 +687,11 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 
 	TR1(("start dump %c\n", dump));
 
-	qetab = gx.qexectab;
 	qdtab = gx.qlogtab;
 	pidtab = gx.pidtab;
-	segtab = gx.segmenttab;
 	querysegtab = gx.querysegtab;
 
-	oldpool = apr_hash_pool_get(qetab);
+	oldpool = apr_hash_pool_get(querysegtab);
 
 	/* make new  hashtabs for next cycle */
 	{
@@ -693,17 +700,10 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 		{
 			gpsmon_fatalx(FLINE, e, "apr_pool_create_alloc failed");
 		}
-		/* qexec hash table */
-		gx.qexectab = apr_hash_make(newpool);
-		CHECKMEM(gx.qexectab);
 
 		/* qlog hash table */
 		gx.qlogtab = apr_hash_make(newpool);
 		CHECKMEM(gx.qlogtab);
-
-		/* segment hash table */
-		gx.segmenttab = apr_hash_make(newpool);
-		CHECKMEM(gx.segmenttab);
 
 		/* queryseg hash table */
 		gx.querysegtab = apr_hash_make(newpool);
@@ -726,25 +726,7 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 		pidrec_t* pidrec;
 		int count = 0;
 		apr_hash_t* query_cpu_table = NULL;
-		sigar_proc_state_t state;
-
-		/*
-		for (hi = apr_hash_first(0, segtab); hi; hi = apr_hash_next(hi))
-		{
- 			void* vptr;
-			apr_hash_this(hi, 0, 0, &vptr);
-			ppkt = vptr;
-			if (ppkt->header.pkttype != GPMON_PKTTYPE_SEGINFO)
-				continue;
-
-			// fill in hostname 
-			strncpy(ppkt->u.seginfo.hostname, gx.hostname, sizeof(ppkt->u.seginfo.hostname) - 1);
-			ppkt->u.seginfo.hostname[sizeof(ppkt->u.seginfo.hostname) - 1] = 0;
-
-			TR2(("sending magic %x, pkttype %d\n", ppkt->header.magic, ppkt->header.pkttype));
-			send_smon_to_mon_pkt(sock, ppkt);
-			count++;
-		}*/
+                sigar_proc_state_t state;
 
 		for (hi = apr_hash_first(0, qdtab); hi; hi = apr_hash_next(hi))
 		{
@@ -753,58 +735,12 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 			ppkt = vptr;
 			if (ppkt->header.pkttype != GPMON_PKTTYPE_QLOG)
 				continue;
-			TR2(("sending magic %x, pkttype %d\n", ppkt->header.magic, ppkt->header.pkttype));
+
+			TR2(("%s: sending magic %x, pkttype %d, %d-%d-%d\n", FLINE, ppkt->header.magic, ppkt->header.pkttype,
+                                ppkt->u.qlog.key.tmid, ppkt->u.qlog.key.ssid, ppkt->u.qlog.key.ccnt));
 			send_smon_to_mon_pkt(sock, ppkt);
 			count++;
 		}
-
-		/*
-		 * QUERYSEG packets must be sent after QLOG packets so that gpmmon can
-		 * correctly populate its query_seginfo_hash.
-		 */
-		for (hi = apr_hash_first(0, querysegtab); hi; hi = apr_hash_next(hi))
-		{
- 			void* vptr;
-			apr_hash_this(hi, 0, 0, &vptr);
-			ppkt = vptr;
-			if (ppkt->header.pkttype != GPMON_PKTTYPE_QUERYSEG)
-				continue;
-
-			TR2(("sending magic %x, pkttype %d\n", ppkt->header.magic, ppkt->header.pkttype));
-			send_smon_to_mon_pkt(sock, ppkt);
-			count++;
-		}
-
-		/*
-		for (hi = apr_hash_first(0, qetab); hi; hi = apr_hash_next(hi))
-		{
-			gpmon_qexec_t* qexec;
-			void *vptr;
-
-			apr_hash_this(hi, 0, 0, &vptr);
-                        qexec = vptr;
-                        // fill in _p_metrics
-                        pidrec = apr_hash_get(pidtab, &qexec->key.hash_key.pid, sizeof(qexec->key.hash_key.pid));
-                        if (pidrec) {
-                        qexec->_p_metrics = pidrec->p_metrics;
-                        qexec->_cpu_elapsed = pidrec->cpu_elapsed;
-                        } else {
-                        memset(&qexec->_p_metrics, 0, sizeof(qexec->_p_metrics));
-                        }
-
-			// fill in _hname 
-			strncpy(qexec->_hname, gx.hostname, sizeof(qexec->_hname) - 1);
-			qexec->_hname[sizeof(qexec->_hname) - 1] = 0;
-
-			if (0 == create_qexec_packet(qexec, &localPacketObject)) {
-				break;
-			}
-
-                        TR2(("sending qexec, pkttype %d\n", localPacketObject.header.pkttype));
-                        send_smon_to_mon_pkt(sock, &localPacketObject);
-                        count++;
-		}
-                */
 
 		// calculate CPU utilization And Memory utilization per query for this machine
 		query_cpu_table = apr_hash_make(oldpool);
@@ -815,13 +751,18 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 		{
 			void* vptr;
 			pidrec_t* lookup;
+                        pidrec_t* pidrec;
 
 			apr_hash_this(hi, 0, 0, &vptr);
 			pidrec = vptr;
+                        if (!pidrec)
+                        {
+                                continue;
+                        }
 
-			TR2(("tmid %d ssid %d ccnt %d pid %d (CPU elapsed %ld CPU Percent %.2f)\n",
-				pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid,
-				pidrec->cpu_elapsed, pidrec->p_metrics.cpu_pct));
+			TR2(("%s: %d-%d-%d pid %d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
+				FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid,
+				pidrec->cpu_elapsed, pidrec->p_metrics.cpu_pct, pidrec->p_metrics.mem.size));
 
 			// table is keyed on query key
 			lookup = apr_hash_get(query_cpu_table, &pidrec->query_key, sizeof(pidrec->query_key));
@@ -843,13 +784,58 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 				apr_hash_set(query_cpu_table, &pidrec->query_key, sizeof(pidrec->query_key), pidrec);
 			}
 
+
+                        // add to queryseg hash table
+                        gp_smon_to_mmon_packet_t*  rec;
+                        rec = apr_hash_get(querysegtab, &pidrec->qseg_key, sizeof(pidrec->qseg_key));
+                        if (rec)
+                        {
+                                rec->u.queryseg.sum_cpu_elapsed += pidrec->cpu_elapsed;
+                        }
+                        else
+                        {
+                                rec = apr_palloc(apr_hash_pool_get(querysegtab),sizeof(gp_smon_to_mmon_packet_t));
+                                CHECKMEM(rec);
+                                gp_smon_to_mmon_set_header(rec, GPMON_PKTTYPE_QUERYSEG);
+                                rec->u.queryseg.key = pidrec->qseg_key;
+                                rec->u.queryseg.sum_cpu_elapsed = pidrec->cpu_elapsed;
+                                apr_hash_set(querysegtab, &rec->u.queryseg.key, sizeof(rec->u.queryseg.key), rec);
+                        }
+
 			//add to new pidtab if process is exist
 			int status = sigar_proc_state_get(gx.sigar,pidrec->pid, &state);
                         if (status == SIGAR_OK)
                         {
-                                apr_hash_set(gx.pidtab, &pidrec->pid, sizeof(pidrec->pid), pidrec);
+                                apr_pool_t* pool = apr_hash_pool_get(gx.pidtab);
+                                pidrec_t* newpidrec = apr_palloc(pool, sizeof(*pidrec));
+                                memcpy(newpidrec, pidrec, sizeof(*pidrec));
+                                apr_hash_set(gx.pidtab, &newpidrec->pid, sizeof(newpidrec->pid), newpidrec);
+                                TR2(("%s: %d-%d-%d pid %d add to new pidtab \n",
+                                        FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid));
+                                continue;
     		        }
+                        TR2(("%s: %d-%d-%d pid %d pid status %d not add to new pidtab \n",
+                                FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid, status));
 		}
+
+
+                /*
+                * QUERYSEG packets must be sent after QLOG packets so that gpmmon can
+                * correctly populate its query_seginfo_hash.
+                */
+                for (hi = apr_hash_first(0, querysegtab); hi; hi = apr_hash_next(hi))
+                {
+                        void* vptr;
+                        apr_hash_this(hi, 0, 0, &vptr);
+                        ppkt = vptr;
+                        if (ppkt->header.pkttype != GPMON_PKTTYPE_QUERYSEG)
+                                continue;
+
+                        TR2(("%s: sending magic %x, pkttype %d, %d-%d-%d\n", FLINE, ppkt->header.magic, ppkt->header.pkttype,
+                                ppkt->u.qlog.key.tmid, ppkt->u.qlog.key.ssid, ppkt->u.qlog.key.ccnt));
+                        send_smon_to_mon_pkt(sock, ppkt);
+                        count++;
+                }
 
 		// reset packet to 0
 		ppkt = &localPacketObject;
@@ -876,9 +862,9 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 			ppkt->u.qlog.p_metrics.mem = pidrec->p_metrics.mem;
 			ppkt->u.qlog.pid = pidrec->pid;
 
-			TR2(("SEND tmid %d ssid %d ccnt %d (CPU elapsed %ld CPU Percent %.2f)\n",
-				ppkt->u.qlog.key.tmid, ppkt->u.qlog.key.ssid, ppkt->u.qlog.key.ccnt,
-				ppkt->u.qlog.cpu_elapsed, ppkt->u.qlog.p_metrics.cpu_pct));
+			TR2(("%s: SEND %d-%d-%d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
+				FLINE, ppkt->u.qlog.key.tmid, ppkt->u.qlog.key.ssid, ppkt->u.qlog.key.ccnt,
+				ppkt->u.qlog.cpu_elapsed, ppkt->u.qlog.p_metrics.cpu_pct, ppkt->u.qlog.p_metrics.mem.size));
 
 			send_smon_to_mon_pkt(sock, ppkt);
 			count++;
@@ -890,6 +876,9 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 	/* get rid of the old pool */
 	{
 		apr_pool_destroy(oldpool);
+                qdtab = NULL;
+                pidtab = NULL;
+                querysegtab = NULL;
 	}
 	struct timeval tv;
 	tv.tv_sec = opt.terminate_timeout;
@@ -1003,7 +992,7 @@ static void gx_recvqlog(gpmon_packet_t* pkt)
 		gpsmon_fatal(FLINE, "assert failed; expected pkttype qlog");
 
 	p = &pkt->u.qlog;
-	TR2(("Received qlog packet for query %d-%d-%d.  Status now %d\n", p->key.tmid, p->key.ssid, p->key.ccnt, p->status));
+	TR2(("%s Received qlog packet for query %d-%d-%d pid %d Status now %d\n", FLINE, p->key.tmid, p->key.ssid, p->key.ccnt, p->pid, p->status));
 	rec = apr_hash_get(gx.qlogtab, &p->key, sizeof(p->key));
 	if (rec)
 	{
@@ -1016,112 +1005,23 @@ static void gx_recvqlog(gpmon_packet_t* pkt)
 	}
 }
 
-static void gx_recvsegment(gpmon_packet_t* pkt)
-{
-	gpmon_seginfo_t* p;
-	gp_smon_to_mmon_packet_t* rec;
-
-	if (pkt->pkttype != GPMON_PKTTYPE_SEGINFO)
-		gpsmon_fatal(FLINE, "assert failed; expected pkttype segment");
-
-	p = &pkt->u.seginfo;
-
-	TR2(("Received segment packet for dbid %d (dynamic_memory_used, dynamic_memory_available) (%lu %lu)\n", p->dbid, p->dynamic_memory_used, p->dynamic_memory_available));
-
-	rec = apr_hash_get(gx.segmenttab, &p->dbid, sizeof(p->dbid));
-	if (rec)
-	{
-		memcpy(&rec->u.seginfo, p, sizeof(*p));
-	}
-	else
-	{
-		rec = gx_pkt_to_smon_to_mmon(apr_hash_pool_get(gx.segmenttab), pkt);
-		apr_hash_set(gx.segmenttab, &rec->u.seginfo.dbid, sizeof(rec->u.seginfo.dbid), rec);
-	}
-}
-
-/**
-* write the qexec packet.
-* @return 1 if success, 0 if failure
-*/
-// static apr_uint32_t create_qexec_packet(const gpmon_qexec_t* qexec, gp_smon_to_mmon_packet_t* pkt)
-// {
-// 	// Copy over needed values
-// 	memcpy(&pkt->u.qexec_packet.data.key, &qexec->key, sizeof(gpmon_qexeckey_t));
-// 	pkt->u.qexec_packet.data.measures_rows_in = qexec->rowsout;
-// 	pkt->u.qexec_packet.data._cpu_elapsed = qexec->_cpu_elapsed;
-// 	pkt->u.qexec_packet.data.rowsout = qexec->rowsout;
-
-// 	gp_smon_to_mmon_set_header(pkt,GPMON_PKTTYPE_QEXEC);
-// 	return 1;
-// }
-
-static void extract_segments_exec(gpmon_packet_t* pkt)
-{
-	gpmon_qexec_t				*p;
-	gp_smon_to_mmon_packet_t	*rec;
-	gpmon_query_seginfo_key_t	qseg_key;
-	pidrec_t					*pidrec;
-
-	if (pkt->pkttype != GPMON_PKTTYPE_QEXEC)
-		gpsmon_fatal(FLINE, "assert failed; expected pkttype qexec");
-
-	p = &pkt->u.qexec;
-	qseg_key.qkey.tmid = p->key.tmid;
-	qseg_key.qkey.ssid = p->key.ssid;
-	qseg_key.qkey.ccnt = p->key.ccnt;
-	qseg_key.segid = p->key.hash_key.segid;
-
-	rec = apr_hash_get(gx.querysegtab, &qseg_key, sizeof(qseg_key));
-	pidrec = apr_hash_get(gx.pidtab, &p->key.hash_key.pid, sizeof(p->key.hash_key.pid));
-	ASSERT(pidrec);
-
-	if (rec)
-	{
-		rec->u.queryseg.sum_cpu_elapsed += pidrec->cpu_elapsed;
-		// rec->u.queryseg.sum_measures_rows_out += p->rowsout;
-		// if (p->key.hash_key.segid == -1 && p->key.hash_key.nid == 1 && (int64)(p->rowsout) > rec->u.queryseg.final_rowsout)
-		// {
-		// 	rec->u.queryseg.final_rowsout = p->rowsout;
-		// }
-	}
-	else
-	{
-		rec = apr_palloc(apr_hash_pool_get(gx.querysegtab),
-					sizeof(gp_smon_to_mmon_packet_t));
-		CHECKMEM(rec);
-		gp_smon_to_mmon_set_header(rec, GPMON_PKTTYPE_QUERYSEG);
-		rec->u.queryseg.key = qseg_key;
-		// if (p->key.hash_key.segid == -1 && p->key.hash_key.nid == 1)
-		// {
-		// 	rec->u.queryseg.final_rowsout = p->rowsout;
-		// }
-		// else
-		// {
-		// 	rec->u.queryseg.final_rowsout = -1;
-		// }
-		rec->u.queryseg.sum_cpu_elapsed = pidrec->cpu_elapsed;
-		//rec->u.queryseg.sum_measures_rows_out = p->rowsout;
-		apr_hash_set(gx.querysegtab, &rec->u.queryseg.key, sizeof(rec->u.queryseg.key), rec);
-	}
-}
-
 static void gx_recvqexec(gpmon_packet_t* pkt)
 {
 	gpmon_qexec_t* p;
 
 	if (pkt->pkttype != GPMON_PKTTYPE_QEXEC)
 		gpsmon_fatal(FLINE, "assert failed; expected pkttype qexec");
-    TR2(("received qexec packet\n"));
+
+        TR2(("%s received qexec packet %d-%d-%d pid %d\n", FLINE, pkt->u.qlog.key.tmid, pkt->u.qlog.key.ssid, pkt->u.qlog.key.ccnt, pkt->u.qlog.pid));
 
 	p = &pkt->u.qexec;
-	get_pid_metrics(p->key.hash_key.pid,
+	get_pid_metrics(p->key.hash_key,
 					p->key.tmid,
 					p->key.ssid,
 					p->key.ccnt);
 	// Store some aggregated information somewhere for metrics in
 	// queries_* tables, like cpu_elapsed, rows_out, and etc.
-	extract_segments_exec(pkt);
+	//extract_segments_exec(pkt);
 	// We don't call gpmon_warning here because the number of
 	// packet is big, and we would make log boating.
 	return;
@@ -1166,9 +1066,6 @@ static void gx_recvfrom(SOCKET sock, short event, void* arg)
 	{
 	case GPMON_PKTTYPE_QLOG:
 		gx_recvqlog(&pkt);
-		break;
-	case GPMON_PKTTYPE_SEGINFO:
-		gx_recvsegment(&pkt);
 		break;
 	case GPMON_PKTTYPE_QEXEC:
 		gx_recvqexec(&pkt);
@@ -1448,16 +1345,16 @@ static void setup_gx(int port, apr_int64_t signature)
 	}
 
 	/* qexec hash table */
-	gx.qexectab = apr_hash_make(subpool);
-	CHECKMEM(gx.qexectab);
+	//gx.qexectab = apr_hash_make(subpool);
+	//CHECKMEM(gx.qexectab);
 
 	/* qlog hash table */
 	gx.qlogtab = apr_hash_make(subpool);
 	CHECKMEM(gx.qlogtab);
 
 	/* segment hash table */
-	gx.segmenttab = apr_hash_make(subpool);
-	CHECKMEM(gx.segmenttab);
+	//gx.segmenttab = apr_hash_make(subpool);
+	//CHECKMEM(gx.segmenttab);
 
 	/* queryseg hash table */
 	gx.querysegtab = apr_hash_make(subpool);
@@ -1644,7 +1541,9 @@ void gx_main(int port, apr_int64_t signature)
                         rec = vptr;
 			if (rec)
                         {
-				get_pid_metrics(rec->pid,
+                                TR2(("%s: %d-%d-%d pid %d refresh process metrics \n ",
+                                        FLINE, rec->query_key.tmid, rec->query_key.ssid, rec->query_key.ccnt, rec->pid));
+				get_pid_metrics(rec->hash_key,
                                 rec->query_key.tmid,
                                 rec->query_key.ssid,
                                 rec->query_key.ccnt);
