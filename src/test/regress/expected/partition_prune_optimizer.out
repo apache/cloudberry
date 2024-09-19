@@ -3986,11 +3986,10 @@ explain (costs off) delete from inh_lp where a = 1;
 -- Ensure we don't exclude normal relations when we only expect to exclude
 -- inheritance children
 explain (costs off) update inh_lp1 set value = 10 where a = 2;
-                 QUERY PLAN                 
---------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Update on inh_lp1
    ->  Result
-         One-Time Filter: true
          ->  Result
                ->  Result
                      One-Time Filter: false

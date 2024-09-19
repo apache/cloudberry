@@ -424,7 +424,8 @@ private:
 
 	// insert NULL values for dropped attributes to construct the target list for a DML statement
 	List *CreateTargetListWithNullsForDroppedCols(List *target_list,
-												  const IMDRelation *md_rel);
+												  const IMDRelation *md_rel,
+												  bool keepDropedAsNull);
 
 	// create a target list containing column references for a hash node from the
 	// project list of its child node
@@ -564,8 +565,14 @@ private:
 		CDXLColRefArray *pdrgdxlcrOuterRefs, CDXLTranslateContext *dxltrctxLeft,
 		CDXLTranslateContext *dxltrctxRight);
 
+	// check if the target list contains any system columns
+	static void CheckSafeTargetListForAOTables(List *target_list);
+
 	// create final target list for update
 	static List *CreateDirectCopyTargetList(List *target_list);
+
+	// get all non-dropped columns of a relation
+	static List *GetRelationActiveColums(const IMDRelation *md_rel);
 };
 }  // namespace gpdxl
 

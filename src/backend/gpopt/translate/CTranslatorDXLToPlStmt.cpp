@@ -602,6 +602,10 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 		plan->qual = qual;
 	}
 
+	if (md_rel->IsAORowOrColTable())
+	{
+		CheckSafeTargetListForAOTables(plan->targetlist);
+	}
 
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 
@@ -769,6 +773,11 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexScan(
 
 	index_scan->indexorderdir = CTranslatorUtils::GetScanDirection(
 		physical_idx_scan_dxlop->GetIndexScanDir());
+
+	if (md_rel->IsAORowOrColTable())
+	{
+		CheckSafeTargetListForAOTables(plan->targetlist);
+	}
 
 	// translate index condition list
 	List *index_cond = NIL;
@@ -4022,6 +4031,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	Plan *plan = &(dml->plan);
 	AclMode acl_mode = ACL_NO_RIGHTS;
 	BOOL isSplit = phy_dml_dxlop->FSplit();
+	List *updateCols = NIL;
 
 	switch (phy_dml_dxlop->GetDmlOpType())
 	{
@@ -4055,6 +4065,11 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 
 	IMDId *mdid_target_table = phy_dml_dxlop->GetDXLTableDescr()->MDId();
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(mdid_target_table);
+
+	if (md_rel->IsAORowOrColTable())
+	{
+		isSplit = true; // AO tables are always use split updates
+	}
 
 	if (IMDRelation::EreldistrMasterOnly != md_rel->GetRelDistribution())
 	{
@@ -4103,9 +4118,16 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 							 nullptr,  // translate context for the base table
 							 child_contexts, output_context);
 
+	BOOL isNonSplitUpdate = (m_cmd_type == CMD_UPDATE && !isSplit);
+	if (isNonSplitUpdate)
+	{
+		// set all columns as updateCols for non-split updates
+		updateCols = GetRelationActiveColums(md_rel);
+	}
+
 	// pad child plan's target list with NULLs for dropped columns for all DML operator types
 	List *target_list_with_dropped_cols =
-		CreateTargetListWithNullsForDroppedCols(dml_target_list, md_rel);
+		CreateTargetListWithNullsForDroppedCols(dml_target_list, md_rel, !isNonSplitUpdate);
 	dml_target_list = target_list_with_dropped_cols;
 
 	// Add junk columns to the target list for the 'action', 'ctid',
@@ -4150,7 +4172,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	result_plan->targetlist = target_list_with_dropped_cols;
 	SetParamIds(result_plan);
 
-	if (m_cmd_type == CMD_UPDATE)
+	if (m_cmd_type == CMD_UPDATE && isSplit)
 	{
 		Result *final_result = MakeNode(Result);
 		Plan *final_result_plan = &(final_result->plan);
@@ -4176,6 +4198,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	// GPDB_14_MERGE_FIXME: fix split update and missing partColsUpdated
 	dml->rootRelation = md_rel->IsPartitioned() ? index : 0;
 	//dml->plans = ListMake1(child_plan);
+	dml->updateColnosLists = ListMake1(updateCols);
 
 	dml->fdwPrivLists = ListMake1(NIL);
 
@@ -4718,7 +4741,7 @@ CTranslatorDXLToPlStmt::TranslateDXLProjList(
 //---------------------------------------------------------------------------
 List *
 CTranslatorDXLToPlStmt::CreateTargetListWithNullsForDroppedCols(
-	List *target_list, const IMDRelation *md_rel)
+	List *target_list, const IMDRelation *md_rel, bool keepDropedAsNull)
 {
 	GPOS_ASSERT_FIXME(nullptr != target_list);
 	GPOS_ASSERT(gpdb::ListLength(target_list) <= md_rel->ColumnCount());
@@ -4741,6 +4764,11 @@ CTranslatorDXLToPlStmt::CreateTargetListWithNullsForDroppedCols(
 		Expr *expr = nullptr;
 		if (md_col->IsDropped())
 		{
+			if (!keepDropedAsNull)
+			{
+				continue;
+			}
+
 			// add a NULL element
 			OID oid_type = CMDIdGPDB::CastMdid(
 							   m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
@@ -5815,6 +5843,22 @@ CTranslatorDXLToPlStmt::TranslateNestLoopParamList(
 	return nest_params_list;
 }
 
+void
+CTranslatorDXLToPlStmt::CheckSafeTargetListForAOTables(List *target_list)
+{
+	ListCell *lc = nullptr;
+
+	ForEach(lc, target_list)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+		if (te->resorigcol < 0)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("System column in target list found for AO table"));
+		}
+	}
+}
+
 List *
 CTranslatorDXLToPlStmt::CreateDirectCopyTargetList(List *target_list)
 {
@@ -5834,5 +5878,33 @@ CTranslatorDXLToPlStmt::CreateDirectCopyTargetList(List *target_list)
 	}
 
 	return result_target_list;
+}
+
+List *
+CTranslatorDXLToPlStmt::GetRelationActiveColums(const IMDRelation *md_rel)
+{
+	List *result_list = NIL;
+	ULONG resno = 1;
+
+	const ULONG num_of_rel_cols = md_rel->ColumnCount();
+
+	for (ULONG ul = 0; ul < num_of_rel_cols; ul++)
+	{
+		const IMDColumn *md_col = md_rel->GetMdCol(ul);
+
+		if (md_col->IsSystemColumn())
+		{
+			continue;
+		}
+
+		if (!md_col->IsDropped())
+		{
+			result_list = gpdb::LAppendInt(result_list, resno);
+		}
+
+		resno++;
+	}
+
+	return result_list;
 }
 // EOF
