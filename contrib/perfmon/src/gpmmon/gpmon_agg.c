@@ -70,6 +70,7 @@ typedef struct dbmetrics_t {
 extern int min_query_time;
 extern mmon_options_t opt;
 extern apr_queue_t* message_queue;
+int32 tmid = -1;
 
 extern void incremement_tail_bytes(apr_uint64_t bytes);
 static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
@@ -310,11 +311,13 @@ static apr_status_t agg_put_metrics(agg_t* agg, const gpmon_metrics_t* met)
 
 static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation)
 {
+        gpmon_qlogkey_t key = qlog->key;
+        key.tmid = tmid;
 	qdnode_t* node;
 
-	node = apr_hash_get(agg->qtab, &qlog->key, sizeof(qlog->key));
+	node = apr_hash_get(agg->qtab, &key, sizeof(key));
         if (!node) {
-                gpmon_warning(FLINE, "put query metrics can not find qdnode from qtab, queryID :%d-%d-%d", qlog->key.tmid,qlog->key.ssid,qlog->key.ccnt);
+                gpmon_warning(FLINE, "put query metrics can not find qdnode from qtab, queryID :%d-%d-%d", tmid, qlog->key.ssid,qlog->key.ccnt);
         }
 	if (node)
 	{
@@ -338,6 +341,10 @@ static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, 
 static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 				 apr_int64_t generation)
 {
+        if (tmid == -1)
+        {
+                tmid = qlog->key.tmid;
+        }
         if (qlog->dbid == gpperfmon_dbid) {
                 TR2(("agg_put_qlog:(%d.%d.%d) ignore gpperfmon sql\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt));
                 return 0;
