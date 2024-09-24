@@ -73,6 +73,8 @@ CREATE TABLE intra_grant_inplace (c int);
 -- acquire LockTuple(), await session 3 xmax
 1&: GRANT SELECT ON intra_grant_inplace TO PUBLIC;
 2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
+-- XXX temporary until patch adds locking to addk2
+3: LOCK TABLE intra_grant_inplace IN ACCESS SHARE MODE;
 -- block in LockTuple() behind grant1
 2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
 -- unblock grant1; addk2 now awaits grant1 xmax

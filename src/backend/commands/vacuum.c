@@ -1722,7 +1722,10 @@ vac_update_relstats(Relation relation,
 {
 	Oid			relid = RelationGetRelid(relation);
 	Relation	rd;
+	ScanKeyData key[1];
 	HeapTuple	ctup;
+	HeapTuple	oldtup;
+	void	   *inplace_state;
 	Form_pg_class pgcform;
 	bool		dirty;
 
@@ -1796,7 +1799,12 @@ vac_update_relstats(Relation relation,
 	rd = heap_open(RelationRelationId, RowExclusiveLock);
 
 	/* Fetch a copy of the tuple to scribble on */
-	ctup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
+	ScanKeyInit(&key[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relid));
+	oldtup = systable_inplace_update_begin(rd, ClassOidIndexId, true, NULL, 1,
+										   key, &ctup, &inplace_state);
 	if (!HeapTupleIsValid(ctup))
 		elog(ERROR, "pg_class entry for relid %u vanished during vacuuming",
 			 relid);
@@ -1909,7 +1917,9 @@ vac_update_relstats(Relation relation,
 
 	/* If anything changed, write out the tuple. */
 	if (dirty)
-		heap_inplace_update(rd, ctup);
+		systable_inplace_update_finish(inplace_state, oldtup, ctup);
+	else
+		systable_inplace_update_cancel(inplace_state, oldtup);
 
 	heap_close(rd, RowExclusiveLock);
 }
@@ -1937,6 +1947,7 @@ void
 vac_update_datfrozenxid(void)
 {
 	HeapTuple	tuple;
+	HeapTuple	oldtup;
 	Form_pg_database dbform;
 	Relation	relation;
 	SysScanDesc scan;
@@ -1947,6 +1958,8 @@ vac_update_datfrozenxid(void)
 	MultiXactId lastSaneMinMulti;
 	bool		bogus = false;
 	bool		dirty = false;
+	ScanKeyData key[1];
+	void	   *inplace_state;
 
 	/*
 	 * Initialize the "min" calculation with GetOldestXmin, which is a
@@ -2052,8 +2065,14 @@ vac_update_datfrozenxid(void)
 	/* Now fetch the pg_database tuple we need to update. */
 	relation = heap_open(DatabaseRelationId, RowExclusiveLock);
 
-	/* Fetch a copy of the tuple to scribble on */
-	tuple = SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(MyDatabaseId));
+	ScanKeyInit(&key[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(MyDatabaseId));
+
+	oldtup = systable_inplace_update_begin(relation, DatabaseOidIndexId, true,
+										   NULL, 1, key, &tuple,
+										   &inplace_state);
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "could not find tuple for database %u", MyDatabaseId);
 	dbform = (Form_pg_database) GETSTRUCT(tuple);
@@ -2086,9 +2105,11 @@ vac_update_datfrozenxid(void)
 
 	if (dirty)
 	{
-		heap_inplace_update(relation, tuple);
+		systable_inplace_update_finish(inplace_state, oldtup, tuple);
 		SIMPLE_FAULT_INJECTOR("vacuum_update_dat_frozen_xid");
 	}
+	else
+		systable_inplace_update_cancel(inplace_state, oldtup);
 
 	heap_freetuple(tuple);
 	heap_close(relation, RowExclusiveLock);

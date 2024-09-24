@@ -22,23 +22,21 @@ BEGIN
 GRANT
 -- inplace update
 2&: VACUUM (FREEZE);  <waiting ...>
-FAILED:  Forked command is not blocking; got output: VACUUM
 3: INSERT INTO frozen_witness SELECT datfrozenxid FROM pg_database WHERE datname = current_catalog;
 INSERT 1
 1: COMMIT;
 COMMIT
 2<:  <... completed>
-FAILED:  Execution failed
+VACUUM
 -- Save the result in an environment variable.
 -- We get the raw xid to be sure that the age in the next query will be executed on the coordinator.
 3: @post_run 'TOKEN=`echo "${RAW_STR}" | awk \'NR==3\' | awk \'{print $1}\'` && echo ""' : SELECT min(x::varchar::int) FROM frozen_witness;
 
 -- observe datfrozenxid
 3: @pre_run 'echo "${RAW_STR}" | sed "s#@TOKEN#${TOKEN}#"': SELECT 'datfrozenxid retreated' FROM pg_database WHERE datname = current_catalog AND age(datfrozenxid) > age('@TOKEN'::xid);
- ?column?               
-------------------------
- datfrozenxid retreated 
-(1 row)
+ ?column? 
+----------
+(0 rows)
 
 REVOKE ALL ON DATABASE isolation2test FROM regress_temp_grantee;
 REVOKE

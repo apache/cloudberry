@@ -29,16 +29,15 @@ GRANT
 (1 row)
 -- inplace waits
 2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
-FAILED:  Forked command is not blocking; got output: ALTER
 
 1: COMMIT;
 COMMIT
 2<:  <... completed>
-FAILED:  Execution failed
+ALTER
 2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
  relhasindex 
 -------------
- f           
+ t           
 (1 row)
 
 DROP TABLE intra_grant_inplace;
@@ -75,13 +74,12 @@ BEGIN
  f           
 (1 row)
 2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
-FAILED:  Forked command is not blocking; got output: ALTER
 3: ROLLBACK;
 ROLLBACK
 5: ROLLBACK;
 ROLLBACK
 2<:  <... completed>
-FAILED:  Execution failed
+ALTER
 
 DROP TABLE intra_grant_inplace;
 DROP
@@ -149,9 +147,11 @@ BEGIN
 -------------
  f           
 (1 row)
+-- XXX temporary until patch adds locking to addk2
+3: LOCK TABLE intra_grant_inplace IN ACCESS SHARE MODE;
+LOCK
 -- block in LockTuple() behind grant1
 2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
-FAILED:  Forked command is not blocking; got output: ALTER
 -- unblock grant1; addk2 now awaits grant1 xmax
 3: ROLLBACK;
 ROLLBACK
@@ -160,11 +160,11 @@ GRANT
 1: COMMIT;
 COMMIT
 2<:  <... completed>
-FAILED:  Execution failed
+ALTER
 2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
  relhasindex 
 -------------
- f           
+ t           
 (1 row)
 
 DROP TABLE intra_grant_inplace;
