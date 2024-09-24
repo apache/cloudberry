@@ -1,0 +1,256 @@
+-- GRANT's lock is the catalog tuple xmax.  GRANT doesn't acquire a heavyweight
+-- lock on the object undergoing an ACL change.  Inplace updates, such as
+-- relhasindex=true, need special code to cope.
+
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- Disabling ORCA because we need to use row-level locks.
+1: set optimizer = off;
+SET
+2: set optimizer = off;
+SET
+3: set optimizer = off;
+SET
+4: set optimizer = off;
+SET
+5: set optimizer = off;
+SET
+
+1: BEGIN;
+BEGIN
+1: GRANT SELECT ON intra_grant_inplace TO PUBLIC;
+GRANT
+
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
+ relhasindex 
+-------------
+ f           
+(1 row)
+-- inplace waits
+2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
+FAILED:  Forked command is not blocking; got output: ALTER
+
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+FAILED:  Execution failed
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
+ relhasindex 
+-------------
+ f           
+(1 row)
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- inplace through KEY SHARE
+5: BEGIN;
+BEGIN
+5: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR KEY SHARE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+2: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
+ALTER
+5: ROLLBACK;
+ROLLBACK
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- inplace wait NO KEY UPDATE w/ KEY SHARE
+5: BEGIN;
+BEGIN
+3: BEGIN ISOLATION LEVEL READ COMMITTED;
+BEGIN
+3: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR NO KEY UPDATE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
+FAILED:  Forked command is not blocking; got output: ALTER
+3: ROLLBACK;
+ROLLBACK
+5: ROLLBACK;
+ROLLBACK
+2<:  <... completed>
+FAILED:  Execution failed
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- same-xact rowmark
+2: BEGIN;
+BEGIN
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR NO KEY UPDATE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+2: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
+ALTER
+2: COMMIT;
+COMMIT
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- same-xact rowmark in multixact
+5: BEGIN;
+BEGIN
+5: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR KEY SHARE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+2: BEGIN;
+BEGIN
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR NO KEY UPDATE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+2: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
+ALTER
+2: COMMIT;
+COMMIT
+5: ROLLBACK;
+ROLLBACK
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+3: BEGIN ISOLATION LEVEL READ COMMITTED;
+BEGIN
+3: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR UPDATE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+1: BEGIN;
+BEGIN
+-- acquire LockTuple(), await session 3 xmax
+1&: GRANT SELECT ON intra_grant_inplace TO PUBLIC;  <waiting ...>
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
+ relhasindex 
+-------------
+ f           
+(1 row)
+-- block in LockTuple() behind grant1
+2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
+FAILED:  Forked command is not blocking; got output: ALTER
+-- unblock grant1; addk2 now awaits grant1 xmax
+3: ROLLBACK;
+ROLLBACK
+1<:  <... completed>
+GRANT
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+FAILED:  Execution failed
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
+ relhasindex 
+-------------
+ f           
+(1 row)
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+2: BEGIN;
+BEGIN
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR NO KEY UPDATE;
+ relhasindex 
+-------------
+ f           
+(1 row)
+1: BEGIN;
+BEGIN
+-- acquire LockTuple(), await session 2 xmax
+1&: GRANT SELECT ON intra_grant_inplace TO PUBLIC;  <waiting ...>
+-- block in LockTuple() behind grant1 = deadlock
+2: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
+ALTER
+2: COMMIT;
+COMMIT
+1<:  <... completed>
+GRANT
+1: COMMIT;
+COMMIT
+2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
+ relhasindex 
+-------------
+ f           
+(1 row)
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- SearchSysCacheLocked1() calling LockRelease()
+1: BEGIN;
+BEGIN
+1: GRANT SELECT ON intra_grant_inplace TO PUBLIC;
+GRANT
+3: BEGIN ISOLATION LEVEL READ COMMITTED;
+BEGIN
+3&: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR UPDATE;  <waiting ...>
+4&: DO $$ BEGIN REVOKE SELECT ON intra_grant_inplace FROM PUBLIC; EXCEPTION WHEN others THEN RAISE WARNING 'got: %', regexp_replace(sqlerrm, '[0-9]+', 'REDACTED'); END $$;  <waiting ...>
+1: COMMIT;
+COMMIT
+3<:  <... completed>
+ relhasindex 
+-------------
+ f           
+(1 row)
+3: ROLLBACK;
+ROLLBACK
+4<:  <... completed>
+DO
+
+DROP TABLE intra_grant_inplace;
+DROP
+CREATE TABLE intra_grant_inplace (c int);
+CREATE
+
+-- SearchSysCacheLocked1() finding a tuple, then no tuple
+1: BEGIN;
+BEGIN
+1: DROP TABLE intra_grant_inplace;
+DROP
+3: BEGIN ISOLATION LEVEL READ COMMITTED;
+BEGIN
+3&: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass FOR UPDATE;  <waiting ...>
+4&: DO $$ BEGIN REVOKE SELECT ON intra_grant_inplace FROM PUBLIC; EXCEPTION WHEN others THEN RAISE WARNING 'got: %', regexp_replace(sqlerrm, '[0-9]+', 'REDACTED'); END $$;  <waiting ...>
+1: COMMIT;
+COMMIT
+3<:  <... completed>
+ relhasindex 
+-------------
+(0 rows)
+3: ROLLBACK;
+ROLLBACK
+4<:  <... completed>
+DO
+
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+4q: ... <quitting>
+5q: ... <quitting>
