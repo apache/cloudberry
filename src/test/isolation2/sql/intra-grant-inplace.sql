@@ -1,3 +1,8 @@
+-- start_matchsubs
+-- m/DETAIL:  Process \d+ waits for ExclusiveLock on tuple \(\d+,\d+\) of relation \d+ of database \d+; blocked by process \d+\./
+-- s/DETAIL:  Process \d+ waits for ExclusiveLock on tuple \(\d+,\d+\) of relation \d+ of database \d+; blocked by process \d+\./DETAIL:  Process ### waits for ExclusiveLock on tuple \(##,##\) of relation ### of database ###; blocked by process ###\./
+-- end_matchsubs
+
 -- GRANT's lock is the catalog tuple xmax.  GRANT doesn't acquire a heavyweight
 -- lock on the object undergoing an ACL change.  Inplace updates, such as
 -- relhasindex=true, need special code to cope.
@@ -10,6 +15,9 @@ CREATE TABLE intra_grant_inplace (c int);
 3: set optimizer = off;
 4: set optimizer = off;
 5: set optimizer = off;
+
+1: SET deadlock_timeout = '100s';
+2: SET deadlock_timeout = '10ms';
 
 1: BEGIN;
 1: GRANT SELECT ON intra_grant_inplace TO PUBLIC;
@@ -73,8 +81,6 @@ CREATE TABLE intra_grant_inplace (c int);
 -- acquire LockTuple(), await session 3 xmax
 1&: GRANT SELECT ON intra_grant_inplace TO PUBLIC;
 2: SELECT relhasindex FROM pg_class WHERE oid = 'intra_grant_inplace'::regclass;
--- XXX temporary until patch adds locking to addk2
-3: LOCK TABLE intra_grant_inplace IN ACCESS SHARE MODE;
 -- block in LockTuple() behind grant1
 2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
 -- unblock grant1; addk2 now awaits grant1 xmax

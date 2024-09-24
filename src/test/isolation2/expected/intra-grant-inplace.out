@@ -1,3 +1,8 @@
+-- start_matchsubs
+-- m/DETAIL:  Process \d+ waits for ExclusiveLock on tuple \(\d+,\d+\) of relation \d+ of database \d+; blocked by process \d+\./
+-- s/DETAIL:  Process \d+ waits for ExclusiveLock on tuple \(\d+,\d+\) of relation \d+ of database \d+; blocked by process \d+\./DETAIL:  Process ### waits for ExclusiveLock on tuple \(##,##\) of relation ### of database ###; blocked by process ###\./
+-- end_matchsubs
+
 -- GRANT's lock is the catalog tuple xmax.  GRANT doesn't acquire a heavyweight
 -- lock on the object undergoing an ACL change.  Inplace updates, such as
 -- relhasindex=true, need special code to cope.
@@ -15,6 +20,11 @@ SET
 4: set optimizer = off;
 SET
 5: set optimizer = off;
+SET
+
+1: SET deadlock_timeout = '100s';
+SET
+2: SET deadlock_timeout = '10ms';
 SET
 
 1: BEGIN;
@@ -147,9 +157,6 @@ BEGIN
 -------------
  f           
 (1 row)
--- XXX temporary until patch adds locking to addk2
-3: LOCK TABLE intra_grant_inplace IN ACCESS SHARE MODE;
-LOCK
 -- block in LockTuple() behind grant1
 2&: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);  <waiting ...>
 -- unblock grant1; addk2 now awaits grant1 xmax
@@ -185,7 +192,10 @@ BEGIN
 1&: GRANT SELECT ON intra_grant_inplace TO PUBLIC;  <waiting ...>
 -- block in LockTuple() behind grant1 = deadlock
 2: ALTER TABLE intra_grant_inplace ADD PRIMARY KEY (c);
-ALTER
+ERROR:  deadlock detected
+DETAIL:  Process ### waits for ExclusiveLock on tuple (##,##) of relation ### of database ###; blocked by process ###.
+Process 69286 waits for ShareLock on transaction 2106; blocked by process 69295.
+HINT:  See server log for query details.
 2: COMMIT;
 COMMIT
 1<:  <... completed>

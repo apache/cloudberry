@@ -132,6 +132,8 @@ static HeapTuple ExtractReplicaIdentity(Relation rel, HeapTuple tup, bool key_mo
  * heavyweight lock mode and MultiXactStatus values to use for any particular
  * tuple lock strength.
  *
+ * These interact with InplaceUpdateTupleLock, an alias for ExclusiveLock.
+ *
  * Don't look at lockstatus/updstatus directly!  Use get_mxact_status_for_lock
  * instead.
  */
@@ -6031,13 +6033,14 @@ heap_inplace_lock(Relation relation,
 
 	Assert(BufferIsValid(buffer));
 
+	LockTuple(relation, &oldtup.t_self, InplaceUpdateTupleLock);
 	LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 
 	/*----------
 	 * Interpret HeapTupleSatisfiesUpdate() like heap_update() does, except:
 	 *
 	 * - wait unconditionally
-	 * - no tuple locks
+	 * - already locked tuple above, since inplace needs that unconditionally
 	 * - don't recheck header after wait: simpler to defer to next iteration
 	 * - don't try to continue even if the updater aborts: likewise
 	 * - no crosscheck
@@ -6120,7 +6123,10 @@ heap_inplace_lock(Relation relation,
 	 * don't bother optimizing that.
 	 */
 	if (!ret)
+	{
+		UnlockTuple(relation, &oldtup.t_self, InplaceUpdateTupleLock);
 		InvalidateCatalogSnapshot();
+	}
 	return ret;
 }
 
@@ -6129,6 +6135,8 @@ heap_inplace_lock(Relation relation,
  *
  * The tuple cannot change size, and therefore its header fields and null
  * bitmap (if any) don't change either.
+ *
+ * Since we hold LOCKTAG_TUPLE, no updater has a local copy of this tuple.
  */
 void
 heap_inplace_update_and_unlock(Relation relation,
@@ -6217,6 +6225,7 @@ heap_inplace_unlock(Relation relation,
 					HeapTuple oldtup, Buffer buffer)
 {
 	LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
+	UnlockTuple(relation, &oldtup->t_self, InplaceUpdateTupleLock);
 }
 
 /*
