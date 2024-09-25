@@ -58,7 +58,7 @@ volatile pg_atomic_uint32 *pg_qs_on;
  * the finished query node. We cached the query
  * state info at end the query. And reset it
  * when next query starts.
- * 
+ *
  * On QD, it is used to cache the whole query
  * state info. And gpmon_query_info_collect_hook
  * will send it to gpsmon. Also reset it when
@@ -601,7 +601,7 @@ pg_query_state(PG_FUNCTION_ARGS)
 		CdbPgResults cdb_pgresults = CollectQEQueryState(backendInfo);
 		AttachPeer();
 		msg =  GetRemoteBackendQueryStates(cdb_pgresults,
-									       proc,
+										   proc,
 										   verbose,
 										   costs,
 										   timing,
@@ -1080,8 +1080,8 @@ GetRemoteBackendQueryStates(CdbPgResults cdb_pgresults,
 
 	mqh = shm_mq_attach(mq, NULL, NULL);
 	sig_result = SendProcSignal(proc->pid,
-                                QueryStatePollReason,
-                                proc->backendId);
+								QueryStatePollReason,
+								proc->backendId);
 	if (sig_result == -1)
 	{
 		goto signal_error;
@@ -1115,7 +1115,7 @@ mq_error:
 					errmsg("error in message queue data transmitting")));
 }
 
-static shm_mq_msg* 
+static shm_mq_msg*
 receive_final_query_state(void)
 {
 	shm_mq_handle  *mqh;
@@ -1164,7 +1164,7 @@ cbdb_mpp_query_state(PG_FUNCTION_ARGS)
 		Size len;
 		if (proc == NULL)
 			continue;
-		/* 
+		/*
 		 * Wait for shm_mq detached as the mq will be reused here,
 		 * we need to wait for the mqh->sender to detached first,
 		 * then reset the mq, otherwiase it will panic
@@ -1178,7 +1178,7 @@ cbdb_mpp_query_state(PG_FUNCTION_ARGS)
 		create_shm_mq(proc, MyProc);
 		mqh = shm_mq_attach(mq, NULL, NULL);
 		/*
-		 * send signal `QueryStatePollReason` to all processes 
+		 * send signal `QueryStatePollReason` to all processes
 		 */
 		sig_result = SendProcSignal(proc->pid,
 									QueryStatePollReason,
@@ -1201,7 +1201,7 @@ cbdb_mpp_query_state(PG_FUNCTION_ARGS)
 			elog(DEBUG1, "invalid msg from %d", proc->pid);
 			goto mq_error;
 		}
-		/* 
+		/*
 		 * the query of this slice maybe closed or no query running on that backend
 		 * such as create table as, some backends insert data to the table instead
 		 * of running any plan nodes.
@@ -1262,7 +1262,7 @@ get_query_backend_info(ArrayType *array)
 
 	for (int i = 0; i < len; i++)
 	{
-		HeapTupleHeader td = DatumGetHeapTupleHeader(data[i]); 
+		HeapTupleHeader td = DatumGetHeapTupleHeader(data[i]);
 		TupleDesc   tupDesc;
 		HeapTupleData tmptup;
 		int32 pid;
@@ -1310,11 +1310,9 @@ void
 create_shm_mq(PGPROC *sender, PGPROC *receiver)
 {
 	memset(mq, 0, QUEUE_SIZE);
-    mq = shm_mq_create(mq, QUEUE_SIZE);
-    shm_mq_set_sender(mq, sender);
-    shm_mq_set_receiver(mq, receiver); /* this function notifies the
-                                        counterpart to come into data
-                                        transfer */
+	mq = shm_mq_create(mq, QUEUE_SIZE);
+	shm_mq_set_sender(mq, sender);
+	shm_mq_set_receiver(mq, receiver);
 }
 
 static bool
@@ -1399,7 +1397,7 @@ check_and_init_peer(LOCKTAG *tag, PGPROC *proc, int n_peers)
 		counterpart_user_id = GetRemoteBackendUserId(proc);
 		if (counterpart_user_id == InvalidOid)
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-							errmsg("query is busy, no response")));	
+							errmsg("query is busy, no response")));
 		if (!(superuser() || GetUserId() == counterpart_user_id))
 		{
 			UnlockShmem(tag);
@@ -1610,7 +1608,11 @@ enable_qs_runtime(void)
 {
 	if (!pg_qs_enable)
 		return false;
-	return pg_atomic_read_u32(pg_qs_on);
+	if (!pg_atomic_read_u32(pg_qs_on))
+		return false;
+	if (strcmp(GP_VERSION, "1.6.0") <= 0)
+		return false;
+	return true;
 }
 
 /* check and count the cbd_pgresults */

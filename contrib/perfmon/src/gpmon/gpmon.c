@@ -503,19 +503,16 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 					gpmon_qlog_query_error(gpmonPacket);
 					break;
 				case METRICS_PLAN_NODE_INITIALIZE:
-					if (!enable_qs_runtime())
-					{
-						query_text = get_query_text(qd);
-						plan = get_plan(qd);
-						gpmon_qlog_query_text(gpmonPacket,
-											  query_text,
-											  plan,
-											  application_name,
-											  NULL,
-											  NULL,
-											  GPMON_QLOG_STATUS_START);
-						pfree(plan);
-					}
+					query_text = get_query_text(qd);
+					plan = get_plan(qd);
+					gpmon_qlog_query_text(gpmonPacket,
+							query_text,
+							plan,
+							application_name,
+							NULL,
+							NULL,
+							GPMON_QLOG_STATUS_START);
+					pfree(plan);
 					break;
 				default:
 					break;

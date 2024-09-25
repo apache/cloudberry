@@ -1330,13 +1330,13 @@ apr_status_t gpdb_check_partitions(mmon_options_t *opt)
 		result = call_for_each_table_with_opt(check_partition, NULL, conn, opt);
 
 		// make sure to run check_partition even if we just got a failure from the previous call
-		apr_status_t temp_result;
-		temp_result = check_partition("log_alert", NULL, conn, opt);
+		//apr_status_t temp_result;
+		//temp_result = check_partition("log_alert", NULL, conn, opt);
 
-		// use the first error that occurred, if any
-		if (result == APR_SUCCESS) {
-			result = temp_result;
-		}
+		//// use the first error that occurred, if any
+		//if (result == APR_SUCCESS) {
+		//	result = temp_result;
+		//}
 	}
 
 	// close connection

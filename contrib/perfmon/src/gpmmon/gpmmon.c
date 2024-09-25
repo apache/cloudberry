@@ -1506,7 +1506,7 @@ int perfmon_main(Datum arg)
 		}
 	}
 
-	create_log_alert_table();
+	//create_log_alert_table();
 	gpmmon_main();
 
 	cleanup();

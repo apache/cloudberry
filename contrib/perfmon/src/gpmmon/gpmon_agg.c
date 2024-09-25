@@ -311,14 +311,16 @@ static apr_status_t agg_put_metrics(agg_t* agg, const gpmon_metrics_t* met)
 
 static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation)
 {
-        gpmon_qlogkey_t key = qlog->key;
-        key.tmid = tmid;
-	qdnode_t* node;
+	gpmon_qlogkey_t key = qlog->key;
+	key.tmid = tmid;
+	qdnode_t *node;
 
 	node = apr_hash_get(agg->qtab, &key, sizeof(key));
-        if (!node) {
-                gpmon_warning(FLINE, "put query metrics can not find qdnode from qtab, queryID :%d-%d-%d", tmid, qlog->key.ssid,qlog->key.ccnt);
-        }
+	if (!node)
+	{
+		TR2(("put query metrics can not find qdnode from qtab, queryID :%d-%d-%d \n",
+			 tmid, qlog->key.ssid, qlog->key.ccnt));
+	}
 	if (node)
 	{
 		// here update the stats for the query
@@ -327,7 +329,7 @@ static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, 
 		node->qlog.p_metrics.fd_cnt  += qlog->p_metrics.fd_cnt;
 		if (qlog->p_metrics.mem.size > node->qlog.p_metrics.mem.size)
 		{
-                        node->qlog.p_metrics.mem.size = qlog->p_metrics.mem.size;
+			node->qlog.p_metrics.mem.size = qlog->p_metrics.mem.size;
 		};
 		node->last_updated_generation = generation;
 		node->num_metrics_packets++;
