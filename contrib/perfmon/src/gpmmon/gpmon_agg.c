@@ -333,8 +333,8 @@ static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, 
 		};
 		node->last_updated_generation = generation;
 		node->num_metrics_packets++;
-		TR2(("Query Metrics: (host %s ssid %d ccnt %d) (cpuelapsed %d cpupct %f) / %d\n",
-			 qlog->user, qlog->key.ssid, qlog->key.ccnt, (int) node->qlog.cpu_elapsed, node->qlog.p_metrics.cpu_pct,
+		TR2(("Query Metrics: (host %s ssid %d ccnt %d) (cpuelapsed %d cpupct %f memsize %lu) / %d\n",
+			 qlog->user, qlog->key.ssid, qlog->key.ccnt, (int) node->qlog.cpu_elapsed, node->qlog.p_metrics.cpu_pct, node->qlog.p_metrics.mem.size,
 			node->num_metrics_packets));
 	}
 	return 0;
