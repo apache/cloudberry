@@ -1554,6 +1554,7 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	GlobalTransaction gxact;
 	PGPROC	   *proc;
 	TransactionId xid;
+	bool		ondisk;
 	char	   *buf;
 	char	   *bufptr;
 	TwoPhaseFileHeader *hdr;
@@ -1739,6 +1740,12 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 
 	PredicateLockTwoPhaseFinish(xid, isCommit);
 
+	/*
+	 * Read this value while holding the two-phase lock, as the on-disk 2PC
+	 * file is physically removed after the lock is released.
+	 */
+	ondisk = gxact->ondisk;
+
 	/* Clear shared memory state */
 	RemoveGXact(gxact);
 
@@ -1754,7 +1761,7 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	/*
 	 * And now we can clean up any files we may have left.
 	 */
-	if (gxact->ondisk)
+	if (ondisk)
 		RemoveTwoPhaseFile(xid, true);
 
 	MyLockedGxact = NULL;
