@@ -761,6 +761,7 @@ PROTOBUF_LIBS
 PROTOBUF_CFLAGS
 enable_preload_ic_module
 enable_ic_proxy
+enable_ic_udp2
 enable_external_fts
 HAVE_CXX14
 enable_gpcloud
@@ -909,6 +910,7 @@ enable_shared_postgres_backend
 enable_link_postgres_with_shared
 enable_gpcloud
 enable_external_fts
+enable_ic_udp2
 enable_ic_proxy
 enable_preload_ic_module
 enable_pax
@@ -1629,6 +1631,7 @@ Optional Features:
                           libpostgres.so
   --enable-gpcloud        enable gpcloud support
   --enable-external-fts   enable external fts support
+  --enable-ic-udp2        enable interconnect udp2 implement
   --enable-ic-proxy       enable interconnect proxy mode (requires libuv
                           library)
   --disable-preload-ic-module
@@ -9180,6 +9183,38 @@ $as_echo "#define USE_INTERNAL_FTS 1" >>confdefs.h
 
   CFLAGS="$CFLAGS -DUSE_INTERNAL_FTS=1"
 fi
+
+#
+# ic-udp2
+#
+
+
+# Check whether --enable-ic-udp2 was given.
+if test "${enable_ic_udp2+set}" = set; then :
+  enableval=$enable_ic_udp2;
+  case $enableval in
+    yes)
+
+$as_echo "#define ENABLE_IC_UDP2 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-ic-udp2 option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_ic_udp2=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with interconnect udp2 support ... $enable_ic_udp2" >&5
+$as_echo "checking whether to build with interconnect udp2 support ... $enable_ic_udp2" >&6; }
+
 
 #
 # ic-proxy
