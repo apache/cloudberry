@@ -132,7 +132,9 @@ void clear_big_fields(yagpcc::SetQueryReq *req) {
   if (Gp_session_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
     qi->clear_plan_text();
+    qi->clear_template_plan_text();
     qi->clear_query_text();
+    qi->clear_template_query_text();
   }
 }
 
