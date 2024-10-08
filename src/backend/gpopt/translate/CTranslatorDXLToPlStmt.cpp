@@ -17,6 +17,7 @@
 extern "C" {
 #include "postgres.h"
 
+#include "access/sysattr.h"
 #include "catalog/gp_distribution_policy.h"
 #include "catalog/pg_collation.h"
 #include "cdb/cdbutil.h"
@@ -5851,10 +5852,14 @@ CTranslatorDXLToPlStmt::CheckSafeTargetListForAOTables(List *target_list)
 	ForEach(lc, target_list)
 	{
 		TargetEntry *te = (TargetEntry *) lfirst(lc);
-		if (te->resorigcol < 0)
+		if (te->resorigcol < 0 &&
+			te->resorigcol != SelfItemPointerAttributeNumber &&
+			te->resorigcol != TableOidAttributeNumber &&
+			te->resorigcol != GpSegmentIdAttributeNumber &&
+			te->resorigcol != GpForeignServerAttributeNumber)
 		{
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-					   GPOS_WSZ_LIT("System column in target list found for AO table"));
+					   GPOS_WSZ_LIT("Invalid system target list found for AO table"));
 		}
 	}
 }
