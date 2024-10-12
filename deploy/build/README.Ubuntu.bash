@@ -20,6 +20,7 @@ sudo apt-get install -y \
 	libkrb5-dev \
 	libpam-dev \
 	libperl-dev \
+	libpq-dev \
 	libreadline-dev \
 	libssl-dev \
 	libxerces-c-dev \
@@ -35,12 +36,10 @@ sudo apt-get install -y \
 	pkg-config \
 	python3-dev \
 	python3-pip \
-	python3-psutil \
-	python3-pygresql \
-	python3-yaml \
 	zlib1g-dev
 
-pip3 install conan
+sudo pip3 install conan==1.50.0
+sudo pip3 install -r ../../python-dependencies.txt
 
 sudo tee -a /etc/sysctl.conf << EOF
 kernel.shmmax = 5000000000000
