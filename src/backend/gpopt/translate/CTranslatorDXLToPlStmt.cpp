@@ -5257,8 +5257,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	}
 
 	ULONG acl_mode = table_descr->GetAclMode();
-	GPOS_ASSERT(acl_mode >= 0 &&
-				acl_mode <= std::numeric_limits<AclMode>::max());
+	GPOS_ASSERT(acl_mode <= std::numeric_limits<AclMode>::max());
 	AclMode required_perms = static_cast<AclMode>(acl_mode);
 
 	// descriptor was already processed, and translated RTE is stored at
