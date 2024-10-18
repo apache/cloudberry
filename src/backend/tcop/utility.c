@@ -261,6 +261,7 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 		case T_AlterTagStmt:
 		case T_CreateDirectoryTableStmt:
 		case T_AlterDirectoryTableStmt:
+		case T_DropDirectoryTableStmt:
 		case T_CreateProfileStmt:
 		case T_CreateQueueStmt:
 		case T_CreateResourceGroupStmt:
@@ -1251,6 +1252,19 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 		case T_DropStmt:
 			{
 				DropStmt   *stmt = (DropStmt *) parsetree;
+
+				if (EventTriggerSupportsObjectType(stmt->removeType))
+					ProcessUtilitySlow(pstate, pstmt, queryString,
+									   context, params, queryEnv,
+									   dest, qc);
+				else
+					ExecDropStmt(stmt, isTopLevel);
+			}
+			break;
+
+		case T_DropDirectoryTableStmt:
+			{
+				DropStmt	*stmt = (DropStmt *) &((DropDirectoryTableStmt *) parsetree)->base;
 
 				if (EventTriggerSupportsObjectType(stmt->removeType))
 					ProcessUtilitySlow(pstate, pstmt, queryString,
@@ -2375,6 +2389,12 @@ ProcessUtilitySlow(ParseState *pstate,
 				commandCollected = true;
 				break;
 
+			case T_DropDirectoryTableStmt:
+				ExecDropStmt((DropStmt *) &((DropDirectoryTableStmt *) parsetree)->base, isTopLevel);
+				/* no commands stashed for DROP */
+				commandCollected = true;
+				break;
+
 			case T_RenameStmt:
 				address = ExecRenameStmt((RenameStmt *) parsetree);
 				break;
@@ -3269,6 +3289,10 @@ CreateCommandTag(Node *parsetree)
 			tag = CMDTAG_ALTER_DIRECTORY_TABLE;
 			break;
 
+		case T_DropDirectoryTableStmt:
+			tag = CMDTAG_DROP_DIRECTORY_TABLE;
+			break;
+
 		case T_DropStmt:
 			switch (((DropStmt *) parsetree)->removeType)
 			{
@@ -4140,6 +4164,7 @@ GetCommandLogLevel(Node *parsetree)
 		case T_ImportForeignSchemaStmt:
 		case T_CreateDirectoryTableStmt:
 		case T_AlterDirectoryTableStmt:
+		case T_DropDirectoryTableStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

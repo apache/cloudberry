@@ -577,6 +577,7 @@ DomainConstraintState
 DomainConstraintType
 DomainIOData
 DropBehavior
+DropDirectoryTableStmt
 DropOwnedStmt
 DropProfileStmt
 DropReplicationSlotCmd
