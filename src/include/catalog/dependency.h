@@ -169,6 +169,7 @@ typedef enum ObjectClass
 #define PERFORM_DELETION_SKIP_EXTENSIONS	0x0010	/* keep extensions */
 #define PERFORM_DELETION_CONCURRENT_LOCK	0x0020	/* normal drop with
 													 * concurrent lock mode */
+#define PERFORM_DELETION_WITH_CONTENT		0x0040	/* drop directory table file */
 
 
 /* in dependency.c */

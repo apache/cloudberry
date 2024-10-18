@@ -623,8 +623,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  inherited relation "dir_table1" is not a table or foreign table
 -- Test DROP DIRECTORY TABLE
 DROP DIRECTORY TABLE dir_table4;
-DROP DIRECTORY TABLE dir_table4;    -- fail
-ERROR:  directory table "dir_table4" does not exist
+DROP DIRECTORY TABLE dir_table4;
+NOTICE:  directory table "dir_table4" does not exist, skipping
 DROP DIRECTORY TABLE IF EXISTS dir_table5;
 DROP DIRECTORY TABLE IF EXISTS dir_table5;  -- skip
 NOTICE:  directory table "dir_table5" does not exist, skipping

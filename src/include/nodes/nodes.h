@@ -539,6 +539,7 @@ typedef enum NodeTag
 	T_PartitionValuesSpec,
 	T_CreateDirectoryTableStmt,
 	T_AlterDirectoryTableStmt,
+	T_DropDirectoryTableStmt,
 	T_CreateFileSpaceStmt,
 	T_FileSpaceEntry,
 	T_DropFileSpaceStmt,

@@ -3442,6 +3442,17 @@ typedef struct DropStmt
 } DropStmt;
 
 /* ----------------------
+ *		DROP Directory Table Statement
+ * ----------------------
+ */
+
+typedef struct DropDirectoryTableStmt
+{
+	DropStmt	base;
+	bool		with_content;	/* whether drop directory table file */
+} DropDirectoryTableStmt;
+
+/* ----------------------
  *				Truncate Table Statement
  * ----------------------
  */

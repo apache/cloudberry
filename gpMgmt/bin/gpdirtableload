@@ -69,6 +69,9 @@ def parseargs():
                         help='Database to connect to')
     parser.add_argument('--mode', choices=['upload', 'download'], default="upload",
                         help='Upload or download file to/from directory table')
+    parser.add_argument('--match', choices=['full', 'regex'], default="full",
+                        help='Input file character match mode, use full match ' 
+                        'for file or regex match for directory')
     parser.add_argument('--dest-path', help='In upload mode, this means path relative to '
                                             'the table root directory, while in download '
                                             'mode, means directory to download')
@@ -165,6 +168,7 @@ class gpdirtableload:
         self.startTimestamp = time.time()
         self.pool = None
         self.upload = True
+        self.regexMatch = False
 
         # set default log level
         if self.options.verbose is not None:
@@ -175,6 +179,10 @@ class gpdirtableload:
         # set load from/to
         if self.options.mode is not None and self.options.mode == 'download':
             self.upload = False
+
+        # set download character match mode
+        if self.options.match is not None and self.options.match == 'regex':
+            self.regexMatch = True
 
         if self.options.dest_path is None:
             self.log(self.ERROR, '--dest-path must be set')        
@@ -355,17 +363,24 @@ class gpdirtableload:
         self.allFilesToDownload = []
         self.numFiles = 0
 
-        qry = "SELECT relative_path FROM %s " % self.options.table
+        qry = "SELECT relative_path FROM %s WHERE " % self.options.table
+
+        qry += " relative_path like \'%s" % self.options.input_file
+        if self.regexMatch:
+        	qry += '%'
+        qry += "\'"
 
         if self.options.tag:
-            qry += "WHERE tag = \'%s\'" % self.options.tag
+            qry += "AND tag = \'%s\'" % self.options.tag
 
         self.allFilesToDownload = [s[0] for s in
                                    self.db.query(qry).getresult()]
         self.numFiles = len(self.allFilesToDownload)
 
     def confirmWorkers(self):
-        if self.numFiles < self.options.tasks:
+        if self.numFiles == 0:
+        	self.numWorkers = 1
+        elif self.numFiles < self.options.tasks:
             self.numWorkers = self.numFiles
         else:
             self.numWorkers = self.options.tasks

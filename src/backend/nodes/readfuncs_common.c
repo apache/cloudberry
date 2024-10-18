@@ -742,6 +742,36 @@ _readCreateDomainStmt(void)
 	READ_DONE();
 }
 
+static void
+_readDropStmt_common(DropStmt *local_node)
+{
+	READ_TEMP_LOCALS();
+
+	READ_NODE_FIELD(objects);
+	READ_ENUM_FIELD(removeType,ObjectType);
+	READ_ENUM_FIELD(behavior,DropBehavior);
+	READ_BOOL_FIELD(missing_ok);
+	READ_BOOL_FIELD(concurrent);
+	READ_BOOL_FIELD(isdynamic);
+
+	/* Force 'missing_ok' in QEs */
+#ifdef COMPILING_BINARY_FUNCS
+	local_node->missing_ok=true;
+#endif /* COMPILING_BINARY_FUNCS */
+}
+
+static DropDirectoryTableStmt *
+_readDropDirectoryTableStmt(void)
+{
+	READ_LOCALS(DropDirectoryTableStmt);
+
+	_readDropStmt_common(&local_node->base);
+
+	READ_BOOL_FIELD(with_content);
+
+	READ_DONE();
+}
+
 static CreateEnumStmt *
 _readCreateEnumStmt(void)
 {

@@ -4041,7 +4041,7 @@ static void
 _outAlterDirectoryTableStmt(StringInfo str, const AlterDirectoryTableStmt *node)
 {
 	WRITE_NODE_TYPE("ALTERDIRECTORYTABLESTMT");
-	
+
 	WRITE_NODE_FIELD(relation);
 	WRITE_NODE_FIELD(tags);
 	WRITE_BOOL_FIELD(unsettag);
@@ -5234,6 +5234,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_AlterDirectoryTableStmt:
 				_outAlterDirectoryTableStmt(str, obj);
+				break;
+			case T_DropDirectoryTableStmt:
+				_outDropDirectoryTableStmt(str, obj);
 				break;
 			case T_CreateTaskStmt:
 				_outCreateTaskStmt(str, obj);

@@ -3306,6 +3306,8 @@ parseNodeString(void)
 		return_value = _readColumnReferenceStorageDirective();
 	else if (MATCHX("RETURN"))
 		return_value = _readReturnStmt();
+	else if (MATCHX("DROPDIRECTORYTABLESTMT"))
+		return_value = _readDropDirectoryTableStmt();
 	else
 	{
         ereport(ERROR,

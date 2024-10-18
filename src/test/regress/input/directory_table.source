@@ -226,7 +226,7 @@ CREATE TABLE test_inherits4(b text) INHERITS(dir_table1, dir_table2);   -- fail
 
 -- Test DROP DIRECTORY TABLE
 DROP DIRECTORY TABLE dir_table4;
-DROP DIRECTORY TABLE dir_table4;    -- fail
+DROP DIRECTORY TABLE dir_table4;
 DROP DIRECTORY TABLE IF EXISTS dir_table5;
 DROP DIRECTORY TABLE IF EXISTS dir_table5;  -- skip
 

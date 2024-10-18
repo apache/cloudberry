@@ -1750,30 +1750,6 @@ _readCreateStatsStmt(void)
 	READ_DONE();
 }
 
-static CreateDirectoryTableStmt *
-_readCreateDirectoryTableStmt(void)
-{
-	READ_LOCALS(CreateDirectoryTableStmt);
-
-	_readCreateStmt_common(&local_node->base);
-
-	READ_STRING_FIELD(tablespacename);
-
-	READ_DONE();
-}
-
-static AlterDirectoryTableStmt *
-_readAlterDirectoryTableStmt(void)
-{
-	READ_LOCALS(AlterDirectoryTableStmt);
-	
-	READ_NODE_FIELD(relation);
-	READ_NODE_FIELD(tags);
-	READ_BOOL_FIELD(unsettag);
-	
-	READ_DONE();
-}
-
 static CreateTaskStmt *
 _readCreateTaskStmt(void)
 {
@@ -1850,6 +1826,30 @@ _readAlterDatabaseStmt(void)
 	
 	READ_STRING_FIELD(dbname);
 	READ_NODE_FIELD(options);
+	READ_NODE_FIELD(tags);
+	READ_BOOL_FIELD(unsettag);
+
+	READ_DONE();
+}
+
+static CreateDirectoryTableStmt *
+_readCreateDirectoryTableStmt(void)
+{
+	READ_LOCALS(CreateDirectoryTableStmt);
+
+	_readCreateStmt_common(&local_node->base);
+
+	READ_STRING_FIELD(tablespacename);
+
+	READ_DONE();
+}
+
+static AlterDirectoryTableStmt *
+_readAlterDirectoryTableStmt(void)
+{
+	READ_LOCALS(AlterDirectoryTableStmt);
+
+	READ_NODE_FIELD(relation);
 	READ_NODE_FIELD(tags);
 	READ_BOOL_FIELD(unsettag);
 
@@ -2894,6 +2894,9 @@ readNodeBinary(void)
 				break;
 			case T_AlterDirectoryTableStmt:
 				return_value = _readAlterDirectoryTableStmt();
+				break;
+			case T_DropDirectoryTableStmt:
+				return_value = _readDropDirectoryTableStmt();
 				break;
 			case T_CreateTaskStmt:
 				return_value = _readCreateTaskStmt();

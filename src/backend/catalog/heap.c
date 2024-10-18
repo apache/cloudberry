@@ -2521,7 +2521,6 @@ heap_drop_with_catalog(Oid relid)
 	if (rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
 	{
 		RemoveDirectoryTableEntry(relid);
-		DirectoryTableDropStorage(rel);
 	}
 
 	/*

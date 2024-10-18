@@ -298,7 +298,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 		CreateAssertionStmt CreateTransformStmt CreateTrigStmt CreateEventTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt CreatePolicyStmt
 		CreatedbStmt CreateWarehouseStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
-		DropOpClassStmt DropOpFamilyStmt DropStmt DropWarehouseStmt
+		DropDirectoryTableStmt DropOpClassStmt DropOpFamilyStmt DropStmt DropWarehouseStmt
 		DropCastStmt DropRoleStmt
 		DropdbStmt DropTableSpaceStmt
 		DropTransformStmt
@@ -348,6 +348,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <ival>	opt_table_partition_exchange_validate
 
 %type <dbehavior>	opt_drop_behavior
+%type <dbehavior>	opt_drop_directory_table_behavior
 
 %type <list>	createdb_opt_list createdb_opt_items copy_opt_list
 				transaction_mode_list
@@ -1485,6 +1486,7 @@ stmt:
 			| DiscardStmt
 			| DoStmt
 			| DropCastStmt
+			| DropDirectoryTableStmt
 			| DropOpClassStmt
 			| DropOpFamilyStmt
 			| DropOwnedStmt
@@ -3882,6 +3884,11 @@ opt_drop_behavior:
 			CASCADE						{ $$ = DROP_CASCADE; }
 			| RESTRICT					{ $$ = DROP_RESTRICT; }
 			| /* EMPTY */				{ $$ = DROP_RESTRICT; /* default */ }
+		;
+
+opt_drop_directory_table_behavior:
+			WITH CONTENT_P				{ $$ = true; }
+			| /* EMPTY */				{ $$ = false; }
 		;
 
 opt_collate_clause:
@@ -8593,7 +8600,41 @@ AlterDirectoryTableStmt:
 					$$ = (Node *)n;
 				}
 			;
-			
+
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *
+ *		DROP DIRECTORY TABLE [ IF EXISTS ] tablename [, tablename ...]
+ *           [ RESTRICT | CASCADE ] [WITH CONTENT]
+ *
+ *****************************************************************************/
+
+DropDirectoryTableStmt:
+			DROP DIRECTORY TABLE IF_P EXISTS any_name_list opt_drop_behavior opt_drop_directory_table_behavior
+				{
+					DropDirectoryTableStmt *n = makeNode(DropDirectoryTableStmt);
+					n->base.removeType = OBJECT_DIRECTORY_TABLE;
+					n->base.missing_ok = true;
+					n->base.objects = $6;
+					n->base.behavior = $7;
+					n->base.concurrent = false;
+					n->with_content = $8;
+					$$ = (Node *)n;
+				}
+			| DROP DIRECTORY TABLE any_name_list opt_drop_behavior opt_drop_directory_table_behavior
+				{
+					DropDirectoryTableStmt *n = makeNode(DropDirectoryTableStmt);
+					n->base.removeType = OBJECT_DIRECTORY_TABLE;
+					n->base.missing_ok = true;
+					n->base.objects = $4;
+					n->base.behavior = $5;
+					n->base.concurrent = false;
+					n->with_content = $6;
+					$$ = (Node *)n;
+				}
+		;
 
 /*****************************************************************************
  *
@@ -9766,7 +9807,6 @@ object_type_any_name:
 			| FOREIGN TABLE							{ $$ = OBJECT_FOREIGN_TABLE; }
 			| EXTERNAL TABLE						{ $$ = OBJECT_FOREIGN_TABLE; }
 			| EXTERNAL WEB TABLE					{ $$ = OBJECT_FOREIGN_TABLE; }
-			| DIRECTORY TABLE					{ $$ = OBJECT_DIRECTORY_TABLE; }
 			| COLLATION								{ $$ = OBJECT_COLLATION; }
 			| CONVERSION_P							{ $$ = OBJECT_CONVERSION; }
 			| STATISTICS							{ $$ = OBJECT_STATISTIC_EXT; }

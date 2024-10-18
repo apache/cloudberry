@@ -4225,6 +4225,22 @@ _copyDropStmt(const DropStmt *from)
 	return newnode;
 }
 
+/*
+ * CopyDropStmtFields
+ *
+ *		This function copies the fields of the DropStmt node.  It is used by
+ *		copy functions for classes which inherit from DropStmt.
+ */
+static void
+CopyDropStmtFields(const DropStmt *from, DropStmt *newnode)
+{
+	COPY_NODE_FIELD(objects);
+	COPY_SCALAR_FIELD(removeType);
+	COPY_SCALAR_FIELD(behavior);
+	COPY_SCALAR_FIELD(missing_ok);
+	COPY_SCALAR_FIELD(concurrent);
+}
+
 static TruncateStmt *
 _copyTruncateStmt(const TruncateStmt *from)
 {
@@ -6231,6 +6247,18 @@ _copyAlterDirectoryTableStmt(const AlterDirectoryTableStmt *from)
 	return newnode;
 }
 
+static DropDirectoryTableStmt *
+_copyDropDirectoryTableStmt(const DropDirectoryTableStmt *from)
+{
+	DropDirectoryTableStmt *newnode = makeNode(DropDirectoryTableStmt);
+
+	CopyDropStmtFields((const DropStmt *) from, (DropStmt *) newnode);
+
+	COPY_SCALAR_FIELD(with_content);
+
+	return newnode;
+}
+
 static EphemeralNamedRelationInfo*
 _copyEphemeralNamedRelationInfo(const EphemeralNamedRelationInfo *from)
 {
@@ -7400,6 +7428,10 @@ copyObjectImpl(const void *from)
 
 		case T_AlterDirectoryTableStmt:
 			retval = _copyAlterDirectoryTableStmt(from);
+			break;
+
+		case T_DropDirectoryTableStmt:
+			retval = _copyDropDirectoryTableStmt(from);
 			break;
 
 		case T_EphemeralNamedRelationInfo:

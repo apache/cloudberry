@@ -1777,3 +1777,23 @@ _outAlterDatabaseStmt(StringInfo str, const AlterDatabaseStmt *node)
 	WRITE_NODE_FIELD(tags);
 	WRITE_BOOL_FIELD(unsettag);
 }
+
+static void
+_outDropStmtInfo(StringInfo str, const DropStmt *node)
+{
+	WRITE_NODE_FIELD(objects);
+	WRITE_ENUM_FIELD(removeType, ObjectType);
+	WRITE_ENUM_FIELD(behavior, DropBehavior);
+	WRITE_BOOL_FIELD(missing_ok);
+	WRITE_BOOL_FIELD(concurrent);
+	WRITE_BOOL_FIELD(isdynamic);
+}
+
+static void
+_outDropDirectoryTableStmt(StringInfo str, const DropDirectoryTableStmt *node)
+{
+	WRITE_NODE_TYPE("DROPDIRECTORYTABLESTMT");
+
+	_outDropStmtInfo(str, (const DropStmt *) node);
+	WRITE_BOOL_FIELD(with_content);
+}
