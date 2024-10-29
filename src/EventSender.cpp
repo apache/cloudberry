@@ -32,6 +32,31 @@ extern "C" {
 
 namespace {
 
+/**
+ * Things get tricky with nested queries.
+ * a) A nested query on master is a real query optimized and executed from
+ * master. An example would be `select some_insert_function();`, where
+ * some_insert_function does something like `insert into tbl values (1)`. Master
+ * will create two statements. Outer select statement and inner insert statement
+ * with nesting level 1.
+ * For segments both statements are top-level statements with nesting level 0.
+ * b) A nested query on segment is something executed as sub-statement on
+ * segment. An example would be `select a from tbl where is_good_value(b);`. In
+ * this case master will issue one top-level statement, but segments will change
+ * contexts for UDF execution and execute  is_good_value(b) once for each tuple
+ * as a nested query. Creating massive load on gpcc agent.
+ *
+ * Hence, here is a decision:
+ * 1) ignore all queries that are nested on segments
+ * 2) record (if enabled) all queries that are nested on master
+ * NODE: The truth is, we can't really ignore nested master queries, because
+ * segment sees those as top-level. We will deprecate disabling nested queries
+ * soon.
+ */
+bool need_report_nested_query() {
+  return Config::report_nested_queries() && Gp_session_role == GP_ROLE_DISPATCH;
+}
+
 std::string *get_user_name() {
   const char *username = GetConfigOption("session_authorization", false, false);
   // username is not to be freed
@@ -227,7 +252,7 @@ inline bool is_top_level_query(QueryDesc *query_desc, int nesting_level) {
 }
 
 inline bool need_collect(QueryDesc *query_desc, int nesting_level) {
-  return (Config::report_nested_queries() ||
+  return (need_report_nested_query() ||
           is_top_level_query(query_desc, nesting_level)) &&
          gp_command_count != 0 && query_desc->sourceText != nullptr &&
          Config::enable_collector() && !Config::filter_user(get_user_name());
@@ -332,7 +357,7 @@ void EventSender::executor_end(QueryDesc *query_desc) {
                                 DISPATCH_WAIT_NONE);
   }*/
   auto *query = get_query_message(query_desc);
-  if (query->state == UNKNOWN && !Config::report_nested_queries()) {
+  if (query->state == UNKNOWN && !need_report_nested_query()) {
     // COMMIT/ROLLBACK of a nested query. Happens in top-level
     return;
   }
