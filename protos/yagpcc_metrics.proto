@@ -39,6 +39,7 @@ message QueryInfo {
 message AdditionalQueryInfo {
     int64 nested_level                    = 1;
     string error_message                  = 2;
+    int64 slice_id                        = 3;
 }
 
 enum PlanGenerator
@@ -117,6 +118,8 @@ message MetricInstrumentation {
     NetworkStat sent           = 19;
     NetworkStat received       = 20;
     double  startup_time       = 21; /* real query startup time (planning + queue time) */
+    uint64  inherited_calls    = 22; /* the number of executed sub-queries */
+    uint64  inherited_time     = 23; /* total time spend on inherited execution */
 }
 
 message SpillInfo {

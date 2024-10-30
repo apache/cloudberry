@@ -177,6 +177,11 @@ void set_qi_nesting_level(yagpcc::SetQueryReq *req, int nesting_level) {
   aqi->set_nested_level(nesting_level);
 }
 
+void set_qi_slice_id(yagpcc::SetQueryReq *req) {
+  auto aqi = req->mutable_add_info();
+  aqi->set_slice_id(currentSliceId);
+}
+
 void set_qi_error_message(yagpcc::SetQueryReq *req) {
   auto aqi = req->mutable_add_info();
   auto error = elog_message();
@@ -380,6 +385,7 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     *query_msg->mutable_submit_time() = current_ts();
     set_query_info(query_msg, query_desc);
     set_qi_nesting_level(query_msg, query_desc->gpmon_pkt->u.qexec.key.tmid);
+    set_qi_slice_id(query_msg);
     set_query_text(query_msg, query_desc);
     if (connector->report_query(*query_msg, "submit")) {
       clear_big_fields(query_msg);
