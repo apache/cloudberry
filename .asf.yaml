@@ -129,7 +129,7 @@ notifications:
   issues: commits@cloudberry.apache.org
   # Route pull request notifications to commits mailing list
   pullrequests: commits@cloudberry.apache.org
-  # Route discussion notifications to commits mailing list
-  discussions: commits@cloudberry.apache.org
+  # Route discussion notifications to dev mailing list
+  discussions: dev@cloudberry.apache.org
   # Route dependabot pull request notifications to private mailing list
   pullrequests_bot_dependabot: private@cloudberry.apache.org

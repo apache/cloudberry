@@ -1,17 +1,17 @@
 blank_issues_enabled: false
 contact_links:
   - name: 🙏🏻 Q&A
-    url: https://github.com/apache/cloudberrydb/discussions/categories/q-a
-    about: Ask for help when running/developing Cloudberry Database.
+    url: https://github.com/apache/cloudberry/discussions/categories/q-a
+    about: Ask for help when running/developing Apache Cloudberry.
   - name: 💡️ New Ideas / Feature Requests
-    url: https://github.com/apache/cloudberrydb/discussions/categories/ideas-feature-requests
+    url: https://github.com/apache/cloudberry/discussions/categories/ideas-feature-requests
     about: Share ideas for new features.
   - name: 🎙️ Submit Your Proposal
-    url: https://github.com/apache/cloudberrydb/discussions/categories/proposal
-    about: As a developer, proposing any major change or enhancement to Cloudberry Database.
+    url: https://github.com/apache/cloudberry/discussions/categories/proposal
+    about: As a developer, proposing any major change or enhancement to Apache Cloudberry.
   - name: 💬️ Join Slack for Real-time Chat
-    url: https://communityinviter.com/apps/cloudberrydb/welcome
+    url: https://inviter.co/apache-cloudberry
     about: Real-time chat including QA, Dev, Events and more.
   - name: 🪲 Issues for Website, Docs
-    url: https://github.com/cloudberrydb/cloudberrydb-site/issues
+    url: https://github.com/apache/cloudberry-site/issues
     about: Hey, we have one dedicated repo for the website and docs.

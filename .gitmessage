@@ -33,8 +33,8 @@ Add your commit body here
 #on-behalf-of: @ORG NAME@ORGANIZATION.COM
 # If your commit have clear context included in GitHub Issues or GitHub
 # Discussions, please list them as a reference:
-#See: Issue#id <https://github.com/cloudberrydb/cloudberrydb/issues/?>?
-#See: Discussion#id <http://github.com/apache/cloudberrydb/discussions/>?
+#See: Issue#id <https://github.com/apache/cloudberry/issues/?>?
+#See: Discussion#id <http://github.com/apache/cloudberry/discussions/>?
 ########################################################################
 #
 #

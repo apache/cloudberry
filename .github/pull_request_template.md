@@ -1,4 +1,4 @@
-<!-- Thank you for your contribution to Apache Cloudberry (incubating)! -->
+<!-- Thank you for your contribution to Apache Cloudberry (Incubating)! -->
 
 Fixes #ISSUE_Number
 
