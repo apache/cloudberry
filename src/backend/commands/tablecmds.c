@@ -620,7 +620,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	List	   *old_constraints;
 	List	   *rawDefaults;
 	List	   *cookedDefaults;
+	List	   *parentenc = NIL;
 	Datum		reloptions;
+	Datum		oldoptions = (Datum) 0;
 	ListCell   *listptr;
 	AttrNumber	attnum;
 	bool		partitioned;
@@ -834,7 +836,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	{
 		accessMethod = stmt->accessMethod;
 
-		if (partitioned)
+		/* Only to allow access method when the partition is gp style partition */
+		if (partitioned && Gp_role == GP_ROLE_DISPATCH && !stmt->partspec->gpPartDef)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("specifying a table access method is not supported on a partitioned table")));
@@ -842,6 +845,29 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 	else if (relkind == RELKIND_DIRECTORY_TABLE)
 		accessMethod = DEFAULT_TABLE_ACCESS_METHOD;
+	else if (stmt->partbound && (relkind == RELKIND_RELATION || relkind == RELKIND_PARTITIONED_TABLE))
+	{
+		HeapTuple       tup;
+		Oid                     relid;
+
+		/*
+		 * For partitioned tables, when no access method is specified, we
+		 * default to the parent table's AM.
+		 */
+		Assert(list_length(inheritOids) == 1);
+		relid = linitial_oid(inheritOids);
+		tup = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+		if (!HeapTupleIsValid(tup))
+			elog(ERROR, "cache lookup failed for relation %u", relid);
+
+		accessMethodId = ((Form_pg_class) GETSTRUCT(tup))->relam;
+		accessMethod = get_am_name(accessMethodId);
+
+		ReleaseSysCache(tup);
+
+		if (!OidIsValid(accessMethodId))
+			accessMethodId = get_table_am_oid(default_table_access_method, false);
+	}
 	else if (relkind == RELKIND_RELATION ||
 			 relkind == RELKIND_TOASTVALUE ||
 			 relkind == RELKIND_MATVIEW)
@@ -855,9 +881,37 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 
 	/*
+	 * GPDB: for partitioned tables, inherit reloptions from the parent.
+	 * Note this is applicable only if the parent has the same AM as the child.
+	 */
+	if (stmt->partbound && (relkind == RELKIND_RELATION || relkind == RELKIND_PARTITIONED_TABLE))
+	{
+		Oid         parentrelid;
+		Relation        parentrel;
+
+		/*
+		 * For partitioned children, when no reloptions is specified, we
+		 * default to the parent table's reloptions. If partitioned
+		 * children has different access method with parent. Do not do it.
+		 */
+		Assert(list_length(inheritOids) == 1);
+		parentrelid = linitial_oid(inheritOids);
+		parentrel = table_open(parentrelid, AccessShareLock);
+
+		if (parentrel->rd_rel->relam == accessMethodId)
+		{
+			oldoptions = get_rel_opts(parentrel);
+			if (accessMethodId == AO_COLUMN_TABLE_AM_OID)
+				parentenc = rel_get_column_encodings(parentrel);
+		}
+
+		table_close(parentrel, AccessShareLock);
+	}
+
+	/*
 	 * Parse and validate reloptions, if any.
 	 */
-	reloptions = transformRelOptions((Datum) 0, stmt->options, NULL, validnsps,
+	reloptions = transformRelOptions((Datum) oldoptions, stmt->options, NULL, validnsps,
 									 true, false);
 
 	/*
@@ -867,7 +921,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 */
 	if (AMHandlerIsAO(amHandlerOid))
 	{
-		Assert(relkind == RELKIND_MATVIEW || relkind == RELKIND_RELATION || relkind == RELKIND_DIRECTORY_TABLE);
+		Assert(relkind == RELKIND_MATVIEW || relkind == RELKIND_RELATION ||
+			   relkind == RELKIND_PARTITIONED_TABLE || relkind == RELKIND_DIRECTORY_TABLE);
 
 		/*
 		 * Extract and process any WITH options supplied, otherwise use defaults
@@ -897,7 +952,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			(void) view_reloptions(reloptions, true);
 			break;
 		case RELKIND_PARTITIONED_TABLE:
-			(void) partitioned_table_reloptions(reloptions, true);
+			if (OidIsValid(accessMethodId))
+				(void) table_reloptions_am(accessMethodId, reloptions, 'r', true);
+			else
+				(void) partitioned_table_reloptions(reloptions, true);
 			break;
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
@@ -1050,7 +1108,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * This is done in dispatcher (and in utility mode). In QE, we receive
 	 * the already-processed options from the QD.
 	 */
-	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW || relkind == RELKIND_DIRECTORY_TABLE) &&
+	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
+		 relkind == RELKIND_DIRECTORY_TABLE ||
+		 (relkind == RELKIND_PARTITIONED_TABLE && OidIsValid(accessMethodId))) &&
 		Gp_role != GP_ROLE_EXECUTE)
 	{
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(accessMethodId);
@@ -1069,6 +1129,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 								schema,
 								stmt->attr_encodings,
 								stmt->options,
+								parentenc,
+								relkind == RELKIND_PARTITIONED_TABLE,
 								AMHandlerIsAoCols(amHandlerOid) /* createDefaultOne*/);
 		if (!AMHandlerSupportEncodingClause(tam) && relkind != RELKIND_PARTITIONED_TABLE)
 			stmt->attr_encodings = NIL;
@@ -1084,6 +1146,11 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		 * Also in this time, we can't get the access method from root partition.
 		 * But for other access method which support encoding clause, still can't
 		 * pass the encoding clause from root partition.
+		 *
+		 * The relam of partition table is 0 for pg partition tables in current(14.4)
+		 * version. In higher postgres kernel, the partition table is allowed to set
+		 * table access method. The partition table will have the same behaviors on
+		 * relam, reloptions, attribute encodings in the future.
 		 */
 		stmt->attr_encodings = transfromColumnEncodingAocoRootPartition(schema,
 								stmt->attr_encodings,
@@ -1238,7 +1305,24 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		cooked_constraints = list_concat(cooked_constraints, newCookedDefaults);
 	}
 
-	if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
+	if (relkind == RELKIND_PARTITIONED_TABLE && rel->rd_rel->relam == AO_COLUMN_TABLE_AM_OID)
+	{
+		const TableAmRoutine *tam = GetTableAmRoutineByAmId(rel->rd_rel->relam);
+		List *part_attr_encodings =
+			transformColumnEncoding(tam,
+									NULL /* Relation */,
+									schema,
+									stmt->attr_encodings,
+									stmt->options,
+									parentenc,
+									false,
+									accessMethodId != AO_COLUMN_TABLE_AM_OID
+									&& !stmt->partbound && !stmt->partspec
+									/* errorOnEncodingClause */);
+
+		AddRelationAttributeEncodings(rel, part_attr_encodings);
+	}
+	else if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
 		AddRelationAttributeEncodings(rel, stmt->attr_encodings);
 
 	/*
@@ -8462,7 +8546,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	add_column_datatype_dependency(myrelid, newattnum, attribute.atttypid);
 	add_column_collation_dependency(myrelid, newattnum, attribute.attcollation);
 
-	if (OidIsValid(rel->rd_rel->relam))
+	if (OidIsValid(rel->rd_rel->relam) && rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
 	{
 		List *enc;
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(rel->rd_rel->relam);
@@ -8480,6 +8564,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		enc = transformColumnEncoding(tam /* TableAmRoutine */, rel, list_make1(colDef),
 						NULL /* COLUMN ENCODING clauses is only for CREATE TABLE */,
 						NULL /* withOptions */,
+						NULL /* parentenc */,
+						false /* explicitOnly */,
 						RelationIsAoCols(rel) /* createDefaultOne */);
 		/*
 		 * Store the encoding clause for AO/CO tables.
@@ -17704,7 +17790,7 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 /*
  * GPDB: Convenience function to get reloptions for a given relation.
  */
-static Datum
+Datum
 get_rel_opts(Relation rel)
 {
 	Datum newOptions = PointerGetDatum(NULL);

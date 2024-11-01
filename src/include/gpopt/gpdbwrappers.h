@@ -23,6 +23,7 @@ extern "C" {
 #include "parser/parse_coerce.h"
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
+#include "utils/partcache.h"
 }
 
 #include "gpos/types.h"
@@ -590,6 +591,8 @@ List *GetRelationIndexes(Relation relation);
 
 // build an array of triggers for this relation
 void BuildRelationTriggers(Relation rel);
+
+PartitionKey GetRelationPartitionKey(Relation rel);
 
 // get relation with given oid
 RelationWrapper GetRelation(Oid rel_oid);

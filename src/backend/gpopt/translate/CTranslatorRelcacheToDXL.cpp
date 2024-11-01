@@ -2516,7 +2516,7 @@ CTranslatorRelcacheToDXL::RetrievePartKeysAndTypes(CMemoryPool *mp,
 	*part_keys = GPOS_NEW(mp) ULongPtrArray(mp);
 	*part_types = GPOS_NEW(mp) CharPtrArray(mp);
 
-	PartitionKeyData *partkey = rel->rd_partkey;
+	PartitionKeyData *partkey = gpdb::GetRelationPartitionKey(rel);
 
 	if (1 < partkey->partnatts)
 	{

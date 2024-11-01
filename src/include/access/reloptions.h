@@ -302,7 +302,8 @@ extern void validate_and_adjust_options(StdRdOptions *result, relopt_value *opti
 /* attribute enconding specific functions */
 extern void validateAOCOColumnEncodingClauses(List *aocoColumnEncoding);
 extern List *transformColumnEncoding(const TableAmRoutine *tam, Relation rel, List *colDefs,
-										List *stenc, List *withOptions, bool createDefaultOne);
+										List *stenc, List *withOptions, List *parentenc,
+										bool explicitOnly, bool createDefaultOne);
 
 List* transfromColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause);
 

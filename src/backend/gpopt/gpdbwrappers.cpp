@@ -834,6 +834,17 @@ gpdb::GetRelationPartConstraints(Relation rel)
 	return nullptr;
 }
 
+PartitionKey
+gpdb::GetRelationPartitionKey(Relation rel)
+{
+	GP_WRAP_START;
+	{
+		return RelationGetPartitionKey(rel);
+	}
+	GP_WRAP_END;
+	return nullptr;
+}
+
 #if 0
 bool
 gpdb::HasExternalPartition

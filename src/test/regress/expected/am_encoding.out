@@ -288,6 +288,7 @@ CREATE TABLE t2_part_encoding_heap (c1 int ENCODING (compresstype=zlib),
                              END ('2100-12-31'::DATE));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t2_part_encoding_aoco;
 CREATE TABLE t2_part_encoding_aoco (c1 int ENCODING (compresstype=zlib),
                   c2 char ENCODING (compresstype=zstd, blocksize=65536),

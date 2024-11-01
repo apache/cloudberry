@@ -2885,31 +2885,29 @@ create table part_ao(a int, b int) with (appendonly=true,compresstype=zlib,compr
 select c.relname, am.amname, c.reloptions from pg_partition_tree('part_ao') as t join pg_class c on (t.relid::oid = c.oid) left join pg_am am on (c.relam = am.oid);
            relname           |  amname   |                     reloptions                      
 -----------------------------+-----------+-----------------------------------------------------
- part_ao                     |           | 
+ part_ao                     | ao_row    | {compresstype=zlib,compresslevel=5,blocksize=65536}
  part_ao_1_prt_def           | ao_row    | {compresstype=zlib,compresslevel=5,blocksize=65536}
  part_ao_1_prt_p1_heap       | heap      | 
  part_ao_1_prt_p2_aoco       | ao_column | 
- part_ao_1_prt_p3_new_relopt | ao_row    | {compresstype=zstd,compresslevel=3}
+ part_ao_1_prt_p3_new_relopt | ao_row    | {blocksize=65536,compresstype=zstd,compresslevel=3}
 (5 rows)
 
 -- Test 2: Parent's reloptions are explicitly specified, and parent's AM is explicitly specified as heap
 create table part_heap1(a int, b int) using heap with (fillfactor=70) partition by range(b) (partition p1 start(0) end(10) with(appendonly=true));
 select c.relname, am.amname, c.reloptions from pg_partition_tree('part_heap1') as t join pg_class c on (t.relid::oid = c.oid) left join pg_am am on (c.relam = am.oid);
-       relname       | amname | reloptions 
----------------------+--------+------------
- part_heap1          |        | 
+       relname       | amname |   reloptions    
+---------------------+--------+-----------------
+ part_heap1          | heap   | {fillfactor=70}
  part_heap1_1_prt_p1 | ao_row | 
 (2 rows)
 
 -- Test 3: Parent's reloptions are explicitly specified, and parent's AM is implicitly specified as heap
 create table part_heap2(a int, b int) with (fillfactor=70) partition by range(b) (partition p1 start(0) end(10) with(appendonly=true));
+ERROR:  unrecognized parameter "fillfactor"
 select c.relname, am.amname, c.reloptions from pg_partition_tree('part_heap2') as t join pg_class c on (t.relid::oid = c.oid) left join pg_am am on (c.relam = am.oid);
-       relname       | amname | reloptions 
----------------------+--------+------------
- part_heap2          |        | 
- part_heap2_1_prt_p1 | ao_row | 
-(2 rows)
-
+ERROR:  relation "part_heap2" does not exist
+LINE 1: ...e, am.amname, c.reloptions from pg_partition_tree('part_heap...
+                                                             ^
 -- Test 4: Parent's reloptions are explicitly specified, and parent's AM is implicitly specified as ao_column
 set default_table_access_method = 'ao_column';
 create table part_aoco(a int, b int) with (compresstype=zlib,compresslevel=5,blocksize=65536)
@@ -2918,19 +2916,16 @@ create table part_aoco(a int, b int) with (compresstype=zlib,compresslevel=5,blo
 		 partition p2_ao start (10) end (20) with (appendonly=true, orientation=row),
 		 partition p3_new_relopt start (20) end (30) with (compresstype=zstd, compresslevel=3),
 		 default partition def);
+ERROR:  unrecognized parameter "compresstype"
 select c.relname, am.amname, c.reloptions from pg_partition_tree('part_aoco') as t join pg_class c on (t.relid::oid = c.oid) left join pg_am am on (c.relam = am.oid);
-            relname            |  amname   |                     reloptions                      
--------------------------------+-----------+-----------------------------------------------------
- part_aoco                     |           | 
- part_aoco_1_prt_def           | ao_column | {compresstype=zlib,compresslevel=5,blocksize=65536}
- part_aoco_1_prt_p1_heap       | heap      | 
- part_aoco_1_prt_p2_ao         | ao_row    | 
- part_aoco_1_prt_p3_new_relopt | ao_column | {compresstype=zstd,compresslevel=3}
-(5 rows)
-
+ERROR:  relation "part_aoco" does not exist
+LINE 1: ...e, am.amname, c.reloptions from pg_partition_tree('part_aoco...
+                                                             ^
 reset default_table_access_method;
 -- cleanup
 drop table part_ao;
 drop table part_heap1;
 drop table part_heap2;
+ERROR:  table "part_heap2" does not exist
 drop table part_aoco;
+ERROR:  table "part_aoco" does not exist

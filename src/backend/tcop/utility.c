@@ -1468,8 +1468,6 @@ ProcessUtilitySlow(ParseState *pstate,
 							char		relKind = RELKIND_RELATION;
 							Datum		toast_options;
 							static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
-							List *options = NIL;
-							char *accessmethod = NULL;
 
 							/*
 							 * If this T_CreateStmt was dispatched and we're a QE
@@ -1484,6 +1482,7 @@ ProcessUtilitySlow(ParseState *pstate,
 							else
 								cstmt->relKind = relKind;
 
+#if 0
 							/*
 							 * Upstream postgres does not support user specified
 							 * RelOptions and TableAM for a parent partitioned
@@ -1500,9 +1499,9 @@ ProcessUtilitySlow(ParseState *pstate,
 							{
 								options = cstmt->options;
 								cstmt->options = NIL;
-								accessmethod = cstmt->accessMethod;
 								cstmt->accessMethod = NULL;
 							}
+#endif
 
 							/*
 							 * GPDB: Don't dispatch it yet, as we haven't
@@ -1523,8 +1522,8 @@ ProcessUtilitySlow(ParseState *pstate,
 								parts = generatePartitions(address.objectId,
 														   cstmt->partspec->gpPartDef,
 														   cstmt->partspec->subPartSpec,
-														   queryString, options,
-														   accessmethod,
+														   queryString, cstmt->options,
+														   cstmt->accessMethod,
 														   cstmt->attr_encodings, false);
 								stmts = list_concat(stmts, parts);
 							}
