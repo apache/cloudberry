@@ -1105,7 +1105,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * This is done in dispatcher (and in utility mode). In QE, we receive
 	 * the already-processed options from the QD.
 	 */
-	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW || relkind == RELKIND_DIRECTORY_TABLE) &&
+	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
+		 relkind == RELKIND_DIRECTORY_TABLE ||
+		 (relkind == RELKIND_PARTITIONED_TABLE && OidIsValid(accessMethodId))) &&
 		Gp_role != GP_ROLE_EXECUTE)
 	{
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(accessMethodId);
@@ -1124,6 +1126,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 								schema,
 								stmt->attr_encodings,
 								stmt->options,
+								parentenc,
+								false,
 								AMHandlerIsAoCols(amHandlerOid) /* createDefaultOne*/);
 		if (!AMHandlerSupportEncodingClause(tam) && relkind != RELKIND_PARTITIONED_TABLE)
 			stmt->attr_encodings = NIL;
@@ -1139,6 +1143,11 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		 * Also in this time, we can't get the access method from root partition.
 		 * But for other access method which support encoding clause, still can't
 		 * pass the encoding clause from root partition.
+		 *
+		 * The relam of partition table is 0 for pg partition tables in current(14.4)
+		 * version. In higher postgres kernel, the partition table is allowed to set
+		 * table access method. The partition table will have the same behaviors on
+		 * relam, reloptions, attribute encodings in the future.
 		 */
 		stmt->attr_encodings = transfromColumnEncodingAocoRootPartition(schema,
 								stmt->attr_encodings,
@@ -1293,7 +1302,24 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		cooked_constraints = list_concat(cooked_constraints, newCookedDefaults);
 	}
 
-	if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
+	if (relkind == RELKIND_PARTITIONED_TABLE && rel->rd_rel->relam == AO_COLUMN_TABLE_AM_OID)
+	{
+		const TableAmRoutine *tam = GetTableAmRoutineByAmId(rel->rd_rel->relam);
+		List *part_attr_encodings =
+			transformColumnEncoding(tam,
+									NULL /* Relation */,
+									schema,
+									stmt->attr_encodings,
+									stmt->options,
+									parentenc,
+									false,
+									accessMethodId != AO_COLUMN_TABLE_AM_OID
+									&& !stmt->partbound && !stmt->partspec
+									/* errorOnEncodingClause */);
+
+		AddRelationAttributeEncodings(rel, part_attr_encodings);
+	}
+	else if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
 		AddRelationAttributeEncodings(rel, stmt->attr_encodings);
 
 	/*
@@ -8535,6 +8561,8 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		enc = transformColumnEncoding(tam /* TableAmRoutine */, rel, list_make1(colDef),
 						NULL /* COLUMN ENCODING clauses is only for CREATE TABLE */,
 						NULL /* withOptions */,
+						NULL /* parentenc */,
+						false /* explicitOnly */,
 						RelationIsAoCols(rel) /* createDefaultOne */);
 		/*
 		 * Store the encoding clause for AO/CO tables.

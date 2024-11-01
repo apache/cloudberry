@@ -2287,8 +2287,10 @@ describeOneTableDetails(const char *schemaname,
 		goto error_return;		/* not an error, just return early */
 	}
 
-	if (greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam)
-			|| greenplum_is_ao_row(tableinfo.relstorage, tableinfo.relam))
+	/* if AO reloptions are specified for table, replace the default reloptions */
+	if (tableinfo.relkind != RELKIND_PARTITIONED_TABLE &&
+		(greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam) ||
+		 greenplum_is_ao_row(tableinfo.relstorage, tableinfo.relam)))
 	{
 		PGresult *result = NULL;
 		/* Get Append Only information
@@ -2948,15 +2950,23 @@ describeOneTableDetails(const char *schemaname,
 		{
 			if (greenplum_is_ao_row(tableinfo.relstorage, tableinfo.relam))
 			{
-				printfPQExpBuffer(&buf, _("Compression Type: %s"), tableinfo.compressionType);
-				printTableAddFooter(&cont, buf.data);
-				printfPQExpBuffer(&buf, _("Compression Level: %s"), tableinfo.compressionLevel);
-				printTableAddFooter(&cont, buf.data);
-				printfPQExpBuffer(&buf, _("Block Size: %s"), tableinfo.blockSize);
-				printTableAddFooter(&cont, buf.data);
+				if (tableinfo.compressionType) {
+				    printfPQExpBuffer(&buf, _("Compression Type: %s"), tableinfo.compressionType);
+				    printTableAddFooter(&cont, buf.data);
+				}
+				if (tableinfo.compressionLevel) {
+				    printfPQExpBuffer(&buf, _("Compression Level: %s"), tableinfo.compressionLevel);
+				    printTableAddFooter(&cont, buf.data);
+				}
+				if (tableinfo.blockSize) {
+				    printfPQExpBuffer(&buf, _("Block Size: %s"), tableinfo.blockSize);
+				    printTableAddFooter(&cont, buf.data);
+				}
 			}
-			printfPQExpBuffer(&buf, _("Checksum: %s"), tableinfo.checksum);
-			printTableAddFooter(&cont, buf.data);
+			if (tableinfo.checksum) {
+			    printfPQExpBuffer(&buf, _("Checksum: %s"), tableinfo.checksum);
+			    printTableAddFooter(&cont, buf.data);
+			}
 		}
 
         /* print indexes */
