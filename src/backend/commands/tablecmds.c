@@ -834,7 +834,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	{
 		accessMethod = stmt->accessMethod;
 
-		if (partitioned)
+		/* Only to allow access method when the partition is gp style partition */
+		if (partitioned && Gp_role == GP_ROLE_DISPATCH && !stmt->partspec->gpPartDef)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("specifying a table access method is not supported on a partitioned table")));
@@ -842,6 +843,29 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 	else if (relkind == RELKIND_DIRECTORY_TABLE)
 		accessMethod = DEFAULT_TABLE_ACCESS_METHOD;
+	else if (stmt->partbound && (relkind == RELKIND_RELATION || relkind == RELKIND_PARTITIONED_TABLE))
+	{
+		HeapTuple       tup;
+		Oid                     relid;
+
+		/*
+		 * For partitioned tables, when no access method is specified, we
+		 * default to the parent table's AM.
+		 */
+		Assert(list_length(inheritOids) == 1);
+		relid = linitial_oid(inheritOids);
+		tup = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+		if (!HeapTupleIsValid(tup))
+			elog(ERROR, "cache lookup failed for relation %u", relid);
+
+		accessMethodId = ((Form_pg_class) GETSTRUCT(tup))->relam;
+		accessMethod = get_am_name(accessMethodId);
+
+		ReleaseSysCache(tup);
+
+		if (!OidIsValid(accessMethodId))
+			accessMethodId = get_table_am_oid(default_table_access_method, false);
+	}
 	else if (relkind == RELKIND_RELATION ||
 			 relkind == RELKIND_TOASTVALUE ||
 			 relkind == RELKIND_MATVIEW)
@@ -867,7 +891,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 */
 	if (AMHandlerIsAO(amHandlerOid))
 	{
-		Assert(relkind == RELKIND_MATVIEW || relkind == RELKIND_RELATION || relkind == RELKIND_DIRECTORY_TABLE);
+		Assert(relkind == RELKIND_MATVIEW || relkind == RELKIND_RELATION ||
+			   relkind == RELKIND_PARTITIONED_TABLE || relkind == RELKIND_DIRECTORY_TABLE);
 
 		/*
 		 * Extract and process any WITH options supplied, otherwise use defaults
@@ -17704,7 +17729,7 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 /*
  * GPDB: Convenience function to get reloptions for a given relation.
  */
-static Datum
+Datum
 get_rel_opts(Relation rel)
 {
 	Datum newOptions = PointerGetDatum(NULL);
