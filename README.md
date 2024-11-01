@@ -1,13 +1,11 @@
+# Apache Cloudberry (Incubating)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="./.github/full_color_black.svg">
     <source media="(prefers-color-scheme: dark)" srcset="./.github/full_color_white.svg">
     <img alt="Cloudberry Database Logo" src="./.github/full_color_black.svg" width="400px">
   </picture>
-</p>
-
-<p align="center">
-    Next Generation Unified Database for Analytics and AI
 </p>
 
 [![Website](https://img.shields.io/badge/Website-eebc46)](https://cloudberrydb.org)
@@ -25,60 +23,40 @@
 
 ---------
 
-## What's Cloudberry Database
+## Introduction
 
-Cloudberry Database (`CBDB` or `CloudberryDB` for short) is created by a bunch
-of original Greenplum Database developers and ASF committers. We aim to bring
-modern computing capabilities to the traditional distributed MPP database to
-support Analytics and AI/ML workloads in one platform.
-
-As a derivative of Greenplum Database 7, Cloudberry Database is compatible
-with Greenplum Database, but it's shipped with a newer PostgreSQL 14.4 kernel
-(scheduled kernel upgrade yearly) and a bunch of features Greenplum Database
-lacks or does not support. View the [Cloudberry Database vs Greenplum
-Database](https://cloudberrydb.org/docs/cbdb-vs-gp-features) doc for details.
-
-## Roadmap
-
-You can check our [Cloudberry Database Roadmap
-2024](https://github.com/orgs/cloudberrydb/discussions/369) out to see the
-product plans and goals we want to achieve in 2024. Welcome to share your
-thoughts and ideas to join us in shaping the future of the Cloudberry
-Database.
+Apache Cloudberry (Incubating) is one advanced and mature open-source MPP
+(Massively Parallel Processing) database, which evolves from the open source
+version of the Pivotal Greenplum Database®️ but with the newer PostgreSQL
+kernel and more advanced enterprise features. It can serve as a data warehouse
+and be used for large-scale analytics workloads.
 
 ## Build and try out
 
 ### Build from source
 
-You can follow [these guides](./deploy/build) to build the Cloudberry Database on
-Linux OS(including CentOS, RHEL/Rocky Linux, and Ubuntu) and macOS.
+You can follow [these guides](./deploy/build) to build Cloudberry on
+Linux OS(including RHEL/Rocky Linux, and Ubuntu) and macOS.
 
 ### Try out quickly
 
-Welcome to try out Cloudberry Database via building [one Docker-based
-Sandbox](https://github.com/cloudberrydb/bootcamp), which is tailored to help
-you gain a basic understanding of Cloudberry Database's capabilities and
-features a range of materials, including tutorials, sample code, and crash
-courses.
+Welcome to try out Cloudberry via building [one Docker-based
+Sandbox](https://github.com/apache/cloudberry-bootcamp), which is tailored to
+help you gain a basic understanding of Cloudberry's capabilities and features
+a range of materials, including tutorials, sample code, and crash courses.
 
 ## Repositories
 
-This is the main repository for Cloudberry Database. Alongside this, there are
-several ecosystem repositories for the Cloudberry Database, including the
+This is the main repository for Apache Cloudberry (Incubating). Alongside
+this, there are several ecosystem repositories for Cloudberry, including the
 website, extensions, connectors, adapters, and other utilities.
 
-* [cloudberrydb/cloudberrydb-site](https://github.com/cloudberrydb/cloudberrydb-site): website and documentation sources.
-* [cloudberrydb/bootcamp](https://github.com/cloudberrydb/bootcamp): help you quickly try out Cloudberry Database via one Docker-based Sandbox.
-* [cloudberrydb/gpbackup](https://github.com/cloudberrydb/gpbackup): backup utility for Cloudberry Database.
-* [cloudberrydb/gp-common-go-libs](https://github.com/cloudberrydb/gp-common-go-libs): gp-common-go-libs for Cloudberry Database.
-* [cloudberrydb/gpbackup-s3-plugin](https://github.com/cloudberrydb/gpbackup-s3-plugin): S3 plugin for use with Cloudberry Database backup utility. 
-* [cloudberrydb/filedump](https://github.com/cloudberrydb/filedump): format heap/index/control files into a human-readable form.
-* [cloudberrydb/postgis](https://github.com/cloudberrydb/postgis): PostGIS for Cloudberry Database.
-* [cloudberrydb/pxf](https://github.com/cloudberrydb/pxf): Platform Extension Framework (PXF) for Cloudberry Database.
-* [cloudberrydb/madlib](https://github.com/cloudberrydb/madlib): MADlib® for Cloudberry Database.
-* [cloudberrydb/plr](https://github.com/cloudberrydb/plr): PL/R for Cloudberry Database. 
-* [cloudberrydb/pljava](https://github.com/cloudberrydb/pljava): PL/Java for Cloudberry Database.
-* More is coming...
+* [apache/cloudberry-site](https://github.com/apache/cloudberry-site): website and documentation sources.
+* [apache/cloudberry-bootcamp](https://github.com/apache/cloudberry-bootcamp): help you quickly try out Cloudberry via one Docker-based Sandbox.
+* [apache/cloudberry-gpbackup](https://github.com/apache/cloudberry-gpbackup): backup utility for Cloudberry.
+* [apache/cloudberry-go-libs](https://github.com/apache/cloudberry-go-libs): go-libs for Cloudberry.
+* [apache/cloudberry-gpbackup-s3-plugin](https://github.com/apache/cloudberry-gpbackup-s3-plugin): S3 plugin for use with Cloudberry backup utility.
+* [apache/cloudberry-pxf](https://github.com/apache/cloudberry-pxf): Platform Extension Framework (PXF) for Cloudberry.
 
 ## Community & Support
 
@@ -87,35 +65,36 @@ feedback, and chat:
 
 | Type | Description |
 |------|-------------|
-| Slack | [Click to Join](https://communityinviter.com/apps/cloudberrydb/welcome) the real-time chat on Slack for QA, Dev, Events, and more. Don't miss out! Check out the [Slack guide](https://cloudberrydb.org/community/slack) to learn more. |
+| Slack | [Click to Join](https://communityinviter.com/apps/cloudberrydb/welcome) the real-time chat on Slack for QA, Dev, Events, and more. Don't miss out! Check out the [Slack guide](https://cloudberry.apache.org/community/slack) to learn more. |
 | Q&A | Ask for help when running/developing Cloudberry Database, visit [GitHub Discussions - QA](https://github.com/orgs/cloudberrydb/discussions/categories/q-a). |
 | New ideas / Feature Requests | Share ideas for new features, visit [GitHub Discussions - Ideas](https://github.com/orgs/cloudberrydb/discussions/categories/ideas-feature-requests).  |
 | Report bugs | Problems and issues in Cloudberry Database core. If you find bugs, welcome to submit them [here](https://github.com/cloudberrydb/cloudberrydb/issues).  |
 | Report a security vulnerability | View our [security policy](https://github.com/cloudberrydb/cloudberrydb/security/policy) to learn how to report and contact us.  |
-| Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberrydb.org/community/events) and subscribe events calendar.  |
-| Documentation | [Official documentation](https://cloudberrydb.org/docs/) for Cloudberry Database. You can explore it to discover more details about us. |
-
-When you are involved, please follow our community [Code of
-Conduct](https://cloudberrydb.org/community/coc) to help create a safe space
-for everyone.
+| Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberry.apache.org/community/events) and subscribe events calendar.  |
+| Documentation | [Official documentation](https://cloudberry.apache.org/docs/) for Cloudberry. You can explore it to discover more details about us. |
 
 ## Contribution
 
-We believe in the Apache Way "Community Over Code" and we want to make
-Cloudberry Database a community-driven project.
-
 Contributions can be diverse, such as code enhancements, bug fixes, feature
 proposals, documents, marketing, and so on. No contribution is too small, we
-encourage all types of contributions. Cloudberry Database community welcomes
+encourage all types of contributions. Cloudberry community welcomes
 contributions from anyone, new and experienced! Our [contribution
-guide](https://cloudberrydb.org/contribute) will help you get started with the
+guide](https://cloudberry.apache.org/contribute) will help you get started with the
 contribution.
 
 | Type | Description |
 |----|---------------|
-| Code contribution | Learn how to contribute code to the Cloudberry Database, including coding preparation, conventions, workflow, review, and checklist following the [code contribution guide](https://cloudberrydb.org/contribute/code).|
-| Submit the proposal | Proposing major changes to Cloudberry Database through [proposal guide](https://cloudberrydb.org/contribute/proposal).|
-| Doc contribution | We need you to join us to help us improve the documentation, see the [doc contribution guide](https://cloudberrydb.org/contribute/doc).|
+| Code contribution | Learn how to contribute code to the Cloudberry, including coding preparation, conventions, workflow, review, and checklist following the [code contribution guide](https://cloudberry.apache.org/contribute/code).|
+| Submit the proposal | Proposing major changes to Cloudberry through [proposal guide](https://cloudberry.apache.org/contribute/proposal).|
+| Doc contribution | We need you to join us to help us improve the documentation, see the [doc contribution guide](https://cloudberry.apache.org/contribute/doc).|
+
+## Roadmap
+
+You can check our [Cloudberry Database Roadmap
+2024](https://github.com/orgs/cloudberrydb/discussions/369) out to see the
+product plans and goals we want to achieve in 2024. Welcome to share your
+thoughts and ideas to join us in shaping the future of Apache Cloudberry
+(Incubating).
 
 ## Contributors Wall
 
@@ -137,5 +116,16 @@ Cloudberry Database has a sound foundation.
 
 ## License
 
-Cloudberry Database is released under the [Apache License, Version
-2.0](https://github.com/cloudberrydb/cloudberrydb/blob/main/LICENSE).
+Cloudberry is licensed under the Apache License, Version 2.0. For details, see
+the [LICENSE](./LICENSE).
+
+## ASF Incubator disclaimer
+
+Apache Cloudberry is an effort undergoing incubation at The Apache Software
+Foundation (ASF), sponsored by the Apache Incubator. Incubation is required
+for all newly accepted projects until a further review indicates that the
+infrastructure, communications, and decision making process have stabilized in
+a manner consistent with other successful ASF projects. While incubation
+status is not necessarily a reflection of the completeness or stability of the
+code, it does indicate that the project has yet to be fully endorsed by the
+ASF.
