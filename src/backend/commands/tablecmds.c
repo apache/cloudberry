@@ -620,7 +620,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	List	   *old_constraints;
 	List	   *rawDefaults;
 	List	   *cookedDefaults;
+	List	   *parentenc = NIL;
 	Datum		reloptions;
+	Datum		oldoptions = (Datum) 0;
 	ListCell   *listptr;
 	AttrNumber	attnum;
 	bool		partitioned;
@@ -879,9 +881,37 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 
 	/*
+	 * GPDB: for partitioned tables, inherit reloptions from the parent.
+	 * Note this is applicable only if the parent has the same AM as the child.
+	 */
+	if (stmt->partbound && (relkind == RELKIND_RELATION || relkind == RELKIND_PARTITIONED_TABLE))
+	{
+		Oid         parentrelid;
+		Relation        parentrel;
+
+		/*
+		 * For partitioned children, when no reloptions is specified, we
+		 * default to the parent table's reloptions. If partitioned
+		 * children has different access method with parent. Do not do it.
+		 */
+		Assert(list_length(inheritOids) == 1);
+		parentrelid = linitial_oid(inheritOids);
+		parentrel = table_open(parentrelid, AccessShareLock);
+
+		if (parentrel->rd_rel->relam == accessMethodId)
+		{
+			oldoptions = get_rel_opts(parentrel);
+			if (accessMethodId == AO_COLUMN_TABLE_AM_OID)
+				parentenc = rel_get_column_encodings(parentrel);
+		}
+
+		table_close(parentrel, AccessShareLock);
+	}
+
+	/*
 	 * Parse and validate reloptions, if any.
 	 */
-	reloptions = transformRelOptions((Datum) 0, stmt->options, NULL, validnsps,
+	reloptions = transformRelOptions((Datum) oldoptions, stmt->options, NULL, validnsps,
 									 true, false);
 
 	/*
