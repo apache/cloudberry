@@ -952,7 +952,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			(void) view_reloptions(reloptions, true);
 			break;
 		case RELKIND_PARTITIONED_TABLE:
-			(void) partitioned_table_reloptions(reloptions, true);
+			if (OidIsValid(accessMethodId))
+				(void) table_reloptions_am(accessMethodId, reloptions, 'r', true);
+			else
+				(void) partitioned_table_reloptions(reloptions, true);
 			break;
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
@@ -8543,7 +8546,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	add_column_datatype_dependency(myrelid, newattnum, attribute.atttypid);
 	add_column_collation_dependency(myrelid, newattnum, attribute.attcollation);
 
-	if (OidIsValid(rel->rd_rel->relam))
+	if (OidIsValid(rel->rd_rel->relam) && rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
 	{
 		List *enc;
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(rel->rd_rel->relam);

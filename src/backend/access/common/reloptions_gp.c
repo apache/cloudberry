@@ -1580,7 +1580,6 @@ transformColumnEncoding(const TableAmRoutine *tam, Relation rel, List *colDefs,
 	bool		errorOnEncodingClause;
 
 	Assert(tam);
-	AssertImply(rel, rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE);
 	errorOnEncodingClause = !AMHandlerSupportEncodingClause(tam);
 
 	if (stenc) {
