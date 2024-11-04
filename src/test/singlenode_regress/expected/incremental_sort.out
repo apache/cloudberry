@@ -1610,20 +1610,18 @@ join tenk1 t3 on t2.unique1 = t3.unique1
 order by count(*);
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Sort
-   Sort Key: (count(*))
-   ->  Aggregate
+ Aggregate
+   ->  Hash Join
+         Hash Cond: (t2.unique1 = t3.unique1)
          ->  Hash Join
-               Hash Cond: (t2.unique1 = t3.unique1)
-               ->  Hash Join
-                     Hash Cond: (t2.unique2 = t1.unique1)
-                     ->  Index Scan using tenk1_unique2 on tenk1 t2
-                     ->  Hash
-                           ->  Index Only Scan using tenk1_unique1 on tenk1 t1
+               Hash Cond: (t2.unique2 = t1.unique1)
+               ->  Index Scan using tenk1_unique2 on tenk1 t2
                ->  Hash
-                     ->  Index Only Scan using tenk1_unique1 on tenk1 t3
+                     ->  Index Only Scan using tenk1_unique1 on tenk1 t1
+         ->  Hash
+               ->  Index Only Scan using tenk1_unique1 on tenk1 t3
  Optimizer: Postgres query optimizer
-(13 rows)
+(10 rows)
 
 -- Parallel sort but with expression (correlated subquery) that
 -- is prohibited in parallel plans.

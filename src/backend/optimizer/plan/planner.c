@@ -1339,6 +1339,8 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	if (hasResultRTEs)
 		remove_useless_result_rtes(root);
 
+	parse = remove_distinct_sort_clause(parse);
+
 	/*
 	 * Do the main planning.
 	 */

@@ -2407,22 +2407,16 @@ create table t1(c1 int) distributed by (c1);
 insert into t1 values(11), (12);
 analyze t1;
 explain(costs off, locus) select distinct min(c1), max(c1) from t1;
-                         QUERY PLAN                         
-------------------------------------------------------------
- Unique
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
    Locus: Entry
-   Group Key: (min(c1)), (max(c1))
-   ->  Sort
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          Locus: Entry
-         Sort Key: (min(c1)), (max(c1))
-         ->  Aggregate
-               Locus: Entry
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     Locus: Entry
-                     ->  Seq Scan on t1
-                           Locus: Hashed
+         ->  Seq Scan on t1
+               Locus: Hashed
  Optimizer: Postgres query optimizer
-(13 rows)
+(7 rows)
 
 abort;
 begin;
