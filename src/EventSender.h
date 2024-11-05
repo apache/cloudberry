@@ -49,8 +49,11 @@ private:
   void collect_query_submit(QueryDesc *query_desc);
   void collect_query_done(QueryDesc *query_desc, QueryMetricsStatus status);
   void cleanup_messages();
+  void update_nested_counters(QueryDesc *query_desc);
 
   UDSConnector *connector = nullptr;
   int nesting_level = 0;
+  int64_t nested_calls = 0;
+  double nested_timing = 0;
   std::unordered_map<std::pair<int, int>, QueryItem, pair_hash> query_msgs;
 };

@@ -119,7 +119,7 @@ message MetricInstrumentation {
     NetworkStat received       = 20;
     double  startup_time       = 21; /* real query startup time (planning + queue time) */
     uint64  inherited_calls    = 22; /* the number of executed sub-queries */
-    uint64  inherited_time     = 23; /* total time spend on inherited execution */
+    double  inherited_time     = 23; /* total time spend on inherited execution */
 }
 
 message SpillInfo {

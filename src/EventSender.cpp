@@ -32,31 +32,6 @@ extern "C" {
 
 namespace {
 
-/**
- * Things get tricky with nested queries.
- * a) A nested query on master is a real query optimized and executed from
- * master. An example would be `select some_insert_function();`, where
- * some_insert_function does something like `insert into tbl values (1)`. Master
- * will create two statements. Outer select statement and inner insert statement
- * with nesting level 1.
- * For segments both statements are top-level statements with nesting level 0.
- * b) A nested query on segment is something executed as sub-statement on
- * segment. An example would be `select a from tbl where is_good_value(b);`. In
- * this case master will issue one top-level statement, but segments will change
- * contexts for UDF execution and execute  is_good_value(b) once for each tuple
- * as a nested query. Creating massive load on gpcc agent.
- *
- * Hence, here is a decision:
- * 1) ignore all queries that are nested on segments
- * 2) record (if enabled) all queries that are nested on master
- * NODE: The truth is, we can't really ignore nested master queries, because
- * segment sees those as top-level. We will deprecate disabling nested queries
- * soon.
- */
-bool need_report_nested_query() {
-  return Config::report_nested_queries() && Gp_session_role == GP_ROLE_DISPATCH;
-}
-
 std::string *get_user_name() {
   const char *username = GetConfigOption("session_authorization", false, false);
   // username is not to be freed
@@ -81,6 +56,53 @@ std::string *get_rg_name() {
   if (rgname == nullptr)
     return nullptr;
   return new std::string(rgname);
+}
+
+/**
+ * Things get tricky with nested queries.
+ * a) A nested query on master is a real query optimized and executed from
+ * master. An example would be `select some_insert_function();`, where
+ * some_insert_function does something like `insert into tbl values (1)`. Master
+ * will create two statements. Outer select statement and inner insert statement
+ * with nesting level 1.
+ * For segments both statements are top-level statements with nesting level 0.
+ * b) A nested query on segment is something executed as sub-statement on
+ * segment. An example would be `select a from tbl where is_good_value(b);`. In
+ * this case master will issue one top-level statement, but segments will change
+ * contexts for UDF execution and execute  is_good_value(b) once for each tuple
+ * as a nested query. Creating massive load on gpcc agent.
+ *
+ * Hence, here is a decision:
+ * 1) ignore all queries that are nested on segments
+ * 2) record (if enabled) all queries that are nested on master
+ * NODE: The truth is, we can't really ignore nested master queries, because
+ * segment sees those as top-level.
+ */
+
+inline bool is_top_level_query(QueryDesc *query_desc, int nesting_level) {
+  return (query_desc->gpmon_pkt &&
+          query_desc->gpmon_pkt->u.qexec.key.tmid == 0) ||
+         nesting_level == 0;
+}
+
+inline bool nesting_is_valid(QueryDesc *query_desc, int nesting_level) {
+  return (Gp_session_role == GP_ROLE_DISPATCH &&
+          Config::report_nested_queries()) ||
+         is_top_level_query(query_desc, nesting_level);
+}
+
+bool need_report_nested_query() {
+  return Config::report_nested_queries() && Gp_session_role == GP_ROLE_DISPATCH;
+}
+
+inline bool filter_query(QueryDesc *query_desc) {
+  return gp_command_count == 0 || query_desc->sourceText == nullptr ||
+         !Config::enable_collector() || Config::filter_user(get_user_name());
+}
+
+inline bool need_collect(QueryDesc *query_desc, int nesting_level) {
+  return !filter_query(query_desc) &&
+         nesting_is_valid(query_desc, nesting_level);
 }
 
 google::protobuf::Timestamp current_ts() {
@@ -189,7 +211,8 @@ void set_qi_error_message(yagpcc::SetQueryReq *req) {
 }
 
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
-                                QueryDesc *query_desc) {
+                                QueryDesc *query_desc, int nested_calls,
+                                double nested_time) {
   auto instrument = query_desc->planstate->instrument;
   if (instrument) {
     metrics->set_ntuples(instrument->ntuples);
@@ -225,11 +248,15 @@ void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
         mlstate->stat_tuple_bytes_recvd);
     metrics->mutable_received()->set_chunks(mlstate->stat_total_chunks_recvd);
   }
+  metrics->set_inherited_calls(nested_calls);
+  metrics->set_inherited_time(nested_time);
 }
 
-void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc) {
+void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
+                    int nested_calls, double nested_time) {
   if (query_desc->planstate && query_desc->planstate->instrument) {
-    set_metric_instrumentation(metrics->mutable_instrumentation(), query_desc);
+    set_metric_instrumentation(metrics->mutable_instrumentation(), query_desc,
+                               nested_calls, nested_time);
   }
   fill_self_stats(metrics->mutable_systemstat());
   metrics->mutable_systemstat()->set_runningtimeseconds(
@@ -250,17 +277,8 @@ yagpcc::SetQueryReq create_query_req(QueryDesc *query_desc,
   return req;
 }
 
-inline bool is_top_level_query(QueryDesc *query_desc, int nesting_level) {
-  return (query_desc->gpmon_pkt &&
-          query_desc->gpmon_pkt->u.qexec.key.tmid == 0) ||
-         nesting_level == 0;
-}
-
-inline bool need_collect(QueryDesc *query_desc, int nesting_level) {
-  return (need_report_nested_query() ||
-          is_top_level_query(query_desc, nesting_level)) &&
-         gp_command_count != 0 && query_desc->sourceText != nullptr &&
-         Config::enable_collector() && !Config::filter_user(get_user_name());
+double protots_to_double(const google::protobuf::Timestamp &ts) {
+  return double(ts.seconds()) + double(ts.nanos()) / 1000000000.0;
 }
 
 } // namespace
@@ -303,6 +321,10 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (!connector) {
     return;
   }
+  if (is_top_level_query(query_desc, nesting_level)) {
+    nested_timing = 0;
+    nested_calls = 0;
+  }
   if (!need_collect(query_desc, nesting_level)) {
     return;
   }
@@ -327,51 +349,53 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   if (!connector) {
     return;
   }
-  if ((Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
-      need_collect(query_desc, nesting_level)) {
-    auto *query = get_query_message(query_desc);
-    update_query_state(query_desc, query, QueryState::START);
-    auto query_msg = query->message;
-    *query_msg->mutable_start_time() = current_ts();
-    set_query_plan(query_msg, query_desc);
-    yagpcc::GPMetrics stats;
-    std::swap(stats, *query_msg->mutable_query_metrics());
-    if (connector->report_query(*query_msg, "started")) {
-      clear_big_fields(query_msg);
+  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
+    if (!filter_query(query_desc)) {
+      auto *query = get_query_message(query_desc);
+      auto query_msg = query->message;
+      *query_msg->mutable_start_time() = current_ts();
+      if (!nesting_is_valid(query_desc, nesting_level)) {
+        return;
+      }
+      update_query_state(query_desc, query, QueryState::START);
+      set_query_plan(query_msg, query_desc);
+      yagpcc::GPMetrics stats;
+      std::swap(stats, *query_msg->mutable_query_metrics());
+      if (connector->report_query(*query_msg, "started")) {
+        clear_big_fields(query_msg);
+      }
+      std::swap(stats, *query_msg->mutable_query_metrics());
     }
-    std::swap(stats, *query_msg->mutable_query_metrics());
   }
 }
 
 void EventSender::executor_end(QueryDesc *query_desc) {
-  if (!connector) {
-    return;
-  }
-  if (!need_collect(query_desc, nesting_level) ||
+  if (!connector ||
       (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE)) {
     return;
   }
-  /* TODO: when querying via CURSOR this call freezes. Need to investigate.
-     To reproduce - uncomment it and run installchecks. It will freeze around
-  join test. Needs investigation
-
-    if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze() &&
-      Config::enable_cdbstats() && query_desc->estate->dispatcherState &&
-      query_desc->estate->dispatcherState->primaryResults) {
-    cdbdisp_checkDispatchResult(query_desc->estate->dispatcherState,
-                                DISPATCH_WAIT_NONE);
-  }*/
-  auto *query = get_query_message(query_desc);
-  if (query->state == UNKNOWN && !need_report_nested_query()) {
-    // COMMIT/ROLLBACK of a nested query. Happens in top-level
-    return;
-  }
-  update_query_state(query_desc, query, QueryState::END);
-  auto query_msg = query->message;
-  *query_msg->mutable_end_time() = current_ts();
-  set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
-  if (connector->report_query(*query_msg, "ended")) {
-    clear_big_fields(query_msg);
+  if (!filter_query(query_desc)) {
+    auto *query = get_query_message(query_desc);
+    auto query_msg = query->message;
+    *query_msg->mutable_end_time() = current_ts();
+    if (nesting_is_valid(query_desc, nesting_level)) {
+      if (query->state == UNKNOWN &&
+          // Yet another greenplum weirdness: thats actually a nested query
+          // which is being committed/rollbacked. Treat it accordingly.
+          !need_report_nested_query()) {
+        return;
+      }
+      update_query_state(query_desc, query, QueryState::END);
+      if (is_top_level_query(query_desc, nesting_level)) {
+        set_gp_metrics(query_msg->mutable_query_metrics(), query_desc,
+                       nested_calls, nested_timing);
+      } else {
+        set_gp_metrics(query_msg->mutable_query_metrics(), query_desc, 0, 0);
+      }
+      if (connector->report_query(*query_msg, "ended")) {
+        clear_big_fields(query_msg);
+      }
+    }
   }
 }
 
@@ -392,60 +416,63 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     }
     // take initial metrics snapshot so that we can safely take diff afterwards
     // in END or DONE events.
-    set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
+    set_gp_metrics(query_msg->mutable_query_metrics(), query_desc, 0, 0);
   }
 }
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      QueryMetricsStatus status) {
-  if (connector && need_collect(query_desc, nesting_level)) {
-    yagpcc::QueryStatus query_status;
-    std::string msg;
-    switch (status) {
-    case METRICS_QUERY_DONE:
-    case METRICS_INNER_QUERY_DONE:
-      query_status = yagpcc::QueryStatus::QUERY_STATUS_DONE;
-      msg = "done";
-      break;
-    case METRICS_QUERY_ERROR:
-      query_status = yagpcc::QueryStatus::QUERY_STATUS_ERROR;
-      msg = "error";
-      break;
-    case METRICS_QUERY_CANCELING:
-      // at the moment we don't track this event, but I`ll leave this code here
-      // just in case
-      Assert(false);
-      query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELLING;
-      msg = "cancelling";
-      break;
-    case METRICS_QUERY_CANCELED:
-      query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELED;
-      msg = "cancelled";
-      break;
-    default:
-      ereport(FATAL, (errmsg("Unexpected query status in query_done hook: %d",
-                             status)));
-    }
+  if (connector && !filter_query(query_desc)) {
     auto *query = get_query_message(query_desc);
-    auto prev_state = query->state;
-    if (query->state != UNKNOWN || Config::report_nested_queries()) {
-      update_query_state(query_desc, query, QueryState::DONE,
-                         query_status ==
-                             yagpcc::QueryStatus::QUERY_STATUS_DONE);
-      auto query_msg = query->message;
-      query_msg->set_query_status(query_status);
-      if (status == METRICS_QUERY_ERROR) {
-        set_qi_error_message(query_msg);
+    if (query->state != UNKNOWN || need_report_nested_query()) {
+      if (nesting_is_valid(query_desc, nesting_level)) {
+        yagpcc::QueryStatus query_status;
+        std::string msg;
+        switch (status) {
+        case METRICS_QUERY_DONE:
+        case METRICS_INNER_QUERY_DONE:
+          query_status = yagpcc::QueryStatus::QUERY_STATUS_DONE;
+          msg = "done";
+          break;
+        case METRICS_QUERY_ERROR:
+          query_status = yagpcc::QueryStatus::QUERY_STATUS_ERROR;
+          msg = "error";
+          break;
+        case METRICS_QUERY_CANCELING:
+          // at the moment we don't track this event, but I`ll leave this code
+          // here just in case
+          Assert(false);
+          query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELLING;
+          msg = "cancelling";
+          break;
+        case METRICS_QUERY_CANCELED:
+          query_status = yagpcc::QueryStatus::QUERY_STATUS_CANCELED;
+          msg = "cancelled";
+          break;
+        default:
+          ereport(FATAL,
+                  (errmsg("Unexpected query status in query_done hook: %d",
+                          status)));
+        }
+        auto prev_state = query->state;
+        update_query_state(query_desc, query, QueryState::DONE,
+                           query_status ==
+                               yagpcc::QueryStatus::QUERY_STATUS_DONE);
+        auto query_msg = query->message;
+        query_msg->set_query_status(query_status);
+        if (status == METRICS_QUERY_ERROR) {
+          set_qi_error_message(query_msg);
+        }
+        if (prev_state == START) {
+          // We've missed ExecutorEnd call due to query cancel or error. It's
+          // fine, but now we need to collect and report execution stats
+          *query_msg->mutable_end_time() = current_ts();
+          set_gp_metrics(query_msg->mutable_query_metrics(), query_desc,
+                         nested_calls, nested_timing);
+        }
+        connector->report_query(*query_msg, msg);
       }
-      if (prev_state == START) {
-        // We've missed ExecutorEnd call due to query cancel or error. It's
-        // fine, but now we need to collect and report execution stats
-        set_gp_metrics(query_msg->mutable_query_metrics(), query_desc);
-      }
-      connector->report_query(*query_msg, msg);
-    } else {
-      // otherwise it`s a nested query being committed/aborted at top level
-      // and we should ignore it
+      update_nested_counters(query_desc);
     }
     query_msgs.erase({query_desc->gpmon_pkt->u.qexec.key.ccnt,
                       query_desc->gpmon_pkt->u.qexec.key.tmid});
@@ -517,6 +544,23 @@ EventSender::QueryItem *EventSender::get_query_message(QueryDesc *query_desc) {
   }
   return &query_msgs.at({query_desc->gpmon_pkt->u.qexec.key.ccnt,
                          query_desc->gpmon_pkt->u.qexec.key.tmid});
+}
+
+void EventSender::update_nested_counters(QueryDesc *query_desc) {
+  if (!is_top_level_query(query_desc, nesting_level)) {
+    auto query_msg = get_query_message(query_desc);
+    nested_calls++;
+    double end_time = protots_to_double(query_msg->message->end_time());
+    double start_time = protots_to_double(query_msg->message->start_time());
+    if (end_time >= start_time) {
+      nested_timing += end_time - start_time;
+    } else {
+      ereport(WARNING, (errmsg("YAGPCC query start_time > end_time (%f > %f)",
+                               start_time, end_time)));
+      ereport(DEBUG3,
+              (errmsg("YAGPCC nested query text %s", query_desc->sourceText)));
+    }
+  }
 }
 
 EventSender::QueryItem::QueryItem(EventSender::QueryState st,
