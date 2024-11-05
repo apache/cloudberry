@@ -475,7 +475,7 @@ SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid)
 WHERE c.relname = 'ao_multi_level_part_table_1_prt_yearyyyy_2_prt_def';
  amname 
 --------
- heap
+ ao_row
 (1 row)
 
 alter table ao_multi_level_part_table drop partition yearYYYY;
