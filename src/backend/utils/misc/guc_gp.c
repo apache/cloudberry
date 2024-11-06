@@ -446,7 +446,8 @@ bool gp_enable_predicate_pushdown;
 int  gp_predicate_pushdown_sample_rows;
 
 bool        enable_offload_entry_to_qe = false;
-bool enable_answer_query_using_materialized_views = false;
+bool 		enable_answer_query_using_materialized_views = false;
+bool		aqumv_allow_foreign_table = false;
 
 bool		gp_log_endpoints = false;
 
@@ -3114,8 +3115,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		 true,
 		 NULL, NULL, NULL
 	},
-
-
+	{
+		{"aqumv_allow_foreign_table", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("allow answer query using materialized views which have foreign or external tables."),
+			NULL,
+			GUC_EXPLAIN
+		 },
+		 &aqumv_allow_foreign_table,
+		 false,
+		 NULL, NULL, NULL
+	},
 	{
 		{"gp_log_suboverflow_statement", PGC_SUSET, LOGGING_WHAT,
 		 gettext_noop("Enable logging of statements that cause subtransaction overflow."),

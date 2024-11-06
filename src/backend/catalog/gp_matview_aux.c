@@ -88,8 +88,16 @@ GetViewBaseRelids(const Query *viewQuery)
 	if (rte->rtekind != RTE_RELATION)
 		return NIL;
 
-	/* Only support normal relation now. */
-	if (get_rel_relkind(rte->relid) != RELKIND_RELATION)
+	char relkind = get_rel_relkind(rte->relid);
+
+	/*
+	 * Allow foreign table here, however we don't know if the data is
+	 * up to date or not of the view.
+	 * But if users want to query matview instead of query foreign tables
+	 * outside CBDB, let them decide with aqumv_allow_foreign_table.
+	 */
+	if (relkind != RELKIND_RELATION &&
+		relkind != RELKIND_FOREIGN_TABLE)
 		return NIL;
 
 	/*

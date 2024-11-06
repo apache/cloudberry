@@ -11,6 +11,7 @@
 /* items in this file should be ordered */
 		"enable_answer_query_using_materialized_views",
 		"application_name",
+		"aqumv_allow_foreign_table",
 		"archive_cleanup_command",
 		"archive_command",
 		"archive_mode",
