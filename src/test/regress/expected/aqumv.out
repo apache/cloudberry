@@ -1560,6 +1560,10 @@ create incremental materialized view aqumv_mvt4_0 as
   select c1 as mc1, c2 as mc2, c3 as mc3
   from aqumv_t4 where c1 > 90;
 analyze aqumv_mvt4_0;
+create incremental materialized view aqumv_mvt4_1 as
+  select c2 as mc2, c1 as mc1
+  from aqumv_t4 where c1 > 95;
+analyze aqumv_mvt4_1;
 -- HAVING clause pushed down to where quals.
 set local enable_answer_query_using_materialized_views = off;
 explain(costs off, verbose)
@@ -1741,6 +1745,122 @@ select c1, c3, avg(c2), random() from aqumv_t4 where c1 > 90 group by (c1, c3);
  Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (10 rows)
+
+-- Test having quals have aggs.
+-- Could not use AQUMV. 
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, (avg(c2))
+   ->  HashAggregate
+         Output: c1, avg(c2)
+         Group Key: aqumv_t4.c1
+         Filter: (avg(aqumv_t4.c3) > '96'::numeric)
+         ->  Seq Scan on aqumv.aqumv_t4
+               Output: c1, c2, c3
+               Filter: (aqumv_t4.c1 > 95)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+ c1  |         avg          
+-----+----------------------
+  99 | 100.0000000000000000
+  97 |  98.0000000000000000
+ 100 | 101.0000000000000000
+  96 |  97.0000000000000000
+  98 |  99.0000000000000000
+(5 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, (avg(c2))
+   ->  HashAggregate
+         Output: c1, avg(c2)
+         Group Key: aqumv_t4.c1
+         Filter: (avg(aqumv_t4.c3) > '96'::numeric)
+         ->  Seq Scan on aqumv.aqumv_t4
+               Output: c1, c2, c3
+               Filter: (aqumv_t4.c1 > 95)
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+ c1  |         avg          
+-----+----------------------
+  99 | 100.0000000000000000
+  97 |  98.0000000000000000
+  98 |  99.0000000000000000
+ 100 | 101.0000000000000000
+  96 |  97.0000000000000000
+(5 rows)
+
+-- Can use AQUMV.
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, (avg(c2))
+   ->  HashAggregate
+         Output: c1, avg(c2)
+         Group Key: aqumv_t4.c1
+         Filter: (avg(aqumv_t4.c3) > '96'::numeric)
+         ->  Seq Scan on aqumv.aqumv_t4
+               Output: c1, c2, c3
+               Filter: (aqumv_t4.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+ c1  |         avg          
+-----+----------------------
+  99 | 100.0000000000000000
+  97 |  98.0000000000000000
+ 100 | 101.0000000000000000
+  96 |  97.0000000000000000
+  98 |  99.0000000000000000
+  95 |  96.0000000000000000
+(6 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: mc1, (avg(mc2))
+   ->  HashAggregate
+         Output: mc1, avg(mc2)
+         Group Key: aqumv_mvt4_0.mc1
+         Filter: (avg(aqumv_mvt4_0.mc3) > '96'::numeric)
+         ->  Seq Scan on aqumv.aqumv_mvt4_0
+               Output: mc1, mc2, mc3
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+ c1  |         avg          
+-----+----------------------
+  99 | 100.0000000000000000
+  97 |  98.0000000000000000
+  98 |  99.0000000000000000
+  95 |  96.0000000000000000
+ 100 | 101.0000000000000000
+  96 |  97.0000000000000000
+(6 rows)
 
 abort;
 -- Test Order By of origin query.
@@ -2732,6 +2852,321 @@ abort;
 --
 -- End of test external table
 --
+-- Test view has aggs
+begin;
+create table t(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze t;
+create materialized view mv as
+  select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
+  from t where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv;
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*), sum(c1), count(c2), avg(c3), abs((count(*) - 21))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*)), (PARTIAL sum(c1)), (PARTIAL count(c2)), (PARTIAL avg(c3))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*), PARTIAL sum(c1), PARTIAL count(c2), PARTIAL avg(c3)
+               ->  Seq Scan on aqumv.t
+                     Output: c1, c2, c3, c4
+                     Filter: (t.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+ count | sum  | count |         avg         | abs 
+-------+------+-------+---------------------+-----
+    20 | 1910 |    20 | 97.5000000000000000 |   1
+(1 row)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: mc4, mc1, mc2, mc3, (abs((mc4 - 21)))
+   ->  Seq Scan on aqumv.mv
+         Output: mc4, mc1, mc2, mc3, abs((mc4 - 21))
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+ count | sum  | count |         avg         | abs 
+-------+------+-------+---------------------+-----
+    20 | 1910 |    20 | 97.5000000000000000 |   1
+(1 row)
+
+-- with HAVING quals
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*), sum(c1)
+   Filter: ((avg(t.c3) > '97'::numeric) AND (abs((count(*) - 21)) > 0))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*)), (PARTIAL sum(c1)), (PARTIAL avg(c3))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*), PARTIAL sum(c1), PARTIAL avg(c3)
+               ->  Seq Scan on aqumv.t
+                     Output: c1, c2, c3, c4
+                     Filter: (t.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: mc4, mc1
+   ->  Seq Scan on aqumv.mv
+         Output: mc4, mc1
+         Filter: ((mv.mc3 > '97'::numeric) AND (abs((mv.mc4 - 21)) > 0))
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+-- Test Order By elimination.
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*), sum(c1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*)), (PARTIAL sum(c1))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*), PARTIAL sum(c1)
+               ->  Seq Scan on aqumv.t
+                     Output: c1, c2, c3, c4
+                     Filter: (t.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: mc4, mc1
+   ->  Seq Scan on aqumv.mv
+         Output: mc4, mc1
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+truncate t;
+set local enable_answer_query_using_materialized_views = off;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+ count | sum 
+-------+-----
+     0 |    
+(1 row)
+
+set local enable_answer_query_using_materialized_views = on;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+ count | sum 
+-------+-----
+     0 |    
+(1 row)
+
+abort;
+-- Test query has limit while view has aggs.
+begin;
+create table t(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze t;
+create materialized view mv as
+  select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
+  from t where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv;
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Limit
+   Output: (count(*)), (sum(c1))
+   ->  Finalize Aggregate
+         Output: count(*), sum(c1)
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: (PARTIAL count(*)), (PARTIAL sum(c1))
+               ->  Partial Aggregate
+                     Output: PARTIAL count(*), PARTIAL sum(c1)
+                     ->  Seq Scan on aqumv.t
+                           Output: c1, c2, c3, c4
+                           Filter: (t.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Limit
+   Output: mc4, mc1
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: mc4, mc1
+         ->  Limit
+               Output: mc4, mc1
+               ->  Seq Scan on aqumv.mv
+                     Output: mc4, mc1
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+-- offset
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Limit
+   Output: (count(*)), (sum(c1))
+   ->  Finalize Aggregate
+         Output: count(*), sum(c1)
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: (PARTIAL count(*)), (PARTIAL sum(c1))
+               ->  Partial Aggregate
+                     Output: PARTIAL count(*), PARTIAL sum(c1)
+                     ->  Seq Scan on aqumv.t
+                           Output: c1, c2, c3, c4
+                           Filter: (t.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+ count | sum 
+-------+-----
+(0 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Limit
+   Output: mc4, mc1
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: mc4, mc1
+         ->  Limit
+               Output: mc4, mc1
+               ->  Seq Scan on aqumv.mv
+                     Output: mc4, mc1
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+ count | sum 
+-------+-----
+(0 rows)
+
+-- no real limit
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit all;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*), sum(c1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*)), (PARTIAL sum(c1))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*), PARTIAL sum(c1)
+               ->  Seq Scan on aqumv.t
+                     Output: c1, c2, c3, c4
+                     Filter: (t.c1 > 90)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(*), sum(c1) from t where c1 > 90 limit all;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit all;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: mc4, mc1
+   ->  Seq Scan on aqumv.mv
+         Output: mc4, mc1
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select count(*), sum(c1) from t where c1 > 90 limit all;
+ count | sum  
+-------+------
+    20 | 1910
+(1 row)
+
+abort;
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore

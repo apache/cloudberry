@@ -220,7 +220,6 @@ AQUMV_MVP
 ---------
 Support SELECT FROM a single relation both for view_query and the origin_query.
 Below are not supported now:
-      Aggregation (on view_query)
       Subquery
       Join
       Sublink

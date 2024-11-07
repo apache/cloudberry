@@ -83,6 +83,7 @@
 #include "cdb/cdbtargeteddispatch.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
+#include "optimizer/aqumv.h" /* answer_query_using_materialized_views */
 #include "optimizer/orca.h"
 #include "storage/lmgr.h"
 #include "utils/guc.h"
@@ -1740,6 +1741,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		List	   *activeWindows = NIL;
 		grouping_sets_data *gset_data = NULL;
 		standard_qp_extra qp_extra;
+		AqumvContext aqumv_context = NULL;
 
 		/* A recursive query should always have setOperations */
 		Assert(!root->hasRecursion);
@@ -1764,6 +1766,20 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		 * tlist of the finished Plan.  This is kept in processed_tlist.
 		 */
 		preprocess_targetlist(root);
+
+		/*
+		 * Used for AQUMV.
+		 * tlist and having quals before process_aggrefs().
+		 * Copy them for agg comparison between view and origin query
+		 * in case different agg order.
+		 */
+		if (Gp_role == GP_ROLE_DISPATCH &&
+			enable_answer_query_using_materialized_views)
+		{
+			aqumv_context = (AqumvContext) palloc0(sizeof(AqumvContextData));
+			aqumv_context->raw_havingQual = copyObject(parse->havingQual);
+			aqumv_context->raw_processed_tlist = copyObject(root->processed_tlist);
+		}
 
 		/*
 		 * Collect statistics about aggregates for estimating costs, and mark
@@ -1890,7 +1906,14 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		if (Gp_role == GP_ROLE_DISPATCH &&
 			enable_answer_query_using_materialized_views)
 		{
-			current_rel = answer_query_using_materialized_views(root, current_rel, standard_qp_callback, &qp_extra);
+			/* Now it's ok to set other fields. */
+			aqumv_context->current_rel = current_rel;
+			aqumv_context->qp_callback = standard_qp_callback;
+			aqumv_context->qp_extra = &qp_extra;
+
+			/* Do the real work. */
+			current_rel = answer_query_using_materialized_views(root, aqumv_context);
+			/* parse tree may be rewriten. */
 			parse = root->parse;
 		}
 

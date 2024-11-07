@@ -418,6 +418,11 @@ create incremental materialized view aqumv_mvt4_0 as
   from aqumv_t4 where c1 > 90;
 analyze aqumv_mvt4_0;
 
+create incremental materialized view aqumv_mvt4_1 as
+  select c2 as mc2, c1 as mc1
+  from aqumv_t4 where c1 > 95;
+analyze aqumv_mvt4_1;
+
 -- HAVING clause pushed down to where quals.
 set local enable_answer_query_using_materialized_views = off;
 explain(costs off, verbose)
@@ -452,6 +457,25 @@ select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having rand
 explain(costs off, verbose)
 select c1, c3, avg(c2), random() from aqumv_t4 where c1 > 90 group by (c1, c3);
 
+-- Test having quals have aggs.
+-- Could not use AQUMV. 
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+-- Can use AQUMV.
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
 abort;
 
 -- Test Order By of origin query.
@@ -680,6 +704,96 @@ abort;
 --
 -- End of test external table
 --
+-- Test view has aggs
+begin;
+create table t(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze t;
+
+create materialized view mv as
+  select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
+  from t where c1 > 90;
+analyze mv;
+
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+
+-- with HAVING quals
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+
+-- Test Order By elimination.
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+truncate t;
+set local enable_answer_query_using_materialized_views = off;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+set local enable_answer_query_using_materialized_views = on;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+
+abort;
+
+-- Test query has limit while view has aggs.
+begin;
+create table t(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze t;
+
+create materialized view mv as
+  select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
+  from t where c1 > 90;
+analyze mv;
+
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+
+-- offset
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+
+-- no real limit
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit all;
+select count(*), sum(c1) from t where c1 > 90 limit all;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit all;
+select count(*), sum(c1) from t where c1 > 90 limit all;
+
+abort;
 
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
