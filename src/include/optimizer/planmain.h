@@ -166,9 +166,4 @@ extern void cdb_extract_plan_dependencies(PlannerInfo *root, Plan *plan);
 
 extern void add_proc_oids_for_dump(Oid funcid);
 
-extern RelOptInfo* answer_query_using_materialized_views(PlannerInfo *root,
-														RelOptInfo *current_rel,
-														query_pathkeys_callback qp_callback,
-														void *qp_extra);
-
 #endif							/* PLANMAIN_H */
