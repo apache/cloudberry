@@ -24,6 +24,8 @@ OBJS			:=	$(PG_STAT_OBJS)						\
 					$(PROTO_GEN_OBJECTS)			 	\
 					$(SRC_DIR)/ProcStats.o				\
 					$(SRC_DIR)/Config.o					\
+					$(SRC_DIR)/PgUtils.o				\
+					$(SRC_DIR)/ProtoUtils.o				\
 					$(SRC_DIR)/YagpStat.o				\
 					$(SRC_DIR)/UDSConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
