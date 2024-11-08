@@ -2417,6 +2417,9 @@ transformDistributedBy(ParseState *pstate,
 	ListCell   *lc;
 	int			numsegments;
 
+	if(distributedBy->ptype == POLICYTYPE_LOCAL){
+		return distributedBy;
+	}
 	/*
 	 * utility mode creates can't have a policy.  Only the QD can have policies
 	 */
@@ -3134,6 +3137,9 @@ getPolicyForDistributedBy(DistributedBy *distributedBy, TupleDesc tupdesc)
 
 		case POLICYTYPE_REPLICATED:
 			return createReplicatedGpPolicy(distributedBy->numsegments);
+		
+		case POLICYTYPE_LOCAL:
+			return NULL;
 	}
 	elog(ERROR, "unrecognized policy type %d", distributedBy->ptype);
 	return NULL;

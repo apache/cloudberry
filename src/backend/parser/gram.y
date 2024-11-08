@@ -6047,6 +6047,15 @@ DistributedBy:   DISTRIBUTED BY  '(' distributed_by_list ')'
 				distributedBy->keyCols = NIL;
 				$$ = (Node *)distributedBy;
 			}
+			| DISTRIBUTED LOCAL
+			{
+				DistributedBy *distributedBy = makeNode(DistributedBy);
+				distributedBy->ptype = POLICYTYPE_LOCAL;
+				distributedBy->numsegments = -1;
+				distributedBy->keyCols = NIL;
+				$$ = (Node *)distributedBy;
+
+			}
 		;
 
 OptDistributedBy:   DistributedBy
