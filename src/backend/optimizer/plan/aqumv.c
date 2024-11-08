@@ -151,6 +151,9 @@ answer_query_using_materialized_views(PlannerInfo *root,
 		has_subclass(origin_rel_oid))
 		return mv_final_rel;
 
+	if (get_rel_relkind(origin_rel_oid) == RELKIND_FOREIGN_TABLE && !aqumv_allow_foreign_table)
+		return mv_final_rel;
+
 	ruleDesc = table_open(RewriteRelationId, AccessShareLock);
 
 	rcscan = systable_beginscan(ruleDesc, InvalidOid, false,

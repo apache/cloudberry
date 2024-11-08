@@ -626,6 +626,54 @@ select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows wit
 
 abort;
 
+--
+-- Test external table
+--
+begin;
+
+CREATE OR REPLACE FUNCTION write_to_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_export' LANGUAGE C STABLE NO SQL;
+CREATE OR REPLACE FUNCTION read_from_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_import' LANGUAGE C STABLE NO SQL;
+--start_ignore
+DROP PROTOCOL IF EXISTS demoprot;
+--end_ignore
+CREATE TRUSTED PROTOCOL demoprot (readfunc = 'read_from_file', writefunc = 'write_to_file'); -- should succeed
+
+CREATE WRITABLE EXTERNAL TABLE aqumv_ext_w(id int)
+    LOCATION('demoprot://aqumvtextfile.txt') 
+
+FORMAT 'text'
+DISTRIBUTED BY (id);
+
+INSERT INTO aqumv_ext_w SELECT * FROM generate_series(1, 10);
+
+CREATE READABLE EXTERNAL TABLE aqumv_ext_r(id int)
+    LOCATION('demoprot://aqumvtextfile.txt') 
+FORMAT 'text';
+
+create materialized view aqumv_ext_mv as
+  select * from aqumv_ext_r;
+analyze aqumv_ext_mv;
+
+explain (costs off, verbose)
+select * from aqumv_ext_r;
+select * from aqumv_ext_r;
+set local enable_answer_query_using_materialized_views = on;
+set local aqumv_allow_foreign_table = on;
+explain (costs off, verbose)
+select * from aqumv_ext_r;
+select * from aqumv_ext_r;
+
+create index on aqumv_ext_mv(id);
+set local enable_seqscan = off;
+explain (costs off, verbose)
+select * from aqumv_ext_r where id = 5;
+select * from aqumv_ext_r where id = 5;
+
+abort;
+--
+-- End of test external table
+--
+
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore

@@ -298,6 +298,7 @@ extern int  gp_appendonly_insert_files_tuples_range;
 extern int  gp_random_insert_segments;
 extern bool enable_answer_query_using_materialized_views;
 extern bool enable_offload_entry_to_qe;
+extern bool	aqumv_allow_foreign_table;
 /*
  * gp_enable_multiphase_limit is not cost based.
  * When set to false, the planner will not use multi-phase limit.
