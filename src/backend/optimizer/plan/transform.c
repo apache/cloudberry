@@ -20,6 +20,7 @@
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/tlist.h"
 #include "optimizer/transform.h"
 #include "utils/lsyscache.h"
 #include "catalog/pg_proc.h"
@@ -519,4 +520,135 @@ replace_sirvf_rte(Query *query, RangeTblEntry *rte)
 	}
 
 	return rte;
+}
+
+/*
+ * Does query has SRFs, or WITH ORDINALITY?
+ */
+bool query_has_srf(Query *query)
+{
+	if (query->hasTargetSRFs)
+	{
+		return true;
+	}
+
+	/* Double check for subquery. */
+	if (expression_returns_set( (Node *) query->targetList))
+	{
+		return true;
+	}
+
+	ListCell *lcrte = NULL;
+	foreach (lcrte, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lcrte);
+
+		switch(rte->rtekind)
+		{
+			case RTE_FUNCTION:
+			{
+				ListCell *lcrtfunc;
+
+				/* WITH ORDINALITY */
+				if (rte->funcordinality)
+					return true;
+
+				foreach(lcrtfunc, rte->functions)
+				{
+					RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lcrtfunc);
+
+					if (!IsA(rtfunc->funcexpr, FuncExpr))
+						return true;
+
+					if (((FuncExpr *) rtfunc->funcexpr)->funcretset)
+					{
+						/* SRF in FROM clause */
+						return true;
+					}
+				}
+				break;
+			}
+			case RTE_SUBQUERY:
+			{
+				Query *sq = (Query *) rte->subquery;
+
+				if (query_has_srf(sq))
+				{
+					return true;
+				}
+				break;
+			}
+			default:
+			{
+				break;
+			}
+		}
+	}
+
+	return false;
+}
+
+/*
+ * DISTINCT/DISTINCT ON/ORDER BY optimization.
+ * Remove DISTINCT clause if possibile, ex:
+ * select DISTINCT count(a) from t; to
+ * select count(a) from t;
+ * There is one row returned at most, DISTINCT and/or ON is pointless then.
+ * The same with ORDER BY clause;
+ */
+Query *remove_distinct_sort_clause(Query *parse)
+{
+	if (parse->hasAggs &&
+		parse->groupClause == NIL &&
+		!contain_mutable_functions((Node *) parse) &&
+		!query_has_srf(parse))
+	{
+		List	   *useless_tlist = NIL;
+		List	   *tles;
+		List	   *sortops;
+		List	   *eqops;
+		ListCell   *lc;
+
+		if (parse->distinctClause != NIL)
+		{
+			get_sortgroupclauses_tles(parse->distinctClause, parse->targetList,
+									  &tles, &sortops, &eqops);
+			foreach(lc, tles)
+			{
+				TargetEntry *tle = lfirst(lc);
+				if (tle->resjunk)
+					useless_tlist = lappend(useless_tlist, tle);
+			}
+			parse->distinctClause = NIL;
+			if (parse->hasDistinctOn)
+				parse->hasDistinctOn = false;
+		}
+
+		if (parse->sortClause != NIL)
+		{
+
+			get_sortgroupclauses_tles(parse->sortClause, parse->targetList,
+									  &tles, &sortops, &eqops);
+			foreach(lc, tles)
+			{
+				TargetEntry *tle = lfirst(lc);
+				/*
+				 * For SELECT DISTINCT, ORDER BY expressions must appear in select list,
+				 * Some tles may be already in the list.
+				 */ 
+				if (tle->resjunk)
+					useless_tlist = list_append_unique(useless_tlist, tle);
+			}
+			parse->sortClause = NIL;
+		}
+
+		/*
+		 * There is no groupClause, sortClause and distinctClause now .
+		 * The junk TargetEntrys with ressortgroupref index are safe to be removed.
+		 */
+		if (useless_tlist != NIL)
+			parse->targetList = list_difference(parse->targetList, useless_tlist);
+	}
+
+	return parse;
 }

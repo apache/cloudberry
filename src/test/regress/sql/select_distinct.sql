@@ -200,3 +200,28 @@ DROP TABLE capitals;
 DROP TABLE cities;
 set gp_statistics_pullup_from_child_partition to off;
 -- gpdb end: test inherit/partition table distinct when gp_statistics_pullup_from_child_partition is on
+
+create table t_distinct_sort(a int, b int, c int);
+insert into t_distinct_sort select i, i+1, i+2 from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+analyze t_distinct_sort;
+
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+explain(verbose, costs off)
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+explain(verbose, costs off)
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort ;
+select distinct count(a), sum(b) from t_distinct_sort ;
+
+-- should keep distinct clause
+explain(verbose, costs off) 
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+drop table t_distinct_sort;

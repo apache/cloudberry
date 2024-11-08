@@ -90,26 +90,20 @@ explain (costs off, locus) select count(x) over () from tst group by x limit 1;
 (14 rows)
 
 explain (costs off, locus) select distinct min(x), max(x) from tst;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Locus: Entry
-   ->  Unique
+   ->  Finalize Aggregate
          Locus: SingleQE
-         Group Key: (min(x)), (max(x))
-         ->  Sort
+         ->  Gather Motion 3:1  (slice2; segments: 3)
                Locus: SingleQE
-               Sort Key: (min(x)), (max(x))
-               ->  Finalize Aggregate
-                     Locus: SingleQE
-                     ->  Gather Motion 3:1  (slice2; segments: 3)
-                           Locus: SingleQE
-                           ->  Partial Aggregate
-                                 Locus: Hashed
-                                 ->  Seq Scan on tst
-                                       Locus: Hashed
+               ->  Partial Aggregate
+                     Locus: Hashed
+                     ->  Seq Scan on tst
+                           Locus: Hashed
  Optimizer: Postgres query optimizer
-(17 rows)
+(11 rows)
 
 reset enable_offload_entry_to_qe;  -- compare results with GUC set to false
 select count(x) from tst where x > 1;
