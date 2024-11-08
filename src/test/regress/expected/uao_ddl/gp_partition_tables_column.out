@@ -1,0 +1,181 @@
+-- test legacy/gp-style partition tables
+create schema gppt_ao_column;
+set search_path="$user",gppt_ao_column,public;
+-- set default table access method to non-ao/co table
+SET default_table_access_method=heap;
+CREATE TABLE gppt_ao_column.pt_ao_column (
+a date NOT NULL,
+b integer NOT NULL,
+c numeric(20,10),
+d integer,
+bi bigint NOT NULL,
+ts timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+using ao_column
+WITH (compresstype=zlib, compresslevel=6)
+DISTRIBUTED RANDOMLY
+PARTITION BY RANGE (a) (
+START ('2020-01-01'::date) INCLUSIVE
+END ('2024-01-01'::date) EXCLUSIVE
+EVERY (interval '1 Year')
+)
+;
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt_ao_column';
+   relname    | relkind |  amname   |             reloptions              
+--------------+---------+-----------+-------------------------------------
+ pt_ao_column | p       | ao_column | {compresstype=zlib,compresslevel=6}
+(1 row)
+
+\d+ gppt_ao_column.pt_ao_column
+                                                              Partitioned table "gppt_ao_column.pt_ao_column"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | zlib             | 6                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | zlib             | 6                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | zlib             | 6                 | 32768      | 
+Partition key: RANGE (a)
+Partitions: pt_ao_column_1_prt_1 FOR VALUES FROM ('01-01-2020') TO ('01-01-2021'),
+            pt_ao_column_1_prt_2 FOR VALUES FROM ('01-01-2021') TO ('01-01-2022'),
+            pt_ao_column_1_prt_3 FOR VALUES FROM ('01-01-2022') TO ('01-01-2023'),
+            pt_ao_column_1_prt_4 FOR VALUES FROM ('01-01-2023') TO ('01-01-2024')
+Distributed randomly
+Options: compresstype=zlib, compresslevel=6
+
+\d+ gppt_ao_column.pt_ao_column_1_prt_2
+                                                                Table "gppt_ao_column.pt_ao_column_1_prt_2"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | zlib             | 6                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | zlib             | 6                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | zlib             | 6                 | 32768      | 
+Partition of: pt_ao_column FOR VALUES FROM ('01-01-2021') TO ('01-01-2022')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2021'::date) AND (a < '01-01-2022'::date))
+Checksum: t
+Distributed randomly
+Options: compresstype=zlib, compresslevel=6
+
+ALTER TABLE gppt_ao_column.pt_ao_column ADD PARTITION START ('2027-01-01') INCLUSIVE END ('2028-01-01') EXCLUSIVE;
+\d+ gppt_ao_column.pt_ao_column_1_prt_11
+                                                                Table "gppt_ao_column.pt_ao_column_1_prt_11"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | zlib             | 6                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | zlib             | 6                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | zlib             | 6                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | zlib             | 6                 | 32768      | 
+Partition of: pt_ao_column FOR VALUES FROM ('01-01-2027') TO ('01-01-2028')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2027'::date) AND (a < '01-01-2028'::date))
+Checksum: t
+Distributed randomly
+Options: compresstype=zlib, compresslevel=6
+
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt_ao_column_1_prt_11';
+        relname        | relkind |  amname   |             reloptions              
+-----------------------+---------+-----------+-------------------------------------
+ pt_ao_column_1_prt_11 | r       | ao_column | {compresstype=zlib,compresslevel=6}
+(1 row)
+
+CREATE TABLE gppt_ao_column.pt2_ao_column (
+a date NOT NULL,
+b integer NOT NULL,
+c numeric(20,10),
+d integer,
+bi bigint NOT NULL,
+ts timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+using ao_column
+DISTRIBUTED RANDOMLY
+PARTITION BY RANGE (a) (
+START ('2020-01-01'::date) INCLUSIVE
+END ('2024-01-01'::date) EXCLUSIVE
+EVERY (interval '1 Year')
+)
+;
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt2_ao_column';
+    relname    | relkind |  amname   | reloptions 
+---------------+---------+-----------+------------
+ pt2_ao_column | p       | ao_column | 
+(1 row)
+
+\d+ gppt_ao_column.pt2_ao_column
+                                                              Partitioned table "gppt_ao_column.pt2_ao_column"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | none             | 0                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | none             | 0                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | none             | 0                 | 32768      | 
+Partition key: RANGE (a)
+Partitions: pt2_ao_column_1_prt_1 FOR VALUES FROM ('01-01-2020') TO ('01-01-2021'),
+            pt2_ao_column_1_prt_2 FOR VALUES FROM ('01-01-2021') TO ('01-01-2022'),
+            pt2_ao_column_1_prt_3 FOR VALUES FROM ('01-01-2022') TO ('01-01-2023'),
+            pt2_ao_column_1_prt_4 FOR VALUES FROM ('01-01-2023') TO ('01-01-2024')
+Distributed randomly
+
+\d+ gppt_ao_column.pt2_ao_column_1_prt_2
+                                                                Table "gppt_ao_column.pt2_ao_column_1_prt_2"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | none             | 0                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | none             | 0                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | none             | 0                 | 32768      | 
+Partition of: pt2_ao_column FOR VALUES FROM ('01-01-2021') TO ('01-01-2022')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2021'::date) AND (a < '01-01-2022'::date))
+Checksum: t
+Distributed randomly
+
+ALTER TABLE gppt_ao_column.pt2_ao_column ADD PARTITION START ('2027-01-01') INCLUSIVE END ('2028-01-01') EXCLUSIVE;
+\d+ gppt_ao_column.pt2_ao_column
+                                                              Partitioned table "gppt_ao_column.pt2_ao_column"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | none             | 0                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | none             | 0                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | none             | 0                 | 32768      | 
+Partition key: RANGE (a)
+Partitions: pt2_ao_column_1_prt_1 FOR VALUES FROM ('01-01-2020') TO ('01-01-2021'),
+            pt2_ao_column_1_prt_11 FOR VALUES FROM ('01-01-2027') TO ('01-01-2028'),
+            pt2_ao_column_1_prt_2 FOR VALUES FROM ('01-01-2021') TO ('01-01-2022'),
+            pt2_ao_column_1_prt_3 FOR VALUES FROM ('01-01-2022') TO ('01-01-2023'),
+            pt2_ao_column_1_prt_4 FOR VALUES FROM ('01-01-2023') TO ('01-01-2024')
+Distributed randomly
+
+\d+ gppt_ao_column.pt2_ao_column_1_prt_11
+                                                               Table "gppt_ao_column.pt2_ao_column_1_prt_11"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+------------------+-------------------+------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ b      | integer                     |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | none             | 0                 | 32768      | 
+ d      | integer                     |           |          |                   | plain   |              | none             | 0                 | 32768      | 
+ bi     | bigint                      |           | not null |                   | plain   |              | none             | 0                 | 32768      | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | none             | 0                 | 32768      | 
+Partition of: pt2_ao_column FOR VALUES FROM ('01-01-2027') TO ('01-01-2028')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2027'::date) AND (a < '01-01-2028'::date))
+Checksum: t
+Distributed randomly
+
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt2_ao_column_1_prt_11';
+        relname         | relkind |  amname   | reloptions 
+------------------------+---------+-----------+------------
+ pt2_ao_column_1_prt_11 | r       | ao_column | 
+(1 row)
+
+reset default_table_access_method;
+reset search_path;

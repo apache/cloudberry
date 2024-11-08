@@ -1,0 +1,193 @@
+-- test legacy/gp-style partition tables
+create schema gppt_ao_row;
+set search_path="$user",gppt_ao_row,public;
+-- set default table access method to non-ao/co table
+SET default_table_access_method=heap;
+CREATE TABLE gppt_ao_row.pt_ao_row (
+a date NOT NULL,
+b integer NOT NULL,
+c numeric(20,10),
+d integer,
+bi bigint NOT NULL,
+ts timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+using ao_row
+WITH (compresstype=zlib, compresslevel=6)
+DISTRIBUTED RANDOMLY
+PARTITION BY RANGE (a) (
+START ('2020-01-01'::date) INCLUSIVE
+END ('2024-01-01'::date) EXCLUSIVE
+EVERY (interval '1 Year')
+)
+;
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt_ao_row';
+  relname  | relkind | amname |             reloptions              
+-----------+---------+--------+-------------------------------------
+ pt_ao_row | p       | ao_row | {compresstype=zlib,compresslevel=6}
+(1 row)
+
+\d+ gppt_ao_row.pt_ao_row
+                                       Partitioned table "gppt_ao_row.pt_ao_row"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition key: RANGE (a)
+Partitions: pt_ao_row_1_prt_1 FOR VALUES FROM ('01-01-2020') TO ('01-01-2021'),
+            pt_ao_row_1_prt_2 FOR VALUES FROM ('01-01-2021') TO ('01-01-2022'),
+            pt_ao_row_1_prt_3 FOR VALUES FROM ('01-01-2022') TO ('01-01-2023'),
+            pt_ao_row_1_prt_4 FOR VALUES FROM ('01-01-2023') TO ('01-01-2024')
+Distributed randomly
+Options: compresstype=zlib, compresslevel=6
+
+\d+ gppt_ao_row.pt_ao_row_1_prt_2
+                                         Table "gppt_ao_row.pt_ao_row_1_prt_2"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition of: pt_ao_row FOR VALUES FROM ('01-01-2021') TO ('01-01-2022')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2021'::date) AND (a < '01-01-2022'::date))
+Compression Type: zlib
+Compression Level: 6
+Block Size: 32768
+Checksum: t
+Distributed randomly
+Options: compresstype=zlib, compresslevel=6
+
+ALTER TABLE gppt_ao_row.pt_ao_row ADD PARTITION START ('2027-01-01') INCLUSIVE END ('2028-01-01') EXCLUSIVE;
+\d+ gppt_ao_row.pt_ao_row_1_prt_11
+                                         Table "gppt_ao_row.pt_ao_row_1_prt_11"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition of: pt_ao_row FOR VALUES FROM ('01-01-2027') TO ('01-01-2028')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2027'::date) AND (a < '01-01-2028'::date))
+Compression Type: zlib
+Compression Level: 6
+Block Size: 32768
+Checksum: t
+Distributed randomly
+Options: compresstype=zlib, compresslevel=6
+
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt_ao_row_1_prt_11';
+      relname       | relkind | amname |             reloptions              
+--------------------+---------+--------+-------------------------------------
+ pt_ao_row_1_prt_11 | r       | ao_row | {compresstype=zlib,compresslevel=6}
+(1 row)
+
+CREATE TABLE gppt_ao_row.pt2_ao_row (
+a date NOT NULL,
+b integer NOT NULL,
+c numeric(20,10),
+d integer,
+bi bigint NOT NULL,
+ts timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+using ao_row
+DISTRIBUTED RANDOMLY
+PARTITION BY RANGE (a) (
+START ('2020-01-01'::date) INCLUSIVE
+END ('2024-01-01'::date) EXCLUSIVE
+EVERY (interval '1 Year')
+)
+;
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt2_ao_row';
+  relname   | relkind | amname | reloptions 
+------------+---------+--------+------------
+ pt2_ao_row | p       | ao_row | 
+(1 row)
+
+\d+ gppt_ao_row.pt2_ao_row
+                                       Partitioned table "gppt_ao_row.pt2_ao_row"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition key: RANGE (a)
+Partitions: pt2_ao_row_1_prt_1 FOR VALUES FROM ('01-01-2020') TO ('01-01-2021'),
+            pt2_ao_row_1_prt_2 FOR VALUES FROM ('01-01-2021') TO ('01-01-2022'),
+            pt2_ao_row_1_prt_3 FOR VALUES FROM ('01-01-2022') TO ('01-01-2023'),
+            pt2_ao_row_1_prt_4 FOR VALUES FROM ('01-01-2023') TO ('01-01-2024')
+Distributed randomly
+
+\d+ gppt_ao_row.pt2_ao_row_1_prt_2
+                                         Table "gppt_ao_row.pt2_ao_row_1_prt_2"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition of: pt2_ao_row FOR VALUES FROM ('01-01-2021') TO ('01-01-2022')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2021'::date) AND (a < '01-01-2022'::date))
+Compression Type: None
+Compression Level: 0
+Block Size: 32768
+Checksum: t
+Distributed randomly
+
+ALTER TABLE gppt_ao_row.pt2_ao_row ADD PARTITION START ('2027-01-01') INCLUSIVE END ('2028-01-01') EXCLUSIVE;
+\d+ gppt_ao_row.pt2_ao_row
+                                       Partitioned table "gppt_ao_row.pt2_ao_row"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition key: RANGE (a)
+Partitions: pt2_ao_row_1_prt_1 FOR VALUES FROM ('01-01-2020') TO ('01-01-2021'),
+            pt2_ao_row_1_prt_11 FOR VALUES FROM ('01-01-2027') TO ('01-01-2028'),
+            pt2_ao_row_1_prt_2 FOR VALUES FROM ('01-01-2021') TO ('01-01-2022'),
+            pt2_ao_row_1_prt_3 FOR VALUES FROM ('01-01-2022') TO ('01-01-2023'),
+            pt2_ao_row_1_prt_4 FOR VALUES FROM ('01-01-2023') TO ('01-01-2024')
+Distributed randomly
+
+\d+ gppt_ao_row.pt2_ao_row_1_prt_11
+                                        Table "gppt_ao_row.pt2_ao_row_1_prt_11"
+ Column |            Type             | Collation | Nullable |      Default      | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+-------------------+---------+--------------+-------------
+ a      | date                        |           | not null |                   | plain   |              | 
+ b      | integer                     |           | not null |                   | plain   |              | 
+ c      | numeric(20,10)              |           |          |                   | main    |              | 
+ d      | integer                     |           |          |                   | plain   |              | 
+ bi     | bigint                      |           | not null |                   | plain   |              | 
+ ts     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP | plain   |              | 
+Partition of: pt2_ao_row FOR VALUES FROM ('01-01-2027') TO ('01-01-2028')
+Partition constraint: ((a IS NOT NULL) AND (a >= '01-01-2027'::date) AND (a < '01-01-2028'::date))
+Compression Type: None
+Compression Level: 0
+Block Size: 32768
+Checksum: t
+Distributed randomly
+
+select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt2_ao_row_1_prt_11';
+       relname       | relkind | amname | reloptions 
+---------------------+---------+--------+------------
+ pt2_ao_row_1_prt_11 | r       | ao_row | 
+(1 row)
+
+reset default_table_access_method;
+reset search_path;
