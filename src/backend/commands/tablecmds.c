@@ -1774,6 +1774,13 @@ RemoveRelations(DropStmt *drop)
 
 	foreach(cell, drop->objects)
 	{
+		if (relkind == RELKIND_DIRECTORY_TABLE)
+		{
+			DropDirectoryTableStmt *dirtable_drop =  (DropDirectoryTableStmt *) drop;
+			if (dirtable_drop->with_content)
+				flags |= PERFORM_DELETION_WITH_CONTENT;
+		}
+
 		RangeVar   *rel = makeRangeVarFromNameList((List *) lfirst(cell));
 		Oid			relOid;
 		ObjectAddress obj;

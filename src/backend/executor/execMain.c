@@ -49,6 +49,7 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_publication.h"
+#include "catalog/storage_directory_table.h"
 #include "commands/matview.h"
 #include "commands/tablespace.h"
 #include "commands/trigger.h"
@@ -2266,10 +2267,11 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation, ModifyTable
 			{
 				case CMD_INSERT:
 				case CMD_DELETE:
-					ereport(ERROR,
-								(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-								 errmsg("cannot change directory table \"%s\"",
-										RelationGetRelationName(resultRel))));
+					if (!allow_dml_directory_table)
+						ereport(ERROR,
+									(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+								 	 errmsg("cannot change directory table \"%s\"",
+											RelationGetRelationName(resultRel))));
 					break;
 				case CMD_UPDATE:
 					if (mtstate)
@@ -2283,7 +2285,7 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation, ModifyTable
 						{
 							AttrNumber targetattnum = lfirst_int(lc);
 
-							if (targetattnum != DIRECTORY_TABLE_TAG_COLUMN_ATTNUM)
+							if (targetattnum != DIRECTORY_TABLE_TAG_COLUMN_ATTNUM && !allow_dml_directory_table)
 								ereport(ERROR,
 											(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 											 errmsg("Only allow to update directory \"tag\" column.")));

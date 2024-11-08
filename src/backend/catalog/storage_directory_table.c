@@ -28,6 +28,8 @@
 #include "utils/rel.h"
 #include "cdb/cdbvars.h"
 
+bool allow_dml_directory_table = false;
+
 /*
  * TODO: support ufile pending delete xlog
  *
@@ -87,8 +89,9 @@ struct PendingRelDeleteAction ufile_pending_rel_deletes_action = {
 };
 
 void
-DirectoryTableDropStorage(Relation rel)
+DirectoryTableDropStorage(Oid relid)
 {
+	Relation rel;
 	char	   *filePath;
 	DirectoryTable *dirTable;
 	TableScanDesc scandesc;
@@ -99,6 +102,7 @@ DirectoryTableDropStorage(Relation rel)
 	Oid			tablespaceoid;
 	char	   *tablespace_name;
 
+	rel = relation_open(relid, AccessExclusiveLock); 
 	dirTable = GetDirectoryTable(RelationGetRelid(rel));
 
 	/*
@@ -133,6 +137,8 @@ DirectoryTableDropStorage(Relation rel)
 	UFileAddPendingDelete(rel, dirTable->spcId, filePath, true);
 
 	pfree(filePath);
+
+	relation_close(rel, NoLock);
 }
 
 void

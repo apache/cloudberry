@@ -4045,6 +4045,25 @@ _outAlterDirectoryTableStmt(StringInfo str, const AlterDirectoryTableStmt *node)
 	WRITE_BOOL_FIELD(unsettag);
 }
 
+static void
+_outDropStmtInfo(StringInfo str, const DropStmt *node)
+{
+	WRITE_NODE_FIELD(objects);
+	WRITE_ENUM_FIELD(removeType, ObjectType);
+	WRITE_ENUM_FIELD(behavior, DropBehavior);
+	WRITE_BOOL_FIELD(missing_ok);
+	WRITE_BOOL_FIELD(concurrent);
+}
+
+static void
+_outDropDirectoryTableStmt(StringInfo str, const DropDirectoryTableStmt *node)
+{
+	WRITE_NODE_TYPE("DROPDIRECTORYTABLESTMT");
+
+	_outDropStmtInfo(str, (const DropStmt *) node);
+	WRITE_BOOL_FIELD(with_content);
+}
+
 #include "outfuncs_common.c"
 #ifndef COMPILING_BINARY_FUNCS
 /*
@@ -5201,6 +5220,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_AlterDirectoryTableStmt:
 				_outAlterDirectoryTableStmt(str, obj);
+				break;
+			case T_DropDirectoryTableStmt:
+				_outDropDirectoryTableStmt(str, obj);
 				break;
 			default:
 

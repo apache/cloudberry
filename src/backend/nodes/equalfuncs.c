@@ -3484,6 +3484,17 @@ _equalAlterDirectoryTableStmt(const AlterDirectoryTableStmt *a, const AlterDirec
 	return true;
 }
 
+static bool
+_equalDropDirectoryTableStmt(const DropDirectoryTableStmt *a, const DropDirectoryTableStmt *b)
+{
+	if (!_equalDropStmt(&a->base, &b->base))
+		return false;
+
+	COMPARE_SCALAR_FIELD(with_content);
+
+	return true;
+}
+
 /*
  * Stuff from pg_list.h
  */
@@ -4438,6 +4449,10 @@ equal(const void *a, const void *b)
 
 		case T_AlterDirectoryTableStmt:
 			retval = _equalAlterDirectoryTableStmt(a, b);
+			break;
+
+		case T_DropDirectoryTableStmt:
+			retval = _equalDropDirectoryTableStmt(a, b);
 			break;
 
 		default:

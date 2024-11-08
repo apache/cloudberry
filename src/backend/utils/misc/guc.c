@@ -48,6 +48,7 @@
 #include "catalog/pg_authid.h"
 #include "catalog/pg_profile.h"
 #include "catalog/storage.h"
+#include "catalog/storage_directory_table.h"
 #include "catalog/index.h"
 #include "commands/async.h"
 #include "commands/prepare.h"
@@ -2199,6 +2200,13 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&tde_force_switch,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"allow_dml_directory_table", PGC_SUSET, DEVELOPER_OPTIONS},
+		&allow_dml_directory_table,
+		false,
 		NULL, NULL, NULL
 	},
 

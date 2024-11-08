@@ -361,7 +361,7 @@ BEGIN
 BEGIN
 1: CREATE DIRECTORY TABLE dir_table3 TABLESPACE directory_tblspc;
 CREATE
-2: DROP DIRECTORY TABLE dir_table2;
+2: DROP DIRECTORY TABLE dir_table2 WITH CONTENT;
 DROP
 2: CREATE DIRECTORY TABLE dir_table2 TABLESPACE directory_tblspc;
 CREATE
@@ -375,11 +375,11 @@ ERROR:  tablespace "directory_tblspc" cannot be dropped because some objects dep
 DETAIL:  tablespace for directory table dir_table1
 tablespace for directory table dir_table3
 tablespace for directory table dir_table2
-DROP DIRECTORY TABLE dir_table1;
+DROP DIRECTORY TABLE dir_table1 WITH CONTENT;
 DROP
-DROP DIRECTORY TABLE dir_table2;
+DROP DIRECTORY TABLE dir_table2 WITH CONTENT;
 DROP
-DROP DIRECTORY TABLE dir_table3;
+DROP DIRECTORY TABLE dir_table3 WITH CONTENT;
 DROP
 DROP TABLESPACE directory_tblspc;
 DROP
