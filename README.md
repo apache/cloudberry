@@ -16,7 +16,7 @@
 [![Twitter Follow](https://img.shields.io/twitter/follow/cloudberrydb)](https://twitter.com/cloudberrydb)
 [![WeChat](https://img.shields.io/badge/WeChat-eebc46)](https://cloudberrydb.org/community/wechat)
 [![Youtube](https://img.shields.io/badge/Youtube-gebc46)](https://youtube.com/@cloudberrydb)
-[![GitHub Discussions](https://img.shields.io/github/discussions/cloudberrydb/cloudberrydb)](https://github.com/orgs/cloudberrydb/discussions)
+[![GitHub Discussions](https://img.shields.io/github/discussions/cloudberrydb/cloudberrydb)](https://github.com/apache/cloudberrydb/discussions)
 ![GitHub commit activity(branch)](https://img.shields.io/github/commit-activity/m/cloudberrydb/cloudberrydb)
 ![GitHub contributors](https://img.shields.io/github/contributors/cloudberrydb/cloudberrydb)
 ![GitHub License](https://img.shields.io/github/license/cloudberrydb/cloudberrydb)
@@ -41,7 +41,7 @@ Database](https://cloudberrydb.org/docs/cbdb-vs-gp-features) doc for details.
 ## Roadmap
 
 You can check our [Cloudberry Database Roadmap
-2024](https://github.com/orgs/cloudberrydb/discussions/369) out to see the
+2024](https://github.com/apache/cloudberrydb/discussions/369) out to see the
 product plans and goals we want to achieve in 2024. Welcome to share your
 thoughts and ideas to join us in shaping the future of the Cloudberry
 Database.
@@ -88,8 +88,8 @@ feedback, and chat:
 | Type | Description |
 |------|-------------|
 | Slack | [Click to Join](https://communityinviter.com/apps/cloudberrydb/welcome) the real-time chat on Slack for QA, Dev, Events, and more. Don't miss out! Check out the [Slack guide](https://cloudberrydb.org/community/slack) to learn more. |
-| Q&A | Ask for help when running/developing Cloudberry Database, visit [GitHub Discussions - QA](https://github.com/orgs/cloudberrydb/discussions/categories/q-a). |
-| New ideas / Feature Requests | Share ideas for new features, visit [GitHub Discussions - Ideas](https://github.com/orgs/cloudberrydb/discussions/categories/ideas-feature-requests).  |
+| Q&A | Ask for help when running/developing Cloudberry Database, visit [GitHub Discussions - QA](https://github.com/apache/cloudberrydb/discussions/categories/q-a). |
+| New ideas / Feature Requests | Share ideas for new features, visit [GitHub Discussions - Ideas](https://github.com/apache/cloudberrydb/discussions/categories/ideas-feature-requests).  |
 | Report bugs | Problems and issues in Cloudberry Database core. If you find bugs, welcome to submit them [here](https://github.com/cloudberrydb/cloudberrydb/issues).  |
 | Report a security vulnerability | View our [security policy](https://github.com/cloudberrydb/cloudberrydb/security/policy) to learn how to report and contact us.  |
 | Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberrydb.org/community/events) and subscribe events calendar.  |
