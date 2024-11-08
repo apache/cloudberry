@@ -283,6 +283,7 @@ int			gp_hashagg_groups_per_bucket = 5;
 int			gp_motion_slice_noop = 0;
 
 /* Cloudberry Database Experimental Feature GUCs */
+bool		gp_enable_explain_rows_out = false;
 bool		gp_enable_explain_allstat = false;
 bool		gp_enable_motion_deadlock_sanity = false;	/* planning time sanity
 														 * check */

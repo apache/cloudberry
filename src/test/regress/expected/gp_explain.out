@@ -436,6 +436,22 @@ explain analyze SELECT * FROM explaintest;
 (8 rows)
 
 set gp_enable_explain_allstat=DEFAULT;
+-- Test explain rows out.
+set gp_enable_explain_rows_out=on;
+explain analyze SELECT * FROM explaintest;
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..3.10 rows=10 width=4) (actual time=0.266..0.384 rows=5 loops=2)
+   ->  Seq Scan on explaintest  (cost=0.00..3.10 rows=4 width=4) (actual time=0.011..0.013 rows=2 loops=2)
+         Rows out: 3.33 rows avg x 3 workers, 5 rows max (seg1), 2 rows min (seg2).
+   (slice0)    Executor memory: 322K bytes.
+   (slice1)    Executor memory: 50K bytes avg x 3 workers, 50K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Total runtime: 2.600 ms
+(8 rows)
+
+set gp_enable_explain_rows_out=DEFAULT;
 --
 -- Test GPDB-specific EXPLAIN (SLICETABLE) option.
 --
