@@ -1546,18 +1546,14 @@ cdbexplain_depositStatsToNode_rt(PlanState *planstate, CdbExplain_RecvStatCtx *c
 		}
 #endif
 		/* Update nodeStatus
-		 * If nodeStatus is METRICS_PLAN_NODE_UNKNOWN, then nodeStatus is rsi->nodeStatus.
-		 * If nodeStatus is METRICS_PLAN_NODE_INITIALIZE and rsi->nodeStatus is METRICS_PLAN_NODE_EXECUTING,
-		 * then nodeStatus is METRICS_PLAN_NODE_EXECUTING.
-		 * If nodeStatus is METRICS_PLAN_NODE_EXECUTING and rsi->nodeStatus is METRICS_PLAN_NODE_FINISHED,
-		 * then nodeStatus is METRICS_PLAN_NODE_EXECUTING.
+		 * METRICS_PLAN_NODE_UNKNOWN won't appear in rsi->nodeStatus
 		 */
-		if (nodeStatus == METRICS_PLAN_NODE_UNKNOWN || rsi->nodeStatus == METRICS_PLAN_NODE_EXECUTING)
+		if (nodeStatus == METRICS_PLAN_NODE_EXECUTING)
+			continue;
+		else if (nodeStatus == METRICS_PLAN_NODE_UNKNOWN || rsi->nodeStatus == METRICS_PLAN_NODE_EXECUTING)
 			nodeStatus = rsi->nodeStatus;
-		else if (nodeStatus != METRICS_PLAN_NODE_EXECUTING)
-		{
-			nodeStatus = rsi->nodeStatus < nodeStatus ? rsi->nodeStatus : nodeStatus;
-		}
+		else if (nodeStatus != rsi->nodeStatus)
+			nodeStatus =  METRICS_PLAN_NODE_EXECUTING;
 	}
 
 	/* Save per-node accumulated stats in NodeSummary. */

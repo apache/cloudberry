@@ -10,13 +10,23 @@
 #include "pg_query_state.h"
 
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/pg_type.h"
-#include "funcapi.h"
+#include "cdb/cdbdispatchresult.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbexplain.h"
+#include "cdb/cdbvars.h"
 #include "executor/execParallel.h"
 #include "executor/executor.h"
+#include "fmgr.h"
+#include "funcapi.h"
+#include "libpq-fe.h"
+#include "libpq-int.h"
+#include "libpq/pqformat.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
+#include "parser/analyze.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
 #include "storage/ipc.h"
@@ -27,23 +37,16 @@
 #include "storage/shm_toc.h"
 #include "utils/guc.h"
 #include "utils/timestamp.h"
-#include "cdb/cdbdispatchresult.h"
-#include "cdb/cdbdisp_query.h"
-#include "cdb/cdbexplain.h"
-#include "cdb/cdbvars.h"
-#include "libpq-fe.h"
-#include "libpq/pqformat.h"
-#include "fmgr.h"
 #include "utils/lsyscache.h"
+#include "utils/portal.h"
 #include "utils/typcache.h"
-#include "libpq-int.h"
 
 #define TEXT_CSTR_CMP(text, cstr) \
 	(memcmp(VARDATA(text), (cstr), VARSIZE(text) - VARHDRSZ))
 #define HEADER_LEN sizeof(int) * 2
 
 /* GUC variables */
-bool pg_qs_enable = true;
+bool pg_qs_enable = false;
 bool pg_qs_timing = false;
 bool pg_qs_buffers = false;
 StringInfo queryStateData = NULL;
@@ -65,7 +68,8 @@ volatile pg_atomic_uint32 *pg_qs_on;
  * next query starts.
  */
 query_state_info *CachedQueryStateInfo = NULL;
-MemoryContext queryStateCtx = NULL;
+static MemoryContext queryStateCtx = NULL;
+static int qs_query_count = 0;
 
 /* Saved hook values in case of unload */
 static ExecutorStart_hook_type prev_ExecutorStart = NULL;
@@ -81,11 +85,11 @@ static void qs_ExecutorFinish(QueryDesc *queryDesc);
 static void qs_ExecutorEnd(QueryDesc *queryDesc);
 static void clear_queryStateInfo(void);
 static void
-set_CachedQueryStateInfo(int sliceIndex, StringInfo strInfo, int gp_command_count, int queryId);
+set_CachedQueryStateInfo(int sliceIndex, StringInfo strInfo, uint64 queryId);
 static shm_mq_result receive_msg_by_parts(shm_mq_handle *mqh, Size *total,
 										  void **datap, int64 timeout, int *rc, bool nowait);
 /* functions added by cbdb */
-static List *GetRemoteBackendInfo(PGPROC *proc);
+static PG_QS_RequestResult GetRemoteBackendInfo(PGPROC *proc, List **result);
 static CdbPgResults CollectQEQueryState(List *backendInfo);
 static List *get_query_backend_info(ArrayType *array);
 static shm_mq_msg *GetRemoteBackendQueryStates(CdbPgResults cdb_pgresults,
@@ -96,8 +100,8 @@ static shm_mq_msg *GetRemoteBackendQueryStates(CdbPgResults cdb_pgresults,
 										 bool buffers,
 										 bool triggers,
 										 ExplainFormat format);
-static void qs_print_plan(qs_query *query);
-static bool filter_query_common(QueryDesc *queryDesc);
+static void qs_print_plan(QueryDesc *queryDesc);
+static bool filter_query(QueryDesc *queryDesc);
 	/* functions added by cbdb */
 
 /* important to record the info of the peer */
@@ -105,7 +109,7 @@ static void check_and_init_peer(LOCKTAG *tag, PGPROC *proc, int n_peers);
 static shm_mq_msg *receive_final_query_state(void);
 static bool wait_for_mq_ready(shm_mq *mq);
 static List *get_cdbStateCells(CdbPgResults cdb_pgresults);
-static qs_query *push_query(QueryDesc *queryDesc);
+static void push_query(QueryDesc *queryDesc);
 static void pop_query(void);
 
 /* Global variables */
@@ -304,7 +308,6 @@ init_pg_query_state(void)
 	ExecutorFinish_hook = qs_ExecutorFinish;
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = pg_qs_shmem_startup;
-
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = qs_ExecutorEnd;
 }
@@ -331,8 +334,12 @@ qs_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	instr_time		starttime;
 	/* Enable per-node instrumentation */
 	if (enable_qs_runtime() && ((eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0) &&
-		Gp_role == GP_ROLE_DISPATCH && is_querystack_empty() &&
-		filter_query_common(queryDesc))
+		Gp_role == GP_ROLE_DISPATCH &&
+		/* Only watch the topest query */
+		is_querystack_empty() &&
+		filter_query(queryDesc)&&
+		/* filter the explain analyze query */
+		(queryDesc->showstatctx == NULL))
 	{
 		queryDesc->instrument_options |= INSTRUMENT_CDB;
 		queryDesc->instrument_options |= INSTRUMENT_ROWS;
@@ -344,21 +351,28 @@ qs_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		INSTR_TIME_SET_CURRENT(starttime);
 		queryDesc->showstatctx = cdbexplain_showExecStatsBegin(queryDesc,
 															   starttime);
+		queryDesc->totaltime = InstrAlloc(1, INSTRUMENT_ALL, false);
 	}
 
-	if (prev_ExecutorStart)
-		prev_ExecutorStart(queryDesc, eflags);
-	else
-		standard_ExecutorStart(queryDesc, eflags);
-	if (enable_qs_runtime() && ((eflags & EXEC_FLAG_EXPLAIN_ONLY)) == 0 &&
-		  queryDesc->totaltime == NULL && Gp_role == GP_ROLE_DISPATCH
-		  && is_querystack_empty())
+	if (queryDesc->plannedstmt->queryId == 0)
+		queryDesc->plannedstmt->queryId =
+			((uint64)gp_command_count << 32) + qs_query_count;
+	push_query(queryDesc);
+	/* push query to make pg_query_stat get the stat of initplans*/
+	PG_TRY();
 	{
-		MemoryContext oldcxt;
-		oldcxt = MemoryContextSwitchTo(queryDesc->estate->es_query_cxt);
-		queryDesc->totaltime = InstrAlloc(1, INSTRUMENT_ALL, false);
-		MemoryContextSwitchTo(oldcxt);
+		if (prev_ExecutorStart)
+			prev_ExecutorStart(queryDesc, eflags);
+		else
+			standard_ExecutorStart(queryDesc, eflags);
+		pop_query();
 	}
+	PG_CATCH();
+	{
+		pop_query();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 /*
@@ -514,7 +528,6 @@ deserialize_stack(char *src, int stack_depth)
 		stack_frame	*frame = deserialize_stack_frame(&curr_ptr);
 		result = lappend(result, frame);
 	}
-
 	return result;
 }
 
@@ -563,8 +576,9 @@ pg_query_state(PG_FUNCTION_ARGS)
 		ExplainFormat	 format;
 		PGPROC			*proc;
 		shm_mq_msg		*msg;
-		List			*msgs;
-		List			*backendInfo;
+		List			*msgs = NIL;
+		List			*backendInfo = NIL;
+		PG_QS_RequestResult result_code;
 
 		if (!module_initialized)
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -597,24 +611,30 @@ pg_query_state(PG_FUNCTION_ARGS)
 		LockShmem(&tag, PG_QS_RCV_KEY);
 		check_and_init_peer(&tag, proc, 1);
 
-		backendInfo = GetRemoteBackendInfo(proc);
-		CdbPgResults cdb_pgresults = CollectQEQueryState(backendInfo);
-		AttachPeer();
-		msg =  GetRemoteBackendQueryStates(cdb_pgresults,
-										   proc,
-										   verbose,
-										   costs,
-										   timing,
-										   buffers,
-										   triggers,
-										   format);
+		result_code = GetRemoteBackendInfo(proc, &backendInfo);
+		if (result_code != QS_RETURNED)
+		{
+			msg = (shm_mq_msg *)palloc0(sizeof(shm_mq_msg));
+			msg ->result_code = result_code;
+		}
+		else
+		{
+			CdbPgResults cdb_pgresults = CollectQEQueryState(backendInfo);
+			AttachPeer();
+			msg = GetRemoteBackendQueryStates(cdb_pgresults,
+											  proc,
+											  verbose,
+											  costs,
+											  timing,
+											  buffers,
+											  triggers,
+											  format);
 
-		msgs = NIL;
+		}
 		if (msg != NULL)
 		{
-			msgs = lappend(msgs, msg );
+			msgs = lappend(msgs, msg);
 		}
-
 		funcctx = SRF_FIRSTCALL_INIT();
 		if (msgs == NULL || list_length(msgs) == 0)
 		{
@@ -951,8 +971,8 @@ DetachPeer(void)
 /*
  * Extracts all QE worker running by process `proc`
  */
-static List *
-GetRemoteBackendInfo(PGPROC *proc)
+static PG_QS_RequestResult
+GetRemoteBackendInfo(PGPROC *proc, List **result)
 {
 	int sig_result;
 	shm_mq_handle *mqh;
@@ -960,7 +980,6 @@ GetRemoteBackendInfo(PGPROC *proc)
 	Size msg_len;
 	backend_info *msg;
 	int i;
-	List *result = NIL;
 
 	Assert(proc && proc->backendId != InvalidBackendId);
 	Assert(BackendInfoPollReason!= INVALID_PROCSIGNAL);
@@ -974,12 +993,8 @@ GetRemoteBackendInfo(PGPROC *proc)
 	mq_receive_result = shm_mq_receive(mqh, &msg_len, (void **) &msg, false);
 	if (mq_receive_result != SHM_MQ_SUCCESS || msg == NULL || msg->reqid != reqid)
 		goto mq_error;
-	if (msg->result_code == STAT_DISABLED)
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-					errmsg("query execution statistics disabled")));
-	if (msg->result_code == QUERY_NOT_RUNNING)
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-					errmsg("backend is not running query")));
+	if (msg->result_code != QS_RETURNED)
+		return msg->result_code;
 	int expect_len = BASE_SIZEOF_GP_BACKEND_INFO + msg->number * sizeof(gp_segment_pid);
 	if (msg_len != expect_len)
 		goto mq_error;
@@ -988,10 +1003,10 @@ GetRemoteBackendInfo(PGPROC *proc)
 	{
 		gp_segment_pid *segpid = &(msg->pids[i]);
 		elog(DEBUG1, "QE %d is running on segment %d", segpid->pid, segpid->segid);
-		result = lcons(segpid, result);
+		*result = lcons(segpid, *result);
 	}
 	shm_mq_detach(mqh);
-	return result;
+	return msg->result_code;;
 
 signal_error:
 	ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
@@ -999,7 +1014,7 @@ signal_error:
 mq_error:
 	shm_mq_detach(mqh);
 	ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-					errmsg("backend is not running query")));
+					errmsg("get remote backend info failed")));
 }
 
 /*
@@ -1076,7 +1091,7 @@ GetRemoteBackendQueryStates(CdbPgResults cdb_pgresults,
 	params->format = format;
 	pg_write_barrier();
 	create_shm_mq(MyProc, proc);
-	elog(DEBUG1, "CREATE shm_mq sender %d, %d, sender %d", MyProc->pid, MyProcPid, proc->pid);
+	elog(DEBUG1, "CREATE shm_mq sender %d, sender %d", MyProc->pid, proc->pid);
 
 	mqh = shm_mq_attach(mq, NULL, NULL);
 	sig_result = SendProcSignal(proc->pid,
@@ -1416,113 +1431,123 @@ check_and_init_peer(LOCKTAG *tag, PGPROC *proc, int n_peers)
 static void
 qs_ExecutorEnd(QueryDesc *queryDesc)
 {
-	if (pg_qs_enable && is_querystack_empty() && filter_running_query(queryDesc))
+	/*
+	 * such as sql: insert into table xx command,
+	 * it runs nothing on master node, only runs on segments
+	 * so it will quickly run into qs_ExecutorEnd function
+	 * and spend long time on 'cdbdisp_checkDispatchResult'.
+	 * if we don't push_query here, the pg_query_state cannot
+	 * get anything when the query is still running
+	 */
+	push_query(queryDesc);
+	PG_TRY();
 	{
-		qs_query *query = push_query(queryDesc);
-		PG_TRY();
+		if (Gp_role == GP_ROLE_EXECUTE && enable_qs_runtime() &&
+			(queryDesc->instrument_options | INSTRUMENT_ROWS) &&
+			queryDesc->planstate->instrument)
 		{
-			if (Gp_role == GP_ROLE_EXECUTE && enable_qs_runtime() &&
-				(query->queryDesc->instrument_options | INSTRUMENT_ROWS))
-			{
-				StringInfo strInfo = cdbexplain_getExecStats_runtime(queryDesc);
-				if (strInfo != NULL)
-					set_CachedQueryStateInfo(LocallyExecutingSliceIndex(queryDesc->estate), strInfo,
-											 gp_command_count, query->id);
-			} else {
-				qs_print_plan(query);
-			}
-			pop_query();
+			StringInfo strInfo = cdbexplain_getExecStats_runtime(queryDesc);
+			if (strInfo != NULL)
+				set_CachedQueryStateInfo(LocallyExecutingSliceIndex(queryDesc->estate), strInfo,
+										 queryDesc->plannedstmt->queryId);
 		}
-		PG_CATCH();
+		else if(Gp_role == GP_ROLE_DISPATCH)
 		{
-			pop_query();
-			PG_RE_THROW();
+			qs_print_plan(queryDesc);
 		}
-		PG_END_TRY();
+		pop_query();
 	}
+	PG_CATCH();
+	{
+		pop_query();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 	if (prev_ExecutorEnd)
 		prev_ExecutorEnd(queryDesc);
 	else
 		standard_ExecutorEnd(queryDesc);
 }
 static void
-qs_print_plan(qs_query *query)
+qs_print_plan(QueryDesc *queryDesc)
 {
 	MemoryContext oldcxt;
-	QueryDesc *queryDesc = query->queryDesc;
 	double msec;
 	ErrorData *qeError = NULL;
-	if (Gp_role == GP_ROLE_DISPATCH && queryDesc->totaltime && queryDesc->showstatctx && enable_qs_runtime())
+	if (!queryDesc->totaltime || !queryDesc->showstatctx)
+		return;
+	if (!(Gp_role == GP_ROLE_DISPATCH && enable_qs_runtime()))
+		return;
+	if (!IsTransactionState())
+		return;
+
+	/* get dispatch result */
+	if (!queryDesc->estate->dispatcherState ||
+		!queryDesc->estate->dispatcherState->primaryResults)
+		return;
+	EState *estate = queryDesc->estate;
+	DispatchWaitMode waitMode = DISPATCH_WAIT_NONE;
+	if (!estate->es_got_eos)
 	{
-		if (queryDesc->estate->dispatcherState &&
-			queryDesc->estate->dispatcherState->primaryResults)
-		{
-			EState *estate = queryDesc->estate;
-			DispatchWaitMode waitMode = DISPATCH_WAIT_NONE;
-			if (!estate->es_got_eos)
-			{
-				ExecSquelchNode(queryDesc->planstate, true);
-			}
-
-			/*
-			 * Wait for completion of all QEs.  We send a "graceful" query
-			 * finish, not cancel signal.  Since the query has succeeded,
-			 * don't confuse QEs by sending erroneous message.
-			 */
-			if (estate->cancelUnfinished)
-				waitMode = DISPATCH_WAIT_FINISH;
-
-			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
-			cdbdisp_getDispatchResults(queryDesc->estate->dispatcherState, &qeError);
-		}
-		if (!qeError)
-		{
-			/*
-			 * Make sure we operate in the per-query context, so any cruft will be
-			 * discarded later during ExecutorEnd.
-			 */
-			oldcxt = MemoryContextSwitchTo(queryDesc->estate->es_query_cxt);
-
-			/*
-			 * Make sure stats accumulation is done.  (Note: it's okay if several
-			 * levels of hook all do this.)
-			 */
-			InstrEndLoop(queryDesc->totaltime);
-			/* Log plan if duration is exceeded. */
-			msec = queryDesc->totaltime->total;
-			if (msec >= 0)
-			{
-				ExplainState *es = NewExplainState();
-				es->analyze = true; 
-				es->verbose = false;
-				es->buffers = false;
-				es->wal = false;
-				es->timing = true;
-				es->summary = false;
-				es->format = EXPLAIN_FORMAT_JSON;
-				es->settings = true;
-				ExplainBeginOutput(es);
-				ExplainQueryText(es, queryDesc);
-				ExplainPrintPlan(es, queryDesc);
-				if (es->costs)
-					ExplainPrintJITSummary(es, queryDesc);
-				if (es->analyze)
-					ExplainPrintExecStatsEnd(es, queryDesc);
-				ExplainEndOutput(es);
-
-				/* Remove last line break */
-				if (es->str->len > 0 && es->str->data[es->str->len - 1] == '\n')
-					es->str->data[--es->str->len] = '\0';
-
-				es->str->data[0] = '{';
-				es->str->data[es->str->len - 1] = '}';
-
-				/* save the qd query state, set the sliceId to be 0, it will be sent to gpsmon */
-				set_CachedQueryStateInfo(0, es->str, gp_command_count, query->id);
-			}
-			MemoryContextSwitchTo(oldcxt);
-		}
+		ExecSquelchNode(queryDesc->planstate, true);
 	}
+
+	/*
+	 * Wait for completion of all QEs.  We send a "graceful" query
+	 * finish, not cancel signal.  Since the query has succeeded,
+	 * don't confuse QEs by sending erroneous message.
+	 */
+	if (estate->cancelUnfinished)
+		waitMode = DISPATCH_WAIT_FINISH;
+
+	cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
+	cdbdisp_getDispatchResults(queryDesc->estate->dispatcherState, &qeError);
+	if (qeError)
+		return;
+	/*
+	 * Make sure we operate in the per-query context, so any cruft will be
+	 * discarded later during ExecutorEnd.
+	 */
+	oldcxt = MemoryContextSwitchTo(queryDesc->estate->es_query_cxt);
+
+	/*
+	 * Make sure stats accumulation is done.  (Note: it's okay if several
+	 * levels of hook all do this.)
+	 */
+	InstrEndLoop(queryDesc->totaltime);
+	/* Log plan if duration is exceeded. */
+	msec = queryDesc->totaltime->total;
+	if (msec >= 0)
+	{
+		ExplainState *es = NewExplainState();
+		es->analyze = true;
+		es->verbose = false;
+		es->buffers = false;
+		es->wal = false;
+		es->timing = true;
+		es->summary = false;
+		es->format = EXPLAIN_FORMAT_JSON;
+		es->settings = true;
+		ExplainBeginOutput(es);
+		ExplainQueryText(es, queryDesc);
+		ExplainPrintPlan(es, queryDesc);
+		if (es->costs)
+			ExplainPrintJITSummary(es, queryDesc);
+		if (es->analyze)
+			ExplainPrintExecStatsEnd(es, queryDesc);
+		ExplainEndOutput(es);
+
+		/* Remove last line break */
+		if (es->str->len > 0 && es->str->data[es->str->len - 1] == '\n')
+			es->str->data[--es->str->len] = '\0';
+
+		es->str->data[0] = '{';
+		es->str->data[es->str->len - 1] = '}';
+
+		/* save the qd query state, set the sliceId to be 0, it will be sent to gpsmon */
+		set_CachedQueryStateInfo(0, es->str, queryDesc->plannedstmt->queryId);
+	}
+	MemoryContextSwitchTo(oldcxt);
 }
 
 static void
@@ -1542,7 +1567,7 @@ clear_queryStateInfo(void)
 }
 
 static void
-set_CachedQueryStateInfo(int sliceIndex, StringInfo strInfo, int gp_command_count, int queryId)
+set_CachedQueryStateInfo(int sliceIndex, StringInfo strInfo, uint64 queryId)
 {
 	HOLD_INTERRUPTS();
 	if (queryStateCtx == NULL)
@@ -1553,13 +1578,14 @@ set_CachedQueryStateInfo(int sliceIndex, StringInfo strInfo, int gp_command_coun
 	}
 	if (CachedQueryStateInfo != NULL)
 		clear_queryStateInfo();
-	MemoryContext queryContext = MemoryContextSwitchTo(queryStateCtx);
-	CachedQueryStateInfo = new_queryStateInfo(sliceIndex, strInfo,gp_command_count , queryId,  QS_RETURNED);
-	MemoryContextSwitchTo(queryContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(queryStateCtx);
+	/* reqid is not usefull here, just set it to 0 */
+	CachedQueryStateInfo = new_queryStateInfo(sliceIndex, strInfo, 0, queryId, QS_RETURNED);
+	MemoryContextSwitchTo(oldContext);
 	RESUME_INTERRUPTS();
 }
 query_state_info*
-new_queryStateInfo(int sliceIndex, StringInfo strInfo, int reqid, int queryId, PG_QS_RequestResult result_code)
+new_queryStateInfo(int sliceIndex, StringInfo strInfo, int reqid, uint64 queryId, PG_QS_RequestResult result_code)
 {
 	/* The strInfo->data[len] is \0, we need it to be included in the length */
 	int dataLen = strInfo->len + 1;
@@ -1569,7 +1595,6 @@ new_queryStateInfo(int sliceIndex, StringInfo strInfo, int reqid, int queryId, P
 	 */
 	query_state_info *info = (query_state_info *)palloc0(dataLen + sizeof(query_state_info));
 	info->sliceIndex = sliceIndex;
-	info->gp_command_count = gp_command_count;
 	info->queryId = queryId;
 	info->length = strInfo->len + sizeof(query_state_info);
 	info->reqid = reqid;
@@ -1581,22 +1606,29 @@ new_queryStateInfo(int sliceIndex, StringInfo strInfo, int reqid, int queryId, P
 }
 
 static bool
-filter_query_common(QueryDesc *queryDesc)
+filter_query(QueryDesc *queryDesc)
 {
+	Portal	portal;
 	if (queryDesc == NULL)
 		return false;
-	if (queryDesc->extended_query)
-		return false;
+	/* check if cusor query */
+	if (queryDesc->extended_query && queryDesc->portal_name)
+	{
+		portal = GetPortalByName(queryDesc->portal_name);
+		/* cursorOptions default values is CURSOR_OPT_NO_SCROLL */
+		if (portal->cursorOptions != CURSOR_OPT_NO_SCROLL)
+			return false;
+	}
 	return (queryDesc->operation == CMD_SELECT || queryDesc->operation == CMD_DELETE ||
 			queryDesc->operation == CMD_INSERT || queryDesc->operation == CMD_UPDATE);
 }
 bool filter_running_query(QueryDesc *queryDesc)
 {
-	if (!filter_query_common(queryDesc))
+	if (!filter_query(queryDesc))
 		return false;
-	if (!queryDesc->instrument_options)
+	if (queryDesc->planstate == NULL)
 		return false;
-	if (!queryDesc->instrument_options)
+	if (queryDesc->estate == NULL)
 		return false;
 	if ((queryDesc->instrument_options & INSTRUMENT_ROWS) == 0)
 		return false;
@@ -1607,6 +1639,8 @@ bool
 enable_qs_runtime(void)
 {
 	if (!pg_qs_enable)
+		return false;
+	if (pg_qs_on == NULL)
 		return false;
 	if (!pg_atomic_read_u32(pg_qs_on))
 		return false;
@@ -1711,14 +1745,11 @@ query_state_resume_command(PG_FUNCTION_ARGS)
 	PG_RETURN_NULL();
 }
 
-static qs_query*
+static void
 push_query(QueryDesc *queryDesc)
 {
-	qs_query *query = (qs_query *) palloc0(sizeof(qs_query));
-	query->id = list_length(QueryDescStack) + 1;
-	query->queryDesc = queryDesc;
-	QueryDescStack = lcons(query, QueryDescStack);
-	return query;
+	qs_query_count++;
+	QueryDescStack = lcons(queryDesc, QueryDescStack);
 }
 
 static void
@@ -1733,8 +1764,16 @@ is_querystack_empty(void)
 	return list_length(QueryDescStack) == 0;
 }
 
-qs_query*
+QueryDesc*
 get_query(void)
 {
-	return QueryDescStack == NIL ? NULL : (qs_query *)llast(QueryDescStack);
+	return QueryDescStack == NIL ? NULL : (QueryDesc *)llast(QueryDescStack);
+}
+
+int
+get_command_count(query_state_info *info)
+{
+	if(info->queryId == 0)
+	return 0;
+	else return info->queryId>>32;
 }

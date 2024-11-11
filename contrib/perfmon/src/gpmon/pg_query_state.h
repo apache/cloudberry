@@ -93,8 +93,7 @@ typedef struct
 	PGPROC	*proc;
 	PG_QS_RequestResult	result_code;
 	int 	sliceIndex;
-	int 	gp_command_count;
-	int 	queryId;
+	uint64 	queryId;
 	/* data saves the CdbExplain_StatHdr */
 	char 	data[FLEXIBLE_ARRAY_MEMBER];
 } query_state_info;
@@ -112,13 +111,6 @@ typedef struct
 	bool	triggers;
 	ExplainFormat format;
 } pg_qs_params;
-
-typedef struct 
-{
-	QueryDesc *queryDesc;
-	int id;
-} qs_query;
-
 
 /* moved from signal_handler.c*/
 /*
@@ -165,9 +157,10 @@ extern bool check_msg(shm_mq_result mq_receive_result, shm_mq_msg *msg, Size len
 extern void create_shm_mq(PGPROC *sender, PGPROC *receiver);
 extern bool filter_running_query(QueryDesc *queryDesc);
 extern query_state_info *new_queryStateInfo(int sliceIndex, StringInfo strInfo, int reqid,
-											int queryId,
+											uint64 queryId,
 											PG_QS_RequestResult result_code);
 extern bool wait_for_mq_detached(shm_mq_handle *mqh);
 extern bool is_querystack_empty(void);
-extern qs_query *get_query(void);
+extern QueryDesc *get_query(void);
+extern int get_command_count(query_state_info *info);
 #endif

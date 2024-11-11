@@ -478,8 +478,13 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 					gpmon_qlog_query_submit(gpmonPacket);
 					break;
 				case METRICS_QUERY_DONE:
-					if (enable_qs_runtime() && CachedQueryStateInfo != NULL &&
-						CachedQueryStateInfo->gp_command_count == gp_command_count)
+					/*
+					* plannedstmt in queryDesc may have been cleaned ,
+					* so we cannot check queryId here.
+					* Only check gp_command_count
+					*/
+					if (enable_qs_runtime() && CachedQueryStateInfo != NULL
+					 && get_command_count(CachedQueryStateInfo) == gp_command_count)
 					{
 						query_text = get_query_text(qd);
 						plan = (char *)CachedQueryStateInfo->data;

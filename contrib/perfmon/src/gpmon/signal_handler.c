@@ -46,9 +46,9 @@ query_state_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg);
 static bool
 send_cdbComponents_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg);
 static bool 
-receive_QE_query_state(shm_mq_handle *mqh, List **pgresults, int queryId);
-static bool
-process_qe_query_state(CdbDispatcherState **disp_state, List *pgresults);
+receive_QE_query_state(shm_mq_handle *mqh, List **query_state_info_list);
+static CdbDispatchResults*
+process_qe_query_state(QueryDesc *queryDesc, List *query_state_info_list);
 static void 
 fill_segpid(CdbComponentDatabaseInfo *segInfo ,backend_info *msg, int *index);
 /*
@@ -180,11 +180,14 @@ SendQueryState(void)
 	int         	reqid = params->reqid;
 	MemoryContext	oldctx;
 	bool 			success = true;
+	volatile int32	savedInterruptHoldoffCount;
 
 	MemoryContext query_state_ctx = AllocSetContextCreate(TopMemoryContext,
 														  "pg_query_state",
 														  ALLOCSET_DEFAULT_SIZES);
 	oldctx = MemoryContextSwitchTo(query_state_ctx);
+	/* in elog(ERROR), InterruptHoldoffCount will be set to 0 */
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
 	elog(DEBUG1, "Worker %d receives pg_query_state request from %d", shm_mq_get_sender(mq)->pid, shm_mq_get_receiver(mq)->pid);
 
 	PG_TRY();
@@ -214,10 +217,10 @@ SendQueryState(void)
 	}
 	PG_CATCH();
 	{
-		MemoryContextSwitchTo(oldctx);
 		elog(WARNING, "Failed to send query state");
 		elog_dismiss(WARNING);
 		success = false;
+		InterruptHoldoffCount = savedInterruptHoldoffCount;
 	}
 	PG_END_TRY();
 	shm_mq_detach(mqh);
@@ -243,10 +246,13 @@ SendCdbComponents(void)
 	MemoryContext oldctx;
 	bool success = true;
 	int index = 0;
+	volatile int32	savedInterruptHoldoffCount;
 	MemoryContext query_state_ctx = AllocSetContextCreate(TopMemoryContext,
 														  "pg_query_state",
 														  ALLOCSET_DEFAULT_SIZES);
 	oldctx = MemoryContextSwitchTo(query_state_ctx);
+	/* in elog(ERROR), InterruptHoldoffCount will be set to 0 */
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
 	pre_check_msg = (shm_mq_msg *)palloc0(sizeof(shm_mq_msg));
 	PG_TRY();
 	{
@@ -297,11 +303,11 @@ SendCdbComponents(void)
 	}
 	PG_CATCH();
 	{
-		MemoryContextSwitchTo(oldctx);
 		elog(WARNING, " SendCdbComponents failed");
 		elog_dismiss(WARNING);
 		success = false;
 		shm_mq_detach(mqh);
+		InterruptHoldoffCount = savedInterruptHoldoffCount;
 	}
 	PG_END_TRY();
 	DetachPeer();
@@ -323,19 +329,18 @@ QD_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 	instr_time starttime;
 	List *qs_stack = NIL;
 	LOCKTAG			 tag;
+	volatile int32 savedInterruptHoldoffCount;
 	bool success = true;
 	PGPROC *sender;
-	List *pgresults = NIL;
+	List *query_state_info_list = NIL;
+	disp_state = palloc0(sizeof(CdbDispatcherState));
 	shm_mq_msg *pre_check_msg = (shm_mq_msg *)palloc0(sizeof(shm_mq_msg));
-	qs_query *query = get_query();
-	int queryId = query == NULL? -1 : query->id;
-
+	queryDesc = get_query();
 	/* first receive the results, it may be empty, such as functions only run on master */
-	if (!receive_QE_query_state(mqh, &pgresults, queryId))
+	if (!receive_QE_query_state(mqh, &query_state_info_list))
 		return false;
-	queryDesc = query == NULL? NULL: query->queryDesc;
-	if (!process_qe_query_state(&disp_state, pgresults))
-		return false;
+	disp_state->primaryResults = process_qe_query_state(queryDesc, query_state_info_list);
+
 	sender = shm_mq_get_sender(mq);
 	if (!wait_for_mq_detached(mqh))
 		return false;
@@ -365,6 +370,7 @@ QD_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 	 */
 	CdbDispatcherState *old_disp_state = queryDesc->estate->dispatcherState;
 	struct CdbExplain_ShowStatCtx *oldShowstatctx = queryDesc->showstatctx;
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
 	PG_TRY();
 	{
 		/* initialize explain state with all config parameters */
@@ -425,6 +431,7 @@ QD_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 		queryDesc->showstatctx = oldShowstatctx;
 		elog_dismiss(WARNING);
 		success = false;
+		InterruptHoldoffCount = savedInterruptHoldoffCount;
 	}
 	PG_END_TRY();
 	if (!success)
@@ -471,11 +478,11 @@ QD_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 static bool 
 QE_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 {
-	//QueryDesc *queryDesc;
-	qs_query *query;
+	QueryDesc *queryDesc;
 	int sliceIndex;
-	query_state_info *info;
+	query_state_info *info = NULL;
 	shm_mq_msg *pre_check_msg = (shm_mq_msg *)palloc0(sizeof(shm_mq_msg));
+	volatile int32 savedInterruptHoldoffCount;
 	bool success = true;
 	/* cannot use the send_msg_by_parts here */
 	if (!query_state_pre_check(mqh, params->reqid, pre_check_msg))
@@ -489,6 +496,7 @@ QE_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 		}
 		return true;
 	}
+	savedInterruptHoldoffCount = InterruptHoldoffCount;
 	PG_TRY();
 	{
 	
@@ -498,36 +506,39 @@ QE_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 				success = false;
 			else
 			{
-
 				int dataLen = 0;
 				info = (query_state_info *)palloc0(CachedQueryStateInfo->length);
 				info->length = CachedQueryStateInfo->length;
 				dataLen = CachedQueryStateInfo->length - sizeof(query_state_info);
 				info->sliceIndex = CachedQueryStateInfo->sliceIndex;
-				info->gp_command_count = CachedQueryStateInfo->gp_command_count;
 				memcpy(info->data, CachedQueryStateInfo->data, dataLen);
 				info->reqid = params->reqid;
 				info->proc = MyProc;
 				info->result_code = QS_RETURNED;
+				info->queryId = CachedQueryStateInfo->queryId;
 			}
 		}
-		else {
-			query = get_query();
-			Assert(query && query->queryDesc);
-			StringInfo strInfo = cdbexplain_getExecStats_runtime(query->queryDesc);
+		else
+		{
+			queryDesc = get_query();
+			Assert(queryDesc);
+			StringInfo strInfo = cdbexplain_getExecStats_runtime(queryDesc);
 			if (strInfo == NULL)
 				ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 					 errmsg("cannot get runtime stats")));
-			sliceIndex = LocallyExecutingSliceIndex(query->queryDesc->estate);
-			info = new_queryStateInfo(sliceIndex, strInfo, params->reqid, query->id, QS_RETURNED);
+			sliceIndex = LocallyExecutingSliceIndex(queryDesc->estate);
+			info = new_queryStateInfo(sliceIndex, strInfo, params->reqid, queryDesc->plannedstmt->queryId, QS_RETURNED);
 		}
-		msg_by_parts_result sendResult = send_msg_by_parts(mqh, info->length, info);
-		pfree(info);
-		if (sendResult != MSG_BY_PARTS_SUCCEEDED)
+		if (info != NULL)
 		{
-			elog(DEBUG1, "pg_query_state: peer seems to have detached");
-			success = false;
+			msg_by_parts_result sendResult = send_msg_by_parts(mqh, info->length, info);
+			pfree(info);
+			if (sendResult != MSG_BY_PARTS_SUCCEEDED)
+			{
+				elog(DEBUG1, "pg_query_state: peer seems to have detached");
+				success = false;
+			}
 		}
 	}
 	PG_CATCH();
@@ -535,6 +546,7 @@ QE_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 		elog_dismiss(WARNING);
 		elog(WARNING, "failed to get QE query state");
 		success = false;
+		InterruptHoldoffCount = savedInterruptHoldoffCount;
 	}
 	PG_END_TRY();
 	if (success)
@@ -601,7 +613,7 @@ set_msg(shm_mq_msg *msg, int reqid, PG_QS_RequestResult res)
 static bool
 query_state_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg)
 {
-	qs_query *query = NULL;
+	QueryDesc *queryDesc;
 	/* check if module is enabled */
 	if (!enable_qs_runtime())
 	{
@@ -615,30 +627,21 @@ query_state_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg)
 	}
 
 	/* no query running on QD/QE */
-	if (list_length(QueryDescStack) != 1)
+	if (list_length(QueryDescStack) <= 0)
 	{
 		set_msg(msg, reqid, QUERY_NOT_RUNNING);
 		return false;
 	}
-	query = get_query();
-	Assert(query && query->queryDesc);
+	queryDesc = get_query();
+	Assert(queryDesc);
 
-
-	if (!filter_running_query(query->queryDesc))
+	if (!filter_running_query(queryDesc))
 	{
 		set_msg(msg, reqid, QUERY_NOT_RUNNING);
 		return false;
 	}
 	return true;
 }
-
-struct slice_result
-{
-	int sliceIndex;
-	int gp_command_count;
-	int queryId;
-	PGresult *pgresult;
-};
 
 /* Receive and process query stats from QE
  *
@@ -650,7 +653,7 @@ struct slice_result
  * CdbExplain_StatHdr is saved in query_state_info.data
  */
 static bool 
-receive_QE_query_state(shm_mq_handle *mqh, List **pgresults, int queryId)
+receive_QE_query_state(shm_mq_handle *mqh, List **query_state_info_list)
 {
 	shm_mq_result mq_receive_result;
 	Size len;
@@ -672,10 +675,6 @@ receive_QE_query_state(shm_mq_handle *mqh, List **pgresults, int queryId)
 	}
 	for (int i = 0; i < *numresults; i++)
 	{
-		PGresult *pgresult = palloc(sizeof(PGresult));
-		int seg_command_count;
-		pgCdbStatCell *statcell = (pgCdbStatCell*)palloc(sizeof(pgCdbStatCell));
-
 		mq_receive_result = shm_mq_receive_with_timeout(mqh,
 														&len,
 														(void **)&seg_query_state_info,
@@ -686,84 +685,63 @@ receive_QE_query_state(shm_mq_handle *mqh, List **pgresults, int queryId)
 			/* counterpart is dead, not considering it */
 			return false;
 		}
-		/*
-		 * Check if the query on segment is the same with the current query
-		 * There is the case when the query stat are collected from the segment,
-		 * QD has started to run the next query.
-		 */
-		seg_command_count = seg_query_state_info->gp_command_count;
-		if (seg_command_count != gp_command_count || seg_query_state_info->queryId != queryId)
-		{
-			elog(DEBUG1, "receive QE query state results command id or queryId is not correct");
-			continue;
-		}
-		/* transform CdbExplain_StatHdr to pgresult */
-		statcell->data = seg_query_state_info->data;
-		statcell->len = len - sizeof(query_state_info);
-		statcell->next = NULL;
-		pgresult->cdbstats = statcell;
-		struct slice_result *res = palloc(sizeof(struct slice_result));
-		res->sliceIndex = seg_query_state_info->sliceIndex;
-		res->pgresult = pgresult;
-		res->gp_command_count = seg_command_count;
-		res->queryId = seg_query_state_info->queryId;
-		*pgresults = lappend(*pgresults, res);
-		elog(DEBUG1, "receive QE query state %d successfully", res->sliceIndex);
+		*query_state_info_list = lappend(*query_state_info_list, seg_query_state_info);
+		elog(DEBUG1, "receive QE query state slice %d, proc %d successfully", seg_query_state_info->sliceIndex, seg_query_state_info->proc->backendId);
 	}
 	return true;
 }
 
-static bool
-process_qe_query_state(CdbDispatcherState **disp_state, List *pgresults)
+static CdbDispatchResults*
+process_qe_query_state(QueryDesc *queryDesc, List *query_state_info_list)
 {
-	QueryDesc *queryDesc;
 	EState *estate;
-	CdbDispatchResults *results;
-	*disp_state = NULL;
-	qs_query *query;
-	/* give spicify error code for it*/
-	if (list_length(QueryDescStack) != 1)
-	{
-		return false;
-	}
-	query = get_query();
-	Assert(query && query->queryDesc);
-	queryDesc = query->queryDesc;
+	CdbDispatchResults *results = NULL;
+	uint64 queryId;
 	/* The query maybe has been finished */
 	if (queryDesc == NULL || queryDesc->estate == NULL)
 	{
-		return true;
+		return results;
 	}
 	estate = queryDesc->estate;
+	queryId = queryDesc->plannedstmt->queryId;
 	/* first constuct a CdbDispatchResults */
 	results = makeDispatchResults(estate->es_sliceTable);
-	if (results->resultCapacity < list_length(pgresults))
+	if (results->resultCapacity < list_length(query_state_info_list))
 	{
 		/*
 		explain analyze select test_auto_stats_in_function('delete from t_test_auto_stats_in_function',
                                    true, 't_test_auto_stats_in_function')*/
-		return true;
+		return results;
 	}
 	/* the pgresult of the same slice should be put in continous memory */
 	for(int i = 0 ; i < estate->es_sliceTable->numSlices; i++)
 	{
 		 ListCell   *c;
-		foreach(c, pgresults)
-		{
-			struct slice_result *res = (struct slice_result *)lfirst(c);
-			if(res->sliceIndex == i)
-			{
-				CdbDispatchResult *dispatchResult = cdbdisp_makeResult(results, NULL, res->sliceIndex);
-				cdbdisp_appendResult(dispatchResult, res->pgresult);
+		 foreach(c, query_state_info_list)
+		 {
+			 query_state_info *info = (query_state_info *)lfirst(c);
+			 /* if the query state's queryId not equal to current queryId, skip it */
+			 if (info->queryId != queryId)
+			 {
+				continue;
+			 }
+			 pgCdbStatCell *statcell = (pgCdbStatCell *)palloc(sizeof(pgCdbStatCell));
+			 PGresult *pgresult = palloc(sizeof(PGresult));
+			 statcell->data = info->data;
+			 statcell->len = info->length - sizeof(query_state_info);
+			 statcell->next = NULL;
+			 pgresult->cdbstats = statcell;
+			 if (info->sliceIndex == i)
+			 {
+				 CdbDispatchResult *dispatchResult = cdbdisp_makeResult(results, NULL, info->sliceIndex);
+				 cdbdisp_appendResult(dispatchResult, pgresult);
 			}
-		}
+		 }
 	}
-	*disp_state = MemoryContextAllocZero(CurrentMemoryContext, sizeof(CdbDispatcherState));
-	(*disp_state)->primaryResults = results;
-	return true;	
+	return results;
 }
 
-static void 
+static void
 fill_segpid(CdbComponentDatabaseInfo *segInfo , backend_info *msg, int* index)
 {
 
