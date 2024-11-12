@@ -300,12 +300,9 @@ char* gpmon_datetime(time_t t, char str[GPMON_DATE_BUF_SIZE])
 		gpmon_warningx(FLINE, APR_FROM_OS_ERROR(errno), "localtime_r failed");
 		return str;
 	}
+	strftime(str, GPMON_DATE_BUF_SIZE - 1, "%Y-%m-%d %H:%M:%S%z", &tm);
 
-	snprintf(str, GPMON_DATE_BUF_SIZE, "%04d-%02d-%02d %02d:%02d:%02d",
-	    1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday,
-	    tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-    	return str;
+	return str;
 }
 
 /* datetime, e.g. 2004-02-14  23:50:10
@@ -322,9 +319,7 @@ char* gpmon_datetime_rounded(time_t t, char str[GPMON_DATE_BUF_SIZE])
 		return str;
 	}
 
-	snprintf(str, GPMON_DATE_BUF_SIZE, "%04d-%02d-%02d %02d:%02d:%02d",
-	1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday,
-		tm.tm_hour, tm.tm_min, ((tm.tm_sec/5)*5));
+	strftime(str, GPMON_DATE_BUF_SIZE - 1, "%Y-%m-%d %H:%M:%S%z", &tm);
 
 	return str;
 }

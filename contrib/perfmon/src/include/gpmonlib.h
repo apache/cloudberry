@@ -43,7 +43,7 @@ extern int verbose;
 	#define GPSMON_METRIC_MAX 0xffffffffUL
 #endif
 
-#define GPMON_DATE_BUF_SIZE 24
+#define GPMON_DATE_BUF_SIZE 30
 extern Oid gpperfmon_dbid;
 
 

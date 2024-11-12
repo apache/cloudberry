@@ -75,7 +75,7 @@ int32 tmid = -1;
 extern void incremement_tail_bytes(apr_uint64_t bytes);
 static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
 			apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool);
-void gpdb_get_spill_file_size_from_query(qdnode_t *qdnode);
+static void format_time(time_t tt, char *buf);
 
 /**
  * Disk space check helper function
@@ -511,30 +511,26 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		void* vptr;
 		qdnode_t* dp;
 		qdnode_t* newdp;
-		apr_int32_t status;
 
 		apr_hash_this(hi, 0, 0, &vptr);
 		dp = vptr;
-
-		/* skip all entries that weren't updated recently and aren't waiting in a queue */
-		/* Read status from query text as this is reliable */
-		/* Todo Why read status from query text instead of dp?*/
-		status = get_query_status(dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt);
+		if (dp->recorded)
+			continue;
+		if ( (dp->qlog.status == GPMON_QLOG_STATUS_DONE || dp->qlog.status == GPMON_QLOG_STATUS_ERROR) &&
+				(dp->qlog.tfin > 0 && ((dp->qlog.tfin - dp->qlog.tstart) < min_query_time )))
+		{
+			TR2(("agg_dup: skip short query %d.%d.%d generation %d, current generation %d, recorded %d\n",
+						dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt,
+						(int) dp->last_updated_generation, (int) newagg->generation, dp->recorded));
+			continue;
+		}
+		if (dp->qlog.status == GPMON_QLOG_STATUS_INVALID || dp->qlog.status == GPMON_QLOG_STATUS_SILENT)
+			continue;
 
 		apr_int32_t age = newagg->generation - dp->last_updated_generation - 1;
 		if (age > 0)
 		{
-			if (status == GPMON_QLOG_STATUS_DONE  && dp->qlog.tfin > 0 && ((dp->qlog.tfin - dp->qlog.tstart) < min_query_time ))
-			{
-				TR2(("agg_dup: skip short query %d.%d.%d generation %d, current generation %d, recorded %d\n",
-							dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt,
-							(int) dp->last_updated_generation, (int) newagg->generation, dp->recorded));
-				continue;
-			}
-			if (  (status != GPMON_QLOG_STATUS_SUBMIT
-			       && status != GPMON_QLOG_STATUS_CANCELING
-			       && status != GPMON_QLOG_STATUS_START)
-			   || ((age % 5 == 0) /* don't call is_query_not_active every time because it's expensive */
+			if (((age % 5 == 0) /* don't call is_query_not_active every time because it's expensive */
 			       && is_query_not_active(dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt, active_query_tab, newagg->pool)))
 			{
 				if (dp->qlog.dbid != gpperfmon_dbid)
@@ -546,14 +542,6 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 				continue;
 			}
 		}
-                else if (dp->qlog.status == GPMON_QLOG_STATUS_DONE && status == GPMON_QLOG_STATUS_INVALID)
-                {
-                        continue;
-                }
-
-		/* check if we missed a status change */
-		if (dp->qlog.status != status)
-			dp->qlog.status = status;
 
 		if (dp->qlog.dbid != gpperfmon_dbid) {
 			TR2( ("agg_dup: add %d.%d.%d, generation %d, recorded %d:\n", dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt, (int) dp->last_updated_generation, dp->recorded));
@@ -566,29 +554,6 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		}
 
 		*newdp = *dp;
-
-		// newdp->qexec_hash = apr_hash_make(newagg->pool);
-		// if (!newdp->qexec_hash) {
-		// 	agg_destroy(newagg);
-		// 	return APR_ENOMEM;
-		// }
-
-		// cnt = 0;
-		// // Copy the qexec hash table
-		// for (hj = apr_hash_first(newagg->pool, dp->qexec_hash); hj; hj = apr_hash_next(hj)) {
-		// 	mmon_qexec_t* new_qexec;
-		// 	apr_hash_this(hj, 0, 0, &vptr);
-
-		// 	//allocate the packet
-		// 	if (!(new_qexec = apr_pcalloc(newagg->pool, sizeof(mmon_qexec_t)))) {
-		// 		agg_destroy(newagg);
-		// 		return APR_ENOMEM;
-		// 	}
-		// 	*new_qexec = *((mmon_qexec_t*)vptr);
-
-		// 	apr_hash_set(newdp->qexec_hash, &(new_qexec->key.hash_key), sizeof(new_qexec->key.hash_key), new_qexec);
-		// 	TR2( ("\t    %d: (%d, %d)\n", ++cnt, new_qexec->key.hash_key.segid, new_qexec->key.hash_key.nid));
-		// }
 
 		newdp->query_seginfo_hash = apr_hash_make(newagg->pool);
 		if (!newdp->query_seginfo_hash) {
@@ -1551,6 +1516,14 @@ static char* replaceQuotes(char *str, apr_pool_t* pool, int* size) {
     return newStr;
 }
 
+static void format_time(time_t tt, char *buf)
+{
+	if (tt)
+		 gpmon_datetime(tt, buf);
+	else
+	 snprintf(buf, GPMON_DATE_BUF_SIZE, "-infinity");
+}
+
 static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nowstr, apr_pool_t* pool)
 {
         char timsubmitted[GPMON_DATE_BUF_SIZE];
@@ -1564,39 +1537,12 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
         int   fd_cnt;
         cpu_skew = get_cpu_skew(qdnode);
         qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
-        //row_skew = get_row_skew(qdnode);
-        //rowsout = get_rowsout(qdnode);
 
         // get spill file size
         gpdb_get_spill_file_size_from_query(qdnode);
-
-        if (qdnode->qlog.tsubmit)
-        {
-                gpmon_datetime((time_t)qdnode->qlog.tsubmit, timsubmitted);
-        }
-        else
-        {
-                snprintf(timsubmitted, GPMON_DATE_BUF_SIZE, "null");
-        }
-
-        if (qdnode->qlog.tstart)
-        {
-                gpmon_datetime((time_t)qdnode->qlog.tstart, timstarted);
-        }
-        else
-        {
-                snprintf(timstarted, GPMON_DATE_BUF_SIZE, "null");
-        }
-
-        if (qdnode->qlog.tfin)
-        {
-                gpmon_datetime((time_t)qdnode->qlog.tfin, timfinished);
-        }
-        else
-        {
-                snprintf(timfinished, GPMON_DATE_BUF_SIZE,  "null");
-        }
-
+		format_time(qdnode->qlog.tsubmit, timsubmitted);
+		format_time(qdnode->qlog.tstart, timstarted);
+		format_time(qdnode->qlog.tfin, timfinished);
 
         if (qdnode->num_metrics_packets)
         {
