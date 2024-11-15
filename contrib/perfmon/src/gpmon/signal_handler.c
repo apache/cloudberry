@@ -335,7 +335,7 @@ QD_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 	List *query_state_info_list = NIL;
 	disp_state = palloc0(sizeof(CdbDispatcherState));
 	shm_mq_msg *pre_check_msg = (shm_mq_msg *)palloc0(sizeof(shm_mq_msg));
-	queryDesc = get_query();
+	queryDesc = get_toppest_query();
 	/* first receive the results, it may be empty, such as functions only run on master */
 	if (!receive_QE_query_state(mqh, &query_state_info_list))
 		return false;
@@ -520,7 +520,7 @@ QE_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 		}
 		else
 		{
-			queryDesc = get_query();
+			queryDesc = get_toppest_query();
 			Assert(queryDesc);
 			StringInfo strInfo = cdbexplain_getExecStats_runtime(queryDesc);
 			if (strInfo == NULL)
@@ -632,7 +632,7 @@ query_state_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg)
 		set_msg(msg, reqid, QUERY_NOT_RUNNING);
 		return false;
 	}
-	queryDesc = get_query();
+	queryDesc = get_toppest_query();
 	Assert(queryDesc);
 
 	if (!filter_running_query(queryDesc))
@@ -652,7 +652,7 @@ query_state_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg)
  *
  * CdbExplain_StatHdr is saved in query_state_info.data
  */
-static bool 
+static bool
 receive_QE_query_state(shm_mq_handle *mqh, List **query_state_info_list)
 {
 	shm_mq_result mq_receive_result;
@@ -703,6 +703,8 @@ process_qe_query_state(QueryDesc *queryDesc, List *query_state_info_list)
 		return results;
 	}
 	estate = queryDesc->estate;
+	if (estate->es_query_cxt == NULL)
+		return results;
 	queryId = queryDesc->plannedstmt->queryId;
 	/* first constuct a CdbDispatchResults */
 	results = makeDispatchResults(estate->es_sliceTable);

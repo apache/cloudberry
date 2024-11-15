@@ -13,6 +13,7 @@
 #include "libpq/pqsignal.h"
 #include "gpmon.h"
 
+#include "executor/execdesc.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 
@@ -53,10 +54,23 @@ static void gpmon_query_info_collect_hook(QueryMetricsStatus status, void *query
 
 static gpmon_packet_t* gpmon_qlog_packet_init();
 static void init_gpmon_hooks(void);
-static char* get_plan(QueryDesc *queryDesc);
 static char* get_query_text(QueryDesc *queryDesc);
-static int32 tstart = 0;
-static int32 tsubmit = 0;
+static bool check_query(QueryDesc *queryDesc, QueryMetricsStatus status);
+
+static void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket, QueryDesc *qd);
+static void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
+		const char *queryText,
+		const char *plan,
+		const char *appName,
+		const char *resqName,
+		const char *resqPriority,
+		int status);
+static void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket, QueryDesc *qd);
+static void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, QueryDesc *qd, bool updateRecord);
+static void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket, QueryDesc *qd);
+static void gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket, QueryDesc *qd);
+static void gpmon_send(gpmon_packet_t*);
+static void gpmon_gettmid(int32*);
 
 struct  {
     int    gxsock;
@@ -66,13 +80,31 @@ struct  {
 
 int64 gpmon_tick = 0;
 
+typedef struct
+{
+	/* data */
+	int 		query_command_count;
+	QueryDesc 	*queryDesc;
+	int32 		tstart;
+	int32 		tsubmit;
+} PerfmonQuery;
+PerfmonQuery *toppest_query;
+
+static void reset_toppest_query(QueryDesc *qd);
+static void init_toppest_query(QueryDesc *qd);
+static inline PerfmonQuery* get_toppest_perfmon_query(void);
+static inline void set_query_tsubmit(int32 tsubmit,QueryDesc *qd);
+static inline void set_query_tstart(int32 tstart,QueryDesc *qd);
+static inline int get_query_command_count(QueryDesc *qd);
+static inline int32 get_query_tsubmit(QueryDesc *qd);
+static inline int32 get_query_tstart(QueryDesc *qd);
+
 void gpmon_sig_handler(int sig);
 
-void gpmon_sig_handler(int sig) 
+void gpmon_sig_handler(int sig)
 {
 	gpmon_tick++;
 }
-
 
 void gpmon_init(void)
 {
@@ -99,17 +131,6 @@ void gpmon_init(void)
 	}
 #endif
 
-//	/*TODO: what exactly perfmon_send_interval does? */
-//	tv.it_interval.tv_sec = perfmon_send_interval;
-//	//tv.it_interval.tv_sec = 5;
-//	tv.it_interval.tv_usec = 0;
-//	tv.it_value = tv.it_interval;
-//#ifndef WIN32
-//	if (-1 == setitimer(ITIMER_VIRTUAL, &tv, 0)) {
-//		elog(WARNING, "[perfmon]: unable to start timer (%m)");
-//	}
-//#endif 
-//
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock == -1) {
 		elog(WARNING, "[perfmon]: cannot create socket (%m)");
@@ -167,20 +188,20 @@ void gpmon_record_update(int32 tmid, int32 ssid, int32 ccnt,
 	fclose(fp);
 }
 
-void gpmon_gettmid(int32* tmid)
+static void
+gpmon_gettmid(int32* tmid)
 {
 	Assert(init_tmid > -1);
 	*tmid = init_tmid;
 } 
 
-
-void gpmon_send(gpmon_packet_t* p)
+static void
+gpmon_send(gpmon_packet_t* p)
 {
 	if (p->magic != GPMON_MAGIC)  {
 		elog(WARNING, "[perfmon] - bad magic %x", p->magic);
 		return;
 	}
-
 
 	if (p->pkttype == GPMON_PKTTYPE_QEXEC) {
 		elog(DEBUG1,
@@ -216,7 +237,7 @@ void gpmon_send(gpmon_packet_t* p)
  * key together in 'update_qlog'
  */
 static gpmon_packet_t*
-gpmon_qlog_packet_init()
+gpmon_qlog_packet_init(QueryDesc *qd)
 {
 	const char *username = NULL;
 	gpmon_packet_t *gpmonPacket = NULL;
@@ -225,7 +246,7 @@ gpmon_qlog_packet_init()
 
 	Assert(perfmon_enabled && Gp_role == GP_ROLE_DISPATCH);
 	Assert(gpmonPacket);
-	
+
 	gpmonPacket->magic = GPMON_MAGIC;
 	gpmonPacket->version = GPMON_PACKET_VERSION;
 	gpmonPacket->pkttype = GPMON_PKTTYPE_QLOG;
@@ -235,7 +256,6 @@ gpmon_qlog_packet_init()
 	gpmonPacket->u.qlog.key.ssid = gp_session_id;
 	gpmonPacket->u.qlog.pid = MyProcPid;
 
-
 	username = GetConfigOption("session_authorization", false, false); /* does not have to be freed */
 	/* User Id.  We use session authorization_string (so to make sense with session id) */
 	snprintf(gpmonPacket->u.qlog.user, sizeof(gpmonPacket->u.qlog.user), "%s",
@@ -243,7 +263,7 @@ gpmon_qlog_packet_init()
 	gpmonPacket->u.qlog.dbid = MyDatabaseId;
 
 	/* Fix up command count */
-	gpmonPacket->u.qlog.key.ccnt = gp_command_count;
+	gpmonPacket->u.qlog.key.ccnt = get_query_command_count(qd);
 	return gpmonPacket;
 }
 
@@ -262,14 +282,14 @@ gpmon_qexec_packet_init()
 
 	Assert(perfmon_enabled && Gp_role == GP_ROLE_EXECUTE);
 	Assert(gpmonPacket);
-	
 	gpmonPacket->magic = GPMON_MAGIC;
 	gpmonPacket->version = GPMON_PACKET_VERSION;
 	gpmonPacket->pkttype = GPMON_PKTTYPE_QEXEC;
 
 	gpmon_gettmid(&gpmonPacket->u.qexec.key.tmid);
 	gpmonPacket->u.qexec.key.ssid = gp_session_id;
-	gpmonPacket->u.qexec.key.ccnt = gp_command_count;
+	/* Better to use get_query_command_count here */
+	gpmonPacket->u.qexec.key.ccnt =  gp_command_count;
 	gpmonPacket->u.qexec.key.hash_key.segid = GpIdentity.segindex;
 	gpmonPacket->u.qexec.key.hash_key.pid = MyProcPid;
 	return gpmonPacket;
@@ -278,18 +298,17 @@ gpmon_qexec_packet_init()
 /**
  * Call this method when query is submitted.
  */
-void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket)
+static void
+gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 {
 	struct timeval tv;
-
 
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 
 	gettimeofday(&tv, 0);
-	tsubmit = tv.tv_sec;
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_SUBMIT;
-	gpmonPacket->u.qlog.tsubmit = tsubmit;
-	
+	gpmonPacket->u.qlog.tsubmit = tv.tv_sec;
+	set_query_tsubmit(tv.tv_sec, qd);
 	gpmon_send(gpmonPacket);
 }
 
@@ -311,9 +330,14 @@ static const char* gpmon_null_subst(const char* input)
  * <VALUE>\n
  * Boolean value extraByte indicates whether an additional newline is desired. This is
  * necessary because gpmon overwrites the last byte to indicate status.
+ *
+ * Have tested the speed of this function on local machine
+ * - each file is 0B, 1000 files, tabke about 50ms
+ * - each file is 102B, 1000 files, take about 70ms
+ * - each file is 57K, 1000 files, take about 240ms
  */
-
-void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
+static void
+gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 		const char *queryText,
 		const char *plan,
 		const char *appName,
@@ -352,26 +376,25 @@ void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 	gpmon_record_kv_with_file("resqname", resqName, false, fp);
 	gpmon_record_kv_with_file("priority", resqPriority, true, fp);
 	fprintf(fp, "%d", status);
-
 	fclose(fp);
-
 }
 
 /**
  * Call this method when query starts executing.
  */
-void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket)
+static void
+gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 {
 	struct timeval tv;
 
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 
 	gettimeofday(&tv, 0);
-	tstart = tv.tv_sec;
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_START;
-	gpmonPacket->u.qlog.tsubmit = tsubmit;
-	gpmonPacket->u.qlog.tstart = tstart;
+	gpmonPacket->u.qlog.tsubmit = get_query_tsubmit(qd);
+	gpmonPacket->u.qlog.tstart = tv.tv_sec;
+	set_query_tstart(tv.tv_sec, qd);
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
 			gpmonPacket->u.qlog.key.ssid,
 			gpmonPacket->u.qlog.key.ccnt,
@@ -382,7 +405,8 @@ void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket)
 /**
  * Call this method when query finishes executing.
  */
-void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, bool updateRecord)
+static void
+gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, QueryDesc *qd, bool updateRecord)
 {
 	struct timeval tv;
 
@@ -390,8 +414,8 @@ void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, bool updateRecord)
 	gettimeofday(&tv, 0);
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_DONE;
-	gpmonPacket->u.qlog.tsubmit = tsubmit;
-	gpmonPacket->u.qlog.tstart = tstart;
+	gpmonPacket->u.qlog.tsubmit = get_query_tsubmit(qd);
+	gpmonPacket->u.qlog.tstart = get_query_tstart(qd);
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
 	if (updateRecord)
 		gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
@@ -405,7 +429,8 @@ void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, bool updateRecord)
 /**
  * Call this method when query errored out.
  */
-void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket)
+static void
+gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 {
 	struct timeval tv;
 
@@ -414,8 +439,8 @@ void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket)
 	gettimeofday(&tv, 0);
 	
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_ERROR;
-	gpmonPacket->u.qlog.tsubmit = tsubmit;
-	gpmonPacket->u.qlog.tstart = tstart;
+	gpmonPacket->u.qlog.tsubmit = get_query_tsubmit(qd);
+	gpmonPacket->u.qlog.tstart = get_query_tstart(qd);
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
 	
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
@@ -430,13 +455,13 @@ void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket)
  * gpmon_qlog_query_canceling
  *    Record that the query is being canceled.
  */
-void
-gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket)
+static void
+gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 {
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_CANCELING;
-	gpmonPacket->u.qlog.tsubmit = tsubmit;
-	gpmonPacket->u.qlog.tstart = tstart;
+	gpmonPacket->u.qlog.tsubmit = get_query_tsubmit(qd);
+	gpmonPacket->u.qlog.tstart = get_query_tstart(qd);
 	
 	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
 			gpmonPacket->u.qlog.key.ssid,
@@ -446,111 +471,113 @@ gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket)
 	gpmon_send(gpmonPacket);
 }
 
-static void 
+static void
 gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 {
 	char *query_text;
 	char *plan;
-	QueryDesc *qd = (QueryDesc *)queryDesc;
 	bool updateRecord = true;
-	if (perfmon_enabled && qd != NULL)
+	gpmon_packet_t *gpmonPacket = NULL;
+	if (prev_query_info_collect_hook)
+		(*prev_query_info_collect_hook)(status, queryDesc);
+
+	if (queryDesc == NULL || !perfmon_enabled)
+		return;
+
+	if (Gp_role == GP_ROLE_DISPATCH && !check_query((QueryDesc*)queryDesc, status))
+		return;
+
+	PG_TRY();
 	{
-		gpmon_packet_t *gpmonPacket = NULL;
-		PG_TRY();
-		{
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
-			gpmonPacket = gpmon_qlog_packet_init();
+			QueryDesc *qd = (QueryDesc *)queryDesc;
 			switch (status)
 			{
-				case METRICS_QUERY_START:
-					gpmon_qlog_query_start(gpmonPacket);
-					break;
-				case METRICS_QUERY_SUBMIT:
+			case METRICS_QUERY_SUBMIT:
+				init_toppest_query(qd);
+				gpmonPacket = gpmon_qlog_packet_init(qd);
+				query_text = get_query_text((QueryDesc *)queryDesc);
+				gpmon_qlog_query_text(gpmonPacket,
+									  query_text,
+									  NULL,
+									  application_name,
+									  NULL,
+									  NULL,
+									  GPMON_QLOG_STATUS_SUBMIT);
+				gpmon_qlog_query_submit(gpmonPacket, qd);
+				break;
+			case METRICS_QUERY_START:
+				gpmonPacket = gpmon_qlog_packet_init(qd);
+				gpmon_qlog_query_start(gpmonPacket, qd);
+				break;
+			case METRICS_QUERY_DONE:
+			case METRICS_INNER_QUERY_DONE:
+				gpmonPacket = gpmon_qlog_packet_init(qd);
+				/*
+				 * plannedstmt in queryDesc may have been cleaned ,
+				 * so we cannot check queryId here.
+				 * Only check gp_command_count
+				 */
+				if (enable_qs_runtime() && CachedQueryStateInfo != NULL &&
+					get_command_count(CachedQueryStateInfo) == get_query_command_count(qd))
+				{
 					query_text = get_query_text(qd);
+					plan = (char *)CachedQueryStateInfo->data;
 					gpmon_qlog_query_text(gpmonPacket,
-							query_text,
-							NULL,
-							application_name,
-							NULL,
-							NULL,
-							GPMON_QLOG_STATUS_SUBMIT);
-					gpmon_qlog_query_submit(gpmonPacket);
-					break;
-				case METRICS_QUERY_DONE:
-					/*
-					* plannedstmt in queryDesc may have been cleaned ,
-					* so we cannot check queryId here.
-					* Only check gp_command_count
-					*/
-					if (enable_qs_runtime() && CachedQueryStateInfo != NULL
-					 && get_command_count(CachedQueryStateInfo) == gp_command_count)
-					{
-						query_text = get_query_text(qd);
-						plan = (char *)CachedQueryStateInfo->data;
-						gpmon_qlog_query_text(gpmonPacket,
-											  query_text,
-											  plan,
-											  application_name,
-											  NULL,
-											  NULL,
-											  GPMON_QLOG_STATUS_DONE);
-						updateRecord = false;
-					}
-					gpmon_qlog_query_end(gpmonPacket, updateRecord);
-					break;
-					/* TODO: no GPMON_QLOG_STATUS for METRICS_QUERY_CANCELED */
-				case METRICS_QUERY_CANCELING:
-					gpmon_qlog_query_canceling(gpmonPacket);
-					break;
-				case METRICS_QUERY_ERROR:
-				case METRICS_QUERY_CANCELED:
-					gpmon_qlog_query_error(gpmonPacket);
-					break;
-				case METRICS_PLAN_NODE_INITIALIZE:
-					query_text = get_query_text(qd);
-					plan = get_plan(qd);
-					gpmon_qlog_query_text(gpmonPacket,
-							query_text,
-							plan,
-							application_name,
-							NULL,
-							NULL,
-							GPMON_QLOG_STATUS_START);
-					pfree(plan);
-					break;
-				default:
-					break;
+										  query_text,
+										  plan,
+										  application_name,
+										  NULL,
+										  NULL,
+										  GPMON_QLOG_STATUS_DONE);
+					updateRecord = false;
+				}
+				gpmon_qlog_query_end(gpmonPacket, qd, updateRecord);
+				reset_toppest_query(qd);
+				break;
+				/* TODO: no GPMON_QLOG_STATUS for METRICS_QUERY_CANCELED */
+			case METRICS_QUERY_CANCELING:
+				gpmonPacket = gpmon_qlog_packet_init(qd);
+				gpmon_qlog_query_canceling(gpmonPacket, qd);
+				break;
+			case METRICS_QUERY_ERROR:
+			case METRICS_QUERY_CANCELED:
+				gpmonPacket = gpmon_qlog_packet_init(qd);
+				gpmon_qlog_query_error(gpmonPacket, qd);
+				reset_toppest_query(qd);
+				break;
+			default:
+				break;
 			}
-			pfree(gpmonPacket);
-		}
-		else if (Gp_role == GP_ROLE_EXECUTE)
-		{
-                        gpmonPacket = gpmon_qexec_packet_init();
-                        switch (status)
-                        {
-                                case METRICS_QUERY_START:
-                                case METRICS_PLAN_NODE_EXECUTING:
-                                        gpmon_send(gpmonPacket);
-                                        break;
-                                default:
-                                        break;
-                        }
-                        pfree(gpmonPacket);
-		}
-		}
-		PG_CATCH();
-		{
-			EmitErrorReport();
-			/* swallow any error in this hook */
-			FlushErrorState();
 			if (gpmonPacket != NULL)
 				pfree(gpmonPacket);
 		}
-		PG_END_TRY();
+		else if (Gp_role == GP_ROLE_EXECUTE)
+		{
+			gpmonPacket = gpmon_qexec_packet_init();
+			switch (status)
+			{
+			case METRICS_QUERY_START:
+			case METRICS_PLAN_NODE_EXECUTING:
+				gpmon_send(gpmonPacket);
+				break;
+			default:
+				break;
+			}
+			pfree(gpmonPacket);
+		}
+		gpmonPacket = NULL;
 	}
-	if (prev_query_info_collect_hook)
-		(*prev_query_info_collect_hook) (status, qd);
+	PG_CATCH();
+	{
+		EmitErrorReport();
+		/* swallow any error in this hook */
+		FlushErrorState();
+		if (gpmonPacket != NULL)
+			pfree(gpmonPacket);
+	}
+	PG_END_TRY();
 }
 
 static void
@@ -593,37 +620,6 @@ _PG_fini(void)
 {}
 
 static
-char* get_plan(QueryDesc *queryDesc)
-{
-	char *plan;
-	ExplainState *es = NewExplainState();
-
-	es->analyze = false;
-	es->verbose = true;
-	es->buffers = true;
-	es->wal = true;
-	es->timing = true;
-	es->summary = es->analyze;
-	es->format = EXPLAIN_FORMAT_JSON;
-	es->settings = true;
-	ExplainBeginOutput(es);
-	ExplainQueryText(es, queryDesc);
-	ExplainPrintPlan(es, queryDesc);
-	ExplainEndOutput(es);
-
-	/* Remove last line break */
-	if (es->str->len > 0 && es->str->data[es->str->len - 1] == '\n')
-		es->str->data[--es->str->len] = '\0';
-
-	/* Fix JSON to output an object */
-	es->str->data[0] = '{';
-	es->str->data[es->str->len - 1] = '}';
-	plan = es->str->data;
-	pfree(es);
-	return plan;
-}
-
-static
 char* get_query_text(QueryDesc *qd)
 {
 		/* convert to UTF8 which is encoding for gpperfmon database */
@@ -637,4 +633,127 @@ char* get_query_text(QueryDesc *qd)
 								strlen(qd->sourceText), GetDatabaseEncoding(), PG_UTF8);
 		}
 		return query_text;
+}
+
+static
+bool check_query(QueryDesc *queryDesc, QueryMetricsStatus status)
+{
+	PerfmonQuery *query;
+	switch (status)
+	{
+	case METRICS_QUERY_SUBMIT:
+		return is_querystack_empty();
+	case METRICS_QUERY_START:
+	case METRICS_QUERY_DONE:
+	case METRICS_INNER_QUERY_DONE:
+	case METRICS_QUERY_ERROR:
+	case METRICS_QUERY_CANCELING:
+	case METRICS_QUERY_CANCELED:
+		query = get_toppest_perfmon_query();
+		return query != NULL && query->queryDesc == queryDesc;
+	default:
+		return true;
+	}
+	/*
+	 * get_query returns the toppest query in the stack or NULL
+	 */
+	return false;
+}
+
+static void
+init_toppest_query(QueryDesc *qd)
+{
+	MemoryContext oldCtx = CurrentMemoryContext;
+	MemoryContextSwitchTo(TopMemoryContext);
+	if (is_querystack_empty())
+	{
+		if (toppest_query != NULL)
+		{
+			elog(WARNING, "toppest_query not reset properly %d", toppest_query->query_command_count);
+			pfree(toppest_query);
+			toppest_query = NULL;
+		}
+		PerfmonQuery *query = (PerfmonQuery *)palloc(sizeof(PerfmonQuery));
+		query->query_command_count = gp_command_count;
+		query->tstart = 0;
+		query->tsubmit = 0;
+		query->queryDesc = qd;
+		toppest_query = query;
+	}
+	MemoryContextSwitchTo(oldCtx);
+}
+
+static void
+reset_toppest_query(QueryDesc *qd)
+{
+	if (toppest_query != NULL && toppest_query->queryDesc == qd)
+	{
+		pfree(toppest_query);
+		toppest_query = NULL;
+	}
+}
+
+static inline PerfmonQuery*
+get_toppest_perfmon_query(void)
+{
+	return toppest_query;
+}
+
+static inline void
+set_query_tsubmit(int32 tsubmit, QueryDesc *qd)
+{
+	PerfmonQuery *query = get_toppest_perfmon_query();
+	if (query != NULL)
+	{
+		Assert(qd == query->queryDesc);
+		query->tsubmit = tsubmit;
+	}
+}
+
+static inline void
+set_query_tstart(int32 tstart,QueryDesc *qd)
+{
+	PerfmonQuery *query = get_toppest_perfmon_query();
+	if (query != NULL)
+	{
+		Assert(qd == query->queryDesc);
+		query->tstart = tstart;
+	}
+}
+
+static inline int
+get_query_command_count(QueryDesc *qd)
+{
+	PerfmonQuery *query = get_toppest_perfmon_query();
+	if (query != NULL)
+	{
+		Assert(qd == query->queryDesc);
+		return query->query_command_count;
+	}
+	return gp_command_count;
+}
+
+static inline int32
+get_query_tsubmit(QueryDesc *qd)
+{
+	PerfmonQuery *query = get_toppest_perfmon_query();
+	if (query != NULL)
+	{
+		Assert(qd == query->queryDesc);
+		return query->tsubmit;
+	}
+	return 0;
+}
+
+static inline int32
+get_query_tstart(QueryDesc *qd)
+{
+
+	PerfmonQuery *query = get_toppest_perfmon_query();
+	if (query != NULL)
+	{
+		Assert(qd == query->queryDesc);
+		return query->tstart;
+	}
+	return 0;
 }

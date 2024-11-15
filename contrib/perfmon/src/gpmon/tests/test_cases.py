@@ -416,31 +416,25 @@ def test_skip_explain_analyze(config):
 
 	# in hashdata-lightning, only print the top level query state
 def test_init_plan(config):
-	"""test statistics of init plan"""
+	"""test statistics of init plan not supported now"""
 	acon1, acon2 = common.n_async_connect(config, 2)
 	query = 'select (select count(*) from foo join bar on foo.c1=bar.c1 and unlock_if_eq_1(foo.c1)=bar.c1) as t, c1 from bar'
-	expected = r"""Query Text: select \(select count\(\*\) from foo join bar on foo.c1=bar.c1 and unlock_if_eq_1\(foo.c1\)=bar.c1\) as t, c1 from bar
-Gather Motion 1:1  \(slice1; segments: 1\) \(node status: Initialize\) \(actual rows=0, loops=1\)
-  InitPlan 1 \(returns \$0\)  \(slice2\)
-    ->  Finalize Aggregate \(node status: Initialize\) \(actual rows=0, loops=1\)
-          ->  Gather Motion \d+:1  \(slice3; segments: \d+\) \(node status: .*\) \(actual rows=0, loops=1\)
-                ->  Partial Aggregate \(node status: Initialize\) \(actual rows=0, loops=1\)
-                      ->  Hash Join \(node status: Initialize\) \(actual rows=0, loops=1\)
-                            Hash Cond: \(bar_1.c1 = foo.c1\)
-                            Join Filter: \(unlock_if_eq_1\(foo.c1\) = bar_1.c1\)
-                            ->  Seq Scan on bar bar_1 \(node status: Initialize\) \(actual rows=0, loops=1\)
-                            ->  Hash \(node status: Initialize\) \(actual rows=0, loops=1\)
-                                  ->  Seq Scan on foo \(node status: Initialize\) \(actual rows=0, loops=1\)
-  ->  Seq Scan on bar \(node status: Initialize\) \(actual rows=0, loops=1\)"""
+	#expected = r"""Query Text: select \(select count\(\*\) from foo join bar on foo.c1=bar.c1 and unlock_if_eq_1\(foo.c1\)=bar.c1\) as t, c1 from bar
+ #Gather Motion 1:1  \(slice1; segments: 1\) \(node status: Initialize\) \(actual rows=0, loops=1\)
+ # InitPlan 1 \(returns \$0\)  \(slice2\)
+ #   ->  Finalize Aggregate \(node status: Initialize\) \(actual rows=0, loops=1\)
+ #         ->  Gather Motion \d+:1  \(slice3; segments: \d+\) \(node status: .*\) \(actual rows=0, loops=1\)
+ #               ->  Partial Aggregate \(node status: Initialize\) \(actual rows=0, loops=1\)
+ #                     ->  Hash Join \(node status: Initialize\) \(actual rows=0, loops=1\)
+ #                           Hash Cond: \(bar_1.c1 = foo.c1\)
+ #                           Join Filter: \(unlock_if_eq_1\(foo.c1\) = bar_1.c1\)
+ #                           ->  Seq Scan on bar bar_1 \(node status: Initialize\) \(actual rows=0, loops=1\)
+ #                           ->  Hash \(node status: Initialize\) \(actual rows=0, loops=1\)
+ #                                 ->  Seq Scan on foo \(node status: Initialize\) \(actual rows=0, loops=1\)
+ # ->  Seq Scan on bar \(node status: Initialize\) \(actual rows=0, loops=1\)"""
 
-	qs,notices = common.onetime_query_state_locks(config, acon1, acon2, query, {})
-	assert qs[0][0] == acon1.get_backend_pid()
-	assert qs[0][1] == 0
-	assert qs[0][2] == query
-	if not re.match(expected, qs[0][3]):
-		print(qs[0][3])
-	assert re.match(expected, qs[0][3])
-	assert qs[0][4] == None
+	_,notices = common.onetime_query_state_locks(config, acon1, acon2, query, {})
+	assert notices[0] == 'INFO:  state of backend is active\n'
 	# assert qs[0][0] == acon.get_backend_pid() and qs[0][1] == 0 \
 	# 	and qs[0][2] == query and re.match(expected, qs[0][3]) and qs[0][4] == None
 
@@ -451,8 +445,8 @@ def test_qe_cache_query(config):
 
 	query = 'select count(*) from foo left join tt on foo.c1 = tt.c1 and tt.c1 < 10 where unlock_if_eq_1(foo.c1) < 100'
 	expected = r"""Query Text: select count\(\*\) from foo left join tt on foo.c1 = tt.c1 and tt.c1 < 10 where unlock_if_eq_1\(foo.c1\) < 100
-Finalize Aggregate \(node status: .*\) \(actual rows=0, loops=1\)
-  ->  Gather Motion \d+:1  \(slice1; segments: \d+\) \(node status: .*\) \(actual rows=0, loops=1\)
+Finalize Aggregate \(node status: .*\) \(actual rows=\d+, loops=1\)
+  ->  Gather Motion \d+:1  \(slice1; segments: \d+\) \(node status: .*\) \(actual rows=\d+, loops=1\)
         ->  Partial Aggregate \(node status: .*\) \(actual rows=\d+, loops=1\)
               ->  Hash Left Join \(node status: Executing\) \(actual rows=\d+, loops=1\)
                     Hash Cond: \(foo.c1 = tt.c1\)

@@ -133,7 +133,7 @@ extern shm_mq 	*mq;
 
 extern query_state_info *CachedQueryStateInfo; 
 
-/* pg_query_setat.c */
+/* pg_query_stat.c */
 extern shm_mq_result
 shm_mq_receive_with_timeout(shm_mq_handle *mqh,
 							Size *nbytesp,
@@ -160,7 +160,8 @@ extern query_state_info *new_queryStateInfo(int sliceIndex, StringInfo strInfo, 
 											uint64 queryId,
 											PG_QS_RequestResult result_code);
 extern bool wait_for_mq_detached(shm_mq_handle *mqh);
+
 extern bool is_querystack_empty(void);
-extern QueryDesc *get_query(void);
+extern QueryDesc *get_toppest_query(void);
 extern int get_command_count(query_state_info *info);
 #endif

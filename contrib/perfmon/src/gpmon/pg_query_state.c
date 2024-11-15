@@ -357,22 +357,10 @@ qs_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	if (queryDesc->plannedstmt->queryId == 0)
 		queryDesc->plannedstmt->queryId =
 			((uint64)gp_command_count << 32) + qs_query_count;
-	push_query(queryDesc);
-	/* push query to make pg_query_stat get the stat of initplans*/
-	PG_TRY();
-	{
-		if (prev_ExecutorStart)
-			prev_ExecutorStart(queryDesc, eflags);
-		else
-			standard_ExecutorStart(queryDesc, eflags);
-		pop_query();
-	}
-	PG_CATCH();
-	{
-		pop_query();
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	if (prev_ExecutorStart)
+		prev_ExecutorStart(queryDesc, eflags);
+	else
+		standard_ExecutorStart(queryDesc, eflags);
 }
 
 /*
@@ -1478,32 +1466,40 @@ qs_print_plan(QueryDesc *queryDesc)
 		return;
 	if (!(Gp_role == GP_ROLE_DISPATCH && enable_qs_runtime()))
 		return;
-	if (!IsTransactionState())
+	if (!IsTransactionState() || !queryDesc->estate)
+		return;
+	if (queryDesc->estate->es_sliceTable->hasMotions &&
+			!queryDesc->estate->dispatcherState)
+		return;
+
+	if (queryDesc->estate->es_sliceTable->hasMotions &&
+			!queryDesc->estate->dispatcherState->primaryResults)
 		return;
 
 	/* get dispatch result */
-	if (!queryDesc->estate->dispatcherState ||
-		!queryDesc->estate->dispatcherState->primaryResults)
-		return;
-	EState *estate = queryDesc->estate;
-	DispatchWaitMode waitMode = DISPATCH_WAIT_NONE;
-	if (!estate->es_got_eos)
-	{
-		ExecSquelchNode(queryDesc->planstate, true);
-	}
+	if (queryDesc->estate->dispatcherState &&
+		queryDesc->estate->dispatcherState->primaryResults)
+		{
+			EState *estate = queryDesc->estate;
+			DispatchWaitMode waitMode = DISPATCH_WAIT_NONE;
+			if (!estate->es_got_eos)
+			{
+				ExecSquelchNode(queryDesc->planstate, true);
+			}
 
-	/*
-	 * Wait for completion of all QEs.  We send a "graceful" query
-	 * finish, not cancel signal.  Since the query has succeeded,
-	 * don't confuse QEs by sending erroneous message.
-	 */
-	if (estate->cancelUnfinished)
-		waitMode = DISPATCH_WAIT_FINISH;
+			/*
+			 * Wait for completion of all QEs.  We send a "graceful" query
+			 * finish, not cancel signal.  Since the query has succeeded,
+			 * don't confuse QEs by sending erroneous message.
+			 */
+			if (estate->cancelUnfinished)
+				waitMode = DISPATCH_WAIT_FINISH;
 
-	cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
-	cdbdisp_getDispatchResults(queryDesc->estate->dispatcherState, &qeError);
-	if (qeError)
-		return;
+			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
+			cdbdisp_getDispatchResults(queryDesc->estate->dispatcherState, &qeError);
+			if (qeError)
+				return;
+		}
 	/*
 	 * Make sure we operate in the per-query context, so any cruft will be
 	 * discarded later during ExecutorEnd.
@@ -1750,6 +1746,7 @@ push_query(QueryDesc *queryDesc)
 {
 	qs_query_count++;
 	QueryDescStack = lcons(queryDesc, QueryDescStack);
+
 }
 
 static void
@@ -1764,11 +1761,6 @@ is_querystack_empty(void)
 	return list_length(QueryDescStack) == 0;
 }
 
-QueryDesc*
-get_query(void)
-{
-	return QueryDescStack == NIL ? NULL : (QueryDesc *)llast(QueryDescStack);
-}
 
 int
 get_command_count(query_state_info *info)
@@ -1776,4 +1768,10 @@ get_command_count(query_state_info *info)
 	if(info->queryId == 0)
 	return 0;
 	else return info->queryId>>32;
+}
+
+QueryDesc*
+get_toppest_query(void)
+{
+	return QueryDescStack == NIL ? NULL : (QueryDesc*) llast(QueryDescStack);
 }

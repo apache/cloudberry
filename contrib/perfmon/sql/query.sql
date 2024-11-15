@@ -31,15 +31,25 @@ CREATE TABLE test(a int);
 INSERT INTO foo SELECT generate_series(0,10);
 INSERT INTO test SELECT generate_series(0,10);
 select count(*) from foo,test where foo.a=test.a;
+-- test nested query
+create or replace function n_join_foo_test() returns integer as $$
+begin
+	return (select count(*) from foo join test on foo.a=test.a);
+end;
+$$ language plpgsql;
+
+select * from n_join_foo_test();
 DROP TABLE foo;
 DROP TABLE test;
 
 \c gpperfmon
+-- start_ignore
 select pg_sleep(100);
 analyze system_history;
 analyze database_history;
 analyze diskspace_history;
 analyze queries_history;
+-- end_ignore
 select count(*) > 0 from system_now;
 select count(*) > 0 from database_now;
 select count(*) > 0 from diskspace_now;
@@ -47,6 +57,8 @@ select count(*) > 0 from system_history;
 select count(*) > 0 from database_history;
 select count(*) > 0 from diskspace_history;
 
-select status, query_text, length(query_plan) > 0 from queries_history
-where ssid = :sess_id and 
-query_text = 'select count(*) from foo,test where foo.a=test.a;';
+select ccnt, status, query_text, length(query_plan) > 0 from queries_history
+where ssid = :sess_id order by ccnt;
+
+SELECT COUNT(*) FROM (SELECT DISTINCT ccnt FROM queries_history
+where ssid = :sess_id) as temp;
