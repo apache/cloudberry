@@ -6555,7 +6555,7 @@ rxThreadFunc(void *arg)
 				continue;
 		}
 
-		if (skip_poll || (n == 1 && (nfd.events & POLLIN)))
+		if (skip_poll || (n == 1 && (nfd.revents & POLLIN)))
 		{
 			/* we've got something interesting to read */
 			/* handle incoming */
