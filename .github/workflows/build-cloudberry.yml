@@ -1,0 +1,1111 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+#
+# GitHub Actions Workflow: Apache Cloudberry Build
+# Description: Builds, tests, and packages Apache Cloudberry on Rocky Linux 9
+#
+# Workflow Structure:
+# 1. Skip Check:
+#    - Evaluates CI skip flags in commit messages or PR titles
+#    - Supports [skip ci], [ci skip], [no ci]
+#    - Successfully completes all checks if skip detected
+#
+# 2. Build Job:
+#    - Sets up build environment in Rocky Linux 9 container
+#    - Configures and builds Cloudberry
+#    - Runs unit tests
+#    - Creates RPM package and source tarball
+#    - Performs build verification
+#    - Uploads build artifacts
+#    Key artifacts: RPM package, source tarball, build logs
+#
+# 3. Install Test Job:
+#    - Sets up test environment in Rocky Linux 9 container
+#    - Downloads build artifacts
+#    - Verifies RPM package integrity
+#    - Installs Cloudberry RPM
+#    - Validates installation
+#    Key artifacts: Installation logs, verification results
+#
+# 4. Test Job:
+#    - Sets up test environment in Rocky Linux 9 container
+#    - Downloads build artifacts
+#    - Installs Cloudberry RPM
+#    - Creates demo cluster
+#    - Executes installcheck tests
+#    - Parses and reports test results
+#    Key artifacts: Test logs, regression files, test summaries
+#
+# 5. Report Job:
+#    - Generates comprehensive build pipeline report
+#    - Aggregates status from all jobs
+#    - Provides failure notifications if needed
+#
+# Required Secrets:
+#   DOCKERHUB_USER: DockerHub username for container access
+#   DOCKERHUB_TOKEN: DockerHub access token
+#
+# Resource Requirements:
+#   - Disk: Minimum 20GB free space
+#   - Memory: Minimum 8GB RAM
+#   - CPU: Recommended 4+ cores
+#
+# Container Images:
+#   Build: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+#     - Rocky Linux 9 base with build dependencies
+#   Test:  apache/incubator-cloudberry:cbdb-test-rocky9-latest
+#     - Rocky Linux 9 base with test dependencies
+#
+# Triggers:
+#   - Push to build-devel branch
+#   - Pull requests to build-devel branch
+#   - Manual workflow dispatch
+#
+# Skip CI:
+#   Add one of these flags to commit message or PR title:
+#   - [skip ci]  : Skip all CI checks
+#   - [ci skip]  : Skip all CI checks (alternative)
+#   - [no ci]    : Skip all CI checks (alternative)
+#
+# Environment Variables:
+#   LOG_RETENTION_DAYS: Number of days to retain logs (default: 7)
+#   BUILD_TIMESTAMP: Build start timestamp
+#   SRC_DIR: Source directory path
+#   CBDB_VERSION: Cloudberry version (99.0.0)
+#   BUILD_NUMBER: Build number (1)
+#   GITHUB_OUTPUT: GitHub Actions output file path
+#
+# Test Matrix:
+#   - ICW Optimizer=off:    Basic regression tests with optimizer disabled
+#   - ICW expandshrink:     Cluster expansion/shrinking tests
+#   # Disabled tests:
+#   # - ICW Optimizer=on:   Advanced tests with optimizer
+#   # - ICW Parallel:       Parallel execution tests
+#
+# Artifacts Generated:
+#   - RPM package          (1 day retention)
+#   - Source tarball       (1 day retention)
+#   - Build and test logs  (7 days retention)
+#   - Test results        (7 days retention)
+#   - Job execution reports (7 days retention)
+#
+# Dependencies:
+#   - Docker Hub credentials for container access
+#   - Cloudberry build scripts repository
+#   - GitHub Actions artifacts for job communication
+#
+# Notes:
+#   - Requires Docker Hub authentication
+#   - Uses concurrent job control
+#   - Provides detailed job summaries
+#   - Includes comprehensive error handling
+#   - Maintains build artifacts for downstream use
+#
+# --------------------------------------------------------------------
+
+name: Apache Cloudberry Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+  actions: write
+
+env:
+  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  LOG_RETENTION_DAYS: 7
+
+jobs:
+
+  # Initial job to check for skip flags
+  check-skip:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    steps:
+      - id: skip-check
+        shell: bash
+        run: |
+          # Get the message to check based on event type
+          MESSAGE=""
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            MESSAGE="${{ github.event.pull_request.title }}"
+          else
+            MESSAGE="${{ github.event.head_commit.message }}"
+          fi
+
+          # Check for skip patterns
+          if echo "$MESSAGE" | grep -qE '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Report Skip Status
+        if: steps.skip-check.outputs.should_skip == 'true'
+        run: |
+          echo "CI Skip flag detected - skipping all checks"
+          exit 0
+
+  build:
+    name: Build Apache Cloudberry
+    needs: check-skip
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      credentials:
+        username: ${{ env.DOCKERHUB_USER }}
+        password: ${{ env.DOCKERHUB_TOKEN }}
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+    - name: Skip Check
+      if: needs.check-skip.outputs.should_skip == 'true'
+      run: |
+        echo "Build skipped via CI skip flag" >> $GITHUB_STEP_SUMMARY
+        exit 0
+
+    - name: Set build timestamp
+      if: needs.check-skip.outputs.should_skip != 'true'
+      id: set_timestamp  # Add an ID to reference this step
+      run: |
+        timestamp=$(date +'%Y%m%d_%H%M%S')
+        echo "timestamp=$timestamp" | tee -a $GITHUB_OUTPUT  # Use GITHUB_OUTPUT for job outputs
+        echo "BUILD_TIMESTAMP=$timestamp" | tee -a $GITHUB_ENV # Also set as environment variable
+
+    - name: Checkout Apache Cloudberry (apache/cloudberry)
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Checkout CI Build/Test Scripts (apache/cloudberry-devops-release)
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: apache/cloudberry-devops-release
+        path: cloudberry-devops-release
+        ref: main
+
+    - name: Move cloudberry-devops-release directory
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        set -eo pipefail
+        if ! mv ${GITHUB_WORKSPACE}/cloudberry-devops-release ${GITHUB_WORKSPACE}/..; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Setup Apache Cloudberry build environment
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        set -eo pipefail
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+        mkdir -p build-logs/details
+        chown -R gpadmin:gpadmin .
+        chmod -R 755 .
+        chmod 777 build-logs
+
+        df -kh /
+        rm -rf /__t/*
+        df -kh /
+
+        df -h | tee -a build-logs/details/disk-usage.log
+        free -h | tee -a build-logs/details/memory-usage.log
+
+        {
+          echo "=== Environment Information ==="
+          uname -a
+          gcc --version
+          df -h
+          free -h
+          env
+        } | tee -a build-logs/details/environment.log
+
+        echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a $GITHUB_ENV
+
+    - name: Generate Build Job Summary Start
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        {
+          echo "# Build Job Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Environment" >> $GITHUB_STEP_SUMMARY
+          echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- OS Version: $(cat /etc/redhat-release)" >> $GITHUB_STEP_SUMMARY
+          echo "- GCC Version: $(gcc --version | head -n1)" >> $GITHUB_STEP_SUMMARY
+        }
+
+    - name: Run Apache Cloudberry configure script
+      if: needs.check-skip.outputs.should_skip != 'true'
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+        chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh
+        if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          echo "::error::Configure script failed"
+          exit 1
+        fi
+
+    - name: Run Apache Cloudberry build script
+      if: needs.check-skip.outputs.should_skip != 'true'
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+        chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
+        if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
+          echo "::error::Build script failed"
+          exit 1
+        fi
+
+    - name: Verify build artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        set -eo pipefail
+
+        echo "Verifying build artifacts..."
+        {
+          echo "=== Build Artifacts Verification ==="
+          echo "Timestamp: $(date -u)"
+
+          if [ ! -d "/usr/local/cloudberry-db" ]; then
+            echo "::error::Build artifacts directory not found"
+            exit 1
+          fi
+
+          # Verify critical binaries
+          critical_binaries=(
+            "/usr/local/cloudberry-db/bin/postgres"
+            "/usr/local/cloudberry-db/bin/psql"
+          )
+
+          echo "Checking critical binaries..."
+          for binary in "${critical_binaries[@]}"; do
+            if [ ! -f "$binary" ]; then
+              echo "::error::Critical binary missing: $binary"
+              exit 1
+            fi
+            if [ ! -x "$binary" ]; then
+              echo "::error::Binary not executable: $binary"
+              exit 1
+            fi
+            echo "Binary verified: $binary"
+            ls -l "$binary"
+          done
+
+          # Test binary execution
+          echo "Testing binary execution..."
+          if ! /usr/local/cloudberry-db/bin/postgres --version; then
+            echo "::error::postgres binary verification failed"
+            exit 1
+          fi
+          if ! /usr/local/cloudberry-db/bin/psql --version; then
+            echo "::error::psql binary verification failed"
+            exit 1
+          fi
+
+          echo "All build artifacts verified successfully"
+        } 2>&1 | tee -a build-logs/details/build-verification.log
+
+    - name: Create Source tarball, create RPM and verify artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      id: create-artifacts
+      env:
+        CBDB_VERSION: 99.0.0
+        BUILD_NUMBER: 1
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+
+        {
+          echo "=== Artifact Creation Log ==="
+          echo "Timestamp: $(date -u)"
+
+          # Create source tarball
+          echo "Creating source tarball..."
+          tar czf ${SRC_DIR}/../apache-cloudberry-incubating-src.tgz -C ${SRC_DIR}/.. ./cloudberry
+          mv ${SRC_DIR}/../apache-cloudberry-incubating-src.tgz ${SRC_DIR}
+
+          # Verify tarball contents
+          echo "Verifying source tarball contents..."
+          if ! tar tzf ${SRC_DIR}/apache-cloudberry-incubating-src.tgz > /dev/null; then
+            echo "::error::Source tarball verification failed"
+            exit 1
+          fi
+
+          # Create RPM
+          echo "Creating RPM package..."
+          rpmdev-setuptree
+          ln -s ${SRC_DIR}/../cloudberry-devops-release/packaging/rpm/el/SPECS/apache-cloudberry-db-incubating.spec ${HOME}/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
+          cp ${SRC_DIR}/LICENSE /usr/local/cloudberry-db
+
+          ${SRC_DIR}/../cloudberry-devops-release/scripts/build-rpm.sh --version ${CBDB_VERSION} --release ${BUILD_NUMBER}
+
+          # Get OS version and move RPM
+          os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
+          RPM_FILE=${HOME}/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-${CBDB_VERSION}-${BUILD_NUMBER}.el${os_version}.x86_64.rpm
+          cp ${RPM_FILE} ${SRC_DIR}
+
+          # Get package information
+          echo "Package Information:"
+          rpm -qip ${RPM_FILE}
+
+          # Verify critical files in RPM
+          echo "Verifying critical files in RPM..."
+          for binary in "bin/postgres" "bin/psql"; do
+            if ! rpm -qlp ${RPM_FILE} | grep -q "${binary}$"; then
+              echo "::error::Critical binary '${binary}' not found in RPM"
+              exit 1
+            fi
+          done
+
+          # Record checksums
+          echo "Calculating checksums..."
+          sha256sum ${RPM_FILE} | tee -a build-logs/details/checksums.log
+          sha256sum ${SRC_DIR}/apache-cloudberry-incubating-src.tgz | tee -a build-logs/details/checksums.log
+
+          echo "Artifacts created and verified successfully"
+
+        } 2>&1 | tee -a build-logs/details/artifact-creation.log
+
+        # Set outputs for subsequent steps
+        echo "rpm_file=${RPM_FILE}" >> $GITHUB_OUTPUT
+        echo "version=${CBDB_VERSION}" >> $GITHUB_OUTPUT
+        echo "build_number=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+
+    - name: Run Apache Cloudberry unittest script
+      if: needs.check-skip.outputs.should_skip != 'true'
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+        chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/unittest-cloudberry.sh
+        if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+          echo "::error::Unittest script failed"
+          exit 1
+        fi
+
+    - name: Generate Build Job Summary End
+      if: always()
+      run: |
+        {
+          echo "## Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        }
+
+    - name: Upload build logs
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ env.BUILD_TIMESTAMP }}
+        path: |
+          build-logs/
+        retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+    - name: Upload Cloudberry RPM build artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: apache-cloudberry-db-incubating-rpm-build-artifacts
+        retention-days: ${{ env.LOG_RETENTION_DAYS }}
+        if-no-files-found: error
+        path: |
+          *.rpm
+
+    - name: Upload Cloudberry source build artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: apache-cloudberry-db-incubating-source-build-artifacts
+        retention-days: ${{ env.LOG_RETENTION_DAYS }}
+        if-no-files-found: error
+        path: |
+          apache-cloudberry-incubating-src.tgz
+
+  rpm-install-test:
+    name: RPM Install Test Apache Cloudberry
+    needs: [check-skip, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-test-rocky9-latest
+      credentials:
+        username: ${{ env.DOCKERHUB_USER }}
+        password: ${{ env.DOCKERHUB_TOKEN }}
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+    - name: Skip Check
+      if: needs.check-skip.outputs.should_skip == 'true'
+      run: |
+        echo "RPM install test skipped via CI skip flag" >> $GITHUB_STEP_SUMMARY
+        exit 0
+
+    - name: Download Cloudberry RPM build artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: apache-cloudberry-db-incubating-rpm-build-artifacts
+        path: ${{ github.workspace }}/rpm_build_artifacts
+        merge-multiple: false
+
+    - name: Setup Apache Cloudberry build environment
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        set -eo pipefail
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+        mkdir -p install-logs/details
+        chown -R gpadmin:gpadmin .
+        chmod -R 755 .
+        chmod 777 install-logs
+
+        df -kh /
+        rm -rf /__t/*
+        df -kh /
+
+        df -h | tee -a install-logs/details/disk-usage.log
+        free -h | tee -a install-logs/details/memory-usage.log
+
+        {
+          echo "=== Environment Information ==="
+          uname -a
+          df -h
+          free -h
+          env
+        } | tee -a install-logs/details/environment.log
+
+        echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a $GITHUB_ENV
+
+    - name: Verify RPM artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      id: verify-artifacts
+      run: |
+        set -eo pipefail
+
+        RPM_FILE=$(ls ${GITHUB_WORKSPACE}/rpm_build_artifacts/apache-cloudberry-db-incubating*.rpm)
+        if [ ! -f "${RPM_FILE}" ]; then
+          echo "::error::RPM file not found"
+          exit 1
+        fi
+
+        echo "rpm_file=${RPM_FILE}" >> $GITHUB_OUTPUT
+
+        echo "Verifying RPM artifacts..."
+        {
+          echo "=== RPM Verification Summary ==="
+          echo "Timestamp: $(date -u)"
+          echo "RPM File: ${RPM_FILE}"
+
+          # Get RPM metadata and verify contents
+          echo "Package Information:"
+          rpm -qip ${RPM_FILE}
+
+          # Get key RPM attributes for verification
+          RPM_VERSION=$(rpm -qp --queryformat "%{VERSION}" ${RPM_FILE})
+          RPM_RELEASE=$(rpm -qp --queryformat "%{RELEASE}" ${RPM_FILE})
+          echo "version=${RPM_VERSION}" >> $GITHUB_OUTPUT
+          echo "release=${RPM_RELEASE}" >> $GITHUB_OUTPUT
+
+          # Verify expected binaries are in the RPM
+          echo "Verifying critical files in RPM..."
+          for binary in "bin/postgres" "bin/psql"; do
+            if ! rpm -qlp ${RPM_FILE} | grep -q "${binary}$"; then
+              echo "::error::Critical binary '${binary}' not found in RPM"
+              exit 1
+            fi
+          done
+
+          echo "RPM Details:"
+          echo "- Version: ${RPM_VERSION}"
+          echo "- Release: ${RPM_RELEASE}"
+
+          # Calculate and store checksum
+          echo "Checksum:"
+          sha256sum ${RPM_FILE}
+
+        } 2>&1 | tee -a install-logs/details/rpm-verification.log
+
+    - name: Install Cloudberry RPM
+      if: success() && needs.check-skip.outputs.should_skip != 'true'
+      env:
+        RPM_FILE: ${{ steps.verify-artifacts.outputs.rpm_file }}
+        RPM_VERSION: ${{ steps.verify-artifacts.outputs.version }}
+        RPM_RELEASE: ${{ steps.verify-artifacts.outputs.release }}
+      run: |
+        set -eo pipefail
+
+        if [ -z "${RPM_FILE}" ]; then
+          echo "::error::RPM_FILE environment variable is not set"
+          exit 1
+        fi
+
+        {
+          echo "=== RPM Installation Log ==="
+          echo "Timestamp: $(date -u)"
+          echo "RPM File: ${RPM_FILE}"
+          echo "Version: ${RPM_VERSION}"
+          echo "Release: ${RPM_RELEASE}"
+
+          # Clean install location
+          rm -rf /usr/local/cloudberry-db
+
+          # Install RPM
+          echo "Starting installation..."
+          if ! time dnf install -y "${RPM_FILE}"; then
+            echo "::error::RPM installation failed"
+            exit 1
+          fi
+
+          echo "Installation completed successfully"
+          rpm -qi apache-cloudberry-db-incubating
+          echo "Installed files:"
+          rpm -ql apache-cloudberry-db-incubating
+        } 2>&1 | tee -a install-logs/details/rpm-installation.log
+
+    - name: Upload install logs
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: install-logs-${{ needs.build.outputs.build_timestamp }}
+        path: |
+          install-logs/
+        retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+    - name: Generate Install Test Job Summary End
+      if: always()
+      shell: bash {0}
+      run: |
+        {
+          echo "# Installed Package Summary"
+          echo "\`\`\`"
+
+          rpm -qi apache-cloudberry-db-incubating
+          echo "\`\`\`"
+        } >> $GITHUB_STEP_SUMMARY || true
+
+  test:
+    name: ${{ matrix.test }}
+    needs: [check-skip, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false  # Continue with other tests if one fails
+      matrix:
+        test: [ic-good-opt-off, ic-expandshrink]
+        include:
+          - test: ic-good-opt-off
+            make_target: installcheck-good
+            make_directory: --directory=src/test/regress
+            pg_settings:
+              optimizer: "off"
+          - test: ic-expandshrink
+            make_target: installcheck-expandshrink
+            make_directory: --directory=src/test/isolation2
+            pg_settings:
+              optimizer: "off"
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      credentials:
+        username: ${{ env.DOCKERHUB_USER }}
+        password: ${{ env.DOCKERHUB_TOKEN }}
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+
+    - name: Skip Check
+      if: needs.check-skip.outputs.should_skip == 'true'
+      run: |
+        echo "Test ${{ matrix.test }} skipped via CI skip flag" >> $GITHUB_STEP_SUMMARY
+        exit 0
+
+    - name: Use timestamp from previous job
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        echo "Timestamp from output: ${{ needs.build.outputs.build_timestamp }}"
+
+    - name: Checkout CI Build/Test Scripts (apache/cloudberry-devops-release)
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: apache/cloudberry-devops-release
+        path: cloudberry-devops-release
+        ref: main
+
+    - name: Move cloudberry-devops-release directory
+      if: needs.check-skip.outputs.should_skip != 'true'
+      run: |
+        set -eo pipefail
+        if ! mv ${GITHUB_WORKSPACE}/cloudberry-devops-release ${GITHUB_WORKSPACE}/..; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+    - name: Setup Apache Cloudberry build environment
+      run: |
+        set -eo pipefail
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
+
+        mkdir -p build-logs/details
+        chown -R gpadmin:gpadmin .
+        chmod -R 755 .
+        chmod 777 build-logs
+
+        df -kh /
+        rm -rf /__t/*
+        df -kh /
+
+        df -h | tee -a build-logs/details/disk-usage.log
+        free -h | tee -a build-logs/details/memory-usage.log
+
+        {
+          echo "=== Environment Information ==="
+          uname -a
+          df -h
+          free -h
+          env
+        } | tee -a build-logs/details/environment.log
+
+        echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a $GITHUB_ENV
+
+    - name: "Generate Test Job Summary Start: ${{ matrix.test }}"
+      if: always()
+      run: |
+        {
+          echo "# Test Job Summary: ${{ matrix.test }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Environment" >> $GITHUB_STEP_SUMMARY
+          echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+            echo "## Skip Status" >> $GITHUB_STEP_SUMMARY
+            echo "✓ Test execution skipped via CI skip flag" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- OS Version: $(cat /etc/redhat-release)" >> $GITHUB_STEP_SUMMARY
+          fi
+        }
+
+    - name: Download Cloudberry RPM build artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: apache-cloudberry-db-incubating-rpm-build-artifacts
+        path: ${{ github.workspace }}/rpm_build_artifacts
+        merge-multiple: false
+
+    - name: Download Cloudberry Source build artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: apache-cloudberry-db-incubating-source-build-artifacts
+        path: ${{ github.workspace }}/source_build_artifacts
+        merge-multiple: false
+
+    - name: Verify downloaded artifacts
+      if: needs.check-skip.outputs.should_skip != 'true'
+      id: verify-artifacts
+      run: |
+        set -eo pipefail
+
+        SRC_TARBALL_FILE=$(ls ${GITHUB_WORKSPACE}/source_build_artifacts/apache-cloudberry-incubating-src.tgz)
+        if [ ! -f "${SRC_TARBALL_FILE}" ]; then
+          echo "::error::SRC TARBALL file not found"
+          exit 1
+        fi
+
+        echo "src_tarball_file=${SRC_TARBALL_FILE}" >> $GITHUB_OUTPUT
+
+        echo "Verifying SRC TARBALL artifacts..."
+        {
+          echo "=== SRC TARBALL Verification Summary ==="
+          echo "Timestamp: $(date -u)"
+          echo "SRC TARBALL File: ${SRC_TARBALL_FILE}"
+
+          # Calculate and store checksum
+          echo "Checksum:"
+          sha256sum ${SRC_TARBALL_FILE}
+
+        } 2>&1 | tee -a build-logs/details/src-tarball-verification.log
+
+        RPM_FILE=$(ls ${GITHUB_WORKSPACE}/rpm_build_artifacts/apache-cloudberry-db-incubating*.rpm)
+        if [ ! -f "${RPM_FILE}" ]; then
+          echo "::error::RPM file not found"
+          exit 1
+        fi
+
+        echo "rpm_file=${RPM_FILE}" >> $GITHUB_OUTPUT
+
+        echo "Verifying RPM artifacts..."
+        {
+          echo "=== RPM Verification Summary ==="
+          echo "Timestamp: $(date -u)"
+          echo "RPM File: ${RPM_FILE}"
+
+          # Get RPM metadata and verify contents
+          echo "Package Information:"
+          rpm -qip ${RPM_FILE}
+
+          # Get key RPM attributes for verification
+          RPM_VERSION=$(rpm -qp --queryformat "%{VERSION}" ${RPM_FILE})
+          RPM_RELEASE=$(rpm -qp --queryformat "%{RELEASE}" ${RPM_FILE})
+          echo "version=${RPM_VERSION}" >> $GITHUB_OUTPUT
+          echo "release=${RPM_RELEASE}" >> $GITHUB_OUTPUT
+
+          # Verify expected binaries are in the RPM
+          echo "Verifying critical files in RPM..."
+          for binary in "bin/postgres" "bin/psql"; do
+            if ! rpm -qlp ${RPM_FILE} | grep -q "${binary}$"; then
+              echo "::error::Critical binary '${binary}' not found in RPM"
+              exit 1
+            fi
+          done
+
+          echo "RPM Details:"
+          echo "- Version: ${RPM_VERSION}"
+          echo "- Release: ${RPM_RELEASE}"
+
+          # Calculate and store checksum
+          echo "Checksum:"
+          sha256sum ${RPM_FILE}
+
+        } 2>&1 | tee -a build-logs/details/rpm-verification.log
+
+    - name: Install Cloudberry RPM
+      if: success() && needs.check-skip.outputs.should_skip != 'true'
+      env:
+        RPM_FILE: ${{ steps.verify-artifacts.outputs.rpm_file }}
+        RPM_VERSION: ${{ steps.verify-artifacts.outputs.version }}
+        RPM_RELEASE: ${{ steps.verify-artifacts.outputs.release }}
+      run: |
+        set -eo pipefail
+
+        if [ -z "${RPM_FILE}" ]; then
+          echo "::error::RPM_FILE environment variable is not set"
+          exit 1
+        fi
+
+        {
+          echo "=== RPM Installation Log ==="
+          echo "Timestamp: $(date -u)"
+          echo "RPM File: ${RPM_FILE}"
+          echo "Version: ${RPM_VERSION}"
+          echo "Release: ${RPM_RELEASE}"
+
+          # Clean install location
+          rm -rf /usr/local/cloudberry-db
+
+          # Install RPM
+          echo "Starting installation..."
+          if ! time dnf install -y "${RPM_FILE}"; then
+            echo "::error::RPM installation failed"
+            exit 1
+          fi
+
+          echo "Installation completed successfully"
+          rpm -qi apache-cloudberry-db-incubating
+        } 2>&1 | tee -a build-logs/details/rpm-installation.log
+
+    - name: Extract source tarball
+      if: success() && needs.check-skip.outputs.should_skip != 'true'
+      env:
+        SRC_TARBALL_FILE: ${{ steps.verify-artifacts.outputs.src_tarball_file }}
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+
+        {
+          echo "=== Source Extraction Log ==="
+          echo "Timestamp: $(date -u)"
+
+          echo "Starting extraction..."
+          if ! time tar zxf ${SRC_TARBALL_FILE} -C ${SRC_DIR}/.. ; then
+            echo "::error::Source extraction failed"
+            exit 1
+          fi
+
+          echo "Extraction completed successfully"
+          echo "Extracted contents:"
+          ls -la "${SRC_DIR}/../cloudberry"
+          echo "Directory size:"
+          du -sh "${SRC_DIR}/../cloudberry"
+        } 2>&1 | tee -a build-logs/details/source-extraction.log
+
+    - name: Create Apache Cloudberry demo cluster
+      if: success() && needs.check-skip.outputs.should_skip != 'true'
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+
+        {
+          chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            echo "::error::Demo cluster creation failed"
+            exit 1
+          fi
+        } 2>&1 | tee -a build-logs/details/create-cloudberry-demo-cluster.log
+
+    - name: "Run Tests: ${{ matrix.test }}"
+      if: success() && needs.check-skip.outputs.should_skip != 'true'
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -eo pipefail
+        {
+
+          # Construct PGOPTIONS from pg_settings
+          PG_OPTS=""
+          if [[ -n "${{ matrix.pg_settings.optimizer }}" ]]; then
+            PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          fi
+
+          chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && \
+            MAKE_NAME='${{ matrix.test }}' \
+            MAKE_TARGET='${{ matrix.make_target }}' \
+            MAKE_DIRECTORY='${{ matrix.make_directory }}' \
+            PGOPTIONS='${PG_OPTS}' \
+            SRC_DIR='${SRC_DIR}' \
+            ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh"; then
+            echo "::error::Test execution failed"
+            df -kh /
+            exit 1
+          fi
+          } 2>&1 | tee -a build-logs/details/make-${{ matrix.test }}.log
+
+    - name: Parse Test Results
+      id: test-results
+      if: always()
+      shell: bash {0}
+      env:
+        SRC_DIR: ${{ github.workspace }}
+      run: |
+        set -o pipefail
+        {
+          if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+            echo "Tests skipped - setting default values"
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "total_tests=0" >> $GITHUB_OUTPUT
+            echo "failed_tests=0" >> $GITHUB_OUTPUT
+            echo "passed_tests=0" >> $GITHUB_OUTPUT
+            echo "Skip status recorded" | tee -a build-logs/details/parse-test-results-${{ matrix.test }}.log
+            exit 0
+          fi
+
+          chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh
+
+          MAKE_NAME='${{ matrix.test }}' \
+          ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh \
+            build-logs/details/make-${{ matrix.test }}.log
+          status_code=$?
+
+          echo "status_code=$status_code"
+
+          case $status_code in
+            0)  # All tests passed
+                echo "All tests passed successfully"
+                ;;
+            1)  # Tests failed but parsed successfully
+                echo "Test failures detected but properly parsed"
+                # Don't exit here - let the workflow continue
+                ;;
+            2)  # Parse error or missing file
+                echo "::error::Could not find or access test results file"
+                exit 1
+                ;;
+            *)  # Unexpected error
+                echo "::error::Unexpected error during test results parsing"
+                exit 1
+                ;;
+          esac
+
+          # Debug: verify outputs were set
+          echo "Debug: Checking GITHUB_OUTPUT contents:"
+          cat $GITHUB_OUTPUT || true
+
+        } 2>&1 | tee -a build-logs/details/parse-test-results-${{ matrix.test }}.log
+
+    - name: "Generate Test Job Summary End: ${{ matrix.test }}"
+      if: always()
+      shell: bash {0}
+      run: |
+        {
+          if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+            echo "## Test Results - SKIPPED"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            exit 0
+          fi
+
+          echo "## Test Results"
+          echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+          # Add test execution results
+          echo "### Test Execution Summary"
+          echo "| Metric | Count |"
+          echo "|--------|-------|"
+          echo "| Total Tests | ${{ steps.test-results.outputs.total_tests }} |"
+          echo "| Passed Tests | ${{ steps.test-results.outputs.passed_tests }} |"
+          echo "| Failed Tests | ${{ steps.test-results.outputs.failed_tests }} |"
+
+          # Test status with emoji based on results
+          echo "### Test Status"
+          if [[ "${{ steps.test-results.outputs.status }}" == "passed" ]]; then
+            echo "✅ All ${{ steps.test-results.outputs.total_tests }} tests passed successfully"
+          else
+            echo "⚠️ ${{ steps.test-results.outputs.failed_tests }} of ${{ steps.test-results.outputs.total_tests }} tests failed"
+
+            # Add failed tests as a bullet list if there are failures
+            if [[ -n "${{ steps.test-results.outputs.failed_test_names }}" ]]; then
+              echo ""
+              echo "### Failed Tests"
+              echo "The following tests failed:"
+              echo "${{ steps.test-results.outputs.failed_test_names }}" | tr ',' '\n' | while read -r test; do
+                if [[ -n "$test" ]]; then
+                  echo "* \`${test}\`"
+                fi
+              done
+            fi
+          fi
+        } >> $GITHUB_STEP_SUMMARY || true
+
+    - name: Upload test logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+        path: |
+          build-logs/
+          **/regression.diffs
+          **/regression.out
+        retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+    - name: Debug Upload Condition
+      if: always()
+      run: |
+        echo "Upload condition check:"
+        echo "status: '${{ steps.test-results.outputs.status }}'"
+        echo "condition result: ${{ steps.test-results.outputs.status == 'failed' }}"
+
+    - name: Upload test regression logs
+      if: always() && steps.test-results.outputs.status == 'failed'
+      uses: actions/upload-artifact@v4
+      with:
+        name: regression-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+        path: |
+          src/test/regress/regression.out
+          src/test/regress/regression.diffs
+          src/test/regress/results/
+          src/test/regress/expected/
+          src/test/isolation2/regression.out
+          src/test/isolation2/regression.diffs
+          src/test/isolation2/results/
+          src/test/isolation2/expected/
+          gpAux/gpdemo/datadirs/standby/log/
+          gpAux/gpdemo/datadirs/qddir/demoDataDir-1/log/
+          gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/log/
+          gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/log/
+          gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/log/
+          gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0/log/
+          gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/log/
+          gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/log/
+        retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+  report:
+    name: Generate Apache Cloudberry Build Report
+    needs: [check-skip, build, rpm-install-test, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Final Report
+        run: |
+          {
+            echo "# Apache Cloudberry Build Pipeline Report" >> $GITHUB_STEP_SUMMARY
+
+            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+              echo "## CI Skip Status" >> $GITHUB_STEP_SUMMARY
+              echo "✅ CI checks skipped via skip flag" >> $GITHUB_STEP_SUMMARY
+              echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "## Job Status" >> $GITHUB_STEP_SUMMARY
+              echo "- Build Job: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+              echo "- Test Job: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+              echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+              if [[ "${{ needs.build.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+                echo "✅ Pipeline completed successfully" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "⚠️ Pipeline completed with failures" >> $GITHUB_STEP_SUMMARY
+
+                if [[ "${{ needs.build.result }}" != "success" ]]; then
+                  echo "### Build Job Failure" >> $GITHUB_STEP_SUMMARY
+                  echo "Check build logs for details" >> $GITHUB_STEP_SUMMARY
+                fi
+
+                if [[ "${{ needs.test.result }}" != "success" ]]; then
+                  echo "### Test Job Failure" >> $GITHUB_STEP_SUMMARY
+                  echo "Check test logs and regression files for details" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
+            fi
+          }
+
+      - name: Notify on failure
+        if: |
+          needs.check-skip.outputs.should_skip != 'true' &&
+          (needs.build.result != 'success' || needs.test.result != 'success')
+        run: |
+          echo "::error::Build/Test pipeline failed! Check job summaries and logs for details"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Build Result: ${{ needs.build.result }}"
+          echo "Test Result: ${{ needs.test.result }}"
