@@ -51,7 +51,6 @@ create table public.system_history (
        net_rb_rate bigint not null,  -- system net read bytes per second
        net_wb_rate bigint not null   -- system net write bytes per second
 ) 
-with (fillfactor=100)
 distributed by (ctime)
 partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
 
@@ -103,7 +102,6 @@ create table public.queries_history (
        disk_read  bigint not null,  -- disk read for all processes executing query
        disk_write bigint not null   -- disk write for all processes executing query
 )
-with (fillfactor=100)
 distributed by (ctime)
 partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
 
@@ -152,7 +150,6 @@ create table public.database_history (
        queries_running int not null, -- number of running queries
        queries_queued int not null -- number of queued queries
 ) 
-with (fillfactor=100)
 distributed by (ctime)
 partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
 
@@ -186,7 +183,7 @@ format 'csv' (delimiter '|');
 --   hostname                   hostname of system this metric belongs to
 --   dynamic_memory_used        bytes of dynamic memory used by the segment
 --   dynamic_memory_available   bytes of dynamic memory available for use by the segment
-create table public.segment_history (ctime timestamptz(0) not null, dbid int not null, hostname varchar(64) not null, dynamic_memory_used bigint not null, dynamic_memory_available bigint not null) with (fillfactor=100) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
+create table public.segment_history (ctime timestamptz(0) not null, dbid int not null, hostname varchar(64) not null, dynamic_memory_used bigint not null, dynamic_memory_available bigint not null) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
 
 -- TABLE: segment_now
 --   (like segment_history)
@@ -218,7 +215,7 @@ CREATE VIEW public.memory_info as select public.system_history.ctime, public.sys
 --   total_bytes                bytes total in filesystem
 --   bytes_used                 bytes used in the filesystem
 --   bytes_available            bytes available in the filesystem
-create table public.diskspace_history (ctime timestamptz(0) not null, hostname varchar(64) not null, filesystem text not null, total_bytes bigint not null, bytes_used bigint not null, bytes_available bigint not null) with (fillfactor=100) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
+create table public.diskspace_history (ctime timestamptz(0) not null, hostname varchar(64) not null, filesystem text not null, total_bytes bigint not null, bytes_used bigint not null, bytes_available bigint not null) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
 
 --- TABLE: diskspace_now
 --   (like diskspace_history)
@@ -253,7 +250,7 @@ create external web table public._diskspace_tail (like public.diskspace_history)
 -- transmit_collision_errors bigint,
 -- transmit_carrier_errors bigint,
 -- transmit_compressed_packets int
-create table public.network_interface_history ( ctime timestamptz(0) not null, hostname varchar(64) not null, interface_name varchar(64) not null, bytes_received bigint, packets_received bigint, receive_errors bigint, receive_drops bigint, receive_fifo_errors bigint, receive_frame_errors bigint, receive_compressed_packets int, receive_multicast_packets int, bytes_transmitted bigint, packets_transmitted bigint, transmit_errors bigint, transmit_drops bigint, transmit_fifo_errors bigint, transmit_collision_errors bigint, transmit_carrier_errors bigint, transmit_compressed_packets int) with (fillfactor=100) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
+create table public.network_interface_history ( ctime timestamptz(0) not null, hostname varchar(64) not null, interface_name varchar(64) not null, bytes_received bigint, packets_received bigint, receive_errors bigint, receive_drops bigint, receive_fifo_errors bigint, receive_frame_errors bigint, receive_compressed_packets int, receive_multicast_packets int, bytes_transmitted bigint, packets_transmitted bigint, transmit_errors bigint, transmit_drops bigint, transmit_fifo_errors bigint, transmit_collision_errors bigint, transmit_carrier_errors bigint, transmit_compressed_packets int) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month'));
 
 --- TABLE: network_interface_now
 --   (like network_interface_history)
@@ -283,7 +280,7 @@ create external web table public._network_interface_tail (like public.network_in
 -- frag_sockets_inuse int,
 -- frag_sockets_memusage_inbytes int
 
-create table public.socket_history ( ctime timestamptz(0) not null, hostname varchar(64) not null, total_sockets_used int, tcp_sockets_inuse int, tcp_sockets_orphan int, tcp_sockets_timewait int, tcp_sockets_alloc int, tcp_sockets_memusage_inbytes int, udp_sockets_inuse int, udp_sockets_memusage_inbytes int, raw_sockets_inuse int, frag_sockets_inuse int, frag_sockets_memusage_inbytes int) with (fillfactor=100) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month')); 
+create table public.socket_history ( ctime timestamptz(0) not null, hostname varchar(64) not null, total_sockets_used int, tcp_sockets_inuse int, tcp_sockets_orphan int, tcp_sockets_timewait int, tcp_sockets_alloc int, tcp_sockets_memusage_inbytes int, udp_sockets_inuse int, udp_sockets_memusage_inbytes int, raw_sockets_inuse int, frag_sockets_inuse int, frag_sockets_memusage_inbytes int) distributed by (ctime) partition by range (ctime)(start (date '2010-01-01') end (date '2010-02-01') EVERY (interval '1 month')); 
 
 --- TABLE: socket_now
 --   (like socket_history)
