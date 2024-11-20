@@ -140,8 +140,6 @@ permissions:
   actions: write
 
 env:
-  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
-  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   LOG_RETENTION_DAYS: 7
 
 jobs:
@@ -186,9 +184,6 @@ jobs:
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
-      credentials:
-        username: ${{ env.DOCKERHUB_USER }}
-        password: ${{ env.DOCKERHUB_TOKEN }}
       options: >-
         --user root
         -h cdw
@@ -470,9 +465,6 @@ jobs:
 
     container:
       image: apache/incubator-cloudberry:cbdb-test-rocky9-latest
-      credentials:
-        username: ${{ env.DOCKERHUB_USER }}
-        password: ${{ env.DOCKERHUB_TOKEN }}
       options: >-
         --user root
         -h cdw
@@ -653,9 +645,6 @@ jobs:
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
-      credentials:
-        username: ${{ env.DOCKERHUB_USER }}
-        password: ${{ env.DOCKERHUB_TOKEN }}
       options: >-
         --user root
         -h cdw
