@@ -58,10 +58,6 @@
 #    - Aggregates status from all jobs
 #    - Provides failure notifications if needed
 #
-# Required Secrets:
-#   DOCKERHUB_USER: DockerHub username for container access
-#   DOCKERHUB_TOKEN: DockerHub access token
-#
 # Resource Requirements:
 #   - Disk: Minimum 20GB free space
 #   - Memory: Minimum 8GB RAM
@@ -107,7 +103,6 @@
 #   - Job execution reports (7 days retention)
 #
 # Dependencies:
-#   - Docker Hub credentials for container access
 #   - Cloudberry build scripts repository
 #   - GitHub Actions artifacts for job communication
 #
@@ -140,8 +135,6 @@ permissions:
   actions: write
 
 env:
-  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
-  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   LOG_RETENTION_DAYS: 7
 
 jobs:
@@ -186,9 +179,6 @@ jobs:
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
-      credentials:
-        username: ${{ env.DOCKERHUB_USER }}
-        password: ${{ env.DOCKERHUB_TOKEN }}
       options: >-
         --user root
         -h cdw
@@ -470,9 +460,6 @@ jobs:
 
     container:
       image: apache/incubator-cloudberry:cbdb-test-rocky9-latest
-      credentials:
-        username: ${{ env.DOCKERHUB_USER }}
-        password: ${{ env.DOCKERHUB_TOKEN }}
       options: >-
         --user root
         -h cdw
@@ -653,9 +640,6 @@ jobs:
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
-      credentials:
-        username: ${{ env.DOCKERHUB_USER }}
-        password: ${{ env.DOCKERHUB_TOKEN }}
       options: >-
         --user root
         -h cdw
