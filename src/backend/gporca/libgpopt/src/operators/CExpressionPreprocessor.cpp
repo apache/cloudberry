@@ -77,11 +77,17 @@ CExpressionPreprocessor::PexprEliminateSelfComparison(CMemoryPool *mp,
 	GPOS_CHECK_STACK_SIZE;
 	GPOS_ASSERT(nullptr != mp);
 	GPOS_ASSERT(nullptr != pexpr);
+	COperator *pop = pexpr->Pop();
 
 	if (CUtils::FScalarCmp(pexpr))
 	{
 		return CPredicateUtils::PexprEliminateSelfComparison(mp, pexpr,
 															 pcrsNotNull);
+	}
+	// Use current expr rather then the root to get not null columns
+	else if (pop->FLogical())
+	{
+		pcrsNotNull = pexpr->DeriveNotNullColumns();
 	}
 
 	// recursively process children
@@ -94,7 +100,6 @@ CExpressionPreprocessor::PexprEliminateSelfComparison(CMemoryPool *mp,
 		pdrgpexprChildren->Append(pexprChild);
 	}
 
-	COperator *pop = pexpr->Pop();
 	pop->AddRef();
 
 	return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexprChildren);

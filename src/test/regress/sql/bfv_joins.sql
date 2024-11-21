@@ -112,6 +112,10 @@ SELECT t1.c FROM t1 LEFT OUTER JOIN (select t3.*, t3.a+t3.b as cc from t3)t ON t
 explain SELECT t1.c FROM t1 LEFT OUTER JOIN (select t3.*, t3.a+t3.b as cc from t3)t ON t.b > t.a WHERE t.cc = t.cc IS NULL;
 SELECT t1.c FROM t1 LEFT OUTER JOIN (select t3.*, t3.a+t3.b as cc from t3)t ON t.b > t.a WHERE t.cc = t.cc IS NULL;
 
+-- Test for eliminating self check condition in subquery
+explain SELECT * FROM t1 LEFT JOIN (select t3.b from t3 where t3.a
+	        < t3.a) AS t ON t1.a = t.b;
+
 -- Test for unexpected NLJ qual
 --
 explain select 1 as mrs_t1 where 1 <= ALL (select x from z);

@@ -947,6 +947,21 @@ SELECT t1.c FROM t1 LEFT OUTER JOIN (select t3.*, t3.a+t3.b as cc from t3)t ON t
  1
 (3 rows)
 
+-- Test for eliminating self check condition in subquery
+explain SELECT * FROM t1 LEFT JOIN (select t3.b from t3 where t3.a
+	        < t3.a) AS t ON t1.a = t.b;
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Hash Left Join  (cost=0.00..431.00 rows=2 width=16)
+   Hash Cond: (a = (NULL::integer))
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
+         ->  Seq Scan on t1  (cost=0.00..431.00 rows=1 width=12)
+   ->  Hash  (cost=0.00..0.00 rows=0 width=4)
+         ->  Result  (cost=0.00..0.00 rows=0 width=4)
+               One-Time Filter: false
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
 -- Test for unexpected NLJ qual
 --
 explain select 1 as mrs_t1 where 1 <= ALL (select x from z);

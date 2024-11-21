@@ -931,6 +931,23 @@ SELECT t1.c FROM t1 LEFT OUTER JOIN (select t3.*, t3.a+t3.b as cc from t3)t ON t
  1
 (3 rows)
 
+-- Test for eliminating self check condition in subquery
+explain SELECT * FROM t1 LEFT JOIN (select t3.b from t3 where t3.a
+	        < t3.a) AS t ON t1.a = t.b;
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=639.89..44124.32 rows=2022803 width=16)
+   ->  Hash Left Join  (cost=639.89..17153.61 rows=674268 width=16)
+         Hash Cond: (t1.a = t3.b)
+         ->  Seq Scan on t1  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Hash  (cost=531.69..531.69 rows=8656 width=4)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..531.69 rows=8656 width=4)
+                     Hash Key: t3.b
+                     ->  Seq Scan on t3  (cost=0.00..358.58 rows=8656 width=4)
+                           Filter: (a < a)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
 -- Test for unexpected NLJ qual
 --
 explain select 1 as mrs_t1 where 1 <= ALL (select x from z);
