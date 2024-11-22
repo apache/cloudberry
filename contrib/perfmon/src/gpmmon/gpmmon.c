@@ -849,50 +849,6 @@ static void* harvest_main(apr_thread_t* thread_, void* arg_)
 }
 
 
-/* Separate thread for message sending */
-/* As gp_elog has been removed, disable this function */
-/*
-static void* message_main(apr_thread_t* thread_, void* arg_)
-{
-	apr_queue_t *queue = arg_;
-	void *query = NULL;
-	apr_status_t status;
-
-	TR2(("In message_main: error_disk_space_percentage = %d, warning_disk_space_percentage = %d, disk_space_interval = %d, max_disk_space_messages_per_interval = %d\n",
-		 opt.error_disk_space_percentage, opt.warning_disk_space_percentage, (int) opt.disk_space_interval, opt.max_disk_space_messages_per_interval));
-	while (1)
-	{
-		query = NULL;
-		status = apr_queue_pop(queue, &query);
-		if (status == APR_EINTR)
-		{ //the blocking operation was interrupted (try again)
-			continue;
-		}
-		else if (status != APR_SUCCESS)
-		{
-			interuptable_sleep(30); // sleep to prevent loop of forking process and failing
-			gpmon_fatalx(
-				FLINE, status, "message_main ERROR: apr_queue_pop failed: returned %d", status);
-			return (void*)1;
-		}
-		else if (NULL == query)
-		{
-			TR0(("message_main ERROR: apr_queue_pop returned NULL\n"));
-		}
-		else
-		{ // send the message
-			if (!gpdb_exec_search_for_at_least_one_row((const char *)query, NULL))
-			{
-				TR0(("message_main ERROR: query %s failed. Cannot send message\n", (char *) query));
-			}
-			free(query);
-		}
-
-	}
-	return APR_SUCCESS;
-}
-*/
-
 time_t compute_next_dump_to_file()
 {
 	time_t current_time = time(NULL);
@@ -1030,21 +986,6 @@ static void gpmmon_main(void)
 		interuptable_sleep(30); // sleep to prevent loop of forking process and failing
 		gpmon_fatalx(FLINE, e, "apr_thread_create failed");
 	}
-
-	/* gp_elog has been removed in hashdata-lightning */
-	///* Create message queue */
-	//if (0 != (e = apr_queue_create(&message_queue, MAX_MESSAGES_PER_INTERVAL, ax.pool)))
-	//{
-	//	interuptable_sleep(30); // sleep to prevent loop of forking process and failing
-	//	gpmon_fatalx(FLINE, e, "apr_queue_create failed");
-	//}
-
-	///* spawn disk space message thread */
-	//if (0 != (e = apr_thread_create(&message_th, ta, message_main, message_queue, ax.pool)))
-	//{
-	//	interuptable_sleep(30); // sleep to prevent loop of forking process and failing
-	//	gpmon_fatalx(FLINE, e, "apr_thread_create failed");
-	//}
 
 	/* main loop */
 	while (!ax.exit)

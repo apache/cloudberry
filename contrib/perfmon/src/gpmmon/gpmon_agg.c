@@ -77,92 +77,6 @@ static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
 			apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool);
 static void format_time(time_t tt, char *buf);
 
-/**
- * Disk space check helper function
- * Note- trys to push a message on a queue so that the message thread can send the message
- */
-/* gp_elog has been removed */
-/*
-static apr_status_t  check_disk_space(mmon_fsinfo_t* rec)
-{
-	static time_t interval_start_time = 0;
-	static unsigned int number_messages_sent_this_interval = 0;
-	time_t now = 0;
-	int used_disk_space_percent =  ROUND_DIVIDE((rec->bytes_used *100),rec->bytes_total);
-
-	now = time(NULL);
-	// reset the interval if needed
-	if ((now - interval_start_time) >= opt.disk_space_interval){
-		interval_start_time = now;
-		number_messages_sent_this_interval = 0;
-	}
-
-	// Check the disk space if we haven't already sent an error
-	if (rec->sent_error_flag != DISK_SPACE_ERROR_SENT) {
-		disk_space_message_t send_flag = DISK_SPACE_NO_MESSAGE_SENT;
-		char* message = 0;
-
-		// check for errors and then warnings
-		if ((opt.error_disk_space_percentage != 0) && (used_disk_space_percent >= opt.error_disk_space_percentage)) {
-			//Send an error if the error_disk_space_percentage threshold is set and the used_disk_space_percent is greater or equal to it
-			send_flag = DISK_SPACE_ERROR_SENT;
-			message = "ERROR";
-		} else if ((rec->sent_error_flag != DISK_SPACE_WARNING_SENT) && (opt.warning_disk_space_percentage != 0 ) &&
-					(used_disk_space_percent >= opt.warning_disk_space_percentage)) {
-			//Send warning if the warning_disk_space_percentage threshold is set and the used_disk_space_percent is greater or equal to it
-			//and if a warning has not already been sent
-			send_flag = DISK_SPACE_WARNING_SENT;
-			message = "WARNING";
-		} else if ((rec->sent_error_flag == DISK_SPACE_WARNING_SENT) && (used_disk_space_percent < opt.warning_disk_space_percentage)) {
-			//if a warning as been sent and the used disk has fallen below the below the warning threshold reset the send flag
-			rec->sent_error_flag = DISK_SPACE_NO_MESSAGE_SENT;
-		}
-
-		// Send a warning or error if needed by putting the message in a queue
-		if (send_flag != DISK_SPACE_NO_MESSAGE_SENT){
-			//only sent the message if
-			if (number_messages_sent_this_interval < opt.max_disk_space_messages_per_interval) {
-				char *query;
-				apr_status_t status;
-				unsigned int query_size_max = NAMEDATALEN + GPMON_FSINFO_MAX_PATH + 200;
-
-				query = malloc(query_size_max);
-				if (!query) {
-					TR0(("check_disk_space ERROR: malloc(%d) returned NULL, out of memory\n", query_size_max));
-					return APR_ENOMEM;
-				}
-				snprintf(query, query_size_max, "select gp_elog('%s: percent used disk space for %s %s is %d%%', True)",
-						message, rec->key.hostname, rec->key.fsname, used_disk_space_percent);
-
-				status = apr_queue_trypush(message_queue, (void *) query);
-				if (status == APR_EINTR) { //blocking interrupted try one more time
-					status = apr_queue_trypush(message_queue, (void *) query);
-				}
-				if (status != APR_SUCCESS) {
-					TR0(("check_disk_space ERROR: apr_queue_trypush returned %d; cannot send %s\n", status, query));
-					free(query);
-				} else {
-					number_messages_sent_this_interval++;
-				}
-
-			} else {
-				TR1(("check_disk_space: message max reached: Not sending message for %s %s. used_disk_space_percent = %d%%\n", rec->key.hostname, rec->key.fsname, used_disk_space_percent));
-			}
-
-			rec->sent_error_flag = send_flag;
-		}
-
-	} else if ( ( opt.warning_disk_space_percentage != 0 ) && ( used_disk_space_percent < opt.warning_disk_space_percentage )) {
-		//if there is a warning percent to check and the used disk has fallen below the below the warning threshold reset the send flag
-		rec->sent_error_flag = DISK_SPACE_NO_MESSAGE_SENT;
-	} else if ( ( opt.warning_disk_space_percentage == 0 ) && ( used_disk_space_percent < opt.error_disk_space_percentage )) {
-		//if there is no warning percent to check and the used disk has fallen below the below the error threshold reset the send flag
-		rec->sent_error_flag = DISK_SPACE_NO_MESSAGE_SENT;
-	}
-	return 0;
-}
-*/
-
 static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool)
 {
 	// get active query of session
@@ -287,28 +201,6 @@ static apr_status_t agg_put_metrics(agg_t* agg, const gpmon_metrics_t* met)
 	return 0;
 }
 
-// static apr_status_t agg_put_segment(agg_t* agg, const gpmon_seginfo_t* seg)
-// {
-// 	gpmon_seginfo_t* rec;
-
-// 	rec = apr_hash_get(agg->stab, &seg->dbid, sizeof(seg->dbid));
-// 	if (rec)
-// 	{
-// 		*rec = *seg;
-// 	}
-// 	else
-// 	{
-// 		rec = apr_palloc(agg->pool, sizeof(*rec));
-// 		if (!rec)
-// 		{
-// 			return APR_ENOMEM;
-// 		}
-// 		*rec = *seg;
-// 		apr_hash_set(agg->stab, &rec->dbid, sizeof(rec->dbid), rec);
-// 	}
-// 	return 0;
-// }
-
 static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation)
 {
 	gpmon_qlogkey_t key = qlog->key;
@@ -398,51 +290,6 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 
 	return 0;
 }
-
-
-// static apr_status_t agg_put_qexec(agg_t* agg, const qexec_packet_t* qexec_packet, apr_int64_t generation)
-// {
-// 	qdnode_t* dp;
-// 	gpmon_qlogkey_t key;
-// 	mmon_qexec_t* mmon_qexec_existing = 0;
-
-// 	/* find qdnode of this qexec */
-// 	key.tmid = qexec_packet->data.key.tmid;
-// 	key.ssid = qexec_packet->data.key.ssid;
-// 	key.ccnt = qexec_packet->data.key.ccnt;
-// 	dp = apr_hash_get(agg->qtab, &key, sizeof(key));
-
-// 	if (!dp) { /* not found, internal SPI query.  Ignore. */
-// 		return 0;
-// 	}
-
-// 	mmon_qexec_existing = apr_hash_get(dp->qexec_hash, &qexec_packet->data.key.hash_key, sizeof(qexec_packet->data.key.hash_key));
-
-// 	/* if found, replace it */
-// 	if (mmon_qexec_existing) {
-// 		mmon_qexec_existing->key.ccnt = qexec_packet->data.key.ccnt;
-// 		mmon_qexec_existing->key.ssid = qexec_packet->data.key.ssid;
-// 		mmon_qexec_existing->key.tmid = qexec_packet->data.key.tmid;
-// 		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
-// 		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
-// 		mmon_qexec_existing->rowsout = qexec_packet->data.rowsout;
-// 	}
-// 	else {
-// 		/* not found, make new hash entry */
-// 		if (! (mmon_qexec_existing = apr_palloc(agg->pool, sizeof(mmon_qexec_t))))
-// 			return APR_ENOMEM;		
-
-// 		memcpy(&mmon_qexec_existing->key, &qexec_packet->data.key, sizeof(gpmon_qexeckey_t));
-// 		mmon_qexec_existing->_cpu_elapsed = qexec_packet->data._cpu_elapsed;
-// 		mmon_qexec_existing->measures_rows_in = qexec_packet->data.measures_rows_in;
-// 		mmon_qexec_existing->rowsout = qexec_packet->data.rowsout;
-// 		apr_hash_set(dp->qexec_hash, &mmon_qexec_existing->key.hash_key, sizeof(mmon_qexec_existing->key.hash_key), mmon_qexec_existing);
-// 	}
-
-// 	dp->last_updated_generation = generation;
-// 	return 0;
-// }
-
 
 apr_status_t agg_create(agg_t** retagg, apr_int64_t generation, apr_pool_t* parent_pool, apr_hash_t* fsinfotab)
 {
@@ -595,13 +442,6 @@ apr_status_t agg_put(agg_t* agg, const gp_smon_to_mmon_packet_t* pkt)
 		return agg_put_metrics(agg, &pkt->u.metrics);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QLOG)
 		return agg_put_qlog(agg, &pkt->u.qlog, agg->generation);
-	/*
-	hashdata-lightning not use
-	if (pkt->header.pkttype == GPMON_PKTTYPE_QEXEC)
-		return agg_put_qexec(agg, &pkt->u.qexec_packet, agg->generation);
-	if (pkt->header.pkttype == GPMON_PKTTYPE_SEGINFO)
-		return agg_put_segment(agg, &pkt->u.seginfo);
-	*/
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QUERY_HOST_METRICS)
 		return agg_put_query_metrics(agg, &pkt->u.qlog, agg->generation);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_FSINFO)
@@ -655,19 +495,10 @@ apr_status_t agg_dump(agg_t* agg)
 	bloom_set(&bloom, GPMON_DIR "queries_tail.dat");
 	bloom_set(&bloom, GPMON_DIR "queries_stage.dat");
 	bloom_set(&bloom, GPMON_DIR "_queries_tail.dat");
-	bloom_set(&bloom, GPMON_DIR "database_now.dat");
-	bloom_set(&bloom, GPMON_DIR "database_tail.dat");
-	bloom_set(&bloom, GPMON_DIR "database_stage.dat");
-	bloom_set(&bloom, GPMON_DIR "_database_tail.dat");
-	bloom_set(&bloom, GPMON_DIR "segment_now.dat");
-	bloom_set(&bloom, GPMON_DIR "segment_tail.dat");
-	bloom_set(&bloom, GPMON_DIR "segment_stage.dat");
-	bloom_set(&bloom, GPMON_DIR "_segment_tail.dat");
 	bloom_set(&bloom, GPMON_DIR "diskspace_now.dat");
 	bloom_set(&bloom, GPMON_DIR "diskspace_tail.dat");
 	bloom_set(&bloom, GPMON_DIR "diskspace_stage.dat");
 	bloom_set(&bloom, GPMON_DIR "_diskspace_tail.dat");
-
 
 	/* dump metrics */
 	temp_bytes_written = write_system(agg, nowstr);
@@ -1068,29 +899,6 @@ static apr_uint32_t write_system(agg_t* agg, const char* nowstr)
 	return bytes_written;
 }
 
-// static apr_int64_t get_rowsout(qdnode_t* qdnode)
-// {
-
-// 	apr_hash_index_t *hi;
-// 	//qenode_t* pqe = NULL;
-// 	apr_int64_t rowsout = 0;
-// 	void* valptr;
-// 	mmon_query_seginfo_t *query_seginfo;
-
-// 	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
-// 	{
-// 		apr_hash_this(hi, 0, 0, &valptr);
-// 		query_seginfo = (mmon_query_seginfo_t*) valptr;
-// 		if (query_seginfo->final_rowsout != -1)
-// 		{
-// 			rowsout = query_seginfo->final_rowsout;
-// 			break;
-// 		}
-// 	}
-// 	return rowsout;
-// }
-
-
 static void _get_sum_seg_info(apr_hash_t* segtab, apr_int64_t* total_data_out, int* segcount_out)
 {
 	apr_hash_index_t *hi;
@@ -1206,89 +1014,6 @@ static double get_cpu_skew(qdnode_t* qdnode)
 
 	return coefficient_of_variation;
 }
-
-// static double get_row_skew(qdnode_t* qdnode)
-// {
-// 	apr_pool_t* tmp_pool;
-// 	apr_hash_t* segtab;
-// 	apr_hash_index_t *hi;
-//
-// 	apr_int64_t total_row_out = 0;
-// 	apr_int64_t total_deviation_squared = 0;
-// 	double variance = 0.0f;
-// 	double standard_deviation = 0;
-// 	double coefficient_of_variation = 0;
-// 	apr_int64_t row_out_avg = 0;
-// 	apr_int64_t* seg_row_out_sum = NULL;
-// 	void* valptr;
-//
-// 	int segcnt = 0;
-// 	int e;
-//
-// 	if (!qdnode)
-// 		return 0.0f;
-//
-// 	if (0 != (e = apr_pool_create_alloc(&tmp_pool, 0)))
-// 	{
-// 		gpmon_warningx(FLINE, e, "apr_pool_create_alloc failed");
-// 		return 0.0f;
-// 	}
-//
-// 	segtab = apr_hash_make(tmp_pool);
-// 	if (!segtab)
-// 	{
-// 		gpmon_warning(FLINE, "Out of memory");
-// 		return 0.0f;
-// 	}
-//
-// 	/* Calc rows in sum per segment */
-// 	TR2(("Calc rows in sum  per segment\n"));
-// 	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
-// 	{
-// 		mmon_query_seginfo_t	*rec;
-// 		apr_hash_this(hi, 0, 0, &valptr);
-// 		rec = (mmon_query_seginfo_t*) valptr;
-//
-// 		if (rec->key.segid == -1)
-// 			continue;
-//
-// 		seg_row_out_sum = apr_hash_get(segtab, &rec->key.segid, sizeof(rec->key.segid));
-//
-// 		if (!seg_row_out_sum) {
-// 			seg_row_out_sum = apr_palloc(tmp_pool, sizeof(apr_int64_t));
-// 			*seg_row_out_sum = 0;
-// 		}
-// 		*seg_row_out_sum += rec->sum_measures_rows_out;
-// 		apr_hash_set(segtab, &rec->key.segid, sizeof(rec->key.segid), seg_row_out_sum);
-// 	}
-//
-// 	_get_sum_seg_info(segtab, &total_row_out, &segcnt);
-//
-// 	if (!segcnt) {
-// 		TR2(("No segments for Rows skew calculation\n"));
-// 		apr_pool_destroy(tmp_pool);
-// 		return 0.0f;
-// 	}
-//
-// 	row_out_avg = total_row_out / segcnt;
-//
-// 	TR2(("(SKEW) Avg rows out: %" FMT64 "\n", row_out_avg));
-//
-// 	_get_sum_deviation_squared(segtab, row_out_avg, &total_deviation_squared);
-//
-// 	variance = total_deviation_squared / (double)segcnt;
-// 	standard_deviation = sqrt(variance);
-//
-// 	TR2(("(SKEW) Rows in standard deviaton: %f\n", standard_deviation));
-//
-// 	coefficient_of_variation = row_out_avg ? standard_deviation/(double)row_out_avg : 0.0f;
-//
-// 	apr_pool_destroy(tmp_pool);
-// 	TR2(("(SKEW) Rows out skew: %f\n", coefficient_of_variation));
-//
-// 	return coefficient_of_variation;
-// }
-
 
 static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const char* nowstr, apr_uint32_t done)
 {
