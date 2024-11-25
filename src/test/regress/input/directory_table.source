@@ -318,6 +318,19 @@ SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 \COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation2';    -- fail
 \COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation4' WITH TAG 'nation';
 \COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation6';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation7';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation8';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation9';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation10';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation11';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation12';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation13';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation14';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation15';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation16';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation17';
+\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation18';
 SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
 SELECT relative_path, content FROM directory_table('dir_table1') ORDER BY 1;
 
