@@ -482,7 +482,8 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	if (gp_enable_refresh_fast_path &&
 		!RelationIsIVM(matviewRel) &&
 		!stmt->skipData &&
-		MatviewIsUpToDate(matviewOid))
+		MatviewIsUpToDate(matviewOid) &&
+		!MatviewHasForeignTables(matviewOid))
 	{
 		table_close(matviewRel, NoLock);
 

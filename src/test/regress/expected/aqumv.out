@@ -2682,6 +2682,52 @@ select * from aqumv_ext_r where id = 5;
   5
 (1 row)
 
+-- refresh matview has foreign tables should not go fast path. 
+select * from aqumv_ext_mv;
+ id 
+----
+  5
+  6
+  9
+ 10
+  2
+  3
+  4
+  7
+  8
+  1
+(10 rows)
+
+INSERT INTO aqumv_ext_w SELECT * FROM generate_series(10, 15);
+set local gp_enable_refresh_fast_path = on;
+select datastatus from gp_matview_aux where mvoid = 'aqumv_ext_mv'::regclass::oid;
+ datastatus 
+------------
+ u
+(1 row)
+
+refresh materialized view aqumv_ext_mv;
+select * from aqumv_ext_mv;
+ id 
+----
+  2
+  3
+  4
+  7
+  8
+  1
+ 12
+ 15
+  5
+  6
+  9
+ 10
+ 10
+ 11
+ 13
+ 14
+(16 rows)
+
 abort;
 --
 -- End of test external table

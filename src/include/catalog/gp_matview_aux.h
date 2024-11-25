@@ -27,6 +27,7 @@ CATALOG(gp_matview_aux,7153,GpMatviewAuxId) BKI_SHARED_RELATION
 {
 	Oid			mvoid; 	/* materialized view oid */
 	NameData	mvname; /* materialized view name */
+	bool		has_foreign;	/* view query has foreign tables? */
 	/* view's data status */
 	char		datastatus; 
 } FormData_gp_matview_aux;
@@ -57,11 +58,13 @@ extern void InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipda
 
 extern void RemoveMatviewAuxEntry(Oid mvoid);
 
-extern List* GetViewBaseRelids(const Query *viewQuery);
+extern List* GetViewBaseRelids(const Query *viewQuery, bool *has_foreign);
 
 extern void SetRelativeMatviewAuxStatus(Oid relid, char status);
 
 extern void SetMatviewAuxStatus(Oid mvoid, char status);
+
+extern bool MatviewHasForeignTables(Oid mvoid);
 
 extern bool MatviewUsableForAppendAgg(Oid mvoid);
 

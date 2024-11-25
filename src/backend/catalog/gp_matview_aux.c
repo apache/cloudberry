@@ -50,7 +50,7 @@ static void SetMatviewAuxStatus_guts(Oid mvoid, char status);
  * Return NIL if the query we think it's useless.
  */
 List*
-GetViewBaseRelids(const Query *viewQuery)
+GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 {
 	List	*relids = NIL;
 	Node	*mvjtnode;
@@ -100,6 +100,9 @@ GetViewBaseRelids(const Query *viewQuery)
 		relkind != RELKIND_FOREIGN_TABLE)
 		return NIL;
 
+	if (has_foreign)
+		*has_foreign = relkind == RELKIND_FOREIGN_TABLE;
+
 	/*
 	 * inherit tables are not supported.
 	 * FIXME: left a door for partition table which will be supported soon.
@@ -140,11 +143,12 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 	Datum		values[Natts_gp_matview_aux];
 	List 		*relids;
 	NameData	mvname;
+	bool		has_foreign = false;
 
 	Assert(OidIsValid(mvoid));
 
 	/* Empty relids means the view is not supported now. */
-	relids = GetViewBaseRelids(viewQuery);
+	relids = GetViewBaseRelids(viewQuery, &has_foreign);
 	if (relids == NIL)
 		return;
 	
@@ -157,6 +161,8 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 
 	namestrcpy(&mvname, get_rel_name(mvoid));
 	values[Anum_gp_matview_aux_mvname - 1] = NameGetDatum(&mvname);
+
+	values[Anum_gp_matview_aux_has_foreign - 1] = BoolGetDatum(has_foreign);
 	
 	if (skipdata)
 		values[Anum_gp_matview_aux_datastatus - 1] = CharGetDatum(MV_DATA_STATUS_EXPIRED);
@@ -447,6 +453,19 @@ MatviewUsableForAppendAgg(Oid mvoid)
 	Form_gp_matview_aux auxform = (Form_gp_matview_aux) GETSTRUCT(mvauxtup);
 	return ((auxform->datastatus == MV_DATA_STATUS_UP_TO_DATE) || 
 			(auxform->datastatus == MV_DATA_STATUS_EXPIRED_INSERT_ONLY));
+}
+
+bool
+MatviewHasForeignTables(Oid mvoid)
+{
+	HeapTuple mvauxtup = SearchSysCacheCopy1(MVAUXOID, ObjectIdGetDatum(mvoid));
+
+	/* Not a candidate we recorded. */
+	if (!HeapTupleIsValid(mvauxtup))
+		return false;
+
+	Form_gp_matview_aux auxform = (Form_gp_matview_aux) GETSTRUCT(mvauxtup);
+	return auxform->has_foreign;
 }
 
 /*
