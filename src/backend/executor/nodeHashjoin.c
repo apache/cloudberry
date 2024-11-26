@@ -167,7 +167,7 @@ static void ExecEagerFreeHashJoin(HashJoinState *node);
 static void CreateRuntimeFilter(HashJoinState* hjstate);
 static bool IsEqualOp(Expr *expr);
 static bool CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno);
-static PlanState *FindTargetAttr(HashJoinState *hjstate,
+static PlanState *FindTargetNode(HashJoinState *hjstate,
 								 AttrNumber attno,
 								 AttrNumber *lattno);
 static AttrFilter *CreateAttrFilter(PlanState *target,
@@ -2224,7 +2224,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		if (lattno < 1 || rattno < 1)
 			continue;
 
-		target = FindTargetAttr(hjstate, lattno, &lattno);
+		target = FindTargetNode(hjstate, lattno, &lattno);
 		if (lattno == -1 || target == NULL || IsA(target, HashJoinState))
 			continue;
 		Assert(IsA(target, SeqScanState));
@@ -2273,14 +2273,9 @@ static bool
 CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno)
 {
 	Var		*var;
-	bool	match;
 	List	*args;
-	ListCell *lc;
 
 	if (lattno == NULL || rattno == NULL)
-		return false;
-
-	if (!IsA(expr, OpExpr) && !IsA(expr, FuncExpr))
 		return false;
 
 	if (IsA(expr, OpExpr))
@@ -2293,26 +2288,31 @@ CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno)
 	if (!args || list_length(args) != 2)
 		return false;
 
-	match = false;
-	foreach (lc, args)
-	{
-		match = false;
+	/* check the first arg */
+	if (!IsA(linitial(args), Var))
+		return false;
 
-		if (!IsA(lfirst(lc), Var))
-			break;
+	var = linitial(args);
+	if (var->varno == INNER_VAR)
+		*rattno = var->varattno;
+	else if (var->varno == OUTER_VAR)
+		*lattno = var->varattno;
+	else
+		return false;
 
-		var = lfirst(lc);
-		if (var->varno == INNER_VAR)
-			*rattno = var->varattno;
-		else if (var->varno == OUTER_VAR)
-			*lattno = var->varattno;
-		else
-			break;
+	/* check the second arg */
+	if (!IsA(lsecond(args), Var))
+		return false;
 
-		match = true;
-	}
+	var = lsecond(args);
+	if (var->varno == INNER_VAR)
+		*rattno = var->varattno;
+	else if (var->varno == OUTER_VAR)
+		*lattno = var->varattno;
+	else
+		return false;
 
-	return match;
+	return true;
 }
 
 /*
@@ -2323,7 +2323,7 @@ CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno)
  *          SeqScan <- target
  */
 static PlanState *
-FindTargetAttr(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
+FindTargetNode(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 {
 	Var *var;
 	PlanState *child, *parent;

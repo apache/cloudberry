@@ -4282,7 +4282,10 @@ ResetRuntimeFilter(HashState *node)
 
 		attr_filter->blm_filter     = bloom_create_aggresive(node->ps.plan->plan_rows,
 		                                             work_mem, random());
-		attr_filter->min    = LLONG_MAX;
-		attr_filter->max    = LLONG_MIN;
+
+		StaticAssertDecl(sizeof(LONG_MAX) == sizeof(Datum), "sizeof(LONG_MAX) should be equal to sizeof(Datum)");
+		StaticAssertDecl(sizeof(LONG_MIN) == sizeof(Datum), "sizeof(LONG_MIN) should be equal to sizeof(Datum)");
+		attr_filter->min    = LONG_MAX;
+		attr_filter->max    = LONG_MIN;
 	}
 }

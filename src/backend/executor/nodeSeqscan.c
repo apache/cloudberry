@@ -103,9 +103,6 @@ SeqNext(SeqScanState *node)
 	 */
 	while (table_scan_getnextslot(scandesc, direction, slot))
 	{
-		if (TupIsNull(slot))
-			return slot;
-
 		if (node->filter_in_seqscan && node->filters &&
 			!PassByBloomFilter(node, slot))
 			continue;
