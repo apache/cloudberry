@@ -20,7 +20,7 @@ m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
-AC_INIT([Cloudberry Database], [1.0.0], [info@cloudberrydb.org], [], [https://www.cloudberrydb.org/])
+AC_INIT([Apache Cloudberry], [1.0.0], [dev@cloudberry.apache.org], [], [https://cloudberry.apache.org/])
 [PG_PACKAGE_VERSION=14.4]
 AC_SUBST(PG_PACKAGE_VERSION)
 
@@ -45,7 +45,7 @@ AC_DEFINE_UNQUOTED(PG_MINORVERSION_NUM, $PG_MINORVERSION, [PostgreSQL minor vers
 
 [PG_VERSION="$PG_PACKAGE_VERSION"]
 PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version], [], [])
-AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Cloudberry Database is based on])
+AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Apache Cloudberry is based on])
 
 AC_CANONICAL_HOST
 
@@ -2973,7 +2973,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["PostgreSQL $PG_VERSION (Cloudberry Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["PostgreSQL $PG_VERSION (Apache Cloudberry $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons
