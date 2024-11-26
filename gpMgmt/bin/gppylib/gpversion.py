@@ -90,10 +90,10 @@ class GpVersion:
             # There are several version formats that we anticipate receiving:
             #
             # Versions from "postgres --gp-version":
-            #    ".* (Cloudberry Database) <VERSION> build <BUILD>"
+            #    ".* (Apache Cloudberry) <VERSION> build <BUILD>"
             #
             # Version from sql "select version()"
-            #    ".* (Cloudberry Database <VERSION> build <BUILD>) .*"
+            #    ".* (Apache Cloudberry <VERSION> build <BUILD>) .*"
             #
             # Versions from python code:
             #    "<VERSION>"
@@ -101,7 +101,7 @@ class GpVersion:
             #
             if isinstance(v, str):
                 # See if it matches one of the two the long formats
-                regex = r"\(Cloudberry Database\)? ([^ ]+) build ([^ )]+)"
+                regex = r"\(Apache Cloudberry\)? ([^ ]+) build ([^ )]+)"
                 m = re.search(regex, v)
                 if m:
                     (v, self.build) = m.groups()   # (version, build)
@@ -175,7 +175,7 @@ class GpVersion:
 
         # If part of the conversion process above failed, throw an error,
         except Exception as e:
-            raise Exception("Unrecognised CloudberryDB Version '%s' due to %s" %
+            raise Exception("Unrecognised Cloudberry Version '%s' due to %s" %
                                 (str(version), str(e)))
 
     #------------------------------------------------------------

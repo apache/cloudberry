@@ -34,7 +34,7 @@ ifeq ($(with_openssl), yes)
 endif
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
-	+@echo "All of Cloudberry Database successfully made. Ready to install."
+	+@echo "All of Apache Cloudberry successfully made. Ready to install."
 
 docs:
 	$(MAKE) -C doc all
@@ -78,7 +78,7 @@ ifeq ($(with_openssl), yes)
 endif
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C gpcontrib $@
-	+@echo "Cloudberry Database installation complete."
+	+@echo "Apache Cloudberry installation complete."
 
 install-docs:
 	$(MAKE) -C doc install
