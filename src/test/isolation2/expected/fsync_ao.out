@@ -270,7 +270,7 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration where
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Gathering information and validating the environment...
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Cloudberry Master catalog information
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Segment details from master...
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
+20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

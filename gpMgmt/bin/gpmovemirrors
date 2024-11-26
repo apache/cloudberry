@@ -338,7 +338,7 @@ try:
         gpArrayInstance = GpArray.initFromCatalog(dburl, utility=True)
     except DatabaseError as ex:
         logger.error('Failed to connect to database.  Make sure the')
-        logger.error('CloudberryDB instance is running, and that')
+        logger.error('Cloudberry instance is running, and that')
         logger.error('your environment is correct, then rerun')
         logger.error('gpmovemirrors ' + ' '.join(sys.argv[1:]))
         sys.exit(1)

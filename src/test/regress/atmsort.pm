@@ -347,7 +347,7 @@ m/^NOTICE:  dropping a column that is part of the distribution policy/
 
 m/^NOTICE:  table has parent\, setting distribution columns to match parent table/
 
-m/^WARNING:  referential integrity \(.*\) constraints are not supported in Cloudberry Database/
+m/^WARNING:  referential integrity \(.*\) constraints are not supported in Apache Cloudberry/
 
         # ignore notices for DROP sqlobject IF EXISTS "objectname"
         # eg NOTICE:  table "foo" does not exist, skipping

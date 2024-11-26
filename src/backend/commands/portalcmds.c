@@ -114,7 +114,7 @@ PerformCursorOpen(ParseState *pstate, DeclareCursorStmt *cstmt, ParamListInfo pa
 	{
 		/*ereport(ERROR,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("scrollable cursors are not yet supported in Cloudberry Database")));*/
+				 errmsg("scrollable cursors are not yet supported in Apache Cloudberry")));*/
 
 		cstmt->options -= CURSOR_OPT_SCROLL;
 	}

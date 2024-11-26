@@ -31,7 +31,7 @@
           (defun postgresql-c-mode-hook ()
             (when (or (string-match "/postgres\\(ql\\)?/" buffer-file-name)
 	              (string-match "/cbdb/" buffer-file-name)
-	              (string-match "/cloudberrydb/" buffer-file-name))
+	              (string-match "/cloudberry/" buffer-file-name))
               (c-set-style "postgresql")
               ;; Don't override the style we just set with the style in
               ;; `dir-locals-file'.  Emacs 23.4.1 needs this; it is obsolete,
@@ -63,7 +63,7 @@
           (defun postgresql-perl-mode-hook ()
             (when (or (string-match "/postgres\\(ql\\)?/" buffer-file-name)
                       (string-match "/cbdb/" buffer-file-name)
-		      (string-match "/cloudberrydb/" buffer-file-name))
+		      (string-match "/cloudberry/" buffer-file-name))
               (pgsql-perl-style))))
 
 
@@ -93,7 +93,7 @@
 ;; use GNU make mode instead of plain make mode
 (add-to-list 'auto-mode-alist '("/postgres\\(ql\\)?/.*Makefile.*" . makefile-gmake-mode))
 (add-to-list 'auto-mode-alist '("/postgres\\(ql\\)?/.*\\.mk\\'" . makefile-gmake-mode))
-(add-to-list 'auto-mode-alist '("/cloudberrydb/.*Makefile.*" . makefile-gmake-mode))
-(add-to-list 'auto-mode-alist '("/cloudberrydb/.*\\.mk\\'" . makefile-gmake-mode))
+(add-to-list 'auto-mode-alist '("/cloudberry/.*Makefile.*" . makefile-gmake-mode))
+(add-to-list 'auto-mode-alist '("/cloudberry/.*\\.mk\\'" . makefile-gmake-mode))
 (add-to-list 'auto-mode-alist '("/cbdb/.*Makefile.*" . makefile-gmake-mode))
 (add-to-list 'auto-mode-alist '("/cbdb/.*\\.mk\\'" . makefile-gmake-mode))

@@ -2,7 +2,7 @@
  *
  * cdbhash.c
  *	  Provides hashing routines to support consistant data distribution/location
- *    within Greenplum Database for Cloudberry Database.
+ *    within Greenplum Database for Apache Cloudberry.
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -68,7 +68,7 @@ static inline int32 jump_consistent_hash(uint64 key, int32 num_segments);
  * In here we set the variables that should not change in the scope of the newly created
  * CdbHash, these are:
  *
- * 1 - number of segments in Cloudberry Database.
+ * 1 - number of segments in Apache Cloudberry.
  * 2 - reduction method.
  * 3 - distribution key column hash functions.
  *

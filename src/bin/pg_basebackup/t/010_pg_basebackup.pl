@@ -42,7 +42,7 @@ $node->set_replication_conf();
 $node->reload;
 
 command_fails(['pg_basebackup', '-D', "$tempdir/backup" ],
-	'pg_basebackup fails without specifiying the target greenplum db id');
+	'pg_basebackup fails without specifiying the target cloudberry db id');
 
 $node->command_fails(
 	[ 'pg_basebackup', '-D', "$tempdir/backup", '--target-gp-dbid', '123' ],

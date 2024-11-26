@@ -109,7 +109,7 @@ COPY t2 from stdin;
 select datastatus from gp_matview_aux where mvname = 'mv2';
 
 --
--- test issue https://github.com/cloudberrydb/cloudberrydb/issues/582
+-- test issue https://github.com/apache/cloudberry/issues/582
 -- test inherits
 --
 begin;
@@ -129,7 +129,7 @@ drop table t1 cascade;
 select mvname, datastatus from gp_matview_aux where mvname in ('mv0','mv1', 'mv2', 'mv3');
 
 --
--- test issue https://github.com/cloudberrydb/cloudberrydb/issues/582
+-- test issue https://github.com/apache/cloudberry/issues/582
 -- test rules
 begin;
 create table t1_issue_582(i int, j int);
@@ -147,7 +147,7 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_t2_issue_582';
 abort;
 
 --
--- test issue https://github.com/cloudberrydb/cloudberrydb/issues/582
+-- test issue https://github.com/apache/cloudberry/issues/582
 -- test writable CTE
 --
 begin;

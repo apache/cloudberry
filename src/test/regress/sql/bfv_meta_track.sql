@@ -1,6 +1,6 @@
 --
 --CBDB GITHUB ISSUE:
---https://github.com/cloudberrydb/cloudberrydb/issues/504 
+--https://github.com/apache/cloudberry/issues/504 
 --
 
 -- start_ignore

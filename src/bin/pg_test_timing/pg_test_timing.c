@@ -61,7 +61,7 @@ handle_args(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_test_timing (Cloudberry Database) " PG_VERSION);
+			puts("pg_test_timing (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}

@@ -914,7 +914,7 @@ drop table test_add_drop_rename_column_change_datatype ;
 -- should run without error
 create table atsdb with (appendonly=true) as select * from
 generate_series(1,1000);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table only atsdb set with(reorganize=true) distributed by (generate_series);
 select count(*) from atsdb;
@@ -926,7 +926,7 @@ select count(*) from atsdb;
 drop table atsdb;
 -- MPP-5746
 create table mpp5746 (c int[], t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp5746 select array[i], i from generate_series(1, 100) i;
 alter table mpp5746 set with (reorganize=true, appendonly = true);
@@ -1253,7 +1253,7 @@ drop table mpp5746;
 -- MPP-5738
 create table mpp5738 (a int, b int, c int, d int)
 partition by range(d) (start(1) end(10) inclusive every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp5738 select i, i+1, i+2, i from generate_series(1, 10) i;
 select * from mpp5738;

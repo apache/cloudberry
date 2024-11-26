@@ -1,6 +1,6 @@
 COMMAND NAME: gpfdist
 
-Serves data files to or writes data files out from Cloudberry Database 
+Serves data files to or writes data files out from Apache Cloudberry 
 segments. 
 
 *****************************************************
@@ -21,13 +21,13 @@ DESCRIPTION
 
 gpfdist is Cloudberry's parallel file distribution program. It is used 
 by readable external tables and gpload to serve external table files to 
-all Cloudberry Database segments in parallel. It is used by writable 
-external tables to accept output streams from Cloudberry Database 
+all Apache Cloudberry segments in parallel. It is used by writable 
+external tables to accept output streams from Apache Cloudberry 
 segments in parallel and write them out to a file. 
 
 In order for gpfdist to be used by an external table, the LOCATION 
 clause of the external table definition must specify the external table 
-data using the gpfdist:// protocol (see the Cloudberry Database command 
+data using the gpfdist:// protocol (see the Apache Cloudberry command 
 CREATE EXTERNAL TABLE). 
 
 NOTE: If the --ssl option is specified to enable SSL security, create 
@@ -39,7 +39,7 @@ offering the best performance as well as easier administration of
 external tables. 
 
 For readable external tables, gpfdist parses and serves data files 
-evenly to all the segment instances in the Cloudberry Database system 
+evenly to all the segment instances in the Apache Cloudberry system 
 when users SELECT from the external table. For writable external tables, 
 gpfdist accepts parallel output streams from the segments when users 
 INSERT into the external table, and writes to an output file. 
@@ -54,7 +54,7 @@ Windows platforms, and writable external tables do not support
 compression on any platforms. 
 
 Most likely, you will want to run gpfdist on your ETL machines rather 
-than the hosts where Cloudberry Database is installed. To install gpfdist 
+than the hosts where Apache Cloudberry is installed. To install gpfdist 
 on another host, simply copy the utility over to that host and add 
 gpfdist to your $PATH. 
 
@@ -89,7 +89,7 @@ OPTIONS
 
 -t <timeout> 
 
- Sets the time allowed for Cloudberry Database to establish a connection 
+ Sets the time allowed for Apache Cloudberry to establish a connection 
  to a gpfdist process. Default is 5 seconds. Allowed values are 2 to 600 
  seconds. May need to be increased on systems with a lot of network 
  traffic. 
@@ -113,13 +113,13 @@ OPTIONS
 
 -w <time> 
 
- Sets the number of seconds that Cloudberry Database delays before closing 
+ Sets the number of seconds that Apache Cloudberry delays before closing 
  a target file such as a named pipe. The default value is 0, no delay. 
  The maximum value is 600 seconds, 10 minutes. 
 
- For a Cloudberry Database with multiple segments, there might be a delay 
+ For a Apache Cloudberry with multiple segments, there might be a delay 
  between segments when writing data from different segments to the file. 
- You can specify a time to wait before Cloudberry Database closes the file 
+ You can specify a time to wait before Apache Cloudberry closes the file 
  to ensure all the data is written to the file. 
 
 
@@ -128,7 +128,7 @@ OPTIONS
  Adds SSL encryption to data transferred with gpfdist. After executing 
  gpfdist with the --ssl <certificate_path> option, the only way to load 
  data from this file server is with the gpfdists protocol. For 
- information on the gpfdists protocol, see the "Cloudberry Database 
+ information on the gpfdists protocol, see the "Apache Cloudberry 
  Administrator Guide". 
 
  The location specified in certificate_path must contain the following 
@@ -268,7 +268,7 @@ SEE ALSO
 
 CREATE EXTERNAL TABLE, gpload 
 
-See the "Cloudberry Database Reference Guide" for information 
+See the "Apache Cloudberry Reference Guide" for information 
 about CREATE EXTERNAL TABLE. 
 
 

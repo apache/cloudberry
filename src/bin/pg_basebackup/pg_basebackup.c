@@ -2491,7 +2491,7 @@ main(int argc, char **argv)
 		else if (strcmp(argv[1], "-V") == 0
 				 || strcmp(argv[1], "--version") == 0)
 		{
-			puts("pg_basebackup (Cloudberry Database) " PG_VERSION);
+			puts("pg_basebackup (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}

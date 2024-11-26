@@ -1285,7 +1285,7 @@ retry:
 	relation->rd_smgr = NULL;
 
     /*
-     * initialize Cloudberry Database partitioning info
+     * initialize Apache Cloudberry partitioning info
      */
 	if ((relation->rd_rel->relkind == RELKIND_RELATION && !IsSystemRelation(relation)) ||
 		relation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE ||

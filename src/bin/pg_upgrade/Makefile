@@ -67,7 +67,7 @@ greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_f
 NOTSUBMAKEMAKE=$(MAKE)
 
 check:
-	# ignore pg_upgarde to make CI happy, issue: https://github.com/cloudberrydb/cloudberrydb/issues/262
+	# ignore pg_upgarde to make CI happy, issue: https://github.com/apache/cloudberry/issues/262
 
 #check: test_gpdb.sh all
 #	bash $< -C -r -s -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)

@@ -1,5 +1,5 @@
 /*
- * Greenplum system views and functions for Cloudberry Database.
+ * Greenplum system views and functions for Apache Cloudberry.
  *
  * Portions Copyright (c) 2009-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.

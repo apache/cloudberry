@@ -406,7 +406,7 @@ select * from foo where a = 1 or a = any(null::int[]);
 
 drop table foo;
 
--- test for compressed bitmap index ; see https://github.com/cloudberrydb/cloudberrydb/pull/679
+-- test for compressed bitmap index ; see https://github.com/apache/cloudberry/pull/679
 SET enable_seqscan = OFF;
 SET enable_indexscan = ON;
 SET enable_bitmapscan = OFF;

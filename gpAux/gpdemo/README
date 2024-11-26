@@ -2,11 +2,11 @@
 ABOUT GP DEMO
 ******************************************************************
 
-The GP demo program will setup a virtual Cloudberry Database system
+The GP demo program will setup a virtual Apache Cloudberry system
 on a single host. It creates and starts a GP coordinator instance and
 three segment instances (three primary and three mirror segments)
 within the same directory. Running GP demo is a good way to test
-your initial installation before deploying the Cloudberry Database
+your initial installation before deploying the Apache Cloudberry
 software on a multi-host array. It is also a good way to become
 familiar with the system without investing the time involved in a
 multi-host setup.
@@ -20,7 +20,7 @@ space, and have the TCP ports defined in gpAux/gpdemo/Makefile free.
 
 * Verify that your $USER environment variable is set. 
 
-* Cloudberry Database recommends using the bash shell to run the
+* Apache Cloudberry recommends using the bash shell to run the
   GP demo programs.
 
 ******************************************************************
@@ -61,8 +61,8 @@ RUNNING GP DEMO
 
 	\q
 
-7. See the Cloudberry Database User Guide for more information on
-   using your Cloudberry Database system.
+7. See the Apache Cloudberry User Guide for more information on
+   using your Apache Cloudberry system.
 
 
 ******************************************************************
@@ -73,7 +73,7 @@ REMOVING GP DEMO
 
 	gpdemo -d
 
-2. This will stop all Cloudberry Database demo server processes
+2. This will stop all Apache Cloudberry demo server processes
    and remove all files and directories created by the GP demo
    program.
 

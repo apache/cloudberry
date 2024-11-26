@@ -30,7 +30,7 @@
 #include "pg_backup.h"
 
 /* version string we expect back from pg_dump */
-#define PGDUMP_VERSIONSTR "pg_dump (Cloudberry Database) " PG_VERSION "\n"
+#define PGDUMP_VERSIONSTR "pg_dump (Apache Cloudberry) " PG_VERSION "\n"
 
 
 static void help(void);
@@ -211,7 +211,7 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_dumpall (Cloudberry Database) " PG_VERSION);
+			puts("pg_dumpall (Apache Cloudberry) " PG_VERSION);
 			exit_nicely(0);
 		}
 	}
@@ -595,7 +595,7 @@ main(int argc, char *argv[])
 	if (quote_all_identifiers && server_version >= 80300)
 		executeCommand(conn, "SET quote_all_identifiers = true");
 
-	fprintf(OPF,"--\n-- Cloudberry Database cluster dump\n--\n\n");
+	fprintf(OPF,"--\n-- Apache Cloudberry cluster dump\n--\n\n");
 	if (verbose)
 		dumpTimestamp("Started on");
 
@@ -758,8 +758,8 @@ help(void)
 	printf(_("  --use-set-session-authorization\n"
 			 "                               use SET SESSION AUTHORIZATION commands instead of\n"
 			 "                               ALTER OWNER commands to set ownership\n"));
-	printf(_("  --gp-syntax                  dump with Cloudberry Database syntax (default if gpdb)\n"));
-	printf(_("  --no-gp-syntax               dump without Cloudberry Database syntax (default if postgresql)\n"));
+	printf(_("  --gp-syntax                  dump with Apache Cloudberry syntax (default if gpdb)\n"));
+	printf(_("  --no-gp-syntax               dump without Apache Cloudberry syntax (default if postgresql)\n"));
 
 	printf(_("\nConnection options:\n"));
 	printf(_("  -d, --dbname=CONNSTR     connect using connection string\n"));

@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbutil.c
- *	  Internal utility support functions for Cloudberry Database/PostgreSQL.
+ *	  Internal utility support functions for Apache Cloudberry/PostgreSQL.
  *
  * Portions Copyright (c) 2005-2011, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -1096,7 +1096,7 @@ ensureInterconnectAddress(void)
 	Assert(interconnect_address && strlen(interconnect_address) > 0);
 }
 /*
- * performs all necessary setup required for Cloudberry Database mode.
+ * performs all necessary setup required for Apache Cloudberry mode.
  *
  * This includes cdblink_setup() and initializing the Motion Layer.
  */
@@ -3479,7 +3479,7 @@ ensureInterconnectAddress(void)
 		Assert(false);
 }
 /*
- * performs all necessary setup required for Cloudberry Database mode.
+ * performs all necessary setup required for Apache Cloudberry mode.
  *
  * This includes cdblink_setup() and initializing the Motion Layer.
  */

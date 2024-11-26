@@ -211,7 +211,7 @@ SET enable_bitmapscan = OFF;
 DECLARE c CURSOR FOR SELECT * from hash_split_heap WHERE keycol = 1;
 MOVE FORWARD ALL FROM c;
 MOVE BACKWARD 10000 FROM c;
-ERROR:  backward scan is not supported in this version of Cloudberry Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 MOVE BACKWARD ALL FROM c;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 CLOSE c;

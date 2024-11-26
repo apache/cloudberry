@@ -1404,7 +1404,7 @@ def main(options, args, parser):
             gparray = GpArray.initFromCatalog(dburl, utility=True)
         except DatabaseError as ex:
             logger.error('Failed to connect to database.  Make sure the')
-            logger.error('CloudberryDB instance you wish to shrink is running')
+            logger.error('Cloudberry instance you wish to shrink is running')
             logger.error('and that your environment is correct, then rerun')
             logger.error('gshrink ' + ' '.join(sys.argv[1:]))
             sys.exit(1)

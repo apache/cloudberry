@@ -108,7 +108,7 @@ ANALYZE dt1;
 -- Create Dynamic Table without DISTRIBUTION KEYS. 
 CREATE DYNAMIC TABLE dt2  AS
   SELECT * FROM t1 WHERE a = 2 WITH NO DATA;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Refresh Dynamic Table WITH NO DATA
 REFRESH DYNAMIC TABLE dt0 WITH NO DATA;
@@ -189,22 +189,22 @@ SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refre
 CREATE TABLE t2(a int, b int, c int) DISTRIBUTED BY (b);
 CREATE MATERIALIZED VIEW mv_t2 AS
   SELECT * FROM t2 WHERE a > 1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- construct dynamic table from materialized view
 CREATE DYNAMIC TABLE dt3  AS
   SELECT * FROM mv_t2 WHERE a = 2;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- construct dynamic table from dynamic table
 CREATE DYNAMIC TABLE dt4  AS
   SELECT * FROM dt3 WHERE b = 3;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- construct dynamic table from joins
 CREATE DYNAMIC TABLE dt5  AS
   SELECT * FROM dt3 natural join t2 natural join mv_t2;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- construct dynamic table from external table 
 begin;
@@ -248,7 +248,7 @@ SELECT sum(id) FROM ext_r where id > 5;
 
 CREATE DYNAMIC TABLE dt_external  AS
   SELECT * FROM ext_r where id > 5;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ANALYZE dt_external;
 SHOW optimizer;
@@ -302,7 +302,7 @@ ERROR:  can not drop a internal task "gp_dynamic_table_refresh_17387" paried wit
 DETAIL:  please drop the dynamic table instead
 \unset dtoid
 CREATE DYNAMIC TABLE dt_schedule SCHEDULE '1 2 3 4 5' AS SELECT * FROM t2;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT pg_catalog.pg_get_dynamic_table_schedule('dt_schedule'::regclass::oid);
  pg_get_dynamic_table_schedule 
@@ -344,10 +344,10 @@ SELECT * FROM pg_dynamic_tables;
 (4 rows)
 
 CREATE TABLE t3(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE DYNAMIC TABLE dt_1_min SCHEDULE '* * * * *' AS SELECT * FROM t3 WITH NO DATA;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO T3 VALUES(1);
 -- wait for backgroud refresh

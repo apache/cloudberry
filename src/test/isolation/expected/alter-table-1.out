@@ -2,7 +2,7 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1 at1 sc1 s2 at2 sc2 rx1 wx rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -27,7 +27,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 at2 rx1 sc2 wx rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -52,7 +52,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 at2 rx1 wx sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -77,7 +77,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 at2 rx1 wx rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -102,7 +102,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 at2 rx1 wx rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -127,7 +127,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 at2 sc2 wx rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -152,7 +152,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 at2 wx sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -177,7 +177,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 at2 wx rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -202,7 +202,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 at2 wx rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -227,7 +227,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 wx at2 sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -252,7 +252,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 wx at2 rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -277,7 +277,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 wx at2 rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -302,7 +302,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 wx rx3 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -327,7 +327,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 wx rx3 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -352,7 +352,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 s2 rx1 wx rx3 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -377,7 +377,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 at2 sc2 wx rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -402,7 +402,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 at2 wx sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -427,7 +427,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 at2 wx rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -452,7 +452,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 at2 wx rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -477,7 +477,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 wx at2 sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -502,7 +502,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 wx at2 rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -527,7 +527,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 wx at2 rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -552,7 +552,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 wx rx3 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -577,7 +577,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 wx rx3 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -602,7 +602,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 s2 wx rx3 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -627,7 +627,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx s2 at2 sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -652,7 +652,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx s2 at2 rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -677,7 +677,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx s2 at2 rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -702,7 +702,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx s2 rx3 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -727,7 +727,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx s2 rx3 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -752,7 +752,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx s2 rx3 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -777,7 +777,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx rx3 s2 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -802,7 +802,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx rx3 s2 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -827,7 +827,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx rx3 s2 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -852,7 +852,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 sc1 rx1 wx rx3 c2 s2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
@@ -877,7 +877,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 at2 sc2 wx rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -902,7 +902,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 at2 wx sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -927,7 +927,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 at2 wx rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -952,7 +952,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 at2 wx rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -977,7 +977,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 wx at2 sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1002,7 +1002,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 wx at2 rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1027,7 +1027,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 wx at2 rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1052,7 +1052,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 wx rx3 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1077,7 +1077,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 wx rx3 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1102,7 +1102,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 s2 wx rx3 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1127,7 +1127,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx s2 at2 sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1152,7 +1152,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx s2 at2 rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1177,7 +1177,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx s2 at2 rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1202,7 +1202,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx s2 rx3 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1227,7 +1227,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx s2 rx3 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1252,7 +1252,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx s2 rx3 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1277,7 +1277,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx rx3 s2 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1302,7 +1302,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx rx3 s2 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1327,7 +1327,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx rx3 s2 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1352,7 +1352,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 sc1 wx rx3 c2 s2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1377,7 +1377,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 s2 at2 sc2 rx3 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1403,7 +1403,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 s2 at2 rx3 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1429,7 +1429,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 s2 at2 rx3 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1455,7 +1455,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 s2 rx3 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1481,7 +1481,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 s2 rx3 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1507,7 +1507,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 s2 rx3 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1533,7 +1533,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 rx3 s2 at2 sc2 c2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1559,7 +1559,7 @@ step c2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 rx3 s2 at2 c2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1585,7 +1585,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 rx3 s2 c2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1611,7 +1611,7 @@ step sc2: COMMIT;
 
 starting permutation: s1 at1 rx1 wx sc1 rx3 c2 s2 at2 sc2
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step rx1: SELECT * FROM b WHERE a_id = 1 LIMIT 1;
 a_id
@@ -1643,7 +1643,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1668,7 +1668,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1693,7 +1693,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1718,7 +1718,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1743,7 +1743,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1768,7 +1768,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1793,7 +1793,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1818,7 +1818,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1843,7 +1843,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1868,7 +1868,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -1893,7 +1893,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -1918,7 +1918,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -1943,7 +1943,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -1968,7 +1968,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -1993,7 +1993,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2018,7 +2018,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2043,7 +2043,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2068,7 +2068,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2093,7 +2093,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2118,7 +2118,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2143,7 +2143,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2169,7 +2169,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2195,7 +2195,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2221,7 +2221,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2247,7 +2247,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2273,7 +2273,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2299,7 +2299,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2325,7 +2325,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2351,7 +2351,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2377,7 +2377,7 @@ a_id
    1
 (1 row)
 
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -2414,7 +2414,7 @@ a_id
 (3 rows)
 
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2440,7 +2440,7 @@ a_id
 
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID; <waiting ...>
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2465,7 +2465,7 @@ a_id
 (3 rows)
 
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2480,7 +2480,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2505,7 +2505,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2530,7 +2530,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2555,7 +2555,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2580,7 +2580,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2605,7 +2605,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2630,7 +2630,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2655,7 +2655,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2680,7 +2680,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2705,7 +2705,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -2730,7 +2730,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2755,7 +2755,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2780,7 +2780,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2805,7 +2805,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2830,7 +2830,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2855,7 +2855,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2880,7 +2880,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2905,7 +2905,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2930,7 +2930,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2955,7 +2955,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step wx: INSERT INTO b VALUES (0);
@@ -2980,7 +2980,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3006,7 +3006,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3032,7 +3032,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3058,7 +3058,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3084,7 +3084,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3110,7 +3110,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3136,7 +3136,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3162,7 +3162,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3188,7 +3188,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3214,7 +3214,7 @@ a_id
 (1 row)
 
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step wx: INSERT INTO b VALUES (0); <waiting ...>
 step sc1: COMMIT;
@@ -3251,7 +3251,7 @@ a_id
 (3 rows)
 
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3277,7 +3277,7 @@ a_id
 
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID; <waiting ...>
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3302,7 +3302,7 @@ a_id
 (3 rows)
 
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3328,7 +3328,7 @@ a_id
 (3 rows)
 
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3354,7 +3354,7 @@ a_id
 
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID; <waiting ...>
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3379,7 +3379,7 @@ a_id
 (3 rows)
 
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3405,7 +3405,7 @@ a_id
 step s1: BEGIN;
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID; <waiting ...>
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: <... completed>
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3430,7 +3430,7 @@ a_id
 
 step s1: BEGIN;
 step c2: COMMIT;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;
@@ -3455,7 +3455,7 @@ a_id
 
 step c2: COMMIT;
 step s1: BEGIN;
-s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+s1: WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 step at1: ALTER TABLE b ADD CONSTRAINT bfk FOREIGN KEY (a_id) REFERENCES a (i) NOT VALID;
 step sc1: COMMIT;
 step s2: BEGIN;

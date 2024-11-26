@@ -28,7 +28,7 @@ CREATE
 20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Gathering information and validating the environment...
 20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Cloudberry Master catalog information
 20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Segment details from master...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.5211.gf5c0dd1 build dev'
+20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.5211.gf5c0dd1 build dev'
 20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Master segment instance directory=/home/huanzhang/workspace/gpdb7/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Attempting forceful termination of any leftover master process

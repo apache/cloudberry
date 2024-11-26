@@ -13181,11 +13181,11 @@ validateForeignKeyConstraint(char *conname,
 	ereport(DEBUG1,
 			(errmsg_internal("validating foreign key constraint \"%s\"", conname)));
 
-	/* Cloudberry Database: Ignore foreign keys for now, with a warning. */
+	/* Apache Cloudberry: Ignore foreign keys for now, with a warning. */
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 		ereport(WARNING,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced")));
+				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced")));
 	return;
 
 	/*
@@ -13324,13 +13324,13 @@ createForeignKeyActionTriggers(Relation rel, Oid refRelOid, Constraint *fkconstr
 	CreateTrigStmt *fk_trigger;
 
 	/*
-	 * Special for Cloudberry Database: Ignore foreign keys for now, with warning
+	 * Special for Apache Cloudberry: Ignore foreign keys for now, with warning
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 	{
 		ereport(WARNING,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced")));
+				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced")));
 	}
 
 	/*

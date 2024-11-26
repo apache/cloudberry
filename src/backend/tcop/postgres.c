@@ -500,7 +500,7 @@ SocketBackend(StringInfo inBuf)
 			doing_extended_query_message = false;
 			break;
 
-		case 'M':				/* Cloudberry Database dispatched statement from QD */
+		case 'M':				/* Apache Cloudberry dispatched statement from QD */
 			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 
@@ -513,7 +513,7 @@ SocketBackend(StringInfo inBuf)
 
 			break;
 
-		case 'T':				/* Cloudberry Database dispatched transaction protocol from QD */
+		case 'T':				/* Apache Cloudberry dispatched transaction protocol from QD */
 			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 

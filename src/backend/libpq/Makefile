@@ -37,18 +37,18 @@ ifeq ($(with_gssapi),yes)
 OBJS += be-gssapi-common.o be-secure-gssapi.o
 endif
 
-# CloudberryDB objects follow
+# Cloudberry objects follow
 OBJS += fe-protocol3.o fe-connect.o \
         fe-exec.o pqexpbuffer.o fe-auth.o fe-misc.o fe-secure.o \
         fe-auth-scram.o fe-trace.o \
         $(filter getpeereid.o, $(LIBOBJS))
 
-# CloudberryDB OpenSSL objects follow
+# Cloudberry OpenSSL objects follow
 ifeq ($(with_ssl),openssl)
 OBJS += fe-secure-common.o fe-secure-openssl.o
 endif
 
-# CloudberryDB GSSAPI objects follow
+# Cloudberry GSSAPI objects follow
 ifeq ($(with_gssapi),yes)
 OBJS += fe-gssapi-common.o fe-secure-gssapi.o
 endif

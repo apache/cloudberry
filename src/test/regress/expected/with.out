@@ -1842,7 +1842,7 @@ WITH RECURSIVE x(n) AS (SELECT 1 UNION ALL SELECT distinct(n+1) FROM x)
 ERROR:  DISTINCT in a recursive query is not implemented
 -- recursive term with a group by operation is not allowed
 CREATE TEMPORARY TABLE bar(c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WITH RECURSIVE x(n) AS (
 	SELECT 1,2
@@ -2505,7 +2505,7 @@ SELECT * FROM t
 UNION ALL
 SELECT * FROM t2;
 ERROR:  only one modifying WITH clause allowed per query
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause.
 HINT:  Rewrite the query to only include one writable CTE clause.
 SELECT * FROM y;
  a  
@@ -2567,7 +2567,7 @@ SELECT * FROM bug6051;
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
 INSERT INTO bug6051 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM bug6051;
  i 
@@ -2584,7 +2584,7 @@ CREATE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
 INSERT INTO bug6051 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM bug6051;
  i 
@@ -2607,7 +2607,7 @@ CREATE OR REPLACE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
 INSERT INTO bug6051 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 -- silly example to verify that hasModifyingCTE flag is propagated
 CREATE TEMP TABLE bug6051_3 AS
@@ -2618,7 +2618,7 @@ BEGIN; SET LOCAL force_parallel_mode = on;
 WITH t1 AS ( DELETE FROM bug6051_3 RETURNING * )
   INSERT INTO bug6051_3 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 COMMIT;
 SELECT * FROM bug6051_3;
@@ -2741,7 +2741,7 @@ WITH t AS (
 )
 INSERT INTO y SELECT -a FROM t RETURNING *;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM y;
  a  
@@ -2899,7 +2899,7 @@ WITH RECURSIVE t1 AS (
 )
 SELECT 1;
 ERROR:  only one modifying WITH clause allowed per query
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause.
 HINT:  Rewrite the query to only include one writable CTE clause.
 SELECT * FROM y;
  a 
@@ -2921,7 +2921,7 @@ WITH RECURSIVE t1 AS (
 )
 SELECT 1;
 ERROR:  only one modifying WITH clause allowed per query
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause.
 HINT:  Rewrite the query to only include one writable CTE clause.
 SELECT * FROM y;
  a 
@@ -3104,7 +3104,7 @@ SELECT * FROM parent;
 WITH wcte AS ( INSERT INTO child1 VALUES ( 42, 'new' ) RETURNING id AS newid )
 UPDATE parent SET id = id + newid FROM wcte;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
@@ -3130,7 +3130,7 @@ SELECT * FROM parent;
 WITH wcte AS ( INSERT INTO child2 VALUES ( 42, 'new2' ) RETURNING id AS newid )
 DELETE FROM parent USING wcte WHERE id = newid;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 SELECT * FROM parent;
  id | val 
@@ -3146,7 +3146,7 @@ EXPLAIN (VERBOSE, COSTS OFF)
 WITH wcte AS ( INSERT INTO int8_tbl VALUES ( 42, 47 ) RETURNING q2 )
 DELETE FROM a USING wcte WHERE aa = q2;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 -- error cases
 -- data-modifying WITH tries to use its own output

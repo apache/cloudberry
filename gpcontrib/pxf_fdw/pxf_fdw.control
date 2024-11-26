@@ -1,5 +1,5 @@
 # pxf_fdw extension
-comment = 'PXF Foreign Data Wrapper for Cloudberry Database'
+comment = 'PXF Foreign Data Wrapper for Apache Cloudberry'
 default_version = '1.0'
 module_pathname = '$libdir/pxf_fdw'
 relocatable = true

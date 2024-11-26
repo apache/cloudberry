@@ -831,7 +831,7 @@ set role regress_coldesc_role;
 with result as (insert into brtrigpartcon values (1, 'hi there') returning 1)
   insert into inserttest3 (f3) select * from result;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 reset role;
 -- cleanup

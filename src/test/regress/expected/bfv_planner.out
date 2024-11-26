@@ -7,10 +7,10 @@ drop table if exists bfv_planner_foo;
 NOTICE:  table "bfv_planner_foo" does not exist, skipping
 --end_ignore
 CREATE TABLE testbadsql(id int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bfv_planner_x(i integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bfv_planner_foo AS SELECT i as a, i+1 as b from generate_series(1,10)i;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
@@ -226,7 +226,7 @@ select * from p;
 -- hash joinable, and create a plan with a hash join on "(a = b)". That
 -- was wrong, because NULLs are treated differently.
 create table booltest (b bool);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into booltest values ('t');
 insert into booltest values (null);
@@ -266,7 +266,7 @@ begin
 end;
 $$ language plpgsql stable;
 create table stabletesttab (id integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into stabletesttab values (1);
 insert into stabletesttab values (1000);
@@ -372,7 +372,7 @@ T1.a=T2.g and T1.c=T2.f;
 -- maintain the ordering (a,b) in the Gather Motion node, which would have
 -- required column b to be present, at least as a junk column.
 create table bfv_planner_t3 (a int4, b int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select a from (select * from bfv_planner_t3 order by a, b) as x limit 1;
  a 
@@ -787,7 +787,7 @@ drop table t3_12146;
 drop table t4_12146;
 reset allow_system_table_mods;
 --
--- test https://github.com/cloudberrydb/cloudberrydb/issues/593
+-- test https://github.com/apache/cloudberry/issues/593
 --
 CREATE TABLE t0_issue_593(c0 bigserial PRIMARY KEY) USING heap WITH (autovacuum_vacuum_threshold=1468046284, autovacuum_analyze_threshold=1889118206, autovacuum_vacuum_cost_delay=9, fillfactor=25, autovacuum_freeze_max_age=1860760049, autovacuum_enabled=0, autovacuum_freeze_min_age=402702412, autovacuum_vacuum_cost_limit=2500);
 CREATE TABLE IF NOT EXISTS t1_issue_593(LIKE t0_issue_593);

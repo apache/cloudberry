@@ -181,7 +181,7 @@ if [ -z "${GPHOME}" ]; then
     echo "FATAL: The GPHOME environment variable is not set."
     echo ""
     echo "  You can set it by sourcing the greenplum_path.sh"
-    echo "  file in your CloudberryDB installation directory."
+    echo "  file in your Cloudberry installation directory."
     echo ""
     exit 1
 fi
@@ -201,13 +201,13 @@ EOF
 
 if [ "${WITH_MIRRORS}" == "true" ]; then
 cat <<-EOF
-	  This is a MIRRORED demo of the Cloudberry Database system.  We will create
+	  This is a MIRRORED demo of the Apache Cloudberry system.  We will create
 	  a cluster installation with coordinator and `expr 2 \* ${NUM_PRIMARY_MIRROR_PAIRS}` segment instances
 	  (${NUM_PRIMARY_MIRROR_PAIRS} primary & ${NUM_PRIMARY_MIRROR_PAIRS} mirror).
 EOF
 elif [ "${WITH_MIRRORS}" == "false" ]; then
 cat <<-EOF
-	  This is a MIRRORLESS demo of the Cloudberry Database system.  We will create
+	  This is a MIRRORLESS demo of the Apache Cloudberry system.  We will create
 	  a cluster installation with coordinator and ${NUM_PRIMARY_MIRROR_PAIRS} segment instances.
 EOF
 fi
@@ -234,17 +234,17 @@ GPPATH=`find -H $GPHOME -name gpstart| tail -1`
 RETVAL=$?
 
 if [ "$RETVAL" -ne 0 ]; then
-    echo "Error attempting to find CloudberryDB executables in $GPHOME"
+    echo "Error attempting to find Cloudberry executables in $GPHOME"
     exit 1
 fi
 
 if [ ! -x "$GPPATH" ]; then
-    echo "No executables found for CloudberryDB installation in $GPHOME"
+    echo "No executables found for Cloudberry installation in $GPHOME"
     exit 1
 fi
 GPPATH=`dirname $GPPATH`
 if [ ! -x $GPPATH/gpinitsystem ]; then
-    echo "No mgmt executables(gpinitsystem) found for CloudberryDB installation in $GPPATH"
+    echo "No mgmt executables(gpinitsystem) found for Cloudberry installation in $GPPATH"
     exit 1
 fi
 
@@ -298,7 +298,7 @@ cat >> $CLUSTER_CONFIG <<-EOF
 	# This names the data directories for the Segment Instances and the Entry Postmaster
 	SEG_PREFIX=$SEG_PREFIX
 	
-	# This is the port at which to contact the resulting Cloudberry database, e.g.
+	# This is the port at which to contact the resulting Apache Cloudberry, e.g.
 	#   psql -p \$PORT_BASE -d template1
 	PORT_BASE=${DEMO_PORT_BASE}
 	

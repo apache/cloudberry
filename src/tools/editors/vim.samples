@@ -6,7 +6,7 @@
 "
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-:if match(getcwd(), "/pgsql") >=0 || match(getcwd(), "/postgresql") >= 0 || match(getcwd(), "/cloudberrydb*") >= 0 || match(getcwd(), "/cbdb*") >= 0
+:if match(getcwd(), "/pgsql") >=0 || match(getcwd(), "/postgresql") >= 0 || match(getcwd(), "/cloudberry*") >= 0 || match(getcwd(), "/cbdb*") >= 0
 
 :  set cinoptions=(0
 :  set tabstop=4

@@ -157,7 +157,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_rewind (Cloudberry Database) " PG_VERSION);
+			puts("pg_rewind (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}
@@ -1072,7 +1072,7 @@ get_target_dbid(const char *argv0)
 
 	/* locate postgres binary */
 	if ((ret = find_other_exec(argv0, "postgres",
-							   "postgres (Cloudberry Database) " PG_VERSION "\n",
+							   "postgres (Apache Cloudberry) " PG_VERSION "\n",
 							   exec_path)) < 0)
 	{
 		char        full_path[MAXPGPATH];

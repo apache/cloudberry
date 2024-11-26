@@ -227,7 +227,7 @@ Where column_reference_storage_directive is:
    a column constraint is only a notational convenience for use when the
    constraint only affects one column.    For more information, search for 
    
-   "Column-level Compression" in the Cloudberry Database Administrator Guide.
+   "Column-level Compression" in the Apache Cloudberry Administrator Guide.
   </para>
 
   <para>

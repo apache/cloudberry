@@ -3,14 +3,14 @@ drop table if exists t1_encoding_heap;
 CREATE TABLE t1_encoding_heap (c1 int ENCODING (compresstype=zstd),
                   c2 char ENCODING (compresstype=zlib),
                   c3 char) using heap;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t1_encoding_aoco;
 CREATE TABLE t1_encoding_aoco (c1 int ENCODING (compresstype=zstd),
                   c2 char ENCODING (compresstype=zlib),
                   c3 char) using ao_column;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t1_encoding_aoco
                                                           Table "public.t1_encoding_aoco"
@@ -36,7 +36,7 @@ CREATE TABLE t2_encoding_heap (c1 int ENCODING (compresstype=zlib),
                   c3 char,
                   COLUMN c3 ENCODING (compresstype=RLE_TYPE)
                   ) using heap;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t2_encoding_aoco;
@@ -45,7 +45,7 @@ CREATE TABLE t2_encoding_aoco (c1 int ENCODING (compresstype=zlib),
                   c3 char,
                   COLUMN c3 ENCODING (compresstype=RLE_TYPE)
                   ) using ao_column;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t2_encoding_aoco
                                                           Table "public.t2_encoding_aoco"
@@ -73,7 +73,7 @@ CREATE TABLE t3_encoding_heap (c1 int ENCODING (compresstype=zlib),
                   DEFAULT COLUMN ENCODING (compresstype=zstd),
                   COLUMN c3 ENCODING (compresstype=RLE_TYPE)
                   ) using heap;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t3_encoding_aoco;
@@ -84,7 +84,7 @@ CREATE TABLE t3_encoding_aoco (c1 int ENCODING (compresstype=zlib),
                   DEFAULT COLUMN ENCODING (compresstype=zstd),
                   COLUMN c3 ENCODING (compresstype=RLE_TYPE)
                   ) using ao_column;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t3_encoding_aoco
                                                           Table "public.t3_encoding_aoco"
@@ -112,7 +112,7 @@ CREATE TABLE t4_encoding_heap (c1 int,
                   c3 char ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
                   using heap
                   with(COMPRESSTYPE=zstd, compresslevel=5);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter "compresstype"
 drop table if exists t4_encoding_aoco;
@@ -121,7 +121,7 @@ CREATE TABLE t4_encoding_aoco (c1 int,
                   c3 char ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
                   using ao_column
                   with(COMPRESSTYPE=zstd, compresslevel=5);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t4_encoding_aoco
                                                           Table "public.t4_encoding_aoco"
@@ -148,7 +148,7 @@ CREATE TABLE t5_encoding_heap (c1 int,
                   c3 char, COLUMN c3 ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
                   using heap
                   with(COMPRESSTYPE=zstd, compresslevel=5);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter "compresstype"
 drop table if exists t5_encoding_aoco;
@@ -157,7 +157,7 @@ CREATE TABLE t5_encoding_aoco (c1 int,
                   c3 char, COLUMN c3 ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
                   using ao_column
                   with(COMPRESSTYPE=zstd, compresslevel=5);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t5_encoding_aoco
                                                           Table "public.t5_encoding_aoco"
@@ -184,7 +184,7 @@ CREATE TABLE t6_encoding_aoco (c1 int,
                   c3 char) 
                   using ao_column
                   with(COMPRESSTYPE=zstd, compresslevel=5);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t6_encoding_aoco
                                                           Table "public.t6_encoding_aoco"
@@ -210,7 +210,7 @@ CREATE TABLE t7_encoding_aoco (c1 int,
                   c2 char,
                   c3 char) 
                   using ao_column;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t7_encoding_aoco
                                                           Table "public.t7_encoding_aoco"
@@ -246,7 +246,7 @@ CREATE TABLE t1_part_encoding_heap (c1 int ENCODING (compresstype=zlib),
     PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
                              END ('2100-12-31'::DATE),
                              COLUMN c3 ENCODING (compresstype=zlib));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t1_part_encoding_aoco;
@@ -257,7 +257,7 @@ CREATE TABLE t1_part_encoding_aoco (c1 int ENCODING (compresstype=zlib),
     PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
                              END ('2100-12-31'::DATE),
                              COLUMN c3 ENCODING (compresstype=zlib));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t1_part_encoding_aoco_1_prt_1
                                                     Table "public.t1_part_encoding_aoco_1_prt_1"
@@ -286,7 +286,7 @@ CREATE TABLE t2_part_encoding_heap (c1 int ENCODING (compresstype=zlib),
     using heap
     PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
                              END ('2100-12-31'::DATE));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t2_part_encoding_aoco;
@@ -296,7 +296,7 @@ CREATE TABLE t2_part_encoding_aoco (c1 int ENCODING (compresstype=zlib),
     using ao_column
     PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
                              END ('2100-12-31'::DATE));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t2_part_encoding_aoco_1_prt_1
                                                     Table "public.t2_part_encoding_aoco_1_prt_1"
@@ -326,7 +326,7 @@ CREATE TABLE t3_part_encoding_heap (c1 int,
     PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)
                              END ('2100-12-31'::DATE),
                              COLUMN c3 ENCODING (compresstype=zlib));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t3_part_encoding_aoco;
@@ -337,7 +337,7 @@ CREATE TABLE t3_part_encoding_aoco (c1 int,
     PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)
                              END ('2100-12-31'::DATE),
                              COLUMN c3 ENCODING (compresstype=zlib));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t3_part_encoding_aoco_1_prt_1
                                                     Table "public.t3_part_encoding_aoco_1_prt_1"
@@ -374,7 +374,7 @@ CREATE TABLE t4_part_encoding_heap (i int, j int, k int, l int)
            column k encoding(compresstype=zstd)
        )
     );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t4_part_encoding_aoco;
@@ -392,7 +392,7 @@ CREATE TABLE t4_part_encoding_aoco (i int, j int, k int, l int)
            column k encoding(compresstype=zstd)
        )
     );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t4_part_encoding_aoco_1_prt_p1_2_prt_sp1
                                            Table "public.t4_part_encoding_aoco_1_prt_p1_2_prt_sp1"
@@ -453,7 +453,7 @@ CREATE TABLE t5_part_encoding_heap (i int ENCODING (compresstype=zlib), j int, k
            column k encoding(compresstype=zstd)
        )
     );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table if exists t5_part_encoding_aoco;
@@ -471,7 +471,7 @@ CREATE TABLE t5_part_encoding_aoco (i int ENCODING (compresstype=RLE_TYPE), j in
            column k encoding(compresstype=zstd)
        )
     );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ t5_part_encoding_aoco_1_prt_p1_2_prt_sp1
                                            Table "public.t5_part_encoding_aoco_1_prt_p1_2_prt_sp1"
@@ -577,10 +577,10 @@ drop table t1_type_int33_heap;
 drop table t1_type_int33_aoco;
 -- test no implement am encoding callback table still can use relation WITH option
 CREATE TABLE t1_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t2_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table t1_heap;
 drop table t2_heap;

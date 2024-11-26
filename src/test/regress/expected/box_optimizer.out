@@ -494,7 +494,7 @@ DROP INDEX box_spgist;
 -- Test the SP-GiST index on the larger volume of data
 --
 CREATE TABLE quad_box_tbl (id int, b box);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 INSERT INTO quad_box_tbl
   SELECT (x - 1) * 100 + y, box(point(x * 10, y * 10), point(x * 10 + 5, y * 10 + 5))
   FROM generate_series(1, 100) x,

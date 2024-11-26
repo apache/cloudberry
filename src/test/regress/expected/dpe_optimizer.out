@@ -60,7 +60,7 @@ PARTITION BY RANGE(ptid)
           )
 ;
 create table t(dist int, tid int, t1 text, t2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index pt1_idx on pt using btree (pt1);
 create index ptid_idx on pt using btree (ptid);
@@ -68,7 +68,7 @@ create index ptid_pt1_idx on pt using btree (ptid, pt1);
 insert into pt select i, 'hello' || i, 'world', 'drop this', i % 6 from generate_series(0,53) i;
 insert into t select i, i % 6, 'hello' || i, 'bar' from generate_series(0,1) i;
 create table t1(dist int, tid int, t1 text, t2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 select i, i % 6, 'hello' || i, 'bar' from generate_series(1,2) i;
 insert into pt1 select * from pt;
@@ -1022,7 +1022,7 @@ select count(*) from pt, pt1 where pt.ptid = pt1.ptid and pt.pt1 = 'hello0';
 drop table if exists pt;
 drop table if exists t;
 create table t(id int, a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pt(id int, b int) DISTRIBUTED BY (id) PARTITION BY RANGE(b) (START (0) END (5) EVERY (1));
 insert into t select i, i from generate_series(0,4) i;
@@ -1070,7 +1070,7 @@ rollback;
 drop table if exists t;
 drop table if exists pt;
 create table t(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pt(b int) DISTRIBUTED BY (b) PARTITION BY RANGE(b)
 (START (0) END (5) EVERY (1));
@@ -1119,7 +1119,7 @@ set search_path='dpe_multi';
 set gp_segments_for_planner=2;
 set optimizer_segments=2;
 create table dim1(dist int, pid int, code text, t1 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dim1 values (1, 0, 'OH', 'world1');
 insert into dim1 values (1, 1, 'OH', 'world2');
@@ -1139,7 +1139,7 @@ subpartition template
  end (4) 
  every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dist' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into fact1 select 1, i % 4 , 'OH', i from generate_series (1,100) i;
 insert into fact1 select 1, i % 4 , 'CA', i + 10000 from generate_series (1,100) i;
@@ -2424,13 +2424,13 @@ select * from dim inner join malp on (dim.i = malp.i and dim.j = malp.j);
 -- of the join.
 --
 create table apart (id int4, t text) partition by range (id) (start (1) end (1000) every (200));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table b (id int4, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table c (id int4, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into apart select g, g from generate_series(1, 999) g;
 insert into b select g, g from generate_series(1, 5) g;
@@ -2518,11 +2518,11 @@ set search_path='dpe_bugs';
 set gp_segments_for_planner=2;
 set optimizer_segments=2;
 create table pat(a int, b date) partition by range (b) (start ('2010-01-01') end ('2010-01-05') every (1), default partition other);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pat select i,date '2010-01-01' + i from generate_series(1, 10)i;  
 create table jpat(a int, b date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into jpat values(1, '2010-01-02');
 analyze jpat;
@@ -2566,10 +2566,10 @@ NOTICE:  table "t" does not exist, skipping
 drop table if exists pt;
 NOTICE:  table "pt" does not exist, skipping
 create table t(id int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pt(id int, b int) partition by range (id);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pt1 partition of pt for values from (1) to (2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2578,7 +2578,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table pt3 partition of pt for values from (3) to (4);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table ptx (id int, b int) partition by list (((b) % 2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ptx_even partition of ptx for values in (0);
 NOTICE:  table has parent, setting distribution columns to match parent table

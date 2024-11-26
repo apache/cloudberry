@@ -1,7 +1,7 @@
 2020-12-01 15:47:53|INFO|gpload session started 2020-12-01 15:47:53
 2020-12-01 15:47:53|ERROR|could not connect to database: Connection refused
 	Is the server running on that host and accepting TCP/IP connections?
-. Is the Cloudberry Database running on port 9999?
+. Is the Apache Cloudberry running on port 9999?
 2020-12-01 15:47:53|INFO|rows Inserted          = 0
 2020-12-01 15:47:53|INFO|rows Updated           = 0
 2020-12-01 15:47:53|INFO|data formatting errors = 0
@@ -9,7 +9,7 @@
 2020-12-01 15:47:53|INFO|gpload session started 2020-12-01 15:47:53
 2020-12-01 15:47:53|ERROR|could not connect to database: Connection refused
 	Is the server running on that host and accepting TCP/IP connections?
-. Is the Cloudberry Database running on port 9999?
+. Is the Apache Cloudberry running on port 9999?
 2020-12-01 15:47:53|INFO|rows Inserted          = 0
 2020-12-01 15:47:53|INFO|rows Updated           = 0
 2020-12-01 15:47:53|INFO|data formatting errors = 0

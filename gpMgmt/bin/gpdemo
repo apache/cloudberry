@@ -46,7 +46,7 @@ for filename in "${CHECK_FILENAME[@]}"; do
     echo "Missing $checking"
     echo ""
     echo "This may be caused by incomplete installation or packaging error."
-    echo "Try to re-install CloudBerryDB. If it doesn't help, contact support."
+    echo "Try to re-install Cloudberry. If it doesn't help, contact support."
     exit 1
   fi
 done

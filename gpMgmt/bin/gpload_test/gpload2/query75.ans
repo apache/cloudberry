@@ -7,7 +7,7 @@
 2021-08-10 14:56:46|INFO|rows Updated           = 0
 2021-08-10 14:56:46|INFO|data formatting errors = 0
 2021-08-10 14:56:46|INFO|gpload succeeded
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '列1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '列1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 2021-08-10 14:56:46|INFO|gpload session started 2021-08-10 14:56:46
 2021-08-10 14:56:46|INFO|setting schema 'public' for table 'chinese表'
@@ -26,7 +26,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 2021-08-10 14:56:46|INFO|rows Updated           = 0
 2021-08-10 14:56:46|INFO|data formatting errors = 0
 2021-08-10 14:56:46|INFO|gpload failed
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '列1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '列1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 2021-08-10 14:56:46|INFO|gpload session started 2021-08-10 14:56:46
 2021-08-10 14:56:46|INFO|setting schema 'public' for table 'chinese表'

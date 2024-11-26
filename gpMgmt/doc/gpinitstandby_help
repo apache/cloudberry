@@ -1,6 +1,6 @@
 COMMAND NAME: gpinitstandby
 
-Adds and/or initializes a standby coordinator host for a Cloudberry Database system.
+Adds and/or initializes a standby coordinator host for a Apache Cloudberry system.
 
 
 *****************************************************
@@ -19,28 +19,28 @@ DESCRIPTION
 *****************************************************
 
 The gpinitstandby utility adds a backup, standby coordinator host to your 
-Cloudberry Database system. If your system has an existing standby coordinator 
+Apache Cloudberry system. If your system has an existing standby coordinator 
 host configured, use the -r option to remove it before adding the new 
 standby coordinator host. 
 
-Before running this utility, make sure that the Cloudberry Database 
+Before running this utility, make sure that the Apache Cloudberry 
 software is installed on the standby coordinator host and that you have 
 exchanged SSH keys between the hosts. It is recommended that the coordinator 
 port is set to the same port number on the coordinator host and the backup 
 coordinator host. 
 
-See the Cloudberry Database Installation Guide for instructions. This 
+See the Apache Cloudberry Installation Guide for instructions. This 
 utility should be run on the currently active primary coordinator host. 
 
 The utility performs the following steps: 
 
-* Updates the Cloudberry Database system catalog to remove the existing 
+* Updates the Apache Cloudberry system catalog to remove the existing 
   standby coordinator host information (if the -r option is supplied) 
 
-* Updates the Cloudberry Database system catalog to add the new standby 
+* Updates the Apache Cloudberry system catalog to add the new standby 
   coordinator host information 
 
-* Edits the pg_hba.conf file of the Cloudberry Database coordinator to allow 
+* Edits the pg_hba.conf file of the Apache Cloudberry coordinator to allow 
   access from the newly added standby coordinator. 
 
 * Sets up the standby coordinator instance on the alternate coordinator host 
@@ -59,7 +59,7 @@ standby coordinator, the replicated logs are used to reconstruct the state of
 the coordinator host at the time of the last successfully committed 
 transaction. 
 
-The activated standby coordinator effectively becomes the Cloudberry Database 
+The activated standby coordinator effectively becomes the Apache Cloudberry 
 coordinator, accepting client connections on the coordinator port and performing 
 normal coordinator operations such as SQL command processing and workload 
 management. 
@@ -86,17 +86,17 @@ OPTIONS
 
 -n
 
- Specify this option to start a Cloudberry Database standby coordinator that 
+ Specify this option to start a Apache Cloudberry standby coordinator that 
  has been configured but has stopped for some reason. 
 
 
 -P <port> 
 
- This option specifies the port that is used by the Cloudberry Database 
+ This option specifies the port that is used by the Apache Cloudberry 
  standby coordinator. The default is the same port used by the active 
- Cloudberry Database coordinator. 
+ Apache Cloudberry coordinator. 
 
- If the Cloudberry Database standby coordinator is on the same host as the 
+ If the Apache Cloudberry standby coordinator is on the same host as the 
  active coordinator, the ports must be different. If the ports are the same 
  for the active and standby coordinator and the host is the same, the utility 
  returns an error. (See also -S.)
@@ -146,7 +146,7 @@ OPTIONS
 EXAMPLES
 *****************************************************
 
-Add a standby coordinator host to your Cloudberry Database system and start 
+Add a standby coordinator host to your Apache Cloudberry system and start 
 the synchronization process: 
 
 gpinitstandby -s host09 
@@ -159,13 +159,13 @@ gpinitstandby -n
 NOTE: Do not specify the -n and -s options in the same command. 
 
 
-Add a standby coordinator host to your Cloudberry Database system specifying a 
+Add a standby coordinator host to your Apache Cloudberry system specifying a 
 different port: 
 
 gpinitstandby -s myhost -P 2222 
 
-If you specify the same host name as the active Cloudberry Database 
-coordinator, the installed Cloudberry Database software that is used as a 
+If you specify the same host name as the active Apache Cloudberry 
+coordinator, the installed Apache Cloudberry software that is used as a 
 standby coordinator must be in a separate location from the active Cloudberry 
 Database coordinator.
 

@@ -175,7 +175,7 @@ typedef struct CopyFromStateData
 
 	uint64		bytes_processed;	/* number of bytes processed so far */
 
-	/* Cloudberry Database specific variables */
+	/* Apache Cloudberry specific variables */
 	CopyDispatchMode dispatch_mode;
 	MemoryContext	rowcontext;   /* per-row evaluation context */
 	bool		escape_off;		/* treat backslashes as non-special? */
@@ -190,7 +190,7 @@ typedef struct CopyFromStateData
 	CdbCopy		*cdbCopy;
 	bool		delim_off;	/* delimiter is set to OFF? */
 	bool		find_eol_with_rawreading; /* sreh: encoding error skip current line data */
-	/* end Cloudberry Database specific variables */
+	/* end Apache Cloudberry specific variables */
 } CopyFromStateData;
 
 extern void ReceiveCopyBegin(CopyFromState cstate);

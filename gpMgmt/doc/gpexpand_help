@@ -1,6 +1,6 @@
 COMMAND NAME:  gpexpand
 
-Expands an existing Cloudberry Database across new hosts in the array.
+Expands an existing Apache Cloudberry across new hosts in the array.
 
 ******************************************************
 SYNOPSIS
@@ -25,7 +25,7 @@ gpexpand --version
 PREREQUISITES
 ******************************************************
 
-* You are logged in as the Cloudberry Database superuser (gpadmin).
+* You are logged in as the Apache Cloudberry superuser (gpadmin).
 
 * The new segment hosts have been installed and configured as per 
   the existing segment hosts. This involves:
@@ -37,10 +37,10 @@ PREREQUISITES
 
 * Enough disk space on your segment hosts to temporarily hold a 
   copy of your largest table. 
-* When redistributing data, Cloudberry Database must be running in 
-  production mode. Cloudberry Database cannot be restricted mode or in 
+* When redistributing data, Apache Cloudberry must be running in 
+  production mode. Apache Cloudberry cannot be restricted mode or in 
   coordinator mode. The gpstart options -R or -m cannot be specified to start 
-  Cloudberry Database. 
+  Apache Cloudberry. 
   
   
 ******************************************************

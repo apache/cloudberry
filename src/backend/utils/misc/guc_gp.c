@@ -4047,7 +4047,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_session_id", PGC_BACKEND, CLIENT_CONN_OTHER,
-			gettext_noop("Global ID used to uniquely identify a particular session in an Cloudberry Database array"),
+			gettext_noop("Global ID used to uniquely identify a particular session in an Apache Cloudberry array"),
 			NULL,
 			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
 		},
@@ -4882,7 +4882,7 @@ struct config_string ConfigureNamesString_gp[] =
 
 	{
 		{"task_host_addr", PGC_POSTMASTER, TASK_SCHEDULE_OPTIONS,
-			gettext_noop("Host address to connect to Cloudberry database."),
+			gettext_noop("Host address to connect to Apache Cloudberry."),
 			NULL,
 			GUC_SUPERUSER_ONLY
 		},
@@ -5365,7 +5365,7 @@ static bool
 check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source)
 {
 	if (!*newval && Gp_role == GP_ROLE_DISPATCH)
-		elog(WARNING, "verify_gpfdists_cert=off. Cloudberry Database will stop validating "
+		elog(WARNING, "verify_gpfdists_cert=off. Apache Cloudberry will stop validating "
 				"the gpfdists SSL certificate for connections between segments and gpfdists");
 	return true;
 }

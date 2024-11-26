@@ -1208,7 +1208,7 @@ DROP TABLE test_ex_constraints;
 -- Test non-inheritable foreign key constraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);
 CREATE TABLE test_foreign_constraints(id1 int REFERENCES test_primary_constraints(id));
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 CREATE TABLE test_foreign_constraints_inh () INHERITS (test_foreign_constraints);
 \d+ test_primary_constraints
                          Table "public.test_primary_constraints"
@@ -1251,7 +1251,7 @@ DROP TABLE test_primary_constraints;
 create table inh_fk_1 (a int primary key);
 insert into inh_fk_1 values (1), (2), (3);
 create table inh_fk_2 (x int primary key, y int references inh_fk_1 on delete cascade);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 insert into inh_fk_2 values (11, 1), (22, 2), (33, 3);
 create table inh_fk_2_child () inherits (inh_fk_2);
 insert into inh_fk_2_child values (111, 1), (222, 2);

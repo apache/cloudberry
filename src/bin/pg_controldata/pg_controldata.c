@@ -40,7 +40,7 @@ usage(const char *progname)
 	printf(_(" [-D, --pgdata=]DATADIR  data directory\n"));
 	printf(_("  -V, --version          output version information, then exit\n"));
 	printf(_("  -?, --help             show this help, then exit\n"));
-	printf(_("  --gp-version   output CloudberryDB version information, then exit\n"));
+	printf(_("  --gp-version   output Cloudberry version information, then exit\n"));
 	printf(_("\nIf no data directory (DATADIR) is specified, "
 			 "the environment variable PGDATA\nis used.\n\n"));
 	printf(_("Report bugs to <%s>.\n"), PACKAGE_BUGREPORT);
@@ -122,12 +122,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_controldata (Cloudberry Database) " PG_VERSION);
+			puts("pg_controldata (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("pg_controldata (Cloudberry Database) " GP_VERSION);
+			puts("pg_controldata (Apache Cloudberry) " GP_VERSION);
 			exit(0);
 		}
 

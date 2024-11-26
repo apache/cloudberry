@@ -118,7 +118,7 @@ SELECT gp_request_fts_probe_scan();
 
 --  Corrupt a heap table
 create table corrupt_table(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 insert into corrupt_table select i from generate_series(1, 10) i;
 checkpoint;
 select invalidate_buffers_for_rel('corrupt_table') from gp_dist_random('gp_id');
@@ -145,7 +145,7 @@ WARNING:  page verification failed, calculated checksum 31819 but expected 57035
 ERROR:  invalid page in block 0 of relation base/81967/81931  (seg0 slice1 127.0.0.1:25432 pid=27287)
 -- Corrupt a heap table, with toast table 
 create table corrupt_toast_table(a int, comment bytea);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 insert into corrupt_toast_table select i, ("decode"(repeat('a',3000000),'escape')) from generate_series(1,10) i;
 checkpoint;
 select invalidate_buffers_for_rel(get_toast_name('corrupt_toast_table')) from gp_dist_random('gp_id');
@@ -172,7 +172,7 @@ WARNING:  page verification failed, calculated checksum 36613 but expected 5564 
 ERROR:  invalid page in block 2 of relation base/81967/81933  (seg0 slice1 127.0.0.1:25432 pid=27287)
 -- Corrupt a Btree Index
 create table corrupt_btree_index(a int, b char(50)); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 create index btree_index on corrupt_btree_index(a);
 insert into corrupt_btree_index select i, 'a' from generate_series(1, 10) i;
 checkpoint;
@@ -200,7 +200,7 @@ WARNING:  page verification failed, calculated checksum 15441 but expected 40657
 ERROR:  invalid page in block 1 of relation base/81967/81936  (seg1 127.0.0.1:25433 pid=27288)
 -- Corrupt a Bitmap Index 
 create table corrupt_bitmap_index(a int, b char(50)); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 create index bitmap_index on corrupt_bitmap_index(a);
 insert into corrupt_bitmap_index select i, 'a' from generate_series(1, 10) i;
 checkpoint;
@@ -252,7 +252,7 @@ select count(*) from mark_buffer_dirty_hint;
 
 -- using a DML to trigger the XLogFlush() to have the backup block written
 create table flush_xlog_page_to_disk (c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
 -- corrupt the page on disk
 select corrupt_file(get_relation_path('mark_buffer_dirty_hint'), -50);
 INFO:  corrupting file base/81967/81939 at -50  (seg0 slice1 127.0.0.1:25432 pid=27287)

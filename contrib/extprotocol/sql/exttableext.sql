@@ -22,7 +22,7 @@ SET search_path TO 'exttableext';
     CREATE READABLE EXTERNAL TABLE exttabtest_r(like exttabtest)
         LOCATION('demoprot://exttabtest.txt') 
     FORMAT 'text'
-    OPTIONS (database 'greenplum', foo 'bar');
+    OPTIONS (database 'cloudberry', foo 'bar');
 
     \d exttabtest_r
     \d exttabtest_w

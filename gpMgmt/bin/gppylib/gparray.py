@@ -961,7 +961,7 @@ class GpArray:
             version_str = dbconn.querySingleton(conn, "SELECT version()")
             version = GpVersion(version_str)
             if not version.isVersionCurrentRelease():
-                raise Exception("Cannot connect to CloudberryDB version %s from installed version %s"%(version.getVersionRelease(), MAIN_VERSION[0]))
+                raise Exception("Cannot connect to Cloudberry version %s from installed version %s"%(version.getVersionRelease(), MAIN_VERSION[0]))
 
             # Get gp_internal_is_singlenode GUC
             is_singlenode = dbconn.querySingleton(conn, "SHOW gp_internal_is_singlenode") == "on"

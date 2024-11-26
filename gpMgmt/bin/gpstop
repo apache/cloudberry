@@ -208,7 +208,7 @@ class GpStop:
 
                 if self.interactive:
                     self._summarize_actions(segs)
-                    if not userinput.ask_yesno(None, "\nContinue with CloudberryDB instance shutdown", 'N'):
+                    if not userinput.ask_yesno(None, "\nContinue with Cloudberry instance shutdown", 'N'):
                         raise UserAbortedException()
 
                 try:
@@ -320,8 +320,8 @@ class GpStop:
 
     ######
     def _check_version(self):
-        self.gpversion = gp.GpVersion.local('local CloudberryDB version check', self.gphome)
-        logger.info("CloudberryDB Version: '%s'" % self.gpversion)
+        self.gpversion = gp.GpVersion.local('local Cloudberry version check', self.gphome)
+        logger.info("Cloudberry Version: '%s'" % self.gpversion)
 
     ######
     def _read_postgresqlconf(self):
@@ -353,11 +353,11 @@ class GpStop:
             pass
         else:
             raise ExceptionNoStackTraceNeeded(
-                'postmaster.pid file does not exist.  is CloudberryDB instance already stopped?')
+                'postmaster.pid file does not exist.  is Cloudberry instance already stopped?')
 
     ######
     def _build_gparray(self):
-        logger.info("Obtaining CloudberryDB Coordinator catalog information")
+        logger.info("Obtaining Cloudberry Coordinator catalog information")
 
         logger.info("Obtaining Segment details from coordinator...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
@@ -823,7 +823,7 @@ class GpStop:
         logger.info("--------------------------------------------")
 
         tabLog = TableLogger(logger=logger).setWarnWithArrows(True)
-        tabLog.info(["Coordinator CloudberryDB instance process active PID", "= %s" % self.pid])
+        tabLog.info(["Coordinator Cloudberry instance process active PID", "= %s" % self.pid])
         tabLog.info(["Database", "= %s" % self.dburl.pgdb])
         tabLog.info(["Coordinator port", "= %s" % self.port])
         tabLog.info(["Coordinator directory", "= %s" % self.coordinator_datadir])
@@ -877,13 +877,13 @@ class GpStop:
                          help='set the method of shutdown')
 
         addTo.add_option('-r', '--restart', action='store_true',
-                         help='Restart Cloudberry Database instance after successful gpstop.')
+                         help='Restart Apache Cloudberry instance after successful gpstop.')
         addTo.add_option('-m', '--master_only', '-c', '--coordinator_only', dest='coordinator_only', action='store_true',
                          help='stop coordinator instance started in maintenance mode')
         addTo.add_option('-y', dest="stop_standby", action='store_false', default=True,
                          help='Do not stop the standby coordinator process.')
         addTo.add_option('-u', dest="request_sighup", action='store_true',
-                         help="upload new coordinator postgresql.conf settings, does not stop CloudberryDB array," \
+                         help="upload new coordinator postgresql.conf settings, does not stop Cloudberry array," \
                               "issues a signal to the coordinator segment postmaster process to reload")
 
         addTo.add_option('-B', '--parallel', type="int", default=DEFAULT_NUM_WORKERS, metavar="<parallel_processes>",

@@ -1,5 +1,5 @@
 --
--- Github issue: https://github.com/cloudberrydb/cloudberrydb/issues/557
+-- Github issue: https://github.com/apache/cloudberry/issues/557
 -- Test update on ao partition tables with unique index.
 --
 create schema t_issue_557;

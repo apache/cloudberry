@@ -101,7 +101,7 @@ main(int argc, char **argv)
 		switch (opt)
 		{
 			case 'V':
-				puts("isolationtester (Cloudberry Database) " PG_VERSION);
+				puts("isolationtester (Apache Cloudberry) " PG_VERSION);
 				exit(0);
 			default:
 				fprintf(stderr, "Usage: isolationtester [CONNINFO]\n");

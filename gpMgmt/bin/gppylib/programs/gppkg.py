@@ -87,7 +87,7 @@ class GpPkgProgram:
     @staticmethod
     def create_parser():
         parser = OptParser(option_class=OptChecker,
-            description="CloudberryDB Package Manager",
+            description="Cloudberry Package Manager",
             version='%prog version $Revision: #1 $')
         parser.setHelp([])
 

@@ -1174,9 +1174,9 @@ If you want to review or change any of your installation settings, click Back. C
       </Directory>
     </Directory>
     <Media Id="1" Cabinet="greenplumClientTools.cab" EmbedCab="yes" CompressionLevel="mszip" />
-    <Feature Id="Base" Level="1" ConfigurableDirectory="BASEDIR" Title="Cloudberry DB Clients" Display="expand" AllowAdvertise="no" Description="Cloudberry DB Clients">
+    <Feature Id="Base" Level="1" ConfigurableDirectory="BASEDIR" Title="Apache Cloudberry Clients" Display="expand" AllowAdvertise="no" Description="Apache Cloudberry Clients">
       <ComponentRef Id="TOPLEVELTextFiles" />
-      <Feature Id="psql" Level="1" Title="Cloudberry DB client command line tools" Description="Cloudberry DB client command line tools" AllowAdvertise="no" Display="expand">
+      <Feature Id="psql" Level="1" Title="Apache Cloudberry client command line tools" Description="Apache Cloudberry client command line tools" AllowAdvertise="no" Display="expand">
         <ComponentRef Id="TOPLEVELbin" />
         <ComponentRef Id="GPPYlib" />
         <ComponentRef Id="PYGRESQLlib" />

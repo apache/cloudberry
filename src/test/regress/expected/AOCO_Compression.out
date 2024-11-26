@@ -3605,7 +3605,7 @@ select
 
 -- Test that an AO/CO table with compresstype zlib and invalid compress level will error at create
 create table a_aoco_table_with_zlib_and_invalid_compression_level(col text) WITH (APPENDONLY=true, COMPRESSTYPE=zlib, compresslevel=-1, ORIENTATION=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value -1 out of bounds for option "compresslevel"
 DETAIL:  Valid values are between "0" and "19".
@@ -3618,7 +3618,7 @@ SELECT * FROM pg_compression WHERE compname='zlib';
 
 -- Given an AO/CO with RLE type compression
 create table a_aoco_table_with_rle_type_compression(col int) WITH (APPENDONLY=true, COMPRESSTYPE=rle_type, compresslevel=1, ORIENTATION=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select pg_size_pretty(pg_relation_size('a_aoco_table_with_rle_type_compression')),
        get_ao_compression_ratio('a_aoco_table_with_rle_type_compression');
@@ -3665,7 +3665,7 @@ select
 
 -- Test that an AO/CO table with compresstype rle and invalid compress level will error at create
 create table a_aoco_table_with_rle_type_and_invalid_compression_level(col int) WITH (APPENDONLY=true, COMPRESSTYPE=rle_type, compresslevel=-1, ORIENTATION=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value -1 out of bounds for option "compresslevel"
 DETAIL:  Valid values are between "0" and "19".

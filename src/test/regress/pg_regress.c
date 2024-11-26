@@ -2967,7 +2967,7 @@ regression_main(int argc, char *argv[],
 				help();
 				exit(0);
 			case 'V':
-				puts("pg_regress (Cloudberry Database) " PG_VERSION);
+				puts("pg_regress (Apache Cloudberry) " PG_VERSION);
 				exit(0);
 			case 1:
 

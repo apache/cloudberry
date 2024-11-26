@@ -512,7 +512,7 @@ main(int argc, char **argv)
 		else if (strcmp(argv[1], "-V") == 0 ||
 				 strcmp(argv[1], "--version") == 0)
 		{
-			puts("pg_receivewal (Cloudberry Database) " PG_VERSION);
+			puts("pg_receivewal (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}

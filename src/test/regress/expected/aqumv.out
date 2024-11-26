@@ -996,7 +996,7 @@ analyze t1;
 create materialized view normal_mv_t1 as
   select c3 as mc3, c1 as mc1
   from t1 where c1 > 90;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze normal_mv_t1;
 set enable_answer_query_using_materialized_views = off;
@@ -1872,7 +1872,7 @@ analyze aqumv_t5;
 create incremental materialized view aqumv_mvt5_0 as
   select c1 as mc1, c2 as mc2, c3 as mc3
   from aqumv_t5 where c1 > 90;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt5_0;
 -- order by column.
@@ -2722,7 +2722,7 @@ CREATE READABLE EXTERNAL TABLE aqumv_ext_r(id int)
 FORMAT 'text';
 create materialized view aqumv_ext_mv as
   select * from aqumv_ext_r;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_ext_mv;
 explain (costs off, verbose)
@@ -2861,7 +2861,7 @@ analyze t;
 create materialized view mv as
   select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
   from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze mv;
 set local enable_answer_query_using_materialized_views = off;
@@ -3022,7 +3022,7 @@ analyze t;
 create materialized view mv as
   select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
   from t where c1 > 90;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze mv;
 set local enable_answer_query_using_materialized_views = off;

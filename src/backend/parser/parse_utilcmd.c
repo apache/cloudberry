@@ -2787,7 +2787,7 @@ transformDistributedBy(ParseState *pstate,
 		 * if we get here, we haven't a clue what to use for the distribution columns.
 		 * table has one or more attributes and there is still no distribution
 		 * key. pick a default one. the winner is the first attribute that is
-		 * an Cloudberry Database-hashable data type.
+		 * an Apache Cloudberry-hashable data type.
 		 */
 
 		ListCell   *columns;
@@ -2836,7 +2836,7 @@ transformDistributedBy(ParseState *pstate,
 							ereport(NOTICE,
 								(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 								 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column "
-										"named '%s' from parent table as the Cloudberry Database data distribution key for this "
+										"named '%s' from parent table as the Apache Cloudberry data distribution key for this "
 										"table. ", inhname),
 								 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
 								 		 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));
@@ -2884,7 +2884,7 @@ transformDistributedBy(ParseState *pstate,
 						ereport(NOTICE,
 							(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 							 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column "
-									"named '%s' as the Cloudberry Database data distribution key for this "
+									"named '%s' as the Apache Cloudberry data distribution key for this "
 									"table. ", column->colname),
 							 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
 							 		 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));
@@ -5131,7 +5131,7 @@ setSchemaName(char *context_schema, char **stmt_schema_name)
 /*
  * getLikeDistributionPolicy
  *
- * For Cloudberry Database distributed tables, default to
+ * For Apache Cloudberry distributed tables, default to
  * the same distribution as the first LIKE table, unless
  * we also have INHERITS
  */

@@ -44,14 +44,14 @@ and runs the following performance tests:
   memory bandwidth (in MB/s). This tests that your system is not 
   limited in performance by the memory bandwidth of the system in 
   relation to the computational performance of the CPU. In applications 
-  where the data set is large (as in Cloudberry Database), low memory 
+  where the data set is large (as in Apache Cloudberry), low memory 
   bandwidth is a major performance issue. If memory bandwidth is 
   significantly lower than the theoretical bandwidth of the CPU, 
   then it can cause the CPU to spend significant amounts of time 
   waiting for data to arrive from system memory.
 
 * Network Performance Test (gpnetbench) - To test network performance 
- (and thereby the performance of the Cloudberry Database interconnect), 
+ (and thereby the performance of the Apache Cloudberry interconnect), 
   the utility runs a network benchmark program that transfers a 5 
   second stream of data from the current host to each remote host 
   included in the test. The data is transferred in parallel to each 
@@ -94,7 +94,7 @@ OPTIONS
 -B <block_size>
 
 Specifies the block size (in KB or MB) to use for disk I/O test. 
-The default is 32KB, which is the same as the Cloudberry Database 
+The default is 32KB, which is the same as the Apache Cloudberry 
 page size. The maximum block size is 1 MB.
 
 --buffersize <kbytes>

@@ -932,7 +932,7 @@
 /* Define to 1 to use <stdbool.h> to define type bool. */
 #undef PG_USE_STDBOOL
 
-/* Postgres version Cloudberry Database is based on */
+/* Postgres version Apache Cloudberry is based on */
 /* PostgreSQL version as a string */
 #undef PG_VERSION
 

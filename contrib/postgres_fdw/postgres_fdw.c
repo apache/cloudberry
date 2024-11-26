@@ -7658,7 +7658,7 @@ greenplumCheckIsCloudberry(UserMapping *user)
 	if (PQntuples(res) == 0)
 		pgfdw_report_error(ERROR, res, conn, true, query);
 
-	ret = strstr(PQgetvalue(res, 0, 0), "Cloudberry Database") ? 1 : 0;
+	ret = strstr(PQgetvalue(res, 0, 0), "Apache Cloudberry") ? 1 : 0;
 
 	PQclear(res);
 	ReleaseConnection(conn);

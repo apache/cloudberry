@@ -9598,7 +9598,7 @@ SELECT count(*) FROM ft1;
 
 -- error here
 PREPARE TRANSACTION 'fdw_tpc';
-ERROR:  PREPARE TRANSACTION is not yet supported in Cloudberry Database
+ERROR:  PREPARE TRANSACTION is not yet supported in Apache Cloudberry
 ROLLBACK;
 WARNING:  there is no transaction in progress
 -- ===================================================================

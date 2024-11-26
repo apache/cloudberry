@@ -866,7 +866,7 @@ array_agg_deserialize(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(result);
 }
 
-/* Cloudberry Database Additions: */
+/* Apache Cloudberry Additions: */
 
 
 /*-----------------------------------------------------------------------------

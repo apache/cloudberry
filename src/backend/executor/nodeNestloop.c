@@ -115,7 +115,7 @@ ExecNestLoop_guts(PlanState *pstate)
 	if (node->prefetch_inner)
 	{
 		/*
-		 * Prefetch inner is CloudberryDB specific behavior.
+		 * Prefetch inner is Cloudberry specific behavior.
 		 * However, inner plan may depend on outer plan as
 		 * outerParams. If so, we have to fake those params
 		 * to avoid null pointer reference issue. And because

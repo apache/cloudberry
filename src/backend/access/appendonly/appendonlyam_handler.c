@@ -300,7 +300,7 @@ appendonly_dml_finish(Relation relation, CmdType operation)
 		else
 		{
 			/*
-			 * Github issue: https://github.com/cloudberrydb/cloudberrydb/issues/557
+			 * Github issue: https://github.com/apache/cloudberry/issues/557
 			 *
 			 * For partition tables, it's possible to update across partitions.
 			 * And it does have deleteDesc and uniqueCheckDesc if there were.

@@ -54,7 +54,7 @@ class GpVersionTestCase(unittest.TestCase):
         self.assertTrue(v34 < "4.0")
 
     def test_case_5(self):
-        vShort = GpVersion("postgres (Cloudberry Database) 3.3.5.0 build 3")
+        vShort = GpVersion("postgres (Apache Cloudberry) 3.3.5.0 build 3")
 
         self.assertTrue(vShort.isVersionCurrentRelease() == False )
         self.assertTrue(vShort.getVersionBuild() == '3')
@@ -66,7 +66,7 @@ class GpVersionTestCase(unittest.TestCase):
 
 
     def test_case_6(self):
-        vLong = GpVersion("PostgreSQL 8.2.14 (Cloudberry Database 3.4.filerep build 0) on i386-apple-darwin9.8.0, compiled by GCC i686-apple-darwin9-gcc-4.0.1 (GCC) 4.0.1 (Apple Inc. build 5465) compiled on Feb 16 2010 11:25:31 (with assert checking)")
+        vLong = GpVersion("PostgreSQL 8.2.14 (Apache Cloudberry 3.4.filerep build 0) on i386-apple-darwin9.8.0, compiled by GCC i686-apple-darwin9-gcc-4.0.1 (GCC) 4.0.1 (Apple Inc. build 5465) compiled on Feb 16 2010 11:25:31 (with assert checking)")
     
         self.assertTrue(vLong.isVersionCurrentRelease() == False )
         self.assertTrue(vLong.getVersionBuild() == 'filerep')
@@ -99,7 +99,7 @@ class GpVersionTestCase(unittest.TestCase):
         self.assertEqual(v_2.getVersionRelease(), "4.2")
        
     def test_case_7(self):
-        vLong = GpVersion("PostgreSQL 9.4.20 (Cloudberry Database 7.0.0 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0, 64-bit compiled on Jul  8 2019 16:27:59")
+        vLong = GpVersion("PostgreSQL 9.4.20 (Apache Cloudberry 7.0.0 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0, 64-bit compiled on Jul  8 2019 16:27:59")
         self.assertTrue(vLong.isVersionCurrentRelease() == True )
         self.assertTrue(vLong.getVersionBuild() == 'dev')
         self.assertTrue(vLong.getVersionRelease() == "7")

@@ -6,7 +6,7 @@ associated action to be taken when that point is hit during execution.
 Fault points are defined in the instrumented code using
 SIMPLE_FAULT_INJECTOR() macro.  A fault point is identifed by a name.
 This module provides an interface to inject a predefined fault point
-into a running Cloudberry Database cluster by associating an action
+into a running Apache Cloudberry cluster by associating an action
 with the fault point.  Action can be error, panic, sleep, skip,
 infinite_loop, etc.
 

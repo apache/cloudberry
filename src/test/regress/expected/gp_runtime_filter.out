@@ -5,10 +5,10 @@ DROP TABLE IF EXISTS fact_rf, dim_rf;
 NOTICE:  table "fact_rf" does not exist, skipping
 NOTICE:  table "dim_rf" does not exist, skipping
 CREATE TABLE fact_rf (fid int, did int, val int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fid' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE dim_rf (did int, proj_id int, filter_val int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Generating data, fact_rd.did and dim_rf.did is 80% matched
 INSERT INTO fact_rf SELECT i, i % 8000 + 1, i FROM generate_series(1, 100000) s(i);

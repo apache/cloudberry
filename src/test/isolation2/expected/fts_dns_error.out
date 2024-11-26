@@ -29,7 +29,7 @@
 20180815:04:37:39:022618 gpstop:gpdbvm:gpadmin-[INFO]:-Gathering information and validating the environment...
 20180815:04:37:39:022618 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Cloudberry Master catalog information
 20180815:04:37:39:022618 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
-20180815:04:37:39:022618 gpstop:gpdbvm:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
+20180815:04:37:39:022618 gpstop:gpdbvm:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
 20180815:04:37:39:022618 gpstop:gpdbvm:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 . 
 
@@ -80,8 +80,8 @@ select count(*) from gp_segment_configuration where status = 'd';
 !\retcode gprecoverseg -aF --no-progress;
 -- start_ignore
 20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF
-20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Cloudberry Database) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
-20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Cloudberry Version: 'PostgreSQL 9.1beta2 (Cloudberry Database 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss) on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Aug 15 2018 00:06:20 (with assert checking)'
+20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
+20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Cloudberry Version: 'PostgreSQL 9.1beta2 (Apache Cloudberry 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss) on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Aug 15 2018 00:06:20 (with assert checking)'
 20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
 20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg
 20180815:04:37:43:022680 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Cloudberry instance recovery parameters
@@ -134,8 +134,8 @@ DO
 !\retcode gprecoverseg -ar;
 -- start_ignore
 20180815:04:37:51:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Starting gprecoverseg with args: -ar
-20180815:04:37:51:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Cloudberry Database) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
-20180815:04:37:52:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Cloudberry Version: 'PostgreSQL 9.1beta2 (Cloudberry Database 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss) on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Aug 15 2018 00:06:20 (with assert checking)'
+20180815:04:37:51:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
+20180815:04:37:52:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Cloudberry Version: 'PostgreSQL 9.1beta2 (Apache Cloudberry 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss) on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Aug 15 2018 00:06:20 (with assert checking)'
 20180815:04:37:52:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
 20180815:04:37:52:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Cloudberry instance recovery parameters
 20180815:04:37:52:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
@@ -165,8 +165,8 @@ DO
 20180815:04:37:53:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Triggering segment reconfiguration
 20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Starting segment synchronization
 20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-=============================START ANOTHER RECOVER=========================================
-20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Cloudberry Database) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
-20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Cloudberry Version: 'PostgreSQL 9.1beta2 (Cloudberry Database 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss) on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Aug 15 2018 00:06:20 (with assert checking)'
+20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
+20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Cloudberry Version: 'PostgreSQL 9.1beta2 (Apache Cloudberry 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss) on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Aug 15 2018 00:06:20 (with assert checking)'
 20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
 20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg
 20180815:04:37:55:023173 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Cloudberry instance recovery parameters
@@ -250,7 +250,7 @@ select count(*) from gp_segment_configuration where status = 'd';
 20180815:04:38:03:023878 gpstop:gpdbvm:gpadmin-[INFO]:-Gathering information and validating the environment...
 20180815:04:38:03:023878 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Cloudberry Master catalog information
 20180815:04:38:03:023878 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
-20180815:04:38:03:023878 gpstop:gpdbvm:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
+20180815:04:38:03:023878 gpstop:gpdbvm:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 6.0.0-alpha.0+dev.7526.g2508fd0 build dev-oss'
 20180815:04:38:03:023878 gpstop:gpdbvm:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 . 
 

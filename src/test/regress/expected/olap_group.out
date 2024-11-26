@@ -1775,7 +1775,7 @@ select count(*) from sale group by rollup((cn,vn),(pn,dt));
 
 -- Distinguish grouping value NULLs from summarization NULLs --
 create table olap_tmp_for_group (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into olap_tmp_for_group values (1,1,1),(1,2,1),(1,2,1),(2,1,1),(2,2,1);
 --start_equiv
@@ -6045,7 +6045,7 @@ select sum((select prc from sale where cn = s.cn and vn = s.vn and pn = s.pn)) f
 -- end MPP-14021
 -- Test COUNT in a subquery
 create table prod_agg (sale integer, prod varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'sale' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'sale' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into prod_agg values
   (100, 'shirts'),
@@ -6054,7 +6054,7 @@ insert into prod_agg values
   (400, 'caps'),
   (450, 'hats');
 create table cust_agg (cusname varchar, sale integer, prod varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cusname' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cusname' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into cust_agg values
   ('aryan', 100, 'shirts'),
@@ -6110,7 +6110,7 @@ select x,y,count(*), grouping(x,y) from generate_series(1,2) x, generate_series(
 (9 rows)
 
 create table test_gsets (i int, n numeric);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_gsets values (0, 0), (0, 1), (0,2);
 select i,n,count(*), grouping(i), grouping(n), grouping(i,n) from test_gsets group by grouping sets((), (i,n)) having n is null;
@@ -6127,10 +6127,10 @@ select x, y, count(*), grouping(x,y) from generate_series(1,1) x, generate_serie
 
 -- GROUPING SETS meets subplan [issue 8342]
 create table foo_gset(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar_gset(b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo_gset select i from generate_series(1,10)i;
 insert into bar_gset select i from generate_series(1,10)i;

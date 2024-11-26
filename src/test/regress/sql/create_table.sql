@@ -962,7 +962,7 @@ drop table defcheck;
 CREATE UNLOGGED TABLE unlogged_toast (a text);
 TRUNCATE unlogged_toast;
 
--- test https://github.com/cloudberrydb/cloudberrydb/issues/595
+-- test https://github.com/apache/cloudberry/issues/595
 CREATE TABLE t_issue_595(c0 DECIMAL UNIQUE DEFAULT (0.059636344153715326) PRIMARY KEY,
 	c1 money CHECK (((t_issue_595.c1)IS NOT DISTINCT FROM(CAST(0.6099821 AS MONEY)))) NULL, c2 TEXT );
 DROP TABLE t_issue_595;

@@ -1,6 +1,6 @@
 COMMAND NAME: gpaddmirrors
 
-Adds mirror segments to a Cloudberry Database system that was 
+Adds mirror segments to a Apache Cloudberry system that was 
 initially configured without mirroring.
 
 
@@ -29,13 +29,13 @@ gpaddmirrors --version
 DESCRIPTION
 *****************************************************
 The gpaddmirrors utility configures mirror segment instances for an 
-existing Cloudberry Database system that was initially configured with 
+existing Apache Cloudberry system that was initially configured with 
 primary segment instances only. The utility will create the mirror 
 instances and begin the online replication process between the primary 
 and mirror segment instances. Once all mirrors are synchronized with 
-their primaries, your Cloudberry Database system is fully data redundant.
+their primaries, your Apache Cloudberry system is fully data redundant.
 
-IMPORTANT: During the online replication process, Cloudberry Database 
+IMPORTANT: During the online replication process, Apache Cloudberry 
 should be in a quiescent state, workloads and other queries should not 
 be running. 
 
@@ -208,7 +208,7 @@ Valid values: 1-128
 EXAMPLES
 *****************************************************
 
-Add mirroring to an existing Cloudberry Database system using 
+Add mirroring to an existing Apache Cloudberry system using 
 the same set of hosts as your primary data. Calculate the mirror 
 database ports by adding 100 to the current primary segment port
 numbers:
@@ -216,7 +216,7 @@ numbers:
   $ gpaddmirrors -p 100
 
 
-Add mirroring to an existing Cloudberry Database system using a 
+Add mirroring to an existing Apache Cloudberry system using a 
 different set of hosts from your primary data:
 
 $ gpaddmirrors -i mirror_config_file

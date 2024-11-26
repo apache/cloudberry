@@ -442,7 +442,7 @@ drop table t4_12146;
 reset allow_system_table_mods;
 
 --
--- test https://github.com/cloudberrydb/cloudberrydb/issues/593
+-- test https://github.com/apache/cloudberry/issues/593
 --
 CREATE TABLE t0_issue_593(c0 bigserial PRIMARY KEY) USING heap WITH (autovacuum_vacuum_threshold=1468046284, autovacuum_analyze_threshold=1889118206, autovacuum_vacuum_cost_delay=9, fillfactor=25, autovacuum_freeze_max_age=1860760049, autovacuum_enabled=0, autovacuum_freeze_min_age=402702412, autovacuum_vacuum_cost_limit=2500);
 CREATE TABLE IF NOT EXISTS t1_issue_593(LIKE t0_issue_593);

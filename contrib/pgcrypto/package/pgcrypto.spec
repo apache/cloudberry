@@ -1,4 +1,4 @@
-Summary:        Cryptographic functions for Cloudberry Database 
+Summary:        Cryptographic functions for Apache Cloudberry 
 License:        PostgreSQL License        
 Name:           pgcrypto
 Version:        %{pgcrypto_ver}
@@ -10,7 +10,7 @@ AutoProv:       no
 Provides:       pgcrypto = %{pgcrypto_ver} 
 
 %description
-The Pgcrypto package provides cryptographic functions for the Cloudberry Database.
+The Pgcrypto package provides cryptographic functions for the Apache Cloudberry.
 
 %install
 mkdir -p %{buildroot}/temp

@@ -112,7 +112,7 @@ select action::text, b from ctas_baz order by 1,2 limit 5;
 -- Once upon a time, we had a bug in dispatching the table's OID in this
 -- scenario.
 create table ctas_input(x int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into ctas_input select * from generate_series(1, 10);
 CREATE FUNCTION ctas_inputArray() RETURNS INT[] AS $$
@@ -124,7 +124,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 create table ctas_output as select ctas_inputArray()::int[] as x;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Test CTAS with VALUES.
 CREATE TEMP TABLE yolo(i, j, k) AS (VALUES (0,0,0), (1, NULL, 0), (2, NULL, 0), (3, NULL, 0)) DISTRIBUTED BY (i);
@@ -183,7 +183,7 @@ $BODY$ LANGUAGE SQL IMMUTABLE
 DROP TABLE IF EXISTS unnest_2d_tbl01;
 NOTICE:  table "unnest_2d_tbl01" does not exist, skipping
 CREATE TABLE unnest_2d_tbl01 (id INT, val DOUBLE PRECISION[][]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO unnest_2d_tbl01 VALUES
   (1, ARRAY[[1::float8,2],[3::float8,4],[5::float8,6],[7::float8,8]]),
@@ -194,12 +194,12 @@ NOTICE:  table "unnest_2d_tbl01_out" does not exist, skipping
 -- The following CTAS fails previously, see Github Issue 9365
 CREATE TABLE unnest_2d_tbl01_out AS
   SELECT id, (array_unnest_2d_to_1d(val)).* FROM unnest_2d_tbl01;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Github issue 9790.
 -- Previously, CTAS with no data won't handle the 'WITH' clause
 CREATE TABLE ctas_base(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ctas_aocs WITH (appendonly=true, orientation=column) AS SELECT * FROM ctas_base WITH NO DATA;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
@@ -256,10 +256,10 @@ reset optimizer;
 create or replace function mv_action_select_issue_11999() returns bool language sql as
 'declare c cursor for select 1/0; select true';
 create materialized view sro_mv_issue_11999 as select mv_action_select_issue_11999() with no data;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action_select_issue_11999' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action_select_issue_11999' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t_sro_mv_issue_11999 as select mv_action_select_issue_11999() with no data;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action_select_issue_11999' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action_select_issue_11999' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select count(*)
 from
@@ -307,7 +307,7 @@ CREATE OR REPLACE FUNCTION public.exception_func()
  LANGUAGE plpgsql
 AS $function$declare cname refcursor = 'result'; begin open cname for select 1; raise sqlstate '02000'; return cname; exception when sqlstate '02000' then  return cname; end;$function$;
 SELECT exception_func() INTO TEMPORARY test_tmp1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM test_tmp1;
  exception_func 
@@ -316,7 +316,7 @@ SELECT * FROM test_tmp1;
 (1 row)
 
 CREATE TEMPORARY TABLE test_tmp2 AS SELECT exception_func();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM test_tmp2;
  exception_func 

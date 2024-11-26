@@ -226,7 +226,7 @@ pgbench(
 	'pgbench help');
 
 # Version
-pgbench('-V', 0, [qr{^pgbench .Cloudberry Database. }], [qr{^$}], 'pgbench version');
+pgbench('-V', 0, [qr{^pgbench .Apache Cloudberry. }], [qr{^$}], 'pgbench version');
 
 # list of builtins
 pgbench(

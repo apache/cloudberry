@@ -2304,7 +2304,7 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path, int flags)
 	}
 
 	/*
-	 * CloudberryDB specific behavior:
+	 * Cloudberry specific behavior:
 	 * We may use the Result plan with resconstantqual to be
 	 * One-Time Filter: (gp_execution_segment() = <some segid>).
 	 * We should re-consider direct dispatch info in this case.

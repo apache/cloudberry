@@ -495,7 +495,7 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 				ereport(NOTICE,
 						(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 						 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) "
-								"named '%s' as the Cloudberry Database data distribution key for this "
+								"named '%s' as the Apache Cloudberry data distribution key for this "
 								"table. ", columnsbuf.data),
 						 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
 								 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));

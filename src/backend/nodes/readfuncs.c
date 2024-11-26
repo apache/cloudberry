@@ -1560,7 +1560,7 @@ _readRangeTblFunction(void)
 }
 
 /*
- * Cloudberry Database additions for serialization support
+ * Apache Cloudberry additions for serialization support
  * These are currently not used (see outfastc ad readfast.c)
  */
 #include "nodes/plannodes.h"

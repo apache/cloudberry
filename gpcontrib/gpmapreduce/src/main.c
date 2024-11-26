@@ -498,7 +498,7 @@ void check_version(PGconn *conn)
 	PGresult *result;
 
 	result = PQexec(conn, "select (regexp_matches(version(), "
-					"E'\\\\(Cloudberry Database ([^)]+)\\\\)'))[1]");
+					"E'\\\\(Apache Cloudberry ([^)]+)\\\\)'))[1]");
 
 	if (PQresultStatus(result) == PGRES_TUPLES_OK && PQntuples(result) == 1)
 	{

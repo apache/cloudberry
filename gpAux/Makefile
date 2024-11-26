@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------
-# Makefile for Cloudberry Database
+# Makefile for Apache Cloudberry
 #---------------------------------------------------------------------
 
 # keep the default target above any targets from included makefiles

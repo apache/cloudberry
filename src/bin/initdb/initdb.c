@@ -3250,7 +3250,7 @@ initialize_data_directory(void)
 
 	load_exttable(cmdfd);
 
-	/* sets up the Cloudberry Database admin schema */
+	/* sets up the Apache Cloudberry admin schema */
 	setup_cdb_schema(cmdfd);
 
 	vacuum_db(cmdfd);
@@ -3340,12 +3340,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("initdb (Cloudberry Database) " PG_VERSION);
+			puts("initdb (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("initdb (Cloudberry Database) " GP_VERSION);
+			puts("initdb (Apache Cloudberry) " GP_VERSION);
 			exit(0);
 		}
 	}

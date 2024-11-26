@@ -37,11 +37,11 @@ operational during resyncronization.
 
 A segment instance can fail for several reasons, such as a host failure, 
 network failure, or disk failure. When a segment instance fails, its 
-status is marked as down in the Cloudberry Database system catalog, 
+status is marked as down in the Apache Cloudberry system catalog, 
 and its mirror is activated in change tracking mode. In order to 
 bring the failed segment instance back into operation again, you 
 must first correct the problem that made it fail in the first place, 
-and then recover the segment instance in Cloudberry Database 
+and then recover the segment instance in Apache Cloudberry 
 using gprecoverseg.
 
 Segment recovery using gprecoverseg requires that you have an active 
@@ -198,9 +198,9 @@ edited to supply alternate recovery locations if needed.
 -p <new_recover_host>[,...]
 
 Specifies a spare host outside of the currently configured 
-Cloudberry Database array on which to recover invalid segments. In 
+Apache Cloudberry array on which to recover invalid segments. In 
 the case of multiple failed segment hosts, you can specify a 
-comma-separated list. The spare host must have the Cloudberry Database 
+comma-separated list. The spare host must have the Apache Cloudberry 
 software installed and configured, and have the same hardware and OS 
 configuration as the current segment hosts (same OS version, locales, 
 gpadmin user account, data directory locations created, ssh keys 
@@ -264,7 +264,7 @@ Recover any failed segment instances in place:
  $ gprecoverseg
 
 
-Rebalance your Cloudberry Database system after a recovery by
+Rebalance your Apache Cloudberry system after a recovery by
 resetting all segments to their preferred role. First check
 that all segments are up and synchronized.
 
