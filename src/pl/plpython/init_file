@@ -18,7 +18,7 @@ s/PLyResult status=5 nrows=2 rows=\[\{'foo': 2\}, \{'foo': 1\}\]/PLyResult statu
 # modify the corresponding expected output. Hence we want to ignore these.
 # Some of the messages include:
 #
-# NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '<colname>' as the Cloudberry Database data distribution key for this table.
+# NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '<colname>' as the Apache Cloudberry data distribution key for this table.
 # NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 # HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 #

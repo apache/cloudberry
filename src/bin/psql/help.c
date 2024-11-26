@@ -70,7 +70,7 @@ usage(unsigned short int pager)
 	 */
 	output = PageOutput(63, pager ? &(pset.popt.topt) : NULL);
 
-	fprintf(output, _("psql is the PostgreSQL interactive terminal (CloudberryDB version).\n\n"));
+	fprintf(output, _("psql is the PostgreSQL interactive terminal (Cloudberry version).\n\n"));
 	fprintf(output, _("Usage:\n"));
 	fprintf(output, _("  psql [OPTION]... [DBNAME [USERNAME]]\n\n"));
 

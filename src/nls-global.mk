@@ -40,7 +40,7 @@ ALL_PO_FILES = $(addprefix po/, $(addsuffix .po, $(AVAIL_LANGUAGES)))
 MO_FILES = $(addprefix po/, $(addsuffix .mo, $(LANGUAGES)))
 
 ifdef XGETTEXT
-XGETTEXT += -ctranslator --copyright-holder='CloudberryDB Project' --msgid-bugs-address=info@cloudberrydb.org --no-wrap --sort-by-file --package-name='$(CATALOG_NAME) (CloudberryDB)' --package-version='$(MAJORVERSION)'
+XGETTEXT += -ctranslator --copyright-holder='Cloudberry Project' --msgid-bugs-address=dev@cloudberry.apache.org --no-wrap --sort-by-file --package-name='$(CATALOG_NAME) (Cloudberry)' --package-version='$(MAJORVERSION)'
 endif
 
 ifdef MSGMERGE

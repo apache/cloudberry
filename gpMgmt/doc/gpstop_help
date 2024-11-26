@@ -1,6 +1,6 @@
 COMMAND NAME: gpstop
 
-Stops or restarts a Cloudberry Database system.
+Stops or restarts a Apache Cloudberry system.
 
 
 *****************************************************
@@ -31,13 +31,13 @@ DESCRIPTION
 *****************************************************
 
 The gpstop utility is used to stop the database servers that 
-comprise a Cloudberry Database system. When you stop a Cloudberry 
+comprise a Apache Cloudberry system. When you stop a Cloudberry 
 Database system, you are actually stopping several postgres 
 database server processes at once (the coordinator and all of the 
 segment instances). The gpstop utility handles the shutdown 
 of the individual instances. Each instance is shutdown in parallel. 
 
-By default, you are not allowed to shut down Cloudberry Database 
+By default, you are not allowed to shut down Apache Cloudberry 
 if there are any client connections to the database. Use 
 the -M fast option to roll back and terminate any connections 
 before shutting down. If there are any transactions in progress, 
@@ -139,7 +139,7 @@ OPTIONS
  shutdown in the specified number of seconds, gpstop displays 
  a message indicating that one or more segments are still in 
  the process of shutting down and that you cannot restart 
- Cloudberry Database until the segment instance(s) are stopped. 
+ Apache Cloudberry until the segment instance(s) are stopped. 
  This option is useful in situations where gpstop is executed 
  and there are very large transactions that need to rollback. 
  These large transactions can take over a minute to rollback 
@@ -150,7 +150,7 @@ OPTIONS
 
  This option reloads the pg_hba.conf files of the coordinator and 
  segments and the runtime parameters of the postgresql.conf files 
- but does not shutdown the Cloudberry Database array. Use this 
+ but does not shutdown the Apache Cloudberry array. Use this 
  option to make new configuration settings active after editing 
  postgresql.conf or pg_hba.conf. Note that this only applies to 
  configuration parameters that are designated as runtime parameters.
@@ -182,12 +182,12 @@ OPTIONS
 EXAMPLES
 *****************************************************
 
-Stop a Cloudberry Database system in smart mode:
+Stop a Apache Cloudberry system in smart mode:
 
   gpstop
 
 
-Stop a Cloudberry Database system in fast mode:
+Stop a Apache Cloudberry system in fast mode:
 
   gpstop -M fast
 
@@ -210,7 +210,7 @@ other hosts up:
 
 Reload the postgresql.conf and pg_hba.conf files after 
 making runtime configuration parameter changes but do not 
-shutdown the Cloudberry Database array:
+shutdown the Apache Cloudberry array:
 
   gpstop -u
 

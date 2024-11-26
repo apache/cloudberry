@@ -173,7 +173,7 @@ const f_smgr *smgr_get(SMgrImpl smgr_impl)
 /*
  * smgr_get_impl() is used to get the smgr id of the relation.
  *
- * FIXME: For PAX_AM_OID, Cloudberrydb reserves this value for ORCA, a
+ * FIXME: For PAX_AM_OID, Cloudberry reserves this value for ORCA, a
  * predefined value is used here to reserve the smgr id for PAX_AM_OID.
  * should we add a hook to get the smgr id of the relation?
  */

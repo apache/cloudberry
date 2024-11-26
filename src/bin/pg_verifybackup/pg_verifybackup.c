@@ -193,7 +193,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_verifybackup (Cloudberry Database) " PG_VERSION);
+			puts("pg_verifybackup (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}
@@ -287,7 +287,7 @@ main(int argc, char **argv)
 
 		pg_waldump_path = pg_malloc(MAXPGPATH);
 		ret = find_other_exec(argv[0], "pg_waldump",
-							  "pg_waldump (Cloudberry Database) " PG_VERSION "\n",
+							  "pg_waldump (Apache Cloudberry) " PG_VERSION "\n",
 							  pg_waldump_path);
 		if (ret < 0)
 		{

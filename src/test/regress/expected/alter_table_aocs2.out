@@ -743,7 +743,7 @@ VACUUM multivarblock_zlibtab;
 drop table if exists nonbulk_rle_tab;
 NOTICE:  table "nonbulk_rle_tab" does not exist, skipping
 create table nonbulk_rle_tab (a int) with (appendonly=true, orientation=column, compresstype='rle_type', checksum=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into nonbulk_rle_tab select i/50 from generate_series(1, 1000000)i;
 alter table nonbulk_rle_tab add column b int default round(random()*100);
@@ -794,7 +794,7 @@ CREATE MATERIALIZED VIEW table_relfilenode (segno, rel, relfilenode)
 AS
 :qry
 ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segno' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segno' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO rewrite_optimization_aoco_parent SELECT i, i % 2, i FROM generate_series(1,10)i;
 ALTER TABLE rewrite_optimization_aoco_parent ADD COLUMN new_col int DEFAULT 1;
@@ -836,7 +836,7 @@ CREATE MATERIALIZED VIEW table_relfilenode (segno, rel, relfilenode)
 AS
 :qry
 ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segno' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segno' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO rewrite_optimization_heap_parent SELECT i, i % 2, i FROM generate_series(1,10)i;
 ALTER TABLE rewrite_optimization_heap_parent ADD COLUMN new_col int DEFAULT 1;
@@ -908,7 +908,7 @@ CREATE MATERIALIZED VIEW table_relfilenode (segno, rel, relfilenode)
 AS
 :qry
 ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segno' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segno' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Scenario 1: ADD COLUMN for AOCO subpartitioned table should not trigger full
 -- table rewrite. AOCO leaf only writes new column

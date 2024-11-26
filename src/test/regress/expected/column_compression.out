@@ -17,7 +17,7 @@ create table ccddl (
 	j int,
 	default column encoding (compresstype=zlib)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -141,7 +141,7 @@ create table ccddl (
 	j int,
 	default column encoding (compresstype=zlib, compresslevel=5)
 ) with (appendonly=true, orientation=column, oids=false);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -156,7 +156,7 @@ create table ccddl (
 	j int,
 	default column encoding (compresstype=zlib)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -288,7 +288,7 @@ create table ccddl (
 	j int encoding (compresstype=RLE_TYPE),
 	default column encoding (compresstype=zlib)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                       attoptions                        
@@ -305,7 +305,7 @@ create table ccddl (
 	default column encoding (compresstype=zlib),
 	column j encoding (compresstype=RLE_TYPE)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                       attoptions                        
@@ -321,7 +321,7 @@ create table ccddl (
 	i int,
 	j text encoding (compresstype=zlib, blocksize=65536, compresslevel=1)
 )  with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -358,7 +358,7 @@ drop table ccddl;
 create table ccddl (i int, j int encoding(compresstype=zlib), column i encoding
 (compresstype=zlib), default column encoding (compresstype=RLE_TYPE)) with
 (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -371,7 +371,7 @@ drop table ccddl;
 -- WITH (..., compresstype=<type>) should act as a default clause
 create table ccddl (i int, j int) with(appendonly = true, orientation = column,
 compresstype=zlib);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -384,7 +384,7 @@ drop table ccddl;
 -- Mix case for compresstype since it should be case insensitive
 create table ccddl (i int, j int encoding (COMPRESSTYPE="ZlIb"))
 	with(appendonly = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                     attoptions                      
@@ -396,7 +396,7 @@ execute ccddlcheck;
 drop table ccddl;
 -- CREATE TABLE (LIKE) WITH (...) must honour the directives in the WITH clause.
 create table ccddl (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddl_co(LIKE ccddl)
   with (appendonly = true, orientation=column);
@@ -432,20 +432,20 @@ create table ccddl (i int encoding (compresstype=zlib))
 ERROR:  ENCODING clause only supported with column oriented tables
 -- can't add encoding to a non-CO table
 create table ccddl (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add column j int encoding (compresstype=zlib);
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table ccddl;
 create table ccddl (i int) with (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add column j int encoding (compresstype=zlib);
 ERROR:  ENCODING clause only supported with column oriented tables
 drop table ccddl;
 -- check that we validate the encoding clause for add column
 create table ccddl (i int) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add column j int encoding(compresstype=yawn);
 ERROR:  unknown compresstype "yawn"
@@ -459,7 +459,7 @@ drop table ccddl;
 -- encoding clause has higher precedence than WITH clause
 create table ccddl (i int encoding(compresstype=RLE_TYPE)) with(compresstype=zlib,
 appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum |                       attoptions                        
@@ -493,7 +493,7 @@ ERROR:  column "dupe" referenced in more than one COLUMN ENCODING clause
 -- Inheritance. The ENCODING options are not inherited from the parent.
 create table ccddlparent (parentcol int encoding (compresstype=zlib))
 with (appendonly = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddlchild (childcol int encoding (compresstype=zlib))
 inherits(ccddlparent) with (appendonly = true, orientation = column);
@@ -525,12 +525,12 @@ drop cascades to table ccddlchild2
 create table ccddlparent1 (parentcol1 int encoding (compresstype=zlib),
                            parentcol2 int)
 with (appendonly = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddlparent2 (parentcol1 int,
                            parentcol2 int encoding (compresstype=zlib))
 with (appendonly = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddlchild (childcol int)
 inherits(ccddlparent1, ccddlparent2) with (appendonly = true, orientation = column);
@@ -554,7 +554,7 @@ NOTICE:  drop cascades to table ccddlchild
 drop table ccddlparent2 cascade;
 -- Conflict between default and with, in the LIKE case
 create table ccddl (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddl_co (like ccddl, 
 					   default column encoding(compresstype=RLE_TYPE)) 
@@ -576,7 +576,7 @@ drop table ccddl;
 -- encoding clause has higher precedence than WITH clause even in the LIKE case.
 -- (this change the behavior of MPP-15120) 
 create table ccddl (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddl_co (like ccddl, column i encoding(compresstype=RLE_TYPE))
 with (appendonly=true, orientation=column, compresstype=zlib);
@@ -603,7 +603,7 @@ partition by range(j)
  column i encoding(compresstype=zlib),
  column j encoding(compresstype=RLE_TYPE)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
     relname     | attname | filenum |                       attoptions                        
@@ -738,7 +738,7 @@ partition by range(j)
 (partition p1 start(1) end(10),
  partition p2 start(10) end(20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
          relname          | attname | filenum |                       attoptions                        
@@ -1095,7 +1095,7 @@ column l encoding(compresstype=zlib))
 (partition p1 start(1) end(10),
 partition p2 start(10) end(20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
          relname          | attname | filenum |                       attoptions                        
@@ -1168,7 +1168,7 @@ subpartition sp1 values(1, 2, 3, 4, 5))
 (partition p1 start(1) end(10),
 partition p2 start(10) end(20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attname | filenum | attoptions 
@@ -1187,7 +1187,7 @@ create table ccddl (i int encoding (compresstype=zlib))
 with (appendonly = true, orientation=column)
 partition by range(i)
 (partition p1 start(1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
     relname     | attname | filenum |                     attoptions                      
@@ -1214,7 +1214,7 @@ subpartition template (subpartition sp1 start(1) end(20),
 	column i encoding (compresstype=zlib),
 	column j encoding (compresstype=RLE_TYPE))
 (partition p1 start(1) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
          relname          | attname | filenum |                       attoptions                        
@@ -1432,7 +1432,7 @@ create table ccddl (
 		column i encoding (blocksize=65536),
 		default column encoding (compresstype=RLE_TYPE)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
     relname     | attname | filenum |                       attoptions                        
@@ -1473,7 +1473,7 @@ partition by range(i) subpartition by range(j)
 		 default column encoding (compresstype=RLE_TYPE)
 		)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
          relname          | attname | filenum |                       attoptions                        
@@ -1512,7 +1512,7 @@ WITH (appendonly=true, orientation=column)
 		        COLUMN c3 ENCODING (compresstype=zlib),
 				COLUMN c2 ENCODING (compresstype=RLE_TYPE)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
     relname    | attname | filenum |                       attoptions                        
@@ -1538,7 +1538,7 @@ create table ccddl
 		partition p2 start(2) end(3),
 		default column encoding (compresstype=zlib)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 execute ccddlcheck;
@@ -1556,7 +1556,7 @@ partition by list(b)
 (partition s_abc values ('abc')
 	with (appendonly=true, orientation=column, compresstype=zlib,
 		  compresslevel=1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add partition "s_xyz" values ('xyz')
 	WITH (appendonly=true, orientation=column,
@@ -1581,7 +1581,7 @@ create table ccddl (i int, d date, j int)
   	subpartition template (subpartition sp1 values(1),
 						   default column encoding (compresstype=zlib))
   (start('2010-01-01') end('2010-01-05') every('1 day'::interval));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add partition newp 
 	start('2010-01-06') end('2010-01-07')
@@ -1632,13 +1632,13 @@ drop table ccddl;
 -- Make sure we validate the storage directives
 create table gg (i int, k int) with (appendonly=true, orientation=column)
 partition by range(k) (partition p1 start(1) end(2), column i encoding(a=b));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter "a"
 create table gg (i int, k int) with (appendonly=true, orientation=column)
 partition by range(k) (partition p1 start(1) end(2), column i
 encoding(compresstype=sdf2sdf));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unknown compresstype "sdf2sdf"
 -- We don't support partition element specific encoding clauses in subpartition
@@ -1648,7 +1648,7 @@ create table a (i int, j int) with (appendonly=true, orientation=column)
       subpartition template(start(1) end(10) default column encoding (compresstype=zlib),
                             start(10) end(20))
 (partition p1 start(1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition specific ENCODING clause not supported in SUBPARTITION TEMPLATE
 LINE 3:       subpartition template(start(1) end(10) default column ...
@@ -1663,7 +1663,7 @@ partition by range(a1)
 		start(1) end(1000) every(500),
 		COLUMN a1 ENCODING (compresstype=zlib,compresslevel=4,blocksize=32768)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  ENCODING clause only supported with column oriented tables
 execute ccddlcheck;
@@ -1883,7 +1883,7 @@ deallocate ccddlcheck;
 -----------------------------------------------------------------------
 -- RLE_TYPE is not supported 
 create table ccddl (i int) with(appendonly = true, compresstype = rle_type);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  rle_type cannot be used with Append Only relations row orientation
 -----------------------------------------------------------------------
@@ -1907,7 +1907,7 @@ CREATE TABLE ccddl (
   , partition p4 start('32') end('33')
   , partition p5 start('33') WITH (appendonly=true, checksum=true, blocksize=819200, compresslevel=8)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO ccddl values ( generate_series(1,25000), 3, 'JUMBO CASE', 1001.00, 'ronic dependencies d' );
 INSERT INTO ccddl values ( generate_series(1,25000), 23, 'JUMBO CASE', 1001.00, 'ronic dependencies d' );
@@ -2005,7 +2005,7 @@ SET enable_seqscan TO ON;
 ------------------------------------------------------------------------------
 -- dummy table to help create the scenario
 CREATE TABLE ao_from_table(a INT, arr DOUBLE PRECISION[]) WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- insert data to create large content header for CO table
 INSERT INTO ao_from_table
@@ -2017,7 +2017,7 @@ INSERT INTO ao_from_table SELECT 1,'{0.1}' FROM generate_series(1, 17000)i;
 CREATE TABLE co_large_and_bulk_content(a INT,
                      arr DOUBLE PRECISION[] ENCODING (compresstype=RLE_TYPE,compresslevel=3,blocksize=8192))
                      WITH (appendonly=true, orientation=column, compresstype=RLE_TYPE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO co_large_and_bulk_content SELECT * FROM ao_from_table;
 -- can't do count(*) as CO optimizes to read only first column

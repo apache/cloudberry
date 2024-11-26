@@ -146,7 +146,7 @@ class Gppkg:
             version         The version of the gppkg
             architecture    The architecture for which the package is built
             os              The operating system for which the package is built
-            gpdbversion     The Cloudberry Database version for which package is built
+            gpdbversion     The Apache Cloudberry version for which package is built
             description     A short description for the package
             abspath         This is the absolute path where the package sits on the host
             preinstall      The cluster level preinstallation hooks
@@ -405,15 +405,15 @@ class IsVersionCompatible(Operation):
         gpdb_version = self._get_gpdb_version()
         required_gpdb_version = gppkg.gpdbversion
 
-        logger.debug('Cloudberry Database Version = %s' % gpdb_version)
-        logger.debug('Required Cloudberry Database version = %s' % required_gpdb_version)
+        logger.debug('Apache Cloudberry Version = %s' % gpdb_version)
+        logger.debug('Required Apache Cloudberry version = %s' % required_gpdb_version)
 
         if gpdb_version is None:
-            logger.error('Could not determine Cloudberry Database version')
+            logger.error('Could not determine Apache Cloudberry version')
             return False
 
         if not required_gpdb_version.isVersionRelease(gpdb_version):
-            logger.error('%s requires Cloudberry Database version %s' % (gppkg.pkgname, required_gpdb_version))
+            logger.error('%s requires Apache Cloudberry version %s' % (gppkg.pkgname, required_gpdb_version))
             return False
 
         return True

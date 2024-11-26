@@ -97,7 +97,7 @@ ALTER ROLE RESOURCE QUEUE none;
   
   <para>
    There is no <command>DROP RESOURCE QUEUE</command> in the SQL standard.
-   Resource scheduling is a feature of Cloudberry Database.
+   Resource scheduling is a feature of Apache Cloudberry.
   </para>
 
  </refsect1>

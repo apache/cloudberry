@@ -1273,7 +1273,7 @@ drop table defcheck;
 -- Test github issue #7340. truncating a toast unlogged table fails.
 -- Leave the table on purpose for pg_dump and gp_replica_check tests.
 CREATE UNLOGGED TABLE unlogged_toast (a text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 TRUNCATE unlogged_toast;
 -- tests of column drop with partition tables and indexes using

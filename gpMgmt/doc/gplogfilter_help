@@ -1,6 +1,6 @@
 ﻿COMMAND NAME: gplogfilter 
 
-Searches through Cloudberry Database log files for specified entries. 
+Searches through Apache Cloudberry log files for specified entries. 
 
 ***************************************************** 
 SYNOPSIS 
@@ -93,7 +93,7 @@ PATTERN MATCHING OPTIONS
  Selects specific columns from the log file. Specify the desired columns 
  as a comma-delimited string of column numbers beginning with 1, where 
  the second column from left is 2, the third is 3, and so on. See the 
- "Cloudberry Database System Administrator Guide" for details about the log 
+ "Apache Cloudberry System Administrator Guide" for details about the log 
  file format and for a list of the available columns and their associated 
  number. 
 

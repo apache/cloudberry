@@ -43,7 +43,7 @@
  * [https://wiki.postgresql.org/wiki/CustomWALResourceManagers] to record
  * the use of smgr to avoid conflicts.
  *
- * FIXME: For PAX_AM_OID, Cloudberrydb reserves this value for ORCA, a
+ * FIXME: For PAX_AM_OID, Cloudberry reserves this value for ORCA, a
  * predefined value is used here to reserve the smgr id for PAX_AM_OID.
  */
 typedef enum SMgrImplementation

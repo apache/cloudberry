@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------
-# Cloudberry Database ThirdParty Library Makefile
+# Apache Cloudberry ThirdParty Library Makefile
 #
 # This file controls which thirdparty libraries are made available to
 # the build of our product(s).

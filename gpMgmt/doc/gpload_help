@@ -24,18 +24,18 @@ The client machine where gpload is executed must have the following:
 
 * Python 2.6.2 or later, pygresql (the Python interface to PostgreSQL), 
   and pyyaml. Note that Python and the required Python libraries are 
-  included with the Cloudberry Database server installation, so if you have 
-  Cloudberry Database installed on the machine where gpload is running, you 
+  included with the Apache Cloudberry server installation, so if you have 
+  Apache Cloudberry installed on the machine where gpload is running, you 
   do not need a separate Python installation. 
 
   Note: Cloudberry Loaders for Windows supports only Python 2.5 
   (available from www.python.org). 
 
 * The gpfdist parallel file distribution program installed and in your 
-  $PATH. This program is located in $GPHOME/bin of your Cloudberry Database 
+  $PATH. This program is located in $GPHOME/bin of your Apache Cloudberry 
   server installation. 
 
-* Network access to and from all hosts in your Cloudberry Database array 
+* Network access to and from all hosts in your Apache Cloudberry array 
  (coordinator and segments). 
 
 * Network access to and from the hosts where the data to be loaded 
@@ -267,7 +267,7 @@ GPLOAD - Required. Begins the load specification section. A GPLOAD specification
 INPUT - Required. Defines the location and the format of the input data to 
         be loaded. gpload will start one or more instances of the gpfdist file
         distribution program on the current host and create the required external
-        table definition(s) in Cloudberry Database that point to the source data. 
+        table definition(s) in Apache Cloudberry that point to the source data. 
         Note that the host from which you run gpload must be accessible over the 
         network by all Cloudberry hosts (coordinator and segments).
 
@@ -279,7 +279,7 @@ SOURCE - Required. The SOURCE block of an INPUT specification defines the
          specification.
          
          For more information about using the gpfdist parallel file server 
-         and single and multiple gpfdist instances, see the "Cloudberry Database 
+         and single and multiple gpfdist instances, see the "Apache Cloudberry 
          Database Administrator Guide."
 
 LOCAL_HOSTNAME - Optional. Specifies the host name or IP address of the local 
@@ -347,7 +347,7 @@ COLUMNS - Optional. Specifies the schema of the source data file(s) in the
 
 TRANSFORM - Optional. Specifies the name of the input XML transformation passed to 
             gpload. For more information about XML transformations, see the 
-            "Cloudberry Database Database Administrator Guide."
+            "Apache Cloudberry Database Administrator Guide."
 
 TRANSFORM_CONFIG - Optional. Specifies the location of the XML transformation 
                    configuration file that is specified in the TRANSFORM 
@@ -359,7 +359,7 @@ MAX_LINE_LENGTH - Optional. An integer that specifies the maximum length of
 FORMAT - Optional. Specifies the format of the source data file(s) - either plain
          text (TEXT) or comma separated values (CSV) format. Defaults to TEXT 
          if not specified. For more information about the format of the source
-         data, see the "Cloudberry Database Database Administrator Guide."
+         data, see the "Apache Cloudberry Database Administrator Guide."
 
 DELIMITER - Optional. Specifies a single ASCII character that separates columns
             within each row (line) of data. The default is a tab character in TEXT
@@ -372,7 +372,7 @@ DELIMITER - Optional. Specifies a single ASCII character that separates columns
 NEWLINE - Optional. Specifies the newline used in your data files – LF
           (Line feed, 0x0A), CR (Carriage return, 0x0D), or CRLF
           (Carriage return plus line feed, 0x0D 0x0A). If not
-          specified, a Cloudberry Database segment will detect the
+          specified, a Apache Cloudberry segment will detect the
           newline type by looking at the first row of data it receives
           and using the first newline type encountered.
 
@@ -415,7 +415,7 @@ ENCODING - Optional. Character set encoding of the source data. Specify
            number, or 'DEFAULT' to use the default client encoding. If 
            not specified, the default client encoding is used. For 
            information about supported character sets, see the 
-           "Cloudberry Database Reference Guide."
+           "Apache Cloudberry Reference Guide."
 
 ERROR_LIMIT - Optional. Enables single row error isolation mode for this
               load operation. When enabled, input rows that have format errors
@@ -430,7 +430,7 @@ ERROR_LIMIT - Optional. Enables single row error isolation mode for this
               client encoding sequences. Constraint errors, such as primary key 
               violations, will still cause the load operation to abort if 
               encountered. For information about handling load errors, see 
-              the "Cloudberry Database Database Administrator Guide." 
+              the "Apache Cloudberry Database Administrator Guide." 
 
 ERROR_TABLE - Deprecated, LOG_ERRORS is encouraged instead.
               Optional when ERROR_LIMIT is declared. Specifies an error
@@ -440,7 +440,7 @@ ERROR_TABLE - Deprecated, LOG_ERRORS is encouraged instead.
               If the error_table specified already exists, it will be used. 
               If it does not exist, it will be automatically generated.
               For more information about handling load errors, see the
-              "Cloudberry Database Database Administrator Guide."
+              "Apache Cloudberry Database Administrator Guide."
 
 LOG_ERRORS  - Optional when ERROR_LIMIT is declared. If true(default false),
               gpload would create an internal error table where rows with
@@ -448,7 +448,7 @@ LOG_ERRORS  - Optional when ERROR_LIMIT is declared. If true(default false),
               isolation mode. You can then examine this error table by using
               GPDB built-in function gp_read_error_log() to see error rows that
               were not loaded (if any). For more information about handling load
-              errors, see the "Cloudberry Database Database Administrator Guide."
+              errors, see the "Apache Cloudberry Database Administrator Guide."
               NOTE: LOG_ERRORS is not allowed to use together with ERROR_TABLE.
 
 EXTERNAL - Optional. Defines the schema of the external table database 
@@ -637,5 +637,5 @@ SEE ALSO
 
 gpfdist, CREATE EXTERNAL TABLE 
 
-See the "Cloudberry Database Reference Guide" for information 
+See the "Apache Cloudberry Reference Guide" for information 
 about CREATE EXTERNAL TABLE.

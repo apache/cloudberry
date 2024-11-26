@@ -1265,13 +1265,13 @@ CREATE TABLE credit_card (
        cnum     text,
        climit   int
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 CREATE TABLE credit_usage (
        cid      int references customer(cid),
        ymd      date,
        usage    int
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 INSERT INTO customer
        VALUES (101, 'regress_alice', '+81-12-3456-7890', 'passwd123'),
               (102, 'regress_bob',   '+01-234-567-8901', 'beafsteak'),

@@ -22,10 +22,10 @@ NOTICE:  table "bfv_subquery_r" does not exist, skipping
 --end_ignore
 -- subquery over partitioned table
 CREATE TABLE bfv_subquery_(a int, b int) partition by range(b) (start(1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bfv_subquery_r (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bfv_subquery_ SELECT i,i FROM generate_series(1,9)i;
 INSERT INTO bfv_subquery_r SELECT i,i FROM generate_series(1,9)i;
@@ -78,7 +78,7 @@ DROP TABLE IF EXISTS csq_r;
 NOTICE:  table "csq_r" does not exist, skipping
 --end_ignore
 CREATE TABLE csq_r(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO csq_r VALUES (1);
 SELECT * FROM csq_r WHERE a IN (SELECT * FROM csq_f(csq_r.a));
@@ -95,10 +95,10 @@ drop table if exists  bfv_subquery_t2;
 NOTICE:  table "bfv_subquery_t2" does not exist, skipping
 --end_ignore
 create table  bfv_subquery_t1(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table  bfv_subquery_t2(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into  bfv_subquery_t1 select i, i%5 from generate_series(1,10)i;
 insert into  bfv_subquery_t2 values (1, 10);
@@ -130,11 +130,11 @@ drop table if exists bfv_subquery_s3;
 NOTICE:  table "bfv_subquery_s3" does not exist, skipping
 -- end_ignore
 create table bfv_subquery_t3(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bfv_subquery_t3 values (1,4),(0,3);
 create table bfv_subquery_s3(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- ALL subquery
 select * from bfv_subquery_t3 where a < all (select i from bfv_subquery_s3 limit 1) order by a;
@@ -171,11 +171,11 @@ NOTICE:  table "bfv_subquery_a1" does not exist, skipping
 DROP TABLE IF EXISTS bfv_subquery_b1;
 NOTICE:  table "bfv_subquery_b1" does not exist, skipping
 CREATE TABLE bfv_subquery_a1(i INT, j INT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bfv_subquery_a1(SELECT i, i * i FROM generate_series(1, 10) AS i);
 CREATE TABLE bfv_subquery_b1(i INT, j INT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bfv_subquery_b1(SELECT i, i * i FROM generate_series(1, 10) AS i);
 SELECT  bfv_subquery_a1.* FROM bfv_subquery_a1 INNER JOIN bfv_subquery_b1 ON  bfv_subquery_a1.i =  bfv_subquery_b1.i WHERE  bfv_subquery_a1.j NOT IN (SELECT j FROM bfv_subquery_a1 a2 where a2.j =  bfv_subquery_b1.j) and  bfv_subquery_a1.i = 1;
@@ -186,7 +186,7 @@ SELECT  bfv_subquery_a1.* FROM bfv_subquery_a1 INNER JOIN bfv_subquery_b1 ON  bf
 DROP TABLE IF EXISTS bfv_subquery_a2;
 NOTICE:  table "bfv_subquery_a2" does not exist, skipping
 CREATE TABLE bfv_subquery_a2(i INT, j INT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bfv_subquery_a2(SELECT i, i * i FROM generate_series(1, 10) AS i);
 SELECT bfv_subquery_a2.* FROM bfv_subquery_a2 WHERE bfv_subquery_a2.j NOT IN (SELECT j FROM bfv_subquery_a2 a2 where a2.j = bfv_subquery_a2.j) and bfv_subquery_a2.i = 1;
@@ -292,7 +292,7 @@ drop table if exists t_case_subquery1;
 NOTICE:  table "t_case_subquery1" does not exist, skipping
 -- end_ignore
 create table t_case_subquery1 (a int, b int, c text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t_case_subquery1 values(1, 5, NULL), (1, 2, NULL);
 select t1.* from t_case_subquery1 t1 where t1.b = (
@@ -322,13 +322,13 @@ NOTICE:  table "t_coalesce_count_subquery_empty" does not exist, skipping
 drop table if exists t_coalesce_count_subquery_empty2;
 NOTICE:  table "t_coalesce_count_subquery_empty2" does not exist, skipping
 CREATE TABLE t_coalesce_count_subquery(a, b) AS VALUES (1, 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t_coalesce_count_subquery_empty(c int, d int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t_coalesce_count_subquery_empty2(e int, f int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- end_ignore
 SELECT (SELECT count(*) FROM t_coalesce_count_subquery_empty where c = a) FROM t_coalesce_count_subquery;
@@ -371,10 +371,10 @@ NOTICE:  table "t_outer" does not exist, skipping
 drop table if exists t_inner;
 NOTICE:  table "t_inner" does not exist, skipping
 create table t_outer (a oid, b tid);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t_inner (c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- end_ignore
 SET enable_nestloop=off;
@@ -404,10 +404,10 @@ NOTICE:  table "foo" does not exist, skipping
 drop table if exists bar;
 NOTICE:  table "bar" does not exist, skipping
 create table foo(a, b) as (values (1, 'a'), (2, 'b'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar(c, d) as (values (1, 'a'), (2, 'b'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- end_ignore
 select * from foo where not exists (select * from bar where foo.a + bar.c = 1);
@@ -449,10 +449,10 @@ drop table foo, bar;
 -- Test subquery with rescan of RESULT node
 --
 create table foo_rescan_result(a, b) as (values (1, 2), (1, 1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar_rescan_result(a, b) as (values (1, 1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from foo_rescan_result t1
 where (select count(*) from bar_rescan_result where t1.a=t1.b) > 0;
@@ -468,7 +468,7 @@ where (select count(*) from bar_rescan_result where t1.a=t1.b) > 0;
 DROP TABLE IF EXISTS A;
 NOTICE:  table "a" does not exist, skipping
 CREATE TABLE A AS SELECT ARRAY[1,2,3] AS X;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO A VALUES(NULL::int4[]);
 -- end_ignore
@@ -527,7 +527,7 @@ NOTICE:  table "with_test2" does not exist, skipping
 create table with_test1 (i int, value int) distributed by (i);
 insert into with_test1 select i%10, i%30 from generate_series(0, 99) i;
 create table with_test2 (i int, value int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into with_test2 select i%100, i%300 from generate_series(0, 999) i;
 -- end_ignore
@@ -557,7 +557,7 @@ limit 15;
 
 -- Test case for Issue 15794, 15767 and 15793
 create table t_15767 (c0 int, c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c0' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c0' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t_15767 values(1,0),(2,1);
 select max(c0) from t_15767
@@ -578,7 +578,7 @@ create table t2_15794(
   y double precision,
   position double precision[]
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t2_15794 values (1,1,1,array[1,1]);
 insert into t2_15794 values (2,2,2,array[2,2]);
@@ -597,10 +597,10 @@ group by length, lower) t;
 
 drop table t2_15794;
 create table t1_15793 (c0 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c0' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c0' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2_15793 (c0 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c0' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c0' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from t1_15793 cross join t2_15793 where not ((t1_15793.c0)+(t1_15793.c0)!=(t2_15793.c0));
  c0 | c0 

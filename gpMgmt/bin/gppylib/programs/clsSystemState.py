@@ -473,7 +473,7 @@ class GpSystemStateProgram:
         """
         hostNameToResults = self.__fetchAllSegmentData(gpArray)
 
-        logger.info("CloudberryDB instance status summary")
+        logger.info("Cloudberry instance status summary")
 
         # coordinator summary info
         tabLog = TableLogger().setWarnWithArrows(True)
@@ -915,15 +915,15 @@ class GpSystemStateProgram:
         tabLog.info(["Coordinator port", "= %d" % coordinator.getSegmentPort()])
 
         tabLog.info(["Coordinator current role", "= %s" % qdRole])
-        tabLog.info(["CloudberryDB initsystem version", "= %s" % initDbVersion])
+        tabLog.info(["Cloudberry initsystem version", "= %s" % initDbVersion])
 
         if statusFetchWarning is None:
             if coordinatorData[gp.SEGMENT_STATUS__GET_VERSION] is None:
-                tabLog.warn(["CloudberryDB current version", "= Unknown"])
+                tabLog.warn(["Cloudberry current version", "= Unknown"])
             else:
-                tabLog.info(["CloudberryDB current version", "= %s" % coordinatorData[gp.SEGMENT_STATUS__GET_VERSION]])
+                tabLog.info(["Cloudberry current version", "= %s" % coordinatorData[gp.SEGMENT_STATUS__GET_VERSION]])
         else:
-            tabLog.warn(["CloudberryDB current version", "= Error fetching data: %s" % statusFetchWarning])
+            tabLog.warn(["Cloudberry current version", "= Error fetching data: %s" % statusFetchWarning])
         tabLog.info(["Postgres version", "= %s" % pgVersion])
 
         self.__appendStandbySummary(hostNameToResults, gpArray.standbyCoordinator, tabLog)
@@ -1299,7 +1299,7 @@ class GpSystemStateProgram:
 
         exitCode = 0
 
-        logger.info("-Quick Cloudberry Database status from Coordinator instance only")
+        logger.info("-Quick Apache Cloudberry status from Coordinator instance only")
         logger.info( "----------------------------------------------------------")
 
         segments = [seg for seg in gpArray.getDbList() if seg.isSegmentQE()]
