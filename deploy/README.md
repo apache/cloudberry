@@ -20,7 +20,7 @@ Before you begin your automation build, make sure the following preparation work
 1. Download the Cloudberry Database source code into your local machine:
 
     ```bash
-    git clone git@github.com:cloudberrydb/cloudberrydb.git
+    git clone https://github.com/apache/cloudberry.git
     ```
 
 2. Install the required [Vagrant](https://developer.hashicorp.com/vagrant/docs/installation) or [Docker](https://docs.docker.com/desktop/install/mac-install/) in your local environment, depending on your deployment preference.
@@ -32,7 +32,7 @@ Before you begin your automation build, make sure the following preparation work
 2. Start the automatic compilation and deployment process.
 
     ```
-    $ cd /cloudberrydb/deploy/vagrant
+    $ cd /cloudberry/deploy/vagrant
     $ vagrant up
     ```
 

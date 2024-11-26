@@ -47,7 +47,7 @@ You can participate by:
 * [Reporting security issues](./SECURITY.md).
 * Testing code, testing releases.
 * Creating educational content (Blog posts, tutorials, videos, etc.)
-* Spreading the word about Cloudberry Database on social media(eg,
+* Spreading the word about Apache Cloudberry on social media(eg,
   Twitter, LinkedIn).
 * ...
 * More things to make Cloudberry better.

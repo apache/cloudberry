@@ -4,7 +4,7 @@
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="./.github/full_color_black.svg">
     <source media="(prefers-color-scheme: dark)" srcset="./.github/full_color_white.svg">
-    <img alt="Cloudberry Database Logo" src="./.github/full_color_black.svg" width="400px">
+    <img alt="Apache Cloudberry Logo" src="./.github/full_color_black.svg" width="400px">
   </picture>
 </p>
 
@@ -68,7 +68,7 @@ feedback, and chat:
 | Slack | [Click to Join](https://inviter.co/apache-cloudberry) the real-time chat on Slack for QA, Dev, Events, and more. Don't miss out! Check out the [Slack guide](https://cloudberry.apache.org/community/slack) to learn more. |
 | Q&A | Ask for help when running/developing Cloudberry, visit [GitHub Discussions - QA](https://github.com/apache/cloudberry/discussions/categories/q-a). |
 | New ideas / Feature Requests | Share ideas for new features, visit [GitHub Discussions - Ideas](https://github.com/apache/cloudberry/discussions/categories/ideas-feature-requests).  |
-| Report bugs | Problems and issues in Apache Cloudberry core. If you find bugs, welcome to submit them [here](https://github.com/apache/cloudberrydb/issues).  |
+| Report bugs | Problems and issues in Apache Cloudberry core. If you find bugs, welcome to submit them [here](https://github.com/apache/cloudberry/issues).  |
 | Report a security vulnerability | View our [security policy](https://github.com/apache/cloudberry/security/policy) to learn how to report and contact us.  |
 | Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberry.apache.org/community/events) and subscribe events calendar.  |
 | Documentation | [Official documentation](https://cloudberry.apache.org/docs/) for Cloudberry. You can explore it to discover more details about us. |
@@ -91,10 +91,10 @@ with the contribution.
 ## Roadmap
 
 You can check our [Cloudberry Roadmap
-2024](https://github.com/orgs/cloudberrydb/discussions/369) out to see the
-product plans and goals we want to achieve in 2024. Welcome to share your
-thoughts and ideas to join us in shaping the future of Apache Cloudberry
-(Incubating). (We will update the Roadmap after entering the Incubator.)
+](https://github.com/apache/cloudberry/discussions/868) out to see the product
+plans and goals we want to achieve. Welcome to share your thoughts and ideas
+to join us in shaping the future of Apache Cloudberry (Incubating). (We will
+update the Roadmap after entering the Incubator.)
 
 ## Acknowledgment
 
