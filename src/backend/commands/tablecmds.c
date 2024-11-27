@@ -837,7 +837,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		accessMethod = stmt->accessMethod;
 
 		/* Only to allow access method when the partition is gp style partition */
-		if (partitioned && Gp_role == GP_ROLE_DISPATCH && !stmt->partspec->gpPartDef)
+		if (partitioned && Gp_role != GP_ROLE_EXECUTE && !stmt->partspec->gpPartDef)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("specifying a table access method is not supported on a partitioned table")));
