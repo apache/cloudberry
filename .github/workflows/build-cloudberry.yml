@@ -625,18 +625,35 @@ jobs:
     strategy:
       fail-fast: false  # Continue with other tests if one fails
       matrix:
-        test: [ic-good-opt-off, ic-expandshrink]
+        test:
+          - ic-good-opt-off
+          - ic-expandshrink
+          - ic-singlenode_regress
+          - ic-singlenode_isolation
+          - ic-singlenode_isolation2
         include:
           - test: ic-good-opt-off
             make_target: installcheck-good
             make_directory: --directory=src/test/regress
+            num_primary_mirror_pairs: 3
             pg_settings:
               optimizer: "off"
           - test: ic-expandshrink
             make_target: installcheck-expandshrink
             make_directory: --directory=src/test/isolation2
-            pg_settings:
-              optimizer: "off"
+            num_primary_mirror_pairs: 3
+          - test: ic-singlenode_regress
+            make_target: installcheck-singlenode
+            make_directory: --directory=src/test/singlenode_regress
+            num_primary_mirror_pairs: 0
+          - test: ic-singlenode_isolation
+            make_target: installcheck-singlenode
+            make_directory: --directory=src/test/isolation
+            num_primary_mirror_pairs: 0
+          - test: ic-singlenode_isolation2
+            make_target: installcheck-singlenode
+            make_directory: --directory=src/test/singlenode_isolation2
+            num_primary_mirror_pairs: 0
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
@@ -874,8 +891,8 @@ jobs:
         set -eo pipefail
 
         {
-          chmod +x ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
             echo "::error::Demo cluster creation failed"
             exit 1
           fi
