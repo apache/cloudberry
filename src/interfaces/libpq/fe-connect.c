@@ -4407,9 +4407,22 @@ PQfinish(PGconn *conn)
 void
 PQreset(PGconn *conn)
 {
+	char	*password;
+	char	*prompt_text;
+
 	if (conn)
 	{
 		closePGconn(conn);
+
+		if (conn->pguser == NULL || conn->pguser[0] == '\0')
+			password = simple_prompt("\nPassword: ", false);
+		else
+		{
+			prompt_text = psprintf(_("\nPassword for user %s: "), conn->pguser);
+			password = simple_prompt(prompt_text, false);
+			free(prompt_text);
+		}
+		conn->pgpass = password;
 
 		if (connectDBStart(conn) && connectDBComplete(conn))
 		{
