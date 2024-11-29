@@ -325,14 +325,13 @@ char* gpmon_datetime_rounded(time_t t, char str[GPMON_DATE_BUF_SIZE])
 }
 
 /* get status from query text file */
-apr_int32_t get_query_status(apr_int32_t tmid, apr_int32_t ssid,
-							 apr_int32_t ccnt)
+apr_int32_t get_query_status(gpmon_qlogkey_t qkey)
 {
 	char fname[GPMON_DIR_MAX_PATH];
 	FILE *fp;
 	apr_int32_t status = GPMON_QLOG_STATUS_INVALID;
 
-	snprintf(fname, GPMON_DIR_MAX_PATH, "%sq%d-%d-%d.txt", GPMON_DIR, tmid, ssid, ccnt);
+	get_query_text_file_name(qkey, fname);
 
 	fp = fopen(fname, "r");
 	if (!fp)
@@ -354,7 +353,7 @@ apr_int32_t get_query_status(apr_int32_t tmid, apr_int32_t ssid,
 }
 
 /* get query text from query text file */
-char *get_query_text(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_pool_t *pool)
+char *get_query_text(gpmon_qlogkey_t qkey, apr_pool_t *pool)
 {
 	char meta[META_LEN] = {0};
 	signed int qrylen = 0;
@@ -362,7 +361,7 @@ char *get_query_text(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_p
 	const char *META_FMT = "%d qtext";
 	const char *META_QTEXT = "qtext\n";
 
-	snprintf(fname, GPMON_DIR_MAX_PATH, "%sq%d-%d-%d.txt", GPMON_DIR, tmid, ssid, ccnt);
+	get_query_text_file_name(qkey, fname);
 
 	FILE *fp = fopen(fname, "r");
 	if (!fp)
@@ -556,4 +555,12 @@ void merge_qlog(gpmon_qlog_t* qlog, const gpmon_qlog_t* newqlog)
 				default:
 						return;
 		}
+}
+
+void
+get_query_text_file_name(gpmon_qlogkey_t key, char *fname)
+{
+	const int fname_size = 100;
+	snprintf(fname, fname_size, GPMON_DIR "q%d-%d-%d.txt", 0,
+			 key.ssid, key.ccnt);
 }

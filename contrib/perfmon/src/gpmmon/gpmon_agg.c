@@ -73,27 +73,26 @@ extern apr_queue_t* message_queue;
 extern int32 tmid;
 
 extern void incremement_tail_bytes(apr_uint64_t bytes);
-static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
-			apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool);
+static bool is_query_not_active(gpmon_qlogkey_t qkey, apr_hash_t *hash, apr_pool_t *pool);
 static void format_time(time_t tt, char *buf);
 static void set_tmid(gp_smon_to_mmon_packet_t* pkt, int32 tmid);
 
-static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool)
+static bool is_query_not_active(gpmon_qlogkey_t qkey, apr_hash_t *hash, apr_pool_t *pool)
 {
 	// get active query of session
-	char *key = apr_psprintf(pool, "%d", ssid);
+	char *key = apr_psprintf(pool, "%d", qkey.ssid);
 	char *active_query = apr_hash_get(hash, key, APR_HASH_KEY_STRING);
 	if (active_query == NULL)
 	{
-		TR0(("Found orphan query, tmid:%d, ssid:%d, ccnt:%d\n", tmid, ssid, ccnt));
+		TR0(("Found orphan query, tmid:%d, ssid:%d, ccnt:%d\n", qkey.tmid, qkey.ssid, qkey.ccnt));
 		return true;
 	}
 
 	// read query text from q file
-	char *query = get_query_text(tmid, ssid, ccnt, pool);
+	char *query = get_query_text(qkey, pool);
 	if (query == NULL)
 	{
-		TR0(("Found error while reading query text in file '%sq%d-%d-%d.txt'\n", GPMON_DIR, tmid, ssid, ccnt));
+		TR0(("Found error while reading query text in file '%sq%d-%d-%d.txt'\n", GPMON_DIR, qkey.tmid, qkey.ssid, qkey.ccnt));
 		return true;
 	}
 	// if the current active query of session (ssid) is not the same
@@ -108,7 +107,7 @@ static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t 
 	int res = strncmp(query, active_query, qlen);
 	if (res != 0)
 	{
-		TR0(("Found orphan query, tmid:%d, ssid:%d, ccnt:%d\n", tmid, ssid, ccnt));
+		TR0(("Found orphan query, tmid:%d, ssid:%d, ccnt:%d\n", qkey.tmid, qkey.ssid, qkey.ccnt));
 		return true;
 	}
 
@@ -325,8 +324,6 @@ apr_status_t agg_create(agg_t** retagg, apr_int64_t generation, apr_pool_t* pare
 	return 0;
 }
 
-
-
 apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr_hash_t* fsinfotab)
 {
 	int e, cnt;
@@ -370,7 +367,7 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		if (age > 0)
 		{
 			if (((age % 5 == 0) /* don't call is_query_not_active every time because it's expensive */
-			       && is_query_not_active(dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt, active_query_tab, newagg->pool)))
+			       && is_query_not_active(dp->qlog.key, active_query_tab, newagg->pool)))
 			{
 				if (dp->qlog.dbid != gpperfmon_dbid)
 				{
@@ -570,10 +567,7 @@ apr_status_t agg_dump(agg_t* agg)
 		{
 			const int fname_size = sizeof(GPMON_DIR) + 100;
 			char fname[fname_size];
-			snprintf(fname, fname_size, GPMON_DIR "q%d-%d-%d.txt",
-			qdnode->qlog.key.tmid, qdnode->qlog.key.ssid,
-			qdnode->qlog.key.ccnt);
-
+			get_query_text_file_name(qdnode->qlog.key, fname);
 			bloom_set(&bloom, fname);
 		}
 
@@ -611,6 +605,7 @@ static void delete_old_files(bloom_t* bloom)
 	char findCmd[512] = {0};
 	FILE* fp = NULL;
 	time_t cutoff = time(0) - gpmmon_quantum() * 3;
+	cutoff = cutoff < 10 ? 10 : cutoff;
 
 	/* Need to remove trailing / in dir so find results are consistent
      * between platforms
@@ -650,14 +645,14 @@ static void delete_old_files(bloom_t* bloom)
 				TR2(("File %s expired: %d\n", p, expired));
 				if (expired)
 				{
-					apr_int32_t tmid = 0, ssid = 0, ccnt = 0;
+					gpmon_qlogkey_t qkey = {0};
 					if (bloom_isset(bloom, p))
 					{
 						TR2(("File %s has bloom set.  Checking status\n", p));
 						/* Verify no bloom collision */
-						sscanf(p, GPMON_DIR "q%d-%d-%d.txt", &tmid, &ssid, &ccnt);
-						TR2(("tmid: %d, ssid: %d, ccnt: %d\n", tmid, ssid, ccnt));
-						status = get_query_status(tmid, ssid, ccnt);
+						sscanf(p, GPMON_DIR "q%d-%d-%d.txt", &qkey.tmid, &qkey.ssid, &qkey.ccnt);
+						TR2(("tmid: %d, ssid: %d, ccnt: %d\n", qkey.tmid, qkey.ssid, qkey.ccnt));
+						status = get_query_status(qkey);
 						TR2(("File %s has status of %d\n", p, status));
 						if (status == GPMON_QLOG_STATUS_DONE ||
 						   status == GPMON_QLOG_STATUS_ERROR)
@@ -1264,28 +1259,25 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
 
         if (qdnode->num_metrics_packets)
         {
-                // average cpu_pct per reporting machine
-                cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
-                fd_cnt = qdnode->qlog.p_metrics.fd_cnt / qdnode->num_metrics_packets;
-                cpu_skew = qdnode->qlog.p_metrics.cpu_skew / qdnode->num_metrics_packets;
-        }
-        else
-        {
-                cpu_current = 0.0f;
-                fd_cnt  = 0;
-                cpu_skew = 0.0f;
-        }
+			// average cpu_pct per reporting machine
+			cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
+			fd_cnt = qdnode->qlog.p_metrics.fd_cnt / qdnode->num_metrics_packets;
+			cpu_skew = qdnode->qlog.p_metrics.cpu_skew / qdnode->num_metrics_packets;
+		}
+		else
+		{
+			cpu_current = 0.0f;
+			fd_cnt = 0;
+			cpu_skew = 0.0f;
+		}
 
-
-        // get query text、plan
-        char* array[5] = {"", "", "", "", ""};
+		// get query text and plan
+		char* array[5] = {"", "", "", "", ""};
         const int qfname_size = 256;
         char qfname[qfname_size];
         int size = 0;
         FILE* qfptr = 0;
-		snprintf(qfname, qfname_size, GPMON_DIR "q%d-%d-%d.txt", 0,
-				 qdnode->qlog.key.ssid,
-				 qdnode->qlog.key.ccnt);
+		get_query_text_file_name(qdnode->qlog.key, qfname);
 		qfptr = fopen(qfname, "r");
         if (qfptr)
         {

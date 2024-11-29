@@ -78,8 +78,8 @@ extern char* gpmon_datetime(time_t t, char str[GPMON_DATE_BUF_SIZE]);
 extern char* gpmon_datetime_rounded(time_t t, char str[GPMON_DATE_BUF_SIZE]);
 
 /* utility */
-extern apr_int32_t get_query_status(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt);
-extern char *get_query_text(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_pool_t *pool);
+extern apr_int32_t get_query_status(gpmon_qlogkey_t qkey);
+extern char *get_query_text(gpmon_qlogkey_t qkey, apr_pool_t *pool);
 
 #define DEFAULT_PATH_TO_HADOOP_HOST_FILE "/etc/gphd/gphdmgr/conf/clusterinfo.txt"
 #define PATH_TO_HADOOP_SMON_LOGS "/var/log/gphd/smon"
@@ -244,4 +244,5 @@ extern void gp_smon_to_mmon_set_header(gp_smon_to_mmon_packet_t* pkt, apr_int16_
 apr_status_t apr_pool_create_alloc(apr_pool_t ** newpool, apr_pool_t *parent);
 void gpdb_get_single_string_from_query(const char* QUERY, char** resultstring, apr_pool_t* pool);
 void merge_qlog(gpmon_qlog_t* qlog, const gpmon_qlog_t* newqlog);
+extern void get_query_text_file_name(gpmon_qlogkey_t key, char *fname);
 #endif /* GPMONLIB_H */

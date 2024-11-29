@@ -329,7 +329,7 @@ static const char* gpmon_null_subst(const char* input)
  * necessary because gpmon overwrites the last byte to indicate status.
  *
  * Have tested the speed of this function on local machine
- * - each file is 0B, 1000 files, tabke about 50ms
+ * - each file is 0B, 1000 files, take about 50ms
  * - each file is 102B, 1000 files, take about 70ms
  * - each file is 57K, 1000 files, take about 240ms
  */
