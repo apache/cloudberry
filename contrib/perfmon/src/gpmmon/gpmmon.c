@@ -65,7 +65,7 @@ char* get_ip_for_host(char*, bool*);
 mmon_options_t opt = { 0 };
 
 static const apr_uint64_t smon_terminate_safe_factor = 10;
-static const apr_uint64_t recv_timeout_factor = 10;
+static const apr_uint64_t recv_timeout_factor = 30;
 
 // If smon doesn't receive any request from mmon,
 // it simply kill itself to restart.
@@ -231,6 +231,17 @@ static void SIGUSR2_handler(int sig)
 	ax.exit = 1;
 }
 
+static void
+add_recv_from_gx_event(host_t *h)
+{
+	struct timeval tv;
+	tv.tv_sec = recv_timeout_factor * gpmmon_quantum();
+	tv.tv_usec = 0;
+	if (event_add(h->event, &tv))
+	{
+		gpmon_warningx(FLINE, APR_FROM_OS_ERROR(errno), "event_add failed");
+	}
+}
 
 /** ------------------------------------------------------------
  After we sent a 'D'ump command, gpsmon will send us packets thru
@@ -250,18 +261,12 @@ static void recv_from_gx(SOCKET sock, short event, void* arg)
 		// no response from gpsmon for a long time
 		// retry connecting
 		TR1(("Connection to %s timeout\n",h->hostname));
-		h->eflag = 1;
-	} 
-	else if (event & EV_READ) 
+		add_recv_from_gx_event(h);
+		return;
+	}
+	else if (event & EV_READ)
 	{
-		// reset timer of timeout event
-		struct timeval tv;
-		tv.tv_sec = 10 * gpmmon_quantum();
-		tv.tv_usec = 0;
-		if (event_add(h->event, &tv))
-		{
-			gpmon_warningx(FLINE, APR_FROM_OS_ERROR(errno), "event_add failed");
-		}
+		add_recv_from_gx_event(h);
 	}
 	else
 	{
@@ -1750,7 +1755,7 @@ static void getconfig(void)
  * Define GUCs
  * start gpmmon bgworker
  */
-void 
+void
 _PG_init(void)
 {
 	if (!process_shared_preload_libraries_in_progress)
@@ -1768,7 +1773,7 @@ _PG_init(void)
 	memset(&worker, 0, sizeof(BackgroundWorker));
 
 	def_gucs();
-	
+
 	/* start gpmmon only on coordinator */
 	if (!IS_QUERY_DISPATCHER())
 	{
