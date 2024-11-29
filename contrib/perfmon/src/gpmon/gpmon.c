@@ -31,7 +31,6 @@
 #include "pg_query_state.h"
 
 PG_MODULE_MAGIC;
-static int32 init_tmid = -1;;
 
 void _PG_init(void);
 void _PG_fini(void);
@@ -43,8 +42,8 @@ static void gpmon_record_kv_with_file(const char* key,
 				  const char* value,
 				  bool extraNewLine,
 				  FILE* fp);
-static void gpmon_record_update(int32 tmid, int32 ssid,
-								int32 ccnt, int32 status);
+static void gpmon_record_update(gpmon_qlogkey_t key,
+						 int32 status);
 static const char* gpmon_null_subst(const char* input);
 
 /* gpmon hooks */
@@ -70,7 +69,7 @@ static void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, QueryDesc *qd, boo
 static void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket, QueryDesc *qd);
 static void gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket, QueryDesc *qd);
 static void gpmon_send(gpmon_packet_t*);
-static void gpmon_gettmid(int32*);
+static inline void set_query_key(gpmon_qlogkey_t *key, int32 ccnt);
 
 struct  {
     int    gxsock;
@@ -168,13 +167,14 @@ static void gpmon_record_kv_with_file(const char* key,
 	}
 }
 
-void gpmon_record_update(int32 tmid, int32 ssid, int32 ccnt,
+static void
+gpmon_record_update(gpmon_qlogkey_t key,
 						 int32 status)
 {
 	char fname[GPMON_DIR_MAX_PATH];
 	FILE *fp;
 
-	snprintf(fname, GPMON_DIR_MAX_PATH, "%sq%d-%d-%d.txt", GPMON_DIR, tmid, ssid, ccnt);
+	snprintf(fname, GPMON_DIR_MAX_PATH, "%sq%d-%d-%d.txt", GPMON_DIR, key.tmid, key.ssid, key.ccnt);
 
 	fp = fopen(fname, "r+");
 
@@ -188,12 +188,13 @@ void gpmon_record_update(int32 tmid, int32 ssid, int32 ccnt,
 	fclose(fp);
 }
 
-static void
-gpmon_gettmid(int32* tmid)
+static inline void
+set_query_key(gpmon_qlogkey_t *key, int32 ccnt)
 {
-	Assert(init_tmid > -1);
-	*tmid = init_tmid;
-} 
+	key->tmid = 0;
+	key->ssid = gp_session_id;
+	key->ccnt =  ccnt;
+}
 
 static void
 gpmon_send(gpmon_packet_t* p)
@@ -207,15 +208,15 @@ gpmon_send(gpmon_packet_t* p)
 		elog(DEBUG1,
 				"[perfmon] Perfmon Executor Packet: (tmid, ssid, ccnt, segid, pid, nid, status) = "
 				"(%d, %d, %d, %d, %d, %d, %d)",
-				p->u.qexec.key.tmid, p->u.qexec.key.ssid, p->u.qexec.key.ccnt,
+				p->u.qexec.key.qkey.tmid, p->u.qexec.key.qkey.ssid, p->u.qexec.key.qkey.ccnt,
 				p->u.qexec.key.hash_key.segid, p->u.qexec.key.hash_key.pid, p->u.qexec.key.hash_key.nid,
 				p->u.qexec.status);
 	}
-	
+
 	if (gpmon.gxsock > 0) {
 		int n = sizeof(*p);
-		if (n != sendto(gpmon.gxsock, (const char *)p, n, 0, 
-						(struct sockaddr*) &gpmon.gxaddr, 
+		if (n != sendto(gpmon.gxsock, (const char *)p, n, 0,
+						(struct sockaddr*) &gpmon.gxaddr,
 						sizeof(gpmon.gxaddr))) {
 			elog(LOG, "[perfmon]: cannot send (%m socket %d)", gpmon.gxsock);
 		}
@@ -252,7 +253,7 @@ gpmon_qlog_packet_init(QueryDesc *qd)
 	gpmonPacket->pkttype = GPMON_PKTTYPE_QLOG;
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_SILENT;
 
-	gpmon_gettmid(&gpmonPacket->u.qlog.key.tmid);
+	set_query_key(&gpmonPacket->u.qlog.key, get_query_command_count(qd));
 	gpmonPacket->u.qlog.key.ssid = gp_session_id;
 	gpmonPacket->u.qlog.pid = MyProcPid;
 
@@ -262,8 +263,6 @@ gpmon_qlog_packet_init(QueryDesc *qd)
 			username ? username : "");
 	gpmonPacket->u.qlog.dbid = MyDatabaseId;
 
-	/* Fix up command count */
-	gpmonPacket->u.qlog.key.ccnt = get_query_command_count(qd);
 	return gpmonPacket;
 }
 
@@ -286,10 +285,8 @@ gpmon_qexec_packet_init()
 	gpmonPacket->version = GPMON_PACKET_VERSION;
 	gpmonPacket->pkttype = GPMON_PKTTYPE_QEXEC;
 
-	gpmon_gettmid(&gpmonPacket->u.qexec.key.tmid);
-	gpmonPacket->u.qexec.key.ssid = gp_session_id;
 	/* Better to use get_query_command_count here */
-	gpmonPacket->u.qexec.key.ccnt =  gp_command_count;
+	set_query_key(&gpmonPacket->u.qexec.key.qkey, gp_command_count);
 	gpmonPacket->u.qexec.key.hash_key.segid = GpIdentity.segindex;
 	gpmonPacket->u.qexec.key.hash_key.pid = MyProcPid;
 	return gpmonPacket;
@@ -395,9 +392,7 @@ gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 	gpmonPacket->u.qlog.tsubmit = get_query_tsubmit(qd);
 	gpmonPacket->u.qlog.tstart = tv.tv_sec;
 	set_query_tstart(tv.tv_sec, qd);
-	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
-			gpmonPacket->u.qlog.key.ssid,
-			gpmonPacket->u.qlog.key.ccnt,
+	gpmon_record_update(gpmonPacket->u.qlog.key,
 			gpmonPacket->u.qlog.status);
 	gpmon_send(gpmonPacket);
 }
@@ -418,9 +413,7 @@ gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket, QueryDesc *qd, bool updateReco
 	gpmonPacket->u.qlog.tstart = get_query_tstart(qd);
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
 	if (updateRecord)
-		gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
-							gpmonPacket->u.qlog.key.ssid,
-							gpmonPacket->u.qlog.key.ccnt,
+		gpmon_record_update(gpmonPacket->u.qlog.key,
 							gpmonPacket->u.qlog.status);
 
 	gpmon_send(gpmonPacket);
@@ -443,9 +436,7 @@ gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 	gpmonPacket->u.qlog.tstart = get_query_tstart(qd);
 	gpmonPacket->u.qlog.tfin = tv.tv_sec;
 	
-	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
-			gpmonPacket->u.qlog.key.ssid,
-			gpmonPacket->u.qlog.key.ccnt,
+	gpmon_record_update(gpmonPacket->u.qlog.key,
 			gpmonPacket->u.qlog.status);
 	
 	gpmon_send(gpmonPacket);
@@ -462,10 +453,7 @@ gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket, QueryDesc *qd)
 	gpmonPacket->u.qlog.status = GPMON_QLOG_STATUS_CANCELING;
 	gpmonPacket->u.qlog.tsubmit = get_query_tsubmit(qd);
 	gpmonPacket->u.qlog.tstart = get_query_tstart(qd);
-	
-	gpmon_record_update(gpmonPacket->u.qlog.key.tmid,
-			gpmonPacket->u.qlog.key.ssid,
-			gpmonPacket->u.qlog.key.ccnt,
+	gpmon_record_update(gpmonPacket->u.qlog.key,
 			gpmonPacket->u.qlog.status);
 	
 	gpmon_send(gpmonPacket);
@@ -590,7 +578,6 @@ init_gpmon_hooks(void)
 void
 _PG_init(void)
 {
-	time_t t;
 	if (!process_shared_preload_libraries_in_progress)
 	{
 		ereport(ERROR, (errmsg("gpmon not in shared_preload_libraries")));
@@ -603,14 +590,6 @@ _PG_init(void)
 		ereport(LOG, (errmsg("booting gpmon")));
 	}
 	init_gpmon_hooks();
-
-	t = time(NULL);
-
-	if (t == (time_t) -1)
-	{
-		elog(PANIC, "[perfmon] cannot generate global transaction id");
-	}
-	init_tmid = t;
 	gpmon_init();
 	init_pg_query_state();
 }

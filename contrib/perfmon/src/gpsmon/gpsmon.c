@@ -1018,9 +1018,9 @@ static void gx_recvqexec(gpmon_packet_t* pkt)
 
 	p = &pkt->u.qexec;
 	get_pid_metrics(p->key.hash_key,
-					p->key.tmid,
-					p->key.ssid,
-					p->key.ccnt);
+					p->key.qkey.tmid,
+					p->key.qkey.ssid,
+					p->key.qkey.ccnt);
 	// Store some aggregated information somewhere for metrics in
 	// queries_* tables, like cpu_elapsed, rows_out, and etc.
 	//extract_segments_exec(pkt);
@@ -1712,4 +1712,3 @@ int main(int argc, const char* const argv[])
 	gx_main(port, signature);
 	return 0;
 }
-

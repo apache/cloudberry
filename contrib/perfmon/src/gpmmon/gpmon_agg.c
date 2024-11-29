@@ -70,12 +70,13 @@ typedef struct dbmetrics_t {
 extern int min_query_time;
 extern mmon_options_t opt;
 extern apr_queue_t* message_queue;
-int32 tmid = -1;
+extern int32 tmid;
 
 extern void incremement_tail_bytes(apr_uint64_t bytes);
 static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
 			apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool);
 static void format_time(time_t tt, char *buf);
+static void set_tmid(gp_smon_to_mmon_packet_t* pkt, int32 tmid);
 
 static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool)
 {
@@ -145,13 +146,10 @@ static apr_status_t agg_put_fsinfo(agg_t* agg, const gpmon_fsinfo_t* met)
 static apr_status_t agg_put_queryseg(agg_t* agg, const gpmon_query_seginfo_t* met, apr_int64_t generation)
 {
 	qdnode_t* dp;
-	gpmon_qlogkey_t key;
+	gpmon_qlogkey_t key = met->key.qkey;
 	mmon_query_seginfo_t* rec = 0;
 
 	/* find qdnode of this qexec */
-	key.tmid = met->key.qkey.tmid;
-	key.ssid = met->key.qkey.ssid;
-	key.ccnt = met->key.qkey.ccnt;
 	dp = apr_hash_get(agg->qtab, &key, sizeof(key));
 
 	if (!dp) { /* not found, internal SPI query.  Ignore. */
@@ -203,11 +201,9 @@ static apr_status_t agg_put_metrics(agg_t* agg, const gpmon_metrics_t* met)
 
 static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation)
 {
-	gpmon_qlogkey_t key = qlog->key;
-	key.tmid = tmid;
 	qdnode_t *node;
 
-	node = apr_hash_get(agg->qtab, &key, sizeof(key));
+	node = apr_hash_get(agg->qtab, &qlog->key, sizeof(qlog->key));
 	if (!node)
 	{
 		TR2(("put query metrics can not find qdnode from qtab, queryID :%d-%d-%d \n",
@@ -235,10 +231,6 @@ static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, 
 static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 				 apr_int64_t generation)
 {
-        if (tmid == -1)
-        {
-                tmid = qlog->key.tmid;
-        }
         if (qlog->dbid == gpperfmon_dbid) {
                 TR2(("agg_put_qlog:(%d.%d.%d) ignore gpperfmon sql\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt));
                 return 0;
@@ -436,8 +428,9 @@ void agg_destroy(agg_t* agg)
 	apr_pool_destroy(agg->pool);
 }
 
-apr_status_t agg_put(agg_t* agg, const gp_smon_to_mmon_packet_t* pkt)
+apr_status_t agg_put(agg_t* agg, gp_smon_to_mmon_packet_t* pkt)
 {
+	set_tmid(pkt, tmid);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_METRICS)
 		return agg_put_metrics(agg, &pkt->u.metrics);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QLOG)
@@ -1290,9 +1283,10 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
         char qfname[qfname_size];
         int size = 0;
         FILE* qfptr = 0;
-        snprintf(qfname, qfname_size, GPMON_DIR "q%d-%d-%d.txt", qdnode->qlog.key.tmid,
-                 qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);
-        qfptr = fopen(qfname, "r");
+		snprintf(qfname, qfname_size, GPMON_DIR "q%d-%d-%d.txt", 0,
+				 qdnode->qlog.key.ssid,
+				 qdnode->qlog.key.ccnt);
+		qfptr = fopen(qfname, "r");
         if (qfptr)
         {
                 // array[0] query text
@@ -1371,4 +1365,21 @@ static int bloom_isset(bloom_t* bloom, const char* name)
       0 != (bloom->map[idx] & (1 << off)));
     */
     return 0 != (bloom->map[idx] & (1 << off));
+}
+
+static void
+set_tmid(gp_smon_to_mmon_packet_t* pkt, int32 tmid)
+{
+
+	if (pkt->header.pkttype == GPMON_PKTTYPE_QLOG ||
+		pkt->header.pkttype == GPMON_PKTTYPE_QUERY_HOST_METRICS)
+	{
+		gpmon_qlog_t* qlog = &(pkt->u.qlog);
+		qlog->key.tmid = tmid;
+	}
+	if (pkt->header.pkttype == GPMON_PKTTYPE_QUERYSEG)
+	{
+		gpmon_query_seginfo_t* met = &pkt->u.queryseg;
+		met->key.qkey.tmid = tmid;
+	}
 }

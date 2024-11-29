@@ -180,10 +180,8 @@ typedef struct gpmon_qexec_hash_key_t {
  * QE will NOT need to touch anything begin with _
  */
 typedef struct gpmon_qexeckey_t {
-    int32 tmid;  /* transaction time */
-    int32 ssid; /* session id */
-    int32 ccnt;	/* command count */
-    gpmon_qexec_hash_key_t hash_key;
+	gpmon_qlogkey_t qkey;
+	gpmon_qexec_hash_key_t hash_key;
 }gpmon_qexeckey_t;
 
 struct gpmon_qexec_t {

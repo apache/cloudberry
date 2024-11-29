@@ -121,6 +121,9 @@ apr_queue_t* message_queue = NULL;
 sigset_t unblocksig;
 sigset_t blocksig;
 
+/* tmid */
+int32 tmid = -1;
+
 extern int gpdb_exec_search_for_at_least_one_row(const char* QUERY, PGconn* persistant_conn);
 
 /* Function defs */
@@ -131,7 +134,7 @@ static apr_status_t sendpkt(int sock, const gp_smon_to_mmon_packet_t* pkt);
 static apr_status_t recvpkt(int sock, gp_smon_to_mmon_packet_t* pkt, bool loop_until_all_recv);
 
 static void def_gucs(void);
-
+static void init_tmid(void);
 
 #define MMON_LOG_FILENAME_SIZE (MAXPATHLEN+1)
 char mmon_log_filename[MMON_LOG_FILENAME_SIZE];
@@ -1447,7 +1450,9 @@ int perfmon_main(Datum arg)
 		}
 	}
 
-	//create_log_alert_table();
+	/* init tmid */
+	init_tmid();
+
 	gpmmon_main();
 
 	cleanup();
@@ -1798,4 +1803,12 @@ def_gucs(void)
 
 	DefineCustomBoolVariable("perfmon.enable", "Enable perfmon monitoring.", NULL,
 			&perfmon_enabled, false, PGC_POSTMASTER, 0, NULL, NULL, NULL);
+}
+
+static void
+init_tmid(void)
+{
+	time_t t;
+	t = time(NULL);
+	tmid = t;
 }
