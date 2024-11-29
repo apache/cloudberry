@@ -91,6 +91,7 @@ github:
         - ic-singlenode_regress
         - ic-singlenode_isolation
         - ic-singlenode_isolation2
+        - ic-resgroup-v2
         - Generate Apache Cloudberry Build Report
 
       # Pull request review requirements
