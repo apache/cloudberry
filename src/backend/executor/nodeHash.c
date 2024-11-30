@@ -4280,8 +4280,9 @@ ResetRuntimeFilter(HashState *node)
 		if (attr_filter->blm_filter)
 			bloom_free(attr_filter->blm_filter);
 
-		attr_filter->blm_filter     = bloom_create_aggresive(node->ps.plan->plan_rows,
-		                                             work_mem, random());
+		attr_filter->blm_filter = bloom_create_aggresive(node->ps.plan->plan_rows,
+														 work_mem,
+														 random());
 
 		StaticAssertDecl(sizeof(LONG_MAX) == sizeof(Datum), "sizeof(LONG_MAX) should be equal to sizeof(Datum)");
 		StaticAssertDecl(sizeof(LONG_MIN) == sizeof(Datum), "sizeof(LONG_MIN) should be equal to sizeof(Datum)");

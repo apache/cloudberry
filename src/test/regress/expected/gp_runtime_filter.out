@@ -251,6 +251,7 @@ SELECT COUNT(*) FROM dim_rf
 (1 row)
 
 -- Test bloom filter pushdown
+-- case 1: join on distribution table and replicated table.
 DROP TABLE IF EXISTS t1;
 NOTICE:  table "t1" does not exist, skipping
 DROP TABLE IF EXISTS t2;
@@ -275,7 +276,7 @@ SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Hash Join (never executed)
+   ->  Hash Join (actual rows=0 loops=1)
          Hash Cond: (t1.c2 = t2.c2)
          Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
          ->  Seq Scan on t1 (actual rows=128 loops=1)
@@ -291,7 +292,7 @@ SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Hash Join (never executed)
+   ->  Hash Join (actual rows=0 loops=1)
          Hash Cond: (t1.c2 = t2.c2)
          Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
          ->  Seq Scan on t1 (actual rows=1 loops=1)
@@ -300,6 +301,59 @@ SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
                ->  Seq Scan on t2 (actual rows=32 loops=1)
  Optimizer: Postgres query optimizer
 (9 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+-- case 2: join on partition table and replicated table.
+CREATE TABLE t1 (c1 INT, c2 INT) DISTRIBUTED BY (c1) PARTITION BY RANGE (c2) (START (1) END (100) EVERY (50));
+CREATE TABLE t2 (c1 INT, c2 INT) DISTRIBUTED REPLICATED;
+INSERT INTO t1 SELECT generate_series(1, 99), generate_series(1, 99);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 SELECT generate_series(1, 5), generate_series(1, 5);
+INSERT INTO t2 SELECT generate_series(51, 51), generate_series(51, 51);
+ANALYZE;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Append (actual rows=608 loops=1)
+               Partition Selectors: $0
+               ->  Seq Scan on t1_1_prt_1 t1_1 (actual rows=288 loops=1)
+               ->  Seq Scan on t1_1_prt_2 t1_2 (actual rows=320 loops=1)
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Append (actual rows=64 loops=1)
+               Partition Selectors: $0
+               ->  Seq Scan on t1_1_prt_1 t1_1 (actual rows=48 loops=1)
+               ->  Seq Scan on t1_1_prt_2 t1_2 (actual rows=16 loops=1)
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Postgres query optimizer
+(13 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;

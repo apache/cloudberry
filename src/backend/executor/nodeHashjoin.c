@@ -167,9 +167,12 @@ static void ExecEagerFreeHashJoin(HashJoinState *node);
 static void CreateRuntimeFilter(HashJoinState* hjstate);
 static bool IsEqualOp(Expr *expr);
 static bool CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno);
-static PlanState *FindTargetNode(HashJoinState *hjstate,
-								 AttrNumber attno,
-								 AttrNumber *lattno);
+static bool CheckTargetNode(PlanState *node,
+							AttrNumber attno,
+							AttrNumber *lattno);
+static List *FindTargetNodes(HashJoinState *hjstate,
+							 AttrNumber attno,
+							 AttrNumber *lattno);
 static AttrFilter *CreateAttrFilter(PlanState *target,
 									AttrNumber lattno,
 									AttrNumber rattno,
@@ -2187,9 +2190,9 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	JoinType	jointype;
 	HashJoin	*hj;
 	HashState	*hstate;
-	PlanState	*target;
 	AttrFilter	*attr_filter;
 	ListCell	*lc;
+	List		*targets;
 
 	/*
 	 * Only applicatable for inner, right and semi join,
@@ -2224,17 +2227,22 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		if (lattno < 1 || rattno < 1)
 			continue;
 
-		target = FindTargetNode(hjstate, lattno, &lattno);
-		if (lattno == -1 || target == NULL || IsA(target, HashJoinState))
+		targets = FindTargetNodes(hjstate, lattno, &lattno);
+		if (lattno == -1 || targets == NULL)
 			continue;
-		Assert(IsA(target, SeqScanState));
 
-		attr_filter = CreateAttrFilter(target, lattno, rattno,
-									   hstate->ps.plan->plan_rows);
-		if (attr_filter->blm_filter)
-			hstate->filters = lappend(hstate->filters, attr_filter);
-		else
-			pfree(attr_filter);
+		foreach(lc, targets)
+		{
+			PlanState *target = lfirst(lc);
+			Assert(IsA(target, SeqScanState));
+
+			attr_filter = CreateAttrFilter(target, lattno, rattno,
+					hstate->ps.plan->plan_rows);
+			if (attr_filter->blm_filter)
+				hstate->filters = lappend(hstate->filters, attr_filter);
+			else
+				pfree(attr_filter);
+		}
 	}
 }
 
@@ -2315,6 +2323,30 @@ CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno)
 	return true;
 }
 
+static bool
+CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
+{
+	Var *var;
+	TargetEntry *te;
+
+	if (!IsA(node, SeqScanState))
+		return false;
+
+	te = (TargetEntry *)list_nth(node->plan->targetlist, attno - 1);
+	if (!IsA(te->expr, Var))
+		return false;
+
+	var = castNode(Var, te->expr);
+
+	/* system column is not allowed */
+	if (var->varattno <= 0)
+		return false;
+
+	*lattno = var->varattno;
+
+	return true;
+}
+
 /*
  * it's just allowed like this:
  *   HashJoin
@@ -2322,46 +2354,75 @@ CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno)
  *        HashJoin
  *          SeqScan <- target
  */
-static PlanState *
-FindTargetNode(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
+static List *
+FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 {
 	Var *var;
 	PlanState *child, *parent;
 	TargetEntry *te;
+	List *targetNodes;
 
 	parent = (PlanState *)hjstate;
 	child  = outerPlanState(hjstate);
 	Assert(child);
 
 	*lattno = -1;
-	while (child)
+	targetNodes = NIL;
+	while (true)
 	{
 		/* target is seqscan */
-		if (IsA(child, SeqScanState))
+		if ((IsA(parent, HashJoinState) || IsA(parent, ResultState)) && IsA(child, SeqScanState))
 		{
-			te = (TargetEntry *)list_nth(child->plan->targetlist, attno - 1);
-			if (!IsA(te->expr, Var))
+			/*
+			 * hashjoin
+			 *   seqscan
+			 * or
+			 * hashjoin
+			 *   result
+			 *     seqscan
+			 */
+			if (!CheckTargetNode(child, attno, lattno))
 				return NULL;
 
-			var = castNode(Var, te->expr);
+			targetNodes = lappend(targetNodes, child);
+			return targetNodes;
+		}
+		else if (IsA(parent, AppendState) && child == NULL)
+		{
+			/*
+			 * append
+			 *   seqscan on t1_prt_1
+			 *   seqscan on t1_prt_2
+			 *   ...
+			 */
+			AppendState *as = castNode(AppendState, parent);
+			for (int i = 0; i < as->as_nplans; i++)
+			{
+				child = as->appendplans[i];
+				if (!CheckTargetNode(child, attno, lattno))
+					return NULL;
 
-			/* system column is not allowed */
-			if (var->varattno <= 0)
-				return NULL;
+				targetNodes = lappend(targetNodes, child);
+			}
 
-			*lattno = var->varattno;
-			return child;
+			return targetNodes;
 		}
 
 		/*
 		 * hashjoin
 		 *   result (hash filter)
 		 *     seqscan on t1, t1 is replicated table
+		 * or
+		 * hashjoin
+		 *   append
+		 *     seqscan on t1_prt_1
+		 *     seqscan on t1_prt_2
+		 *     ...
 		 */
-		if (!IsA(child, HashJoinState) && !IsA(child, ResultState))
+		if (!IsA(child, HashJoinState) && !IsA(child, ResultState) && !IsA(child, AppendState))
 			return NULL;
 
-		/* child is hashjoin or result node */
+		/* child is hashjoin, result or append node */
 		te = (TargetEntry *)list_nth(child->plan->targetlist, attno - 1);
 		if (!IsA(te->expr, Var))
 			return NULL;
