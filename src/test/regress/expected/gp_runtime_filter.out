@@ -296,11 +296,12 @@ SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
          Hash Cond: (t1.c2 = t2.c2)
          Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
          ->  Seq Scan on t1 (actual rows=1 loops=1)
+               Rows Removed by Pushdown Runtime Filter: 127
          ->  Hash (actual rows=32 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4098kB
                ->  Seq Scan on t2 (actual rows=32 loops=1)
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
@@ -347,13 +348,15 @@ SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
          ->  Append (actual rows=64 loops=1)
                Partition Selectors: $0
                ->  Seq Scan on t1_1_prt_1 t1_1 (actual rows=48 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 240
                ->  Seq Scan on t1_1_prt_2 t1_2 (actual rows=16 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 304
          ->  Hash (actual rows=6 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
                      ->  Seq Scan on t2 (actual rows=6 loops=1)
  Optimizer: Postgres query optimizer
-(13 rows)
+(15 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;

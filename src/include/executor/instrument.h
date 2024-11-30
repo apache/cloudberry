@@ -94,6 +94,7 @@ typedef struct Instrumentation
 	uint64		nloops;			/* # of run cycles for this node */
 	double		nfiltered1;		/* # tuples removed by scanqual or joinqual */
 	double		nfiltered2;		/* # tuples removed by "other" quals */
+	double		nfilteredPRF;	/* # tuples removed by pushdown runtime filter */
 	BufferUsage	bufusage;		/* Total buffer usage */
 	WalUsage	walusage;		/* total WAL usage */
 
