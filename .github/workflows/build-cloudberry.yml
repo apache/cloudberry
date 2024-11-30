@@ -64,7 +64,7 @@
 #    - Sends failure notifications if any step fails.
 #
 # Execution Environment:
-# - **Runs On**: Ubuntu-latest with Rocky Linux 9 containers.
+# - **Runs On**: ubuntu-22.04 with Rocky Linux 9 containers.
 # - **Resource Requirements**:
 #   - Disk: Minimum 20GB free space.
 #   - Memory: Minimum 8GB RAM.
@@ -144,7 +144,7 @@ jobs:
   ## ======================================================================
 
   check-skip:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       should_skip: ${{ steps.skip-check.outputs.should_skip }}
     steps:
@@ -191,7 +191,7 @@ jobs:
     env:
       JOB_TYPE: build
     needs: check-skip
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
     outputs:
       build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
@@ -217,20 +217,21 @@ jobs:
           echo "timestamp=$timestamp" | tee -a "$GITHUB_OUTPUT"  # Use GITHUB_OUTPUT for job outputs
           echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV" # Also set as environment variable
 
-      - name: Checkout Apache Cloudberry (apache/cloudberry)
+      - name: Checkout Apache Cloudberry
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/checkout@v4
         with:
           repository: apache/cloudberry
           fetch-depth: 1
 
-      - name: Checkout CI Build/Test Scripts (apache/cloudberry-devops-release)
+      - name: Checkout CI Build/Test Scripts
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/checkout@v4
         with:
           repository: apache/cloudberry-devops-release
-          ref: main
+          ref: group-ic-test-support
           path: cloudberry-devops-release
+          fetch-depth: 1
 
       - name: Move cloudberry-devops-release directory
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -256,10 +257,6 @@ jobs:
           chown -R gpadmin:gpadmin .
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
-
-          df -kh /
-          rm -rf /__t/*
-          df -kh /
 
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
           free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
@@ -474,7 +471,7 @@ jobs:
   rpm-install-test:
     name: RPM Install Test Apache Cloudberry
     needs: [check-skip, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
 
     container:
@@ -513,10 +510,6 @@ jobs:
           chown -R gpadmin:gpadmin .
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
-
-          df -kh /
-          rm -rf /__t/*
-          df -kh /
 
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
           free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
@@ -642,48 +635,84 @@ jobs:
   ## Job: test
   ## ======================================================================
 
+  # WARNING: When adding new pg_settings key/value pairs:
+  # 1. Add the new setting with empty string ("") in all matrix entries
+  # 2. Update the "Run Tests" step to check and apply the new setting
+  # 3. Example: pg_settings.new_setting must be added to ALL matrix entries
+
   test:
     name: ${{ matrix.test }}
     needs: [check-skip, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
+    # actionlint-allow matrix[*].pg_settings
     strategy:
       fail-fast: false  # Continue with other tests if one fails
+
       matrix:
         test:
           - ic-good-opt-off
           - ic-expandshrink
-          - ic-singlenode_regress
-          - ic-singlenode_isolation
-          - ic-singlenode_isolation2
+          - ic-singlenode
           - ic-resgroup-v2
+          - ic-contrib
+          - ic-gpcontrib
         include:
           - test: ic-good-opt-off
-            make_target: installcheck-good
-            make_directory: --directory=src/test/regress
+            make_configs:
+              - src/test/regress:installcheck-good
             num_primary_mirror_pairs: 3
             pg_settings:
               optimizer: "off"
           - test: ic-expandshrink
-            make_target: installcheck-expandshrink
-            make_directory: --directory=src/test/isolation2
+            make_configs:
+              - src/test/isolation2:installcheck-expandshrink
             num_primary_mirror_pairs: 3
-          - test: ic-singlenode_regress
-            make_target: installcheck-singlenode
-            make_directory: --directory=src/test/singlenode_regress
+            pg_settings:
+              optimizer: ""
+          - test: ic-singlenode
+            make_configs:
+              - src/test/isolation:installcheck-singlenode
+              - src/test/singlenode_regress:installcheck-singlenode
+              - src/test/singlenode_isolation2:installcheck-singlenode
             num_primary_mirror_pairs: 0
-          - test: ic-singlenode_isolation
-            make_target: installcheck-singlenode
-            make_directory: --directory=src/test/isolation
-            num_primary_mirror_pairs: 0
-          - test: ic-singlenode_isolation2
-            make_target: installcheck-singlenode
-            make_directory: --directory=src/test/singlenode_isolation2
-            num_primary_mirror_pairs: 0
+            pg_settings:
+              optimizer: ""
           - test: ic-resgroup-v2
-            make_target: installcheck-resgroup-v2
-            make_directory: --directory=src/test/isolation2
+            make_configs:
+              - src/test/isolation2:installcheck-resgroup-v2
             num_primary_mirror_pairs: 3
+            pg_settings:
+              optimizer: ""
+          - test: ic-contrib
+            make_configs:
+              - contrib/auto_explain:installcheck
+              - contrib/citext:installcheck
+              - contrib/btree_gin:installcheck
+              - contrib/file_fdw:installcheck
+              - contrib/formatter_fixedwidth:installcheck
+              - contrib/extprotocol:installcheck
+              - contrib/dblink:installcheck
+              - contrib/pg_trgm:installcheck
+              - contrib/indexscan:installcheck
+              - contrib/hstore:installcheck
+              - contrib/pgcrypto:installcheck
+              - contrib/tablefunc:installcheck
+              - contrib/passwordcheck:installcheck
+              - contrib/sslinfo:installcheck
+            num_primary_mirror_pairs: 3
+            pg_settings:
+              optimizer: ""
+          - test: ic-gpcontrib
+            make_configs:
+              - gpcontrib/orafce:installcheck
+              - gpcontrib/pxf_fdw:installcheck
+              - gpcontrib/zstd:installcheck
+              - gpcontrib/gp_sparse_vector:installcheck
+              - gpcontrib/gp_toolkit:installcheck
+            num_primary_mirror_pairs: 3
+            pg_settings:
+              optimizer: ""
 
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
@@ -707,13 +736,14 @@ jobs:
         run: |
           echo "Timestamp from output: ${{ needs.build.outputs.build_timestamp }}"
 
-      - name: Checkout CI Build/Test Scripts (apache/cloudberry-devops-release)
+      - name: Checkout CI Build/Test Scripts
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/checkout@v4
         with:
           repository: apache/cloudberry-devops-release
-          ref: main
+          ref: group-ic-test-support
           path: cloudberry-devops-release
+          fetch-depth: 1
 
       - name: Move cloudberry-devops-release directory
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -738,10 +768,6 @@ jobs:
           chown -R gpadmin:gpadmin .
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
-
-          df -kh /
-          rm -rf /__t/*
-          df -kh /
 
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
           free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
@@ -1077,133 +1103,199 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+        shell: bash {0}
         run: |
           set -o pipefail
-          {
 
-            # Construct PGOPTIONS from pg_settings
-            PG_OPTS=""
-            if [[ -n "${{ matrix.pg_settings.optimizer }}" ]]; then
-              PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
-            fi
+          # Initialize test status
+          overall_status=0
 
-            chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh
+          # Create logs directory structure
+          mkdir -p build-logs/details
+
+          # WARNING: PostgreSQL Settings
+          # When adding new pg_settings key/value pairs:
+          # 1. Add a new check below for the setting
+          # 2. Follow the same pattern as optimizer
+          # 3. Update matrix entries to include the new setting
+
+          # Set PostgreSQL options if defined
+          PG_OPTS=""
+          if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          fi
+
+          # Read configs into array
+          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+
+          echo "=== Starting test execution for ${{ matrix.test }} ==="
+          echo "Number of configurations to execute: ${#configs[@]}"
+          echo ""
+
+          # Execute each config separately
+          for ((i=0; i<${#configs[@]}; i++)); do
+            config="${configs[$i]}"
+            IFS=':' read -r dir target <<< "$config"
+
+            echo "=== Executing configuration $((i+1))/${#configs[@]} ==="
+            echo "Make command: make -C $dir $target"
+            echo "Environment:"
+            echo "- PGOPTIONS: ${PG_OPTS}"
+
+            # Create unique log file for this configuration
+            config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
+
+            # Execute test script with proper environment setup
             if ! time su - gpadmin -c "cd ${SRC_DIR} && \
-              MAKE_NAME='${{ matrix.test }}' \
-              MAKE_TARGET='${{ matrix.make_target }}' \
-              MAKE_DIRECTORY='${{ matrix.make_directory }}' \
-              PGOPTIONS='${PG_OPTS}' \
-              SRC_DIR='${SRC_DIR}' \
-              ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh"; then
-              echo "::error::Test execution failed"
-              df -kh /
-              exit 1
+                 MAKE_NAME='${{ matrix.test }}-config$i' \
+                 MAKE_TARGET='$target' \
+                 MAKE_DIRECTORY='-C $dir' \
+                 PGOPTIONS='${PG_OPTS}' \
+                 SRC_DIR='${SRC_DIR}' \
+                 ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh" \
+                 2>&1 | tee "$config_log"; then
+              echo "::warning::Test execution failed for configuration $((i+1)): make -C $dir $target"
+              overall_status=1
             fi
-            } 2>&1 | tee -a build-logs/details/make-${{ matrix.test }}.log
 
-      - name: Parse Test Results
+            echo "Log file: $config_log"
+            echo "=== End configuration $((i+1)) execution ==="
+            echo ""
+          done
+
+          echo "=== Test execution completed ==="
+          echo "Log files:"
+          ls -l build-logs/details/
+
+          # Store number of configurations for parsing step
+          echo "NUM_CONFIGS=${#configs[@]}" >> "$GITHUB_ENV"
+
+          # Report overall status
+          if [ $overall_status -eq 0 ]; then
+            echo "All test executions completed successfully"
+          else
+            echo "::warning::Some test executions failed, check individual logs for details"
+          fi
+
+          exit $overall_status
+
+      - name: "Parse Test Results: ${{ matrix.test }}"
         id: test-results
-        if: always()
-        shell: bash {0}
+        if: always() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+        shell: bash {0}
         run: |
           set -o pipefail
-          {
-            # Check if the workflow was cancelled
-            if [[ "${{ job.status }}" == "cancelled" ]]; then
-              echo "Workflow was cancelled - recording cancelled status"
+
+          overall_status=0
+
+          # Get configs array to create context for results
+          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+
+          echo "=== Starting results parsing for ${{ matrix.test }} ==="
+          echo "Number of configurations to parse: ${#configs[@]}"
+          echo ""
+
+          # Parse each configuration's results independently
+          for ((i=0; i<NUM_CONFIGS; i++)); do
+            config="${configs[$i]}"
+            IFS=':' read -r dir target <<< "$config"
+
+            config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
+
+            echo "=== Parsing results for configuration $((i+1))/${NUM_CONFIGS} ==="
+            echo "Make command: make -C $dir $target"
+            echo "Log file: $config_log"
+
+            if [ ! -f "$config_log" ]; then
+              echo "::error::Log file not found: $config_log"
               {
-                echo "status=cancelled"
-                echo "total_tests=0"
-                echo "failed_tests=0"
-                echo "passed_tests=0"
-                echo "ignored_tests=0"
-              } >> "$GITHUB_OUTPUT"
-              echo "Cancellation status recorded" | tee -a build-logs/details/parse-test-results-${{ matrix.test }}.log
-              exit 0
+                echo "MAKE_COMMAND=make -C $dir $target"
+                echo "STATUS=missing_log"
+                echo "TOTAL_TESTS=0"
+                echo "FAILED_TESTS=0"
+                echo "PASSED_TESTS=0"
+                echo "IGNORED_TESTS=0"
+              } > "test_results.$i.txt"
+              overall_status=1
+              continue
             fi
 
-            # Check for skipped tests
-            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
-              echo "Tests skipped - setting default values"
-              {
-                echo "status=skipped"
-                echo "total_tests=0"
-                echo "failed_tests=0"
-                echo "passed_tests=0"
-                echo "ignored_tests=0"
-              } >> "$GITHUB_OUTPUT"
-              echo "Skip status recorded" | tee -a build-logs/details/parse-test-results-${{ matrix.test }}.log
-              exit 0
-            fi
+            # Parse this configuration's results
 
-            # Ensure log file exists and has content
-            LOG_FILE="build-logs/details/make-${{ matrix.test }}.log"
-            if [[ ! -f "$LOG_FILE" ]]; then
-              echo "::warning::Test log file not found, using default values"
-              {
-                echo "status=no_log"
-                echo "total_tests=0"
-                echo "failed_tests=0"
-                echo "passed_tests=0"
-                echo "ignored_tests=0"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            # Check if log file is empty or contains only whitespace
-            if [[ ! -s "$LOG_FILE" ]] || ! grep -q '[^[:space:]]' "$LOG_FILE"; then
-              echo "::warning::Test log file is empty, using default values"
-              {
-                echo "status=empty_log"
-                echo "total_tests=0"
-                echo "failed_tests=0"
-                echo "passed_tests=0"
-                echo "ignored_tests=0"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            # Attempt to parse results
-            chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh
-            MAKE_NAME='${{ matrix.test }}' \
-            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh \
-              "$LOG_FILE"
-
+            MAKE_NAME="${{ matrix.test }}-config$i" \
+            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh "$config_log"
             status_code=$?
+
+            {
+                echo "SUITE_NAME=${{ matrix.test }}"
+                echo "DIR=${dir}"
+                echo "TARGET=${target}"
+            } >> test_results.txt
+
+            # Process return code
             case $status_code in
               0)  # All tests passed
                   echo "All tests passed successfully"
+                  if [ -f test_results.txt ]; then
+                    (echo "MAKE_COMMAND=\"make -C $dir $target\""; cat test_results.txt) | tee "test_results.${{ matrix.test }}.$i.txt"
+                    rm test_results.txt
+                  fi
                   ;;
               1)  # Tests failed but parsed successfully
                   echo "Test failures detected but properly parsed"
-                  # Don't exit here - let the workflow continue
+                  if [ -f test_results.txt ]; then
+                    (echo "MAKE_COMMAND=\"make -C $dir $target\""; cat test_results.txt) | tee "test_results.${{ matrix.test }}.$i.txt"
+                    rm test_results.txt
+                  fi
+                  overall_status=1
                   ;;
               2)  # Parse error or missing file
-                  echo "::warning::Could not parse test results properly"
+                  echo "::warning::Could not parse test results properly for configuration $((i+1))"
                   {
-                    echo "status=parse_error"
-                    echo "total_tests=0"
-                    echo "failed_tests=0"
-                    echo "passed_tests=0"
-                    echo "ignored_tests=0"
-                  } >> "$GITHUB_OUTPUT"
-                  exit 0
+                    echo "MAKE_COMMAND=\"make -C $dir $target\""
+                    echo "STATUS=parse_error"
+                    echo "TOTAL_TESTS=0"
+                    echo "FAILED_TESTS=0"
+                    echo "PASSED_TESTS=0"
+                    echo "IGNORED_TESTS=0"
+                  } | tee "test_results.${{ matrix.test }}.$i.txt"
+                  overall_status=1
                   ;;
               *)  # Unexpected error
-                  echo "::warning::Unexpected error during test results parsing"
+                  echo "::warning::Unexpected error during test results parsing for configuration $((i+1))"
                   {
-                    echo "status=unknown_error"
-                    echo "total_tests=0"
-                    echo "failed_tests=0"
-                    echo "passed_tests=0"
-                    echo "ignored_tests=0"
-                  } >> "$GITHUB_OUTPUT"
-                  exit 0
+                    echo "MAKE_COMMAND=\"make -C $dir $target\""
+                    echo "STATUS=unknown_error"
+                    echo "TOTAL_TESTS=0"
+                    echo "FAILED_TESTS=0"
+                    echo "PASSED_TESTS=0"
+                    echo "IGNORED_TESTS=0"
+                  } | tee "test_results.${{ matrix.test }}.$i.txt"
+                  overall_status=1
                   ;;
             esac
-          } 2>&1 | tee -a build-logs/details/parse-test-results-${{ matrix.test }}.log
+
+            echo "Results stored in test_results.$i.txt"
+            echo "=== End parsing for configuration $((i+1)) ==="
+            echo ""
+          done
+
+          # Report status of results files
+          echo "=== Results file status ==="
+          echo "Generated results files:"
+          for ((i=0; i<NUM_CONFIGS; i++)); do
+            if [ -f "test_results.${{ matrix.test }}.$i.txt" ]; then
+              echo "- test_results.${{ matrix.test }}.$i.txt exists"
+              echo ""
+            else
+              echo "::error::Missing results file: test_results.${{ matrix.test }}.$i.txt"
+              overall_status=1
+            fi
+          done
+
+          exit $overall_status
 
       - name: Check and Display Regression Diffs
         if: always()
@@ -1241,46 +1333,82 @@ jobs:
               exit 0
             fi
 
-            # Add test execution results
-            echo "### Test Execution Summary"
-            echo "| Metric | Count |"
-            echo "|--------|-------|"
-            echo "| Total Tests | ${{ steps.test-results.outputs.total_tests }} |"
-            echo "| Passed Tests | ${{ steps.test-results.outputs.passed_tests }} |"
-            echo "| Failed Tests | ${{ steps.test-results.outputs.failed_tests }} |"
-            echo "| Ignored Tests | ${{ steps.test-results.outputs.ignored_tests }} |"
+            # Process results for each configuration
+            IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
 
-            # Test status with emoji based on results
-            echo "### Test Status"
-            if [[ "${{ steps.test-results.outputs.status }}" == "passed" ]]; then
-              echo "✅ All ${{ steps.test-results.outputs.total_tests }} tests passed successfully"
-            else
-              echo "⚠️ ${{ steps.test-results.outputs.failed_tests }} of ${{ steps.test-results.outputs.total_tests }} tests failed"
+            for ((i=0; i<NUM_CONFIGS; i++)); do
+              config="${configs[$i]}"
+              IFS=':' read -r dir target <<< "$config"
 
-              # Add failed tests as a bullet list if there are failures
-              if [[ -n "${{ steps.test-results.outputs.failed_test_names }}" ]]; then
+              echo "### Configuration $((i+1)): \`make -C $dir $target\`"
+
+              if [[ ! -f "test_results.${{ matrix.test }}.$i.txt" ]]; then
+                echo "⚠️ No results file found for this configuration"
+                continue
+              fi
+
+              # Source configuration results
+              # shellcheck source=/dev/null
+              . "test_results.${{ matrix.test }}.$i.txt"
+
+              # Rest of the code remains the same...
+              # Display status with emoji
+              echo "#### Status"
+              case "${STATUS:-unknown}" in
+                passed)
+                  echo "✅ All tests passed"
+                  ;;
+                failed)
+                  echo "❌ Some tests failed"
+                  ;;
+                parse_error)
+                  echo "⚠️ Could not parse test results"
+                  ;;
+                unknown_error)
+                  echo "⚠️ Unexpected error during test execution/parsing"
+                  ;;
+                missing_log)
+                  echo "⚠️ Test log file missing"
+                  ;;
+                *)
+                  echo "⚠️ Unknown status: ${status:-unknown}"
+                  ;;
+              esac
+
+              echo ""
+              echo "#### Test Counts"
+              echo "| Metric | Count |"
+              echo "|--------|-------|"
+              echo "| Total Tests | ${TOTAL_TESTS:-0} |"
+              echo "| Passed Tests | ${PASSED_TESTS:-0} |"
+              echo "| Failed Tests | ${FAILED_TESTS:-0} |"
+              echo "| Ignored Tests | ${IGNORED_TESTS:-0} |"
+
+              # Add failed tests if any
+              if [[ -n "${FAILED_TEST_NAMES:-}" && "${FAILED_TESTS:-0}" != "0" ]]; then
                 echo ""
-                echo "### Failed Tests"
-                echo "The following tests failed:"
-                echo "${{ steps.test-results.outputs.failed_test_names }}" | tr ',' '\n' | while read -r test; do
+                echo "#### Failed Tests"
+                echo "${FAILED_TEST_NAMES}" | tr ',' '\n' | while read -r test; do
                   if [[ -n "$test" ]]; then
                     echo "* \`${test}\`"
                   fi
                 done
               fi
-            fi
 
-            # Add ignored tests as a separate section
-            if [[ -n "${{ steps.test-results.outputs.ignored_test_names }}" ]]; then
+              # Add ignored tests if any
+              if [[ -n "${IGNORED_TEST_NAMES:-}" && "${IGNORED_TESTS:-0}" != "0" ]]; then
+                echo ""
+                echo "#### Ignored Tests"
+                echo "${IGNORED_TEST_NAMES}" | tr ',' '\n' | while read -r test; do
+                  if [[ -n "$test" ]]; then
+                    echo "* \`${test}\`"
+                  fi
+                done
+              fi
+
               echo ""
-              echo "### Ignored Tests"
-              echo "The following tests were ignored (results not critical):"
-              echo "${{ steps.test-results.outputs.ignored_test_names }}" | tr ',' '\n' | while read -r test; do
-                if [[ -n "$test" ]]; then
-                  echo "* \`${test}\`"
-                fi
-              done
-            fi
+              echo "---"
+            done
 
           } >> "$GITHUB_STEP_SUMMARY" || true
 
@@ -1293,20 +1421,24 @@ jobs:
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
+      - name: Upload Test Metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-metadata-${{ matrix.test }}
+          path: |
+            test_results*.txt
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
       - name: Upload test regression logs
-        if: >-
-          always() && (
-          steps.test-results.outputs.status == 'failed' ||
-          job.status == 'cancelled' ||
-          steps.test-results.outputs.status == 'cancelled'
-          )
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: regression-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
           path: |
-            src/test/**/regression.out
-            src/test/**/regression.diffs
-            src/test/**/results/
+            **/regression.out
+            **/regression.diffs
+            **/results/
             gpAux/gpdemo/datadirs/standby/log/
             gpAux/gpdemo/datadirs/qddir/demoDataDir-1/log/
             gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/log/
@@ -1317,11 +1449,15 @@ jobs:
             gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/log/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
+  ## ======================================================================
+  ## Job: report
+  ## ======================================================================
+
   report:
     name: Generate Apache Cloudberry Build Report
     needs: [check-skip, build, rpm-install-test, test]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Generate Final Report
         run: |
