@@ -420,7 +420,10 @@ PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 
 		blm_filter = (bloom_filter *)DatumGetPointer(sk->sk_argument);
 		if (bloom_lacks_element(blm_filter, (unsigned char *)&val, sizeof(Datum)))
+		{
+			InstrCountFilteredPRF(node, 1);
 			return false;
+		}
 	}
 
 	return true;
