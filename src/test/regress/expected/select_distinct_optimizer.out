@@ -537,3 +537,216 @@ DROP TABLE capitals;
 DROP TABLE cities;
 set gp_statistics_pullup_from_child_partition to off;
 -- gpdb end: test inherit/partition table distinct when gp_statistics_pullup_from_child_partition is on
+create table t_distinct_sort(a int, b int, c int);
+insert into t_distinct_sort select i, i+1, i+2 from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+analyze t_distinct_sort;
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Output: (count(a)), (sum(b))
+   Sort Key: (sum(t_distinct_sort.b)), (count(t_distinct_sort.a))
+   ->  Finalize Aggregate
+         Output: count(a), sum(b)
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: (PARTIAL count(a)), (PARTIAL sum(b))
+               ->  Partial Aggregate
+                     Output: PARTIAL count(a), PARTIAL sum(b)
+                     ->  Seq Scan on public.t_distinct_sort
+                           Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'on'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
+
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(a), sum(b)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(a)), (PARTIAL sum(b))
+         ->  Partial Aggregate
+               Output: PARTIAL count(a), PARTIAL sum(b)
+               ->  Seq Scan on public.t_distinct_sort
+                     Output: a, b, c
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'on'
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: (count(a)), (sum(b))
+   ->  Sort
+         Output: (count(a)), (sum(b)), (sum(a)), (count(c))
+         Sort Key: (sum(t_distinct_sort.a)), (count(t_distinct_sort.c))
+         ->  Finalize Aggregate
+               Output: count(a), sum(b), sum(a), count(c)
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Output: (PARTIAL count(a)), (PARTIAL sum(b)), (PARTIAL sum(a)), (PARTIAL count(c))
+                     ->  Partial Aggregate
+                           Output: PARTIAL count(a), PARTIAL sum(b), PARTIAL sum(a), PARTIAL count(c)
+                           ->  Seq Scan on public.t_distinct_sort
+                                 Output: a, b, c
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'on'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(15 rows)
+
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort ;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(a), sum(b)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(a)), (PARTIAL sum(b))
+         ->  Partial Aggregate
+               Output: PARTIAL count(a), PARTIAL sum(b)
+               ->  Seq Scan on public.t_distinct_sort
+                     Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'on'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+select distinct count(a), sum(b) from t_distinct_sort ;
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+-- should keep distinct clause
+explain(verbose, costs off) 
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Unique
+   Output: (count(a)), (sum(b)), (count(random()))
+   Group Key: (count(random()))
+   ->  Sort
+         Output: (count(a)), (sum(b)), (count(random()))
+         Sort Key: (count(random()))
+         ->  Finalize Aggregate
+               Output: count(a), sum(b), count(random())
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Output: (PARTIAL count(a)), (PARTIAL sum(b)), (PARTIAL count(random()))
+                     ->  Partial Aggregate
+                           Output: PARTIAL count(a), PARTIAL sum(b), PARTIAL count(random())
+                           ->  Seq Scan on public.t_distinct_sort
+                                 Output: a, b, c
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'on'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
+0, 2) from t_distinct_sort)as xx;
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(t_distinct_sort_1.a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(t_distinct_sort_1.a))
+         ->  Partial Aggregate
+               Output: PARTIAL count(t_distinct_sort_1.a)
+               ->  Nested Loop
+                     Output: t_distinct_sort_1.a
+                     Join Filter: true
+                     ->  Seq Scan on public.t_distinct_sort t_distinct_sort_1
+                           Output: t_distinct_sort_1.a
+                     ->  Materialize
+                           ->  Broadcast Motion 1:3  (slice2)
+                                 ->  Result
+                                       ->  ProjectSet
+                                             Output: generate_series(0, 2)
+                                             ->  Finalize Aggregate
+                                                   Output: count()
+                                                   ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                         Output: (PARTIAL count())
+                                                         ->  Partial Aggregate
+                                                               Output: PARTIAL count()
+                                                               ->  Seq Scan on public.t_distinct_sort
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(25 rows)
+
+select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
+0, 2) from t_distinct_sort)as xx;
+ count 
+-------
+    90
+(1 row)
+
+drop table t_distinct_sort;
+explain(verbose, costs off)
+select distinct(count(a)) from generate_series(0, 1) as a;
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Aggregate
+   Output: count(generate_series)
+   ->  Function Scan on pg_catalog.generate_series
+         Output: generate_series
+         Function Call: generate_series(0, 1)
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+select distinct(count(a)) from generate_series(0, 1) as a;
+ count 
+-------
+     2
+(1 row)
+
+explain(verbose, costs off)
+select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2) b on true;
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Aggregate
+   Output: count()
+   ->  Nested Loop
+         Join Filter: true
+         ->  Function Scan on pg_catalog.generate_series generate_series_1
+               Output: generate_series_1.generate_series
+               Function Call: generate_series(0, 1)
+         ->  Function Scan on pg_catalog.generate_series
+               Output: generate_series.generate_series
+               Function Call: generate_series(0, 2)
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
+
+select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2) b on true;
+ count 
+-------
+     6
+(1 row)
+

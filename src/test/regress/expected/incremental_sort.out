@@ -1705,26 +1705,24 @@ from tenk1 t1
 join tenk1 t2 on t1.unique1 = t2.unique2
 join tenk1 t3 on t2.unique1 = t3.unique1
 order by count(*);
-                                           QUERY PLAN                                            
--------------------------------------------------------------------------------------------------
- Sort
-   Sort Key: (count(*))
-   ->  Finalize Aggregate
-         ->  Gather Motion 3:1  (slice1; segments: 3)
-               ->  Partial Aggregate
-                     ->  Hash Join
-                           Hash Cond: (t2.unique2 = t1.unique1)
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: t2.unique2
-                                 ->  Hash Join
-                                       Hash Cond: (t2.unique1 = t3.unique1)
-                                       ->  Index Scan using tenk1_unique2 on tenk1 t2
-                                       ->  Hash
-                                             ->  Index Only Scan using tenk1_unique1 on tenk1 t3
-                           ->  Hash
-                                 ->  Index Only Scan using tenk1_unique1 on tenk1 t1
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (t2.unique2 = t1.unique1)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.unique2
+                           ->  Hash Join
+                                 Hash Cond: (t2.unique1 = t3.unique1)
+                                 ->  Index Scan using tenk1_unique2 on tenk1 t2
+                                 ->  Hash
+                                       ->  Index Only Scan using tenk1_unique1 on tenk1 t3
+                     ->  Hash
+                           ->  Index Only Scan using tenk1_unique1 on tenk1 t1
  Optimizer: Postgres query optimizer
-(17 rows)
+(15 rows)
 
 -- Parallel sort but with expression (correlated subquery) that
 -- is prohibited in parallel plans.

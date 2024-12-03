@@ -21,4 +21,8 @@
 
 extern Query *normalize_query(Query *query);
 
+extern Query *remove_distinct_sort_clause(Query *query);
+
+extern bool query_has_srf(Query *query);
+
 #endif /* TRANSFORM_H */
