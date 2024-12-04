@@ -1,5 +1,4 @@
 <!-- Thank you for your contribution to Apache Cloudberry (Incubating)! -->
-
 Fixes #ISSUE_Number
 
 ### What does this PR do?
@@ -41,7 +40,12 @@ Fixes #ISSUE_Number
 ### Additional Context
 <!-- Any other information that would help reviewers? Remove if none -->
 
-⚠️ **To skip CI:** Add `[skip ci]` to your PR title. Only use when necessary! ⚠️
+### CI Skip Instructions
+<!--
+To skip CI builds, replace this comment with [skip ci] in your PR title.
+WARNING: Only use CI skip for documentation-only changes or when absolutely necessary.
+Please remove these instructions from your PR.
+-->
 
 ---
 <!-- Join our community:
