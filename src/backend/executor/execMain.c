@@ -323,7 +323,20 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	 */
 	if ((XactReadOnly || IsInParallelMode() || Gp_role == GP_ROLE_DISPATCH) &&
 		!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
-		ExecCheckXactReadOnly(queryDesc->plannedstmt);
+	{
+		PG_TRY();
+		{
+			ExecCheckXactReadOnly(queryDesc->plannedstmt);
+		}
+		PG_CATCH();
+		{
+			/* GPDB hook for collecting query info */
+			if (query_info_collect_hook)
+				(*query_info_collect_hook)(QueryCancelCleanup ? METRICS_QUERY_CANCELED : METRICS_QUERY_ERROR, queryDesc);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+	}
 
 	/*
 	 * Build EState, switch into per-query memory context for startup.
