@@ -361,6 +361,59 @@ SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
+-- case 3: bug fix with explain
+DROP TABLE IF EXISTS test_tablesample;
+NOTICE:  table "test_tablesample" does not exist, skipping
+CREATE TABLE test_tablesample (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
+INSERT INTO test_tablesample SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (COSTS OFF) SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sample Scan on test_tablesample
+         Sampling: system ('50'::real) REPEATABLE ('2'::double precision)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS test_tablesample;
+-- case 4: show debug info only when gp_enable_runtime_filter_pushdown is on
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE t2(c1 int, c2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t1 SELECT GENERATE_SERIES(1, 1000), GENERATE_SERIES(1, 1000);
+INSERT INTO t2 SELECT * FROM t1;
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT count(t1.c2) FROM t1, t2 WHERE t1.c1 = t2.c1;
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Finalize Aggregate (actual rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
+         ->  Partial Aggregate (actual rows=1 loops=1)
+               ->  Hash Join (actual rows=340 loops=1)
+                     Hash Cond: (t1.c1 = t2.c1)
+                     Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 340 of 524288 buckets.
+                     ->  Seq Scan on t1 (actual rows=340 loops=1)
+                           Rows Removed by Pushdown Runtime Filter: 0
+                     ->  Hash (actual rows=340 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4108kB
+                           ->  Seq Scan on t2 (actual rows=340 loops=1)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
 SET optimizer TO default;

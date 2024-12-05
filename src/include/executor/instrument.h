@@ -78,6 +78,7 @@ typedef struct Instrumentation
 	bool		need_bufusage;	/* true if we need buffer usage data */
 	bool		need_walusage;	/* true if we need WAL usage data */
 	bool		async_mode;		/* true if node is in async mode */
+	bool		prf_work;		/* true if pushdown runtime filters really work */
 	/* Info about current plan cycle: */
 	bool		running;		/* true if we've completed first tuple */
 	instr_time	starttime;		/* Start time of current iteration of node */

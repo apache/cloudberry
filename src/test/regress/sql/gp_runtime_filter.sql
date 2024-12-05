@@ -136,6 +136,34 @@ RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 
+-- case 3: bug fix with explain
+DROP TABLE IF EXISTS test_tablesample;
+CREATE TABLE test_tablesample (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
+INSERT INTO test_tablesample SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (COSTS OFF) SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS test_tablesample;
+
+-- case 4: show debug info only when gp_enable_runtime_filter_pushdown is on
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+CREATE TABLE t1(c1 int, c2 int);
+CREATE TABLE t2(c1 int, c2 int);
+INSERT INTO t1 SELECT GENERATE_SERIES(1, 1000), GENERATE_SERIES(1, 1000);
+INSERT INTO t2 SELECT * FROM t1;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT count(t1.c2) FROM t1, t2 WHERE t1.c1 = t2.c1;
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
 SET optimizer TO default;

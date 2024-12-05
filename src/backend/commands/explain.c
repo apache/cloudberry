@@ -2498,8 +2498,9 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			/* fall through to print additional fields the same as SeqScan */
 			/* FALLTHROUGH */
 		case T_SeqScan:
-			show_pushdown_runtime_filter_info("Rows Removed by Pushdown Runtime Filter",
-											  planstate, es);
+			if (gp_enable_runtime_filter_pushdown && IsA(planstate, SeqScanState))
+				show_pushdown_runtime_filter_info("Rows Removed by Pushdown Runtime Filter",
+												  planstate, es);
 			/* FALLTHROUGH */
 		case T_DynamicSeqScan:
 		case T_ValuesScan:
@@ -4372,25 +4373,21 @@ show_instrumentation_count(const char *qlabel, int which,
 }
 
 /*
- * If it's EXPLAIN ANALYZE, show instrumentation information with pushdown runtime filter
+ * If it's EXPLAIN ANALYZE, show instrumentation information with pushdown
+ * runtime filter.
  */
 static void
-show_pushdown_runtime_filter_info(const char *qlabel, PlanState *planstate, ExplainState *es)
+show_pushdown_runtime_filter_info(const char *qlabel,
+								  PlanState *planstate,
+								  ExplainState *es)
 {
-	double		nfiltered;
-
-	Assert(IsA(planstate, SeqScanState));
+	Assert(gp_enable_runtime_filter_pushdown && IsA(planstate, SeqScanState));
 
 	if (!es->analyze || !planstate->instrument)
 		return;
 
-	nfiltered = planstate->instrument->nfilteredPRF;
-
-	/* In text mode, suppress zero counts; they're not interesting enough */
-	if (nfiltered > 0 || es->format != EXPLAIN_FORMAT_TEXT)
-	{
-		ExplainPropertyFloat(qlabel, NULL, nfiltered, 0, es);
-	}
+	if (planstate->instrument->prf_work)
+		ExplainPropertyFloat(qlabel, NULL, planstate->instrument->nfilteredPRF, 0, es);
 }
 
 /*
