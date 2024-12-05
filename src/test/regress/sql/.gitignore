@@ -61,3 +61,4 @@
 /directory_table.sql
 /tag.sql
 /ao_unique_index_partition.sql
+/bfv_copy.sql
