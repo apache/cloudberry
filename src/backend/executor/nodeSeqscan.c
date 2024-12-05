@@ -408,6 +408,14 @@ PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 	ListCell *lc;
 	bloom_filter *blm_filter;
 
+	/*
+	 * Mark that the pushdown runtime filter is actually taking effect.
+	 */
+	if (node->ss.ps.instrument &&
+		!node->ss.ps.instrument->prf_work &&
+		list_length(node->filters))
+		node->ss.ps.instrument->prf_work = true;
+
 	foreach (lc, node->filters)
 	{
 		sk = lfirst(lc);

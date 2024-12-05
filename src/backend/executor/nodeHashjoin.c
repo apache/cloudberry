@@ -2195,13 +2195,19 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	List		*targets;
 
 	/*
-	 * Only applicatable for inner, right and semi join,
+	 * A build-side Bloom filter tells us if a row is definitely not in the build
+	 * side. This allows us to early-eliminate rows or early-accept rows depending
+	 * on the type of join.
+	 * Left Outer Join and Full Outer Join output all rows, so a build-side Bloom
+	 * filter would only allow us to early-output. Left Antijoin outputs only if
+	 * there is no match, so again early output. We don't implement early output
+	 * for now.
+	 * So it's only applicatable for inner, right and semi join.
 	 */
 	jointype = hjstate->js.jointype;
-	if (jointype != JOIN_INNER
-		&& jointype != JOIN_RIGHT
-		&& jointype != JOIN_SEMI
-	   )
+	if (jointype != JOIN_INNER &&
+		jointype != JOIN_RIGHT &&
+		jointype != JOIN_SEMI)
 		return;
 
 	hstate = castNode(HashState, innerPlanState(hjstate));
