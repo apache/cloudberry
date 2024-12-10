@@ -25,4 +25,6 @@ extern Query *remove_distinct_sort_clause(Query *query);
 
 extern bool query_has_srf(Query *query);
 
+extern bool tlist_has_srf(const Query *query);
+
 #endif /* TRANSFORM_H */

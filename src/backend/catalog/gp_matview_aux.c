@@ -32,6 +32,7 @@
 #include "utils/lsyscache.h"
 #include "storage/lockdefs.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/transform.h"
 #include "parser/parsetree.h"
 
 static void InsertMatviewTablesEntries(Oid mvoid, List *relids);
@@ -69,6 +70,11 @@ GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 		viewQuery->groupDistinct ||
 		(viewQuery->parentStmtType == PARENTSTMTTYPE_REFRESH_MATVIEW) ||
 		viewQuery->hasSubLinks)
+	{
+		return NIL;
+	}
+
+	if (tlist_has_srf(viewQuery))
 	{
 		return NIL;
 	}

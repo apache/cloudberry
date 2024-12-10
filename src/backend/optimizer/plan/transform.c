@@ -40,7 +40,6 @@ static SubLink *make_sirvf_subselect(FuncExpr *fe);
 static Query *make_sirvf_subquery(FuncExpr *fe);
 static bool safe_to_replace_sirvf_tle(Query *query);
 static bool safe_to_replace_sirvf_rte(Query *query);
-static bool tlist_has_srf(Query *query);
 
 /**
  * Normalize query before planning.
@@ -526,15 +525,15 @@ replace_sirvf_rte(Query *query, RangeTblEntry *rte)
 /*
  * Does target list have SRFs?
  */
-static
-bool tlist_has_srf(Query *query)
+bool
+tlist_has_srf(const Query *query)
 {
 	if (query->hasTargetSRFs)
 	{
 		return true;
 	}
 
-	if (expression_returns_set( (Node *) query->targetList))
+	if (expression_returns_set((Node *) query->targetList))
 	{
 		return true;
 	}

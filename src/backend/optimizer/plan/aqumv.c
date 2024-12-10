@@ -30,6 +30,7 @@
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
+#include "optimizer/transform.h"
 #include "parser/analyze.h"
 #include "parser/parsetree.h"
 #include "parser/parse_node.h"
@@ -350,12 +351,16 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 				limit_needed(viewQuery)) /* LIMIT, OFFSET is not supported on IMMV yet. */
 				continue;
 
+			if (tlist_has_srf(parse))
+				continue;
+
 			/*
 			 * There is a trick for ORDER BY for both origin query and view query.
 			 * As we has no Groupy By here, the aggregation results would be either one or
-			 * zero rows that make the Order By clause pointless.
+			 * zero rows that make the Order By clause pointless, except that there were
+			 * SRF.
 			 * We could avoid considering the sort columns if it's a junk for view matching.
-			 * This in-place update raw_processed_tlist.
+			 * This in-place updates raw_processed_tlist.
 			 */
 			if (parse->sortClause != NIL || viewQuery->sortClause != NIL)
 			{
@@ -431,6 +436,8 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 				continue;
 
 			viewQuery->targetList = mv_final_tlist;
+			/* SRF is not supported now, but correct the field. */
+			viewQuery->hasTargetSRFs = parse->hasTargetSRFs;
 			viewQuery->hasAggs = false;
 			subroot->agginfos = NIL;
 			subroot->aggtransinfos = NIL;
@@ -483,6 +490,8 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 			if (context->has_unmatched)
 				continue;
 
+			/* SRF is not supported now, but correct the field. */
+			viewQuery->hasTargetSRFs = parse->hasTargetSRFs;
 			viewQuery->groupClause = parse->groupClause;
 			viewQuery->groupingSets = parse->groupingSets;
 			viewQuery->sortClause = parse->sortClause;
