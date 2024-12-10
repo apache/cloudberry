@@ -414,6 +414,59 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT count(t1.c2) FROM t
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
+-- case 5: hashjoin + result + seqsacn
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t2(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t1 VALUES (5,5,5,5,5), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+ANALYZE;
+SET optimizer TO on;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
+   ->  Hash Join (actual rows=32 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 3 of 524288 buckets.
+         ->  Result (actual rows=16 loops=1)
+               ->  Seq Scan on t1 (actual rows=24 loops=1)
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
+   ->  Hash Join (actual rows=32 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 3 of 524288 buckets.
+         ->  Result (actual rows=16 loops=1)
+               ->  Seq Scan on t1 (actual rows=16 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 8
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(11 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
 SET optimizer TO default;
