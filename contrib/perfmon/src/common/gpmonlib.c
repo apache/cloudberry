@@ -319,6 +319,7 @@ char* gpmon_datetime_rounded(time_t t, char str[GPMON_DATE_BUF_SIZE])
 		return str;
 	}
 
+	tm.tm_sec = (tm.tm_sec /5) * 5;
 	strftime(str, GPMON_DATE_BUF_SIZE - 1, "%Y-%m-%d %H:%M:%S%z", &tm);
 
 	return str;
