@@ -345,14 +345,7 @@ MultiExecParallelHash(HashState *node)
 
 				slot = ExecProcNode(outerNode);
 				if (TupIsNull(slot))
-				{
-					if (gp_enable_runtime_filter_pushdown && node->filters)
-						PushdownRuntimeFilter(node);
 					break;
-				}
-
-				if (gp_enable_runtime_filter_pushdown && node->filters)
-					BuildRuntimeFilter(node, slot);
 
 				econtext->ecxt_outertuple = slot;
 				if (ExecHashGetHashValue(node, hashtable, econtext, hashkeys,
