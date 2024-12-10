@@ -808,6 +808,7 @@ ExecSquelchNode(PlanState *node, bool force)
 		case T_GatherState:
 		case T_GatherMergeState:
 		case T_NamedTuplestoreScanState:
+		case T_CustomScanState:
 			node->squelched = true;
 			break;
 
