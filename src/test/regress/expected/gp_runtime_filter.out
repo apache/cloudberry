@@ -467,6 +467,75 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 W
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
+-- case 6: hashjoin + hashjoin + seqscan
+DROP TABLE IF EXISTS t1;
+NOTICE:  table "t1" does not exist, skipping
+DROP TABLE IF EXISTS t2;
+NOTICE:  table "t2" does not exist, skipping
+DROP TABLE IF EXISTS t3;
+NOTICE:  table "t3" does not exist, skipping
+CREATE TABLE t1(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t2(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+CREATE TABLE t3(c1 int, c2 int, c3 char(50), c4 char(50), c5 char(50)) DISTRIBUTED REPLICATED;
+INSERT INTO t1 VALUES (1,1,1,1,1), (2,2,2,2,2), (5,5,5,5,5);
+INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t3 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t2 select * FROM t2;
+INSERT INTO t3 select * FROM t3;
+ANALYZE;
+SET optimizer TO off;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1) (actual rows=256 loops=1)
+   ->  Hash Join (actual rows=256 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: Hash chain length 4.0 avg, 4 max, using 4 of 32768 buckets.
+         ->  Hash Join (actual rows=64 loops=1)
+               Hash Cond: (t1.c2 = t3.c2)
+               Extra Text: Hash chain length 2.0 avg, 2 max, using 4 of 32768 buckets.
+               ->  Seq Scan on t1 (actual rows=48 loops=1)
+               ->  Hash (actual rows=8 loops=1)
+                     Buckets: 32768  Batches: 1  Memory Usage: 258kB
+                     ->  Seq Scan on t3 (actual rows=8 loops=1)
+         ->  Hash (actual rows=16 loops=1)
+               Buckets: 32768  Batches: 1  Memory Usage: 260kB
+               ->  Seq Scan on t2 (actual rows=16 loops=1)
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1) (actual rows=256 loops=1)
+   ->  Hash Join (actual rows=256 loops=1)
+         Hash Cond: (t1.c1 = t2.c1)
+         Extra Text: Hash chain length 4.0 avg, 4 max, using 4 of 32768 buckets.
+         ->  Hash Join (actual rows=64 loops=1)
+               Hash Cond: (t1.c2 = t3.c2)
+               Extra Text: Hash chain length 2.0 avg, 2 max, using 4 of 32768 buckets.
+               ->  Seq Scan on t1 (actual rows=32 loops=1)
+                     Rows Removed by Pushdown Runtime Filter: 16
+               ->  Hash (actual rows=8 loops=1)
+                     Buckets: 32768  Batches: 1  Memory Usage: 258kB
+                     ->  Seq Scan on t3 (actual rows=8 loops=1)
+         ->  Hash (actual rows=16 loops=1)
+               Buckets: 32768  Batches: 1  Memory Usage: 260kB
+               ->  Seq Scan on t2 (actual rows=16 loops=1)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
 SET optimizer TO default;
