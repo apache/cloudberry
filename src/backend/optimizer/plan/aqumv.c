@@ -122,7 +122,6 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 	RelOptInfo *current_rel = aqumv_context->current_rel;
 	query_pathkeys_callback qp_callback = aqumv_context->qp_callback;
 	void *qp_extra = aqumv_context->qp_extra;
-	List *raw_processed_tlist = aqumv_context->raw_processed_tlist;
 	Node *raw_havingQual = aqumv_context->raw_havingQual;
 
 	Query   		*parse = root->parse; /* Query of origin SQL. */
@@ -359,27 +358,9 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 			 * As we has no Groupy By here, the aggregation results would be either one or
 			 * zero rows that make the Order By clause pointless, except that there were
 			 * SRF.
-			 * We could avoid considering the sort columns if it's a junk for view matching.
-			 * This in-place updates raw_processed_tlist.
 			 */
 			if (parse->sortClause != NIL || viewQuery->sortClause != NIL)
 			{
-				ListCell *lc;
-				ListCell *lcc;
-
-				foreach (lc, raw_processed_tlist)
-				{
-					TargetEntry *tle = (TargetEntry *) lfirst(lc);
-					if (!tle->resjunk || (0 == tle->ressortgroupref))
-						continue;
-
-					foreach (lcc, parse->sortClause)
-					{
-						SortGroupClause *srt = (SortGroupClause *) lfirst(lcc);
-						if (tle->ressortgroupref == srt->tleSortGroupRef)
-							foreach_delete_current(raw_processed_tlist, lc);
-					}
-				}
 				/* Earse view's sort caluse, it's ok to let alone view's target list. */
 				viewQuery->sortClause = NIL;
 			}
@@ -432,7 +413,7 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 				continue;
 			subroot->hasHavingQual = false;
 
-			if(!aqumv_process_targetlist(context, raw_processed_tlist, &mv_final_tlist))
+			if(!aqumv_process_targetlist(context, aqumv_context->raw_processed_tlist, &mv_final_tlist))
 				continue;
 
 			viewQuery->targetList = mv_final_tlist;

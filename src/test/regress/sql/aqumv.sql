@@ -713,7 +713,7 @@ analyze t;
 
 create materialized view mv as
   select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
-  from t where c1 > 90;
+  from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
 analyze mv;
 
 set local enable_answer_query_using_materialized_views = off;
