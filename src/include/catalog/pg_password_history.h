@@ -15,7 +15,7 @@
  *-------------------------------------------------------------------------
  */
 #ifndef PG_PASSWORD_HISTORY_H
-#define PG_PASSWROD_HISTORY_H
+#define PG_PASSWORD_HISTORY_H
 
 #include "catalog/genbki.h"
 #include "catalog/pg_password_history_d.h"
