@@ -1741,7 +1741,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		List	   *activeWindows = NIL;
 		grouping_sets_data *gset_data = NULL;
 		standard_qp_extra qp_extra;
-		AqumvContext aqumv_context = NULL;
+		AqumvContext aqumv_context = (AqumvContext) &(AqumvContextData){0};
 
 		/* A recursive query should always have setOperations */
 		Assert(!root->hasRecursion);
@@ -1776,7 +1776,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		if (Gp_role == GP_ROLE_DISPATCH &&
 			enable_answer_query_using_materialized_views)
 		{
-			aqumv_context = (AqumvContext) palloc0(sizeof(AqumvContextData));
 			aqumv_context->raw_havingQual = copyObject(parse->havingQual);
 			aqumv_context->raw_processed_tlist = copyObject(root->processed_tlist);
 		}
@@ -1913,7 +1912,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 			/* Do the real work. */
 			current_rel = answer_query_using_materialized_views(root, aqumv_context);
-			pfree(aqumv_context);
 			/* parse tree may be rewriten. */
 			parse = root->parse;
 		}
