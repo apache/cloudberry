@@ -1913,6 +1913,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 			/* Do the real work. */
 			current_rel = answer_query_using_materialized_views(root, aqumv_context);
+			pfree(aqumv_context);
 			/* parse tree may be rewriten. */
 			parse = root->parse;
 		}
