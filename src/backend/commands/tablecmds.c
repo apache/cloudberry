@@ -836,11 +836,20 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	{
 		accessMethod = stmt->accessMethod;
 
+	/*
+	 * CBDB: Allow specifying table access method to be compatible with
+	 * gp-style partition table.
+	 * Please KEEP the macro switch to reduce upgrade conflict.
+	 * NOTE: The upstream also supports table access method for partition
+	 *       tables in higher(17) version
+	 */
+#if 0
 		/* Only to allow access method when the partition is gp style partition */
-		if (partitioned && Gp_role != GP_ROLE_EXECUTE && !stmt->partspec->gpPartDef)
+		if (partitioned && Gp_role != GP_ROLE_EXECUTE)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("specifying a table access method is not supported on a partitioned table")));
+#endif
 
 	}
 	else if (relkind == RELKIND_DIRECTORY_TABLE)

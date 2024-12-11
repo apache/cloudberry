@@ -125,7 +125,8 @@ CREATE MATERIALIZED VIEW tableam_tblmv_heap2 USING heap2 AS SELECT * FROM tablea
 SELECT f1 FROM tableam_tblmv_heap2 ORDER BY f1;
 
 -- CREATE TABLE ..  PARTITION BY doesn't not support USING
-CREATE TABLE tableam_parted_heap2 (a text, b int) PARTITION BY list (a) USING heap2;
+-- CBDB ignore: allow table access method
+-- CREATE TABLE tableam_parted_heap2 (a text, b int) PARTITION BY list (a) USING heap2;
 
 CREATE TABLE tableam_parted_heap2 (a text, b int) PARTITION BY list (a);
 -- new partitions will inherit from the current default, rather the partition root
