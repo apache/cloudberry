@@ -395,7 +395,7 @@ auth_failed(Port *port, int status, char *logdetail)
 	account_status = DatumGetInt16(SysCacheGetAttr(AUTHNAME, auth_tuple,
 						Anum_pg_authid_rolaccountstatus, &account_status_isnull));
 	if (enable_password_profile && !authform->rolsuper && authform->rolenableprofile &&
-		(account_status != ROLE_ACCOUNT_STATUS_LOCKED ||
+		(account_status != ROLE_ACCOUNT_STATUS_LOCKED &&
 		 account_status != ROLE_ACCOUNT_STATUS_LOCKED_TIMED))
 		SendLoginFailedSignal(port->user_name);
 

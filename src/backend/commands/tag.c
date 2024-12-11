@@ -471,7 +471,7 @@ AddTagDescriptions(List *tags,
 		bool	isnull;
 		bool	has_matching_allowed_val;
 		List	*allowed_values;
-		ListCell	*value_cell;
+		ListCell	*value_cell = NULL;
 		
 		has_matching_allowed_val = false;
 		def = lfirst(cell);
@@ -871,7 +871,7 @@ transformTagValues(int action, Oid tagId, Datum oldvalues,
 				   List *allowed_values, bool unset)
 {
 	List		*resultValues = untransformTagValues(oldvalues);
-	ListCell	*value_cell;
+	ListCell	*value_cell = NULL;
 	Datum		result;
 
 	Assert(!(resultValues && unset));
