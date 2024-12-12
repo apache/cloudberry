@@ -258,6 +258,10 @@ jobs:
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
 
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
           free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
 
@@ -510,6 +514,10 @@ jobs:
           chown -R gpadmin:gpadmin .
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
 
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
           free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
@@ -768,6 +776,10 @@ jobs:
           chown -R gpadmin:gpadmin .
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
 
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
           free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
