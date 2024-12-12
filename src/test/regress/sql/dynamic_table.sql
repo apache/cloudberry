@@ -137,6 +137,8 @@ SELECT pg_catalog.pg_get_dynamic_table_schedule('dt_schedule'::regclass::oid);
 -- not a dynamic table
 SELECT pg_catalog.pg_get_dynamic_table_schedule('t2'::regclass::oid);
 
+SELECT * FROM pg_dynamic_tables;
+
 RESET enable_answer_query_using_materialized_views;
 RESET optimizer;
 --start_ignore
