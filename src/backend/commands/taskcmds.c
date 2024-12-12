@@ -30,84 +30,85 @@
  *      Create a new cron task.
  */
 ObjectAddress
-DefineTask(ParseState *pstate, CreateTaskStmt *stmt)
+DefineTask(ParseState *pstate, CreateTaskStmt * stmt)
 {
-    ObjectAddress address;
-    char          *dbname = NULL;
-    char          *username = NULL;
-    ListCell      *option;
-    DefElem       *d_dbname = NULL;
-    DefElem       *d_username = NULL;
-    Oid           jobid = InvalidOid;
-    AclResult     aclresult;
+	ObjectAddress address;
+	char	   *dbname = NULL;
+	char	   *username = NULL;
+	ListCell   *option;
+	DefElem    *d_dbname = NULL;
+	DefElem    *d_username = NULL;
+	Oid			jobid = InvalidOid;
+	AclResult	aclresult;
 
-    /* must have CREATE privilege on database */
-    aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
-    if (aclresult != ACLCHECK_OK)
-        aclcheck_error(aclresult, OBJECT_DATABASE,
-                       get_database_name(MyDatabaseId));
+	/* must have CREATE privilege on database */
+	aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, OBJECT_DATABASE,
+					   get_database_name(MyDatabaseId));
 
-    foreach(option, stmt->options)
-    {
-        DefElem *defel = (DefElem *) lfirst(option);
-        if (strcmp(defel->defname, "dbname") == 0)
-        {
-            if (d_dbname)
+	foreach(option, stmt->options)
+	{
+		DefElem    *defel = (DefElem *) lfirst(option);
+
+		if (strcmp(defel->defname, "dbname") == 0)
+		{
+			if (d_dbname)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("conflicting or redundant options"),
 						 parser_errposition(pstate, defel->location)));
-            d_dbname = defel;
-        }
-        else if (strcmp(defel->defname, "username") == 0)
-        {
-            if (d_username)
-                ereport(ERROR,
-                        (errcode(ERRCODE_SYNTAX_ERROR),
-                         errmsg("conflicting or redundant options"),
-                         parser_errposition(pstate, defel->location)));
-            d_username = defel;
-        }
-        else
+			d_dbname = defel;
+		}
+		else if (strcmp(defel->defname, "username") == 0)
+		{
+			if (d_username)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options"),
+						 parser_errposition(pstate, defel->location)));
+			d_username = defel;
+		}
+		else
 			elog(ERROR, "option \"%s\" not recognized",
 				 defel->defname);
-    }
+	}
 
-    /* use the specified or current user */
-    if (d_username != NULL && d_username->arg)
-    {
-        username = defGetString(d_username);
-        if (!OidIsValid(get_role_oid(username, false)))
-            ereport(ERROR,
-                    (errcode(ERRCODE_UNDEFINED_OBJECT),
-                     errmsg("role \"%s\" does not exist", username)));
-    }
-    else
-        username = GetUserNameFromId(GetUserId(), false);
+	/* use the specified or current user */
+	if (d_username != NULL && d_username->arg)
+	{
+		username = defGetString(d_username);
+		if (!OidIsValid(get_role_oid(username, false)))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("role \"%s\" does not exist", username)));
+	}
+	else
+		username = GetUserNameFromId(GetUserId(), false);
 
-    /* use the specified or current database */
-    if (d_dbname != NULL && d_dbname->arg)
-        dbname = defGetString(d_dbname);
-    else
-        dbname = get_database_name(MyDatabaseId);
+	/* use the specified or current database */
+	if (d_dbname != NULL && d_dbname->arg)
+		dbname = defGetString(d_dbname);
+	else
+		dbname = get_database_name(MyDatabaseId);
 
-    if (!OidIsValid(get_database_oid(dbname, true)))
-        ereport(ERROR,
-                (errcode(ERRCODE_UNDEFINED_DATABASE),
-                 errmsg("database \"%s\" does not exist", dbname)));
+	if (!OidIsValid(get_database_oid(dbname, true)))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_DATABASE),
+				 errmsg("database \"%s\" does not exist", dbname)));
 
-    /* check if the task already exists */
-    if (stmt->if_not_exists)
-    {
-        if (OidIsValid(GetTaskJobId(stmt->taskname, username)))
-        {
-            ereport(NOTICE,
-                    (errcode(ERRCODE_DUPLICATE_OBJECT),
-                     errmsg("task \"%s\" already exists, skipping",
-                            stmt->taskname)));
-            return InvalidObjectAddress;
-        }
-    }
+	/* check if the task already exists */
+	if (stmt->if_not_exists)
+	{
+		if (OidIsValid(GetTaskJobId(stmt->taskname, username)))
+		{
+			ereport(NOTICE,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("task \"%s\" already exists, skipping",
+							stmt->taskname)));
+			return InvalidObjectAddress;
+		}
+	}
 
 	if (!allowSystemTableMods && strncmp(stmt->taskname, DYNAMIC_TASK_PREFIX, 25) == 0)
 	{
@@ -117,15 +118,15 @@ DefineTask(ParseState *pstate, CreateTaskStmt *stmt)
 				 errdetail("The prefix \"%s\" is reserved for system tasks.",
 						   DYNAMIC_TASK_PREFIX)));
 	}
-    jobid = ScheduleCronJob(cstring_to_text(stmt->schedule), cstring_to_text(stmt->sql),
-                            cstring_to_text(dbname), cstring_to_text(username),
-                            true, cstring_to_text(stmt->taskname));
+	jobid = ScheduleCronJob(cstring_to_text(stmt->schedule), cstring_to_text(stmt->sql),
+							cstring_to_text(dbname), cstring_to_text(username),
+							true, cstring_to_text(stmt->taskname));
 
-    /* Depend on owner. */
-    recordDependencyOnOwner(TaskRelationId, jobid, get_role_oid(username, false));
+	/* Depend on owner. */
+	recordDependencyOnOwner(TaskRelationId, jobid, get_role_oid(username, false));
 
-    ObjectAddressSet(address, TaskRelationId, jobid);
-    return address;
+	ObjectAddressSet(address, TaskRelationId, jobid);
+	return address;
 }
 
 /*
@@ -133,137 +134,137 @@ DefineTask(ParseState *pstate, CreateTaskStmt *stmt)
  *      Alter an existing cron task.
  */
 ObjectAddress
-AlterTask(ParseState *pstate, AlterTaskStmt *stmt)
+AlterTask(ParseState *pstate, AlterTaskStmt * stmt)
 {
-    ObjectAddress address = InvalidObjectAddress;
-    char          *current_user;
-    Oid           jobid = InvalidOid;
-    DefElem       *d_schedule = NULL;
-    DefElem       *d_dbname = NULL;
-    DefElem       *d_username = NULL;
-    DefElem       *d_active = NULL;
-    DefElem       *d_sql = NULL;
-    ListCell      *option;
-    char          *schedule = NULL;
-    char          *dbname = NULL;
-    char          *username = NULL;
-    bool          active;
-    char          *sql = NULL;
+	ObjectAddress address = InvalidObjectAddress;
+	char	   *current_user;
+	Oid			jobid = InvalidOid;
+	DefElem    *d_schedule = NULL;
+	DefElem    *d_dbname = NULL;
+	DefElem    *d_username = NULL;
+	DefElem    *d_active = NULL;
+	DefElem    *d_sql = NULL;
+	ListCell   *option;
+	char	   *schedule = NULL;
+	char	   *dbname = NULL;
+	char	   *username = NULL;
+	bool		active;
+	char	   *sql = NULL;
 
-    current_user = GetUserNameFromId(GetUserId(), false);
-    jobid = GetTaskJobId(stmt->taskname, current_user);
-    if (!OidIsValid(jobid))
-    {
-        if (stmt->missing_ok)
-        {
-            ereport(NOTICE,
-                    (errcode(ERRCODE_UNDEFINED_OBJECT),
-                     errmsg("task \"%s\" does not exist, skipping",
-                            stmt->taskname)));
-            return address;
-        }
-        else
-            ereport(ERROR,
-                    (errcode(ERRCODE_UNDEFINED_OBJECT),
-                     errmsg("task \"%s\" does not exist", stmt->taskname)));
-    }
+	current_user = GetUserNameFromId(GetUserId(), false);
+	jobid = GetTaskJobId(stmt->taskname, current_user);
+	if (!OidIsValid(jobid))
+	{
+		if (stmt->missing_ok)
+		{
+			ereport(NOTICE,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("task \"%s\" does not exist, skipping",
+							stmt->taskname)));
+			return address;
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("task \"%s\" does not exist", stmt->taskname)));
+	}
 
-    foreach(option, stmt->options)
-    {
-        DefElem *defel = (DefElem *) lfirst(option);
+	foreach(option, stmt->options)
+	{
+		DefElem    *defel = (DefElem *) lfirst(option);
 
-        if (strcmp(defel->defname, "schedule") == 0)
-        {
-            if (d_schedule)
-                ereport(ERROR,
-                        (errcode(ERRCODE_SYNTAX_ERROR),
-                         errmsg("conflicting or redundant options"),
-                         parser_errposition(pstate, defel->location)));
-            d_schedule = defel;
-        }
-        else if (strcmp(defel->defname, "dbname") == 0)
-        {
-            if (d_dbname)
+		if (strcmp(defel->defname, "schedule") == 0)
+		{
+			if (d_schedule)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("conflicting or redundant options"),
 						 parser_errposition(pstate, defel->location)));
-            d_dbname = defel;
-        }
-        else if (strcmp(defel->defname, "username") == 0)
-        {
-            if (d_username)
-                ereport(ERROR,
-                        (errcode(ERRCODE_SYNTAX_ERROR),
-                         errmsg("conflicting or redundant options"),
-                         parser_errposition(pstate, defel->location)));
-            d_username = defel;
-        }
-        else if (strcmp(defel->defname, "active") == 0)
-        {
-            if (d_active)
-                ereport(ERROR,
-                        (errcode(ERRCODE_SYNTAX_ERROR),
-                         errmsg("conflicting or redundant options"),
-                         parser_errposition(pstate, defel->location)));
-            d_active = defel;
-        }
-        else if (strcmp(defel->defname, "sql") == 0)
-        {
-            if (d_sql)
-                ereport(ERROR,
-                        (errcode(ERRCODE_SYNTAX_ERROR),
-                         errmsg("conflicting or redundant options"),
-                         parser_errposition(pstate, defel->location)));
-            d_sql = defel;
-        }
-        else
+			d_schedule = defel;
+		}
+		else if (strcmp(defel->defname, "dbname") == 0)
+		{
+			if (d_dbname)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options"),
+						 parser_errposition(pstate, defel->location)));
+			d_dbname = defel;
+		}
+		else if (strcmp(defel->defname, "username") == 0)
+		{
+			if (d_username)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options"),
+						 parser_errposition(pstate, defel->location)));
+			d_username = defel;
+		}
+		else if (strcmp(defel->defname, "active") == 0)
+		{
+			if (d_active)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options"),
+						 parser_errposition(pstate, defel->location)));
+			d_active = defel;
+		}
+		else if (strcmp(defel->defname, "sql") == 0)
+		{
+			if (d_sql)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options"),
+						 parser_errposition(pstate, defel->location)));
+			d_sql = defel;
+		}
+		else
 			elog(ERROR, "option \"%s\" not recognized",
 				 defel->defname);
-    }
+	}
 
-    if (d_schedule != NULL && d_schedule->arg)
-        schedule = defGetString(d_schedule);
+	if (d_schedule != NULL && d_schedule->arg)
+		schedule = defGetString(d_schedule);
 
-    if (d_dbname != NULL && d_dbname->arg)
-    {
-        dbname = defGetString(d_dbname);
-        if (!OidIsValid(get_database_oid(dbname, true)))
-            ereport(ERROR,
-                    (errcode(ERRCODE_UNDEFINED_DATABASE),
-                     errmsg("database \"%s\" does not exist", dbname)));
-    }
+	if (d_dbname != NULL && d_dbname->arg)
+	{
+		dbname = defGetString(d_dbname);
+		if (!OidIsValid(get_database_oid(dbname, true)))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_DATABASE),
+					 errmsg("database \"%s\" does not exist", dbname)));
+	}
 
-    if (d_username != NULL && d_username->arg)
-    {
-        username = defGetString(d_username);
-        if (!OidIsValid(get_role_oid(username, true)))
-            ereport(ERROR,
-                    (errcode(ERRCODE_UNDEFINED_DATABASE),
-                     errmsg("role \"%s\" does not exist", username)));
-    }
+	if (d_username != NULL && d_username->arg)
+	{
+		username = defGetString(d_username);
+		if (!OidIsValid(get_role_oid(username, true)))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_DATABASE),
+					 errmsg("role \"%s\" does not exist", username)));
+	}
 
-    if (d_active != NULL)
-    {
-        active = intVal(d_active->arg);
-        Assert(BoolIsValid(active));
-    }
+	if (d_active != NULL)
+	{
+		active = intVal(d_active->arg);
+		Assert(BoolIsValid(active));
+	}
 
-    if (d_sql != NULL && d_sql->arg)
-        sql = defGetString(d_sql);
-    
-    AlterCronJob(jobid, schedule, sql, dbname, username, d_active != NULL ? &active : NULL);
+	if (d_sql != NULL && d_sql->arg)
+		sql = defGetString(d_sql);
 
-    if (username)
-    {
-        /* Update owner dependency reference */
-        changeDependencyOnOwner(TaskRelationId,
-                                jobid,
-                                get_role_oid(username, false));
-    }
+	AlterCronJob(jobid, schedule, sql, dbname, username, d_active != NULL ? &active : NULL);
 
-    ObjectAddressSet(address, TaskRelationId, jobid);
-    return address;
+	if (username)
+	{
+		/* Update owner dependency reference */
+		changeDependencyOnOwner(TaskRelationId,
+								jobid,
+								get_role_oid(username, false));
+	}
+
+	ObjectAddressSet(address, TaskRelationId, jobid);
+	return address;
 }
 
 /*
@@ -271,21 +272,21 @@ AlterTask(ParseState *pstate, AlterTaskStmt *stmt)
  *      Drop an existing cron task.
  */
 ObjectAddress
-DropTask(ParseState *pstate, DropTaskStmt *stmt)
+DropTask(ParseState *pstate, DropTaskStmt * stmt)
 {
-    ObjectAddress address = InvalidObjectAddress;
-    char          *username;
-    Oid           jobid = InvalidOid;
+	ObjectAddress address = InvalidObjectAddress;
+	char	   *username;
+	Oid			jobid = InvalidOid;
 
-    /* current username */
-    username = GetUserNameFromId(GetUserId(), false);
+	/* current username */
+	username = GetUserNameFromId(GetUserId(), false);
 
-    /* delete from pg_task */
-    jobid = UnscheduleCronJob(stmt->taskname, username, InvalidOid, stmt->missing_ok);
+	/* delete from pg_task */
+	jobid = UnscheduleCronJob(stmt->taskname, username, InvalidOid, stmt->missing_ok);
 
-    /* delete from pg_task_run_history according to the jobid */
-    if (OidIsValid(jobid))
-    {
+	/* delete from pg_task_run_history according to the jobid */
+	if (OidIsValid(jobid))
+	{
 		if (!allowSystemTableMods && strncmp(stmt->taskname, DYNAMIC_TASK_PREFIX, 25) == 0)
 		{
 			ereport(ERROR,
@@ -293,13 +294,13 @@ DropTask(ParseState *pstate, DropTaskStmt *stmt)
 					 errmsg("can not drop a internal task \"%s\" paried with dynamic table", stmt->taskname),
 					 errdetail("please drop the dynamic table instead")));
 		}
-        RemoveTaskRunHistoryByJobId(jobid);
-        ObjectAddressSet(address, TaskRelationId, jobid);
-        /* Clean up dependencies */
-        deleteSharedDependencyRecordsFor(TaskRelationId, jobid, 0);
-    }
+		RemoveTaskRunHistoryByJobId(jobid);
+		ObjectAddressSet(address, TaskRelationId, jobid);
+		/* Clean up dependencies */
+		deleteSharedDependencyRecordsFor(TaskRelationId, jobid, 0);
+	}
 
-    return address;
+	return address;
 }
 
 /*
@@ -309,11 +310,11 @@ DropTask(ParseState *pstate, DropTaskStmt *stmt)
 void
 RemoveTaskById(Oid jobid)
 {
-    /* remove the cron task in pg_task */
-    UnscheduleCronJob(NULL, NULL, jobid, false);
-    /* delete from pg_task_run_history according to the jobid */
-    if (OidIsValid(jobid))
-    {
-        RemoveTaskRunHistoryByJobId(jobid);
-    }
+	/* remove the cron task in pg_task */
+	UnscheduleCronJob(NULL, NULL, jobid, false);
+	/* delete from pg_task_run_history according to the jobid */
+	if (OidIsValid(jobid))
+	{
+		RemoveTaskRunHistoryByJobId(jobid);
+	}
 }
