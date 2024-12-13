@@ -251,7 +251,14 @@ AlterTask(ParseState *pstate, AlterTaskStmt * stmt)
 	}
 
 	if (d_sql != NULL && d_sql->arg)
-		sql = defGetString(d_sql);
+	{
+		if (strncmp(stmt->taskname, DYNAMIC_TASK_PREFIX, 25) == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("can not alter REFRESH SQL of dynamic tables")));
+		else
+			sql = defGetString(d_sql);
+	}
 
 	AlterCronJob(jobid, schedule, sql, dbname, username, d_active != NULL ? &active : NULL);
 

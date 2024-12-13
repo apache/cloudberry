@@ -54,9 +54,9 @@ SELECT * FROM t1 WHERE a = 2;
 SELECT * FROM t1 WHERE a = 2;
 
 -- test DROP DYNAMIC TABLE
-SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0';
+SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0%';
 DROP DYNAMIC TABLE dt0;
-SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0';
+SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0%';
 
 -- drop base tables will drop DYNAMIC TABLEs too.
 SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%';
@@ -127,6 +127,10 @@ SELECT 'dt5'::regclass::oid AS dtoid \gset
 -- should fail
 CREATE TASK gp_dynamic_table_refresh_xxx SCHEDULE '1 second' AS 'REFRESH DYNAMIC TABLE dt5';
 
+-- can not alter the REFRESH SQL of Dynamic Tables.
+ALTER TASK gp_dynamic_table_refresh_:dtoid AS '* * * * *';
+ALTER TASK gp_dynamic_table_refresh_:dtoid AS '';
+
 -- should fail
 DROP TASK gp_dynamic_table_refresh_:dtoid;
 
@@ -138,6 +142,13 @@ SELECT pg_catalog.pg_get_dynamic_table_schedule('dt_schedule'::regclass::oid);
 SELECT pg_catalog.pg_get_dynamic_table_schedule('t2'::regclass::oid);
 
 SELECT * FROM pg_dynamic_tables;
+
+CREATE TABLE t3(a int);
+CREATE DYNAMIC TABLE dt_1_min SCHEDULE '* * * * *' AS SELECT * FROM t3 WITH NO DATA;
+INSERT INTO T3 VALUES(1);
+-- wait for backgroud refresh
+SELECT pg_sleep(80);
+SELECT * FROM dt_1_min;
 
 RESET enable_answer_query_using_materialized_views;
 RESET optimizer;

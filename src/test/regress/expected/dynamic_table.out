@@ -156,14 +156,14 @@ SELECT * FROM t1 WHERE a = 2;
 (2 rows)
 
 -- test DROP DYNAMIC TABLE
-SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0';
+SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0%';
  schedule  |                    command                     
 -----------+------------------------------------------------
  5 * * * * | REFRESH DYNAMIC TABLE dynamic_table_schema.dt0
 (1 row)
 
 DROP DYNAMIC TABLE dt0;
-SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0';
+SELECT schedule, command FROM pg_task WHERE jobname LIKE 'gp_dynamic_table_refresh%' AND command LIKE '%dt0%';
  schedule | command 
 ----------+---------
 (0 rows)
@@ -291,6 +291,11 @@ SELECT 'dt5'::regclass::oid AS dtoid \gset
 CREATE TASK gp_dynamic_table_refresh_xxx SCHEDULE '1 second' AS 'REFRESH DYNAMIC TABLE dt5';
 ERROR:  unacceptable task name "gp_dynamic_table_refresh_xxx"
 DETAIL:  The prefix "gp_dynamic_table_refresh_" is reserved for system tasks.
+-- can not alter the REFRESH SQL of Dynamic Tables.
+ALTER TASK gp_dynamic_table_refresh_:dtoid AS '* * * * *';
+ERROR:  can not alter REFRESH SQL of dynamic tables
+ALTER TASK gp_dynamic_table_refresh_:dtoid AS '';
+ERROR:  can not alter REFRESH SQL of dynamic tables
 -- should fail
 DROP TASK gp_dynamic_table_refresh_:dtoid;
 ERROR:  can not drop a internal task "gp_dynamic_table_refresh_17387" paried with dynamic table
@@ -337,6 +342,26 @@ SELECT * FROM pg_dynamic_tables;
                       |                  |                   |            |            |             |     t2.c                         +
                       |                  |                   |            |            |             |    FROM t2;
 (4 rows)
+
+CREATE TABLE t3(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE DYNAMIC TABLE dt_1_min SCHEDULE '* * * * *' AS SELECT * FROM t3 WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO T3 VALUES(1);
+-- wait for backgroud refresh
+SELECT pg_sleep(80);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT * FROM dt_1_min;
+ a 
+---
+ 1
+(1 row)
 
 RESET enable_answer_query_using_materialized_views;
 RESET optimizer;
