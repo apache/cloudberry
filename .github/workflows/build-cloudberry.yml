@@ -41,8 +41,9 @@
 #
 # 2. **Build Job**:
 #    - Configures and builds Apache Cloudberry.
+#    - Supports debug build configuration via ENABLE_DEBUG flag.
 #    - Runs unit tests and verifies build artifacts.
-#    - Creates RPM packages, source tarballs, and logs.
+#    - Creates RPM packages (regular or debug), source tarballs, and logs.
 #    - **Key Artifacts**: RPM package, source tarball, build logs.
 #
 # 3. **RPM Install Test Job**:
@@ -54,10 +55,12 @@
 #    - Executes a test matrix to validate different scenarios.
 #    - Creates a demo cluster and runs installcheck tests.
 #    - Parses and reports test results, including failed and ignored tests.
+#    - Detects and analyzes any core dumps generated during tests.
 #    - **Key Features**:
 #      - Regression diffs are displayed if found, aiding quick debugging.
 #      - Both failed and ignored test names are logged and reported.
-#    - **Key Artifacts**: Test logs, regression files, test summaries.
+#      - Core dumps are analyzed using GDB for stack traces.
+#    - **Key Artifacts**: Test logs, regression files, test summaries, core analyses.
 #
 # 5. **Report Job**:
 #    - Aggregates job results into a final report.
@@ -71,8 +74,8 @@
 #   - CPU: Recommended 4+ cores.
 #
 # Triggers:
-# - Push to `build-devel` branch.
-# - Pull requests to `build-devel` branch.
+# - Push to `main` branch.
+# - Pull requests to `main` branch.
 # - Manual workflow dispatch.
 #
 # Container Images:
@@ -84,12 +87,15 @@
 # - Source Tarball       (retention: ${{ env.LOG_RETENTION_DAYS }} days).
 # - Logs and Test Results (retention: ${{ env.LOG_RETENTION_DAYS }} days).
 # - Regression Diffs      (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Core Dump Analyses    (retention: ${{ env.LOG_RETENTION_DAYS }} days).
 #
 # Notes:
 # - Supports concurrent job execution.
 # - Includes robust skip logic for pull requests and pushes.
 # - Handles ignored test cases, ensuring results are comprehensive.
 # - Provides detailed logs and error handling for failed and ignored tests.
+# - Analyzes core dumps generated during test execution.
+# - Supports debug builds with preserved symbols.
 # --------------------------------------------------------------------
 
 name: Apache Cloudberry Build
@@ -136,6 +142,7 @@ permissions:
 
 env:
   LOG_RETENTION_DAYS: 7
+  ENABLE_DEBUG: false
 
 jobs:
 
@@ -221,7 +228,6 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/checkout@v4
         with:
-          repository: apache/cloudberry
           fetch-depth: 1
 
       - name: Checkout CI Build/Test Scripts
@@ -229,7 +235,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: apache/cloudberry-devops-release
-          ref: group-ic-test-support
+          ref: main
           path: cloudberry-devops-release
           fetch-depth: 1
 
@@ -282,6 +288,7 @@ jobs:
             echo "# Build Job Summary"
             echo "## Environment"
             echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- ENABLE_DEBUG: ${{ env.ENABLE_DEBUG }}"
             echo "- OS Version: $(cat /etc/redhat-release)"
             echo "- GCC Version: $(gcc --version | head -n1)"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -293,7 +300,7 @@ jobs:
         run: |
           set -eo pipefail
           chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh"; then
             echo "::error::Configure script failed"
             exit 1
           fi
@@ -304,6 +311,7 @@ jobs:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
+
           chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
           if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
             echo "::error::Build script failed"
@@ -390,11 +398,18 @@ jobs:
             ln -s "${SRC_DIR}"/../cloudberry-devops-release/packaging/rpm/el/SPECS/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
             cp "${SRC_DIR}"/LICENSE /usr/local/cloudberry-db
 
-            "${SRC_DIR}"/../cloudberry-devops-release/scripts/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}"
+            DEBUG_RPMBUILD_OPT=""
+            DEBUG_IDENTIFIER=""
+            if [ "${{ env.ENABLE_DEBUG }}" = "true" ]; then
+               DEBUG_RPMBUILD_OPT="--with-debug"
+               DEBUG_IDENTIFIER=".debug"
+            fi
+
+            "${SRC_DIR}"/../cloudberry-devops-release/scripts/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
 
             # Get OS version and move RPM
             os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
-            RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}".el"${os_version}".x86_64.rpm
+            RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
             cp "${RPM_FILE}" "${SRC_DIR}"
 
             # Get package information
@@ -670,12 +685,14 @@ jobs:
             make_configs:
               - src/test/regress:installcheck-good
             num_primary_mirror_pairs: 3
+            enable_cgroups: false
             pg_settings:
               optimizer: "off"
           - test: ic-expandshrink
             make_configs:
               - src/test/isolation2:installcheck-expandshrink
             num_primary_mirror_pairs: 3
+            enable_cgroups: false
             pg_settings:
               optimizer: ""
           - test: ic-singlenode
@@ -684,12 +701,14 @@ jobs:
               - src/test/singlenode_regress:installcheck-singlenode
               - src/test/singlenode_isolation2:installcheck-singlenode
             num_primary_mirror_pairs: 0
+            enable_cgroups: false
             pg_settings:
               optimizer: ""
           - test: ic-resgroup-v2
             make_configs:
               - src/test/isolation2:installcheck-resgroup-v2
             num_primary_mirror_pairs: 3
+            enable_cgroups: true
             pg_settings:
               optimizer: ""
           - test: ic-contrib
@@ -709,6 +728,7 @@ jobs:
               - contrib/passwordcheck:installcheck
               - contrib/sslinfo:installcheck
             num_primary_mirror_pairs: 3
+            enable_cgroups: false
             pg_settings:
               optimizer: ""
           - test: ic-gpcontrib
@@ -719,6 +739,7 @@ jobs:
               - gpcontrib/gp_sparse_vector:installcheck
               - gpcontrib/gp_toolkit:installcheck
             num_primary_mirror_pairs: 3
+            enable_cgroups: false
             pg_settings:
               optimizer: ""
 
@@ -729,6 +750,7 @@ jobs:
         --user root
         --hostname cdw
         --shm-size=2gb
+        --ulimit core=-1
         --cgroupns=host
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw
 
@@ -749,7 +771,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: apache/cloudberry-devops-release
-          ref: group-ic-test-support
+          ref: main
           path: cloudberry-devops-release
           fetch-depth: 1
 
@@ -800,139 +822,143 @@ jobs:
         run: |
           set -uxo pipefail
 
-          echo "Current mounts:"
-          mount | grep cgroup
+          if [ "${{ matrix.enable_cgroups }}" = "true" ]; then
 
-          CGROUP_BASEDIR=/sys/fs/cgroup
-
-          # 1. Basic setup with permissions
-          sudo chmod -R 777 ${CGROUP_BASEDIR}/
-          sudo mkdir -p ${CGROUP_BASEDIR}/gpdb
-          sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
-          sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
-
-          # 2. Enable controllers
-          sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/cgroup.subtree_control" || true
-          sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control" || true
-
-          # 3. CPU settings
-          sudo bash -c "echo 'max 100000' > ${CGROUP_BASEDIR}/gpdb/cpu.max" || true
-          sudo bash -c "echo '100' > ${CGROUP_BASEDIR}/gpdb/cpu.weight" || true
-          sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpu.weight.nice" || true
-          sudo bash -c "echo 0-$(( $(nproc) - 1 )) > ${CGROUP_BASEDIR}/gpdb/cpuset.cpus" || true
-          sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpuset.mems" || true
-
-          # 4. Memory settings
-          sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.max" || true
-          sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/memory.min" || true
-          sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.high" || true
-
-          # 5. IO settings
-          echo "Available block devices:"
-          lsblk
-
-          sudo bash -c "
-            if [ -f \${CGROUP_BASEDIR}/gpdb/io.stat ]; then
-              echo 'Detected IO devices:'
-              cat \${CGROUP_BASEDIR}/gpdb/io.stat
-            fi
-            echo '' > \${CGROUP_BASEDIR}/gpdb/io.max || true
-          "
-
-          # 6. Fix permissions again after all writes
-          sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
-          sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
-
-          # 7. Check required files
-          echo "Checking required files:"
-          required_files=(
-              "cgroup.procs"
-              "cpu.max"
-              "cpu.pressure"
-              "cpu.weight"
-              "cpu.weight.nice"
-              "cpu.stat"
-              "cpuset.cpus"
-              "cpuset.mems"
-              "cpuset.cpus.effective"
-              "cpuset.mems.effective"
-              "memory.current"
-              "io.max"
-          )
-
-          for file in "${required_files[@]}"; do
-              if [ -f "${CGROUP_BASEDIR}/gpdb/$file" ]; then
-                  echo "✓ $file exists"
-                  ls -l "${CGROUP_BASEDIR}/gpdb/$file"
-              else
-                  echo "✗ $file missing"
-              fi
-          done
-
-          # 8. Test subdirectory creation
-          echo "Testing subdirectory creation..."
-          sudo -u gpadmin bash -c "
-            TEST_DIR=\${CGROUP_BASEDIR}/gpdb/test6448
-            if mkdir -p \$TEST_DIR; then
-              echo 'Created test directory'
-              sudo chmod -R 777 \$TEST_DIR
-              if echo \$\$ > \$TEST_DIR/cgroup.procs; then
-                echo 'Successfully wrote to cgroup.procs'
-                cat \$TEST_DIR/cgroup.procs
-                # Move processes back to parent before cleanup
-                echo \$\$ > \${CGROUP_BASEDIR}/gpdb/cgroup.procs
-              else
-                echo 'Failed to write to cgroup.procs'
-                ls -la \$TEST_DIR/cgroup.procs
-              fi
-              ls -la \$TEST_DIR/
-              rmdir \$TEST_DIR || {
-                echo 'Moving all processes to parent before cleanup'
-                cat \$TEST_DIR/cgroup.procs | while read pid; do
-                  echo \$pid > \${CGROUP_BASEDIR}/gpdb/cgroup.procs 2>/dev/null || true
-                done
-                rmdir \$TEST_DIR
-              }
-            else
-              echo 'Failed to create test directory'
-            fi
-          "
-
-          # 9. Verify setup as gpadmin user
-          echo "Testing cgroup access as gpadmin..."
-          sudo -u gpadmin bash -c "
-            echo 'Checking mounts...'
+            echo "Current mounts:"
             mount | grep cgroup
 
-            echo 'Checking /proc/self/mounts...'
-            cat /proc/self/mounts | grep cgroup
+            CGROUP_BASEDIR=/sys/fs/cgroup
 
-            if ! grep -q cgroup2 /proc/self/mounts; then
-                echo 'ERROR: cgroup2 mount NOT visible to gpadmin'
-                exit 1
-            fi
-            echo 'SUCCESS: cgroup2 mount visible to gpadmin'
+            # 1. Basic setup with permissions
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/
+            sudo mkdir -p ${CGROUP_BASEDIR}/gpdb
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
+            sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
 
-            if ! [ -w ${CGROUP_BASEDIR}/gpdb ]; then
-                echo 'ERROR: gpadmin cannot write to gpdb cgroup'
-                exit 1
-            fi
-            echo 'SUCCESS: gpadmin can write to gpdb cgroup'
+            # 2. Enable controllers
+            sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/cgroup.subtree_control" || true
+            sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control" || true
 
-            echo 'Verifying key files content:'
-            echo 'cpu.max:'
-            cat ${CGROUP_BASEDIR}/gpdb/cpu.max || echo 'Failed to read cpu.max'
-            echo 'cpuset.cpus:'
-            cat ${CGROUP_BASEDIR}/gpdb/cpuset.cpus || echo 'Failed to read cpuset.cpus'
-            echo 'cgroup.subtree_control:'
-            cat ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control || echo 'Failed to read cgroup.subtree_control'
-          "
+            # 3. CPU settings
+            sudo bash -c "echo 'max 100000' > ${CGROUP_BASEDIR}/gpdb/cpu.max" || true
+            sudo bash -c "echo '100' > ${CGROUP_BASEDIR}/gpdb/cpu.weight" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpu.weight.nice" || true
+            sudo bash -c "echo 0-$(( $(nproc) - 1 )) > ${CGROUP_BASEDIR}/gpdb/cpuset.cpus" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpuset.mems" || true
 
-          # 10. Show final state
-          echo "Final cgroup state:"
-          ls -la ${CGROUP_BASEDIR}/gpdb/
+            # 4. Memory settings
+            sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.max" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/memory.min" || true
+            sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.high" || true
 
-          echo "Cgroup setup completed successfully"
+            # 5. IO settings
+            echo "Available block devices:"
+            lsblk
+
+            sudo bash -c "
+              if [ -f \${CGROUP_BASEDIR}/gpdb/io.stat ]; then
+                echo 'Detected IO devices:'
+                cat \${CGROUP_BASEDIR}/gpdb/io.stat
+              fi
+              echo '' > \${CGROUP_BASEDIR}/gpdb/io.max || true
+            "
+
+            # 6. Fix permissions again after all writes
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
+            sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
+
+            # 7. Check required files
+            echo "Checking required files:"
+            required_files=(
+                "cgroup.procs"
+                "cpu.max"
+                "cpu.pressure"
+                "cpu.weight"
+                "cpu.weight.nice"
+                "cpu.stat"
+                "cpuset.cpus"
+                "cpuset.mems"
+                "cpuset.cpus.effective"
+                "cpuset.mems.effective"
+                "memory.current"
+                "io.max"
+            )
+
+            for file in "${required_files[@]}"; do
+                if [ -f "${CGROUP_BASEDIR}/gpdb/$file" ]; then
+                    echo "✓ $file exists"
+                    ls -l "${CGROUP_BASEDIR}/gpdb/$file"
+                else
+                    echo "✗ $file missing"
+                fi
+            done
+
+            # 8. Test subdirectory creation
+            echo "Testing subdirectory creation..."
+            sudo -u gpadmin bash -c "
+              TEST_DIR=\${CGROUP_BASEDIR}/gpdb/test6448
+              if mkdir -p \$TEST_DIR; then
+                echo 'Created test directory'
+                sudo chmod -R 777 \$TEST_DIR
+                if echo \$\$ > \$TEST_DIR/cgroup.procs; then
+                  echo 'Successfully wrote to cgroup.procs'
+                  cat \$TEST_DIR/cgroup.procs
+                  # Move processes back to parent before cleanup
+                  echo \$\$ > \${CGROUP_BASEDIR}/gpdb/cgroup.procs
+                else
+                  echo 'Failed to write to cgroup.procs'
+                  ls -la \$TEST_DIR/cgroup.procs
+                fi
+                ls -la \$TEST_DIR/
+                rmdir \$TEST_DIR || {
+                  echo 'Moving all processes to parent before cleanup'
+                  cat \$TEST_DIR/cgroup.procs | while read pid; do
+                    echo \$pid > \${CGROUP_BASEDIR}/gpdb/cgroup.procs 2>/dev/null || true
+                  done
+                  rmdir \$TEST_DIR
+                }
+              else
+                echo 'Failed to create test directory'
+              fi
+            "
+
+            # 9. Verify setup as gpadmin user
+            echo "Testing cgroup access as gpadmin..."
+            sudo -u gpadmin bash -c "
+              echo 'Checking mounts...'
+              mount | grep cgroup
+
+              echo 'Checking /proc/self/mounts...'
+              cat /proc/self/mounts | grep cgroup
+
+              if ! grep -q cgroup2 /proc/self/mounts; then
+                  echo 'ERROR: cgroup2 mount NOT visible to gpadmin'
+                  exit 1
+              fi
+              echo 'SUCCESS: cgroup2 mount visible to gpadmin'
+
+              if ! [ -w ${CGROUP_BASEDIR}/gpdb ]; then
+                  echo 'ERROR: gpadmin cannot write to gpdb cgroup'
+                  exit 1
+              fi
+              echo 'SUCCESS: gpadmin can write to gpdb cgroup'
+
+              echo 'Verifying key files content:'
+              echo 'cpu.max:'
+              cat ${CGROUP_BASEDIR}/gpdb/cpu.max || echo 'Failed to read cpu.max'
+              echo 'cpuset.cpus:'
+              cat ${CGROUP_BASEDIR}/gpdb/cpuset.cpus || echo 'Failed to read cpuset.cpus'
+              echo 'cgroup.subtree_control:'
+              cat ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control || echo 'Failed to read cgroup.subtree_control'
+            "
+
+            # 10. Show final state
+            echo "Final cgroup state:"
+            ls -la ${CGROUP_BASEDIR}/gpdb/
+            echo "Cgroup setup completed successfully"
+          else
+            echo "Cgroup setup skipped"
+          fi
 
       - name: "Generate Test Job Summary Start: ${{ matrix.test }}"
         if: always()
@@ -1125,6 +1151,13 @@ jobs:
           # Create logs directory structure
           mkdir -p build-logs/details
 
+          # Core file config
+          mkdir -p "/tmp/cloudberry-cores"
+          chmod 1777 "/tmp/cloudberry-cores"
+          sysctl -w kernel.core_pattern="/tmp/cloudberry-cores/core-%e-%s-%u-%g-%p-%t"
+          sysctl kernel.core_pattern
+          su - gpadmin -c "ulimit -c"
+
           # WARNING: PostgreSQL Settings
           # When adding new pg_settings key/value pairs:
           # 1. Add a new check below for the setting
@@ -1157,6 +1190,10 @@ jobs:
             # Create unique log file for this configuration
             config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
 
+            # Clean up any existing core files
+            echo "Cleaning up existing core files..."
+            rm -f /tmp/cloudberry-cores/core-*
+
             # Execute test script with proper environment setup
             if ! time su - gpadmin -c "cd ${SRC_DIR} && \
                  MAKE_NAME='${{ matrix.test }}-config$i' \
@@ -1169,6 +1206,42 @@ jobs:
               echo "::warning::Test execution failed for configuration $((i+1)): make -C $dir $target"
               overall_status=1
             fi
+
+            # Check for results directory
+            results_dir="${dir}/results"
+
+            if [[ -d "$results_dir" ]]; then
+              echo "-----------------------------------------" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              echo "Found results directory: $results_dir" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              echo "Contents of results directory:" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+
+              find "$results_dir" -type f -ls >> "$log_file" 2>&1 | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              echo "-----------------------------------------" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+            else
+              echo "-----------------------------------------"
+              echo "Results directory $results_dir does not exit"
+              echo "-----------------------------------------"
+            fi
+
+            # Analyze any core files generated by this test configuration
+            echo "Analyzing core files for configuration ${{ matrix.test }}-config$i..."
+            test_id="${{ matrix.test }}-config$i"
+
+            # List the cores directory
+            echo "-----------------------------------------"
+            echo "Cores directory: /tmp/cloudberry-cores"
+            echo "Contents of cores directory:"
+            ls -Rl "/tmp/cloudberry-cores"
+            echo "-----------------------------------------"
+
+            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/analyze_core_dumps.sh "$test_id"
+            core_analysis_rc=$?
+            case "$core_analysis_rc" in
+              0) echo "No core dumps found for this configuration" ;;
+              1) echo "Core dumps were found and analyzed successfully" ;;
+              2) echo "::warning::Issues encountered during core dump analysis" ;;
+              *) echo "::error::Unexpected return code from core dump analysis: $core_analysis_rc" ;;
+            esac
 
             echo "Log file: $config_log"
             echo "=== End configuration $((i+1)) execution ==="
@@ -1321,6 +1394,26 @@ jobs:
             echo "No regression.diffs file found in the hierarchy."
           fi
 
+      - name: "Check for Core Dumps Across All Configurations: ${{ matrix.test }}"
+        if: always() && needs.check-skip.outputs.should_skip != 'true'
+        shell: bash {0}
+        run: |
+          # Look for any core analysis files from this test matrix entry
+          core_files=$(find "${SRC_DIR}/build-logs" -name "core_analysis_*.log")
+
+          if [ -n "$core_files" ]; then
+            echo "::error::Core dumps were found during test execution:"
+            echo "$core_files" | while read -r file; do
+              echo "Core analysis file: $file"
+              echo "=== Content ==="
+              cat "$file"
+              echo "=============="
+            done
+            exit 1
+          else
+            echo "No core dumps were found during test execution"
+          fi
+
       - name: "Generate Test Job Summary End: ${{ matrix.test }}"
         if: always()
         shell: bash {0}
@@ -1343,6 +1436,30 @@ jobs:
               echo "### Execution Summary"
               echo "Test run was interrupted and did not complete. No test results are available."
               exit 0
+            fi
+
+            # Check for core analysis files
+            core_files=$(find "${SRC_DIR}/build-logs" -name "core_analysis_*.log")
+
+            if [ -n "$core_files" ]; then
+              echo "❌ Core dumps were detected"
+              echo ""
+              echo "#### Core Analysis Files"
+              echo "\`\`\`"
+              echo "$core_files"
+              echo "\`\`\`"
+
+              echo ""
+              echo "#### Analysis Details"
+              echo "\`\`\`"
+              while read -r file; do
+                echo "=== $file ==="
+                cat "$file"
+                echo ""
+              done <<< "$core_files"
+              echo "\`\`\`"
+            else
+              echo "✅ No core dumps detected"
             fi
 
             # Process results for each configuration
@@ -1440,6 +1557,16 @@ jobs:
           name: test-metadata-${{ matrix.test }}
           path: |
             test_results*.txt
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload test results files
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          path: |
+            **/regression.out
+            **/regression.diffs
+            **/results/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload test regression logs
