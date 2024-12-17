@@ -673,28 +673,26 @@ jobs:
       fail-fast: false  # Continue with other tests if one fails
 
       matrix:
-        test:
-          - ic-good-opt-off
-          - ic-expandshrink
-          - ic-singlenode
-          - ic-resgroup-v2
-          - ic-contrib
-          - ic-gpcontrib
         include:
+
           - test: ic-good-opt-off
             make_configs:
               - src/test/regress:installcheck-good
             num_primary_mirror_pairs: 3
             enable_cgroups: false
+            enable_core_check: true
             pg_settings:
               optimizer: "off"
+
           - test: ic-expandshrink
             make_configs:
               - src/test/isolation2:installcheck-expandshrink
             num_primary_mirror_pairs: 3
             enable_cgroups: false
+            enable_core_check: true
             pg_settings:
               optimizer: ""
+
           - test: ic-singlenode
             make_configs:
               - src/test/isolation:installcheck-singlenode
@@ -702,15 +700,19 @@ jobs:
               - src/test/singlenode_isolation2:installcheck-singlenode
             num_primary_mirror_pairs: 0
             enable_cgroups: false
+            enable_core_check: true
             pg_settings:
               optimizer: ""
+
           - test: ic-resgroup-v2
             make_configs:
               - src/test/isolation2:installcheck-resgroup-v2
             num_primary_mirror_pairs: 3
             enable_cgroups: true
+            enable_core_check: true
             pg_settings:
               optimizer: ""
+
           - test: ic-contrib
             make_configs:
               - contrib/auto_explain:installcheck
@@ -729,8 +731,10 @@ jobs:
               - contrib/sslinfo:installcheck
             num_primary_mirror_pairs: 3
             enable_cgroups: false
+            enable_core_check: true
             pg_settings:
               optimizer: ""
+
           - test: ic-gpcontrib
             make_configs:
               - gpcontrib/orafce:installcheck
@@ -740,6 +744,16 @@ jobs:
               - gpcontrib/gp_toolkit:installcheck
             num_primary_mirror_pairs: 3
             enable_cgroups: false
+            enable_core_check: true
+            pg_settings:
+              optimizer: ""
+
+          - test: ic-fixme
+            make_configs:
+              - src/test/regress:installcheck-fixme
+            num_primary_mirror_pairs: 3
+            enable_cgroups: false
+            enable_core_check: false
             pg_settings:
               optimizer: ""
 
@@ -1409,7 +1423,11 @@ jobs:
               cat "$file"
               echo "=============="
             done
-            exit 1
+            if [ "${{ matrix.enable_core_check }}" = "true" ]; then
+              exit 1
+            else
+              echo "::warning::Special case - core checks will generate a warning"
+            fi
           else
             echo "No core dumps were found during test execution"
           fi
@@ -1442,7 +1460,11 @@ jobs:
             core_files=$(find "${SRC_DIR}/build-logs" -name "core_analysis_*.log")
 
             if [ -n "$core_files" ]; then
-              echo "❌ Core dumps were detected"
+              if [ "${{ matrix.enable_core_check }}" = "true" ]; then
+                echo "❌ Core dumps were detected"
+              else
+                echo "⚠️  Core dumps were detected - enable_core_check: false"
+              fi
               echo ""
               echo "#### Core Analysis Files"
               echo "\`\`\`"
