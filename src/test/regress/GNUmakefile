@@ -220,6 +220,9 @@ installcheck-cbdb-parallel: all twophase_pqexecparams
 installcheck-tests: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) $(TESTS) $(EXTRA_TESTS)
 
+installcheck-fixme: all
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/fixme_schedule $(EXTRA_TESTS)
+
 ifeq ($(BUILD_TYPE),prod)
 .PHONY: installcheck-icudp
 installcheck-icudp:

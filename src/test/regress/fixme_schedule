@@ -1,0 +1,12 @@
+# ======================================================================
+# Cloudberry-specific tests
+# ----------------------------------------------------------------------
+# These tests have issues
+# ======================================================================
+
+# [Bug] Core Dump in mirror_replay Test Suite During Execution #782
+# https://github.com/apache/cloudberry/issues/782
+
+test: mirror_replay
+
+# end of tests
