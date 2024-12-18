@@ -3474,6 +3474,7 @@ _equalCreateDirectoryTableStmt(const CreateDirectoryTableStmt *a, const CreateDi
 		return false;
 
 	COMPARE_STRING_FIELD(tablespacename);
+	COMPARE_STRING_FIELD(location);
 
 	return true;
 }

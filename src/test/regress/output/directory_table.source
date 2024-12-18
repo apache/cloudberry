@@ -2063,6 +2063,19 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 
 SAVEPOINT s2;
 ROLLBACK;
+-- test create directory table with location
+CREATE DIRECTORY TABLE dir_table_with_location TABLESPACE directory_tblspc WITH LOCATION '/test_dirtable';
+CREATE DIRECTORY TABLE dir_table_with_location2 TABLESPACE directory_tblspc WITH LOCATION '/test_dirtable'; -- error
+ERROR:  directory table path "pg_tblspc//test_dirtable" already exists
+CREATE DIRECTORY TABLE dir_table_with_location3 WITH LOCATION '/test_dirtable';
+SELECT count(*) FROM pg_directory_table;
+ count 
+-------
+     8
+(1 row)
+
+DROP DIRECTORY TABLE dir_table_with_location WITH CONTENT;
+DROP DIRECTORY TABLE dir_table_with_location3 WITH CONTENT;
 -- clean up
 DROP DIRECTORY TABLE IF EXISTS dir_table1;
 DROP DIRECTORY TABLE IF EXISTS dir_table2;

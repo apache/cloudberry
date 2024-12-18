@@ -416,6 +416,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 				access_method_clause attr_name
 				table_access_method_clause name cursor_name file_name
 				opt_index_name cluster_index_specification opt_file_name
+%type <str>		OptWithLocation
 
 %type <list>	func_name handler_name qual_Op qual_all_Op subquery_Op
 				opt_class opt_inline_handler opt_validator validator_clause
@@ -6013,6 +6014,11 @@ OptWith:
 			| /*EMPTY*/					{ $$ = NIL; }
 		;
 
+OptWithLocation:
+			WITH LOCATION Sconst		{ $$ = $3; }
+			| /*EMPTY*/					{ $$ = NULL; }
+		;
+
 OnCommitOption:  ON COMMIT DROP				{ $$ = ONCOMMIT_DROP; }
 			| ON COMMIT DELETE_P ROWS		{ $$ = ONCOMMIT_DELETE_ROWS; }
 			| ON COMMIT PRESERVE ROWS		{ $$ = ONCOMMIT_PRESERVE_ROWS; }
@@ -8530,7 +8536,7 @@ AlterStorageUserMappingStmt:
 
 CreateDirectoryTableStmt:
             CREATE DIRECTORY TABLE qualified_name
-            table_access_method_clause OptTableSpace OptTagOptList
+            table_access_method_clause OptTableSpace OptWithLocation OptTagOptList
                 {
                     CreateDirectoryTableStmt *n = makeNode(CreateDirectoryTableStmt);
                     $4->relpersistence = RELPERSISTENCE_PERMANENT;
@@ -8545,13 +8551,14 @@ CreateDirectoryTableStmt:
                     n->base.if_not_exists = false;
                     n->base.distributedBy = GetDirectoryTableDistributedBy();
                     n->base.relKind = RELKIND_DIRECTORY_TABLE;
-                    n->base.tags = $7;
                     n->tablespacename = $6;
+                    n->location = $7;
+                    n->base.tags = $8;
 
                     $$ = (Node *) n;
                 }
             | CREATE DIRECTORY TABLE IF_P NOT EXISTS qualified_name
-            table_access_method_clause OptTableSpace OptTagOptList
+            table_access_method_clause OptTableSpace OptWithLocation OptTagOptList
                 {
                     CreateDirectoryTableStmt *n = makeNode(CreateDirectoryTableStmt);
                     $7->relpersistence = RELPERSISTENCE_PERMANENT;
@@ -8566,8 +8573,9 @@ CreateDirectoryTableStmt:
                     n->base.if_not_exists = true;
                     n->base.distributedBy = GetDirectoryTableDistributedBy();
                     n->base.relKind = RELKIND_DIRECTORY_TABLE;
-                    n->base.tags = $10;
                     n->tablespacename = $9;
+                    n->location = $10;
+                    n->base.tags = $11;
 
                     $$ = (Node *) n;
                 }

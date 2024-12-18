@@ -3412,6 +3412,7 @@ typedef struct CreateDirectoryTableStmt
 {
 	CreateStmt	base;
 	char	   *tablespacename;
+	char       *location;   /* dtlocation for pg_directory_table */
 } CreateDirectoryTableStmt;
 
 typedef struct AlterDirectoryTableStmt

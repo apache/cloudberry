@@ -4094,6 +4094,7 @@ _outCreateDirectoryTableStmt(StringInfo str, const CreateDirectoryTableStmt *nod
 
 	_outCreateStmtInfo(str, (const CreateStmt *) node);
 	WRITE_STRING_FIELD(tablespacename);
+	WRITE_STRING_FIELD(location);
 }
 
 static void

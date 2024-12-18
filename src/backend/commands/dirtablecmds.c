@@ -122,22 +122,45 @@ CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId)
 	bool 		nulls[Natts_pg_directory_table];
 	HeapTuple	tuple;
 	char 		*dirTablePath;
-	Form_pg_class pg_class_tuple;
-	HeapTuple	class_tuple;
 	Oid 		spcId = chooseTableSpace(stmt);
-	RelFileNode relFileNode = {0};
 
-	class_tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relId));
-	if (!HeapTupleIsValid(class_tuple))
-		elog(ERROR, "cache lookup failed for relation %u", relId);
-	pg_class_tuple = (Form_pg_class) GETSTRUCT(class_tuple);
+	if (stmt->location)
+	{
+		if (spcId == InvalidOid ||
+			spcId == DEFAULTTABLESPACE_OID)
+			dirTablePath = psprintf("base/%s", stmt->location);
+		else if (spcId == GLOBALTABLESPACE_OID)
+			dirTablePath = psprintf("global/%s", stmt->location);
+		else
+			dirTablePath = psprintf("pg_tblspc/%s", stmt->location);
+	}
+	else
+	{
+		Form_pg_class pg_class_tuple = NULL;
+		HeapTuple	class_tuple = NULL;
+		RelFileNode relFileNode = {0};
 
-	relFileNode.spcNode = spcId;
-	relFileNode.dbNode = MyDatabaseId;
-	relFileNode.relNode = pg_class_tuple->relfilenode;
-	dirTablePath = UFileFormatPathName(&relFileNode);
+		class_tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relId));
+		if (!HeapTupleIsValid(class_tuple))
+			elog(ERROR, "cache lookup failed for relation %u", relId);
+		pg_class_tuple = (Form_pg_class) GETSTRUCT(class_tuple);
 
-	ReleaseSysCache(class_tuple);
+		relFileNode.spcNode = spcId;
+		relFileNode.dbNode = MyDatabaseId;
+		relFileNode.relNode = pg_class_tuple->relfilenode;
+
+		dirTablePath = UFileFormatPathName(&relFileNode);
+		ReleaseSysCache(class_tuple);
+	}
+
+	/*
+	 * We will check whether the directory path has existed only when use the local file am.
+	 */
+	if (UFileExists(spcId, dirTablePath) && GetTablespaceFileHandler(spcId) == &localFileAm)
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("directory table path \"%s\" already exists",
+				 dirTablePath)));
 
 	/*
 	 * Acquire DirectoryTableLock to ensure that no DROP DIRECTORY TABLE
