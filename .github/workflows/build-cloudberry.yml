@@ -766,6 +766,15 @@ jobs:
             pg_settings:
               optimizer: ""
 
+          - test: ic-isolation2-crash
+            make_configs:
+              - src/test/isolation2:installcheck-isolation2-crash
+            num_primary_mirror_pairs: 3
+            enable_cgroups: true
+            enable_core_check: false
+            pg_settings:
+              optimizer: ""
+
           - test: ic-parallel-retrieve-cursor
             make_configs:
               - src/test/isolation2:installcheck-parallel-retrieve-cursor

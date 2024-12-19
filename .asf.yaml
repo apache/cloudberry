@@ -94,6 +94,7 @@ github:
         - ic-gpcontrib
         - ic-fixme
         - ic-isolation2
+        - ic-isolation2-crash
         - ic-parallel-retrieve-cursor
         - Generate Apache Cloudberry Build Report
 

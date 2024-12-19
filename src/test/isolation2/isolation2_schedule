@@ -14,24 +14,6 @@ test: ao_partition_lock
 test: select_dropped_table
 test: update_hash_col_utilitymode execute_on_utilitymode
 
-# Tests for crash recovery
-test: uao_crash_compaction_column
-test: uao_crash_compaction_row
-test: crash_recovery
-test: crash_recovery_redundant_dtx
-test: crash_recovery_dtm
-test: unlogged_heap_tables
-test: unlogged_appendonly_tables
-test: udf_exception_blocks_panic_scenarios
-test: ao_same_trans_truncate_crash
-test: frozen_insert_crash
-
-test: prevent_ao_wal
-
-# Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
-# so must be scheduled after that one.
-test: packcore
-
 # Tests on global deadlock detector
 test: gdd/prepare
 test: gdd/concurrent_update
