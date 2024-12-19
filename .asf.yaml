@@ -88,10 +88,11 @@ github:
         - RPM Install Test Apache Cloudberry
         - ic-good-opt-off
         - ic-expandshrink
-        - ic-singlenode_regress
-        - ic-singlenode_isolation
-        - ic-singlenode_isolation2
+        - ic-singlenode
         - ic-resgroup-v2
+        - ic-contrib
+        - ic-gpcontrib
+        - ic-fixme
         - Generate Apache Cloudberry Build Report
 
       # Pull request review requirements
