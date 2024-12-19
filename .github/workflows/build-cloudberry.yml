@@ -757,6 +757,24 @@ jobs:
             pg_settings:
               optimizer: ""
 
+          - test: ic-isolation2
+            make_configs:
+              - src/test/isolation2:installcheck-isolation2
+            num_primary_mirror_pairs: 3
+            enable_cgroups: true
+            enable_core_check: true
+            pg_settings:
+              optimizer: ""
+
+          - test: ic-parallel-retrieve-cursor
+            make_configs:
+              - src/test/isolation2:installcheck-parallel-retrieve-cursor
+            num_primary_mirror_pairs: 3
+            enable_cgroups: true
+            enable_core_check: true
+            pg_settings:
+              optimizer: ""
+
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
       options: >-
