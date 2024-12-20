@@ -527,7 +527,7 @@ pg_query_state(PG_FUNCTION_ARGS)
 {
 	typedef struct
 	{
-		PGPROC 		*proc;
+		int 		pid;
 		ListCell 	*frame_cursor;
 		int			 frame_index;
 		List		*stack;
@@ -684,7 +684,7 @@ pg_query_state(PG_FUNCTION_ARGS)
 						qs_stack = deserialize_stack(current_msg->stack,
 													 current_msg->stack_depth);
 
-						p_state->proc = current_msg->proc;
+						p_state->pid = current_msg->pid;
 						p_state->stack = qs_stack;
 						p_state->frame_index = 0;
 						p_state->frame_cursor = list_head(qs_stack);
@@ -733,11 +733,11 @@ pg_query_state(PG_FUNCTION_ARGS)
 		/* Make and return next tuple to caller */
 		MemSet(values, 0, sizeof(values));
 		MemSet(nulls, 0, sizeof(nulls));
-		values[0] = Int32GetDatum(p_state->proc->pid);
+		values[0] = Int32GetDatum(p_state->pid);
 		values[1] = Int32GetDatum(p_state->frame_index);
 		values[2] = PointerGetDatum(frame->query);
 		values[3] = PointerGetDatum(frame->plan);
-		if (p_state->proc->pid == pid)
+		if (p_state->pid == pid)
 			nulls[4] = true;
 		else
 			values[4] = Int32GetDatum(pid);

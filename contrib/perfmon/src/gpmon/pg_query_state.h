@@ -57,7 +57,7 @@ typedef struct
 {
 	int     reqid;
 	int		length;							/* size of message record, for sanity check */
-	PGPROC	*proc;
+	int 	pid;
 	PG_QS_RequestResult	result_code;
 	int warnings;
 	int		stack_depth;
@@ -91,6 +91,7 @@ typedef struct
 	int     reqid;
 	int		length;							/* size of message record, for sanity check */
 	PGPROC	*proc;
+
 	PG_QS_RequestResult	result_code;
 	int 	sliceIndex;
 	uint64 	queryId;

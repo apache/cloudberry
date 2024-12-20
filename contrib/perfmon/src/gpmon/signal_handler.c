@@ -443,7 +443,7 @@ QD_SendQueryState(shm_mq_handle  *mqh, PGPROC *proc)
 
 	msg->reqid = params->reqid;
 	msg->length = msglen;
-	msg->proc = MyProc;
+	msg->pid = MyProc->pid;
 	msg->result_code = QS_RETURNED;
 
 	msg->warnings = 0;
@@ -598,7 +598,7 @@ send_cdbComponents_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg)
 	{
 		res = false;
 		if (msg != NULL)
-			*msg = (shm_mq_msg){reqid, BASE_SIZEOF_SHM_MQ_MSG, MyProc, QUERY_NOT_RUNNING};
+			*msg = (shm_mq_msg){reqid, BASE_SIZEOF_SHM_MQ_MSG, MyProc->pid, QUERY_NOT_RUNNING};
 	}
 	return res;
 
@@ -608,7 +608,7 @@ static  void
 set_msg(shm_mq_msg *msg, int reqid, PG_QS_RequestResult res)
 {
 	if (msg != NULL)
-		*msg = (shm_mq_msg){reqid, BASE_SIZEOF_SHM_MQ_MSG, MyProc, res};
+		*msg = (shm_mq_msg){reqid, BASE_SIZEOF_SHM_MQ_MSG, MyProc->pid, res};
 }
 static bool
 query_state_pre_check(shm_mq_handle *mqh, int reqid, shm_mq_msg *msg)
@@ -686,7 +686,7 @@ receive_QE_query_state(shm_mq_handle *mqh, List **query_state_info_list)
 			return false;
 		}
 		*query_state_info_list = lappend(*query_state_info_list, seg_query_state_info);
-		elog(DEBUG1, "receive QE query state slice %d, proc %d successfully", seg_query_state_info->sliceIndex, seg_query_state_info->proc->backendId);
+		elog(DEBUG1, "receive QE query state slice %d", seg_query_state_info->sliceIndex);
 	}
 	return true;
 }
