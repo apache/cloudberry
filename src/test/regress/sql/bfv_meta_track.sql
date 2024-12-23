@@ -3,29 +3,35 @@
 --https://github.com/cloudberrydb/cloudberrydb/issues/504 
 --
 
+-- start_ignore
+drop schema if exists bfv_meta_track;
+-- end_ignore
 create schema bfv_meta_track;
 set search_path to bfv_meta_track;
-select count(*) from pg_stat_last_operation join
+select staactionname, stasubtype, nspname from pg_stat_last_operation join
   pg_namespace on pg_namespace.oid = pg_stat_last_operation.objid
   where pg_namespace.nspname = 'bfv_meta_track';
 
 -- test drop popicy
 create table t1(a int);
 create policy p1 on t1 using (a % 2 = 0);
-select count(*) from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+select staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+-- start_ignore
+select a.xmin as pg_stat_last_operation_xmin, a.xmax as pg_stat_last_operation_xmax,
+  b.xmin as pg_policy_xmin, b.xmax as pg_policy_xmax,
+  staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid
+  where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+select xmin, xmax, relname from pg_class where oid in (select objid from (select objid, staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid ) a) ;
+-- end_ignore
+select relname from pg_class where oid in (select objid from (select objid, staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid ) a) ;
+
 drop policy p1 on t1;
-select count(*) from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+select staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
 
 --test drop publication
 -- start_ignore
 create publication pub1;
 -- end_ignore
-select count(*) from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
+select staactionname, stasubtype from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
 drop publication pub1;
-select count(*) from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
-
-drop schema bfv_meta_track cascade;
--- test drop schema
-select count(*) from pg_stat_last_operation join
-  pg_namespace on pg_namespace.oid = pg_stat_last_operation.objid
-  where pg_namespace.nspname = 'bfv_meta_track';
+select staactionname, stasubtype from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';

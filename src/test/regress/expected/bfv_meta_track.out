@@ -2,14 +2,17 @@
 --CBDB GITHUB ISSUE:
 --https://github.com/cloudberrydb/cloudberrydb/issues/504 
 --
+-- start_ignore
+drop schema if exists bfv_meta_track;
+-- end_ignore
 create schema bfv_meta_track;
 set search_path to bfv_meta_track;
-select count(*) from pg_stat_last_operation join
+select staactionname, stasubtype, nspname from pg_stat_last_operation join
   pg_namespace on pg_namespace.oid = pg_stat_last_operation.objid
   where pg_namespace.nspname = 'bfv_meta_track';
- count 
--------
-     1
+ staactionname | stasubtype |    nspname     
+---------------+------------+----------------
+ CREATE        | SCHEMA     | bfv_meta_track
 (1 row)
 
 -- test drop popicy
@@ -17,44 +20,45 @@ create table t1(a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create policy p1 on t1 using (a % 2 = 0);
-select count(*) from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
- count 
--------
-     1
+select staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+ staactionname | stasubtype 
+---------------+------------
+ CREATE        | POLICY
 (1 row)
 
+-- start_ignore
+select a.xmin as pg_stat_last_operation_xmin, a.xmax as pg_stat_last_operation_xmax,
+  b.xmin as pg_policy_xmin, b.xmax as pg_policy_xmax,
+  staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid
+  where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+
+select xmin, xmax, relname from pg_class where oid in (select objid from (select objid, staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid ) a) ;
+
+-- end_ignore
+select relname from pg_class where oid in (select objid from (select objid, staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid ) a) ;
+ relname 
+---------
+(0 rows)
+
 drop policy p1 on t1;
-select count(*) from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
- count 
--------
-     0
-(1 row)
+select staactionname, stasubtype from pg_stat_last_operation a join pg_policy b on b.oid = a.objid where b.polname = 'p1' and b.polrelid ='t1'::regclass::oid;
+ staactionname | stasubtype 
+---------------+------------
+(0 rows)
 
 --test drop publication
 -- start_ignore
 create publication pub1;
 -- end_ignore
-select count(*) from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
- count 
--------
-     1
+select staactionname, stasubtype from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
+ staactionname | stasubtype  
+---------------+-------------
+ CREATE        | PUBLICATION
 (1 row)
 
 drop publication pub1;
-select count(*) from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
- count 
--------
-     0
-(1 row)
-
-drop schema bfv_meta_track cascade;
-NOTICE:  drop cascades to table t1
--- test drop schema
-select count(*) from pg_stat_last_operation join
-  pg_namespace on pg_namespace.oid = pg_stat_last_operation.objid
-  where pg_namespace.nspname = 'bfv_meta_track';
- count 
--------
-     0
-(1 row)
+select staactionname, stasubtype from pg_stat_last_operation a join pg_publication b on b.oid = a.objid where b.pubname = 'pub1';
+ staactionname | stasubtype 
+---------------+------------
+(0 rows)
 
