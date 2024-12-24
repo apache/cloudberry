@@ -14633,3 +14633,13 @@ where id in(select id from cte);
 (0 rows)
 
 reset optimizer_trace_fallback;
+WITH conf AS (
+    SELECT setting
+    FROM pg_catalog.pg_config
+    WHERE name = 'LDFLAGS_EX')
+select * from conf;
+ setting 
+---------
+ 
+(1 row)
+

@@ -1000,6 +1000,61 @@ gpdb::GetFuncOutputArgTypes(Oid funcid)
 }
 
 List *
+gpdb::ProcessRecordFuncTargetList(Oid funcid, List *targetList)
+{
+	GP_WRAP_START;
+	{
+		HeapTuple	tp;
+		int			numargs;
+		Oid		   *argtypes = NULL;
+		char	  **argnames = NULL;
+		char	   *argmodes = NULL;
+		int         i;
+		Datum       datum;
+		bool        isNull;
+		Oid         prorettype;
+		ListCell    *lc = NULL;
+		int         index;
+
+		tp = SearchSysCache1(PROCOID,
+		                     ObjectIdGetDatum(funcid));
+		if (!HeapTupleIsValid(tp))
+			elog(ERROR, "cache lookup failed for function %u", funcid);
+		datum = SysCacheGetAttr(PROCOID, tp, Anum_pg_proc_prorettype, &isNull);
+		prorettype = DatumGetObjectId(datum);
+		ReleaseSysCache(tp);
+
+		if (prorettype != RECORDOID)
+			return targetList;
+
+		numargs = get_func_arg_info(tp, &argtypes, &argnames, &argmodes);
+
+		if (numargs > 0 && argtypes && argnames && argmodes)
+		{
+			foreach (lc, targetList)
+			{
+				index = 0;
+				TargetEntry *target_entry = (TargetEntry *) lfirst(lc);
+				for (i = 0; i < numargs; i++)
+				{
+					if (PROARGMODE_INOUT == argmodes[i] || PROARGMODE_OUT == argmodes[i] || PROARGMODE_TABLE == argmodes[i])
+						index++;
+
+					if (!strcmp(target_entry->resname, argnames[i]) &&
+						(PROARGMODE_INOUT == argmodes[i] || PROARGMODE_OUT == argmodes[i] || PROARGMODE_TABLE == argmodes[i]))
+					{
+						target_entry->resno = index;
+						break;
+					}
+				}
+			}
+		}
+	}
+	GP_WRAP_END;
+	return targetList;
+}
+
+List *
 gpdb::GetFuncArgTypes(Oid funcid)
 {
 	GP_WRAP_START;

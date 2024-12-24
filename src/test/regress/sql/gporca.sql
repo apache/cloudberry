@@ -3606,6 +3606,12 @@ from empty_cte_tl_test
 where id in(select id from cte);
 reset optimizer_trace_fallback;
 
+WITH conf AS (
+    SELECT setting
+    FROM pg_catalog.pg_config
+    WHERE name = 'LDFLAGS_EX')
+select * from conf;
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore
