@@ -481,4 +481,18 @@ extern ExprState* appendonly_predicate_pushdown_prepare(AppendOnlyScanDesc scan,
 												   ExprState *qual,
 												   ExprContext *ecxt);
 
+extern bool AppendOnlyExecutorReadBlock_GetBlockInfo(AppendOnlyStorageRead *storageRead,
+										 AppendOnlyExecutorReadBlock *executorReadBlock);
+
+extern void AppendOnlyStorageRead_CloseFile(AppendOnlyStorageRead *storageRead);
+
+extern bool SetNextFileSegForRead(AppendOnlyScanDesc scan);
+
+extern bool AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBlock *executorReadBlock,
+										  int nkeys,
+										  ScanKey key,
+										  TupleTableSlot *slot);
+
+extern void AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorReadBlock);
+
 #endif   /* CDBAPPENDONLYAM_H */
