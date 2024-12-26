@@ -18,7 +18,7 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
     priority = ''
     fp = None
     try:
-        fp = open(os.path.join(GPMONDIR, "q%s-%s-%s.txt" % (tmid, xid, cid)), 'r')
+        fp = open(os.path.join(GPMONDIR, "q%s-%s-%s.txt" % (0, xid, cid)), 'r')
         meta = fp.readline().split(' ')
         qrytxt = fp.read(int(meta[0])).strip()
 
