@@ -4041,7 +4041,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 Plan *
 CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	const CDXLNode *dyn_tbl_scan_dxlnode, CDXLTranslateContext *output_context,
-	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+	CDXLTranslationContextArray * /*ctxt_translation_prev_siblings*/)
 {
 	// translate table descriptor into a range table entry
 	CDXLPhysicalDynamicTableScan *dyn_tbl_scan_dxlop =

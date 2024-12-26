@@ -8579,7 +8579,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	add_column_datatype_dependency(myrelid, newattnum, attribute.atttypid);
 	add_column_collation_dependency(myrelid, newattnum, attribute.attcollation);
 
-	if (OidIsValid(rel->rd_rel->relam) && rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+	if (OidIsValid(rel->rd_rel->relam))
 	{
 		List *enc;
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(rel->rd_rel->relam);

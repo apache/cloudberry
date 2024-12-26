@@ -177,5 +177,58 @@ select relname, relkind, amname, reloptions from pg_class c left join pg_am am o
  pt2_ao_column_1_prt_11 | r       | ao_column | 
 (1 row)
 
+create table gppt_ao_column.alter_part_tab1 (id SERIAL, a1 int, a2 char(5), a3 text)
+  WITH (appendonly=true, orientation=column, compresstype=zlib)
+  partition by list(a2) subpartition by range(a1)
+  subpartition template (
+    default subpartition subothers,
+    subpartition sp1 start(1) end(9) with(appendonly=true,orientation=column,compresstype=rle_type),
+    subpartition sp2 start(11) end(20) with(appendonly=true,orientation=column,compresstype=zstd))
+   (partition p1 values('val1') , partition p2 values('val2'));
+create index on gppt_ao_column.alter_part_tab1(a1);
+create index on gppt_ao_column.alter_part_tab1 using bitmap(a3);
+alter table gppt_ao_column.alter_part_tab1 add column a4 numeric default 5.5;
+update gppt_ao_column.alter_part_tab1 set a4 = a1 % 2;
+ALTER TABLE gppt_ao_column.alter_part_tab1 ADD partition p31 values(1);
+\d+ gppt_ao_column.alter_part_tab1
+                                                                   Partitioned table "gppt_ao_column.alter_part_tab1"
+ Column |     Type     | Collation | Nullable |                   Default                   | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------------------------------------------+----------+--------------+------------------+-------------------+------------+-------------
+ id     | integer      |           | not null | nextval('alter_part_tab1_id_seq'::regclass) | plain    |              | zlib             | 1                 | 32768      | 
+ a1     | integer      |           |          |                                             | plain    |              | zlib             | 1                 | 32768      | 
+ a2     | character(5) |           |          |                                             | extended |              | zlib             | 1                 | 32768      | 
+ a3     | text         |           |          |                                             | extended |              | zlib             | 1                 | 32768      | 
+ a4     | numeric      |           |          | 5.5                                         | main     |              | none             | 0                 | 32768      | 
+Partition key: LIST (a2)
+Indexes:
+    "alter_part_tab1_a1_idx" btree (a1)
+    "alter_part_tab1_a3_idx" bitmap (a3)
+Partitions: alter_part_tab1_1_prt_p1 FOR VALUES IN ('val1 '), PARTITIONED,
+            alter_part_tab1_1_prt_p2 FOR VALUES IN ('val2 '), PARTITIONED,
+            alter_part_tab1_1_prt_p31 FOR VALUES IN ('1    '), PARTITIONED
+Distributed by: (id)
+Options: compresstype=zlib
+
+\d+ gppt_ao_column.alter_part_tab1_1_prt_p31
+                                                              Partitioned table "gppt_ao_column.alter_part_tab1_1_prt_p31"
+ Column |     Type     | Collation | Nullable |                   Default                   | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------------------------------------------+----------+--------------+------------------+-------------------+------------+-------------
+ id     | integer      |           | not null | nextval('alter_part_tab1_id_seq'::regclass) | plain    |              | zlib             | 1                 | 32768      | 
+ a1     | integer      |           |          |                                             | plain    |              | zlib             | 1                 | 32768      | 
+ a2     | character(5) |           |          |                                             | extended |              | zlib             | 1                 | 32768      | 
+ a3     | text         |           |          |                                             | extended |              | zlib             | 1                 | 32768      | 
+ a4     | numeric      |           |          | 5.5                                         | main     |              | none             | 0                 | 32768      | 
+Partition of: alter_part_tab1 FOR VALUES IN ('1    ')
+Partition constraint: ((a2 IS NOT NULL) AND (a2 = '1    '::character(5)))
+Partition key: RANGE (a1)
+Indexes:
+    "alter_part_tab1_1_prt_p31_a1_idx" btree (a1)
+    "alter_part_tab1_1_prt_p31_a3_idx" bitmap (a3)
+Partitions: alter_part_tab1_1_prt_p31_2_prt_sp1 FOR VALUES FROM (1) TO (9),
+            alter_part_tab1_1_prt_p31_2_prt_sp2 FOR VALUES FROM (11) TO (20),
+            alter_part_tab1_1_prt_p31_2_prt_subothers DEFAULT
+Distributed by: (id)
+Options: compresstype=zlib
+
 reset default_table_access_method;
 reset search_path;

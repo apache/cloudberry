@@ -2310,6 +2310,15 @@ aoco_transform_column_encoding_clauses(Relation rel, List *aocoColumnEncoding,
 	char	   *compresstype = NULL;
 	NameData	compresstype_nd;
 
+	/*
+	 * The relam of partition table may be ao table, but partition table
+	 * has no entry in pg_appendonly. It shouldn't fetch encoding options
+	 * from here for partition tables. See details in function
+	 * transformColumnEncoding.
+	 */
+	if (rel && rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		rel = NULL;
+
 	foreach(lc, aocoColumnEncoding)
 	{
 		dl = (DefElem *) lfirst(lc);

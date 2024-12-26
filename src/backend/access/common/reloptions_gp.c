@@ -1689,9 +1689,10 @@ transformColumnEncoding(const TableAmRoutine *tam, Relation rel, List *colDefs,
 					encoding = copyObject(deflt->encoding);
 				else if (!explicitOnly)
 				{
-					if (parentenc)
+					ColumnReferenceStorageDirective *parent_col_encoding;
+					parent_col_encoding = find_crsd(d->colname, parentenc);
+					if (parent_col_encoding)
 					{
-						ColumnReferenceStorageDirective *parent_col_encoding = find_crsd(d->colname, parentenc);
 						encoding = transformStorageEncodingClause(parent_col_encoding->encoding, true);
 					}
 					else if (d->typeName) {
@@ -1701,7 +1702,6 @@ transformColumnEncoding(const TableAmRoutine *tam, Relation rel, List *colDefs,
 							encoding = tam->transform_column_encoding_clauses(rel, encoding, true, true);
 					}
 					if (!encoding && createDefaultOne) {
-						Assert(tam == GetTableAmRoutineByAmId(rel->rd_rel->relam));
 						encoding = default_column_encoding_clause(rel);
 					}
 				}

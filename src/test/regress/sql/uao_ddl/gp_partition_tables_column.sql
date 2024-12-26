@@ -58,5 +58,23 @@ ALTER TABLE gppt_ao_column.pt2_ao_column ADD PARTITION START ('2027-01-01') INCL
 \d+ gppt_ao_column.pt2_ao_column_1_prt_11
 select relname, relkind, amname, reloptions from pg_class c left join pg_am am on c.relam=am.oid where relname='pt2_ao_column_1_prt_11';
 
+create table gppt_ao_column.alter_part_tab1 (id SERIAL, a1 int, a2 char(5), a3 text)
+  WITH (appendonly=true, orientation=column, compresstype=zlib)
+  partition by list(a2) subpartition by range(a1)
+  subpartition template (
+    default subpartition subothers,
+    subpartition sp1 start(1) end(9) with(appendonly=true,orientation=column,compresstype=rle_type),
+    subpartition sp2 start(11) end(20) with(appendonly=true,orientation=column,compresstype=zstd))
+   (partition p1 values('val1') , partition p2 values('val2'));
+
+create index on gppt_ao_column.alter_part_tab1(a1);
+create index on gppt_ao_column.alter_part_tab1 using bitmap(a3);
+alter table gppt_ao_column.alter_part_tab1 add column a4 numeric default 5.5;
+update gppt_ao_column.alter_part_tab1 set a4 = a1 % 2;
+ALTER TABLE gppt_ao_column.alter_part_tab1 ADD partition p31 values(1);
+\d+ gppt_ao_column.alter_part_tab1
+\d+ gppt_ao_column.alter_part_tab1_1_prt_p31
+
+
 reset default_table_access_method;
 reset search_path;
