@@ -30,6 +30,9 @@ CREATE TABLE foo(a int);
 CREATE TABLE test(a int);
 INSERT INTO foo SELECT generate_series(0,10);
 INSERT INTO test SELECT generate_series(0,10);
+-- test query text in multiple lines
+INSERT INTO test
+SELECT generate_series(0,10);
 select count(*) from foo,test where foo.a=test.a;
 -- test nested query
 create or replace function n_join_foo_test() returns integer as $$
