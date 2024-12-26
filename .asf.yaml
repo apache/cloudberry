@@ -98,6 +98,7 @@ github:
         - ic-isolation2-crash
         - ic-parallel-retrieve-cursor
         - Generate Apache Cloudberry Build Report
+        - ic-cbdb-parallel
 
       # Pull request review requirements
       required_pull_request_reviews:
