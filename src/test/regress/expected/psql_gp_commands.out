@@ -169,16 +169,16 @@ ALTER TABLE "d_bogus_heap" OWNER TO test_psql_de_role;
 (7 rows)
 
 \d+
-                                              List of relations
-      Schema      |       Name        |     Type      |       Owner       |  Storage  |  Size   | Description 
-------------------+-------------------+---------------+-------------------+-----------+---------+-------------
- test_psql_schema | dE_external_table | foreign table | test_psql_de_role |           | 0 bytes | 
- test_psql_schema | dE_foreign_table  | foreign table | test_psql_de_role |           | 0 bytes | 
- test_psql_schema | d_ao              | table         | test_psql_de_role | ao_row    | 128 kB  | 
- test_psql_schema | d_aocs            | table         | test_psql_de_role | ao_column | 128 kB  | 
- test_psql_schema | d_bogus_heap      | table         | test_psql_de_role | bogus     | 0 bytes | 
- test_psql_schema | d_heap            | table         | test_psql_de_role | heap      | 0 bytes | 
- test_psql_schema | d_view            | view          | test_psql_de_role |           | 0 bytes | 
+                                                     List of relations
+      Schema      |       Name        |     Type      |       Owner       |  Storage  | Persistence |  Size   | Description 
+------------------+-------------------+---------------+-------------------+-----------+-------------+---------+-------------
+ test_psql_schema | dE_external_table | foreign table | test_psql_de_role |           | permanent   | 0 bytes | 
+ test_psql_schema | dE_foreign_table  | foreign table | test_psql_de_role |           | permanent   | 0 bytes | 
+ test_psql_schema | d_ao              | table         | test_psql_de_role | ao_row    | permanent   | 128 kB  | 
+ test_psql_schema | d_aocs            | table         | test_psql_de_role | ao_column | permanent   | 128 kB  | 
+ test_psql_schema | d_bogus_heap      | table         | test_psql_de_role | bogus     | permanent   | 0 bytes | 
+ test_psql_schema | d_heap            | table         | test_psql_de_role | heap      | permanent   | 0 bytes | 
+ test_psql_schema | d_view            | view          | test_psql_de_role |           | permanent   | 0 bytes | 
 (7 rows)
 
 -- The Storage column is not interesting for indexes, so it's omitted with
