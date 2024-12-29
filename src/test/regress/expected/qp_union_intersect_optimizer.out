@@ -1711,7 +1711,7 @@ SELECT COUNT(DISTINCT(b)) FROM dml_union_s;
 (1 row)
 
 UPDATE dml_union_s SET b = (SELECT NULL UNION SELECT NULL)::numeric;
-ERROR:  null value in column "b" violates not-null constraint  (seg0 127.0.0.1:7002 pid=31287)
+ERROR:  null value in column "b" of relation "dml_union_s_1_prt_2" violates not-null constraint  (seg0 127.0.1.1:9002 pid=577298)
 DETAIL:  Failing row contains (1, null, s, 1).
 --SELECT COUNT(DISTINCT(b)) FROM dml_union_s;
 --SELECT DISTINCT(b) FROM dml_union_s;
