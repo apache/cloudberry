@@ -770,6 +770,7 @@ select id,name from cte;
   4 | AAA>B1>C1_2
   5 | AAA>B1>C1_3
 (9 rows)
+
 -- WTIH RECURSIVE and subquery
 with recursive cte (n) as
 (
