@@ -1346,7 +1346,7 @@ check_ivm_restriction_walker(Node *node, check_ivm_restriction_context *context)
 				if (qry->havingQual != NULL)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg(" HAVING clause is not supported on incrementally maintainable materialized view")));
+							 errmsg("HAVING clause is not supported on incrementally maintainable materialized view")));
 				if (qry->sortClause != NIL)	/* There is a possibility that we don't need to return an error */
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
