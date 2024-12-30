@@ -510,7 +510,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 
 	/*
 	 * Fast path to REFRESH a view:
-	 * avoid do the real REFRESH if the data of view
+	 * avoid doing the real REFRESH if the data of view
 	 * is up to date. The data should be the logically same as after
 	 * REFRESH when there is data changed since latest REFRESH.
 	 * In that case we may save a lot, ex: a cron task REFRESH view periodically
@@ -772,17 +772,17 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 
 	/*
 	 * Cloudberry specific behavior:
-	 * MPP architecture need to make sure OIDs of the temp table are the same
+	 * MPP architecture needs to make sure OIDs of the temp table are the same
 	 * among QD and all QEs. It stores the OID in the static variable dispatch_oids.
 	 * This variable will be consumed for each dispatch.
 	 *
 	 * During planning, Cloudberry might pre-evalute some function expr, this will
-	 * lead to dispatch if the function is in SQL or PLPGSQL and consume the above
+	 * lead to dispatch if the function is in SQL or PLPGSQL and consumes the above
 	 * static variable. So later refresh matview's dispatch will not find the
 	 * oid on QEs.
 	 *
 	 * We first store the OIDs information in a local variable, and then restore
-	 * it for later refresh matview's dispatch to solve the above issue.
+	 * it is for later refresh matview's dispatch to solve the above issue.
 	 *
 	 * See Github Issue for details: https://github.com/greenplum-db/gpdb/issues/11956
 	 */
@@ -2897,7 +2897,7 @@ get_operation_string(IvmOp op, const char *col, const char *arg1, const char *ar
  * get_null_condition_string
  *
  * Build a predicate string for CASE clause to check if an aggregate value
- * will became NULL after the given operation is applied.
+ * will become NULL after the given operation is applied.
  */
 static char *
 get_null_condition_string(IvmOp op, const char *arg1, const char *arg2,
@@ -2933,12 +2933,12 @@ get_null_condition_string(IvmOp op, const char *arg1, const char *arg2,
 /*
  * apply_old_delta_with_count
  *
- * Execute a query for applying a delta table given by deltname_old
- * which contains tuples to be deleted from to a materialized view given by
+ * Execute a query for applying a delta table given by deltaname_old
+ * which contains tuples to be deleted from a materialized view given by
  * matviewname.  This is used when counting is required, that is, the view
  * has aggregate or distinct.
  *
- * If the view desn't have aggregates or has GROUP BY, this requires a keys
+ * If the view doesn't have aggregates or has GROUP BY, this requires a keys
  * list to identify a tuple in the view. If the view has aggregates, this
  * requires strings representing resnames of aggregates and SET clause for
  * updating aggregate values.
@@ -3047,8 +3047,8 @@ apply_old_delta_with_count(const char *matviewname, Oid matviewRelid, const char
 /*
  * apply_old_delta
  *
- * Execute a query for applying a delta table given by deltname_old
- * which contains tuples to be deleted from to a materialized view given by
+ * Execute a query for applying a delta table given by deltaname_old
+ * which contains tuples to be deleted from a materialized view given by
  * matviewname.  This is used when counting is not required.
  */
 static void
@@ -3097,13 +3097,13 @@ apply_old_delta(const char *matviewname, const char *deltaname_old,
 /*
  * apply_new_delta_with_count
  *
- * Execute a query for applying a delta table given by deltname_new
+ * Execute a query for applying a delta table given by deltaname_new
  * which contains tuples to be inserted into a materialized view given by
  * matviewname.  This is used when counting is required, that is, the view
  * has aggregate or distinct. Also, when a table in EXISTS sub queries
  * is modified.
  *
- * If the view desn't have aggregates or has GROUP BY, this requires a keys
+ * If the view doesn't have aggregates or has GROUP BY, this requires a keys
  * list to identify a tuple in the view. If the view has aggregates, this
  * requires strings representing SET clause for updating aggregate values.
  */
@@ -3188,7 +3188,7 @@ apply_new_delta_with_count(const char *matviewname, const char* deltaname_new,
 /*
  * apply_new_delta
  *
- * Execute a query for applying a delta table given by deltname_new
+ * Execute a query for applying a delta table given by deltaname_new
  * which contains tuples to be inserted into a materialized view given by
  * matviewname.  This is used when counting is not required.
  */
