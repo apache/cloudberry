@@ -5936,6 +5936,7 @@ select count(*) from t_issue_547_ao;
 
 drop table t_issue_547_aoco;
 drop table t_issue_547_ao;
+-- test on commit behavior used on partition table
 -- test on commit delete rows
 begin;
 create temp table temp_parent (a int) partition by range(a) (start(1) end(10) every(10)) on commit delete rows;

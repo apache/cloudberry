@@ -1498,7 +1498,7 @@ select jsonb_path_query('"1.23"', '$.double()');
 select jsonb_path_query('"1.23aaa"', '$.double()');
 ERROR:  string argument of jsonpath item method .double() is not a valid representation of a double precision number
 select jsonb_path_query('1e1000', '$.double()');
-ERROR:  value out of range: overflow
+ERROR:  numeric argument of jsonpath item method .double() is out of range for type double precision
 select jsonb_path_query('"nan"', '$.double()');
 ERROR:  string argument of jsonpath item method .double() is not a valid representation of a double precision number
 select jsonb_path_query('"NaN"', '$.double()');
