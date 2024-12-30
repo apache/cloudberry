@@ -3458,7 +3458,7 @@ clean_up_ivm_dsm_entry(MV_TriggerHashEntry *entry)
 /*
  * isIvmName
  *
- * Check if this is a IVM hidden column from the name.
+ * Check if this is an IVM hidden column from the name.
  */
 bool
 isIvmName(const char *s)
