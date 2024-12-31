@@ -14987,7 +14987,7 @@ EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2
          ->  Hash Join
                Hash Cond: (ds_main.c = non_part2.e)
                ->  Dynamic Seq Scan on ds_main
-                     Number of partitions to scan: 6 (out of 6)
+                     Number of partitions to scan: 6 
                      Filter: ((a = a) AND (SubPlan 1))
                      SubPlan 1
                        ->  Materialize
