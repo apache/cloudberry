@@ -828,16 +828,6 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	/* run the plan */
 	ExecutorRun(queryDesc, ForwardScanDirection, 0L, true);
 
-	/*
-	 * GPDB: The total processed tuples here is always 0 on QD since we get it
-	 * before we fetch the total processed tuples from segments(which is done by
-	 * ExecutorEnd).
-	 * In upstream, the number is used to update pgstat, but in GPDB we do the
-	 * pgstat update on segments.
-	 * Since the processed is not used, no need to get correct value here.
-	 */
-	processed = queryDesc->estate->es_processed;
-
 	/* and clean up */
 	ExecutorFinish(queryDesc);
 	ExecutorEnd(queryDesc);
