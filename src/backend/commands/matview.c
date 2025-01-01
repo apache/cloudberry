@@ -3412,10 +3412,10 @@ clean_up_IVM_hash_entry(MV_TriggerHashEntry *entry, bool is_abort)
 static void
 clean_up_ivm_dsm_entry(MV_TriggerHashEntry *entry)
 {
-	SnapshotDumpEntry	*pDump;
 	if (entry->snapname && entry->snapname[0] != '\0' && Gp_is_writer)
 	{
-		bool found;
+		bool 				found;
+		SnapshotDumpEntry	*pDump;
 		LWLockAcquire(GPIVMResLock, LW_EXCLUSIVE);
 		pDump = (SnapshotDumpEntry *) hash_search(mv_trigger_snapshot,
 													(void *)entry->snapname,
