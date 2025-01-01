@@ -184,7 +184,6 @@ static Query *get_matview_query(Relation matviewRel);
 static Query *rewrite_query_for_preupdate_state(Query *query, List *tables,
 								  ParseState *pstate, Oid matviewid);
 static void register_delta_ENRs(ParseState *pstate, Query *query, List *tables);
-static char *make_delta_enr_name(const char *prefix, Oid relid, int count);
 static RangeTblEntry *get_prestate_rte(RangeTblEntry *rte, MV_TriggerTable *table,
 				 QueryEnvironment *queryEnv, Oid matviewid);
 static RangeTblEntry *replace_rte_with_delta(RangeTblEntry *rte, MV_TriggerTable *table, bool is_new,
@@ -2089,7 +2088,7 @@ register_delta_ENRs(ParseState *pstate, Query *query, List *tables)
 			if (freezed || shared_name)
 				enr->md.name = pstrdup(shared_name);
 			else
-				enr->md.name = make_delta_enr_name("old", table->table_id, gp_command_count);
+				enr->md.name = MakeDeltaName("old", table->table_id, gp_command_count);
 			enr->md.reliddesc = table->table_id;
 			enr->md.tupdesc = CreateTupleDescCopy(table->rel->rd_att);
 			enr->md.enrtype = ENR_NAMED_TUPLESTORE;
@@ -2127,7 +2126,7 @@ register_delta_ENRs(ParseState *pstate, Query *query, List *tables)
 			if (freezed || shared_name)
 				enr->md.name = pstrdup(shared_name);
 			else
-				enr->md.name = make_delta_enr_name("new", table->table_id, gp_command_count);
+				enr->md.name = MakeDeltaName("new", table->table_id, gp_command_count);
 			enr->md.reliddesc = table->table_id;
 			enr->md.tupdesc = CreateTupleDescCopy(table->rel->rd_att);
 			enr->md.enrtype = ENR_NAMED_TUPLESTORE;
@@ -2295,24 +2294,6 @@ get_prestate_rte(RangeTblEntry *rte, MV_TriggerTable *table,
 }
 
 /*
- * make_delta_enr_name
- *
- * Make a name for ENR of a transition table from the base table's oid.
- * prefix will be "new" or "old" depending on its transition table kind..
- */
-static char*
-make_delta_enr_name(const char *prefix, Oid relid, int count)
-{
-	char buf[NAMEDATALEN];
-	char *name;
-
-	snprintf(buf, NAMEDATALEN, "__ivm_%s_%u_%u", prefix, relid, count);
-	name = pstrdup(buf);
-
-	return name;
-}
-
-/*
  * replace_rte_with_delta
  *
  * Replace RTE of the modified table with a single table delta that combine its
@@ -2443,7 +2424,7 @@ calc_delta_old(Tuplestorestate *ts, Relation matviewRel, MV_TriggerTable *table,
 	{
 		/* Replace the modified table with the old delta table and calculate the old view delta. */
 		replace_rte_with_delta(rte, table, false, queryEnv);
-		enrname = make_delta_enr_name(OLD_DELTA_ENRNAME, RelationGetRelid(matviewRel), gp_command_count);
+		enrname = MakeDeltaName(OLD_DELTA_ENRNAME, RelationGetRelid(matviewRel), gp_command_count);
 		es_processed = refresh_matview_memoryfill(dest_old, query, queryEnv,
 									tupdesc_old, enrname, matviewRel);
 		if (ts)
@@ -2469,7 +2450,7 @@ calc_delta_new(Tuplestorestate *ts, Relation matviewRel, MV_TriggerTable *table,
 	{
 		/* Replace the modified table with the new delta table and calculate the new view delta*/
 		replace_rte_with_delta(rte, table, true, queryEnv);
-		enrname = make_delta_enr_name(NEW_DELTA_ENRNAME, RelationGetRelid(matviewRel), gp_command_count);
+		enrname = MakeDeltaName(NEW_DELTA_ENRNAME, RelationGetRelid(matviewRel), gp_command_count);
 		es_processed = refresh_matview_memoryfill(dest_new, query, queryEnv,
 									tupdesc_new, enrname, matviewRel);
 		if (ts)
@@ -2989,7 +2970,7 @@ apply_old_delta_with_count(const char *matviewname, Oid matviewRelid, const char
 					matviewname);
 #else
 	/* CBDB_IVM_FIXME: use tuplestore to replace temp table. */
-	tempTableName = make_delta_enr_name("temp_old_delta", matviewRelid, gp_command_count);
+	tempTableName = MakeDeltaName("temp_old_delta", matviewRelid, gp_command_count);
 
 	initStringInfo(&tselect);
 	initStringInfo(&querybuf);

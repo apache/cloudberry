@@ -259,6 +259,8 @@ extern List* AfterTriggerGetMvList(void);
 extern void AfterTriggerAppendMvList(Oid matview_id);
 extern void SetTransitionTableName(Oid relid, CmdType cmdType, Oid mvoid);
 
+extern char* MakeDeltaName(const char *prefix, Oid relid, int count);
+
 /*
  * in utils/adt/ri_triggers.c
  */

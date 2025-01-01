@@ -101,7 +101,6 @@ static void AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 static void AfterTriggerEnlargeQueryState(void);
 static bool before_stmt_triggers_fired(Oid relid, CmdType cmdType);
 
-static char* make_delta_ts_name(const char *prefix, Oid relid, int count);
 /*
  * Create a trigger.  Returns the address of the created trigger.
  *
@@ -4486,13 +4485,13 @@ SetTransitionTableName(Oid relid, CmdType cmdType, Oid mvoid)
 		{
 			if (table->new_tuplestore)
 			{
-				char *name = make_delta_ts_name("new", relid, gp_command_count);
+				char *name = MakeDeltaName("new", relid, gp_command_count);
 				tuplestore_set_sharedname(table->new_tuplestore, name);
 				tuplestore_set_tableid(table->new_tuplestore, relid);
 			}
 			if (table->old_tuplestore)
 			{
-				char *name = make_delta_ts_name("old", relid, gp_command_count);
+				char *name = MakeDeltaName("old", relid, gp_command_count);
 				tuplestore_set_sharedname(table->old_tuplestore, name);
 				tuplestore_set_tableid(table->old_tuplestore, relid);
 			}
@@ -6175,13 +6174,13 @@ pg_trigger_depth(PG_FUNCTION_ARGS)
 	PG_RETURN_INT32(MyTriggerDepth);
 }
 
-static char*
-make_delta_ts_name(const char *prefix, Oid relid, int count)
+char*
+MakeDeltaName(const char *prefix, Oid relid, int count)
 {
 	char buf[NAMEDATALEN];
 	char *name;
 
-	snprintf(buf, NAMEDATALEN, "__ivm_%s_%u_%u", prefix, relid, count);
+	snprintf(buf, NAMEDATALEN, "__ivm_%s_%u_%d", prefix, relid, count);
 	name = pstrdup(buf);
 
 	return name;
