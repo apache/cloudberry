@@ -2641,8 +2641,8 @@ apply_delta(char *old_enr, char *new_enr, MV_TriggerTable *table, Oid matviewOid
 		/* apply new delta */
 		if (use_count)
 			apply_new_delta_with_count(matviewname, enr->md.name,
-										keys, aggs_set_new,
-										&target_list_buf, count_colname);
+										keys, &target_list_buf,
+										aggs_set_new, count_colname);
 		else
 			apply_new_delta(matviewname, enr->md.name, &target_list_buf);
 	}
@@ -3080,7 +3080,7 @@ apply_old_delta(const char *matviewname, const char *deltaname_old,
  */
 static void
 apply_new_delta_with_count(const char *matviewname, const char* deltaname_new,
-				List *keys, StringInfo aggs_set, StringInfo target_list,
+				List *keys, StringInfo target_list, StringInfo aggs_set,
 				const char* count_colname)
 {
 	StringInfoData	querybuf;
