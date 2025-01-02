@@ -2063,9 +2063,7 @@ register_delta_ENRs(ParseState *pstate, Query *query, List *tables)
 	{
 		MV_TriggerTable *table = (MV_TriggerTable *) lfirst(lc);
 		ListCell *lc2;
-		int count;
 
-		count = 0;
 		foreach(lc2, table->old_tuplestores)
 		{
 			Tuplestorestate *oldtable = (Tuplestorestate *) lfirst(lc2);
@@ -2090,7 +2088,6 @@ register_delta_ENRs(ParseState *pstate, Query *query, List *tables)
 			rte = nsitem->p_rte;
 			query->rtable = list_append_unique_ptr(query->rtable, rte);
 
-			count++;
 			/* Note: already freezed case */
 			if (freezed)
 			{
@@ -2103,7 +2100,6 @@ register_delta_ENRs(ParseState *pstate, Query *query, List *tables)
 			tuplestore_freeze(oldtable);
 		}
 
-		count = 0;
 		foreach(lc2, table->new_tuplestores)
 		{
 			Tuplestorestate *newtable = (Tuplestorestate *) lfirst(lc2);
@@ -2129,7 +2125,6 @@ register_delta_ENRs(ParseState *pstate, Query *query, List *tables)
 
 			query->rtable = list_append_unique_ptr(query->rtable, rte);
 
-			count++;
 			/* Note: already freezed case */
 			if (freezed)
 			{
