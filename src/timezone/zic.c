@@ -700,8 +700,15 @@ main(int argc, char **argv)
 					error(_("invalid option: -b '%s'"), optarg);
 				break;
 			case 'd':
-				if (directory == NULL)
+				if (directory == NULL) {
 					directory = strdup(optarg);
+					if (directory == NULL) {
+						fprintf(stderr,
+								_("%s: Out of memory\n"),
+								progname);
+						return EXIT_FAILURE;
+					}
+				}
 				else
 				{
 					fprintf(stderr,
