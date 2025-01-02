@@ -38,9 +38,9 @@ explain select * from parttab where length(n::text) = 3;
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..533.04 rows=70 width=64)
    ->  Append  (cost=0.00..532.12 rows=23 width=64)
-         ->  Seq Scan on parttab_1_prt_one  (cost=0.00..266.00 rows=12 width=64)
+         ->  Seq Scan on parttab_1_prt_one parttab_1  (cost=0.00..266.00 rows=12 width=64)
                Filter: (length((n)::text) = 3)
-         ->  Seq Scan on parttab_1_prt_two  (cost=0.00..266.00 rows=12 width=64)
+         ->  Seq Scan on parttab_1_prt_two parttab_2  (cost=0.00..266.00 rows=12 width=64)
                Filter: (length((n)::text) = 3)
  Optimizer: Postgres query optimizer
 (7 rows)

@@ -14977,9 +14977,9 @@ EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ds_main_1_prt_2.a
+   Merge Key: ds_main.a
    ->  Sort
-         Sort Key: ds_main_1_prt_2.a
+         Sort Key: ds_main.a
          ->  HashAggregate
                Group Key: (RowIdExpr)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
@@ -14987,20 +14987,20 @@ EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2
                      ->  Nested Loop
                            ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                  ->  Hash Join
-                                       Hash Cond: (ds_main_1_prt_2.c = non_part2.e)
+                                       Hash Cond: (ds_main.c = non_part2.e)
                                        ->  Append
                                              Partition Selectors: $0
-                                             ->  Seq Scan on ds_main_1_prt_2
+                                             ->  Seq Scan on ds_main_1_prt_2 ds_main_1
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_3
+                                             ->  Seq Scan on ds_main_1_prt_3 ds_main_2
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_4
+                                             ->  Seq Scan on ds_main_1_prt_4 ds_main_3
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_5
+                                             ->  Seq Scan on ds_main_1_prt_5 ds_main_4
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_6
+                                             ->  Seq Scan on ds_main_1_prt_6 ds_main_5
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_deflt
+                                             ->  Seq Scan on ds_main_1_prt_deflt ds_main_6
                                                    Filter: (a IS NOT NULL)
                                        ->  Hash
                                              ->  Partition Selector (selector id: $0)
