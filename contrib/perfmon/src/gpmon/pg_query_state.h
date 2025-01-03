@@ -18,8 +18,8 @@
 #include "storage/shm_mq.h"
 
 
-#define	QUEUE_SIZE			(16 * 1024)
-#define MSG_MAX_SIZE		1024
+#define	QUEUE_SIZE			(64 * 1024)
+#define MSG_MAX_SIZE		(4 * 1024)
 #define WRITING_DELAY		(100 * 1000) /* 100ms */
 #define NUM_OF_ATTEMPTS		6
 
@@ -31,14 +31,14 @@
 #define	PG_QS_SND_KEY       1
 
 /* Receive timeout should be larger than send timeout to let workers stop waiting before polling process */
-#define MAX_RCV_TIMEOUT   6000 /* 6 seconds */
-#define MAX_SND_TIMEOUT   3000 /* 3 seconds */
+#define MAX_RCV_TIMEOUT   2000 /* 2 seconds */
+#define MAX_SND_TIMEOUT   1000 /* 1 seconds */
 
 /*
  * Delay for receiving parts of full message (in case SHM_MQ_WOULD_BLOCK code),
  * should be tess than MAX_RCV_TIMEOUT
  */
-#define PART_RCV_DELAY    1000 /* 1 second */
+#define PART_RCV_DELAY    100 /* 100 ms */
 
 /*
  * Result status on query state request from asked backend
