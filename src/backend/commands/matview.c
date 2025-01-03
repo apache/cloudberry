@@ -663,7 +663,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	refreshClause = MakeRefreshClause(concurrent, stmt->skipData, stmt->relation);
 
 	/*
-	 * Only in dispather role, we should set intoPolicy, else it should remain NULL.
+	 * Only in dispatcher role, we should set intoPolicy, else it should remain NULL.
 	 */
 	if (GP_ROLE_DISPATCH == Gp_role)
 	{
