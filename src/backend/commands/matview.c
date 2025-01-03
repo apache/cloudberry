@@ -708,7 +708,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 		 * QD, so both the segments and coordinator will have pgstat for this
 		 * relation. See pgstat_combine_from_qe(pgstat.c) for more details.
 		 * Then comment out the below codes on the dispatcher side and leave
-		 * the current comment to avoid futher upstream merge issues.
+		 * the current comment to avoid further upstream merge issues.
 		 * The pgstat is updated in function transientrel_shutdown on QE side.
 		 * This related to issue: https://github.com/greenplum-db/gpdb/issues/11375
 		 */
@@ -2014,7 +2014,7 @@ rewrite_query_for_preupdate_state(Query *query, List *tables,
 
 				RangeTblEntry *rte_pre = get_prestate_rte(r, table, pstate->p_queryEnv, matviewid);
 				/*
-				 * Set a row security poslicies of the modified table to the subquery RTE which
+				 * Set a row security policies of the modified table to the subquery RTE which
 				 * represents the pre-update state of the table.
 				 */
 				get_row_security_policies(query, table->original_rte, i,
@@ -2322,7 +2322,7 @@ replace_rte_with_delta(RangeTblEntry *rte, MV_TriggerTable *table, bool is_new,
 	sub = transformStmt(pstate, raw->stmt);
 
 	/*
-	 * Update the subquery so that it represent the combined transition
+	 * Update the subquery so that it represents the combined transition
 	 * table.  Note that we leave the security_barrier and securityQuals
 	 * fields so that the subquery relation can be protected by the RLS
 	 * policy as same as the modified table.
@@ -3112,7 +3112,7 @@ apply_new_delta_with_count(const char *matviewname, const char* deltaname_new,
 						"FROM %s AS diff "
 						"WHERE %s "					/* tuple matching condition */
 						"RETURNING %s"				/* returning keys of updated tuples */
-					") INSERT INTO %s (%s)"	/* insert a new tuple if this doesn't existw */
+					") INSERT INTO %s (%s)"	/* insert a new tuple if this doesn't exist */
 						"SELECT %s FROM %s AS diff "
 						"WHERE NOT EXISTS (SELECT 1 FROM updt AS mv WHERE %s);",
 					matviewname, count_colname, count_colname, count_colname,
@@ -3139,7 +3139,7 @@ apply_new_delta_with_count(const char *matviewname, const char* deltaname_new,
 
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					"INSERT INTO %s (%s)"	/* insert a new tuple if this doesn't existw */
+					"INSERT INTO %s (%s)"	/* insert a new tuple if this doesn't exist */
 						"SELECT %s FROM %s AS diff "
 						"WHERE NOT EXISTS (SELECT 1 FROM %s AS mv WHERE %s);",
 					matviewname, target_list->data,
@@ -3852,7 +3852,7 @@ makeIvmIntoClause(const char *enrname, Relation matviewRel)
 {
 	IntoClause *intoClause = makeNode(IntoClause);
 	intoClause->ivm = true;
-	/* rel is NULL means put tuples into memory.*/
+	/* rel is NULL means putting tuples into memory.*/
 	intoClause->rel = NULL;
 	intoClause->enrname = (char*) enrname;
 	intoClause->distributedBy = (Node*) make_distributedby_for_rel(matviewRel);
