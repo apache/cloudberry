@@ -3218,7 +3218,7 @@ get_matching_condition_string(List *keys)
 }
 
 /*
- * generate_equals
+ * generate_equal
  *
  * Generate an equality clause using given operands' default equality
  * operator.
