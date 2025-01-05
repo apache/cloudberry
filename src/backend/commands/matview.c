@@ -2917,7 +2917,6 @@ apply_old_delta_with_count(const char *matviewname, Oid matviewRelid, const char
 	const char * tempTableName;
 
 	StringInfoData	querybuf;
-	StringInfoData	tselect;
 	char   *match_cond;
 	bool	agg_without_groupby = (list_length(keys) == 0);
 
@@ -2957,9 +2956,8 @@ apply_old_delta_with_count(const char *matviewname, Oid matviewRelid, const char
 	/* CBDB_IVM_FIXME: use tuplestore to replace temp table. */
 	tempTableName = MakeDeltaName("temp_old_delta", matviewRelid, gp_command_count);
 
-	initStringInfo(&tselect);
 	initStringInfo(&querybuf);
-	appendStringInfo(&tselect,
+	appendStringInfo(&querybuf,
 					"CREATE TEMP TABLE %s AS SELECT diff.%s, "			/* count column */
 								"(diff.%s OPERATOR(pg_catalog.=) mv.%s AND %s) AS for_dlt, "
 								"mv.ctid AS tid, mv.gp_segment_id AS gid"
@@ -2974,11 +2972,12 @@ apply_old_delta_with_count(const char *matviewname, Oid matviewRelid, const char
 					match_cond);
 
 	/* Create the temporary table. */
-	if (SPI_exec(tselect.data, 0) != SPI_OK_UTILITY)
-		elog(ERROR, "SPI_exec failed: %s", tselect.data);
-	elogif(Debug_print_ivm, INFO, "IVM apply_old_delta_with_count select: %s", tselect.data);
+	if (SPI_exec(querybuf.data, 0) != SPI_OK_UTILITY)
+		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
+	elogif(Debug_print_ivm, INFO, "IVM apply_old_delta_with_count select: %s", querybuf.data);
 
 	/* Search for matching tuples from the view and update or delete if found. */
+	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
 					"UPDATE %s AS mv SET %s = mv.%s OPERATOR(pg_catalog.-) t.%s "
 											"%s"	/* SET clauses for aggregates */
