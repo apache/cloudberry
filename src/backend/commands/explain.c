@@ -724,6 +724,9 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 		/* run the plan */
 		ExecutorRun(queryDesc, dir, 0L, true);
 
+		/* run cleanup too */
+		ExecutorFinish(queryDesc);
+
 		/* Wait for completion of all qExec processes. */
 		if (queryDesc->estate->dispatcherState && queryDesc->estate->dispatcherState->primaryResults)
 		{
@@ -741,13 +744,6 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 				ThrowErrorData(qeError);
 			}
 		}
-
-		/* run cleanup too */
-		ExecutorFinish(queryDesc);
-
-		/* Wait for completion of all qExec processes. */
-		if (queryDesc->estate->dispatcherState && queryDesc->estate->dispatcherState->primaryResults)
-			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
 
 		/* We can't run ExecutorEnd 'till we're done printing the stats... */
 		totaltime += elapsed_time(&starttime);

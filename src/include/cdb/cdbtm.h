@@ -298,9 +298,9 @@ extern volatile int *shmNumCommittedGxacts;
 
 extern bool IsDtxRecoveryProcess(void);
 
-extern char *DtxStateToString(DtxState state);
-extern char *DtxProtocolCommandToString(DtxProtocolCommand command);
-extern char *DtxContextToString(DtxContext context);
+extern const char *DtxStateToString(DtxState state);
+extern const char *DtxProtocolCommandToString(DtxProtocolCommand command);
+extern const char *DtxContextToString(DtxContext context);
 extern void dtxDeformGid(const char	*gid,
 							DistributedTransactionId		*distribXid);
 extern void dtxFormGid(char *gid, DistributedTransactionId gxid);

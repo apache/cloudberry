@@ -1278,7 +1278,7 @@ SELECT gp_inject_fault('ckpt_loop_begin', 'infinite_loop', mirror0());
 show fsync;
  fsync 
 -------
- off
+ on
 (1 row)
 
 --- start_ignore

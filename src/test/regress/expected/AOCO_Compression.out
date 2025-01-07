@@ -3680,14 +3680,15 @@ SELECT * FROM pg_compression WHERE compname='rle_type';
 DROP type if exists mood_encoded cascade;
 CREATE TYPE mood_encoded AS ENUM ('sad', 'ok', 'happy');
 ALTER TYPE public.mood_encoded SET DEFAULT ENCODING (compresstype=zlib, blocksize=65536, compresslevel=4);
+ERROR:  mood_encoded is not a base type
 SELECT t.typname, te.typoptions
 FROM pg_type t
 LEFT JOIN pg_type_encoding te ON (t.oid=te.typid)
 WHERE t.typname in ('mood_encoded', '_mood_encoded');
-    typname    |                     typoptions                      
----------------+-----------------------------------------------------
- _mood_encoded | {compresstype=zlib,blocksize=65536,compresslevel=4}
- mood_encoded  | {compresstype=zlib,blocksize=65536,compresslevel=4}
+    typname    | typoptions 
+---------------+------------
+ mood_encoded  | 
+ _mood_encoded | 
 (2 rows)
 
 -- get_ao_compression_ratio when the relation is a partitioned table with ao table children.
@@ -3703,7 +3704,7 @@ PARTITION BY RANGE (sales_date)
 );
 SELECT get_ao_compression_ratio('public.partitioned_table_14876');
  get_ao_compression_ratio 
-------------
+--------------------------
                        -1
 (1 row)
 

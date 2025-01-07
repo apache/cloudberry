@@ -1598,17 +1598,14 @@ CREATE OR REPLACE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true';
 REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot fire deferred trigger within security-restricted operation
-CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot fire deferred trigger within security-restricted operation
-CONTEXT:  SQL function "mv_action" statement 1
 BEGIN; SET allow_segment_DML = ON; SET CONSTRAINTS ALL IMMEDIATE; REFRESH MATERIALIZED VIEW sro_mv; COMMIT;
 ERROR:  must have admin option on role "regress_priv_group2"
 CONTEXT:  SQL function "unwanted_grant" statement 1
 SQL statement "SELECT unwanted_grant()"
 PL/pgSQL function sro_trojan() line 1 at PERFORM
-SQL function "mv_action" statement 1
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY use of eval_const_expressions()
 SET SESSION AUTHORIZATION regress_sro_user;
 CREATE FUNCTION unwanted_grant_nofail(int) RETURNS int
@@ -2560,7 +2557,6 @@ CREATE OR REPLACE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true';
 REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot fire deferred trigger within security-restricted operation
-CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot fire deferred trigger within security-restricted operation
@@ -2570,7 +2566,6 @@ ERROR:  must have admin option on role "regress_priv_group2"
 CONTEXT:  SQL function "unwanted_grant" statement 1
 SQL statement "SELECT unwanted_grant()"
 PL/pgSQL function sro_trojan() line 1 at PERFORM
-SQL function "mv_action" statement 1
 DROP OWNED BY regress_sro_user;
 DROP ROLE regress_sro_user;
 -- Test sandbox escape with CVE-2020-25695 on Cloudberry.

@@ -1527,24 +1527,24 @@ get_ao_compression_ratio(PG_FUNCTION_ARGS)
 	Relation	parentrel;
 	float8		result = -1.0;
 
-	if (Gp_role == GP_ROLE_EXECUTE)
-		ereport(ERROR,
-				(errmsg("get_ao_compression_ratio is expected to run in QD process, or utility mode")));
-
 	/* open the parent (main) relation */
 	parentrel = table_open(relid, AccessShareLock);
-
-	if (!(RelationIsAoRows(parentrel) || RelationIsAoCols(parentrel)))
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("'%s' is not an append-only relation",
-						RelationGetRelationName(parentrel))));
 
 	if (parentrel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
 		table_close(parentrel, AccessShareLock);
 		PG_RETURN_FLOAT8(result);
 	}
+
+	if (Gp_role == GP_ROLE_EXECUTE)
+		ereport(ERROR,
+				(errmsg("get_ao_compression_ratio is expected to run in QD process, or utility mode")));
+
+	if (!(RelationIsAoRows(parentrel) || RelationIsAoCols(parentrel)))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("'%s' is not an append-only relation",
+						RelationGetRelationName(parentrel))));
 
 	if (RelationIsAoRows(parentrel))
 		result = aorow_compression_ratio_internal(parentrel);

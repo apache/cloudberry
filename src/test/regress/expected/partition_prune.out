@@ -3777,7 +3777,7 @@ explain (costs off) select * from pp_enumpart where a = 'blue';
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on pp_enumpart_blue
+   ->  Seq Scan on pp_enumpart_blue pp_enumpart
          Filter: (a = 'blue'::pp_colors)
  Optimizer: Postgres query optimizer
 (4 rows)

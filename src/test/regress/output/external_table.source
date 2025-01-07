@@ -1829,9 +1829,6 @@ NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
 CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
-SQL statement "INSERT INTO exttab_udfs_insert_2
-  SELECT i, j from exttab_udfs_2"
-PL/pgSQL function exttab_udfs_func2() line 25 at SQL statement
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1860,9 +1857,6 @@ NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
 CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
-SQL statement "INSERT INTO exttab_udfs_insert_2
-  SELECT i, j from exttab_udfs_2"
-PL/pgSQL function exttab_udfs_func2() line 25 at SQL statement
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1891,9 +1885,6 @@ NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
 CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
-SQL statement "INSERT INTO exttab_udfs_insert_2
-  SELECT i, j from exttab_udfs_2"
-PL/pgSQL function exttab_udfs_func2() line 25 at SQL statement
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1924,9 +1915,6 @@ NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
 CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
-SQL statement "INSERT INTO exttab_udfs_insert_2
-  SELECT i, j from exttab_udfs_2"
-PL/pgSQL function exttab_udfs_func2() line 25 at SQL statement
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
