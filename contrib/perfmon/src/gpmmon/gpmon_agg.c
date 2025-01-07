@@ -466,6 +466,7 @@ apr_status_t agg_dump(agg_t* agg)
 	char nowstr[GPMON_DATE_BUF_SIZE];
 	FILE* fp_queries_now = 0;
 	FILE* fp_queries_tail = 0;
+	apr_hash_t *spill_file_tab = NULL;
 
 	dbmetrics_t dbmetrics = {0};
 
@@ -489,6 +490,8 @@ apr_status_t agg_dump(agg_t* agg)
 	bloom_set(&bloom, GPMON_DIR "diskspace_tail.dat");
 	bloom_set(&bloom, GPMON_DIR "diskspace_stage.dat");
 	bloom_set(&bloom, GPMON_DIR "_diskspace_tail.dat");
+	// get spill file size
+	spill_file_tab = gpdb_get_spill_file_size(agg->pool);
 
 	/* dump metrics */
 	temp_bytes_written = write_system(agg, nowstr);
@@ -512,6 +515,15 @@ apr_status_t agg_dump(agg_t* agg)
 		qdnode_t* qdnode;
 		apr_hash_this(hi, 0, 0, &vptr);
 		qdnode = vptr;
+		if (spill_file_tab != NULL)
+		{
+			char *key = apr_psprintf(agg->pool, "%d-%d", qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);
+			long *spill_file_size = apr_hash_get(spill_file_tab, key, APR_HASH_KEY_STRING);
+			if (spill_file_size)
+			{
+				qdnode->qlog.p_metrics.spill_files_size = *spill_file_size;
+			}
+		}
 
 		if (qdnode->qlog.status == GPMON_QLOG_STATUS_DONE || qdnode->qlog.status == GPMON_QLOG_STATUS_ERROR)
 		{
@@ -1018,8 +1030,6 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 	qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
 	//row_skew = get_row_skew(qdnode);
 	//rowsout = get_rowsout(qdnode);
-        // get spill file size
-        gpdb_get_spill_file_size_from_query(qdnode);
 
 	if (qdnode->qlog.tsubmit)
 	{
@@ -1251,8 +1261,6 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
         cpu_skew = get_cpu_skew(qdnode);
         qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
 
-        // get spill file size
-        gpdb_get_spill_file_size_from_query(qdnode);
 		format_time(qdnode->qlog.tsubmit, timsubmitted);
 		format_time(qdnode->qlog.tstart, timstarted);
 		format_time(qdnode->qlog.tfin, timfinished);
@@ -1290,6 +1298,10 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
                 array[0] = replaceQuotes(array[0], pool, &size);
                 array[1] = replaceQuotes(array[1], pool, &size);
         }
+		else
+		{
+			gpmon_warning(FLINE, "missing expected qyuery file: %s", qfname);
+		}
 
         int line_size = (1024+size)*sizeof(char);
         char* line = apr_palloc(pool,line_size);

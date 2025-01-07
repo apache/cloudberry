@@ -718,48 +718,43 @@ void gpdb_get_single_string_from_query(const char* QUERY, char** resultstring, a
 	*resultstring = tmpoutput;
 }
 
-void gpdb_get_spill_file_size_from_query(qdnode_t *qdnode)
+apr_hash_t *gpdb_get_spill_file_size(apr_pool_t *pool)
 {
-        char query[200];
-        snprintf(query, sizeof(query), "select sum(size) from gp_toolkit.gp_workfile_usage_per_query where sess_id=%d And command_cnt=%d;",
-                 qdnode->qlog.key.ssid,qdnode->qlog.key.ccnt);
+    apr_hash_t *spill_file_tab = NULL;
+    PGconn *conn = 0;
+    PGresult *result = 0;
+    const char *query = "select sess_id, command_cnt, sum(size) from gp_toolkit.gp_workfile_usage_per_query group by (sess_id, command_cnt)";
+    int rowcount = 0;
 
-        PGconn* conn = 0;
-        PGresult* result = 0;
-        char* tmpoutput = 0;
-        int rowcount;
-        const char* errmsg = gpdb_exec(&conn, &result, query);
-        if (errmsg)
+    const char *errmsg = gpdb_exec(&conn, &result, query);
+    if (errmsg)
+    {
+        gpmon_warning(FLINE, "GPDB error %s\n\tquery: %s\n", errmsg, query);
+    }
+    else
+    {
+        rowcount = PQntuples(result);
+    }
+    spill_file_tab = apr_hash_make(pool);
+    if (!spill_file_tab)
+        gpmon_warning(FLINE, "Out of memory");
+    else
+    {
+        for (int i = 0; i < rowcount; i ++)
         {
-            gpmon_warning(FLINE, "GPDB error %s\n\tquery: %s\n", errmsg, query);
+            char *sessid = PQgetvalue(result, i, 0);
+            char *command_cnt = PQgetvalue(result, i, 1);
+            long *size = apr_pcalloc(pool, sizeof(long));
+            *size = atol(PQgetvalue(result, i, 2));
+            char *key = apr_psprintf(pool, "%s-%s", sessid, command_cnt);
+            apr_hash_set(spill_file_tab, key, APR_HASH_KEY_STRING, size);
         }
-        else
-        {
-            rowcount = PQntuples(result);
-            if (rowcount == 1)
-            {
-                tmpoutput = PQgetvalue(result, 0, 0);
-            }
-            else if (rowcount > 1)
-            {
-                gpmon_warning(FLINE, "unexpected number of rows returned from query %s", query);
-            }
-        }
+    }
 
-        PQclear(result);
-        PQfinish(conn);
-
-        if (tmpoutput)
-        {
-                uint64_t temp_result = 0;
-                sscanf(tmpoutput, "%lu", &temp_result);
-                if (temp_result > 0 && temp_result > qdnode->qlog.p_metrics.spill_files_size)
-                {
-                        qdnode->qlog.p_metrics.spill_files_size = temp_result;
-                }
-        }
+    PQclear(result);
+    PQfinish(conn);
+    return spill_file_tab;
 }
-
 
 static void check_and_add_partition(PGconn* conn, const char* tbl, int begin_year, int begin_month, int end_year, int end_month)
 {

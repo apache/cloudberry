@@ -92,7 +92,7 @@ APR_DECLARE (void) create_log_alert_table(void);
 int find_token_in_config_string(char*, char**, const char*);
 void process_line_in_hadoop_cluster_info(apr_pool_t*, apr_hash_t*, char*, char*, char*);
 int get_hadoop_hosts_and_add_to_hosts(apr_pool_t*, apr_hash_t*, mmon_options_t*);
-extern void gpdb_get_spill_file_size_from_query(qdnode_t* qdnode);
+extern apr_hash_t *gpdb_get_spill_file_size(apr_pool_t * pool);
 apr_status_t truncate_file(char*, apr_pool_t*);
 
 #endif /* GPMONDB_H */

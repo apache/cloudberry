@@ -135,7 +135,7 @@ struct gpmon_proc_metrics_t {
     uint32 fd_cnt;		/* # opened files / sockets etc */
     float        cpu_pct;	/* cpu usage % */
     double       cpu_skew;
-    uint64       spill_files_size;
+    long       spill_files_size;
     struct {
 		uint64 size, resident, share;
     } mem;
