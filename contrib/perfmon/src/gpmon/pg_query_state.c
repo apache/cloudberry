@@ -1431,7 +1431,7 @@ qs_ExecutorEnd(QueryDesc *queryDesc)
 	PG_TRY();
 	{
 		if (Gp_role == GP_ROLE_EXECUTE && enable_qs_runtime() &&
-			(queryDesc->instrument_options | INSTRUMENT_ROWS) &&
+			(queryDesc->instrument_options & INSTRUMENT_ROWS) &&
 			queryDesc->planstate->instrument)
 		{
 			StringInfo strInfo = cdbexplain_getExecStats_runtime(queryDesc);
