@@ -2003,8 +2003,13 @@ vac_update_datfrozenxid(void)
 	/* chicken out if bogus data found */
 	if (bogus)
 	{
-		/* Cherry-pick from GPDB FIXME: is it right for PG14? */
-		UnLockDatabaseFrozenIds(ExclusiveLock);
+		/*
+		 * Cherry-pick from GPDB FIXME: is it right for PG14?
+		 * Ignore this for error.
+		 */
+#if 0
+		 UnLockDatabaseFrozenIds(ExclusiveLock);
+#endif
 		return;
 	}
 
