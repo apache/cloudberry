@@ -1288,11 +1288,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	/*
 	 * If this is an append-only relation, create the auxliary tables necessary
 	 */
-<<<<<<< HEAD
-	if (RelationIsAppendOptimized(rel))
-=======
 	if (RelationStorageIsAO(rel))
->>>>>>> 0c942b968db (Refactor AO macro RelationIsAppendOptimized (#15546))
 		NewRelationCreateAOAuxTables(RelationGetRelid(rel), stmt->buildAoBlkdir);
 
 	/*
