@@ -39,7 +39,6 @@
 #include "catalog/gp_indexing.h"
 
 
-static void ATAOEntriesHeapToAO(Oid heaprelid, Oid aorelid);
 static void TransferAppendonlyEntries(Oid fromrelid, Oid torelid);
 
 /*

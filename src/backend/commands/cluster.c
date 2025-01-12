@@ -91,10 +91,6 @@ static void copy_table_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex,
 							TransactionId *pFreezeXid, MultiXactId *pCutoffMulti);
 static List *get_tables_to_cluster(MemoryContext cluster_context);
 
-/* Convenient macro for checking AO AMs */
-#define IsAccessMethodAO(am_oid) \
-	(am_oid == AO_ROW_TABLE_AM_OID || am_oid == AO_COLUMN_TABLE_AM_OID)
-
 
 /*---------------------------------------------------------------------------
  * This cluster code allows for clustering multiple tables at once. Because
