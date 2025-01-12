@@ -187,7 +187,9 @@ RemoveAppendonlyEntry(Oid relid);
 extern void
 SwapAppendonlyEntries(Oid entryRelId1, Oid entryRelId2);
 
-extern void ATAOEntries(Form_pg_class relform1, Form_pg_class relform2);
+extern void ATAOEntries(Form_pg_class relform1, Form_pg_class relform2, 
+					TransactionId frozenXid,
+					MultiXactId cutoffMulti);
 
 extern int16
 GetAppendOnlySegmentFilesCount(Relation rel);

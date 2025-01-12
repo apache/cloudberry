@@ -5549,7 +5549,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 						 errmsg("cannot change access method of a partitioned table")));
 
 			/* check if another access method change was already requested */
-			if (OidIsValid(tab->newAccessMethod))
+			if (Gp_role == GP_ROLE_DISPATCH && OidIsValid(tab->newAccessMethod))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot have multiple SET ACCESS METHOD subcommands")));

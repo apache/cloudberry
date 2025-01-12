@@ -1212,9 +1212,8 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		elog(ERROR, "cache lookup failed for relation %u", r2);
 	relform2 = (Form_pg_class) GETSTRUCT(reltup2);
 
-	if (relform1->relam == AO_ROW_TABLE_AM_OID || relform1->relam == AO_COLUMN_TABLE_AM_OID ||
-		relform2->relam == AO_ROW_TABLE_AM_OID || relform2->relam == AO_COLUMN_TABLE_AM_OID)
-		ATAOEntries(relform1, relform2);
+	if (IsAccessMethodAO(relform1->relam) || IsAccessMethodAO(relform2->relam))
+		ATAOEntries(relform1, relform2, frozenXid, cutoffMulti);
 
 	/* Also swap reloptions if we are swaping between heap and AO/AOCO tables. */
 	if ((relform1->relam == HEAP_TABLE_AM_OID && IsAccessMethodAO(relform2->relam)) ||
@@ -1386,25 +1385,6 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		swap_allvisible = relform1->relallvisible;
 		relform1->relallvisible = relform2->relallvisible;
 		relform2->relallvisible = swap_allvisible;
-	}
-
-	/*
-	 * Swap auxiliary tables if the table AM has non-standard structure.
-	 * See the details of the callback swap_relation_files.
-	 */
-	if (relform1->relkind == RELKIND_RELATION ||
-		relform1->relkind == RELKIND_MATVIEW)
-	{
-		const TableAmRoutine *tam;
-		Oid relam;
-
-		relam = relform1->relam;
-		if (relam != relform2->relam)
-			elog(ERROR, "can't swap relation files for different AM");
-
-		tam = GetTableAmRoutineByAmId(relam);
-		if (tam->swap_relation_files)
-			tam->swap_relation_files(r1, r2, frozenXid, cutoffMulti);
 	}
 
 	/*

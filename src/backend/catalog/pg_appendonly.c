@@ -487,6 +487,27 @@ GetAppendEntryForMove(
 	return tuple;
 }
 
+static void
+swapAppendonlyEntriesUsingTAM(Form_pg_class relform1, Form_pg_class relform2, TransactionId frozenXid, MultiXactId cutoffMulti)
+{
+	/*
+	 * Swap auxiliary tables if the table AM has non-standard structure.
+	 * See the details of the callback swap_relation_files.
+	 */
+	if (relform1->relkind == RELKIND_RELATION ||
+		relform1->relkind == RELKIND_MATVIEW)
+	{
+		const TableAmRoutine *tam;
+		Oid relam;
+		relam = relform1->relam;
+		if (relam != relform2->relam)
+			elog(ERROR, "can't swap relation files for different AM");
+		tam = GetTableAmRoutineByAmId(relam);
+		if (tam->swap_relation_files)
+			tam->swap_relation_files(relform1->oid, relform2->oid, frozenXid, cutoffMulti);
+	}
+}
+
 /*
  * This function acts as a controller of catalog actions that needs to be
  * performed when we have an AT involving AO/AOCO table, where the original
@@ -505,7 +526,8 @@ GetAppendEntryForMove(
  *	individual case bodies for more details.
  */
 void
-ATAOEntries(Form_pg_class relform1, Form_pg_class relform2)
+ATAOEntries(Form_pg_class relform1, Form_pg_class relform2, 
+			TransactionId frozenXid, MultiXactId cutoffMulti)
 {
 	switch(relform1->relam)
 	{
@@ -553,7 +575,7 @@ ATAOEntries(Form_pg_class relform1, Form_pg_class relform2)
 					TransferAppendonlyEntries(relform1->oid, relform2->oid);
 					break;
 				case AO_ROW_TABLE_AM_OID:
-					SwapAppendonlyEntries(relform1->oid, relform2->oid);
+					swapAppendonlyEntriesUsingTAM(relform1, relform2, frozenXid, cutoffMulti);
 					break;
 				case AO_COLUMN_TABLE_AM_OID:
 					ereport(ERROR,
@@ -580,7 +602,7 @@ ATAOEntries(Form_pg_class relform1, Form_pg_class relform2)
 								errmsg("alter table does not support switch from AOCO to AO")));
 					break;
 				case AO_COLUMN_TABLE_AM_OID:
-					SwapAppendonlyEntries(relform1->oid, relform2->oid);
+					swapAppendonlyEntriesUsingTAM(relform1, relform2, frozenXid, cutoffMulti);
 					break;
 				default:
 					ereport(ERROR,
