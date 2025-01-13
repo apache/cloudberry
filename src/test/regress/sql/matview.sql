@@ -358,3 +358,55 @@ SELECT * FROM mat_view_twn;
 
 DROP MATERIALIZED VIEW mat_view_twn;
 DROP TABLE mvtest_twn;
+
+--
+-- https://github.com/apache/cloudberry/issues/865
+--
+set default_table_access_method TO AO_ROW;
+
+CREATE TABLE t_issue_865_ao
+(
+    id           bigint NOT NULL,
+    user_id      bigint
+);
+insert into t_issue_865_ao values (1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3), (7, 4), (8, 4), (9, 5), (10, 5);
+
+CREATE MATERIALIZED VIEW matview_issue_865_ao AS SELECT * FROM t_issue_865_ao WHERE id < 6;
+CREATE INDEX idx_matview_issue_865_ao ON matview_issue_865_ao USING btree (user_id);
+
+BEGIN;
+UPDATE t_issue_865_ao SET id = id WHERE id = 1;
+UPDATE t_issue_865_ao SET id = id WHERE id = 2;
+UPDATE t_issue_865_ao SET id = id WHERE id = 3;
+COMMIT;
+
+VACUUM t_issue_865_ao;
+
+REFRESH MATERIALIZED VIEW matview_issue_865_ao;
+
+-- AOCS
+set default_table_access_method TO AO_COLUMN;
+
+CREATE TABLE t_issue_865_aocs
+(
+    id           bigint NOT NULL,
+    user_id      bigint
+);
+insert into t_issue_865_aocs values (1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3), (7, 4), (8, 4), (9, 5), (10, 5);
+
+CREATE MATERIALIZED VIEW matview_issue_865_aocs AS SELECT * FROM t_issue_865_aocs WHERE id < 6;
+CREATE INDEX idx_matview_issue_865_aocs ON matview_issue_865_aocs USING btree (user_id);
+
+BEGIN;
+UPDATE t_issue_865_aocs SET id = id WHERE id = 1;
+UPDATE t_issue_865_aocs SET id = id WHERE id = 2;
+UPDATE t_issue_865_aocs SET id = id WHERE id = 3;
+COMMIT;
+
+VACUUM t_issue_865_aocs;
+
+REFRESH MATERIALIZED VIEW matview_issue_865_aocs;
+
+RESET default_table_access_method;
+DROP TABLE t_issue_865_ao CASCADE; 
+DROP TABLE t_issue_865_aocs CASCADE; 

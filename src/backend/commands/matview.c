@@ -410,6 +410,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	ObjectAddress address;
 	RefreshClause *refreshClause;
 	bool oldPopulated;
+	bool ao_has_index;
 
 	/* MATERIALIZED_VIEW_FIXME: Refresh MatView is not MPP-fied. */
 
@@ -650,12 +651,18 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	}
 
 	/*
+	 * Fix issue https://github.com/apache/cloudberry/issues/865
+	 * Create blockdir for Matartalized View of AO/AOCS storage has index.
+	 */
+	ao_has_index = matviewRel->rd_rel->relhasindex && RelationIsAppendOptimized(matviewRel);
+
+	/*
 	 * Create the transient table that will receive the regenerated data. Lock
 	 * it against access by any other process until commit (by which time it
 	 * will be gone).
 	 */
 	OIDNewHeap = make_new_heap(matviewOid, tableSpace, matviewRel->rd_rel->relam, relpersistence,
-							   ExclusiveLock, false, true);
+							   ExclusiveLock, ao_has_index, true);
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 	dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent, relpersistence,
 										  stmt->skipData);
@@ -888,6 +895,7 @@ transientrel_init(QueryDesc *queryDesc)
 	char		relpersistence;
 	LOCKMODE	lockmode;
 	RefreshClause *refreshClause;
+	bool		ao_has_index;
 
 	refreshClause = queryDesc->plannedstmt->refreshClause;
 	/* Determine strength of lock needed. */
@@ -919,6 +927,9 @@ transientrel_init(QueryDesc *queryDesc)
 		tableSpace = matviewRel->rd_rel->reltablespace;
 		relpersistence = matviewRel->rd_rel->relpersistence;
 	}
+
+	ao_has_index = matviewRel->rd_rel->relhasindex && RelationIsAppendOptimized(matviewRel);
+
 	/*
 	 * Create the transient table that will receive the regenerated data. Lock
 	 * it against access by any other process until commit (by which time it
@@ -926,7 +937,7 @@ transientrel_init(QueryDesc *queryDesc)
 	 */
 	OIDNewHeap = make_new_heap(matviewOid, tableSpace, matviewRel->rd_rel->relam,
 							   relpersistence,
-							   ExclusiveLock, false, false);
+							   ExclusiveLock, ao_has_index, false);
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 
 	queryDesc->dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent,
