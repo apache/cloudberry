@@ -512,7 +512,7 @@ static void ATExecSetTableSpaceNoStorage(Relation rel, Oid newTableSpace);
 static void ATExecSetRelOptions(Relation rel, List *defList,
 								AlterTableType operation,
 								bool *aoopt_changed,
-								bool am_change_heap_ao,
+								Oid newAccessMethod,
 								LOCKMODE lockmode);
 static void ATExecEnableDisableTrigger(Relation rel, const char *trigname,
 									   char fires_when, bool skip_system, LOCKMODE lockmode);
@@ -6165,11 +6165,8 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			if (cmd->def)
 			{
 				bool aoopt_changed = false;
-				bool am_change_heap_ao = OidIsValid(tab->newAccessMethod) && 
-						((IsAccessMethodAO(tab->newAccessMethod) && !RelationIsAppendOptimized(rel)) ||
-						(!IsAccessMethodAO(tab->newAccessMethod) && RelationIsAppendOptimized(rel)));
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, am_change_heap_ao, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, tab->newAccessMethod, lockmode);
 
 				/* 
 				 * When user sets the same access method as the existing one, the
@@ -6198,7 +6195,7 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			{
 				bool 		aoopt_changed = false;
 
-				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, false, lockmode);
+				ATExecSetRelOptions(rel, (List *) cmd->def, cmd->subtype, &aoopt_changed, InvalidOid, lockmode);
 
 				/* Will rewrite table if there's a change to the AO reloptions. */
 				if (aoopt_changed)
@@ -16066,7 +16063,7 @@ ATPrepSetTableSpace(AlteredTableInfo *tab, Relation rel, const char *tablespacen
  */
 static void
 ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
-					bool *aoopt_changed, bool am_change_heap_ao, LOCKMODE lockmode)
+					bool *aoopt_changed, Oid newAccessMethod, LOCKMODE lockmode)
 {
 	Oid			relid;
 	Relation	pgclass;
@@ -16078,10 +16075,13 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 	Datum		repl_val[Natts_pg_class];
 	bool		repl_null[Natts_pg_class];
 	bool		repl_repl[Natts_pg_class];
+	const TableAmRoutine * newAM;
 	static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
 
 	if (defList == NIL && operation != AT_ReplaceRelOptions)
 		return;					/* nothing to do */
+
+	newAM = OidIsValid(newAccessMethod) ? GetTableAmRoutineByAmId(newAccessMethod) : NULL;
 
 	pgclass = table_open(RelationRelationId, RowExclusiveLock);
 
@@ -16091,7 +16091,8 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for relation %u", relid);
 
-	if (operation == AT_ReplaceRelOptions || am_change_heap_ao)
+	if (operation == AT_ReplaceRelOptions || 
+		(newAccessMethod != InvalidOid && IsAccessMethodAO(rel->rd_rel->relam) != IsAccessMethodAO(newAccessMethod)))
 	{
 		/*
 		 * If we're supposed to replace the reloptions list, or if we're
@@ -16151,21 +16152,20 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 			 * Validate the reloptions as for AO/CO table if (1) we'll change AM to 
 			 * AO/CO, or (2) we are not changing AM but the relation is just AO/CO.
 			 */
-			if ((RelationIsAppendOptimized(rel) && !am_change_heap_ao) || 
-					(!RelationIsAppendOptimized(rel) && am_change_heap_ao))
+			if (newAM != NULL)
 			{
-				StdRdOptions *stdRdOptions = (StdRdOptions *) table_reloptions(rel->rd_tableam->amoptions, newOptions, rel->rd_rel->relkind, true);
-				validateAppendOnlyRelOptions(stdRdOptions->blocksize,
-											 gp_safefswritesize,
-											 stdRdOptions->compresslevel,
-											 stdRdOptions->compresstype,
-											 stdRdOptions->checksum,
-											AMHandlerIsAoCols(rel->rd_amhandler));
+				(void) table_reloptions(newAM->amoptions, newOptions, rel->rd_rel->relkind, true);
+
 				/* If reloptions will be changed, indicate so. */
-				if (aoopt_changed != NULL)
-					*aoopt_changed = !relOptionsEquals(datum, newOptions);
-			} else
+				*aoopt_changed = true;
+			}
+			else
+			{
 				(void) table_reloptions(rel->rd_tableam->amoptions, newOptions, rel->rd_rel->relkind, true);
+
+				if (RelationIsAppendOptimized(rel) && aoopt_changed != NULL)
+					*aoopt_changed = !relOptionsEquals(datum, newOptions);
+			}
 
 			break;
 		case RELKIND_PARTITIONED_TABLE:

@@ -727,7 +727,9 @@ reloption_is_default(const char *optstr, int optlen)
 	else
 		res = false;
 
-	pfree(defaultopt);
+	if (defaultopt)
+		pfree(defaultopt);
+
 	return res;
 }
 

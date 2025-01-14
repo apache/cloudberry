@@ -32,10 +32,6 @@
 
 struct AlterTableUtilityContext;	/* avoid including tcop/utility.h here */
 
-/* Convenient macro for checking AO AMs */
-#define IsAccessMethodAO(am_oid) \
-	(am_oid == AO_ROW_TABLE_AM_OID || am_oid == AO_COLUMN_TABLE_AM_OID)
-
 extern const char *synthetic_sql;
 
 extern void	DefineExternalRelation(CreateExternalStmt *stmt);
