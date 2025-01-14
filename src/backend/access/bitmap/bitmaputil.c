@@ -1066,7 +1066,7 @@ _bitmap_log_bitmapwords(Relation rel,
 		/* fill bm_next_blkno field */
 		if (current_page + 1 < num_bm_pages)
 		{
-			xl_bm_bitmapwords_perpage *next_xl_bm_bitmapwords_perpage = lfirst(lnext(lcp));
+			xl_bm_bitmapwords_perpage *next_xl_bm_bitmapwords_perpage = lfirst(lnext(xl_bm_bitmapword_pages, lcp));
 			xlBitmapwordsPage->bm_next_blkno = next_xl_bm_bitmapwords_perpage->bmp_blkno;
 		}
 
