@@ -547,7 +547,6 @@ gpmon_query_info_collect_hook(QueryMetricsStatus status, void *queryDesc)
 			switch (status)
 			{
 			case METRICS_QUERY_START:
-			case METRICS_PLAN_NODE_EXECUTING:
 				gpmon_send(gpmonPacket);
 				break;
 			default:

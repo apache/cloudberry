@@ -45,9 +45,7 @@ typedef struct mmon_qexec_t
 typedef struct mmon_query_seginfo_t
 {
 	gpmon_query_seginfo_key_t	key;
-	apr_int64_t					final_rowsout;
 	apr_uint64_t				sum_cpu_elapsed;
-	apr_uint64_t				sum_measures_rows_out;
 } mmon_query_seginfo_t;  //The agg value at segment level for query
 
 struct agg_t
@@ -76,7 +74,8 @@ extern void incremement_tail_bytes(apr_uint64_t bytes);
 static bool is_query_not_active(gpmon_qlogkey_t qkey, apr_hash_t *hash, apr_pool_t *pool);
 static void format_time(time_t tt, char *buf);
 static void set_tmid(gp_smon_to_mmon_packet_t* pkt, int32 tmid);
-
+static void update_query_now_metrics(qdnode_t* qdnode, long *spill_file_size);
+static void update_query_history_metrics(qdnode_t* qdnode);
 static bool is_query_not_active(gpmon_qlogkey_t qkey, apr_hash_t *hash, apr_pool_t *pool)
 {
 	// get active query of session
@@ -158,9 +157,7 @@ static apr_status_t agg_put_queryseg(agg_t* agg, const gpmon_query_seginfo_t* me
 
 	/* if found, replace it */
 	if (rec) {
-		rec->final_rowsout = met->final_rowsout;
-		rec->sum_cpu_elapsed += met->sum_cpu_elapsed;
-		rec->sum_measures_rows_out += met->sum_measures_rows_out;
+		rec->sum_cpu_elapsed = met->sum_cpu_elapsed;
 	}
 	else {
 		/* not found, make new hash entry */
@@ -170,9 +167,7 @@ static apr_status_t agg_put_queryseg(agg_t* agg, const gpmon_query_seginfo_t* me
 			return APR_ENOMEM;
 		}
 		memcpy(&rec->key, &met->key, sizeof(gpmon_query_seginfo_key_t));
-		rec->final_rowsout = met->final_rowsout;
 		rec->sum_cpu_elapsed = met->sum_cpu_elapsed;
-		rec->sum_measures_rows_out = met->sum_measures_rows_out;
 
 		apr_hash_set(dp->query_seginfo_hash, &rec->key.segid, sizeof(rec->key.segid), rec);
 	}
@@ -198,31 +193,41 @@ static apr_status_t agg_put_metrics(agg_t* agg, const gpmon_metrics_t* met)
 	return 0;
 }
 
-static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation)
+static apr_status_t agg_put_query_metrics(agg_t* agg, const gpmon_qlog_t* qlog, apr_int64_t generation, char* host_ip)
 {
 	qdnode_t *node;
 
 	node = apr_hash_get(agg->qtab, &qlog->key, sizeof(qlog->key));
+        int* exist;
 	if (!node)
 	{
-		TR2(("put query metrics can not find qdnode from qtab, queryID :%d-%d-%d \n",
-			 tmid, qlog->key.ssid, qlog->key.ccnt));
+		TR2(("put query metrics can not find qdnode from qtab, queryID :%d-%d-%d, Host Ip:%s \n",
+			 qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, host_ip));
 	}
 	if (node)
 	{
-		// here update the stats for the query
-		node->qlog.cpu_elapsed += qlog->cpu_elapsed;
-		node->qlog.p_metrics.cpu_pct += qlog->p_metrics.cpu_pct;
-		node->qlog.p_metrics.fd_cnt  += qlog->p_metrics.fd_cnt;
-		if (qlog->p_metrics.mem.size > node->qlog.p_metrics.mem.size)
-		{
-			node->qlog.p_metrics.mem.size = qlog->p_metrics.mem.size;
-		};
+                exist = apr_hash_get(node->host_hash, host_ip, strlen(host_ip));
+                if(!exist)
+                {
+                        exist = apr_pcalloc(agg->pool, sizeof(int));
+                        *exist = 1;
+                        apr_hash_set(node->host_hash, host_ip, strlen(host_ip), exist);
+                        node->host_cnt++;
+                }
+                else
+                {
+                        ASSERT(*exist == 1);
+                }
+
+                // It is used to calculate the real-time value of the metrics for a small time period of the query.
+                node->p_interval_metrics.cpu_pct += qlog->p_metrics.cpu_pct;
+                node->p_interval_metrics.mem.resident += qlog->p_metrics.mem.resident;
+                node->num_metrics_packets_interval++;
+
 		node->last_updated_generation = generation;
-		node->num_metrics_packets++;
-		TR2(("Query Metrics: (host %s ssid %d ccnt %d) (cpuelapsed %d cpupct %f memsize %lu) / %d\n",
-			 qlog->user, qlog->key.ssid, qlog->key.ccnt, (int) node->qlog.cpu_elapsed, node->qlog.p_metrics.cpu_pct, node->qlog.p_metrics.mem.size,
-			node->num_metrics_packets));
+		TR2(("Query Metrics, Query ID: %d-%d-%d , Host Ip:%s (cpu_pct %f mem_resident %lu), interval pkt:%d, host cnt:%d\n",
+			 qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, host_ip, qlog->p_metrics.cpu_pct, qlog->p_metrics.mem.resident,
+			node->num_metrics_packets_interval, node->host_cnt));
 	}
 	return 0;
 }
@@ -231,7 +236,7 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 				 apr_int64_t generation)
 {
         if (qlog->dbid == gpperfmon_dbid) {
-                TR2(("agg_put_qlog:(%d.%d.%d) ignore gpperfmon sql\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt));
+                TR2(("agg_put_qlog:(%d-%d-%d) ignore gpperfmon sql\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt));
                 return 0;
         }
 
@@ -243,7 +248,7 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 		node->qlog.tsubmit = qlog->tsubmit;
 		node->qlog.tfin = qlog->tfin;
 		if (qlog->dbid != gpperfmon_dbid) {
-			TR2(("agg_put_qlog: found %d.%d.%d generation %d recorded %d\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, (int) generation, node->recorded));
+			TR2(("agg_put_qlog: found %d-%d-%d generation %d recorded %d\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, (int) generation, node->recorded));
 		}
 	} else {
 		node = apr_pcalloc(agg->pool, sizeof(*node));
@@ -253,16 +258,17 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 		node->qlog = *qlog;
 		node->recorded = 0;
 		node->qlog.cpu_elapsed = 0;
-		node->qlog.p_metrics.cpu_pct = 0.0f;
-		node->qlog.p_metrics.fd_cnt = 0;
-		node->qlog.p_metrics.cpu_skew = 0.0f;
-		node->qlog.p_metrics.mem.size = 0;
-                node->qlog.p_metrics.spill_files_size = 0;
-		node->num_metrics_packets = 0;
+                memset(&node->qlog.p_metrics, 0, sizeof(node->qlog.p_metrics));
+                memset(&node->p_interval_metrics, 0, sizeof(node->p_interval_metrics));
+                memset(&node->p_queries_history_metrics, 0, sizeof(node->p_queries_history_metrics));
+                memset(&node->p_queries_now_metrics, 0, sizeof(node->p_queries_now_metrics));
+                node->host_cnt = 0;
+		node->num_cpu_pct_interval_total = 0;
+                node->num_metrics_packets_interval = 0;
 
-		node->qexec_hash = apr_hash_make(agg->pool);
-		if (!node->qexec_hash) {
-			TR2(("agg_put_qlog: qexec_hash = apr_hash_make(agg->pool) returned null\n"));
+		node->host_hash = apr_hash_make(agg->pool);
+		if (!node->host_hash) {
+			TR2(("agg_put_qlog: host_hash = apr_hash_make(agg->pool) returned null\n"));
 			return APR_ENOMEM;
 		}
 
@@ -274,7 +280,7 @@ static apr_status_t agg_put_qlog(agg_t* agg, const gpmon_qlog_t* qlog,
 
 		apr_hash_set(agg->qtab, &node->qlog.key, sizeof(node->qlog.key), node);
 		if (qlog->dbid != gpperfmon_dbid) {
-			TR2(("agg_put: new %d.%d.%d generation %d recorded %d\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, (int) generation, node->recorded));
+			TR2(("agg_put: new %d-%d-%d generation %d recorded %d\n", qlog->key.tmid, qlog->key.ssid, qlog->key.ccnt, (int) generation, node->recorded));
 		}
 	}
 	node->last_updated_generation = generation;
@@ -355,7 +361,7 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		if ( (dp->qlog.status == GPMON_QLOG_STATUS_DONE || dp->qlog.status == GPMON_QLOG_STATUS_ERROR) &&
 				(dp->qlog.tfin > 0 && ((dp->qlog.tfin - dp->qlog.tstart) < min_query_time )))
 		{
-			TR2(("agg_dup: skip short query %d.%d.%d generation %d, current generation %d, recorded %d\n",
+			TR2(("agg_dup: skip short query %d-%d-%d generation %d, current generation %d, recorded %d\n",
 						dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt,
 						(int) dp->last_updated_generation, (int) newagg->generation, dp->recorded));
 			continue;
@@ -371,7 +377,7 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 			{
 				if (dp->qlog.dbid != gpperfmon_dbid)
 				{
-					TR2(("agg_dup: skip %d.%d.%d generation %d, current generation %d, recorded %d\n",
+					TR2(("agg_dup: skip %d-%d-%d generation %d, current generation %d, recorded %d\n",
 						dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt,
 						(int) dp->last_updated_generation, (int) newagg->generation, dp->recorded));
 				}
@@ -380,7 +386,7 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		}
 
 		if (dp->qlog.dbid != gpperfmon_dbid) {
-			TR2( ("agg_dup: add %d.%d.%d, generation %d, recorded %d:\n", dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt, (int) dp->last_updated_generation, dp->recorded));
+			TR2( ("agg_dup: add %d-%d-%d, generation %d, recorded %d:\n", dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt, (int) dp->last_updated_generation, dp->recorded));
 		}
 
 		/* dup this entry */
@@ -391,11 +397,21 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 
 		*newdp = *dp;
 
+                newdp->num_metrics_packets_interval = 0;
+                newdp->host_cnt = 0;
+                memset(&newdp->p_interval_metrics, 0, sizeof(newdp->p_interval_metrics));
+                memset(&newdp->p_queries_now_metrics, 0, sizeof(newdp->p_queries_now_metrics));
+
 		newdp->query_seginfo_hash = apr_hash_make(newagg->pool);
 		if (!newdp->query_seginfo_hash) {
 			agg_destroy(newagg);
 			return APR_ENOMEM;
 		}
+                newdp->host_hash = apr_hash_make(newagg->pool);
+                if (!newdp->host_hash) {
+                        agg_destroy(newagg);
+                        return APR_ENOMEM;
+                }
 
 		cnt = 0;
 		// Copy the query_seginfo hash table
@@ -410,7 +426,6 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 			*new_query_seginfo = *((mmon_query_seginfo_t*)vptr);
 
 			apr_hash_set(newdp->query_seginfo_hash, &(new_query_seginfo->key.segid), sizeof(new_query_seginfo->key.segid), new_query_seginfo);
-			TR2( ("\t    %d: (%d)\n", ++cnt, new_query_seginfo->key.segid));
 		}
 
 		apr_hash_set(newagg->qtab, &newdp->qlog.key, sizeof(newdp->qlog.key), newdp);
@@ -433,7 +448,7 @@ apr_status_t agg_put(agg_t* agg, gp_smon_to_mmon_packet_t* pkt)
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QLOG)
 		return agg_put_qlog(agg, &pkt->u.qlog, agg->generation);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QUERY_HOST_METRICS)
-		return agg_put_query_metrics(agg, &pkt->u.qlog, agg->generation);
+		return agg_put_query_metrics(agg, &pkt->u.qlog, agg->generation, pkt->ipaddr);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_FSINFO)
 		return agg_put_fsinfo(agg, &pkt->u.fsinfo);
 	if (pkt->header.pkttype == GPMON_PKTTYPE_QUERYSEG)
@@ -466,8 +481,7 @@ apr_status_t agg_dump(agg_t* agg)
 	char nowstr[GPMON_DATE_BUF_SIZE];
 	FILE* fp_queries_now = 0;
 	FILE* fp_queries_tail = 0;
-	apr_hash_t *spill_file_tab = NULL;
-
+        apr_hash_t *spill_file_tab = NULL;
 	dbmetrics_t dbmetrics = {0};
 
 	apr_uint32_t temp_bytes_written = 0;
@@ -490,8 +504,8 @@ apr_status_t agg_dump(agg_t* agg)
 	bloom_set(&bloom, GPMON_DIR "diskspace_tail.dat");
 	bloom_set(&bloom, GPMON_DIR "diskspace_stage.dat");
 	bloom_set(&bloom, GPMON_DIR "_diskspace_tail.dat");
-	// get spill file size
-	spill_file_tab = gpdb_get_spill_file_size(agg->pool);
+        // get spill file size
+        spill_file_tab = gpdb_get_spill_file_size(agg->pool);
 
 	/* dump metrics */
 	temp_bytes_written = write_system(agg, nowstr);
@@ -515,23 +529,12 @@ apr_status_t agg_dump(agg_t* agg)
 		qdnode_t* qdnode;
 		apr_hash_this(hi, 0, 0, &vptr);
 		qdnode = vptr;
-		if (spill_file_tab != NULL)
-		{
-			char *key = apr_psprintf(agg->pool, "%d-%d", qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);
-			long *spill_file_size = apr_hash_get(spill_file_tab, key, APR_HASH_KEY_STRING);
-			if (spill_file_size)
-			{
-				qdnode->qlog.p_metrics.spill_files_size = *spill_file_size;
-			}
-		}
 
 		if (qdnode->qlog.status == GPMON_QLOG_STATUS_DONE || qdnode->qlog.status == GPMON_QLOG_STATUS_ERROR)
 		{
 			if (!qdnode->recorded && ((qdnode->qlog.tfin - qdnode->qlog.tstart) >= min_query_time))
 			{
-				TR1(("queries_tail: %p add query %d.%d.%d, status %d, generation %d, recorded %d\n",
-					 agg->qtab, qdnode->qlog.key.tmid, qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt, qdnode->qlog.status, (int) qdnode->last_updated_generation, qdnode->recorded));
-
+                                update_query_history_metrics(qdnode);
 				temp_bytes_written += write_qlog_full(fp_queries_tail, qdnode, nowstr, agg->pool);
 				incremement_tail_bytes(temp_bytes_written);
 
@@ -583,13 +586,22 @@ apr_status_t agg_dump(agg_t* agg)
 			bloom_set(&bloom, fname);
 		}
 
+                long *spill_file_size = NULL;
+                if (spill_file_tab != NULL)
+                {
+                        char *key = apr_psprintf(agg->pool, "%d-%d", qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);
+                        spill_file_size = apr_hash_get(spill_file_tab, key, APR_HASH_KEY_STRING);
+                }
+
 		/* write to _query_now.dat */
 		if (qdnode->qlog.status != GPMON_QLOG_STATUS_DONE && qdnode->qlog.status != GPMON_QLOG_STATUS_ERROR)
 		{
+                        update_query_now_metrics(qdnode, spill_file_size);
 			write_qlog(fp_queries_now, qdnode, nowstr, 0);
 		}
 		else if (qdnode->qlog.tfin - qdnode->qlog.tstart >= min_query_time)
 		{
+                        update_query_now_metrics(qdnode, spill_file_size);
 			write_qlog(fp_queries_now, qdnode, nowstr, 1);
 		}
 
@@ -617,7 +629,7 @@ static void delete_old_files(bloom_t* bloom)
 	char findCmd[512] = {0};
 	FILE* fp = NULL;
 	time_t cutoff = time(0) - gpmmon_quantum() * 3;
-	cutoff = cutoff < 10 ? 10 : cutoff;
+        cutoff = cutoff < 10 ? 10 : cutoff;
 
 	/* Need to remove trailing / in dir so find results are consistent
      * between platforms
@@ -899,120 +911,128 @@ static apr_uint32_t write_system(agg_t* agg, const char* nowstr)
 	return bytes_written;
 }
 
-static void _get_sum_seg_info(apr_hash_t* segtab, apr_int64_t* total_data_out, int* segcount_out)
-{
-	apr_hash_index_t *hi;
-	void* valptr;
-	apr_int64_t* seg_data_sum = NULL;
-
-	for (hi = apr_hash_first(NULL, segtab); hi; hi = apr_hash_next(hi))
-	{
-		apr_hash_this(hi, 0, 0, &valptr);
-		seg_data_sum = (apr_int64_t*) valptr;
-		*total_data_out += *seg_data_sum;
-		TR2(("(SKEW) Segment resource usage: %d\n", (int) *seg_data_sum));
-		(*segcount_out)++;
-	}
-}
-
-static void _get_sum_deviation_squared(apr_hash_t* segtab, const apr_int64_t data_avg, apr_int64_t* total_deviation_squared_out)
-{
-	apr_hash_index_t *hi;
-	void* valptr;
-	apr_int64_t* seg_data_sum = NULL;
-
-	for (hi = apr_hash_first(NULL, segtab); hi; hi = apr_hash_next(hi))
-	{
-		apr_int64_t dev = 0;
-
-		apr_hash_this(hi, NULL, NULL, &valptr);
-		seg_data_sum = (apr_int64_t*) valptr;
-		dev = *seg_data_sum - data_avg;
-		TR2(("(SKEW) Deviation: %d\n", (int) dev));
-		*total_deviation_squared_out += dev * dev;
-	}
-}
-
 static double get_cpu_skew(qdnode_t* qdnode)
 {
-	apr_pool_t* tmp_pool;
-	apr_hash_t* segtab;
-	apr_hash_index_t *hi;
-
+        apr_hash_index_t *hi;
 	apr_int64_t cpu_avg = 0;
 	apr_int64_t total_cpu = 0;
-	apr_int64_t total_deviation_squared = 0;
-	double variance = 0;
-	double standard_deviation = 0;
-	double coefficient_of_variation = 0;
-	apr_int64_t* seg_cpu_sum = NULL;
-	void* valptr;
-
+        apr_int64_t max_seg_cpu_sum = 0;
+        double cpu_skew = 0;
 	int segcnt = 0;
-	int e;
+        void* valptr;
 
 	if (!qdnode)
 		return 0.0f;
-
-	if (0 != (e = apr_pool_create_alloc(&tmp_pool, 0)))
-	{
-		gpmon_warningx(FLINE, e, "apr_pool_create_alloc failed");
-		return 0.0f;
-	}
-
-	segtab = apr_hash_make(tmp_pool);
-	if (!segtab)
-	{
-		gpmon_warning(FLINE, "Out of memory");
-		return 0.0f;
-	}
-
-	TR2(("Calc mean per segment\n"));
 
 	for (hi = apr_hash_first(NULL, qdnode->query_seginfo_hash); hi; hi = apr_hash_next(hi))
 	{
 		mmon_query_seginfo_t	*rec;
 		apr_hash_this(hi, 0, 0, &valptr);
 		rec = (mmon_query_seginfo_t*) valptr;
+                if (rec->key.segid == -1)
+                        continue;
 
-		if (rec->key.segid == -1)
-			continue;
+                TR2(("segment cpu elapsed %lu, queryID:%d-%d-%d, segmentID:%d \n",
+                        rec->sum_cpu_elapsed, rec->key.qkey.tmid, rec->key.qkey.ssid, rec->key.qkey.ccnt, rec->key.segid));
 
-		seg_cpu_sum = apr_hash_get(segtab, &rec->key.segid, sizeof(rec->key.segid));
+                if (rec->sum_cpu_elapsed > max_seg_cpu_sum){
+                        max_seg_cpu_sum = rec->sum_cpu_elapsed;
+                };
 
-		if (!seg_cpu_sum) {
-			seg_cpu_sum = apr_palloc(tmp_pool, sizeof(apr_int64_t));
-			*seg_cpu_sum = 0;
-		}
-		*seg_cpu_sum += rec->sum_cpu_elapsed;
-		apr_hash_set(segtab, &rec->key.segid, sizeof(rec->key.segid), seg_cpu_sum);
+                total_cpu += rec->sum_cpu_elapsed;
+                segcnt++;
 	}
-
-	_get_sum_seg_info(segtab, &total_cpu, &segcnt);
 
 	if (!segcnt) {
 		TR2(("No segments for CPU skew calculation\n"));
-		apr_pool_destroy(tmp_pool);
 		return 0.0f;
 	}
 
 	cpu_avg = total_cpu / segcnt;
-	TR2(("(SKEW) Avg resource usage: %" FMT64 "\n", cpu_avg));
+        cpu_skew = 1 - (cpu_avg / max_seg_cpu_sum);
+        TR2(("(SKEW) queryID:%d-%d-%d, Avg cpu usage: %" FMT64 ", Max segment cpu sum : %" FMT64 ", cpu skew : %lf \n",
+                qdnode->qlog.key.tmid, qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt, cpu_avg, max_seg_cpu_sum, cpu_skew));
+        return cpu_skew;
+}
 
-	_get_sum_deviation_squared(segtab, cpu_avg, &total_deviation_squared);
 
-	variance = total_deviation_squared / (double)segcnt;
+/*
+ *  The update_query_now_metrics function is used to update qdnode.p_queries_now_metrics.
+ *  p_queries_now_metrics is calculated from p_interval_metrics and then written into the queries_now table.
+ *
+ *  cpu_skew: Since cpu_elapsed is an accumulated value, the cpu_skew is calculated directly using this accumulated value each time.
+ *
+ *  spill_file_size: The value is obtained in real - time by querying the gp_workfile_usage_per_query table.
+ *  Meanwhile, the maximum value of this value is recorded in p_queries_history_metrics for subsequent writing into the queries_tail table.
+ *
+ *  cpu_pct: Within a time window, multiple segment hosts may send multiple packets to gpmmon. At this time, the average value within the time window needs to be calculated.
+ *  Therefore, the accumulated cpu_pct value should be divided by (the total number of received packets / the number of hosts that send packets).
+ *  For example, suppose three segment hosts send a total of 9 packets during a certain period. After gpmmon accumulates these 9 packets, the actual cpu_pct should be sum_cpu_pct/(9/3).
+ *  Here, 9/3 means that three groups of packets are received within this time window (the sum of the packets sent by the three segment hosts is regarded as one group).
+ *
+ *  mem.resident: Using resident can more accurately reflect the actual physical memory value used for executing the query.
+ *  Its calculation method is the same as that of cpu_pct, which will not be repeated here.
+ *  At the same time, the maximum value of mem.resident is recorded for subsequent writing into the queries_tail table.
+ */
+static void update_query_now_metrics(qdnode_t* qdnode, long *spill_file_size)
+{
+        qdnode->p_queries_now_metrics.cpu_skew = get_cpu_skew(qdnode);
 
-	standard_deviation = sqrt(variance);
+        if (spill_file_size != NULL)
+        {
+                qdnode->p_queries_now_metrics.spill_files_size = *spill_file_size;
+        }
 
-	TR2(("(SKEW) CPU standard deviation: %f\n", standard_deviation));
+        if (qdnode->p_queries_now_metrics.spill_files_size > 0 && qdnode->p_queries_now_metrics.spill_files_size > qdnode->p_queries_history_metrics.spill_files_size)
+        {
+                qdnode->p_queries_history_metrics.spill_files_size = qdnode->p_queries_now_metrics.spill_files_size;
+                TR2(("(SPILL FILE) queryID:%d-%d-%d, spill file size peak: %lu \n", qdnode->qlog.key.tmid,
+                        qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt, qdnode->p_queries_history_metrics.spill_files_size));
+        }
 
-	coefficient_of_variation = cpu_avg ? standard_deviation/(double)cpu_avg : 0.0f;
+        if (qdnode->num_metrics_packets_interval && qdnode->host_cnt)
+        {
+                qdnode->p_queries_now_metrics.cpu_pct = qdnode->p_interval_metrics.cpu_pct / (qdnode->num_metrics_packets_interval / qdnode->host_cnt);
+                qdnode->p_queries_history_metrics.cpu_pct += qdnode->p_queries_now_metrics.cpu_pct;
+                qdnode->num_cpu_pct_interval_total++;
 
-	apr_pool_destroy(tmp_pool);
-	TR2(("(SKEW) CPU Skew: %f\n", coefficient_of_variation));
+                qdnode->p_queries_now_metrics.mem.resident = qdnode->p_interval_metrics.mem.resident / (qdnode->num_metrics_packets_interval / qdnode->host_cnt);
+                if (qdnode->p_queries_now_metrics.mem.resident > qdnode->p_queries_history_metrics.mem.resident){
+                        qdnode->p_queries_history_metrics.mem.resident = qdnode->p_queries_now_metrics.mem.resident;
+                }
+        }
+        else
+        {
+                qdnode->p_queries_now_metrics.cpu_pct = 0;
+                qdnode->p_queries_now_metrics.mem.resident = 0;
+        }
+}
 
-	return coefficient_of_variation;
+
+/*
+ *  The update_query_history_metrics function is used to update qdnode.p_queries_history_metrics.
+ *  p_queries_history_metrics is calculated from p_query_now_metrics and then written into the queries_now table.
+ *
+ *  cpu_skew: As cpu_elapsed is an accumulated value, the cpu_skew is directly calculated using this accumulated value each time.
+ *
+ *  spill_file_size: The maximum value of the spill file size is recorded in the queries_tail table.
+ *
+ *  cpu_pct: The average value of cpu_pct throughout the entire lifecycle of this query is obtained by
+ *  dividing the cumulative value of cpu_pct in each previous time window by the total number of time windows.
+ *
+ *  mem.resident:  The maximum value of mem.resident is recorded in the queries_tail table.
+ */
+static void update_query_history_metrics(qdnode_t* qdnode)
+{
+        qdnode->p_queries_history_metrics.cpu_skew = get_cpu_skew(qdnode);
+        if (qdnode->num_cpu_pct_interval_total)
+        {
+                qdnode->p_queries_history_metrics.cpu_pct = qdnode->p_queries_history_metrics.cpu_pct / qdnode->num_cpu_pct_interval_total;
+        }
+        else
+        {
+                qdnode->p_queries_history_metrics.cpu_pct = 0.0f;
+        }
 }
 
 static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const char* nowstr, apr_uint32_t done)
@@ -1020,17 +1040,9 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 	char timsubmitted[GPMON_DATE_BUF_SIZE];
 	char timstarted[GPMON_DATE_BUF_SIZE];
 	char timfinished[GPMON_DATE_BUF_SIZE];
-	double cpu_skew = 0.0f;
-	double row_skew = 0.0f;
-	int query_hash = 0;
-	apr_int64_t rowsout = 0;
-	float cpu_current;
-	int   fd_cnt;
-	cpu_skew = get_cpu_skew(qdnode);
-	qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
-	//row_skew = get_row_skew(qdnode);
-	//rowsout = get_rowsout(qdnode);
-
+        double row_skew = 0.0f;
+        int query_hash = 0;
+        apr_int64_t rowsout = 0;
 	if (qdnode->qlog.tsubmit)
 	{
 		gpmon_datetime((time_t)qdnode->qlog.tsubmit, timsubmitted);
@@ -1058,20 +1070,11 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 		snprintf(timfinished, GPMON_DATE_BUF_SIZE,  "null");
 	}
 
-
-	if (qdnode->num_metrics_packets)
-	{
-		// average cpu_pct per reporting machine
-		cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
-		fd_cnt = qdnode->qlog.p_metrics.fd_cnt / qdnode->num_metrics_packets;
-		cpu_skew = qdnode->qlog.p_metrics.cpu_skew / qdnode->num_metrics_packets;
-	}
-	else
-	{
-		cpu_current = 0.0f;
-		fd_cnt  = 0;
-		cpu_skew = 0.0f;
-	}
+        TR2(("fmt qlog to queries_now , queryID:%d-%d-%d, cpu pct:%f, mem_resident:%lu, spill_files_size:%lu, cpu_skew:%lf, segment host cnt:%d, pkt nums:%d\n",
+                qdnode->qlog.key.tmid, qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt,
+                qdnode->p_queries_now_metrics.cpu_pct, qdnode->p_queries_now_metrics.mem.resident,
+                qdnode->p_queries_now_metrics.spill_files_size, qdnode->p_queries_now_metrics.cpu_skew,
+                qdnode->host_cnt, qdnode->num_metrics_packets_interval));
 
 	snprintf(line, line_size, "%s|%d|%d|%d|%d|%s|%u|%d|%s|%s|%s|%s|%" FMT64 "|%" FMT64 "|%.4f|%.2f|%.2f|%d||||||%" FMTU64 "|%" FMTU64 "|%d|%d",
 		nowstr,
@@ -1088,12 +1091,12 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 		gpmon_qlog_status_string(qdnode->qlog.status),
 		rowsout,
 		qdnode->qlog.cpu_elapsed,
-		cpu_current,
-		cpu_skew,
+                qdnode->p_queries_now_metrics.cpu_pct,
+                qdnode->p_queries_now_metrics.cpu_skew,
 		row_skew,
 		query_hash,
-                qdnode->qlog.p_metrics.mem.size,
-                qdnode->qlog.p_metrics.spill_files_size,
+                qdnode->p_queries_now_metrics.mem.resident,
+                qdnode->p_queries_now_metrics.spill_files_size,
                 0,
                 0
                 );
@@ -1252,35 +1255,15 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
         char timsubmitted[GPMON_DATE_BUF_SIZE];
         char timstarted[GPMON_DATE_BUF_SIZE];
         char timfinished[GPMON_DATE_BUF_SIZE];
-        double cpu_skew = 0.0f;
         double row_skew = 0.0f;
         int query_hash = 0;
         apr_int64_t rowsout = 0;
-        float cpu_current;
-        int   fd_cnt;
-        cpu_skew = get_cpu_skew(qdnode);
-        qdnode->qlog.p_metrics.cpu_skew += cpu_skew;
-
 		format_time(qdnode->qlog.tsubmit, timsubmitted);
 		format_time(qdnode->qlog.tstart, timstarted);
 		format_time(qdnode->qlog.tfin, timfinished);
 
-        if (qdnode->num_metrics_packets)
-        {
-			// average cpu_pct per reporting machine
-			cpu_current = qdnode->qlog.p_metrics.cpu_pct / qdnode->num_metrics_packets;
-			fd_cnt = qdnode->qlog.p_metrics.fd_cnt / qdnode->num_metrics_packets;
-			cpu_skew = qdnode->qlog.p_metrics.cpu_skew / qdnode->num_metrics_packets;
-		}
-		else
-		{
-			cpu_current = 0.0f;
-			fd_cnt = 0;
-			cpu_skew = 0.0f;
-		}
-
-		// get query text and plan
-		char* array[5] = {"", "", "", "", ""};
+        // get query text and plan
+        char* array[5] = {"", "", "", "", ""};
         const int qfname_size = 256;
         char qfname[qfname_size];
         int size = 0;
@@ -1303,6 +1286,11 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
 			gpmon_warning(FLINE, "missing expected qyuery file: %s", qfname);
 		}
 
+        TR2(("fmt qlog to queries_tail, queryID:%d-%d-%d, cpu pct:%f, mem_resident_peak:%lu, spill_files_size_peak:%lu, cpu_skew:%lf, cpu_pct interval nums:%d\n",
+                qdnode->qlog.key.tmid, qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt,
+                qdnode->p_queries_history_metrics.cpu_pct, qdnode->p_queries_history_metrics.mem.resident,
+                qdnode->p_queries_history_metrics.spill_files_size, qdnode->p_queries_history_metrics.cpu_skew, qdnode->num_cpu_pct_interval_total));
+
         int line_size = (1024+size)*sizeof(char);
         char* line = apr_palloc(pool,line_size);
         memset(line,0,line_size);
@@ -1321,8 +1309,8 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
                 gpmon_qlog_status_string(qdnode->qlog.status),
                 rowsout,
                 qdnode->qlog.cpu_elapsed,
-                cpu_current,
-                cpu_skew,
+                qdnode->p_queries_history_metrics.cpu_pct,
+                qdnode->p_queries_history_metrics.cpu_skew,
                 row_skew,
                 query_hash,
                 array[0],
@@ -1330,8 +1318,8 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
                 array[2],
                 array[3],
                 array[4],
-                qdnode->qlog.p_metrics.mem.size,
-                qdnode->qlog.p_metrics.spill_files_size,
+                qdnode->p_queries_history_metrics.mem.resident,
+                qdnode->p_queries_history_metrics.spill_files_size,
                 0,
                 0
         );

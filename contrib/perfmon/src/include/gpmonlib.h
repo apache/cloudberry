@@ -30,7 +30,7 @@ extern int verbose;
 /* TODO: REMOVE */
 //extern int very_verbose;
 #define TR0(x) gpmon_print x
-#define TR1(x) if (verbose == 1) gpmon_print x
+#define TR1(x) if (verbose >= 1) gpmon_print x
 #define TR2(x) if (verbose == 2) gpmon_print x
 #define TR1_FILE(x) if (verbose == 1) gpmon_print_file x
 
@@ -220,6 +220,7 @@ typedef struct gp_smon_to_mmon_header_t {
 
 typedef struct gp_smon_to_mmon_packet_t {
 	gp_smon_to_mmon_header_t header;
+        char* ipaddr;
 	union {
 		gpmon_hello_t   hello;
 		gpmon_metrics_t metrics;

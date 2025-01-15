@@ -49,6 +49,7 @@ int perfmon_port = 8888;
 bool perfmon_enabled = false;
 //bool perfmon_enable_query_metric;
 
+
 void update_mmonlog_filename(void);
 int gpmmon_quantum(void);
 void incremement_tail_bytes(apr_uint64_t);
@@ -254,7 +255,8 @@ static void recv_from_gx(SOCKET sock, short event, void* arg)
 	int e;
 	gp_smon_to_mmon_packet_t pktbuf;
 	gp_smon_to_mmon_packet_t* pkt = 0;
-	TR2(("recv_from_gx sock %d host %s port %d\n", sock, h->hostname, ax.port));
+        char* host_ip = get_connection_ip(h);
+	TR2(("recv_from_gx sock %d host %s ip %s port %d\n", sock, h->hostname, host_ip, ax.port));
 
 	if (event & EV_TIMEOUT)
 	{
@@ -297,7 +299,7 @@ static void recv_from_gx(SOCKET sock, short event, void* arg)
 		else
 		{
 			pkt = &pktbuf;
-			TR2(("received packet %d from %s:%d\n", pkt->header.pkttype, h->hostname, ax.port));
+			TR2(("received packet %d from %s:%s:%d\n", pkt->header.pkttype, h->hostname, host_ip, ax.port));
 		}
 	}
 
@@ -305,6 +307,7 @@ static void recv_from_gx(SOCKET sock, short event, void* arg)
 	if (pkt)
 	{
 		apr_thread_mutex_lock(ax.agg_mutex);
+                pkt->ipaddr = host_ip;
 		e = agg_put(ax.agg, pkt);
 		apr_thread_mutex_unlock(ax.agg_mutex);
 		if (e)
@@ -1554,7 +1557,6 @@ static void gethostlist()
 
 	/* Connect to database, get segment hosts from gp_segment_configuration */
 	gpdb_get_hostlist(&ax.hosttabsz, &ax.hosttab, ax.pool, &opt);
-
 	for (i = 0; i < ax.hosttabsz; ++i)
 	{
 		addressinfo_holder_t* addressinfo;

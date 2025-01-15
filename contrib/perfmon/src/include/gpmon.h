@@ -176,6 +176,11 @@ typedef struct gpmon_qexec_hash_key_t {
 	int16 nid;	/* plan node id */
 }gpmon_qexec_hash_key_t;
 
+typedef struct gpmon_pidtable_key_t {
+        int32 pid; 	/* process id */
+        gpmon_qlogkey_t qkey;
+}gpmon_pidtable_key_t;
+
 /* XXX According to CK.
  * QE will NOT need to touch anything begin with _
  */

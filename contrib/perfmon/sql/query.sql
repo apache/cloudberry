@@ -28,8 +28,8 @@ select sess_id from pg_stat_activity where pg_backend_pid()=pid;
 
 CREATE TABLE foo(a int);
 CREATE TABLE test(a int);
-INSERT INTO foo SELECT generate_series(0,10);
-INSERT INTO test SELECT generate_series(0,10);
+INSERT INTO foo SELECT generate_series(0,30000000);
+INSERT INTO test SELECT generate_series(0,30000000);
 -- test query text in multiple lines
 INSERT INTO test
 SELECT generate_series(0,10);
@@ -65,3 +65,6 @@ where ssid = :sess_id order by ccnt;
 
 SELECT COUNT(*) FROM (SELECT DISTINCT ccnt FROM queries_history
 where ssid = :sess_id) as temp;
+
+select mem_peak>0, cpu_currpct>0, spill_file_size>0, skew_cpu>0, status, query_text, length(query_plan) > 0 from queries_history
+where ssid = :sess_id and query_text = 'select count(*) from foo,test where foo.a=test.a;'
