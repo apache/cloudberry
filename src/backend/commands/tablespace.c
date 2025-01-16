@@ -123,6 +123,42 @@ static void ensure_tablespace_directory_is_empty(const Oid tablespaceoid, const 
 static void unlink_during_redo(Oid tablepace_oid_to_unlink);
 static void unlink_without_redo(Oid tablespace_oid_to_unlink);
 
+static bool
+TablespaceLockTuple(Oid tablespaceOid, LOCKMODE lockmode, bool wait)
+{
+	Relation	rel;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+	TableScanDesc scan;
+	bool ok = true;
+
+	Assert(tablespaceOid != GLOBALTABLESPACE_OID);
+	Assert(tablespaceOid != DEFAULTTABLESPACE_OID);
+
+	rel = table_open(TableSpaceRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_tablespace_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tablespaceOid));
+	scan = table_beginscan_catalog(rel, 1, entry);
+
+	tuple = heap_getnext(scan, ForwardScanDirection);
+
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "tablespace with OID %u does not exist", tablespaceOid);
+
+	if (wait)
+		LockTuple(rel, &tuple->t_self, lockmode);
+	else
+		ok = ConditionalLockTuple(rel, &tuple->t_self, lockmode);
+
+	heap_endscan(scan);
+	table_close(rel, NoLock);
+
+	return ok;
+}
+
 /*
  * Each database using a table space is isolated into its own name space
  * by a subdirectory named for the database OID.  On first creation of an
@@ -155,6 +191,9 @@ TablespaceCreateDbspace(Oid spcNode, Oid dbNode, bool isRedo)
 
 	Assert(OidIsValid(spcNode));
 	Assert(OidIsValid(dbNode));
+
+	if (spcNode != DEFAULTTABLESPACE_OID && !isRedo)
+		TablespaceLockTuple(spcNode, AccessShareLock, true);
 
 	dir = GetDatabasePath(dbNode, spcNode);
 
@@ -719,6 +758,12 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 	/* DROP hook for the tablespace being removed */
 	InvokeObjectDropHook(TableSpaceRelationId, tablespaceoid, 0);
+
+	if (!TablespaceLockTuple(tablespaceoid, AccessExclusiveLock, false))
+		ereport(ERROR,
+				(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+				 errmsg("could not lock tablespace \"%s\"",
+						tablespacename)));
 
 	/*
 	 * Remove the pg_tablespace tuple (this will roll back if we fail below)

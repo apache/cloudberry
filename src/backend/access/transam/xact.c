@@ -2995,6 +2995,8 @@ CommitTransaction(void)
 
 	AtEOXact_MultiXact();
 
+	AtCommit_TablespaceStorage();
+
 	ResourceOwnerRelease(TopTransactionResourceOwner,
 						 RESOURCE_RELEASE_LOCKS,
 						 true, true);
@@ -3025,8 +3027,6 @@ CommitTransaction(void)
 	 */
 	if(Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE())
 		MoveDbSessionLockRelease();
-
-	AtCommit_TablespaceStorage();
 
 	/*
 	 * Send out notification signals to other backends (and do other
