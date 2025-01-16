@@ -294,6 +294,7 @@ SELECT count(*) FROM tenk_aocs4;
 -- Issue #15904
 EXPLAIN (verbose, costs off) SELECT max(unique1) FROM tenk_aocs1;
 CREATE TABLE tenk_aorow WITH(appendonly=true, orientation=row) AS SELECT * FROM tenk_heap_for_aocs;
+ANALYZE tenk_aorow;
 EXPLAIN (verbose, costs off) SELECT max(unique1) FROM tenk_aorow;
 
 -- LIKE

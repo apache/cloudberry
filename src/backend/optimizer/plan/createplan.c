@@ -1081,7 +1081,7 @@ use_physical_tlist(PlannerInfo *root, Path *path, int flags)
 	 * overhead and impact performance, so in this case we let the tlist apply
 	 * to the projection to avoid unnecessory column fetches.
 	 */
-	if (rel->relam == AO_ROW_TABLE_AM_OID || rel->relam == AO_COLUMN_TABLE_AM_OID)
+	if (AMHandlerIsAO(rel->amhandler))
 		return false;
 
 	return true;

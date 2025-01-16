@@ -551,6 +551,7 @@ EXPLAIN (verbose, costs off) SELECT max(unique1) FROM tenk_aocs1;
 (9 rows)
 
 CREATE TABLE tenk_aorow WITH(appendonly=true, orientation=row) AS SELECT * FROM tenk_heap_for_aocs;
+ANALYZE tenk_aorow;
 EXPLAIN (verbose, costs off) SELECT max(unique1) FROM tenk_aorow;
                    QUERY PLAN                    
 -------------------------------------------------

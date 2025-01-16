@@ -231,11 +231,8 @@ EXPLAIN (COSTS OFF) SELECT * FROM atest12 WHERE a >>> 0;
 -- These plans should continue to use a nestloop, since they execute with the
 -- privileges of the view owner.
 EXPLAIN (COSTS OFF) SELECT * FROM atest12v x, atest12v y WHERE x.a = y.b;
-<<<<<<< HEAD
-=======
 
 discard plans;
->>>>>>> b564485081a (Reset plan cache to prevent flakes in ICW privileges)
 EXPLAIN (COSTS OFF) SELECT * FROM atest12sbv x, atest12sbv y WHERE x.a = y.b;
 
 -- A non-security barrier view does not guard against information leakage.

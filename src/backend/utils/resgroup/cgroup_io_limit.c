@@ -542,7 +542,7 @@ io_limit_dump(List *limit_list)
 				appendStringInfo(result, ",");
 		}
 
-		if (cell != limit_list->tail)
+		if (cell != list_tail(limit_list))
 			appendStringInfo(result, ";");
 	}
 
