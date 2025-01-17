@@ -126,34 +126,16 @@ static void unlink_without_redo(Oid tablespace_oid_to_unlink);
 static bool
 TablespaceLockTuple(Oid tablespace_oid, LOCKMODE lockmode, bool wait)
 {
-	Relation	rel;
-	HeapTuple	tuple;
-	ScanKeyData entry[1];
-	TableScanDesc scan;
 	bool ok = true;
 
+	Assert(OidIsValid(tablespace_oid));
 	Assert(tablespace_oid != GLOBALTABLESPACE_OID);
 	Assert(tablespace_oid != DEFAULTTABLESPACE_OID);
 
-	rel = table_open(TableSpaceRelationId, AccessShareLock);
-
-	ScanKeyInit(&entry[0],
-				Anum_pg_tablespace_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(tablespace_oid));
-	scan = table_beginscan_catalog(rel, 1, entry);
-
-	tuple = heap_getnext(scan, ForwardScanDirection);
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "tablespace with OID %u does not exist", tablespace_oid);
-
 	if (wait)
-		LockTuple(rel, &tuple->t_self, lockmode);
+		LockSharedObject(TableSpaceRelationId, tablespace_oid, 0, lockmode);
 	else
-		ok = ConditionalLockTuple(rel, &tuple->t_self, lockmode);
-
-	table_endscan(scan);
-	table_close(rel, NoLock);
+		ok = ConditionalLockSharedObject(TableSpaceRelationId, tablespace_oid, 0, lockmode);
 
 	return ok;
 }

@@ -1154,6 +1154,27 @@ LockSharedObject(Oid classid, Oid objid, uint16 objsubid,
 }
 
 /*
+ *		ConditionalLockSharedObject
+ *
+ * As above, but only lock if we can get the lock without blocking.
+ * Returns true iff the lock was acquired.
+ */
+bool
+ConditionalLockSharedObject(Oid classid, Oid objid, uint16 objsubid,
+							LOCKMODE lockmode)
+{
+	LOCKTAG		tag;
+
+	SET_LOCKTAG_OBJECT(tag,
+					   InvalidOid,
+					   classid,
+					   objid,
+					   objsubid);
+
+	return (LockAcquire(&tag, lockmode, false, true) != LOCKACQUIRE_NOT_AVAIL);
+}
+
+/*
  *		UnlockSharedObject
  */
 void
