@@ -135,7 +135,8 @@ TablespaceLockTuple(Oid tablespace_oid, LOCKMODE lockmode, bool wait)
 	if (wait)
 		LockSharedObject(TableSpaceRelationId, tablespace_oid, 0, lockmode);
 	else
-		ok = ConditionalLockSharedObject(TableSpaceRelationId, tablespace_oid, 0, lockmode);
+		ok = ConditionalLockSharedObject(TableSpaceRelationId, tablespace_oid,
+										 0, lockmode);
 
 	return ok;
 }
