@@ -28,8 +28,8 @@ select sess_id from pg_stat_activity where pg_backend_pid()=pid;
 
 CREATE TABLE foo(a int);
 CREATE TABLE test(a int);
-INSERT INTO foo SELECT generate_series(0,30000000);
-INSERT INTO test SELECT generate_series(0,30000000);
+INSERT INTO foo SELECT generate_series(0,40000000);
+INSERT INTO test SELECT generate_series(0,40000000);
 -- test query text in multiple lines
 INSERT INTO test
 SELECT generate_series(0,10);
