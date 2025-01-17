@@ -746,6 +746,7 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 				(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
 				 errmsg("could not lock tablespace \"%s\"",
 						tablespacename)));
+	SIMPLE_FAULT_INJECTOR("drop_tablespace_after_acquire_lock");
 
 	/*
 	 * Remove the pg_tablespace tuple (this will roll back if we fail below)
@@ -822,7 +823,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 	/* We keep the lock on pg_tablespace until commit */
 	table_close(rel, NoLock);
-	SIMPLE_FAULT_INJECTOR("AfterTablespaceCreateLockRelease");
 
 	/*
 	 * If we are the QD, dispatch this DROP command to all the QEs
