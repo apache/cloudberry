@@ -35,7 +35,6 @@ EXPLAIN (COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR WITHOUT HOLD FOR SELEC
  QUERY PLAN                        
 -----------------------------------
  Seq Scan on t1                    
- Optimizer: Postgres-based planner 
  Endpoint: on all 3 segments       
 (3 rows)
 EXPLAIN (COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR WITH HOLD FOR SELECT * FROM t1;
@@ -46,7 +45,6 @@ EXPLAIN (COSTS false) DECLARE c1 NO SCROLL PARALLEL RETRIEVE CURSOR FOR SELECT *
  QUERY PLAN                        
 -----------------------------------
  Seq Scan on t1                    
- Optimizer: Postgres-based planner 
  Endpoint: on all 3 segments       
 (3 rows)
 EXPLAIN (COSTS false) DECLARE c1 SCROLL PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t1;
@@ -59,7 +57,6 @@ EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * 
 -----------------------------------
  Seq Scan on public.t1             
    Output: a                       
- Optimizer: Postgres-based planner 
  Endpoint: on all 3 segments       
 (4 rows)
 EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t1 ORDER BY a;
@@ -101,7 +98,6 @@ EXPLAIN (VERBOSE, COSTS false) DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * 
 -----------------------------------
  Seq Scan on public.t2             
    Output: a                       
- Optimizer: Postgres-based planner 
  Endpoint: on all 3 segments       
 (4 rows)
 
