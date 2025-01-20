@@ -103,7 +103,7 @@ github:
       # Pull request review requirements
       required_pull_request_reviews:
         # Require new reviews when new commits are pushed
-        dismiss_stale_reviews: true
+        dismiss_stale_reviews: false
         # Require at least 2 approving reviews
         required_approving_review_count: 2
 
