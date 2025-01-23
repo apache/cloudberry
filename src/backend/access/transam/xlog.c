@@ -7550,7 +7550,7 @@ StartupXLOG(void)
 			 */
 			StartupSUBTRANS(oldestActiveXID);
 			DistributedLog_Startup(oldestActiveXID,
-								   XidFromFullTransactionId(ShmemVariableCache->nextFullXid));
+								   XidFromFullTransactionId(ShmemVariableCache->nextXid));
 
 			/*
 			 * If we're beginning at a shutdown checkpoint, we know that

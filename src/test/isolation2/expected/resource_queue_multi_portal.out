@@ -19,9 +19,9 @@ SET
 1:BEGIN;
 BEGIN
 1:DECLARE c1 CURSOR FOR SELECT 1;
-DECLARE CURSOR
+DECLARE
 1:DECLARE c2 CURSOR FOR SELECT 1;
-DECLARE CURSOR
+DECLARE
 
 -- Shows 1 lock on the resource queue, with 2 holders (one for each cursor).
 -- Note: In the gp_locks_on_resqueue view, we show that lorusename as the
@@ -39,7 +39,7 @@ DECLARE CURSOR
 (1 row)
 
 1:END;
-COMMIT
+END
 
 --
 -- Scenario 1:
