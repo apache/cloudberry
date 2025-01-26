@@ -75,7 +75,6 @@ SeqNext(SeqScanState *node)
 
 	if (scandesc == NULL)
 	{
-		int nkeys = 0;
 		ScanKey keys = NULL;
 
 		/*
@@ -84,7 +83,7 @@ SeqNext(SeqScanState *node)
 		 * AM.
 		 */
 		if (gp_enable_runtime_filter_pushdown && !node->filter_in_seqscan)
-			keys = ScanKeyListToArray(node->filters, &nkeys);
+			keys = ScanKeyListToArray(node->filters, &node->num_scan_keys);
 
 		/*
 		* We reach here if the scan is not parallel, or if we're serially
@@ -92,7 +91,7 @@ SeqNext(SeqScanState *node)
 		*/
 		scandesc = table_beginscan_es(node->ss.ss_currentRelation,
 									  estate->es_snapshot,
-									  nkeys, keys,
+									  node->num_scan_keys, keys,
 									  NULL,
 									  &node->ss.ps);
 		node->ss.ss_currentScanDesc = scandesc;
@@ -283,12 +282,27 @@ void
 ExecReScanSeqScan(SeqScanState *node)
 {
 	TableScanDesc scan;
+	ScanKey keys;
 
 	scan = node->ss.ss_currentScanDesc;
 
+	/*
+	 * Clear all the pushdown scan keys.
+	 */
+	keys = NULL;
+	if (node->num_scan_keys)
+	{
+		keys = (ScanKey)palloc(sizeof(ScanKeyData) * node->num_scan_keys);
+		for (int i = 0; i < node->num_scan_keys; ++i)
+			keys[i].sk_flags = SK_EMPYT;
+	}
+
 	if (scan != NULL)
 		table_rescan(scan,		/* scan desc */
-					 NULL);		/* new scan keys */
+					 keys);		/* new scan keys */
+
+	if (keys)
+		pfree(keys);
 
 	ExecScanReScan((ScanState *) node);
 }
@@ -455,7 +469,10 @@ ScanKeyListToArray(List *keys, int *num)
 	ScanKey sk;
 
 	if (list_length(keys) == 0)
+	{
+		*num = 0;
 		return NULL;
+	}
 
 	Assert(num);
 	*num = list_length(keys);
