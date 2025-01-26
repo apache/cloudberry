@@ -1,3 +1,7 @@
+-- start_matchignore
+-- m/^.*Extra Text:.*/
+-- m/^.*Buckets:.*/
+-- end_matchignore
 -- Disable ORCA
 SET optimizer TO off;
 
@@ -76,6 +80,8 @@ SELECT COUNT(*) FROM dim_rf
     WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2;
 
 -- Test bloom filter pushdown
+SET enable_parallel TO off;
+
 -- case 1: join on distribution table and replicated table.
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
@@ -137,17 +143,17 @@ DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 
 -- case 3: bug fix with explain
-DROP TABLE IF EXISTS test_tablesample;
-CREATE TABLE test_tablesample (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
-INSERT INTO test_tablesample SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
-INSERT INTO test_tablesample SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
-INSERT INTO test_tablesample SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+DROP TABLE IF EXISTS test_tablesample1;
+CREATE TABLE test_tablesample1 (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
+INSERT INTO test_tablesample1 SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample1 SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample1 SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
 
 SET gp_enable_runtime_filter_pushdown TO on;
-EXPLAIN (COSTS OFF) SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+EXPLAIN (COSTS OFF) SELECT id FROM test_tablesample1 TABLESAMPLE SYSTEM (50) REPEATABLE (2);
 RESET gp_enable_runtime_filter_pushdown;
 
-DROP TABLE IF EXISTS test_tablesample;
+DROP TABLE IF EXISTS test_tablesample1;
 
 -- case 4: show debug info only when gp_enable_runtime_filter_pushdown is on
 DROP TABLE IF EXISTS t1;
@@ -220,6 +226,8 @@ RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 DROP TABLE IF EXISTS t3;
+
+RESET enable_parallel;
 
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;
