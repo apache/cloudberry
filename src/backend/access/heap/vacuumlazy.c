@@ -532,11 +532,13 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	TransactionId FreezeLimit;
 	MultiXactId MultiXactCutoff;
 
+	/* Used for instrumentation and cumulative maintenance statistics. */
+	starttime = GetCurrentTimestamp();
+
 	/* measure elapsed time iff autovacuum logging requires it */
 	if (IsAutoVacuumWorkerProcess() && params->log_min_duration >= 0)
 	{
 		pg_rusage_init(&ru0);
-		starttime = GetCurrentTimestamp();
 		if (track_io_timing)
 		{
 			startreadtime = pgStatBlockReadTime;
@@ -765,7 +767,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0),
-						 vacrel->new_dead_tuples);
+						 vacrel->new_dead_tuples, starttime);
 
 	/* assemble the per-vacuum measurements for subsequent reporting */
 	{

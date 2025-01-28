@@ -1589,7 +1589,8 @@ pgstat_report_autovac(Oid dboid)
  */
 void
 pgstat_report_vacuum(Oid tableoid, bool shared,
-					 PgStat_Counter livetuples, PgStat_Counter deadtuples)
+					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+					 TimestampTz starttime)
 {
 	PgStat_MsgVacuum msg;
 
@@ -1601,6 +1602,7 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 	msg.m_tableoid = tableoid;
 	msg.m_autovacuum = IsAutoVacuumWorkerProcess();
 	msg.m_vacuumtime = GetCurrentTimestamp();
+	msg.m_elapsedtime = Max(msg.m_vacuumtime - starttime, 0);
 	msg.m_live_tuples = livetuples;
 	msg.m_dead_tuples = deadtuples;
 	pgstat_send(&msg, sizeof(msg));
@@ -1618,7 +1620,7 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 void
 pgstat_report_analyze(Relation rel,
 					  PgStat_Counter livetuples, PgStat_Counter deadtuples,
-					  bool resetcounter)
+					  bool resetcounter, TimestampTz starttime)
 {
 	PgStat_MsgAnalyze msg;
 
@@ -1660,6 +1662,7 @@ pgstat_report_analyze(Relation rel,
 	msg.m_autovacuum = IsAutoVacuumWorkerProcess();
 	msg.m_resetcounter = resetcounter;
 	msg.m_analyzetime = GetCurrentTimestamp();
+	msg.m_elapsedtime = Max(msg.m_analyzetime - starttime, 0);
 	msg.m_live_tuples = livetuples;
 	msg.m_dead_tuples = deadtuples;
 	pgstat_send(&msg, sizeof(msg));
@@ -3918,6 +3921,10 @@ pgstat_get_tab_entry(PgStat_StatDBEntry *dbentry, Oid tableoid, bool create)
 		result->autovac_analyze_count = 0;
 		result->frozen_page_marks_cleared = 0;
 		result->visible_page_marks_cleared = 0;
+		result->total_vacuum_time = 0;
+		result->total_autovacuum_time = 0;
+		result->total_analyze_time = 0;
+		result->total_autoanalyze_time = 0;
 	}
 
 	return result;
@@ -5281,6 +5288,10 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 			tabentry->autovac_analyze_count = 0;
 			tabentry->frozen_page_marks_cleared = 0;
 			tabentry->visible_page_marks_cleared = 0;
+			tabentry->total_vacuum_time = 0;
+			tabentry->total_autovacuum_time = 0;
+			tabentry->total_analyze_time = 0;
+			tabentry->total_autoanalyze_time = 0;
 		}
 		else
 		{
@@ -5638,11 +5649,13 @@ pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len)
 	{
 		tabentry->autovac_vacuum_timestamp = msg->m_vacuumtime;
 		tabentry->autovac_vacuum_count++;
+		tabentry->total_autovacuum_time += msg->m_elapsedtime;
 	}
 	else
 	{
 		tabentry->vacuum_timestamp = msg->m_vacuumtime;
 		tabentry->vacuum_count++;
+		tabentry->total_vacuum_time += msg->m_elapsedtime;
 	}
 }
 
@@ -5680,11 +5693,13 @@ pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len)
 	{
 		tabentry->autovac_analyze_timestamp = msg->m_analyzetime;
 		tabentry->autovac_analyze_count++;
+		tabentry->total_autoanalyze_time += msg->m_elapsedtime;
 	}
 	else
 	{
 		tabentry->analyze_timestamp = msg->m_analyzetime;
 		tabentry->analyze_count++;
+		tabentry->total_analyze_time += msg->m_elapsedtime;
 	}
 }
 
