@@ -14,6 +14,7 @@
 #define APPENDONLY_COMPACTION_H
 
 #include "pgstat.h"
+#include "datatype/timestamp.h"
 #include "nodes/pg_list.h"
 #include "access/appendonly_visimap.h"
 #include "utils/rel.h"
@@ -43,6 +44,8 @@ typedef struct AOVacuumRelStats
 	Oid			relid;
 	/* Index resources are excluded from each phase's VERBOSE report. */
 	AOVacuumExtStats *extstats; /* allocated only for VERBOSE */
+	/* when the first phase started, for the cumulative vacuum time */
+	TimestampTz starttime;
 } AOVacuumRelStats;
 
 extern void ao_vacuum_insert_index_tuples(struct ResultRelInfo *resultRelInfo,
