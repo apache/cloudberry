@@ -541,7 +541,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 						   save_sec_context | SECURITY_RESTRICTED_OPERATION);
 	save_nestlevel = NewGUCNestLevel();
 
-	/* measure elapsed time iff autovacuum logging requires it */
+	/*
+	 * When autovacuum logging is used, initialize a resource usage snapshot
+	 * and optionally track I/O timing.
+	 */
 	if (IsAutoVacuumWorkerProcess() && params->log_min_duration >= 0)
 	{
 		if (track_io_timing)
@@ -551,8 +554,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		}
 
 		pg_rusage_init(&ru0);
-		starttime = GetCurrentTimestamp();
 	}
+
+	/* Used for instrumentation and stats report */
+	starttime = GetCurrentTimestamp();
 
 	/*
 	 * Determine which columns to analyze
@@ -1222,9 +1227,9 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 */
 	if (!inh)
 		pgstat_report_analyze(onerel, totalrows, totaldeadrows,
-							  (va_cols == NIL));
+							  (va_cols == NIL), starttime);
 	else if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-		pgstat_report_analyze(onerel, 0, 0, (va_cols == NIL));
+		pgstat_report_analyze(onerel, 0, 0, (va_cols == NIL), starttime);
 
 	/*
 	 * If this isn't part of VACUUM ANALYZE, let index AMs do cleanup.
