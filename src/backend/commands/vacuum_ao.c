@@ -306,7 +306,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	pgstat_report_vacuum(RelationGetRelid(onerel),
 						 onerel->rd_rel->relisshared,
 						 reltuples,
-						 deadtuples);
+						 deadtuples,
+						 vacrelstats->starttime);
 
 	SIMPLE_FAULT_INJECTOR("vacuum_ao_post_cleanup_end");
 }
@@ -415,6 +416,12 @@ init_vacrelstats()
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
 	MemoryContextSwitchTo(old_context);
+
+	/*
+	 * The phases of an AO vacuum run as separate steps, all of them sharing
+	 * these stats; time the vacuum from the first one.
+	 */
+	vacrelstats->starttime = GetCurrentTimestamp();
 
 	return vacrelstats;
 }
