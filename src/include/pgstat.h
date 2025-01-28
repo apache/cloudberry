@@ -419,6 +419,7 @@ typedef struct PgStat_MsgVacuum
 	TimestampTz m_vacuumtime;
 	PgStat_Counter m_live_tuples;
 	PgStat_Counter m_dead_tuples;
+	PgStat_Counter m_elapsedtime; /* microseconds */
 } PgStat_MsgVacuum;
 
 
@@ -459,6 +460,7 @@ typedef struct PgStat_MsgAnalyze
 	TimestampTz m_analyzetime;
 	PgStat_Counter m_live_tuples;
 	PgStat_Counter m_dead_tuples;
+	PgStat_Counter m_elapsedtime; /* microseconds */
 } PgStat_MsgAnalyze;
 
 
@@ -755,7 +757,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA3
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA4
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -845,6 +847,12 @@ typedef struct PgStat_StatTabEntry
 	PgStat_Counter analyze_count;
 	TimestampTz autovac_analyze_timestamp;	/* autovacuum initiated */
 	PgStat_Counter autovac_analyze_count;
+
+	/* Cumulative maintenance times, in microseconds. */
+	PgStat_Counter total_vacuum_time;
+	PgStat_Counter total_autovacuum_time;
+	PgStat_Counter total_analyze_time;
+	PgStat_Counter total_autoanalyze_time;
 
 	/* VM revisions are fed by ordinary relation statistics. */
 	PgStat_Counter frozen_page_marks_cleared;
@@ -1092,7 +1100,8 @@ extern void pgstat_reset_replslot_counter(const char *name);
 extern void pgstat_report_connect(Oid dboid);
 extern void pgstat_report_autovac(Oid dboid);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
-								 PgStat_Counter livetuples, PgStat_Counter deadtuples);
+								 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+								 TimestampTz starttime);
 
 /* count a page whose all-visible bit is being cleared */
 #define pgstat_count_visible_page_marks_cleared(rel)						\
@@ -1108,7 +1117,7 @@ extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 	} while (0)
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
-								  bool resetcounter);
+								  bool resetcounter, TimestampTz starttime);
 
 extern void pgstat_report_recovery_conflict(int reason);
 extern void pgstat_report_deadlock(void);
