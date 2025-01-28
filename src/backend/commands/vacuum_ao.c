@@ -321,7 +321,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	pgstat_report_vacuum(RelationGetRelid(onerel),
 						 onerel->rd_rel->relisshared,
 						 reltuples,
-						 deadtuples);
+						 deadtuples,
+						 vacrelstats->starttime);
 
 	/*
 	 * Remember what is left behind for the vacuum statistics, which
@@ -435,6 +436,8 @@ init_vacrelstats()
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
+	/* Time the run from its first phase in this worker. */
+	vacrelstats->starttime = GetCurrentTimestamp();
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -708,6 +711,7 @@ vacuum_appendonly_index(Relation indexRelation,
 
 	INSTR_TIME_SET_CURRENT(endtime);
 	INSTR_TIME_SUBTRACT(endtime, starttime);
+
 
 	if (!stats)
 		return;
