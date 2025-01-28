@@ -498,7 +498,6 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	if (instrument)
 	{
 		pg_rusage_init(&ru0);
-		starttime = GetCurrentTimestamp();
 		if (track_io_timing)
 		{
 			startreadtime = pgStatBlockReadTime;
@@ -506,6 +505,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		}
 	}
 
+	/* Used for instrumentation and stats report */
+	starttime = GetCurrentTimestamp();
 	extVacCounters = extvac_stats_start(rel, verbose);
 
 	pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM,
@@ -783,7 +784,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 rel->rd_rel->relisshared,
 						 Max(vacrel->new_live_tuples, 0),
 						 vacrel->recently_dead_tuples +
-						 vacrel->missed_dead_tuples);
+						 vacrel->missed_dead_tuples,
+						 starttime);
 	pgstat_progress_end_command();
 
 	if (instrument)
