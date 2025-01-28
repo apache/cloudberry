@@ -215,19 +215,22 @@ pgstat_drop_relation(Relation rel)
  */
 void
 pgstat_report_vacuum(Oid tableoid, bool shared,
-					 PgStat_Counter livetuples, PgStat_Counter deadtuples)
+					 PgStat_Counter livetuples, PgStat_Counter deadtuples,
+					 TimestampTz starttime)
 {
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
 	PgStat_StatTabEntry *tabentry;
 	Oid			dboid = (shared ? InvalidOid : MyDatabaseId);
 	TimestampTz ts;
+	PgStat_Counter elapsedtime;
 
 	if (!pgstat_track_counts)
 		return;
 
 	/* Store the data in the table's hash table entry. */
 	ts = GetCurrentTimestamp();
+	elapsedtime = TimestampDifferenceMilliseconds(starttime, ts);
 
 	/* block acquiring lock for the same reason as pgstat_report_autovac() */
 	entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RELATION,
@@ -255,11 +258,13 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 	{
 		tabentry->last_autovacuum_time = ts;
 		tabentry->autovacuum_count++;
+		tabentry->total_autovacuum_time += elapsedtime;
 	}
 	else
 	{
 		tabentry->last_vacuum_time = ts;
 		tabentry->vacuum_count++;
+		tabentry->total_vacuum_time += elapsedtime;
 	}
 
 	pgstat_unlock_entry(entry_ref);
@@ -282,12 +287,14 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 void
 pgstat_report_analyze(Relation rel,
 					  PgStat_Counter livetuples, PgStat_Counter deadtuples,
-					  bool resetcounter)
+					  bool resetcounter, TimestampTz starttime)
 {
 	PgStat_EntryRef *entry_ref;
 	PgStatShared_Relation *shtabentry;
 	PgStat_StatTabEntry *tabentry;
 	Oid			dboid = (rel->rd_rel->relisshared ? InvalidOid : MyDatabaseId);
+	TimestampTz ts;
+	PgStat_Counter elapsedtime;
 
 	if (!pgstat_track_counts)
 		return;
@@ -321,6 +328,10 @@ pgstat_report_analyze(Relation rel,
 		deadtuples = Max(deadtuples, 0);
 	}
 
+	/* Store the data in the table's hash table entry. */
+	ts = GetCurrentTimestamp();
+	elapsedtime = TimestampDifferenceMilliseconds(starttime, ts);
+
 	/* block acquiring lock for the same reason as pgstat_report_autovac() */
 	entry_ref = pgstat_get_entry_ref_locked(PGSTAT_KIND_RELATION, dboid,
 											RelationGetRelid(rel),
@@ -344,13 +355,15 @@ pgstat_report_analyze(Relation rel,
 
 	if (IsAutoVacuumWorkerProcess())
 	{
-		tabentry->last_autoanalyze_time = GetCurrentTimestamp();
+		tabentry->last_autoanalyze_time = ts;
 		tabentry->autoanalyze_count++;
+		tabentry->total_autoanalyze_time += elapsedtime;
 	}
 	else
 	{
-		tabentry->last_analyze_time = GetCurrentTimestamp();
+		tabentry->last_analyze_time = ts;
 		tabentry->analyze_count++;
+		tabentry->total_analyze_time += elapsedtime;
 	}
 
 	pgstat_unlock_entry(entry_ref);
