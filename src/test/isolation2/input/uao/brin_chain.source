@@ -19,8 +19,11 @@ INSERT INTO brin_chain_@amname@ SELECT '2' FROM generate_series(1, 1000);
 ALTER TABLE brin_chain_@amname@ SET ACCESS METHOD @amname@;
 
 1: BEGIN;
+1: SET gp_appendonly_insert_files TO 0;
 2: BEGIN;
+2: SET gp_appendonly_insert_files TO 0;
 3: BEGIN;
+3: SET gp_appendonly_insert_files TO 0;
 
 -- Insert 180000000 rows into seg1. Use COPY for speed.
 !\retcode yes 2 | head -n 180000000 > /tmp/brin_chain_@amname@_seg1.csv;
