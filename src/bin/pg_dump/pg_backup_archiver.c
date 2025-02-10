@@ -2723,6 +2723,7 @@ processEncodingEntry(ArchiveHandle *AH, TocEntry *te)
 			fatal("unrecognized encoding \"%s\"",
 				  ptr1);
 		AH->public.encoding = encoding;
+		setFmtEncoding(encoding);
 	}
 	else
 		fatal("invalid ENCODING item: %s",
