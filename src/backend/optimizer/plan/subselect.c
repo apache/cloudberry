@@ -215,6 +215,15 @@ CorrelatedVarWalker(Node *node, CorrelatedVarWalkerContext *ctx)
 		}
 		return false;
 	}
+	else if (IsA(node, PlaceHolderVar))
+	{
+		PlaceHolderVar *phv = (PlaceHolderVar *) node;
+		if (phv->phlevelsup > ctx->maxLevelsUp)
+		{
+			ctx->maxLevelsUp = phv->phlevelsup;
+		}
+		return false;
+	}
 	else if (IsA(node, Query))
 	{
 		return query_tree_walker((Query *) node, CorrelatedVarWalker, ctx, 0 /* flags */);

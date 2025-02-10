@@ -53,6 +53,22 @@ select csq_t1.x, (select sum(bar.x) from csq_t1 bar where bar.x = csq_t1.x) as s
 select csq_t1.x, (select bar.x from csq_t1 bar where bar.x = csq_t1.x) as sum from csq_t1 order by csq_t1.x;
 
 --
+-- Another case correlations in the targetlist: PlaceHolderVar
+--
+
+drop table if exists phv_t;
+
+create table phv_t(a int, b int) distributed by (a);
+
+insert into phv_t values(1,1),(2,2);
+
+explain(costs off) select *, (select ss.y as z from phv_t as t3 limit 1) from phv_t t1 left join
+(select a as x, 42 as y from phv_t t2) ss on t1.b = ss.x order by 1,2;
+
+select *, (select ss.y as z from phv_t as t3 limit 1) from phv_t t1 left join
+(select a as x, 42 as y from phv_t t2) ss on t1.b = ss.x order by 1,2;
+
+--
 -- CSQs with partitioned tables
 --
 
