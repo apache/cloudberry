@@ -5145,9 +5145,9 @@ struct config_enum ConfigureNamesEnum_gp[] =
 };
 
 /*
- * For system defined GUC must assign a tag either GUC_GPDB_NEED_SYNC
- * or GUC_GPDB_NO_SYNC. We deprecated direct define in guc.c, instead,
- * add into sync_guc_names_array or unsync_guc_names_array.
+ * For system defined GUC must assign a tag of {GUC_GPDB_NEED_SYNC,
+ * GUC_GPDB_NO_SYNC, GUC_GPDB_NO_DISPATCH}. We deprecated direct define in guc.c, 
+ * instead add into sync_guc_names_array or unsync_guc_names_array or undispatch_guc_names_array.
  */
 static const char *sync_guc_names_array[] =
 {
@@ -5159,8 +5159,27 @@ static const char *unsync_guc_names_array[] =
 	#include "utils/unsync_guc_name.h"
 };
 
-int sync_guc_num = 0;
-int unsync_guc_num = 0;
+static const char *undispatch_guc_names_array[] =
+{
+	#include "utils/undispatch_guc_name.h"
+};
+
+static const struct guc_names_type GucNamesArray_gp[] =
+{
+	{
+		sync_guc_names_array, sizeof(sync_guc_names_array) / sizeof(char *), GUC_GPDB_NEED_SYNC
+	},
+	{
+		unsync_guc_names_array, sizeof(unsync_guc_names_array) / sizeof(char *), GUC_GPDB_NO_SYNC
+	},
+	{
+		undispatch_guc_names_array, sizeof(undispatch_guc_names_array) / sizeof(char *), GUC_GPDB_NO_DISPATCH
+	},
+	/* End-of-list marker */
+	{
+		NULL, 0, 0
+	}
+};
 
 static int guc_array_compare(const void *a, const void *b)
 {
@@ -5175,13 +5194,13 @@ void gpdb_assign_sync_flag(struct config_generic **guc_variables, int size, bool
 	static bool init = false;
 	/* ordering guc_name_array alphabets */
 	if (!init) {
-		sync_guc_num = sizeof(sync_guc_names_array) / sizeof(char *);
-		qsort((void *) sync_guc_names_array, sync_guc_num,
-		      sizeof(char *), guc_array_compare);
 
-		unsync_guc_num = sizeof(unsync_guc_names_array) / sizeof(char *);
-		qsort((void *) unsync_guc_names_array, unsync_guc_num,
+		for (int i = 0; GucNamesArray_gp[i].guc_names_array; i++)
+		{
+			struct guc_names_type current_type = GucNamesArray_gp[i];
+			qsort((void *) (current_type.guc_names_array), current_type.num,
 		      sizeof(char *), guc_array_compare);
+		}
 
 		init = true;
 	}
@@ -5191,41 +5210,40 @@ void gpdb_assign_sync_flag(struct config_generic **guc_variables, int size, bool
 		struct config_generic *var = guc_variables[i];
 
 		/* if the sync flags is defined in guc variable, skip it */
-		if (var->flags & (GUC_GPDB_NEED_SYNC | GUC_GPDB_NO_SYNC))
+		if (var->flags & (GUC_GPDB_NEED_SYNC | GUC_GPDB_NO_SYNC | GUC_GPDB_NO_DISPATCH))
 			continue;
 
-		char *res = (char *) bsearch((void *) &var->name,
-		                             (void *) sync_guc_names_array,
-		                             sync_guc_num,
-		                             sizeof(char *),
-		                             guc_array_compare);
-		if (!res)
+		char *res = NULL;
+		for (int j = 0; GucNamesArray_gp[j].guc_names_array; j++)
 		{
-			char *res = (char *) bsearch((void *) &var->name,
-			                             (void *) unsync_guc_names_array,
-			                             unsync_guc_num,
-			                             sizeof(char *),
-			                             guc_array_compare);
-
-			/* for predefined guc, we force its name in one array.
-			 * for the third-part libraries gucs introduced by customer
-			 * we assign unsync flags as default.
-			 */
-			if (!res && predefine)
+			struct guc_names_type current_type = GucNamesArray_gp[j];
+			res = (char *) bsearch((void *) &var->name,
+		                           (void *) (current_type.guc_names_array),
+		                           current_type.num,
+		                           sizeof(char *),
+		                           guc_array_compare);
+			
+			if (res)
 			{
-				ereport(ERROR,
-				        (errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Neither sync_guc_names_array nor "
-								"unsync_guc_names_array contains predefined "
-								"guc name: %s", var->name)));
-			}
-
-			var->flags |= GUC_GPDB_NO_SYNC;
+				var->flags |= current_type.flag;
+				break;
+			}	
 		}
-		else
+		/* for predefined guc, we force its name in one array.
+		 * for the third-part libraries gucs introduced by customer
+		 * we assign unsync flags as default.
+		 */
+		if (!res && predefine)
 		{
-			var->flags |= GUC_GPDB_NEED_SYNC;
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					errmsg("sync_guc_names_array or unsync_guc_names_array or "
+							"undispatch_guc_names_array doesn't contain predefined "
+							"guc name: %s", var->name)));
 		}
+
+		if (!res)
+			var->flags |= GUC_GPDB_NO_SYNC;
 	}
 }
 

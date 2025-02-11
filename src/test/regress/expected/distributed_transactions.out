@@ -1062,7 +1062,6 @@ set Test_print_direct_dispatch_info = true;
 begin;
 set optimizer=false;
 end;
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 -- 2. implicit transaction block with just SET
 set optimizer=false;
 -- 3. still implicit transaction block, but with UPDATE that will send DTX protocol command to *some* QEs

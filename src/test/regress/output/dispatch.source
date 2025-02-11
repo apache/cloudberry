@@ -925,7 +925,6 @@ set gp_print_create_gang_time=on;
 INFO:  The shortest establish conn time: 8.46 ms, segindex: 0,
        The longest  establish conn time: 9.87 ms, segindex: 2
 set optimizer=off;
-INFO:  (Gang) is reused
 --gang reused
 create table t_create_gang_time(tc1 int,tc2 int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tc1' as the Greenplum Database data distribution key for this table.

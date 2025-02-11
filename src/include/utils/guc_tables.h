@@ -311,6 +311,13 @@ struct config_enum
 	void	   *reset_extra;
 };
 
+struct guc_names_type
+{
+	const char **guc_names_array;
+	int		    num;
+	int			flag;
+};
+
 /* constant tables corresponding to enums above and in guc.h */
 extern const char *const config_group_names[];
 extern const char *const config_type_names[];
