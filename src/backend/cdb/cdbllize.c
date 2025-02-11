@@ -1025,6 +1025,7 @@ fix_subplan_motion(PlannerInfo *root, Plan *subplan, Flow *outer_query_flow)
 		{
 			initPlans = list_concat(initPlans, subplan->initPlan);
 			subplan = subplan->lefttree;
+			subFlow = subplan->flow;
 		}
 
 		/*
@@ -1041,6 +1042,7 @@ fix_subplan_motion(PlannerInfo *root, Plan *subplan, Flow *outer_query_flow)
 
 			sendSlice = strippedMotion->senderSliceInfo;
 			subplan = subplan->lefttree;
+			subFlow = subplan->flow;
 			initPlans = list_concat(initPlans, strippedMotion->plan.initPlan);
 		}
 		else

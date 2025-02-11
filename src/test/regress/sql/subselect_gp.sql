@@ -136,6 +136,31 @@ drop table if exists mrs_u1;
 drop table if exists mrs_u2;
 
 --
+-- Set right motion type to subquery
+--
+
+drop table if exists gs_tab;
+
+create table gs_tab(a int, b int, c int) distributed by (a);
+insert into gs_tab values (1,1,1),(2,2,2);
+explain(costs off)
+select a from gs_tab t1 where b in
+	(select b from gs_tab t2 where c in
+		(select c from gs_tab t3)
+		or (c >= 2))
+	or (b <= 3)
+order by a;
+
+select a from gs_tab t1 where b in
+	(select b from gs_tab t2 where c in
+		(select c from gs_tab t3)
+		or (c >= 2))
+	or (b <= 3)
+order by a;
+
+drop table if exists gs_tab;
+
+--
 -- MPP-13758
 --
 
