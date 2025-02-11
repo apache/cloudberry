@@ -119,6 +119,13 @@ double		vacuum_cost_delay = 0;
 int			vacuum_cost_limit = 200;
 
 /*
+ * Cumulative cost-based VACUUM delay time (ms) for this process, excluding
+ * ANALYZE.
+ * Callers save the starting value and report the delta.
+ */
+double		VacuumDelayTime = 0;
+
+/*
  * VacuumFailsafeActive is a defined as a global so that we can determine
  * whether or not to re-enable cost-based vacuum delay when vacuuming a table.
  * If failsafe mode has been engaged, we will not re-enable cost-based delay
@@ -3211,6 +3218,8 @@ vacuum_delay_point(bool is_analyze)
 			INSTR_TIME_SET_CURRENT(delay_end);
 			INSTR_TIME_SET_ZERO(delay);
 			INSTR_TIME_ACCUM_DIFF(delay, delay_end, delay_start);
+			if (!is_analyze)
+				VacuumDelayTime += INSTR_TIME_GET_MILLISEC(delay);
 
 			if (is_analyze)
 				pgstat_progress_incr_param(PROGRESS_ANALYZE_DELAY_TIME,
