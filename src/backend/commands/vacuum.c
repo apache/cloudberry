@@ -105,6 +105,15 @@ static BufferAccessStrategy vac_strategy;
 
 
 /*
+ * Cumulative time this process has spent in cost-based VACUUM delays, in
+ * microseconds.  Consumers take differences around an operation.  ANALYZE
+ * uses the same delay function but does not contribute to this accumulator.
+ * Updated only while track_cost_delay_timing is enabled.
+ */
+int64		VacuumDelayTime = 0;
+bool		track_cost_delay_timing = false;
+
+/*
  * Variables for cost-based parallel vacuum.  See comments atop
  * compute_parallel_delay to understand how it works.
  */
@@ -3007,12 +3016,27 @@ vacuum_delay_point(bool is_analyze)
 	/* Nap if appropriate */
 	if (msec > 0)
 	{
+		instr_time	delay_start;
+		instr_time	delay_end;
+
 		if (msec > VacuumCostDelay * 4)
 			msec = VacuumCostDelay * 4;
 
 		pgstat_report_wait_start(WAIT_EVENT_VACUUM_DELAY);
+		if (track_cost_delay_timing && !is_analyze)
+			INSTR_TIME_SET_CURRENT(delay_start);
 		pg_usleep(msec * 1000);
 		pgstat_report_wait_end();
+
+		if (track_cost_delay_timing && !is_analyze)
+		{
+			int64 delay_us;
+
+			INSTR_TIME_SET_CURRENT(delay_end);
+			INSTR_TIME_SUBTRACT(delay_end, delay_start);
+			delay_us = (int64) INSTR_TIME_GET_MICROSEC(delay_end);
+			VacuumDelayTime += delay_us;
+		}
 
 		/*
 		 * We don't want to ignore postmaster death during very long vacuums
