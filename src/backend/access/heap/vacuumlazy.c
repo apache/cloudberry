@@ -914,7 +914,7 @@ lazy_scan_heap(LVRelState *vacrel)
 		update_vacuum_error_info(vacrel, NULL, VACUUM_ERRCB_PHASE_SCAN_HEAP,
 								 blkno, InvalidOffsetNumber);
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		/*
 		 * Regularly check if wraparound failsafe should trigger.
@@ -1377,7 +1377,7 @@ lazy_scan_skip(LVRelState *vacrel, Buffer *vmbuffer, BlockNumber next_block,
 			skipsallvis = true;
 		}
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 		next_unskippable_block++;
 		nskippable_blocks++;
 	}
@@ -2463,7 +2463,7 @@ lazy_vacuum_heap_rel(LVRelState *vacrel)
 		Page		page;
 		Size		freespace;
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		blkno = ItemPointerGetBlockNumber(&vacrel->dead_items->items[index]);
 		vacrel->blkno = blkno;
