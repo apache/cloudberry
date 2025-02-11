@@ -446,6 +446,7 @@ extern PGDLLIMPORT double vacuum_cost_delay;
 extern PGDLLIMPORT int vacuum_cost_limit;
 
 extern PGDLLIMPORT int64 parallel_vacuum_worker_delay_ns;
+extern PGDLLIMPORT double VacuumDelayTime;
 
 /* in commands/vacuum.c */
 extern void ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_stats);
