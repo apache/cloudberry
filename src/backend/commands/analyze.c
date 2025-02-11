@@ -1428,7 +1428,7 @@ compute_index_stats(Relation onerel, double totalrows,
 		{
 			HeapTuple	heapTuple = rows[rowno];
 
-			vacuum_delay_point();
+			vacuum_delay_point(true);
 
 			/*
 			 * Reset the per-tuple context each time, to reclaim any cruft
@@ -1848,7 +1848,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 			prefetch_targblock = BlockSampler_Next(&prefetch_bs);
 #endif
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		block_accepted = table_scan_analyze_next_block(scan, targblock, vac_strategy);
 
@@ -3476,7 +3476,7 @@ compute_trivial_stats(VacAttrStatsP stats,
 		Datum		value;
 		bool		isnull;
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		value = fetchfunc(stats, i, &isnull);
 
@@ -3598,7 +3598,7 @@ compute_distinct_stats(VacAttrStatsP stats,
 		int			firstcount1,
 					j;
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		value = fetchfunc(stats, i, &isnull);
 
@@ -3958,7 +3958,7 @@ compute_scalar_stats(VacAttrStatsP stats,
 		Datum		value;
 		bool		isnull;
 
-		vacuum_delay_point();
+		vacuum_delay_point(true);
 
 		value = fetchfunc(stats, i, &isnull);
 
