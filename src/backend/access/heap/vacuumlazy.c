@@ -1075,7 +1075,7 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 				if ((vmstatus & VISIBILITYMAP_ALL_VISIBLE) == 0)
 					break;
 			}
-			vacuum_delay_point();
+			vacuum_delay_point(false);
 			next_unskippable_block++;
 		}
 	}
@@ -1127,7 +1127,7 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 						if ((vmskipflags & VISIBILITYMAP_ALL_VISIBLE) == 0)
 							break;
 					}
-					vacuum_delay_point();
+					vacuum_delay_point(false);
 					next_unskippable_block++;
 				}
 			}
@@ -1177,7 +1177,7 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 			all_visible_according_to_vm = true;
 		}
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		/*
 		 * Regularly check if wraparound failsafe should trigger.
@@ -2374,7 +2374,7 @@ lazy_vacuum_heap_rel(LVRelState *vacrel)
 		Page		page;
 		Size		freespace;
 
-		vacuum_delay_point();
+		vacuum_delay_point(false);
 
 		tblk = ItemPointerGetBlockNumber(&vacrel->dead_tuples->itemptrs[tupindex]);
 		vacrel->blkno = tblk;
