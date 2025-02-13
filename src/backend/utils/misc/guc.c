@@ -1006,8 +1006,8 @@ static const unit_conversion time_unit_conversion_table[] =
  *	  variable_is_guc_list_quote() in src/bin/pg_dump/dumputils.c.
  *
  * 8. In gpdb, the guc is force explicit declare whether it needs to sync value
- * 	  between master and primary. Add guc name into either sync_guc_names_array
- * 	  or unsync_guc_names_array.
+ * 	  between master and primary. Add guc name of {sync_guc_names_array,
+ * 	  unsync_guc_names_array,undispatch_guc_names_array}.
  */
 
 
@@ -9227,8 +9227,13 @@ DispatchSetPGVariable(const char *name, List *args, bool is_local)
 {
 	ListCell   *l;
 	StringInfoData buffer;
+	struct config_generic *record;
 
 	if (Gp_role != GP_ROLE_DISPATCH || IsBootstrapProcessingMode())
+		return;
+
+	record = find_option(name, false, false, 0);
+	if (record == NULL || record->flags & GUC_GPDB_NO_DISPATCH)
 		return;
 
 	/*

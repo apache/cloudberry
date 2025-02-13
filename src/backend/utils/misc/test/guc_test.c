@@ -24,40 +24,56 @@ static const char *unsync_guc_names_array[] =
 {
 #include "utils/unsync_guc_name.h"
 };
+static const char *undispatch_guc_names_array[] =
+{
+	#include "utils/undispatch_guc_name.h"
+};
 void init(void );
-extern int sync_guc_num;
-extern int unsync_guc_num;
+
+static const struct guc_names_type GucNamesArray_gp[] =
+{
+	{
+		sync_guc_names_array, sizeof(sync_guc_names_array) / sizeof(char *), GUC_GPDB_NEED_SYNC
+	},
+	{
+		unsync_guc_names_array, sizeof(unsync_guc_names_array) / sizeof(char *), GUC_GPDB_NO_SYNC
+	},
+	{
+		undispatch_guc_names_array, sizeof(undispatch_guc_names_array) / sizeof(char *), GUC_GPDB_NO_DISPATCH
+	},
+	/* End-of-list marker */
+	{
+		NULL, 0, 0
+	}
+};
 void init()
 {
-	sync_guc_num = sizeof(sync_guc_names_array)/ sizeof(char *);
-	unsync_guc_num = sizeof(unsync_guc_names_array)/ sizeof(char *);
-	qsort((void *) sync_guc_names_array, sync_guc_num,
+	for (int i = 0; GucNamesArray_gp[i].guc_names_array; i++)
+	{
+		struct guc_names_type current_type = GucNamesArray_gp[i];
+		qsort((void *) (current_type.guc_names_array), current_type.num,
 			sizeof(char *), guc_array_compare);
-
-	qsort((void *) unsync_guc_names_array, unsync_guc_num,
-			sizeof(char *), guc_array_compare);
+	}
 }
 
 static void assert_guc(struct config_generic *conf)
 {
-	char *res = (char *) bsearch((void *) &conf->name,
-			(void *) sync_guc_names_array,
-			sync_guc_num,
-			sizeof(char *),
-			guc_array_compare);
-	if (!res)
+	char *res = NULL;
+	for (int i = 0; GucNamesArray_gp[i].guc_names_array; i++)
 	{
-		char *res = (char *) bsearch((void *) &conf->name,
-				(void *) unsync_guc_names_array,
-				unsync_guc_num,
-				sizeof(char *),
-				guc_array_compare);
-
-		if ( res == NULL)
-			printf("GUC: '%s' does not exist in both list.\n", conf->name);
-
-		assert_true(res);
+		struct guc_names_type current_type = GucNamesArray_gp[i];
+		res = (char *) bsearch((void *) &conf->name,
+								(void *) (current_type.guc_names_array),
+								current_type.num,
+								sizeof(char *),
+								guc_array_compare);
+		
+		if (res)
+			break;
 	}
+	if ( res == NULL)
+		printf("GUC: '%s' does not exist in lists.\n", conf->name);
+	assert_true(res);
 }
 
 static void
@@ -121,6 +137,9 @@ test_enum_guc_coverage(void **state)
 static void
 test_guc_name_list_mutual_exclusion(void **state)
 {
+	int sync_guc_num = sizeof(sync_guc_names_array) / sizeof(char *);
+	int unsync_guc_num = sizeof(unsync_guc_names_array) / sizeof(char *);
+	int undispatch_guc_num = sizeof(undispatch_guc_names_array) / sizeof(char *);
 	for (int i = 0; i < sync_guc_num; i++)
 	{
 		char *res = (char *) bsearch((void *) &(sync_guc_names_array[i]),
@@ -130,7 +149,21 @@ test_guc_name_list_mutual_exclusion(void **state)
 				guc_array_compare);
 
 		if ( res != NULL)
-			printf("GUC: '%s' exist in both list.\n", sync_guc_names_array[i]);
+			printf("GUC: '%s' exist in both list(sync, unsync).\n", sync_guc_names_array[i]);
+
+		assert_true(res == NULL);
+	}
+
+	for (int i = 0; i < unsync_guc_num; i++)
+	{
+		char *res = (char *) bsearch((void *) &(unsync_guc_names_array[i]),
+				(void *) undispatch_guc_names_array,
+				undispatch_guc_num,
+				sizeof(char *),
+				guc_array_compare);
+
+		if ( res != NULL)
+			printf("GUC: '%s' exist in both list(unsync, undispatch).\n", unsync_guc_names_array[i]);
 
 		assert_true(res == NULL);
 	}
