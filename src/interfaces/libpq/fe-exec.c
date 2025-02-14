@@ -4257,7 +4257,7 @@ PQescapeInternal(PGconn *conn, const char *str, size_t len, bool as_ident)
 			if (!validated_mb)
 			{
 				if (pg_encoding_verifymbstr(conn->client_encoding, s, remaining)
-					!= strlen(s))
+					!= remaining)
 				{
 					libpq_append_conn_error(conn, "invalid multibyte character");
 					return NULL;
