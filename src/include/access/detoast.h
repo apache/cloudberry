@@ -3,7 +3,6 @@
  * detoast.h
  *	  Access to compressed and external varlena values.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2000-2021, PostgreSQL Global Development Group
  *
  * src/include/access/detoast.h

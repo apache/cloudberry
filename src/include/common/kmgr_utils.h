@@ -3,7 +3,6 @@
  * kmgr_utils.h
  *		Declarations for utility function for file encryption key
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2021, PostgreSQL Global Development Group
  *
  * src/include/common/kmgr_utils.h

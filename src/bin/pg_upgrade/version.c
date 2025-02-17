@@ -3,7 +3,6 @@
  *
  *	Postgres-version-specific routines
  *
- * 	Portions Copyright (c) 2023, HashData Technology Limited.
  *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/version.c
  */

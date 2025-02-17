@@ -5,7 +5,6 @@
  * Functions for reading and manipulating pg_cron metadata.
  *
  * Copyright (c) 2016, Citus Data, Inc.
- * Portions Copyright (c) 2023, HashData Technology Limited.
  *
  *-------------------------------------------------------------------------
  */

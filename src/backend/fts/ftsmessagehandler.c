@@ -3,7 +3,6 @@
  * ftsmessagehandler.c
  *	  Implementation of handling of FTS messages
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *
  *

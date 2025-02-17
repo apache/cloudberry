@@ -5,7 +5,6 @@
  *
  * Portions Copyright (c) 2011 EMC Corporation All Rights Reserved
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 2023, HashData Technology Limited.
  *
  * IDENTIFICATION
  *	    src/backend/catalog/pg_compression.c

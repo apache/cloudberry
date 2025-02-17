@@ -3,7 +3,6 @@
  * resgroup.c
  *	  GPDB resource group management code.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

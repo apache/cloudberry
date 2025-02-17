@@ -3,7 +3,6 @@
  * lockfuncs.c
  *		Functions for SQL access to various lock-manager capabilities.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2002-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

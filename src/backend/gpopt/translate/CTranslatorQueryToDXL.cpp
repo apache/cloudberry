@@ -1,7 +1,6 @@
 //---------------------------------------------------------------------------
 //  Greenplum Database
 //	Copyright (C) 2011 EMC Corp.
-//	Portions Copyright (c) 2023, HashData Technology Limited.
 //
 //	@filename:
 //		CTranslatorQueryToDXL.cpp

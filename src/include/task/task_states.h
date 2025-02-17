@@ -3,7 +3,6 @@
  * task_states.h
  *	  definition of task state functions
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2010-2015, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------

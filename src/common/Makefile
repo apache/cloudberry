@@ -22,7 +22,6 @@
 # IDENTIFICATION
 #    src/common/Makefile
 #
-# Portions Copyright (c) 2023, HashData Technology Limited.
 #-------------------------------------------------------------------------
 
 subdir = src/common

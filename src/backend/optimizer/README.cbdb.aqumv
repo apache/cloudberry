@@ -1,12 +1,5 @@
 src/backend/optimizer/README.cbdb.aqumv
 
-Portions Copyright (c) 2023, HashData Technology Limited.
-
-Author
-============
-Zhang Mingli   avamingli@gmail.com
-
-
 Answer Query Using Materialized Views
 =====================================
 

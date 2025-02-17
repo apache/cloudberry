@@ -2,7 +2,6 @@
 #
 # Makefile for src/test
 #
-# Portions Copyright (c) 2023, HashData Technology Limited.
 # Copyright (c) 1994, Regents of the University of California
 #
 # src/test/Makefile

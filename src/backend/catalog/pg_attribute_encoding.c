@@ -3,7 +3,6 @@
  * pg_attribute_encoding.c
  *	  Routines to manipulation and retrieve column encoding information.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) EMC, 2011
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

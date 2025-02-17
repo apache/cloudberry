@@ -3,7 +3,6 @@
  * cdbvars.h
  *	  definitions for Greenplum-specific global variables
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2003-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

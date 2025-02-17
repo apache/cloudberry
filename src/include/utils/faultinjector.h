@@ -2,7 +2,6 @@
  *  faultinjector.h
  *  
  *
- * 	Portions Copyright (c) 2023, HashData Technology Limited.
  *  Copyright 2009-2010, Greenplum Inc. All rights reserved.
  *
  */

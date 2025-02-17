@@ -10,7 +10,6 @@
  * NOTE: If new fields are added to these structs, remember to update
  * outfuncs.c/readfuncs.c
  *
- * Portions Copyright (c) 2013, HashData Technology Limited.
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group

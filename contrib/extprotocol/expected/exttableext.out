@@ -10,7 +10,7 @@ NOTICE:  foreign table "exttabtest_options_r" does not exist, skipping
     SELECT * FROM exttabtest_options_r
     EXCEPT ALL
     SELECT * FROM exttabtest;
-ERROR:  This is greenplum. (gpextprotocol.c:67)
+ERROR:  This is greenplum. (gpextprotocol.c:65)
 CONTEXT:  External table exttabtest_options_r, line 1 of file demoprot://exttabtest.txt
     DROP EXTERNAL TABLE IF EXISTS exttabtest_w;
 NOTICE:  foreign table "exttabtest_w" does not exist, skipping

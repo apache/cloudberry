@@ -4,7 +4,6 @@
  *	  Helper functions for gpexpand.
  *
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2018-Present VMware, Inc. or its affiliates.
  *
  * src/backend/utils/misc/gpexpand.c

@@ -7,7 +7,6 @@
  * This is only a wrapper, the actual main loop is in ic_proxy_main.c .
  *
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2020-Present VMware, Inc. or its affiliates.
  *
  *

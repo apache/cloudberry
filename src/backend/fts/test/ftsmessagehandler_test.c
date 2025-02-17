@@ -2,9 +2,6 @@
 *
 * ftsmessagehandler_test.c
 *
-* Portions Copyright (c) 2023, HashData Technology Limited.
-*
-*
 *--------------------------------------------------------------------------
 */
 

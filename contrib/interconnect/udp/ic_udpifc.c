@@ -2,7 +2,6 @@
  * ic_udpifc.c
  *	   Interconnect code specific to UDP transport.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2005-2011, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  * Copyright (c) 2011-2012, EMC Corporation

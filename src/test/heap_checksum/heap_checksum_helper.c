@@ -2,8 +2,6 @@
 *
 * heap_checksum_helper.c
 *
-* Portions Copyright (c) 2023, HashData Technology Limited.
-*
 * DENTIFICATION
 *	src/test/heap_checksum/heap_checksum_helper.c
 *--------------------------------------------------------------------------

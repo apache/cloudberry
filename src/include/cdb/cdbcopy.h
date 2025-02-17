@@ -5,7 +5,6 @@
  *	 These are functions that are used by the backend
  *	 COPY command in Greenplum Database.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

@@ -2,9 +2,6 @@
 *
 * ps_status_test.c
 *
-* Portions Copyright (c) 2023, HashData Technology Limited.
-*
-*
 *--------------------------------------------------------------------------
 */
 #include <stdarg.h>

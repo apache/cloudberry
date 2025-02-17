@@ -3,7 +3,6 @@
  * libpq_fetch.c
  *	  Functions for fetching files from a remote server.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2013-2020, PostgreSQL Global Development Group
  *
  *-------------------------------------------------------------------------

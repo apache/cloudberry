@@ -11,7 +11,6 @@
  * Transactions on Mathematical Software, Vol. 24, No. 4, December 1998,
  * pages 359-367.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 1998-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

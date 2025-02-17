@@ -1,4 +1,3 @@
-# Portions Copyright (c) 2023, HashData Technology Limited.
 
 use strict;
 use warnings;

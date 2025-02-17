@@ -2,8 +2,6 @@
  *
  * gp_replica_check.c
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
- *
  * IDENTIFICATION
  *          gpcontrib/gp_replica_check/gp_replica_check.c
  *

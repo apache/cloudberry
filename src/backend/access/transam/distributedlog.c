@@ -17,7 +17,6 @@
  * distributed transaction identifier -- the timestamp -- also so we can
  * be sure which distributed transaction we are looking at.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

@@ -15,7 +15,6 @@
  * users.  The txid_XXX variants should eventually be dropped.
  *
  *
- *	Portions Copyright (c) 2023, HashData Technology Limited.
  *	Copyright (c) 2003-2021, PostgreSQL Global Development Group
  *	Author: Jan Wieck, Afilias USA INC.
  *	64-bit txids: Marko Kreen, Skype Technologies

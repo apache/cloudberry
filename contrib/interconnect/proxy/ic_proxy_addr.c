@@ -15,7 +15,6 @@
  *
  *
  * Copyright (c) 2020-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 2023, HashData Technology Limited.
  *
  *-------------------------------------------------------------------------
  */

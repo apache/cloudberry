@@ -4,7 +4,6 @@
  *	  Heap-specific definitions for external and compressed storage
  *	  of variable size attributes.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2000-2021, PostgreSQL Global Development Group
  *
  * src/include/access/heaptoast.h

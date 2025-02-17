@@ -2,8 +2,6 @@
  *
  * fstream.h
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
- *
  * src/include/fstream/fstream.h
  *-------------------------------------------------------------------------
  */

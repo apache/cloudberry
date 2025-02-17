@@ -3,7 +3,6 @@
  * checksum_helper.c
  *	  Compute a checksum of any of various types using common routines
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2016-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

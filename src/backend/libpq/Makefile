@@ -6,7 +6,6 @@
 # IDENTIFICATION
 #    src/backend/libpq/Makefile
 #
-# Portions Copyright (c) 2023, HashData Technology Limited.
 #-------------------------------------------------------------------------
 
 subdir = src/backend/libpq

@@ -40,7 +40,6 @@
  *
  * Note - Currently only 1 walsender is supported for GPDB
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

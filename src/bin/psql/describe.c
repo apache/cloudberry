@@ -6,7 +6,6 @@
  * with servers of versions 7.4 and up.  It's okay to omit irrelevant
  * information for an old server, but not to fail outright.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2000-2021, PostgreSQL Global Development Group
  *
  * src/bin/psql/describe.c

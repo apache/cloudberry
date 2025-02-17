@@ -2,8 +2,6 @@
  *
  * gp_inject_fault.c
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
- *
  * IDENTIFICATION
  *          gpcontrib/gp_inject_fault/gp_inject_fault.c
  *

@@ -6,7 +6,6 @@
  *
  *	See the headers to pg_restore for more details.
  *
- *	Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2000, Philip Warner
  *	Rights are granted to use this software in any way so long
  *	as this notice is not removed.

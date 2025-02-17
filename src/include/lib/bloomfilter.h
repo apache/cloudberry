@@ -3,7 +3,6 @@
  * bloomfilter.h
  *	  Space-efficient set membership testing
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2018-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

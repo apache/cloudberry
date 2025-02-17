@@ -2,7 +2,6 @@
  * dbsize.c
  *		Database object size functions, and related inquiries
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2002-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

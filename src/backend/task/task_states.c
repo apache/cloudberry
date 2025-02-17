@@ -4,7 +4,6 @@
  *
  * Logic for storing and manipulating cron task states.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------

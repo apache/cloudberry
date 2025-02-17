@@ -3,7 +3,6 @@
  * cdbaocsam.h
  *	  append-only columnar relation access method definitions.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2009, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

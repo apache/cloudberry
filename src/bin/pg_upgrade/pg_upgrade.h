@@ -3,7 +3,6 @@
 /*
  *	pg_upgrade.h
  *
- *	Portions Copyright (c) 2023, HashData Technology Limited.
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
  *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.h

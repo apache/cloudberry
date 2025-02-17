@@ -3,7 +3,6 @@
  * ic_faultinjection.h
  *	   Fault injection code for UDP interconnect.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2005-2011, Greenplum Inc.
  * Portions Copyright (c) 2011-2012, EMC Corporation
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.

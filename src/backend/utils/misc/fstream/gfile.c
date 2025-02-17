@@ -2,9 +2,6 @@
 *
 * gfile.c
 *
-* Portions Copyright (c) 2023, HashData Technology Limited.
-*
-*
 *--------------------------------------------------------------------------
 */
 #include "c.h"

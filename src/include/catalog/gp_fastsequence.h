@@ -4,7 +4,6 @@
  *    a table maintaining a light-weight fast sequence number for a unique
  *    object.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2009-2011, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

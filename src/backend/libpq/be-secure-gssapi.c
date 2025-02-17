@@ -3,7 +3,6 @@
  * be-secure-gssapi.c
  *  GSSAPI encryption support
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2018-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

@@ -5,7 +5,6 @@
  *
  * Original coding 1998, Jan Wieck.  Heavily revised 2003, Tom Lane.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 1998-2021, PostgreSQL Global Development Group
  *
  * src/include/utils/numeric.h

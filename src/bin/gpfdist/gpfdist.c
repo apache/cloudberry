@@ -2,9 +2,6 @@
 *
 * gpfdist.c
 *
-* Portions Copyright (c) 2023, HashData Technology Limited.
-*
-*
 *--------------------------------------------------------------------------
 */
 #ifdef WIN32

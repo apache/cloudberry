@@ -3,7 +3,6 @@
  *
  * reads the data from $PGDATA/global/pg_control
  *
- * Portions Copyright (c) 2023, HashData Technology Limited. 
  * copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001;
  * license: BSD
  *

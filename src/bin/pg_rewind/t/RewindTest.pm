@@ -1,5 +1,4 @@
 
-# Portions Copyright (c) 2023, HashData Technology Limited.
 # Copyright (c) 2021, PostgreSQL Global Development Group
 
 package RewindTest;

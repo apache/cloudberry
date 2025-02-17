@@ -3,7 +3,6 @@
  * transform.c
  *	  This file contains methods to transform the query tree
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2011, EMC Greenplum
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  *

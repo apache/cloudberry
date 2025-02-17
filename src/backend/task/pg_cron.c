@@ -7,7 +7,6 @@
  *	   - A job is a scheduling definition of a task
  *	   - A task is what is actually executed within the database engine
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------

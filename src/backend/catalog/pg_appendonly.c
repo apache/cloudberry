@@ -3,7 +3,6 @@
  * pg_appendonly.c
  *	  routines to support manipulation of the pg_appendonly relation
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2008, Greenplum Inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  * Portions Copyright (c) 1996-2006, PostgreSQL Global Development Group

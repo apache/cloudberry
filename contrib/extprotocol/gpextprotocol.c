@@ -2,8 +2,6 @@
  *
  * gpextprotocol.c
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
- *
  * IDENTIFICATION
  *          contrib/extprotocol/gpextprotocol.c
  *

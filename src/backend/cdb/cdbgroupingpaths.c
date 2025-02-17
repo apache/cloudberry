@@ -37,7 +37,6 @@
  * details.
  *
  * Portions Copyright (c) 2019-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 2023, HashData Technology Limited.
  *
  * IDENTIFICATION
  *	    src/backend/cdb/cdbgroupingpaths.c

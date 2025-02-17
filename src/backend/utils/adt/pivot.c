@@ -2,9 +2,6 @@
 *
 * pivot.c
 *
-* Portions Copyright (c) 2023, HashData Technology Limited.
-*
-*
 *--------------------------------------------------------------------------
 */
 #include "postgres.h"

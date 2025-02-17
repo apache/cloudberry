@@ -24,7 +24,6 @@
  * caller many authoritative lookups, such as expensive probes of a much larger
  * on-disk structure.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2018-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

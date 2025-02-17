@@ -5,7 +5,6 @@
  * avoid adding so much stuff to guc.c. This makes it easier to diff
  * and merge with upstream.
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
  * Copyright (c) 2000-2009, PostgreSQL Global Development Group

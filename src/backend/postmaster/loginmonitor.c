@@ -1,9 +1,28 @@
 /*-------------------------------------------------------------------------
  *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  * loginmonitor.c
+ *    PostgreSQL Integrated Login Monitor Daemon
  *
- * PostgreSQL Integrated Login Monitor Daemon
- *
+ * IDENTIFICATION
+ *	  src/backend/postmaster/loginmonitor.c
+ * 
  * Like autovacuum, the login monitor is structured in two different
  * kinds of processes: the login monitor launcher and the login monitor
  * worker. The launcher is an always-running process, started by the
@@ -46,12 +65,7 @@
  * login monitor and wait for the completion of worker process. Otherwise,
  * the failed login authentication of the user will be ignored and doesn't
  * need to send signal to the launcher.
- *
- * Copyright (c) 2023, Cloudberry Database, HashData Technology Limited.
- *
- *
- * IDENTIFICATION
- *	  src/backend/postmaster/loginmonitor.c
+ *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"

@@ -7,7 +7,6 @@
  * numbers of equally-sized objects are allocated (and freed).
  *
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Portions Copyright (c) 2017-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

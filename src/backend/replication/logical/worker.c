@@ -2,7 +2,6 @@
  * worker.c
  *	   PostgreSQL logical replication worker (apply)
  *
- * Portions Copyright (c) 2023, HashData Technology Limited.
  * Copyright (c) 2016-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION

@@ -4,8 +4,6 @@
  *  Created on: Feb 8, 2011
  *      Author: siva
  * 
- * Portions Copyright (c) 2023, HashData Technology Limited.
- * 
  */
 
 #include "postgres.h"
