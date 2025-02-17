@@ -25,6 +25,18 @@ insert into l values (1), (1), (2);
 select * from l l1 join l l2 on l1.a = l2.a left join l l3 on l1.a = l3.a and l1.a = 2 order by 1,2,3;
 
 --
+-- test anti_join/left_anti_semi_join selectivities
+--
+create table aj_t1(a int, b int, c int) distributed by (a);
+create table aj_t2(a int, b int, c int) distributed by (a);
+insert into aj_t1 values(1,1,1);
+insert into aj_t2 values(1,1,1),(2,2,2);
+
+explain(costs off) select t1.a from aj_t1 t1 where not exists (select 1 from aj_t2 t2 where t1.b = t2.b and t1.c = t2.c);
+
+select t1.a from aj_t1 t1 where not exists (select 1 from aj_t2 t2 where t1.b = t2.b and t1.c = t2.c);
+
+--
 -- test hash join
 --
 
