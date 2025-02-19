@@ -1186,6 +1186,11 @@ extern uint64 PlanStateOperatorMemKB(const PlanState *ps);
 		if (((PlanState *)(node))->instrument) \
 			((PlanState *)(node))->instrument->nfiltered2 += (delta); \
 	} while(0)
+#define InstrCountFilteredPRF(node, delta) \
+	do { \
+		if (((PlanState *)(node))->instrument) \
+			((PlanState *)(node))->instrument->nfilteredPRF += (delta); \
+	} while(0)
 
 /*
  * EPQState is state for executing an EvalPlanQual recheck on a candidate
@@ -1544,6 +1549,12 @@ typedef struct SeqScanState
 {
 	ScanState	ss;				/* its first field is NodeTag */
 	Size		pscan_len;		/* size of parallel heap scan descriptor */
+
+	List		*filters;			/* the list of struct ScanKeyData */
+	bool		filter_in_seqscan;	/* check scan slot with runtime filters in
+                                       seqscan node or in am */
+	int			num_scan_keys;		/* valid if filter_in_seqscan is false,
+                                       number of pushdown scan keys */
 } SeqScanState;
 
 /* ----------------
@@ -3069,6 +3080,20 @@ typedef struct RuntimeFilterState
 	bloom_filter *bf;
 } RuntimeFilterState;
 
+typedef struct AttrFilter
+{
+	bool			empty;  /* empty filter or not */
+	PlanState		*target;/* the node in where runtime filter will be used,
+							   target will be seqscan, see FindTargetAttr().
+							   in nodeHashjoin.c */
+	AttrNumber		rattno;	/* attr no in hash node */
+	AttrNumber		lattno;	/* if target is seqscan, attr no in relation */
+
+	bloom_filter	*blm_filter;
+	Datum			min;
+	Datum			max;
+} AttrFilter;
+
 /* ----------------
  *	 HashState information
  * ----------------
@@ -3104,6 +3129,8 @@ typedef struct HashState
 	struct ParallelHashJoinState *parallel_state;
 
 	Barrier	*sync_barrier;
+
+	List *filters;  /* the list of AttrFilter */
 } HashState;
 
 /* ----------------
