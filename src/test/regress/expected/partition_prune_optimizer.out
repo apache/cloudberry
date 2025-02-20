@@ -3378,7 +3378,6 @@ explain (analyze, costs off, summary off, timing off) execute mt_q1(15);
          ->  Sort (actual rows=1 loops=1)
                Sort Key: b
                Sort Method:  quicksort  Memory: 75kB
-               Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 1)
                ->  Dynamic Seq Scan on ma_test (actual rows=1 loops=1)
                      Number of partitions to scan: 3 (out of 3)
                      Filter: ((a >= $1) AND ((a % 10) = 5))
@@ -3402,7 +3401,6 @@ explain (analyze, costs off, summary off, timing off) execute mt_q1(25);
          ->  Sort (actual rows=1 loops=1)
                Sort Key: b
                Sort Method:  quicksort  Memory: 75kB
-               Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 2)
                ->  Dynamic Seq Scan on ma_test (actual rows=1 loops=1)
                      Number of partitions to scan: 3 (out of 3)
                      Filter: ((a >= $1) AND ((a % 10) = 5))
@@ -3426,7 +3424,6 @@ explain (analyze, costs off, summary off, timing off) execute mt_q1(35);
          ->  Sort (actual rows=0 loops=1)
                Sort Key: b
                Sort Method:  quicksort  Memory: 75kB
-               Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
                ->  Dynamic Seq Scan on ma_test (actual rows=0 loops=1)
                      Number of partitions to scan: 3 (out of 3)
                      Filter: ((a >= $1) AND ((a % 10) = 5))
@@ -3443,21 +3440,28 @@ deallocate mt_q1;
 prepare mt_q2 (int) as select * from ma_test where a >= $1 order by b limit 1;
 -- Ensure output list looks sane when the MergeAppend has no subplans.
 explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35);
-                                                                                            QUERY PLAN                                                                                            
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                        QUERY PLAN                                                                                                         
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit (actual rows=0 loops=1)
-   Output: ma_test.a, ma_test.b
+   Output: a, b
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-         Output: ma_test.a, ma_test.b
-         Merge Key: ma_test.b
+         Output: a, b
+         Merge Key: b
          ->  Limit (actual rows=0 loops=1)
-               Output: ma_test.a, ma_test.b
-               ->  Merge Append (actual rows=0 loops=1)
+               Output: a, b
+               ->  Sort (actual rows=0 loops=1)
+                     Output: a, b
                      Sort Key: ma_test.b
-                     Subplans Removed: 3
- Settings: enable_hashjoin = 'off', enable_indexonlyscan = 'off', enable_mergejoin = 'off', enable_seqscan = 'off', enable_sort = 'off', optimizer = 'on', plan_cache_mode = 'force_generic_plan'
- Optimizer: Postgres query optimizer
-(12 rows)
+                     Sort Method:  quicksort  Memory: 75kB
+   Max Memory: 25kB  Avg Memory: 25kB (3 segments)
+                     ->  Dynamic Seq Scan on public.ma_test (actual rows=0 loops=1)
+                           Output: a, b
+                           Number of partitions to scan: 3 (out of 3)
+                           Filter: (ma_test.a >= $1)
+                           Partitions scanned:  Avg 3.0 x 3 workers.  Max 3 parts (seg0).
+ Settings: enable_hashjoin = 'off', enable_indexonlyscan = 'off', enable_mergejoin = 'off', enable_parallel = 'off', enable_seqscan = 'off', enable_sort = 'off', optimizer = 'on', plan_cache_mode = 'force_generic_plan'
+ Optimizer: GPORCA
+(19 rows)
 
 deallocate mt_q2;
 -- ensure initplan params properly prune partitions

@@ -1746,16 +1746,16 @@ NestLoop(t1 t2)
 not used hint:
 duplication hint:
 error hint:
-                          QUERY PLAN
+                          QUERY PLAN                           
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop Anti Join
-         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+   ->  Nested Loop Left Anti Semi (Not-In) Join
+         Join Filter: (t1.a = t2.a)
          ->  Seq Scan on t1
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                      ->  Seq Scan on t2
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 --
@@ -1882,16 +1882,16 @@ MergeJoin(t1 t2)
 not used hint:
 duplication hint:
 error hint:
-                          QUERY PLAN
+                          QUERY PLAN                           
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop Anti Join
-         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+   ->  Nested Loop Left Anti Semi (Not-In) Join
+         Join Filter: (t1.a = t2.a)
          ->  Seq Scan on t1
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                      ->  Seq Scan on t2
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 --
@@ -2013,16 +2013,16 @@ HashJoin(t1 t2)
 not used hint:
 duplication hint:
 error hint:
-                          QUERY PLAN
+                          QUERY PLAN                           
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop Anti Join
-         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+   ->  Hash Left Anti Semi (Not-In) Join
+         Hash Cond: (t1.a = t2.a)
          ->  Seq Scan on t1
-         ->  Materialize
+         ->  Hash
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                      ->  Seq Scan on t2
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 -- Test planhints logging for JoinTypeHints
@@ -2041,16 +2041,16 @@ not used hint:
 HashJoin(y z)
 duplication hint:
 error hint:
-                          QUERY PLAN
+                          QUERY PLAN                           
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop Anti Join
-         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+   ->  Hash Left Anti Semi (Not-In) Join
+         Hash Cond: (t1.a = t2.a)
          ->  Seq Scan on t1
-         ->  Materialize
+         ->  Hash
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                      ->  Seq Scan on t2
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 -- Invalid JoinHint type to test Hint logging behavior
@@ -3999,14 +3999,12 @@ not used hint:
 Leading(((t5 t4) (t3 (t1 t2))))
 duplication hint:
 error hint:
-                                                     QUERY PLAN                                                      
----------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: (t3.a = t1.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on t3
-         ->  Hash
+   ->  Nested Loop Left Join
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t1.a
                ->  Nested Loop
                      ->  Broadcast Motion 1:3  (slice3; segments: 1)
                            ->  Limit
@@ -4024,8 +4022,13 @@ error hint:
                                  ->  Materialize
                                        ->  Broadcast Motion 3:3  (slice6; segments: 3)
                                              ->  Seq Scan on t5
- Optimizer: Postgres-based planner
-(24 rows)
+         ->  Memoize
+               Cache Key: t1.a
+               Cache Mode: logical
+               ->  Index Scan using i3 on t3
+                     Index Cond: (a = t1.a)
+ Optimizer: Postgres query optimizer
+(27 rows)
 
 /*+
     Leading((((t1 t2) t3) (t4 t5)))
@@ -4043,14 +4046,12 @@ not used hint:
 Leading((((t1 t2) t3) (t4 t5)))
 duplication hint:
 error hint:
-                                                     QUERY PLAN                                                      
----------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: (t3.a = t1.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on t3
-         ->  Hash
+   ->  Nested Loop Left Join
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t1.a
                ->  Nested Loop
                      ->  Broadcast Motion 1:3  (slice3; segments: 1)
                            ->  Limit
@@ -4068,8 +4069,13 @@ error hint:
                                  ->  Materialize
                                        ->  Broadcast Motion 3:3  (slice6; segments: 3)
                                              ->  Seq Scan on t5
- Optimizer: Postgres-based planner
-(24 rows)
+         ->  Memoize
+               Cache Key: t1.a
+               Cache Mode: logical
+               ->  Index Scan using i3 on t3
+                     Index Cond: (a = t1.a)
+ Optimizer: Postgres query optimizer
+(27 rows)
 
 --
 -- 2. LOJ inside subquery
@@ -4183,14 +4189,12 @@ not used hint:
 Leading(((t5 t4) (t3 (t1 t2))))
 duplication hint:
 error hint:
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: (t3.a = t1.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on t3
-         ->  Hash
+   ->  Nested Loop Left Join
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t1.a
                ->  Nested Loop
                      ->  Broadcast Motion 1:3  (slice3; segments: 1)
                            ->  Limit
@@ -4210,8 +4214,13 @@ error hint:
                                  ->  Materialize
                                        ->  Broadcast Motion 3:3  (slice5; segments: 3)
                                              ->  Seq Scan on t5
- Optimizer: Postgres-based planner
-(26 rows)
+         ->  Memoize
+               Cache Key: t1.a
+               Cache Mode: logical
+               ->  Index Scan using i3 on t3
+                     Index Cond: (a = t1.a)
+ Optimizer: Postgres query optimizer
+(29 rows)
 
 /*+
     Leading((((t2 t1) t3) (t4 t5)))
@@ -4229,14 +4238,12 @@ not used hint:
 Leading((((t2 t1) t3) (t4 t5)))
 duplication hint:
 error hint:
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: (t3.a = t1.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on t3
-         ->  Hash
+   ->  Nested Loop Left Join
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t1.a
                ->  Nested Loop
                      ->  Broadcast Motion 1:3  (slice3; segments: 1)
                            ->  Limit
@@ -4256,8 +4263,13 @@ error hint:
                                  ->  Materialize
                                        ->  Broadcast Motion 3:3  (slice5; segments: 3)
                                              ->  Seq Scan on t5
- Optimizer: Postgres-based planner
-(26 rows)
+         ->  Memoize
+               Cache Key: t1.a
+               Cache Mode: logical
+               ->  Index Scan using i3 on t3
+                     Index Cond: (a = t1.a)
+ Optimizer: Postgres query optimizer
+(29 rows)
 
 RESET client_min_messages;
 LOG:  statement: RESET client_min_messages;

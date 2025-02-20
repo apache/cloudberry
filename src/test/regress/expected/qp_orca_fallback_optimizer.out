@@ -353,9 +353,9 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  "a"   |          2
 (2 rows)
 
-reset optimizer_enable_orderedagg;
 -- start_ignore
 -- FIXME: gpcheckcat fails due to mismatching distribution policy if this table isn't dropped
 -- Keep this table around once this is fixed
+reset optimizer_enable_orderedagg;
 drop table ext_part;
 -- end_ignore

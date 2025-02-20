@@ -520,14 +520,14 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
-                     QUERY PLAN                      
------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Index Scan using gpointind on point_tbl p
-               Index Cond: (f1 <^ '(0,0)'::point)
-               Filter: (f1 <^ '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA)
+               Index Cond: (f1 <<| '(0,0)'::point)
+               Filter: (f1 <<| '(0,0)'::point)
+ Optimizer: GPORCA
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
@@ -538,14 +538,14 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
-                     QUERY PLAN                      
------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Index Scan using gpointind on point_tbl p
-               Index Cond: (f1 >^ '(0,0)'::point)
-               Filter: (f1 >^ '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA)
+               Index Cond: (f1 |>> '(0,0)'::point)
+               Filter: (f1 |>> '(0,0)'::point)
+ Optimizer: GPORCA
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';

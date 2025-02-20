@@ -2719,32 +2719,24 @@ select least_agg(variadic array[q1,q2]) from int8_tbl;
 (1 row)
 
 select cleast_agg(q1,q2) from int8_tbl;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
     cleast_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select cleast_agg(4.5,f1) from int4_tbl;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
  cleast_agg  
 -------------
  -2147483647
 (1 row)
 
 select cleast_agg(variadic array[4.5,f1]) from int4_tbl;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
  cleast_agg  
 -------------
  -2147483647
 (1 row)
 
 select pg_typeof(cleast_agg(variadic array[4.5,f1])) from int4_tbl;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
  pg_typeof 
 -----------
  numeric

@@ -8949,7 +8949,7 @@ create view distinct_windowagg_view as select sum(distinct g/2) OVER (partition 
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
@@ -8959,7 +8959,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
               View "olap_window_seq.distinct_windowagg_view"
  Column |  Type  | Collation | Nullable | Default | Storage | Description 
 --------+--------+-----------+----------+---------+---------+-------------

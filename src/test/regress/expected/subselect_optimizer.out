@@ -1025,25 +1025,25 @@ analyze exists_tbl;
 explain (costs off)
 select * from exists_tbl t1
   where (exists(select 1 from exists_tbl t2 where t1.c1 = t2.c2) or c3 < 0);
-                                              QUERY PLAN                                               
--------------------------------------------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Result
-                     Filter: ((COALESCE((count()), '0'::bigint) > '0'::bigint) OR (t1.c3 < 0))
-                     ->  Hash Left Join
-                           Hash Cond: (t1.c1 = t2.c2)
-                           ->  Dynamic Seq Scan on exists_tbl t1
-                                 Number of partitions to scan: 2 (out of 2)
-                           ->  Hash
-                                 ->  HashAggregate
-                                       Group Key: t2.c2
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                             Hash Key: t2.c2
-                                             ->  Dynamic Seq Scan on exists_tbl t2
-                                                   Number of partitions to scan: 2 (out of 2)
- Optimizer: Pivotal Optimizer (GPORCA)
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: ((COALESCE((count()), '0'::bigint) > '0'::bigint) OR (t1.c3 < 0))
+         ->  Hash Left Join
+               Hash Cond: (t1.c1 = t2.c2)
+               ->  Dynamic Seq Scan on exists_tbl t1
+                     Number of partitions to scan: 2 (out of 2)
+               ->  Hash
+                     ->  GroupAggregate
+                           Group Key: t2.c2
+                           ->  Sort
+                                 Sort Key: t2.c2
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: t2.c2
+                                       ->  Dynamic Seq Scan on exists_tbl t2
+                                             Number of partitions to scan: 2 (out of 2)
+ Optimizer: GPORCA
 (17 rows)
 
 select * from exists_tbl t1

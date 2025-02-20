@@ -1,3 +1,6 @@
+-- start_matchignore
+-- m/^LOG.*Missing statistics for column.*/
+-- end_matchignore
 -- Test Optimizer Plan Hints Feature
 --
 -- Purpose: Test that plan hints may be used to coerce the plan shape generated
@@ -167,6 +170,14 @@ EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
  */
 EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
 
+-- CBDB_MERGE_FIXME: ao/aocs table not suport IndexOnlyScan in PG Optimizer(ORCA support it)
+-- after we cherry-pick 74246e48ed(Enable index only scan on ao/aocs table)
+-- So current case will generate a scan seq(also other IndexOnlyScan(your_table) will).
+-- See more details in indxpath.c:L817, The logic is:
+-- 
+-- if (!AMHandlerIsAO(rel->amhandler) ||
+--				index->amcostestimate == bmcostestimate)
+--				add_path(rel, (Path *) ipath, root);
 /*+
     IndexOnlyScan(t2 your_amazing_index)
  */

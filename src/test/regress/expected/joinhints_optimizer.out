@@ -1877,16 +1877,16 @@ MergeJoin(t1 t2)
 not used hint:
 duplication hint:
 error hint:
-                          QUERY PLAN
+                          QUERY PLAN                           
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop Anti Join
-         Join Filter: ((t1.a = t2.a) IS NOT FALSE)
+   ->  Nested Loop Left Anti Semi (Not-In) Join
+         Join Filter: (t1.a = t2.a)
          ->  Seq Scan on t1
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                      ->  Seq Scan on t2
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 --

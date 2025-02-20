@@ -78,7 +78,9 @@ CGPOptimizer::GPOPTOptimizedPlan(
 		else if (GPOS_MATCH_EX(ex, CException::ExmaInvalid,
 							   CException::ExmiORCAInvalidState))
 		{
-			if (errstart(INFO, TEXTDOMAIN))
+			// The fallback logic below cannot be used because the current 
+			// exception stack does not belong to the current QUERY.
+			if (errstart(LOG, TEXTDOMAIN))
 			{
 				errcode(ERRCODE_INTERNAL_ERROR);
 				errmsg(

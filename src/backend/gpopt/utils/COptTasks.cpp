@@ -529,7 +529,7 @@ GenerateJoinNodes(CMemoryPool *mp, OuterInnerRels *outer_inner,
 		CJoinHint::JoinNode *right_joinnode = GenerateJoinNodes(
 			mp,
 			(OuterInnerRels *) lfirst(
-				lnext(list_head(outer_inner->outer_inner_pair))),
+				list_second_cell(outer_inner->outer_inner_pair)),
 			aliases);
 
 		if (nullptr == left_joinnode || nullptr == right_joinnode)
@@ -998,6 +998,8 @@ COptTasks::OptimizeTask(void *ptr)
 
 			CStatisticsConfig *stats_conf = optimizer_config->GetStatsConf();
 			col_stats = GPOS_NEW(mp) IMdIdArray(mp);
+			// CBDB_MERGE_FIXME: empty table after analyze still have no stats
+			// cause CBDB can't tell empty or no stats
 			stats_conf->CollectMissingStatsColumns(col_stats);
 
 			rel_stats = GPOS_NEW(mp) MdidHashSet(mp);

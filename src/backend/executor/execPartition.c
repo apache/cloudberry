@@ -184,7 +184,7 @@ static void FormPartitionKeyDatum(PartitionDispatch pd,
 								  EState *estate,
 								  Datum *values,
 								  bool *isnull,
-								  AttrNumber *attno_map);
+								  AttrMap *attno_map);
 
 static char *ExecBuildSlotPartitionKeyDescription(Relation rel,
 												  Datum *values,
@@ -328,7 +328,7 @@ ExecFindPartition(ModifyTableState *mtstate,
 															  RelationGetDescr(dispatch->reldesc));
 		}
 		/* Populate values/isnull with partition key value from tuple */
-		FormPartitionKeyDatum(dispatch, slot, estate, values, isnull, attno_map->attnums);
+		FormPartitionKeyDatum(dispatch, slot, estate, values, isnull, attno_map);
 
 		/*
 		 * If this partitioned table has no partitions or no partition for
@@ -1270,7 +1270,7 @@ FormPartitionKeyDatum(PartitionDispatch pd,
 					  EState *estate,
 					  Datum *values,
 					  bool *isnull,
-					  AttrNumber *attno_map)
+					  AttrMap *attno_map)
 {
 	ListCell   *partexpr_item;
 	int			i;
@@ -1290,8 +1290,10 @@ FormPartitionKeyDatum(PartitionDispatch pd,
 	{
 		AttrNumber	keycol = pd->key->partattrs[i];
 		/* Use passed in map to extract part key, as slot's attrs may not match the Relation's attrs */
-		if (attno_map)
-			keycol = attno_map[pd->key->partattrs[i]-1];
+		if (attno_map) {
+			Assert(pd->key->partattrs[i] - 1 < attno_map->maplen);
+			keycol = attno_map->attnums[pd->key->partattrs[i] - 1];
+		}
 
 		Datum		datum;
 		bool		isNull;

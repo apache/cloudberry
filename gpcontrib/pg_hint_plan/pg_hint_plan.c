@@ -3707,7 +3707,7 @@ restrict_indexes(PlannerInfo *root, ScanMethodHint *hint, RelOptInfo *rel,
 		}
 
 		if (!use_index)
-			rel->indexlist = list_delete_cell(rel->indexlist, cell);
+			rel->indexlist = foreach_delete_current(rel->indexlist, cell);
 
 		pfree(indexname);
 	}
@@ -4456,7 +4456,7 @@ transform_join_hints(HintState *hstate, PlannerInfo *root, int nbaserel,
 						  hint->joinrelids)))
 					{
 						hstate->join_hint_level[i] =
-							list_delete_cell(hstate->join_hint_level[i], l);
+							foreach_delete_current(hstate->join_hint_level[i], l);
 					}
 				}
 			}

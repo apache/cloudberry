@@ -56,20 +56,20 @@ select explain_filter('explain select * from int8_tbl i8');
                               explain_filter                              
 --------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N)
- Optimizer: Pivotal Optimizer (GPORCA)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
+ Optimizer: GPORCA
 (3 rows)
 
 select explain_filter('explain (analyze) select * from int8_tbl i8');
                                                  explain_filter                                                 
 ----------------------------------------------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-   ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
  Planning Time: N.N ms
    (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice1)    Executor memory: 112K bytes avg x 3x(N) workers, 112K bytes max (seg0).
  Memory used:  NkB
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
  Execution Time: N.N ms
 (8 rows)
 
@@ -78,14 +78,14 @@ select explain_filter('explain (analyze, verbose) select * from int8_tbl i8');
 ----------------------------------------------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Output: q1, q2
-   ->  Seq Scan on public.int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
          Output: q1, q2
- Settings: optimizer = 'on'
+ Settings: enable_parallel = 'off', optimizer = 'on'
  Planning Time: N.N ms
    (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
+   (slice1)    Executor memory: 110K bytes avg x 3x(N) workers, 110K bytes max (seg0).
  Memory used:  NkB
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
  Execution Time: N.N ms
 (11 rows)
 
@@ -93,12 +93,12 @@ select explain_filter('explain (analyze, buffers, format text) select * from int
                                                  explain_filter                                                 
 ----------------------------------------------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-   ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
  Planning Time: N.N ms
    (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 110K bytes avg x N workers, 110K bytes max (seg0).
+   (slice1)    Executor memory: 110K bytes avg x 3x(N) workers, 110K bytes max (seg0).
  Memory used:  NkB
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
  Execution Time: N.N ms
 (8 rows)
 
@@ -402,7 +402,7 @@ select explain_filter('explain (buffers, format text) select * from int8_tbl i8'
                               explain_filter                              
 --------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N)
+   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
  Optimizer: Pivotal Optimizer (GPORCA)
 (3 rows)
 
@@ -743,9 +743,9 @@ select explain_filter('explain (verbose) select * from int8_tbl i8');
 --------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
    Output: q1, q2
-   ->  Seq Scan on public.int8_tbl  (cost=N.N..N.N rows=N width=N)
+   ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N)
          Output: q1, q2
- Settings: optimizer = 'on'
- Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: enable_parallel = 'off', optimizer = 'on'
+ Optimizer: GPORCA
 (6 rows)
 

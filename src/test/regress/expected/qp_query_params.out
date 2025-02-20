@@ -62,14 +62,14 @@ deallocate q1;
 -- Should perform static elimination at execution time, Orca does not do this currently
 PREPARE q1 as SELECT * from part where a=$1;
 explain (costs off) EXECUTE q1(2);
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          Subplans Removed: 3
-         ->  Seq Scan on part_1_prt_2
+         ->  Seq Scan on part_1_prt_2 part_1
                Filter: (a = $1)
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (6 rows)
 
 execute q1(2);
@@ -80,14 +80,14 @@ execute q1(2);
 
 -- Ensure default partition is scanned
 explain (costs off) EXECUTE q1(9);
-                QUERY PLAN                
-------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          Subplans Removed: 3
-         ->  Seq Scan on part_1_prt_def
+         ->  Seq Scan on part_1_prt_def part_1
                Filter: (a = $1)
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (6 rows)
 
 execute q1(9);

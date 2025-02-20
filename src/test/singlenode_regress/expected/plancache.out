@@ -368,20 +368,29 @@ execute test_mode_pp(1); -- 5x
   1000
 (1 row)
 
+-- should not be custom_plans
+--  - The version of CBDB before commit "Support Query Parameters in Orca"
+--    will cause the function `choose_custom_plan` always return true.
+--    because `optimizer` is on in singlenode tests
+--  - After that commit, the function `choose_custom_plan` will calculate
+--    and compare `avg_custom_cost` and `generic_cost` to decide use the
+--    custom plan or not.
+--  - SingleNode have not segment(excute in itself), current `avg_custom_cost`
+--    always less than `generic_cost`. So it won't use the custom plan.
 select name, generic_plans, custom_plans from pg_prepared_statements
   where  name = 'test_mode_pp';
      name     | generic_plans | custom_plans 
 --------------+---------------+--------------
- test_mode_pp |             1 |            6
+ test_mode_pp |             2 |            5
 (1 row)
 
 -- we should now get a really bad plan
 explain (costs off) execute test_mode_pp(2);
-                        QUERY PLAN                        
-----------------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Aggregate
-   ->  Index Only Scan using test_mode_a_idx on test_mode
-         Index Cond: (a = 2)
+   ->  Seq Scan on test_mode
+         Filter: (a = $1)
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -400,7 +409,7 @@ select name, generic_plans, custom_plans from pg_prepared_statements
   where  name = 'test_mode_pp';
      name     | generic_plans | custom_plans 
 --------------+---------------+--------------
- test_mode_pp |             1 |            8
+ test_mode_pp |             3 |            6
 (1 row)
 
 drop table test_mode;

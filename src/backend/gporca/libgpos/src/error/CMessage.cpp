@@ -259,10 +259,10 @@ CMessage::GetMessage(ULONG index)
 							CException::ExmiORCAInvalidState),
 				 CException::ExsevError,
 				 GPOS_WSZ_WSZLEN(
-					 "This is an invalid state, please report this error"),
+					 "Invalid state, Falling back to Postgres-based planner."),
 				 0,
 				 GPOS_WSZ_WSZLEN(
-					 "This is an invalid state, please report this error."))};
+					 "Invalid state, Falling back to Postgres-based planner."))};
 
 	return &msg[index];
 }

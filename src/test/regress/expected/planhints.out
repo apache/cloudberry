@@ -1,3 +1,6 @@
+-- start_matchignore
+-- m/^LOG.*Missing statistics for column.*/
+-- end_matchignore
 -- Test Optimizer Plan Hints Feature
 --
 -- Purpose: Test that plan hints may be used to coerce the plan shape generated
@@ -684,6 +687,14 @@ error hint:
  Optimizer: Postgres query optimizer
 (4 rows)
 
+-- CBDB_MERGE_FIXME: ao/aocs table not suport IndexOnlyScan in PG Optimizer(ORCA support it)
+-- after we cherry-pick 74246e48ed(Enable index only scan on ao/aocs table)
+-- So current case will generate a scan seq(also other IndexOnlyScan(your_table) will).
+-- See more details in indxpath.c:L817, The logic is:
+-- 
+-- if (!AMHandlerIsAO(rel->amhandler) ||
+--				index->amcostestimate == bmcostestimate)
+--				add_path(rel, (Path *) ipath, root);
 /*+
     IndexOnlyScan(t2 your_amazing_index)
  */
@@ -2524,11 +2535,11 @@ IndexScanRegexp(t1 '*awesome*')
 not used hint:
 duplication hint:
 error hint:
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using my_incredible_index on my_table t1
-         Index Cond: (a < 42)
+   ->  Seq Scan on my_table t1
+         Filter: (a < 42)
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -2547,11 +2558,11 @@ IndexOnlyScanRegexp(t1 '*awesome*')
 not used hint:
 duplication hint:
 error hint:
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using my_incredible_index on my_table t1
-         Index Cond: (a < 42)
+   ->  Seq Scan on my_table t1
+         Filter: (a < 42)
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -2570,15 +2581,13 @@ BitmapScanRegexp(t1 '*awesome*')
 not used hint:
 duplication hint:
 error hint:
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on my_table t1
-         Recheck Cond: (a < 42)
-         ->  Bitmap Index Scan on my_incredible_index
-               Index Cond: (a < 42)
+   ->  Seq Scan on my_table t1
+         Filter: (a < 42)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 --------------------------------------------------------------------
 --

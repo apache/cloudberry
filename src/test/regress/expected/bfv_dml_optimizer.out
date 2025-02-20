@@ -679,14 +679,24 @@ NOTICE:  dropping a column that is part of the distribution policy forces a rand
 alter table part set WITH (reorganize=true) distributed by (e);
 -- test delete with dropped column
 explain delete from part where d>9;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Delete on part  (cost=0.00..431.03 rows=1 width=1)
-   ->  Dynamic Seq Scan on part  (cost=0.00..431.00 rows=1 width=26)
-         Number of partitions to scan: 4 (out of 4)
-         Filter: (d > '9'::numeric)
- Optimizer: GPORCA
-(5 rows)
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Delete on part  (cost=0.00..742.33 rows=0 width=0)
+   Delete on part_1_prt_2 part_1
+   Delete on part_1_prt_3 part_2
+   Delete on part_1_prt_4 part_3
+   Delete on part_1_prt_def part_4
+   ->  Append  (cost=0.00..742.33 rows=14267 width=14)
+         ->  Seq Scan on part_1_prt_2 part_1  (cost=0.00..167.75 rows=3567 width=14)
+               Filter: (d > '9'::numeric)
+         ->  Seq Scan on part_1_prt_3 part_2  (cost=0.00..167.75 rows=3567 width=14)
+               Filter: (d > '9'::numeric)
+         ->  Seq Scan on part_1_prt_4 part_3  (cost=0.00..167.75 rows=3567 width=14)
+               Filter: (d > '9'::numeric)
+         ->  Seq Scan on part_1_prt_def part_4  (cost=0.00..167.75 rows=3567 width=14)
+               Filter: (d > '9'::numeric)
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 delete from part where d>9;
 select count(*) from part;
@@ -697,14 +707,24 @@ select count(*) from part;
 
 -- test delete with added partition key
 explain delete from part where e=3;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Delete on part  (cost=0.00..431.03 rows=1 width=1)
-   ->  Dynamic Seq Scan on part  (cost=0.00..431.00 rows=1 width=18)
-         Number of partitions to scan: 4 (out of 4)
-         Filter: (e = 3)
- Optimizer: GPORCA
-(5 rows)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Delete on part  (cost=0.00..671.21 rows=0 width=0)
+   Delete on part_1_prt_2 part_1
+   Delete on part_1_prt_3 part_2
+   Delete on part_1_prt_4 part_3
+   Delete on part_1_prt_def part_4
+   ->  Append  (cost=0.00..671.21 rows=43 width=14)
+         ->  Seq Scan on part_1_prt_2 part_1  (cost=0.00..167.75 rows=11 width=14)
+               Filter: (e = 3)
+         ->  Seq Scan on part_1_prt_3 part_2  (cost=0.00..167.75 rows=11 width=14)
+               Filter: (e = 3)
+         ->  Seq Scan on part_1_prt_4 part_3  (cost=0.00..167.75 rows=11 width=14)
+               Filter: (e = 3)
+         ->  Seq Scan on part_1_prt_def part_4  (cost=0.00..167.75 rows=11 width=14)
+               Filter: (e = 3)
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 delete from part where e=3;
 select count(*) from part;
@@ -715,13 +735,13 @@ select count(*) from part;
 
 -- test delete from default partition
 explain delete from part where a=8;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Delete on part  (cost=0.00..431.03 rows=1 width=1)
-   ->  Dynamic Seq Scan on part  (cost=0.00..431.00 rows=1 width=18)
-         Number of partitions to scan: 1 (out of 4)
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Delete on part  (cost=0.00..167.75 rows=0 width=0)
+   Delete on part_1_prt_def part_1
+   ->  Seq Scan on part_1_prt_def part_1  (cost=0.00..167.75 rows=11 width=14)
          Filter: (a = 8)
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (5 rows)
 
 delete from part where a=8;
@@ -753,14 +773,24 @@ NOTICE:  dropping a column that is part of the distribution policy forces a rand
 alter table part set WITH (reorganize=true) distributed by (e);
 -- test delete with column order change
 explain delete from part where d>9;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Delete on part  (cost=0.00..431.03 rows=1 width=1)
-   ->  Dynamic Seq Scan on part  (cost=0.00..431.00 rows=1 width=26)
-         Number of partitions to scan: 4 (out of 4)
-         Filter: (d > '9'::numeric)
- Optimizer: GPORCA
-(5 rows)
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Delete on part  (cost=0.00..717.78 rows=0 width=0)
+   Delete on part_1_prt_2 part_1
+   Delete on part_1_prt_3 part_2
+   Delete on part_1_prt_4 part_3
+   Delete on part_1_prt_def part_4
+   ->  Append  (cost=0.00..717.78 rows=13689 width=14)
+         ->  Seq Scan on part_1_prt_2 part_1  (cost=0.00..162.33 rows=3422 width=14)
+               Filter: (d > '9'::numeric)
+         ->  Seq Scan on part_1_prt_3 part_2  (cost=0.00..162.33 rows=3422 width=14)
+               Filter: (d > '9'::numeric)
+         ->  Seq Scan on part_1_prt_4 part_3  (cost=0.00..162.33 rows=3422 width=14)
+               Filter: (d > '9'::numeric)
+         ->  Seq Scan on part_1_prt_def part_4  (cost=0.00..162.33 rows=3422 width=14)
+               Filter: (d > '9'::numeric)
+ Optimizer: Postgres query optimizer
+(15 rows)
 
 delete from part where d>9;
 select count(*) from part;

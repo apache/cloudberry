@@ -74,24 +74,24 @@ explain(costs off) select *, (select ss.y as z from phv_t as t3 limit 1) from ph
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: phv_t.a, phv_t.b
+   Merge Key: t1.a, t1.b
    ->  Result
          ->  Sort
-               Sort Key: phv_t.a, phv_t.b
+               Sort Key: t1.a, t1.b
                ->  Hash Left Join
-                     Hash Cond: (phv_t.b = phv_t_1.a)
+                     Hash Cond: (t1.b = t2.a)
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: phv_t.b
-                           ->  Seq Scan on phv_t
+                           Hash Key: t1.b
+                           ->  Seq Scan on phv_t t1
                      ->  Hash
-                           ->  Seq Scan on phv_t phv_t_1
+                           ->  Seq Scan on phv_t t2
          SubPlan 1
            ->  Limit
                  ->  Result
                        ->  Materialize
                              ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                   ->  Seq Scan on phv_t phv_t_2
- Optimizer: Pivotal Optimizer (GPORCA)
+                                   ->  Seq Scan on phv_t t3
+ Optimizer: GPORCA
 (19 rows)
 
 select *, (select ss.y as z from phv_t as t3 limit 1) from phv_t t1 left join
@@ -288,37 +288,37 @@ select a from gs_tab t1 where b in
 		or (c >= 2))
 	or (b <= 3)
 order by a;
-                                                                                                                                      QUERY PLAN                                                                                                                                      
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                              QUERY PLAN                                                                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: gs_tab_2.a
+   Merge Key: t1.a
    ->  Sort
-         Sort Key: gs_tab_2.a
+         Sort Key: t1.a
          ->  Result
-               Filter: (CASE WHEN ((count((true))) > '0'::bigint) THEN CASE WHEN ((sum((CASE WHEN ((gs_tab_2.b = gs_tab_1.b) IS NULL) THEN 1 ELSE 0 END))) = (count((true)))) THEN NULL::boolean ELSE true END ELSE false END OR (gs_tab_2.b <= 3))
+               Filter: (CASE WHEN ((count((true))) > '0'::bigint) THEN CASE WHEN ((sum((CASE WHEN ((t1.b = t2.b) IS NULL) THEN 1 ELSE 0 END))) = (count((true)))) THEN NULL::boolean ELSE true END ELSE false END OR (t1.b <= 3))
                ->  GroupAggregate
-                     Group Key: gs_tab_2.a, gs_tab_2.b, gs_tab_2.ctid, gs_tab_2.gp_segment_id
+                     Group Key: t1.a, t1.b, t1.ctid, t1.gp_segment_id
                      ->  Nested Loop Left Join
-                           Join Filter: ((gs_tab_2.b = gs_tab_1.b) IS NOT FALSE)
+                           Join Filter: ((t1.b = t2.b) IS NOT FALSE)
                            ->  Sort
-                                 Sort Key: gs_tab_2.a, gs_tab_2.b, gs_tab_2.ctid, gs_tab_2.gp_segment_id
-                                 ->  Seq Scan on gs_tab gs_tab_2
+                                 Sort Key: t1.a, t1.b, t1.ctid, t1.gp_segment_id
+                                 ->  Seq Scan on gs_tab t1
                            ->  Materialize
                                  ->  Result
                                        ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                              ->  Result
-                                                   Filter: (CASE WHEN ((count((true))) > '0'::bigint) THEN CASE WHEN ((sum((CASE WHEN ((gs_tab_1.c = gs_tab.c) IS NULL) THEN 1 ELSE 0 END))) = (count((true)))) THEN NULL::boolean ELSE true END ELSE false END OR (gs_tab_1.c >= 2))
+                                                   Filter: (CASE WHEN ((count((true))) > '0'::bigint) THEN CASE WHEN ((sum((CASE WHEN ((t2.c = t3.c) IS NULL) THEN 1 ELSE 0 END))) = (count((true)))) THEN NULL::boolean ELSE true END ELSE false END OR (t2.c >= 2))
                                                    ->  GroupAggregate
-                                                         Group Key: gs_tab_1.a, gs_tab_1.b, gs_tab_1.c, gs_tab_1.ctid, gs_tab_1.gp_segment_id
+                                                         Group Key: t2.a, t2.b, t2.c, t2.ctid, t2.gp_segment_id
                                                          ->  Nested Loop Left Join
-                                                               Join Filter: ((gs_tab_1.c = gs_tab.c) IS NOT FALSE)
+                                                               Join Filter: ((t2.c = t3.c) IS NOT FALSE)
                                                                ->  Sort
-                                                                     Sort Key: gs_tab_1.a, gs_tab_1.b, gs_tab_1.c, gs_tab_1.ctid, gs_tab_1.gp_segment_id
-                                                                     ->  Seq Scan on gs_tab gs_tab_1
+                                                                     Sort Key: t2.a, t2.b, t2.c, t2.ctid, t2.gp_segment_id
+                                                                     ->  Seq Scan on gs_tab t2
                                                                ->  Materialize
                                                                      ->  Result
                                                                            ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                                                                 ->  Seq Scan on gs_tab
+                                                                                 ->  Seq Scan on gs_tab t3
  Optimizer: GPORCA
 (30 rows)
 
@@ -3652,20 +3652,6 @@ select * from r where b in (select b from s where c=10 order by c limit 2);
  1 | 2 | 3
 (1 row)
 
--- test cross params of initplan
--- https://github.com/greenplum-db/gpdb/issues/16268
-create table tmp (a varchar, b varchar, c varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-select (SELECT EXISTS
-                 (SELECT
-                  FROM pg_views
-                  WHERE schemaname = a)) from tmp;
- exists 
---------
-(0 rows)
-
-drop table tmp;
 -- Test nested query with aggregate inside a sublink,
 -- ORCA should correctly normalize the aggregate expression inside the
 -- sublink's nested query and the column variable accessed in aggregate should

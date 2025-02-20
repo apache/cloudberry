@@ -3576,36 +3576,30 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 explain (costs off) select * from (   
  select distinct (select bar.c from bar_predicate_pushdown bar where c = foo.b) as ss from foo_predicate_pushdown foo
 ) ABC where ABC.ss = 5;
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ((SubPlan 1))
-   ->  Unique
-         Group Key: ((SubPlan 1))
-         ->  Sort
-               Sort Key: ((SubPlan 1))
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ((SubPlan 1))
-                     ->  Seq Scan on foo_predicate_pushdown foo
-                           Filter: ((SubPlan 2) = 5)
-                           SubPlan 1
-                             ->  Result
-                                   Filter: (bar.c = foo.b)
-                                   ->  Materialize
-                                         ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                               ->  Seq Scan on bar_predicate_pushdown bar
-                           SubPlan 2
-                             ->  Result
-                                   Filter: (bar_1.c = foo.b)
-                                   ->  Materialize
-                                         ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                               ->  Seq Scan on bar_predicate_pushdown bar_1
- Optimizer: Postgres-based planner
-(23 rows)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Subquery Scan on abc
+   Filter: (abc.ss = 5)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: ((SubPlan 1))
+         ->  Unique
+               Group Key: ((SubPlan 1))
+               ->  Sort
+                     Sort Key: ((SubPlan 1))
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: ((SubPlan 1))
+                           ->  Seq Scan on foo_predicate_pushdown foo
+                                 SubPlan 1
+                                   ->  Result
+                                         Filter: (bar.c = foo.b)
+                                         ->  Materialize
+                                               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                                     ->  Seq Scan on bar_predicate_pushdown bar
+ Optimizer: Postgres query optimizer
+(18 rows)
 
 DROP TABLE foo_predicate_pushdown;
 DROP TABLE bar_predicate_pushdown;
-
 --
 -- Test case for ORCA semi join with random table
 -- See https://github.com/greenplum-db/gpdb/issues/16611
