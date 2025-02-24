@@ -34,24 +34,20 @@ select sess_id from pg_stat_activity where pg_backend_pid()=pid;
 (1 row)
 
 \gset
--- end_ignore
-CREATE TABLE foo(a int);
+CREATE TABLE foo(a int, b int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test(a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-INSERT INTO foo SELECT generate_series(0,40000000);
-INSERT INTO test SELECT generate_series(0,40000000);
+\timing
+INSERT INTO foo SELECT i + 1 from generate_series(0,80000000) as i;
+Time: 149935.380 ms (02:29.935)
+\timing
+-- end_ignore
 -- test query text in multiple lines
 INSERT INTO test
 SELECT generate_series(0,10);
-select count(*) from foo,test where foo.a=test.a;
-  count   
-----------
- 40000012
-(1 row)
-
 -- test nested query
 create or replace function n_join_foo_test() returns integer as $$
 begin
@@ -61,7 +57,7 @@ $$ language plpgsql;
 select * from n_join_foo_test();
  n_join_foo_test 
 -----------------
-        40000012
+              10
 (1 row)
 
 DROP TABLE foo;
@@ -117,29 +113,27 @@ select count(*) > 0 from diskspace_history;
 
 select ccnt, status, query_text, length(query_plan) > 0 from queries_history
 where ssid = :sess_id order by ccnt;
- ccnt | status |                            query_text                            | ?column? 
-------+--------+------------------------------------------------------------------+----------
-    2 | done   | select sess_id from pg_stat_activity where pg_backend_pid()=pid; | t
-    4 | done   | select sess_id from pg_stat_activity where pg_backend_pid()=pid; | t
-    8 | done   | INSERT INTO foo SELECT generate_series(0,40000000);              | t
-   10 | done   | INSERT INTO test SELECT generate_series(0,40000000);             | t
-   12 | done   | INSERT INTO test                                                +| t
-      |        | SELECT generate_series(0,10);                                    | 
-   14 | done   | select count(*) from foo,test where foo.a=test.a;                | t
-   17 | done   | select * from n_join_foo_test();                                 | t
-(7 rows)
+ ccnt | status |                             query_text                              | ?column? 
+------+--------+---------------------------------------------------------------------+----------
+    2 | done   | select sess_id from pg_stat_activity where pg_backend_pid()=pid;    | t
+    4 | done   | select sess_id from pg_stat_activity where pg_backend_pid()=pid;    | t
+    8 | done   | INSERT INTO foo SELECT i + 1 from generate_series(0,80000000) as i; | t
+   10 | done   | INSERT INTO test                                                   +| t
+      |        | SELECT generate_series(0,10);                                       | 
+   13 | done   | select * from n_join_foo_test();                                    | t
+(5 rows)
 
 SELECT COUNT(*) FROM (SELECT DISTINCT ccnt FROM queries_history
 where ssid = :sess_id) as temp;
  count 
 -------
-     7
+     5
 (1 row)
 
 select mem_peak>0, cpu_currpct>0, spill_file_size>0, skew_cpu>0, status, query_text, length(query_plan) > 0 from queries_history
-where ssid = :sess_id and query_text = 'select count(*) from foo,test where foo.a=test.a;'
- ?column? | ?column? | ?column? | ?column? | status |                    query_text                     | ?column? 
-----------+----------+----------+----------+--------+---------------------------------------------------+----------
- t        | t        | t        | t        | done   | select count(*) from foo,test where foo.a=test.a; | t
+where ssid = :sess_id and query_text = 'INSERT INTO foo SELECT i + 1 from generate_series(0,80000000) as i;'
+ ?column? | ?column? | ?column? | ?column? | status |                             query_text                              | ?column? 
+----------+----------+----------+----------+--------+---------------------------------------------------------------------+----------
+ t        | t        | t        | t        | done   | INSERT INTO foo SELECT i + 1 from generate_series(0,80000000) as i; | t
 (1 row)
 

@@ -24,16 +24,16 @@ select wait_for_gpmmon_work();
 \c contrib_regression
 select sess_id from pg_stat_activity where pg_backend_pid()=pid;
 \gset
+CREATE TABLE foo(a int, b int);
+CREATE TABLE test(a int);
+\timing
+INSERT INTO foo SELECT i + 1 from generate_series(0,80000000) as i;
+\timing
 -- end_ignore
 
-CREATE TABLE foo(a int);
-CREATE TABLE test(a int);
-INSERT INTO foo SELECT generate_series(0,40000000);
-INSERT INTO test SELECT generate_series(0,40000000);
 -- test query text in multiple lines
 INSERT INTO test
 SELECT generate_series(0,10);
-select count(*) from foo,test where foo.a=test.a;
 -- test nested query
 create or replace function n_join_foo_test() returns integer as $$
 begin
@@ -67,4 +67,4 @@ SELECT COUNT(*) FROM (SELECT DISTINCT ccnt FROM queries_history
 where ssid = :sess_id) as temp;
 
 select mem_peak>0, cpu_currpct>0, spill_file_size>0, skew_cpu>0, status, query_text, length(query_plan) > 0 from queries_history
-where ssid = :sess_id and query_text = 'select count(*) from foo,test where foo.a=test.a;'
+where ssid = :sess_id and query_text = 'INSERT INTO foo SELECT i + 1 from generate_series(0,80000000) as i;'

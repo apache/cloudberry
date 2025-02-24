@@ -24,8 +24,6 @@
 
 void update_log_filename(void);
 void gx_main(int, apr_int64_t);
-static void agg_metrics(apr_hash_t* pidtab, apr_hash_t* query_cpu_table, apr_hash_t* querysegtab, apr_pool_t* oldpool);
-
 /* Temporary global memory to store the qexec line for a send*/
 char	qexec_smon_temp_line[QEXEC_MAX_ROW_BUF_SIZE];
 
@@ -63,9 +61,8 @@ struct pidrec_t
 	gpmon_proc_metrics_t p_metrics;
 	apr_uint64_t cpu_elapsed;
 	gpmon_qlogkey_t query_key;
-        gpmon_query_seginfo_key_t qseg_key;
-        gpmon_qexec_hash_key_t hash_key;
-        gpmon_pidtable_key_t  pidtable_key;
+	gpmon_query_seginfo_key_t qseg_key;
+	gpmon_qexec_hash_key_t hash_key;
 };
 
 typedef struct gx_t gx_t;
@@ -165,7 +162,10 @@ void update_log_filename()
 
 static void gx_accept(SOCKET sock, short event, void* arg);
 static void gx_recvfrom(SOCKET sock, short event, void* arg);
-//static apr_uint32_t create_qexec_packet(const gpmon_qexec_t* qexec, gp_smon_to_mmon_packet_t* pkt);
+static void agg_one_query_metrics(pidrec_t *totalMetric, pidrec_t *pidrec);
+static void agg_metrics(apr_hash_t *pidtab, apr_hash_t *query_perf_metrics_table,
+                        apr_hash_t *querysegtab, apr_pool_t *oldpool);
+static void refresh_proc_metrics(pidrec_t *rec);
 
 /**
  * helper function to copy the union packet from a gpmon_packet_t to a gp_smon_to_mmon_packet_t
@@ -254,91 +254,51 @@ static void send_smon_to_mon_pkt(SOCKET sock, gp_smon_to_mmon_packet_t* pkt)
 	TR2(("Sent packet of type %d to mmon\n", pkt->header.pkttype));
 }
 
-static void get_pid_metrics(gpmon_qexec_hash_key_t key, apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt)
+static void refresh_proc_metrics(pidrec_t* rec)
 {
+	apr_int32_t tmid;
+	apr_int32_t ssid;
+	apr_int32_t ccnt;
 	apr_int32_t status;
 	sigar_proc_cpu_t cpu;
 	sigar_proc_mem_t mem;
 	sigar_mem_t system_mem;
 	sigar_proc_fd_t fd;
-	pidrec_t* rec;
-	apr_pool_t* pool = apr_hash_pool_get(gx.pidtab);
 
-        gpmon_pidtable_key_t pidtable_key;
-        pidtable_key.pid = key.pid;
-        pidtable_key.qkey.tmid = tmid;
-        pidtable_key.qkey.ssid = ssid;
-        pidtable_key.qkey.ccnt = ccnt;
-	rec = apr_hash_get(gx.pidtab, &pidtable_key, sizeof(pidtable_key));
-        if (rec && rec->updated_tick == gx.tick)
-		return; /* updated in current cycle */
+	if (rec == NULL)
+		return;
+	tmid = rec->query_key.tmid;
+	ssid = rec->query_key.ssid;
+	ccnt = rec->query_key.ccnt;
 	memset(&cpu, 0, sizeof(cpu));
 	memset(&mem, 0, sizeof(mem));
 	memset(&fd, 0, sizeof(fd));
 
-	if (!rec)
-	{
-		sigar_proc_exe_t exe;
 
-		/* There might be cases where the pid no longer exist, so we'll just
-		 * zero out the memory first before doing anything */
-		rec = apr_pcalloc(pool, sizeof(*rec));
-		CHECKMEM(rec);
-
-                gpmon_query_seginfo_key_t	qseg_key;
-                qseg_key.qkey.tmid = tmid;
-                qseg_key.qkey.ssid = ssid;
-                qseg_key.qkey.ccnt = ccnt;
-                qseg_key.segid = key.segid;
-
-
-		rec->pid = key.pid;
-		rec->query_key.tmid = tmid;
-		rec->query_key.ssid = ssid;
-		rec->query_key.ccnt = ccnt;
-                rec->qseg_key = qseg_key;
-                rec->hash_key = key;
-
-                rec->pidtable_key = pidtable_key;
-
-		rec->pname = rec->cwd = 0;
-		if (0 == sigar_proc_exe_get(gx.sigar, key.pid, &exe))
-		{
-			rec->pname = apr_pstrdup(pool, exe.name);
-			rec->cwd = apr_pstrdup(pool, exe.root);
-		}
-		if (!rec->pname)
-			rec->pname = "unknown";
-		if (!rec->cwd)
-			rec->cwd = "unknown";
-
-		apr_hash_set(gx.pidtab, &rec->pidtable_key, sizeof(rec->pidtable_key), rec);
-	}
-
-	status = sigar_proc_mem_get(gx.sigar, key.pid, &mem);
+	status = sigar_proc_mem_get(gx.sigar, rec->pid, &mem);
 	/* ESRCH is error 3: (No such process) */
 	if (status != SIGAR_OK)
 	{
 		if (status != ESRCH) {
-			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, key.pid));
+			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, rec->pid));
 		}
 		return;
 	}
 
-	status = sigar_proc_cpu_get(gx.sigar, key.pid, &cpu);
+	status = sigar_proc_cpu_get(gx.sigar, rec->pid, &cpu);
 	if (status != SIGAR_OK)
 	{
 		if (status != ESRCH) {
-			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, key.pid));
+			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, rec->pid));
 		}
 		return;
 	}
 
-	status = sigar_proc_fd_get(gx.sigar, key.pid, &fd);
+	status = sigar_proc_fd_get(gx.sigar, rec->pid, &fd);
 	if (status != SIGAR_OK)
 	{
 		if (status != ESRCH) {
-			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, key.pid));
+			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, rec->pid));
 		}
 		return;
 	}
@@ -348,7 +308,7 @@ static void get_pid_metrics(gpmon_qexec_hash_key_t key, apr_int32_t tmid, apr_in
 	{
 		if (status != ESRCH)
                 {
-			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, key.pid));
+			TR2(("[WARNING] %s. query id(%d-%d-%d) PID: %d\n", sigar_strerror(gx.sigar, status), tmid, ssid, ccnt, rec->pid));
 		}
 		return;
 	}
@@ -366,7 +326,54 @@ static void get_pid_metrics(gpmon_qexec_hash_key_t key, apr_int32_t tmid, apr_in
 #endif
 
 	rec->cpu_elapsed = cpu.total;
-        TR2(("%s:---pid(%d) query id(%d-%d-%d) metrics refresh finished---\n", FLINE, key.pid, tmid, ssid, ccnt));
+	TR2(("%s:---pid(%d) query id(%d-%d-%d) metrics refresh finished---\n", FLINE, rec->pid, tmid, ssid, ccnt));
+}
+
+static void get_pid_metrics(gpmon_qexec_hash_key_t key, apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt)
+{
+	pidrec_t* rec;
+	apr_pool_t* pool = apr_hash_pool_get(gx.pidtab);
+
+	rec = apr_hash_get(gx.pidtab, &key.pid, sizeof(key.pid));
+	if (rec && rec->updated_tick == gx.tick)
+		return; /* updated in current cycle */
+
+	if (!rec)
+	{
+		sigar_proc_exe_t exe;
+
+		/* There might be cases where the pid no longer exist, so we'll just
+		 * zero out the memory first before doing anything */
+		rec = apr_pcalloc(pool, sizeof(*rec));
+		CHECKMEM(rec);
+
+		gpmon_query_seginfo_key_t qseg_key;
+		qseg_key.qkey.tmid = tmid;
+		qseg_key.qkey.ssid = ssid;
+		qseg_key.qkey.ccnt = ccnt;
+		qseg_key.segid = key.segid;
+
+		rec->pid = key.pid;
+		rec->query_key.tmid = tmid;
+		rec->query_key.ssid = ssid;
+		rec->query_key.ccnt = ccnt;
+		rec->qseg_key = qseg_key;
+		rec->hash_key = key;
+
+		rec->pname = rec->cwd = 0;
+		if (0 == sigar_proc_exe_get(gx.sigar, key.pid, &exe))
+		{
+			rec->pname = apr_pstrdup(pool, exe.name);
+			rec->cwd = apr_pstrdup(pool, exe.root);
+		}
+		if (!rec->pname)
+			rec->pname = "unknown";
+		if (!rec->cwd)
+			rec->cwd = "unknown";
+
+		apr_hash_set(gx.pidtab, &rec->pid, sizeof(rec->pid), rec);
+	}
+	refresh_proc_metrics(rec);
 }
 
 
@@ -670,7 +677,7 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 	apr_pool_t* oldpool;
 	apr_hash_t* qdtab;
 	apr_hash_t* pidtab;
-        apr_hash_t* querysegtab;
+	apr_hash_t *querysegtab;
 	if (event & EV_TIMEOUT) // didn't get command from gpmmon, quit
 	{
 		if(gx.tcp_sock)
@@ -732,7 +739,7 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 		gp_smon_to_mmon_packet_t localPacketObject;
 		pidrec_t* pidrec;
 		int count = 0;
-		apr_hash_t* query_cpu_table = NULL;
+		apr_hash_t* query_perf_metrics_table = NULL;
 
 		for (hi = apr_hash_first(0, qdtab); hi; hi = apr_hash_next(hi))
 		{
@@ -749,11 +756,11 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 		}
 
 		// calculate CPU utilization And Memory utilization per query for this machine
-		query_cpu_table = apr_hash_make(oldpool);
-		CHECKMEM(query_cpu_table);
+		query_perf_metrics_table = apr_hash_make(oldpool);
+		CHECKMEM(query_perf_metrics_table);
 
-                // Iterate the PID's hash table 'pidtab' to update query_cpu hash table and query_seg hash table
-                agg_metrics(pidtab, query_cpu_table, querysegtab, oldpool);
+		// Iterate the PID's hash table 'pidtab' to update query_cpu hash table and query_seg hash table
+		agg_metrics(pidtab, query_perf_metrics_table, querysegtab, oldpool);
 
 		/*
 		 * QUERYSEG packets must be sent after QLOG packets so that gpmmon can
@@ -782,8 +789,8 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 		strncpy(ppkt->u.qlog.user, gx.hostname, sizeof(ppkt->u.qlog.user) - 1);
 		ppkt->u.qlog.user[sizeof(ppkt->u.qlog.user) - 1] = 0;
 
-		// loop through the query per cpu table and send the metrics
-		for (hi = apr_hash_first(0, query_cpu_table); hi; hi = apr_hash_next(hi))
+		// loop through the query_perf_metrics_table and send the metrics
+		for (hi = apr_hash_first(0, query_perf_metrics_table); hi; hi = apr_hash_next(hi))
 		{
 			void* vptr;
 			apr_hash_this(hi, 0, 0, &vptr);
@@ -811,98 +818,102 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 	/* get rid of the old pool */
 	{
 		apr_pool_destroy(oldpool);
-                qdtab = NULL;
-                pidtab = NULL;
-                querysegtab = NULL;
+		qdtab = NULL;
+		pidtab = NULL;
+		querysegtab = NULL;
 	}
 	struct timeval tv;
 	tv.tv_sec = opt.terminate_timeout;
 	tv.tv_usec = 0;
-	if (event_add(&gx.tcp_event, opt.terminate_timeout ? &tv : NULL)) //reset timeout
-        {
+	if (event_add(&gx.tcp_event, opt.terminate_timeout ? &tv : NULL)) // reset timeout
+	{
 		gpmon_warningx(FLINE, APR_FROM_OS_ERROR(errno), "event_add failed");
-        }
+	}
 	return;
 }
 
-static void agg_metrics(apr_hash_t* pidtab, apr_hash_t* query_cpu_table, apr_hash_t* querysegtab, apr_pool_t* oldpool){
-        sigar_proc_state_t state;
-        apr_hash_index_t* hi;
-        for (hi = apr_hash_first(0, pidtab); hi; hi = apr_hash_next(hi))
-        {
-                void* vptr;
-                pidrec_t* queryMetric;
-                pidrec_t *pidrec;
+static void agg_one_query_metrics(pidrec_t *totalMetric, pidrec_t *pidrec)
+{
+	totalMetric->cpu_elapsed += pidrec->cpu_elapsed;
+	totalMetric->p_metrics.cpu_pct += pidrec->p_metrics.cpu_pct;
+	totalMetric->p_metrics.fd_cnt += pidrec->p_metrics.fd_cnt;
+	totalMetric->p_metrics.mem.resident += pidrec->p_metrics.mem.resident;
+	totalMetric->p_metrics.mem.size += pidrec->p_metrics.mem.size;
+	totalMetric->p_metrics.mem.share += pidrec->p_metrics.mem.share;
+	TR2(("%s: increase %d-%d-%d pid %d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
+		 FLINE, totalMetric->query_key.tmid, totalMetric->query_key.ssid, totalMetric->query_key.ccnt, totalMetric->pid,
+		 totalMetric->cpu_elapsed, totalMetric->p_metrics.cpu_pct, totalMetric->p_metrics.mem.resident));
+}
 
-                apr_hash_this(hi, 0, 0, &vptr);
-                pidrec = vptr;
-                if (!pidrec)
-                {
-                        continue;
-                }
+static void agg_metrics(apr_hash_t *pidtab, apr_hash_t *query_perf_metrics_table, apr_hash_t *querysegtab, apr_pool_t *oldpool)
+{
+	sigar_proc_state_t state;
+	apr_hash_index_t *hi;
+	for (hi = apr_hash_first(0, pidtab); hi; hi = apr_hash_next(hi))
+	{
+		void *vptr;
+		pidrec_t *queryMetric;
+		pidrec_t *pidrec;
 
-                TR2(("%s: %d-%d-%d pid %d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
-                        FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid,
-                        pidrec->cpu_elapsed, pidrec->p_metrics.cpu_pct, pidrec->p_metrics.mem.resident));
+		apr_hash_this(hi, 0, 0, &vptr);
+		pidrec = vptr;
+		if (!pidrec)
+		{
+			continue;
+		}
+		// add to new pidtab if process is exist
+		int status = sigar_proc_state_get(gx.sigar, pidrec->pid, &state);
+		if (status != SIGAR_OK)
+		{
+			continue;
+		}
+		else
+		{
+			apr_pool_t *pool = apr_hash_pool_get(gx.pidtab);
+			pidrec_t *newpidrec = apr_palloc(pool, sizeof(*pidrec));
+			memcpy(newpidrec, pidrec, sizeof(*pidrec));
+			apr_hash_set(gx.pidtab, &newpidrec->pid, sizeof(newpidrec->pid), newpidrec);
+			TR2(("%s: %d-%d-%d pid %d add to new pidtab \n",
+				 FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid));
+		}
 
-                // add to query_cpu_table，aggregate by tmid-ssid-ccnt
-                queryMetric = apr_hash_get(query_cpu_table, &pidrec->query_key, sizeof(pidrec->query_key));
+		TR2(("%s: %d-%d-%d pid %d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
+			 FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid,
+			 pidrec->cpu_elapsed, pidrec->p_metrics.cpu_pct, pidrec->p_metrics.mem.resident));
 
-                if (queryMetric)
-                {
-                        // found other pids with same query key so add the metrics to that
+		// add to query_perf_metrics_table，aggregate by tmid-ssid-ccnt
+		queryMetric = apr_hash_get(query_perf_metrics_table, &pidrec->query_key, sizeof(pidrec->query_key));
 
-                        queryMetric->cpu_elapsed += pidrec->cpu_elapsed;
-                        queryMetric->p_metrics.cpu_pct += pidrec->p_metrics.cpu_pct;
-                        queryMetric->p_metrics.fd_cnt += pidrec->p_metrics.fd_cnt;
-                        queryMetric->p_metrics.mem.resident += pidrec->p_metrics.mem.resident;
-                        queryMetric->p_metrics.mem.size += pidrec->p_metrics.mem.size;
-                        queryMetric->p_metrics.mem.share += pidrec->p_metrics.mem.share;
-                        TR2(("%s: increase %d-%d-%d pid %d (CPU elapsed %ld CPU Percent %.2f Mem size %lu)\n",
-                                FLINE, queryMetric->query_key.tmid, queryMetric->query_key.ssid, queryMetric->query_key.ccnt, queryMetric->pid,
-                                queryMetric->cpu_elapsed, queryMetric->p_metrics.cpu_pct, queryMetric->p_metrics.mem.resident));
-                }
-                else
-                {
-                        // insert existing pid record into table keyed by query key
-                        queryMetric = apr_palloc(oldpool, sizeof(pidrec_t));
-                        memcpy(queryMetric, pidrec, sizeof(pidrec_t));
-                        apr_hash_set(query_cpu_table, &queryMetric->query_key, sizeof(gpmon_qlogkey_t), queryMetric);
-                }
+		if (queryMetric)
+		{
+			agg_one_query_metrics(queryMetric, pidrec);
+		}
+		else
+		{
+			// insert existing pid record into query_perf_metrics_table
+			queryMetric = apr_palloc(oldpool, sizeof(pidrec_t));
+			memcpy(queryMetric, pidrec, sizeof(pidrec_t));
+			apr_hash_set(query_perf_metrics_table, &queryMetric->query_key, sizeof(gpmon_qlogkey_t), queryMetric);
+		}
 
-                // add to queryseg hash table, aggregate by tmid-ssid-ccnt、segid
-                gp_smon_to_mmon_packet_t *rec;
-                rec = apr_hash_get(querysegtab, &pidrec->qseg_key, sizeof(pidrec->qseg_key));
-                if (rec)
-                {
-                        rec->u.queryseg.sum_cpu_elapsed += pidrec->cpu_elapsed;
-                }
-                else
-                {
-                        rec = apr_palloc(apr_hash_pool_get(querysegtab), sizeof(gp_smon_to_mmon_packet_t));
-                        CHECKMEM(rec);
-                        gp_smon_to_mmon_set_header(rec, GPMON_PKTTYPE_QUERYSEG);
-                        rec->u.queryseg.key = pidrec->qseg_key;
-                        rec->u.queryseg.sum_cpu_elapsed = pidrec->cpu_elapsed;
-                        apr_hash_set(querysegtab, &rec->u.queryseg.key, sizeof(rec->u.queryseg.key), rec);
-                }
-
-                //add to new pidtab if process is exist
-                int status = sigar_proc_state_get(gx.sigar,pidrec->pid, &state);
-                if (status == SIGAR_OK)
-                {
-                        apr_pool_t *pool = apr_hash_pool_get(gx.pidtab);
-                        pidrec_t *newpidrec = apr_palloc(pool, sizeof(*pidrec));
-                        memcpy(newpidrec, pidrec, sizeof(*pidrec));
-                        apr_hash_set(gx.pidtab, &newpidrec->pidtable_key, sizeof(newpidrec->pidtable_key), newpidrec);
-                        TR2(("%s: %d-%d-%d pid %d add to new pidtab \n",
-                                FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid));
-                        continue;
-                }
-                TR2(("%s: %d-%d-%d pid %d pid status %d not add to new pidtab \n",
-                        FLINE, pidrec->query_key.tmid, pidrec->query_key.ssid, pidrec->query_key.ccnt, pidrec->pid, status));
-        }
-        return;
+		// add to queryseg hash table, aggregate by tmid-ssid-ccnt、segid
+		gp_smon_to_mmon_packet_t *rec;
+		rec = apr_hash_get(querysegtab, &pidrec->qseg_key, sizeof(pidrec->qseg_key));
+		if (rec)
+		{
+			rec->u.queryseg.sum_cpu_elapsed += pidrec->cpu_elapsed;
+		}
+		else
+		{
+			rec = apr_palloc(apr_hash_pool_get(querysegtab), sizeof(gp_smon_to_mmon_packet_t));
+			CHECKMEM(rec);
+			gp_smon_to_mmon_set_header(rec, GPMON_PKTTYPE_QUERYSEG);
+			rec->u.queryseg.key = pidrec->qseg_key;
+			rec->u.queryseg.sum_cpu_elapsed = pidrec->cpu_elapsed;
+			apr_hash_set(querysegtab, &rec->u.queryseg.key, sizeof(rec->u.queryseg.key), rec);
+		}
+	}
+	return;
 }
 
 static void gx_accept(SOCKET sock, short event, void* arg)
@@ -1549,12 +1560,9 @@ void gx_main(int port, apr_int64_t signature)
 			rec = vptr;
 			if (rec)
 			{
-                                TR2(("%s:----start to refresh pid(%d) query id(%d-%d-%d) metrics in main loop----\n",
-                                        FLINE, rec->pid, rec->query_key.tmid, rec->query_key.ssid, rec->query_key.ccnt));
-				get_pid_metrics(rec->hash_key,
-								rec->query_key.tmid,
-								rec->query_key.ssid,
-								rec->query_key.ccnt);
+				TR2(("%s:----start to refresh pid(%d) query id(%d-%d-%d) metrics in main loop----\n",
+					 FLINE, rec->pid, rec->query_key.tmid, rec->query_key.ssid, rec->query_key.ccnt));
+				refresh_proc_metrics(rec);
 			}
 		}
 
