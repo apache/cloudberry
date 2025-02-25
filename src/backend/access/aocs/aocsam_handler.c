@@ -1824,12 +1824,12 @@ aoco_index_build_range_scan(Relation heapRelation,
 		Assert(fileSegTotals->totalbytes >= 0);
 		totalBlocks = RelationGuessNumberOfBlocksFromSize(fileSegTotals->totalbytes);
 #endif
-		seginfo = GetAllAOCSFileSegInfo(heapRelation, NULL, &segfile_count, NULL);
-		for (int seginfo_no = 0; seginfo_no < segfile_count; seginfo_no++)
-			total_blockcount += seginfo[seginfo_no]->varblockcount;
+		FileSegTotals	*fileSegTotals;
+		fileSegTotals = GetAOCSSSegFilesTotals(heapRelation,
+												   aocoscan->appendOnlyMetaDataSnapshot);
 
 		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL,
-									total_blockcount);
+									RelationGuessNumberOfBlocksFromSize(fileSegTotals->totalbytes));
 	}
 
 	/* set our scan endpoints */

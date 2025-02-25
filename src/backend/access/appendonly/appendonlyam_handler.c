@@ -1664,12 +1664,17 @@ appendonly_index_build_range_scan(Relation heapRelation,
 	 */ 
 	if (progress)
 	{
-		seginfo = GetAllFileSegInfo(heapRelation, snapshot, &segfile_count, NULL);
-		for (int seginfo_no = 0; seginfo_no < segfile_count; seginfo_no++)
-		{
-			total_blockcount += seginfo[seginfo_no]->varblockcount;
-		}
-		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL, total_blockcount);
+		FileSegTotals	*fileSegTotals;
+		BlockNumber		totalBlocks;
+
+		fileSegTotals = GetSegFilesTotals(heapRelation, aoscan->appendOnlyMetaDataSnapshot);
+
+		Assert(fileSegTotals->totalbytes >= 0);
+
+		totalBlocks =
+			RelationGuessNumberOfBlocksFromSize((uint64) fileSegTotals->totalbytes);
+		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL,
+									 totalBlocks);
 	}
 
 	/* set our scan endpoints */
