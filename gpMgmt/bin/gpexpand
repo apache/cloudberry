@@ -261,12 +261,13 @@ def gpexpand_status_file_exists(coordinator_data_directory):
 
 
 def is_cluster_up_and_balanced(dburl):
-    conn = dbconn.connect(dburl, encoding='UTF8')
+    count = -1
+    sql = "select count(*) from gp_segment_configuration where status <> 'u' or preferred_role <> role;"
     try:
-        count = dbconn.querySingleton(conn,
-                                      "select count(*) from gp_segment_configuration where status <> 'u' or preferred_role <> role;")
-    finally:
-        conn.close()
+        with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+            count = dbconn.querySingleton(conn, sql)
+    except Exception as e:
+        raise Exception("failed to query cluster role check: %s" % str(e))
 
     return count == 0
 
@@ -2487,10 +2488,9 @@ def main(options, args, parser):
                 logger.error(e)
                 sys.exit(1)
 
-        # check if the cluster is in good health if not exit from gpexpand
-        if gpexpand_file_status is None and gpexpand_db_status is None and  not is_cluster_up_and_balanced(dburl):
-            logger.error('One or more segments are either down or not in preferred role. Please fix the issue before running gpexpand.')
-            sys.exit(1)
+        # check if the cluster is in good health
+        if gpexpand_file_status is None and gpexpand_db_status is None and not is_cluster_up_and_balanced(dburl):
+            logger.warning('One or more segments are either down or not in preferred role.')
 
         if gpexpand_db_status == 'SETUP DONE' or gpexpand_db_status == 'EXPANSION STOPPED':
             if not _gp_expand.validate_max_connections():

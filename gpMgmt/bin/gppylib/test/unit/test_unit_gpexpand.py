@@ -143,9 +143,17 @@ class GpExpand(GpTestCase):
 
     @patch('gppylib.db.dbconn.querySingleton', side_effect=Exception())
     def test_unit_cluster_up_and_balanced_exception(self, mock1):
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception) as ex:
             self.subject.is_cluster_up_and_balanced(dbconn.DbURL())
 
+        self.assertTrue('failed to query cluster role check' in str(ex.exception))
+
+    @patch('gppylib.db.dbconn.connect', side_effect=Exception())
+    def test_unit_cluster_up_and_balanced_conn_exception(self, mock1):
+        with self.assertRaises(Exception) as ex:
+            self.subject.is_cluster_up_and_balanced(dbconn.DbURL())
+
+        self.assertTrue('failed to query cluster role check' in str(ex.exception))
 
     #
     # end tests for interview_setup()

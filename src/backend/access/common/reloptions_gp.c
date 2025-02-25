@@ -73,6 +73,16 @@ static relopt_int intRelOpts_gp[] =
 	},
 	{
 		{
+			SOPT_FILLFACTOR,
+			"Packs bitmap index pages only to this percentage",
+			RELOPT_KIND_BITMAP,
+			ShareUpdateExclusiveLock	/* since it applies only to later
+										 * inserts */
+		},
+		BITMAP_DEFAULT_FILLFACTOR, BITMAP_MIN_FILLFACTOR, 100
+	},
+	{
+		{
 			SOPT_BLOCKSIZE,
 			"AO tables block size in bytes",
 			RELOPT_KIND_APPENDOPTIMIZED,
