@@ -160,7 +160,7 @@ OpenAOSegmentFile(Relation rel,
 
 	RelationOpenSmgr(rel);
 
-	fd = rel->rd_smgr->smgr_ao->smgr_AORelOpenSegFile(filepathname, fileFlags);
+	fd = rel->rd_smgr->smgr_ao->smgr_AORelOpenSegFile(RelationGetRelid(rel), filepathname, fileFlags);
 	if (fd < 0)
 	{
 		if (logicalEof == 0 && errno == ENOENT)
@@ -407,7 +407,7 @@ copy_file(char *srcsegpath, char *dstsegpath,
 	char       *buffer = palloc(BLCKSZ);
 	int dstflags;
 
-	srcFile = srcSMGR->smgr_ao->smgr_AORelOpenSegFile(srcsegpath, O_RDONLY | PG_BINARY);
+	srcFile = srcSMGR->smgr_ao->smgr_AORelOpenSegFile(InvalidOid, srcsegpath, O_RDONLY | PG_BINARY);
 	if (srcFile < 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -422,7 +422,7 @@ copy_file(char *srcsegpath, char *dstsegpath,
 	if (segfilenum)
 		dstflags |= O_CREAT;
 
-	dstFile = dstSMGR->smgr_ao->smgr_AORelOpenSegFile(dstsegpath, dstflags);
+	dstFile = dstSMGR->smgr_ao->smgr_AORelOpenSegFile(InvalidOid, dstsegpath, dstflags);
 	if (dstFile < 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),

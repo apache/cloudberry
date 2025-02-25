@@ -62,6 +62,7 @@ AppendOnlyStorageRead_Init(AppendOnlyStorageRead *storageRead,
 						   MemoryContext memoryContext,
 						   int32 maxBufferLen,
 						   char *relationName,
+						   Oid reloid,
 						   char *title,
 						   AppendOnlyStorageAttributes *storageAttributes,
 						   RelFileNode *relFileNode,
@@ -96,6 +97,7 @@ AppendOnlyStorageRead_Init(AppendOnlyStorageRead *storageRead,
 		   sizeof(AppendOnlyStorageAttributes));
 
 	storageRead->relationName = pstrdup(relationName);
+	storageRead->reloid = reloid;
 	storageRead->title = title;
 
 	storageRead->minimumHeaderLen =
@@ -249,7 +251,7 @@ AppendOnlyStorageRead_DoOpenFile(AppendOnlyStorageRead *storageRead,
 	/*
 	 * Open the file for read.
 	 */
-	file = storageRead->smgrAO->smgr_AORelOpenSegFile(filePathName, fileFlags);
+	file = storageRead->smgrAO->smgr_AORelOpenSegFile(storageRead->reloid, filePathName, fileFlags);
 
 	return file;
 }

@@ -171,6 +171,7 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 								   scan->aoScanInitContext,
 								   scan->usableBlockSize,
 								   NameStr(scan->aos_rd->rd_rel->relname),
+								   RelationGetRelid(scan->aos_rd),
 								   scan->title,
 								   &scan->storageAttributes,
 								   &scan->aos_rd->rd_node, reln->rd_smgr->smgr_ao);
@@ -2220,6 +2221,7 @@ appendonly_fetch_init(Relation relation,
 							   aoFetchDesc->initContext,
 							   aoFetchDesc->usableBlockSize,
 							   NameStr(aoFetchDesc->relation->rd_rel->relname),
+							   RelationGetRelid(aoFetchDesc->relation),
 							   aoFetchDesc->title,
 							   &aoFetchDesc->storageAttributes,
 							   &relation->rd_node, relation->rd_smgr->smgr_ao);
@@ -2759,6 +2761,7 @@ appendonly_insert_init(Relation rel, int segno)
 								NULL,
 								aoInsertDesc->usableBlockSize,
 								RelationGetRelationName(aoInsertDesc->aoi_rel),
+								RelationGetRelid(aoInsertDesc->aoi_rel),
 								aoInsertDesc->title,
 								&aoInsertDesc->storageAttributes,
 								XLogIsNeeded() && RelationNeedsWAL(aoInsertDesc->aoi_rel), rel->rd_smgr->smgr_ao);

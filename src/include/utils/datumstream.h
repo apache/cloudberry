@@ -259,6 +259,7 @@ extern DatumStreamWrite *create_datumstreamwrite(
 						int32 maxsz,
 						Form_pg_attribute attr,
 						char *relname,
+						Oid reloid,
 						char *title,
 						bool needsWAL,
 						RelFileNodeBackend *rnode,
@@ -271,6 +272,7 @@ extern DatumStreamRead *create_datumstreamread(
 					   int32 maxsz,
 					   Form_pg_attribute attr,
 					   char *relname,
+					   Oid reloid,
 					   char *title,
 					   RelFileNode *relFileNode,
 					   const struct f_smgr_ao *smgrAO);

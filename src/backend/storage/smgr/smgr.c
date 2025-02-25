@@ -103,13 +103,35 @@ static f_smgr smgrsw[SMGR_MAX_ID + 1] = {
 	}
 };
 
+static File	AORelOpenSegFile(__attribute__((unused))Oid reloid, const char *filePath, int fileFlags)
+{
+	return PathNameOpenFile(filePath, fileFlags);
+}
+
+static File	AORelOpenSegFileXlog(RelFileNode node, int32 segmentFileNum, int fileFlags)
+{
+	char	   *dbPath;
+	char		path[MAXPGPATH];
+	dbPath = GetDatabasePath(node.dbNode,
+							 node.spcNode);
+
+	if (segmentFileNum == 0)
+		snprintf(path, MAXPGPATH, "%s/%lu", dbPath, node.relNode);
+	else
+		snprintf(path, MAXPGPATH, "%s/%lu.%u", dbPath, node.relNode, segmentFileNum);
+	pfree(dbPath);
+
+	return PathNameOpenFile(path, fileFlags);
+}
+
 static const f_smgr_ao smgrswao[] = {
 	/* regular file */
 	{
 		.smgr_FileClose = FileClose,
 		.smgr_FileDiskSize = FileDiskSize,
 		.smgr_FileTruncate = FileTruncate,
-		.smgr_AORelOpenSegFile = PathNameOpenFile,
+		.smgr_AORelOpenSegFile = AORelOpenSegFile,
+		.smgr_AORelOpenSegFileXlog = AORelOpenSegFileXlog,
 		.smgr_FileWrite = FileWrite,
 		.smgr_FileRead = FileRead,
 		.smgr_FileSize = FileSize,
