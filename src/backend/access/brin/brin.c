@@ -61,8 +61,12 @@ typedef struct BrinBuildState
 	BrinRevmap *bs_rmAccess;
 	BrinDesc   *bs_bdesc;
 	BrinMemTuple *bs_dtuple;
+
 	/* GPDB specific state for AO/CO tables */
-	bool		bs_isAo;
+
+	bool         bs_isAO;
+	/* Have we incorporated even one data tuple into the build state? */
+	bool         bs_aoHasDataTuple;
 } BrinBuildState;
 
 /*
@@ -81,7 +85,7 @@ static BrinBuildState *
 initialize_brin_buildstate(Relation idxRel,
 						   BrinRevmap *revmap,
 						   BlockNumber pagesPerRange,
-						   bool isAo);
+						   bool isAO);
 static void terminate_brin_buildstate(BrinBuildState *state);
 static void brinsummarize(Relation index, Relation heapRel, BlockNumber pageRange,
 						  bool include_partial, double *numSummarized, double *numExisting);
@@ -195,7 +199,9 @@ brininsert(Relation idxRel, Datum *values, bool *nulls,
 	 * is the first block in the corresponding page range.
 	 */
 	origHeapBlk = ItemPointerGetBlockNumber(heaptid);
-	heapBlk = (origHeapBlk / pagesPerRange) * pagesPerRange;
+	heapBlk = brin_range_start_blk(origHeapBlk,
+								   RelationIsAppendOptimized(heapRel),
+								   pagesPerRange);
 
 	/*
 	 * GPDB: Due to the appendonly nature of AO/CO tables, we would always write
@@ -777,6 +783,8 @@ bringetbitmap(IndexScanDesc scan, Node **bmNodeP)
 				tbm_add_page(tbm, pageno);
 				totalpages++;
 				MemoryContextSwitchTo(perRangeCxt);
+
+				SIMPLE_FAULT_INJECTOR("brin_bitmap_page_added");
 			}
 		}
 	}
@@ -865,17 +873,30 @@ brinbuildCallback(Relation index,
 	 * XXX: We can move this out of brinbuildCallback() if we refactor
 	 * brinbuild() to loop over BlockSequences, much like we do in
 	 * bringetbitmap() and brinsummarize().
+	 * We would also be able to get rid of BrinBuildState.bs_seq_reltuples.
 	 */
-	if (state->bs_isAo)
+	if (state->bs_isAO)
 	{
 		BlockNumber seqStartBlk = AOHeapBlockGet_startHeapBlock(thisblock);
+
 		if (state->bs_currRangeStart < seqStartBlk)
 		{
+			/* We are starting a new block sequence */
+			int seqNum;
+
+			/* process the final batch in the current block sequence (if any) */
+			if (state->bs_aoHasDataTuple)
+				form_and_insert_tuple(state);
+
 			/* adjust the current block sequence */
-			int seqNum = AOSegmentGet_blockSequenceNum(thisblock);
+			seqNum = AOSegmentGet_blockSequenceNum(thisblock);
 			brinRevmapAOPositionAtStart(state->bs_rmAccess, seqNum);
+
 			/* readjust the range lower bound */
 			state->bs_currRangeStart = seqStartBlk;
+
+			/* re-initialize state for it */
+			brin_memtuple_initialize(state->bs_dtuple, state->bs_bdesc);
 		}
 	}
 
@@ -901,6 +922,8 @@ brinbuildCallback(Relation index,
 	/* Accumulate the current tuple into the running state */
 	(void) add_values_to_range(index, state->bs_bdesc, state->bs_dtuple,
 							   values, isnull);
+	/* GPDB: Additional accounting in the build state for AO/CO relations */
+	state->bs_aoHasDataTuple = true;
 }
 
 /*
@@ -916,9 +939,9 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	BrinBuildState *state;
 	Buffer		meta;
 	BlockNumber pagesPerRange;
-	bool		isAo;
+	bool		isAO;
 
-	isAo = RelationStorageIsAO(heap);
+	isAO = RelationStorageIsAO(heap);
 	/*
 	 * We expect to be called exactly once for any index relation.
 	 */
@@ -947,7 +970,7 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 
 		xlrec.version = BRIN_CURRENT_VERSION;
 		xlrec.pagesPerRange = BrinGetPagesPerRange(index);
-		xlrec.isAo = isAo;
+		xlrec.isAO          = isAO;
 
 		XLogBeginInsert();
 		XLogRegisterData((char *) &xlrec, SizeOfBrinCreateIdx);
@@ -965,7 +988,7 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	 * Initialize our state, including the deformed tuple state.
 	 */
 	revmap = brinRevmapInitialize(index, &pagesPerRange, NULL);
-	state = initialize_brin_buildstate(index, revmap, pagesPerRange, isAo);
+	state = initialize_brin_buildstate(index, revmap, pagesPerRange, isAO);
 
 	/* GPDB: AO/CO tables: position iterator to start of sequence 0's chain. */
 	brinRevmapAOPositionAtStart(revmap, 0);
@@ -984,7 +1007,7 @@ brinbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	 * as is done for heap. If we did, we would have to do so for all 128
 	 * possible block sequences, creating unnecessary bloat.
 	 */
-	if (!isAo || reltuples != 0)
+	if (!isAO || state->bs_aoHasDataTuple)
 		form_and_insert_tuple(state);
 
 	/* release resources */
@@ -1417,7 +1440,7 @@ brinGetStats(Relation index, BrinStatsData *stats)
  */
 static BrinBuildState *
 initialize_brin_buildstate(Relation idxRel, BrinRevmap *revmap,
-						   BlockNumber pagesPerRange, bool isAo)
+						   BlockNumber pagesPerRange, bool isAO)
 {
 	BrinBuildState *state;
 
@@ -1433,7 +1456,8 @@ initialize_brin_buildstate(Relation idxRel, BrinRevmap *revmap,
 	state->bs_dtuple = brin_new_memtuple(state->bs_bdesc);
 
 	/* GPDB specific state for AO/CO tables */
-	state->bs_isAo = isAo;
+	state->bs_isAO           = isAO;
+	state->bs_aoHasDataTuple = false;
 
 	brin_memtuple_initialize(state->bs_dtuple, state->bs_bdesc);
 
@@ -1525,10 +1549,10 @@ summarize_range(IndexInfo *indexInfo, BrinBuildState *state, Relation heapRel,
 		BlockSequence 	blockSequence;
 		BlockNumber 	endblknum;
 
+		SIMPLE_FAULT_INJECTOR("summarize_last_partial_range");
+
 		table_relation_get_block_sequence(heapRel, heapBlk, &blockSequence);
 		endblknum = blockSequence.startblknum + blockSequence.nblocks;
-
-		SIMPLE_FAULT_INJECTOR("summarize_last_partial_range");
 
 		/*
 		 * If we're asked to scan what we believe to be the final range on the
@@ -1552,7 +1576,7 @@ summarize_range(IndexInfo *indexInfo, BrinBuildState *state, Relation heapRel,
 			 * in the appendonly AMs. This is why we need to bail.
 			 */
 			brin_free_tuple(phtup);
-			UnlockReleaseBuffer(phbuf);
+			ReleaseBuffer(phbuf);
 			return;
 		}
 
@@ -1706,7 +1730,9 @@ brinsummarize(Relation index, Relation heapRel, BlockNumber pageRange,
 		/* should have to loop only once as there is only 1 sequence for heap */
 		Assert(numSequences == 1);
 
-		startBlk = (pageRange / pagesPerRange) * pagesPerRange;
+		startBlk = brin_range_start_blk(pageRange,
+										RelationIsAppendOptimized(heapRel),
+										pagesPerRange);
 		endBlk = Min(sequences[i].nblocks, startBlk + pagesPerRange);
 		if (startBlk > endBlk)
 		{
