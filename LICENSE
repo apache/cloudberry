@@ -199,3 +199,140 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+================================================================================
+This product includes software from PostgreSQL, under the PostgreSQL License:
+
+   see licenses/LICENSE-postgresql.txt
+
+The PostgreSQL software includes:
+
+----------------------------
+   BSD License
+      
+      src/bin/pg_controldata/pg_controldata.c
+      copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
+
+----------------------------
+   BSD-4-Clause (University of California-Specific)
+      
+      src/include/port/win32_msvc/glob.h
+      src/port/glob.c
+
+      see licenses/LICENSE-glob.txt
+
+----------------------------
+   BSD 3 Clause License
+      
+      src/port/inet_aton.c
+      see licenses/LICENSE-bsd3-inet_aton.txt
+      
+      src/port/snprintf.c
+      see licenses/LICENSE-bsd3-snprintf.txt
+      
+      src/backend/utils/mb/wstrcmp.c
+      see licenses/LICENSE-bsd3-wstrcmp.txt
+      
+      src/backend/utils/mb/wstrncmp.c
+      see licenses/LICENSE-bsd3-wstrncmp.txt
+      
+      src/backend/libpq/sha2.h
+      see licenses/LICENSE-bsd3-sha2.txt
+
+----------------------------
+   Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
+      
+      src/port/strlcpy.c
+      see licenses/LICENSE-strlcpy.txt
+      
+      src/backend/utils/adt/inet_cidr_ntop.c
+      src/backend/utils/adt/inet_net_pton.c
+      see licenses/licenses/LICENSE-isc.txt
+
+----------------------------
+   Perl Artistic License 2.0 (exception)
+      
+      src/pl/plperl/ppport.h: 
+
+      Pursuant to https://issues.apache.org/jira/browse/LEGAL-79 and
+      PL/Perl's use of a generated header file, we declare this file to
+      be an exception to the Perl Artistic License.  This file is
+      derived from the PostgreSQL code base.
+  
+      For completeness sake, we have provided the Perl Artistic License
+      for the Perl Devel-PPPort module
+      (http://search.cpan.org/~wolfsage/Devel-PPPort-3.32/PPPort.pm).
+      This module was used to generate the src/pl/plperl/ppport.h header
+      file. The license is available:
+  
+      see licenses/LICENSE-ppport.txt
+
+----------------------------
+   test-ctype LICENSE
+
+      src/test/locale/test-ctype.c
+  
+      see licenses/LICENSE-test-ctype.txt
+
+----------------------------
+   regex LICENSE
+      
+      src/backend/regex 
+  
+      see licenses/LICENSE-regex.txt
+
+----------------------------
+   PostgreSQL-style License
+
+      src/port/gettimeofday.c 
+  
+      see licenses/LICENSE-gettimeofday.txt
+
+================================================================================
+This product contains significant parts that were originally based on software
+from VMware, Inc. or its affiliates.
+
+Greenplum Database
+
+Copyright (c) 2004-2020 VMware, Inc. or its affiliates. All Rights Reserved.
+
+All Rights Reserved.
+
+Greenplum Database is licensed under the Apache License Version 2.0
+(see LICENSE & NOTICE) and is based on the PostgreSQL Database
+Management System.
+
+The Greenplum Database software includes:
+
+----------------------------
+   Stream License
+
+      gpMgmt/bin/stream/*
+
+      see licenses/LICENSE-stream.txt
+
+----------------------------
+   0-clause license ("Zero Clause BSD")
+
+      gpcontrib/orafce/*
+
+      see licenses/LICENSE-orafce.txt
+
+================================================================================
+PostgreSQL-style license
+
+   gpMgmt/bin/pythonSrc/PyGreSQL-4.0: 
+
+   see licenses/LICENSE-pygresql.txt
+
+================================================================================
+This product includes code from pg_cron under PostgreSQL license:
+
+   /src/include/task/pg_cron.h
+   /src/include/task/task_states.h
+   /src/include/task/job_metadata.h
+   /src/backend/task/task_states.c
+   /src/backend/task/job_metadata.c
+   /src/backend/task/pg_cron.c
+
+   see licenses/LICENSE-citusdata.txt
