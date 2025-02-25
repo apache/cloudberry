@@ -54,7 +54,7 @@ language plpython3u;
 -- Test UPDATE that moves row from one partition to another. The partitioning
 -- key is also the distribution key in this case.
 create table mpp3061 (i int) partition by range(i) (start(1) end(5) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3061 values(1);
 update mpp3061 set i = 2 where i = 1;
@@ -124,11 +124,11 @@ drop table if exists mpp23195_t2;
 NOTICE:  table "mpp23195_t2" does not exist, skipping
 -- end_ignore
 create table mpp23195_t1 (i int) partition by range(i) (partition pt1 start(1) end(10), partition pt2 start(10) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index index_mpp23195_t1_i on mpp23195_t1(i);
 create table mpp23195_t2(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp23195_t1 values (generate_series(1,19));
 insert into mpp23195_t2 values (1);
@@ -182,12 +182,12 @@ drop table if exists mpp21834_t2;
 NOTICE:  table "mpp21834_t2" does not exist, skipping
 -- end_ignore
 create table mpp21834_t1 (i int, j int) partition by range(i) (partition pp1 start(1) end(10), partition pp2 start(10) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index index_1 on mpp21834_t1(i);
 create index index_2 on mpp21834_t1(j);
 create table mpp21834_t2(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- TEST
 set optimizer_enable_hashjoin = off;
@@ -229,7 +229,7 @@ create table mpp23288(a int, b int)
       PARTITION pinter  START(6) END (10) INCLUSIVE,
       PARTITION plast   START (11)
   );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp23288(a) select generate_series(1,20);
 analyze mpp23288;
@@ -508,19 +508,19 @@ drop table if exists p;
 NOTICE:  table "p" does not exist, skipping
 -- end_ignore
 create table p1 (a int, b int) partition by range(b) (start (1) end(100) every (20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2 (a int, b int) partition by range(b) (start (1) end(100) every (20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p3 (a int, b int) partition by range(b) (start (1) end(100) every (20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t select g, g*10 from generate_series(1,100) g;
 insert into p1 select g, g%99 +1 from generate_series(1,10000) g;
@@ -638,14 +638,14 @@ drop table if exists dbs;
 NOTICE:  table "dbs" does not exist, skipping
 -- end_ignore
 create table dts(c1 int, c2 int) partition by range(c2) (start(1) end(11) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table dis(c1 int, c2 int, c3 int) partition by range(c2) (start(1) end(11) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index dis_index on dis(c3);
 CREATE TABLE dbs(c1 int, c2 int, c3 int) partition by range(c2) (start(1) end(11) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index dbs_index on dbs using bitmap(c3);
 -- TEST
@@ -731,7 +731,7 @@ set optimizer_segments=2;
 set optimizer_partition_selection_log=on;
 -- end_ignore
 create table pp(a int, b int, c int) partition by range(b) (start(1) end(15) every(5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pp values (1,1,2),(2,6,2), (3,11,2);
 -- Heterogeneous Index on the partition table
@@ -864,7 +864,7 @@ PARTITION BY RANGE (b)
   START (0) END (10),
   START (10) END (20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bar SELECT g % 20, g % 20 from generate_series(1, 1000) g;
 ANALYZE bar;
@@ -923,7 +923,7 @@ START ('2005-07-01 00:00:00'::timestamp without time zone)
 END ('2006-01-01 00:00:00'::timestamp without time zone)
 EVERY ('2 mons'::interval)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'oid' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'oid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
                                                        QUERY PLAN                                                        
@@ -1017,10 +1017,10 @@ deallocate f3;
 ERROR:  prepared statement "f3" does not exist
 -- end_ignore
 create table r_part(a int, b int) partition by range(a) (start (1) end(10) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table r_co(a int, b int) with (orientation=column, appendonly=true) partition by range(a) (start (1) end(10) every(1)) ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into r_part values (1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8);
 -- following tests rely on the data distribution, verify them
@@ -1258,7 +1258,7 @@ drop table mpp6247_bar;
 drop table mpp6247_foo;
 -- Validate that basic DELETE on partition table with index functions properly
 CREATE TABLE delete_from_indexed_pt (a int, b int) PARTITION BY RANGE(b) (START (0) END (7) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX index_delete_from_indexed_pt ON delete_from_indexed_pt USING bitmap(b);
 INSERT INTO delete_from_indexed_pt SELECT i, i%6 FROM generate_series(1, 10)i;
@@ -1294,10 +1294,10 @@ SELECT * FROM delete_from_indexed_pt;
 
 -- Validate that basic DELETE on partition table using DPE functions properly
 CREATE TABLE delete_from_pt (a int, b int) PARTITION BY RANGE(b) (START (0) END (7) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO delete_from_pt SELECT i, i%6 FROM generate_series(1, 10)i;
 INSERT INTO t VALUES (1);

@@ -167,7 +167,7 @@ explain select t1.id1, (select count(*) from generate_series(1,5) g, choose_seqs
 -- first, and then filter the join result based on the correlation qual "t1.id1 = t2.id1". But
 -- the planner isn't smart enough to generate that plan, currently.
 create table choose_seqscan_t3(id1 int,id2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index bidx3 on choose_seqscan_t3(id1);
 insert into choose_seqscan_t3 select i+1,i from generate_series(1,50)i;

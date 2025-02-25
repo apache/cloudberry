@@ -1,6 +1,6 @@
 COMMAND NAME: gppkg
 
-Installs Cloudberry Database extensions such as 
+Installs Apache Cloudberry extensions such as 
 pgcrypto, PL/R, PL/Java, PL/Perl, MADlib and PostGIS, 
 along with their dependencies, across an entire cluster.
 
@@ -23,7 +23,7 @@ gppkg --version
 DESCRIPTION
 *****************************************************
 The Cloudberry Package Manager (gppkg) utility installs 
-Cloudberry Database extensions, including any dependencies,
+Apache Cloudberry extensions, including any dependencies,
 on all hosts across a cluster. It will also automatically 
 install database extensions on new hosts in the case of 
 system expansion and segment recovery.
@@ -34,7 +34,7 @@ then copy it to the coordinator host. Use the Cloudberry
 Package Manager to install each package using the 
 options described below.
 
-NOTE: After a major upgrade to Cloudberry Database, you must 
+NOTE: After a major upgrade to Apache Cloudberry, you must 
 download and install all extensions again.
 
 The following packages are available for download from the
@@ -87,7 +87,7 @@ Options
 --migrate <GPHOME_1> <GPHOME_2>
 
  Migrates packages from a separate $GPHOME. Carries over 
- packages from one version of Cloudberry Database to another.
+ packages from one version of Apache Cloudberry to another.
  For example: 
    gppkg --migrate /usr/local/greenplum-db-4.2.0.1 
    /usr/local/greenplum-db-4.2.1.0

@@ -8,17 +8,17 @@ set gp_selectivity_damping_for_scans = off;
 set gp_selectivity_damping_for_joins = off;
 set allow_system_table_mods = true;
 -- 
--- Cloudberry Database Statistics Dump
+-- Apache Cloudberry Statistics Dump
 -- Copyright (C) 2007  Greenplum Inc.
 -- 
 -- Database: tpch500
 -- Date:     2007-10-05
 -- Time:     12:07:47.570184-07
 -- CmdLine:    
--- Version:  PostgreSQL 8.2.4 (Cloudberry Database Release-3_1_0_0-alpha1-branch build 1896) on i386-pc-solaris2.10, compiled by GCC gcc.exe (GCC) 4.1.1 compiled on Sep 25 2007 10:48:21
+-- Version:  PostgreSQL 8.2.4 (Apache Cloudberry Release-3_1_0_0-alpha1-branch build 1896) on i386-pc-solaris2.10, compiled by GCC gcc.exe (GCC) 4.1.1 compiled on Sep 25 2007 10:48:21
 -- 
 --
--- Cloudberry Database database dump
+-- Apache Cloudberry database dump
 --
 SET client_encoding = 'SQL_ASCII';
 SET standard_conforming_strings = off;
@@ -1665,7 +1665,7 @@ INSERT INTO pg_statistic VALUES (
 	NULL::varchar[],
 	NULL::varchar[]);
 -- 
--- Cloudberry Database Statistics Dump complete
+-- Apache Cloudberry Statistics Dump complete
 -- 
 -- set pages and tuple counts
 -- 

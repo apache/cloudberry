@@ -636,7 +636,7 @@ ERROR:  invalid ON UPDATE action for foreign key constraint containing generated
 CREATE TABLE gtest23x (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED REFERENCES gtest23a (x) ON DELETE SET NULL);  -- error
 ERROR:  invalid ON DELETE action for foreign key constraint containing generated column
 CREATE TABLE gtest23b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED REFERENCES gtest23a (x));
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 \d gtest23b
                            Table "public.gtest23b"
  Column |  Type   | Collation | Nullable |              Default               
@@ -656,7 +656,7 @@ DROP TABLE gtest23a;
 CREATE TABLE gtest23p (x int, y int GENERATED ALWAYS AS (x * 2) STORED, PRIMARY KEY (y));
 INSERT INTO gtest23p VALUES (1), (2), (3);
 CREATE TABLE gtest23q (a int PRIMARY KEY, b int REFERENCES gtest23p (y));
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 INSERT INTO gtest23q VALUES (1, 2);  -- ok
 -- GPDB doesn't enforce foreign key constraints, so this doesn't error out.
 INSERT INTO gtest23q VALUES (2, 5);  -- error

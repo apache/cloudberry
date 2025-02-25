@@ -1,7 +1,7 @@
-# gpexpand for Cloudberry Database
+# gpexpand for Apache Cloudberry
 
 gpexpand is one Greenplum cluster expansion tool for Cloudberry
-Database which expands an existing Greenplum/Cloudberry Database by
+Database which expands an existing Greenplum/Apache Cloudberry by
 adding new hosts to the cluster.
 
 gpexpand has two phases:

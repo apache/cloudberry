@@ -23,7 +23,7 @@ class SimpleNegativeTestCase(GppkgTestCase):
         alpha_spec = GppkgSpec("alpha", "1.0", gpdb_version)
         gppkg_file = self.build(alpha_spec, A_spec)
 
-        with self.assertRaisesRegex(ExecutionError, "requires Cloudberry Database version %s" % gpdb_version):
+        with self.assertRaisesRegex(ExecutionError, "requires Apache Cloudberry version %s" % gpdb_version):
             self.install(gppkg_file)
 
     def test03_install_twice(self):

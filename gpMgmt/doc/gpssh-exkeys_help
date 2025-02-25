@@ -23,9 +23,9 @@ DESCRIPTION
 The gpssh-exkeys utility exchanges SSH keys between the specified host 
 names (or host addresses). This allows SSH connections between Cloudberry 
 hosts and network interfaces without a password prompt. The utility is 
-used to initially prepare a Cloudberry Database system for password-free 
+used to initially prepare a Apache Cloudberry system for password-free 
 SSH access, and also to add additional ssh keys when expanding a 
-Cloudberry Database system. 
+Apache Cloudberry system. 
 
 To specify the hosts involved in an initial SSH key exchange, use the 
 -f option to specify a file containing a list of host names (recommended), 
@@ -33,7 +33,7 @@ or use the -h option to name single host names on the command-line. At
 least one host name (-h) or a host file is required. Note that the local 
 host is included in the key exchange by default.
 
-To specify new expansion hosts to be added to an existing Cloudberry Database 
+To specify new expansion hosts to be added to an existing Apache Cloudberry 
 system, use the -e and -x options. The -e option specifies a file containing 
 a list of existing hosts in the system that already have SSH keys. The -x 
 option specifies a file containing a list of new hosts that need to participate 
@@ -41,9 +41,9 @@ in the SSH key exchange.
 
 Keys are exchanged as the currently logged in user. Cloudberry recommends 
 performing the key exchange process twice: once as root and once as the 
-gpadmin user (the user designated to own your Cloudberry Database installation). 
-The Cloudberry Database management utilities require that the same non-root 
-user be created on all hosts in the Cloudberry Database system, and the 
+gpadmin user (the user designated to own your Apache Cloudberry installation). 
+The Apache Cloudberry management utilities require that the same non-root 
+user be created on all hosts in the Apache Cloudberry system, and the 
 utilities must be able to connect as that user to all hosts without a 
 password prompt.
 

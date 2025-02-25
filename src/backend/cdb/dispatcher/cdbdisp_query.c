@@ -73,7 +73,7 @@ typedef struct
 } SliceVec;
 
 /*
- * Parameter structure for Cloudberry Database Queries
+ * Parameter structure for Apache Cloudberry Queries
  */
 typedef struct DispatchCommandQueryParms
 {

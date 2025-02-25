@@ -23,7 +23,7 @@ if hash brew 2> /dev/null; then
   CMDPATH+=("$(brew --prefix)/bin")
 fi
 
-#GPPATH is the list of possible locations for the Cloudberry Database binaries, in precedence order
+#GPPATH is the list of possible locations for the Apache Cloudberry binaries, in precedence order
 declare -a GPPATH
 GPPATH=( $GPHOME $MPPHOME $BIZHOME )
 if [ ${#GPPATH[@]} -eq 0 ];then
@@ -318,7 +318,7 @@ ERROR_EXIT () {
 		DEBUG_LEVEL=1
 		if [ $BACKOUT_FILE ]; then
 				if [ -s $BACKOUT_FILE ]; then
-						LOG_MSG "[WARN]:-Script has left Cloudberry Database in an incomplete state"
+						LOG_MSG "[WARN]:-Script has left Apache Cloudberry in an incomplete state"
 						LOG_MSG "[WARN]:-Run command bash $BACKOUT_FILE on coordinator to remove these changes"
 						$ECHO "$RM -f $BACKOUT_FILE" >> $BACKOUT_FILE
 				fi
@@ -1142,7 +1142,7 @@ CHK_GPDB_ID () {
 		elif [ x$GPDB_GROUPID_CHK == x$COORDINATOR_INITDB_GROUPID ] && [ x"x" == x"$GROUP_EXECUTE" ] ; then
 		    LOG_MSG "[INFO]:-Current group id of $GPDB_GROUPID, matches initdb group id of $COORDINATOR_INITDB_GROUPID"
 		else
-			LOG_MSG "[WARN]:-File permission mismatch.  The $GPDB_ID_CHK owns the Cloudberry Database installation directory."
+			LOG_MSG "[WARN]:-File permission mismatch.  The $GPDB_ID_CHK owns the Apache Cloudberry installation directory."
 			LOG_MSG "[WARN]:-You are currently logged in as $COORDINATOR_INITDB_ID and may not have sufficient"
 			LOG_MSG "[WARN]:-permissions to run the Cloudberry binaries and management utilities."
 		fi

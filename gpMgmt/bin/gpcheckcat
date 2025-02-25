@@ -210,7 +210,7 @@ def getversion():
     db = connect()
     curs = db.query('''
     select regexp_replace(version(),
-       E'.*PostgreSQL [^ ]+ .Cloudberry Database ([1-9]+.[0-9]+|main).*',
+       E'.*PostgreSQL [^ ]+ .Apache Cloudberry ([1-9]+.[0-9]+|main).*',
        E'\\\\1') as ver;''')
 
     row = curs.getresult()[0]
@@ -3415,7 +3415,7 @@ def main():
     GV.version = getversion()
     # Our current implementation does always support gpcheckcat
     #if GV.version < "4.0":
-    #    myprint("Error: only Cloudberry database version >= 4.0 are supported\n")
+    #    myprint("Error: only Apache Cloudberry version >= 4.0 are supported\n")
     #    sys.exit(GV.retcode)
 
     check_test_subset_parameter_count()

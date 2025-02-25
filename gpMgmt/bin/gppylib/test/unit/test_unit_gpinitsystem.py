@@ -13,15 +13,15 @@ class GpInitSystemTest(GpTestCase):
         p = Popen([self.gpinitsystem_path, '-c', 'cluster_configfile', '-I', 'input_configfile'], stdout=PIPE)
         output = p.stdout.read().decode()
         self.assertIn("[FATAL]:-Options [-c] and [-I] cannot be used at the same time.", output)
-        self.assertNotIn("Creates a new Cloudberry Database instance", output)
-        self.assertNotIn("Initializes a Cloudberry Database system by using configuration", output)
+        self.assertNotIn("Creates a new Apache Cloudberry instance", output)
+        self.assertNotIn("Initializes a Apache Cloudberry system by using configuration", output)
 
     def test_option_without_neither_cluster_configfile_and_input_configfile_should_error(self):
         p = Popen([self.gpinitsystem_path], stdout=PIPE)
         output = p.stdout.read().decode()
         self.assertIn("[FATAL]:-At least one of two options, [-c] or [-I], is required", output)
-        self.assertNotIn("Creates a new Cloudberry Database instance", output)
-        self.assertNotIn("Initializes a Cloudberry Database system by using configuration", output)
+        self.assertNotIn("Creates a new Apache Cloudberry instance", output)
+        self.assertNotIn("Initializes a Apache Cloudberry system by using configuration", output)
 
     def test_option_with_input_configfile_should_work(self):
         p = Popen([self.gpinitsystem_path, '-I', 'input_configfile'], stdout=PIPE)
@@ -36,15 +36,15 @@ class GpInitSystemTest(GpTestCase):
     def test_option_help_prints_docs_usage(self):
         p = Popen([self.gpinitsystem_path, '--help'], stdout=PIPE)
         output = p.stdout.read().decode()
-        self.assertIn("Initializes a Cloudberry Database system by using configuration", output)
-        self.assertNotIn("Creates a new Cloudberry Database instance", output)
+        self.assertIn("Initializes a Apache Cloudberry system by using configuration", output)
+        self.assertNotIn("Creates a new Apache Cloudberry instance", output)
 
     def test_invalid_option_prints_raw_usage(self):
         p = Popen([self.gpinitsystem_path, '--unknown-option'], stdout=PIPE)
         output = p.stdout.read().decode()
         self.assertIn("[ERROR]:-Unknown option --unknown-option", output)
-        self.assertIn("Creates a new Cloudberry Database instance", output)
-        self.assertNotIn("Initializes a Cloudberry Database system by using configuration", output)
+        self.assertIn("Creates a new Apache Cloudberry instance", output)
+        self.assertNotIn("Initializes a Apache Cloudberry system by using configuration", output)
 
 if __name__ == '__main__':
     run_tests()

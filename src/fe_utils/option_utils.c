@@ -31,7 +31,7 @@ handle_help_version_opts(int argc, char *argv[],
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			printf("%s (Cloudberry Database) " PG_VERSION "\n", fixed_progname);
+			printf("%s (Apache Cloudberry) " PG_VERSION "\n", fixed_progname);
 			exit(0);
 		}
 	}

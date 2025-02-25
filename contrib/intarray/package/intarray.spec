@@ -10,7 +10,7 @@ AutoProv:       no
 Provides:       intarray = %{intarray_ver} 
 
 %description
-The intarray package provides integer array functions and GiST index support for Cloudberry Database
+The intarray package provides integer array functions and GiST index support for Apache Cloudberry
 
 %install
 mkdir -p %{buildroot}/temp

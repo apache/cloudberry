@@ -65,7 +65,7 @@ CREATE TABLE document (
     dauthor     name,
     dtitle      text
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 GRANT ALL ON document TO public;
 INSERT INTO document VALUES
     ( 1, 11, 1, 'regress_rls_bob', 'my first novel'),
@@ -3764,7 +3764,7 @@ SET SESSION AUTHORIZATION regress_rls_alice;
 SET row_security = on;
 CREATE TABLE r1 (a int PRIMARY KEY);
 CREATE TABLE r2 (a int REFERENCES r1);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
 -- Create policies on r2 which prevent the
@@ -3799,7 +3799,7 @@ DROP TABLE r1;
 -- Ensure cascaded DELETE works
 CREATE TABLE r1 (a int PRIMARY KEY);
 CREATE TABLE r2 (a int REFERENCES r1 ON DELETE CASCADE);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
 -- Create policies on r2 which prevent the
@@ -3827,7 +3827,7 @@ DROP TABLE r1;
 -- Ensure cascaded UPDATE works
 CREATE TABLE r1 (a int PRIMARY KEY);
 CREATE TABLE r2 (a int REFERENCES r1 ON UPDATE CASCADE);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
 -- Create policies on r2 which prevent the

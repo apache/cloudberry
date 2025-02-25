@@ -647,7 +647,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_dump (Cloudberry Database) " PG_VERSION);
+			puts("pg_dump (Apache Cloudberry) " PG_VERSION);
 			exit_nicely(0);
 		}
 	}
@@ -1036,7 +1036,7 @@ main(int argc, char **argv)
 		case GPS_ENABLED:
 			dumpGpPolicy = isGPbackend;
 			if (!isGPbackend)
-				pg_log_warning("server is not a Cloudberry Database instance; --gp-syntax option ignored");
+				pg_log_warning("server is not a Apache Cloudberry instance; --gp-syntax option ignored");
 			break;
 	}
 
@@ -1389,8 +1389,8 @@ help(const char *progname)
 			 "                               ALTER OWNER commands to set ownership\n"));
 
 	/* START MPP ADDITION */
-	printf(_("  --gp-syntax                  dump with Cloudberry Database syntax (default if gpdb)\n"));
-	printf(_("  --no-gp-syntax               dump without Cloudberry Database syntax (default if postgresql)\n"));
+	printf(_("  --gp-syntax                  dump with Apache Cloudberry syntax (default if gpdb)\n"));
+	printf(_("  --no-gp-syntax               dump without Apache Cloudberry syntax (default if postgresql)\n"));
 	printf(_("  --function-oids              dump only function(s) of given list of oids\n"));
 	printf(_("  --relation-oids              dump only relation(s) of given list of oids\n"));
 	/* END MPP ADDITION */

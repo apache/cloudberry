@@ -2,15 +2,15 @@ src/backend/optimizer/README.cbdb.parallel
 
 ---
 
-Cloudberry Database parallel query is based on Postgres parallel.
+Apache Cloudberry parallel query is based on Postgres parallel.
 
 Most mechanisms are the same, refer to Parallel Query and Partial
 Paths in src/backend/optimizer/README.  The main difference is
 Postgres has a Gather/GatherMerge node which launches any number of
 workers to execute a plan as a leader process(PG style), but
-Cloudberry Database doesn't have that.
+Apache Cloudberry doesn't have that.
 
-Cloudberry Database treats all workers equally. They work together to
+Apache Cloudberry treats all workers equally. They work together to
 execute a plan node with some sync mechanism to keep the right thing,
 ex: create a shared hash table etc.
 
