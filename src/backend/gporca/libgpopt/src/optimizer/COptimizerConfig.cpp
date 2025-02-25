@@ -218,18 +218,18 @@ COptimizerConfig::Serialize(CMemoryPool *mp, CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
 		CDXLTokens::GetDXLTokenStr(EdxltokenHint));
 
+	xml_serializer->OpenElement(
+		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
+		CDXLTokens::GetDXLTokenStr(EdxltokenPlanHint));
+
 	if (nullptr != GetPlanHint())
 	{
-		xml_serializer->OpenElement(
-			CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
-			CDXLTokens::GetDXLTokenStr(EdxltokenPlanHint));
-
 		GetPlanHint()->Serialize(xml_serializer);
-
-		xml_serializer->CloseElement(
-			CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
-			CDXLTokens::GetDXLTokenStr(EdxltokenPlanHint));
 	}
+
+	xml_serializer->CloseElement(
+		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
+		CDXLTokens::GetDXLTokenStr(EdxltokenPlanHint));
 
 	// Serialize traceflags represented in bitset into stream
 	gpos::CBitSetIter bsi(*pbsTrace);

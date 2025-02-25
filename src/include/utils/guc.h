@@ -524,7 +524,9 @@ extern bool optimizer_enable_direct_dispatch;
 extern bool optimizer_enable_master_only_queries;
 extern bool optimizer_enable_hashjoin;
 extern bool optimizer_enable_dynamictablescan;
+extern bool optimizer_enable_dynamicindexscan;
 extern bool optimizer_enable_dynamicindexonlyscan;
+extern bool optimizer_enable_dynamicbitmapscan;
 extern bool optimizer_enable_indexscan;
 extern bool optimizer_enable_indexonlyscan;
 extern bool optimizer_enable_tablescan;
@@ -539,6 +541,7 @@ extern bool optimizer_force_comprehensive_join_implementation;
 extern bool optimizer_enable_replicated_table;
 extern bool optimizer_enable_foreign_table;
 extern bool optimizer_enable_right_outer_join;
+extern bool optimizer_enable_query_parameter;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;

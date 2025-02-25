@@ -109,10 +109,6 @@ public:
 		return PfpDeriveFromScalar(mp, exprhdl);
 	}
 
-	// derive table descriptor
-	CTableDescriptorHashSet *DeriveTableDescriptor(
-		CMemoryPool *mp, CExpressionHandle &exprhdl) const override;
-
 	//-------------------------------------------------------------------------------------
 	// Derived Stats
 	//-------------------------------------------------------------------------------------

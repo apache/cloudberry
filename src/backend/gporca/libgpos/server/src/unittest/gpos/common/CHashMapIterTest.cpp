@@ -72,7 +72,7 @@ CHashMapIterTest::EresUnittest_Basic()
 
 	// iteration over empty map
 	MapIter miEmpty(pm);
-	GPOS_ASSERT(!miEmpty.Advance());
+	GPOS_UNITTEST_ASSERT(!miEmpty.Advance());
 
 #endif	// GPOS_DEBUG
 
@@ -100,8 +100,8 @@ CHashMapIterTest::EresUnittest_Basic()
 		pdrgpulIterKeys->Sort(CompareUlongPtr);
 		pdrgpulIterValues->Sort(CompareUlongPtr);
 
-		GPOS_ASSERT(pdrgpulKeys->Equals(pdrgpulIterKeys.Value()));
-		GPOS_ASSERT(pdrgpulValues->Equals(pdrgpulIterValues.Value()));
+		GPOS_UNITTEST_ASSERT(pdrgpulKeys->Equals(pdrgpulIterKeys.Value()));
+		GPOS_UNITTEST_ASSERT(pdrgpulValues->Equals(pdrgpulIterValues.Value()));
 	}
 
 	pm->Release();

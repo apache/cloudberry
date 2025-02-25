@@ -344,8 +344,8 @@ CUnittest::Driver(CBitVector *pbv)
 			{
 				CUnittest &ut = CUnittest::m_rgut[i];
 				GPOS_RESULT eres = EresExecute(&ut, 1 /*size*/);
-				GPOS_ASSERT((GPOS_OK == eres || GPOS_FAILED == eres) &&
-							"Unexpected result from unittest");
+				GPOS_UNITTEST_ASSERT((GPOS_OK == eres || GPOS_FAILED == eres) &&
+									 "Unexpected result from unittest");
 
 				if (GPOS_OK == eres)
 				{
@@ -426,8 +426,8 @@ void
 CUnittest::Init(CUnittest *rgut, ULONG ulUtCnt, void (*pfConfig)(),
 				void (*pfCleanup)())
 {
-	GPOS_ASSERT(0 == m_ulTests &&
-				"Unittest array has already been initialized");
+	GPOS_UNITTEST_ASSERT(0 == m_ulTests &&
+						 "Unittest array has already been initialized");
 
 	m_rgut = rgut;
 	m_ulTests = ulUtCnt;

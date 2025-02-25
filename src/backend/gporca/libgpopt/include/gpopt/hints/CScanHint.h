@@ -96,7 +96,7 @@ public:
 		m_types->ExchangeSet(type);
 	}
 
-	virtual BOOL SatisfiesOperator(COperator *op) const;
+	virtual BOOL SatisfiesOperator(COperator *op);
 
 	virtual IOstream &OsPrint(IOstream &os) const;
 

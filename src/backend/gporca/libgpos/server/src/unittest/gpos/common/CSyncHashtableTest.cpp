@@ -139,7 +139,7 @@ CSyncHashtableTest::EresUnittest_Accessor()
 		if (nullptr == shtacc0.Find())
 		{
 			// must be in the other hashtable
-			GPOS_ASSERT(pelem == shtacc1.Find());
+			GPOS_UNITTEST_ASSERT(pelem == shtacc1.Find());
 
 			// move to other hashtable
 			shtacc1.Remove(pelem);
@@ -157,8 +157,8 @@ CSyncHashtableTest::EresUnittest_Accessor()
 
 		CSyncHashtableAccessByKey<SElem, ULONG> shtacc1(rgsht[1], ulKey);
 
-		GPOS_ASSERT(nullptr == shtacc1.Find());
-		GPOS_ASSERT(pelem == shtacc0.Find());
+		GPOS_UNITTEST_ASSERT(nullptr == shtacc1.Find());
+		GPOS_UNITTEST_ASSERT(pelem == shtacc0.Find());
 	}
 
 	GPOS_DELETE_ARRAY(rgelem);
@@ -203,8 +203,8 @@ CSyncHashtableTest::EresUnittest_ComplexEquality()
 
 #ifdef GPOS_DEBUG
 		SElem *pelem = shtacc.Find();
-		GPOS_ASSERT(nullptr != pelem && pelem != &elem);
-		GPOS_ASSERT(pelem->Id() == GPOS_SHT_ELEMENTS + j);
+		GPOS_UNITTEST_ASSERT(nullptr != pelem && pelem != &elem);
+		GPOS_UNITTEST_ASSERT(pelem->Id() == GPOS_SHT_ELEMENTS + j);
 #endif	// GPOS_DEBUG
 	}
 
@@ -261,7 +261,7 @@ CSyncHashtableTest::EresUnittest_SameKeyIteration()
 			count++;
 			pelem = shtacc.Next(pelem);
 		}
-		GPOS_ASSERT(count == GPOS_SHT_ELEMENT_DUPLICATES);
+		GPOS_UNITTEST_ASSERT(count == GPOS_SHT_ELEMENT_DUPLICATES);
 	}
 
 	GPOS_DELETE_ARRAY(rgelem);
@@ -296,8 +296,8 @@ CSyncHashtableTest::EresUnittest_NonConcurrentIteration()
 
 	// iterate over empty hash table
 	SElemHashtableIter shtitEmpty(sht);
-	GPOS_ASSERT(!shtitEmpty.Advance() &&
-				"Iterator advanced in an empty hash table");
+	GPOS_UNITTEST_ASSERT(!shtitEmpty.Advance() &&
+						 "Iterator advanced in an empty hash table");
 
 
 	// insert elements
@@ -312,10 +312,8 @@ CSyncHashtableTest::EresUnittest_NonConcurrentIteration()
 	SElemHashtableIter shtit(sht);
 	ULONG count = 0;
 
-#ifdef GPOS_DEBUG
 	// maintain a flag for visiting each element
 	CBitVector bv(mp, GPOS_SHT_ELEMENTS);
-#endif	// GPOS_DEBUG
 
 	while (shtit.Advance())
 	{
@@ -323,18 +321,18 @@ CSyncHashtableTest::EresUnittest_NonConcurrentIteration()
 
 		SElem *pelem GPOS_ASSERTS_ONLY = htitacc.Value();
 
-		GPOS_ASSERT(nullptr != pelem);
+		GPOS_UNITTEST_ASSERT(nullptr != pelem);
 
-		GPOS_ASSERT(SElem::IsValid(pelem->m_ulKey));
+		GPOS_UNITTEST_ASSERT(SElem::IsValid(pelem->m_ulKey));
 
 		// check if element has been visited before
-		GPOS_ASSERT(!bv.ExchangeSet(pelem->Id()) &&
-					"Iterator returned duplicates");
+		GPOS_UNITTEST_ASSERT(!bv.ExchangeSet(pelem->Id()) &&
+							 "Iterator returned duplicates");
 
 		count++;
 	}
 
-	GPOS_ASSERT(count == GPOS_SHT_ELEMENTS);
+	GPOS_UNITTEST_ASSERT(count == GPOS_SHT_ELEMENTS);
 
 	GPOS_DELETE_ARRAY(rgelem);
 

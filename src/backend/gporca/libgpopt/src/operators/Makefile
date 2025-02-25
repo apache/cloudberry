@@ -113,6 +113,7 @@ OBJS        = CExpression.o \
               CPhysicalLeftOuterNLJoin.o \
               CPhysicalLeftSemiHashJoin.o \
               CPhysicalLeftSemiNLJoin.o \
+              CPhysicalFullHashJoin.o \
               CPhysicalLimit.o \
               CPhysicalMotion.o \
               CPhysicalMotionBroadcast.o \
@@ -173,6 +174,7 @@ OBJS        = CExpression.o \
               CScalarNullIf.o \
               CScalarNullTest.o \
               CScalarOp.o \
+              CScalarParam.o \
               CScalarProjectElement.o \
               CScalarProjectList.o \
               CScalarSortGroupClause.o \
@@ -185,9 +187,9 @@ OBJS        = CExpression.o \
               CScalarSwitchCase.o \
               CScalarWindowFunc.o \
               CStrictHashedDistributions.o \
-              CWindowPreprocessor.o \
               COrderedAggPreprocessor.o \
-              CLeftJoinPruningPreprocessor.o
+              CLeftJoinPruningPreprocessor.o \
+              CJoinOrderHintsPreprocessor.o
 
 include $(top_srcdir)/src/backend/common.mk
 

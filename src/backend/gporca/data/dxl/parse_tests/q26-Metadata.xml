@@ -7,11 +7,11 @@
     <dxl:MDScalarComparison Mdid="4.23.1.0;20.1.0;0" Name="=" ComparisonType="Eq" LeftType="0.23.1.0" RightType="0.20.1.0" OperatorMdid="0.416.1.0"/>
     <dxl:RelationStatistics Mdid="2.1234.1.2" Name="T" Rows="1234.123400" RelPages="0" RelAllVisible="0" EmptyRelation="false"/>
     <dxl:ColumnStatistics Mdid="1.1234.1.2.1" Name="T.a" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="false">
-      <dxl:StatsBucket Frequency="0.500000" DistinctValues="5.000000">
+      <dxl:StatsBucket Frequency="0.50000000000000000" DistinctValues="5.00000000000000000">
         <dxl:LowerBound Closed="true" TypeMdid="0.23.1.0" Value="10"/>
         <dxl:UpperBound Closed="false" TypeMdid="0.23.1.0" Value="15"/>
       </dxl:StatsBucket>
-      <dxl:StatsBucket Frequency="0.500000" DistinctValues="2.000000">
+      <dxl:StatsBucket Frequency="0.50000000000000000" DistinctValues="2.00000000000000000">
         <dxl:LowerBound Closed="true" TypeMdid="0.23.1.0" Value="15"/>
         <dxl:UpperBound Closed="false" TypeMdid="0.23.1.0" Value="20"/>
       </dxl:StatsBucket>

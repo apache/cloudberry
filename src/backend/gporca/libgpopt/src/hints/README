@@ -58,7 +58,7 @@ than one hint per relation.
 
 How does it work?
 
-In exploration phase, transfoms add logical plan alternatives. If scan hints
+In exploration phase, transforms add logical plan alternatives. If scan hints
 are specified, then the transformed operators must satisfy the hints in order
 to be considered as a valid alternative.
 
@@ -73,12 +73,56 @@ the proposed alternative operator satisfies all of the hint's scan types.
 
 Row Hints
 ---------
-TODO
+
+How is it represented?
+
+CRowHint contains all row hints for a set of relations.
+
+How does it work?
+
+In CLogicalJoin stats derive, if the children aliases matches a specified row
+hint, then update the row estimate accordingly.
 
 
-Join Hints
-----------
-TODO
+Join Order Hints
+----------------
+
+How is it represented?
+
+CJoinHint contains all join hints for a set of relations. There are 2 kinds of
+join hints:
+
+  1) order
+    a) direction
+      Leading((T1 (T2 T3)))
+
+    b) direction-less
+      Leading(T1 T2 T3)
+
+  2) kind
+    a) hash
+    b) merge
+    c) nest loop
+
+How does it work?
+
+Join order hints are applied in preprocessing stage. For each nary join we
+check wether a corresponding join hint exists. If it does, then transform the
+child expressions into inner joins that satisfy the join order hints.
+
+
+Join Type Hints
+---------------
+
+How is it represented?
+
+CJoinTypeHint contains join type for a set of relations.
+
+How does it work?
+
+In implementation phase, transforms add physical plan alternatives. If join type
+hints are specified, then the transformed operators must satisfy the hints in
+order to be considered as a valid alternative.
 
 
 Motion Hints
@@ -93,23 +137,23 @@ Supported Hints
   IndexScan
   NoIndexScan
   IndexOnlyScan
-  NoIndexOnlyScan,
+  NoIndexOnlyScan
   BitmapScan
-  NoBitmapScan.
-
-
-Unsupported Hints
------------------
-  TidScan
-  NoTidScan
+  NoBitmapScan
+  Leading
+  Rows
   NestLoop
   NoNestLoop
   HashJoin
   NoHashJoin
   MergeJoin,
   NoMergeJoin
-  Leading
-  Rows
+
+
+Unsupported Hints
+-----------------
+  TidScan
+  NoTidScan
   Parallel
 
 [1] https://github.com/pivotal/pg_hint_plan/tree/PG12

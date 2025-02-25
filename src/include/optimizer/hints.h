@@ -243,6 +243,7 @@ struct HintState
 	GucContext		context;			/* which GUC parameters can we set? */
 	RowsHint	  **rows_hints;			/* parsed Rows hints */
 	ParallelHint  **parallel_hints;		/* parsed Parallel hints */
+	int				log_level;  /* debug_print log level */
 };
 
 #endif	// !OPTIMIZER_HINTS_H

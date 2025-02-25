@@ -41,9 +41,9 @@ CSubqueryTestUtils::GenerateGetExpressions(CMemoryPool *mp,
 										   CExpression **ppexprOuter,
 										   CExpression **ppexprInner)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(nullptr != ppexprOuter);
-	GPOS_ASSERT(nullptr != ppexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != ppexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != ppexprInner);
 
 	// outer expression
 	CWStringConst strNameR(GPOS_WSZ_LIT("Rel1"));
@@ -74,7 +74,7 @@ CSubqueryTestUtils::GenerateGetExpressions(CMemoryPool *mp,
 CExpression *
 CSubqueryTestUtils::PexprJoinWithAggSubquery(CMemoryPool *mp, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprLeft = nullptr;
 	CExpression *pexprRight = nullptr;
@@ -110,8 +110,8 @@ CSubqueryTestUtils::PexprSelectWithAggSubquery(CMemoryPool *mp,
 											   CExpression *pexprInner,
 											   BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	// get any column
 	CColRefSet *pcrs = pexprOuter->DeriveOutputColumns();
@@ -143,8 +143,8 @@ CSubqueryTestUtils::PexprSelectWithAggSubqueryConstComparison(
 	CMemoryPool *mp, CExpression *pexprOuter, CExpression *pexprInner,
 	BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	// generate agg subquery
 	CExpression *pexprSubq =
@@ -174,8 +174,8 @@ CSubqueryTestUtils::PexprProjectWithAggSubquery(CMemoryPool *mp,
 												CExpression *pexprInner,
 												BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
@@ -214,7 +214,7 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithAggSubquery(CMemoryPool *mp,
 											   BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -236,7 +236,7 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithAggSubqueryConstComparison(CMemoryPool *mp,
 															  BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -260,7 +260,7 @@ CExpression *
 CSubqueryTestUtils::PexprProjectWithAggSubquery(CMemoryPool *mp,
 												BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -282,7 +282,7 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithAggSubqueryOverJoin(CMemoryPool *mp,
 													   BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	// generate a pair of get expressions
 	CExpression *pexprR = nullptr;
@@ -378,9 +378,9 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithSubqueryQuantifiedOverWindow(
 	CMemoryPool *mp, COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
 
 	CExpression *pexprOuter = CTestUtils::PexprLogicalGet(mp);
 	CExpression *pexprInner = CTestUtils::PexprOneWindowFunction(mp);
@@ -606,7 +606,7 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithSubqueryDisjuncts(CMemoryPool *mp,
 													 BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -734,7 +734,7 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithCmpSubqueries(CMemoryPool *mp,
 												 BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
 	GenerateGetExpressions(mp, &pexprOuter, &pexprInner);
@@ -805,8 +805,8 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithNestedQuantifiedSubqueries(
 	CMemoryPool *mp, COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
 
 	CWStringConst strName1(GPOS_WSZ_LIT("Rel1"));
 	CWStringConst strAlias1(GPOS_WSZ_LIT("Rel1Alias"));
@@ -923,7 +923,7 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithSubqueryConjuncts(CMemoryPool *mp,
 													 BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -946,7 +946,7 @@ CExpression *
 CSubqueryTestUtils::PexprProjectWithSubqueries(CMemoryPool *mp,
 											   BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -976,8 +976,8 @@ CSubqueryTestUtils::PexprSubquery(
 		fCorrelated	 // add a predicate to inner expression correlated with outer expression?
 )
 {
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	// get a random column from inner expression
 	CColRef *pcrInner = pexprInner->DeriveOutputColumns()->PcrAny();
@@ -1030,10 +1030,10 @@ CSubqueryTestUtils::PexprSubqueryQuantified(
 		fCorrelated	 // add a predicate to inner expression correlated with outer expression?
 )
 {
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	CExpression *pexprSelect =
 		PexprSubquery(mp, pexprOuter, pexprInner, fCorrelated);
@@ -1083,10 +1083,10 @@ CSubqueryTestUtils::PexprUndecorrelatableSubquery(CMemoryPool *mp,
 												  COperator::EOperatorId op_id,
 												  BOOL fCorrelated)
 {
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id ||
-				COperator::EopScalarSubqueryExists == op_id ||
-				COperator::EopScalarSubqueryNotExists == op_id);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id ||
+						 COperator::EopScalarSubqueryExists == op_id ||
+						 COperator::EopScalarSubqueryNotExists == op_id);
 
 	CWStringConst strNameR(GPOS_WSZ_LIT("Rel1"));
 	CMDIdGPDB *pmdidR =
@@ -1115,7 +1115,7 @@ CSubqueryTestUtils::PexprUndecorrelatableSubquery(CMemoryPool *mp,
 			break;
 
 		default:
-			GPOS_ASSERT(!"Invalid subquery type");
+			GPOS_UNITTEST_ASSERT(!"Invalid subquery type");
 	}
 
 	// generate a regular predicate
@@ -1251,11 +1251,11 @@ CSubqueryTestUtils::PexprSubqueryExistential(
 		fCorrelated	 // add a predicate to inner expression correlated with outer expression?
 )
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
-				COperator::EopScalarSubqueryNotExists == op_id);
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
+						 COperator::EopScalarSubqueryNotExists == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	CExpression *pexprSelect =
 		PexprSubquery(mp, pexprOuter, pexprInner, fCorrelated);
@@ -1291,9 +1291,9 @@ CSubqueryTestUtils::PexprSubqueryAgg(
 		fCorrelated	 // add a predicate to inner expression correlated with outer expression?
 )
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	CExpression *pexprSelect =
 		PexprSubquery(mp, pexprOuter, pexprInner, fCorrelated);
@@ -1341,11 +1341,11 @@ CSubqueryTestUtils::PexprSelectWithSubqueryBoolOp(
 	CMemoryPool *mp, CExpression *pexprOuter, CExpression *pexprInner,
 	BOOL fCorrelated, CScalarBoolOp::EBoolOperator eboolop)
 {
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
-	GPOS_ASSERT(CScalarBoolOp::EboolopAnd == eboolop ||
-				CScalarBoolOp::EboolopOr == eboolop);
+	GPOS_UNITTEST_ASSERT(CScalarBoolOp::EboolopAnd == eboolop ||
+						 CScalarBoolOp::EboolopOr == eboolop);
 
 	// get any two columns
 	CColRefSet *pcrs = pexprOuter->DeriveOutputColumns();
@@ -1401,8 +1401,8 @@ CSubqueryTestUtils::PexprProjectWithSubqueries(CMemoryPool *mp,
 											   CExpression *pexprInner,
 											   BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != pexprOuter);
-	GPOS_ASSERT(nullptr != pexprInner);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprOuter);
+	GPOS_UNITTEST_ASSERT(nullptr != pexprInner);
 
 	CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
@@ -1468,9 +1468,9 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithSubqueryQuantified(
 	CMemoryPool *mp, COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -1496,9 +1496,9 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithQuantifiedAggSubquery(
 	CMemoryPool *mp, COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
 
 	CExpression *pexprOuter = CTestUtils::PexprLogicalGet(mp);
 	CExpression *pexprSubq = PexprSubqueryAgg(
@@ -1549,9 +1549,9 @@ CSubqueryTestUtils::PexprProjectWithSubqueryQuantified(
 	CMemoryPool *mp, CExpression *pexprOuter, CExpression *pexprInner,
 	COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
 
 	CExpression *pexprSubqueryQuantified =
 		PexprSubqueryQuantified(mp, op_id, pexprOuter, pexprInner, fCorrelated);
@@ -1590,9 +1590,9 @@ CExpression *
 CSubqueryTestUtils::PexprSelectWithSubqueryExistential(
 	CMemoryPool *mp, COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
-				COperator::EopScalarSubqueryNotExists == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
+						 COperator::EopScalarSubqueryNotExists == op_id);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -1620,9 +1620,9 @@ CSubqueryTestUtils::PexprSelectWithTrimmableExistentialSubquery(
 	BOOL  // fCorrelated
 )
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
-				COperator::EopScalarSubqueryNotExists == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
+						 COperator::EopScalarSubqueryNotExists == op_id);
 
 	CExpression *pexprOuter = CTestUtils::PexprLogicalGet(mp);
 	CExpression *pexprInner = CTestUtils::PexprLogicalGbAggWithSum(mp);
@@ -1675,9 +1675,9 @@ CExpression *
 CSubqueryTestUtils::PexprProjectWithSubqueryExistential(
 	CMemoryPool *mp, COperator::EOperatorId op_id, BOOL fCorrelated)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
-				COperator::EopScalarSubqueryNotExists == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryExists == op_id ||
+						 COperator::EopScalarSubqueryNotExists == op_id);
 
 	CExpression *pexprOuter = nullptr;
 	CExpression *pexprInner = nullptr;
@@ -1718,9 +1718,9 @@ CExpression *
 CSubqueryTestUtils::PexprSubqueryWithConstTableGet(CMemoryPool *mp,
 												   COperator::EOperatorId op_id)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
-				COperator::EopScalarSubqueryAll == op_id);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarSubqueryAny == op_id ||
+						 COperator::EopScalarSubqueryAll == op_id);
 
 	CWStringConst strNameR(GPOS_WSZ_LIT("Rel1"));
 	CMDIdGPDB *pmdidR =
@@ -1783,7 +1783,7 @@ CSubqueryTestUtils::PexprSubqueryWithConstTableGet(CMemoryPool *mp,
 CExpression *
 CSubqueryTestUtils::PexprSubqueryWithDisjunction(CMemoryPool *mp)
 {
-	GPOS_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
 
 	CWStringConst strNameR(GPOS_WSZ_LIT("Rel1"));
 	CMDIdGPDB *pmdidR =

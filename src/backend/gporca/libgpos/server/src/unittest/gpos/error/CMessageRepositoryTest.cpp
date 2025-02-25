@@ -54,19 +54,19 @@ CMessageRepositoryTest::EresUnittest_Basic()
 	CMessage *pmsg = CMessageRepository::GetMessageRepository()->LookupMessage(
 		CException(CException::ExmaSystem, CException::ExmiOOM), ElocEnUS_Utf8);
 
-	GPOS_ASSERT(GPOS_MATCH_EX(pmsg->m_exception, CException::ExmaSystem,
-							  CException::ExmiOOM));
+	GPOS_UNITTEST_ASSERT(GPOS_MATCH_EX(
+		pmsg->m_exception, CException::ExmaSystem, CException::ExmiOOM));
 
-	GPOS_ASSERT(pmsg == CMessage::GetMessage(CException::ExmiOOM));
+	GPOS_UNITTEST_ASSERT(pmsg == CMessage::GetMessage(CException::ExmiOOM));
 
 	// attempt looking up OOM message in German -- should return enUS OOM message;
 	pmsg = CMessageRepository::GetMessageRepository()->LookupMessage(
 		CException(CException::ExmaSystem, CException::ExmiOOM), ElocGeDE_Utf8);
 
-	GPOS_ASSERT(GPOS_MATCH_EX(pmsg->m_exception, CException::ExmaSystem,
-							  CException::ExmiOOM));
+	GPOS_UNITTEST_ASSERT(GPOS_MATCH_EX(
+		pmsg->m_exception, CException::ExmaSystem, CException::ExmiOOM));
 
-	GPOS_ASSERT(pmsg == CMessage::GetMessage(CException::ExmiOOM));
+	GPOS_UNITTEST_ASSERT(pmsg == CMessage::GetMessage(CException::ExmiOOM));
 
 	GPOS_TRY
 	{
@@ -76,7 +76,7 @@ CMessageRepositoryTest::EresUnittest_Basic()
 	}
 	GPOS_CATCH_EX(exc)
 	{
-		GPOS_ASSERT(
+		GPOS_UNITTEST_ASSERT(
 			GPOS_MATCH_EX(exc, CException::ExmaSystem, CException::ExmiAssert));
 		GPOS_RESET_EX;
 	}

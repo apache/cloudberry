@@ -1379,14 +1379,6 @@ select * from r where b in (select b from s where c=10 order by c);
 explain (costs off) select * from r where b in (select b from s where c=10 order by c limit 2);
 select * from r where b in (select b from s where c=10 order by c limit 2);
 
--- test cross params of initplan
--- https://github.com/greenplum-db/gpdb/issues/16268
-create table tmp (a varchar, b varchar, c varchar);
-select (SELECT EXISTS
-                 (SELECT
-                  FROM pg_views
-                  WHERE schemaname = a)) from tmp;
-drop table tmp;
 -- Test nested query with aggregate inside a sublink,
 -- ORCA should correctly normalize the aggregate expression inside the
 -- sublink's nested query and the column variable accessed in aggregate should
@@ -1401,6 +1393,16 @@ explain (COSTS OFF) with t0 AS (
         JOIN s as t ON  true
    )
 SELECT c FROM t0;
+
+-- Test push predicate into subquery
+-- more details could be found at https://github.com/greenplum-db/gpdb/issues/8429
+CREATE TABLE foo_predicate_pushdown (a int, b  int);
+CREATE TABLE bar_predicate_pushdown (c int, d int);
+explain (costs off) select * from (   
+ select distinct (select bar.c from bar_predicate_pushdown bar where c = foo.b) as ss from foo_predicate_pushdown foo
+) ABC where ABC.ss = 5;
+DROP TABLE foo_predicate_pushdown;
+DROP TABLE bar_predicate_pushdown;
 
 --
 -- Test case for ORCA semi join with random table

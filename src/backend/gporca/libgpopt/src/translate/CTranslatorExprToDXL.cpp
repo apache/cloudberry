@@ -87,6 +87,7 @@
 #include "gpopt/operators/CScalarMinMax.h"
 #include "gpopt/operators/CScalarNullIf.h"
 #include "gpopt/operators/CScalarOp.h"
+#include "gpopt/operators/CScalarParam.h"
 #include "gpopt/operators/CScalarProjectElement.h"
 #include "gpopt/operators/CScalarSortGroupClause.h"
 #include "gpopt/operators/CScalarSwitch.h"
@@ -163,6 +164,7 @@
 #include "naucrates/dxl/operators/CDXLScalarOneTimeFilter.h"
 #include "naucrates/dxl/operators/CDXLScalarOpExpr.h"
 #include "naucrates/dxl/operators/CDXLScalarOpList.h"
+#include "naucrates/dxl/operators/CDXLScalarParam.h"
 #include "naucrates/dxl/operators/CDXLScalarProjElem.h"
 #include "naucrates/dxl/operators/CDXLScalarProjList.h"
 #include "naucrates/dxl/operators/CDXLScalarRecheckCondFilter.h"
@@ -439,6 +441,7 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 		case COperator::EopPhysicalLeftAntiSemiHashJoin:
 		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
 		case COperator::EopPhysicalRightOuterHashJoin:
+		case COperator::EopPhysicalFullHashJoin:
 			dxlnode = CTranslatorExprToDXL::PdxlnHashJoin(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
@@ -661,6 +664,8 @@ CTranslatorExprToDXL::PdxlnScalar(CExpression *pexpr)
 			return CTranslatorExprToDXL::PdxlnBitmapIndexProbe(pexpr);
 		case COperator::EopScalarBitmapBoolOp:
 			return CTranslatorExprToDXL::PdxlnBitmapBoolOp(pexpr);
+		case COperator::EopScalarParam:
+			return CTranslatorExprToDXL::PdxlnScParam(pexpr);
 		default:
 			GPOS_RAISE(gpopt::ExmaGPOPT, gpopt::ExmiUnsupportedOp,
 					   pexpr->Pop()->SzId());
@@ -4581,6 +4586,9 @@ CTranslatorExprToDXL::EdxljtHashJoin(CPhysicalHashJoin *popHJ)
 		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
 			return EdxljtLeftAntiSemijoinNotIn;
 
+		case COperator::EopPhysicalFullHashJoin:
+			return EdxljtFull;
+
 		default:
 			GPOS_ASSERT(!"Invalid join type");
 			return EdxljtSentinel;
@@ -5282,12 +5290,31 @@ CTranslatorExprToDXL::GetDXLDirectDispatchInfo(CExpression *pexprDML)
 		return nullptr;
 	}
 
-
+	// get index of distribution column in the DML's source array. For non-delete DMLs, the
+	// source array has the same columns as the table descriptor's, and the columns will match.
+	// For deletes, we need to find the distribution col's index by iterating through the delete operator's source
+	// columns (which will only include distribution and partitioning columns, so this will be fast)
+	ULONG ulPos = 0;
 	GPOS_ASSERT(1 == pdrgpcoldescDist->Size());
-	CColumnDescriptor *pcoldesc = (*pdrgpcoldescDist)[0];
-	ULONG ulPos =
-		gpopt::CTableDescriptor::UlPos(pcoldesc, ptabdesc->Pdrgpcoldesc());
-	GPOS_ASSERT(ulPos < ptabdesc->Pdrgpcoldesc()->Size() && "Column not found");
+	if (CLogicalDML::EdmlDelete == popDML->Edmlop())
+	{
+		for (ULONG ul = 0; ul < (popDML->PdrgpcrSource())->Size(); ul++)
+		{
+			if ((*popDML->PdrgpcrSource())[ul]->IsDistCol())
+			{
+				ulPos = ul;
+				break;
+			}
+		}
+	}
+	else
+	{
+		CColumnDescriptor *pcoldesc = (*pdrgpcoldescDist)[0];
+		ulPos =
+			gpopt::CTableDescriptor::UlPos(pcoldesc, ptabdesc->Pdrgpcoldesc());
+		GPOS_ASSERT(ulPos < ptabdesc->Pdrgpcoldesc()->Size() &&
+					"Column not found");
+	}
 
 	CColRef *pcrDistrCol = (*popDML->PdrgpcrSource())[ulPos];
 	CPropConstraint *ppc = (*pexprDML)[0]->DerivePropertyConstraint();
@@ -6268,6 +6295,32 @@ CTranslatorExprToDXL::PdxlnScArrayCoerceExpr(CExpression *pexprArrayCoerceExpr)
 	pdxlnArrayCoerceExpr->AddChild(elemexpr_dxlnode);
 
 	return pdxlnArrayCoerceExpr;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnScParam
+//
+//	@doc:
+//		Create a DXL scalar param node from an optimizer scalar param expr.
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnScParam(CExpression *pexprScParam)
+{
+	GPOS_ASSERT(nullptr != pexprScParam);
+
+	CScalarParam *popScParam = CScalarParam::PopConvert(pexprScParam->Pop());
+	popScParam->MdidType()->AddRef();
+
+	CDXLScalarParam *dxl_scalar_param = GPOS_NEW(m_mp)
+		CDXLScalarParam(m_mp, popScParam->Id(), popScParam->MdidType(),
+						popScParam->TypeModifier());
+
+	// create the DXL node holding the scalar param operator
+	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, dxl_scalar_param);
+
+	return dxlnode;
 }
 
 //---------------------------------------------------------------------------

@@ -99,6 +99,13 @@ public:
 			return m_pstats->GetNDVs(colref);
 		}
 
+		// look up the number of distinct values of a particular column
+		CDouble
+		GetNullFreq(const CColRef *colref)
+		{
+			return m_pstats->GetNullFreq(colref);
+		}
+
 		// root stats getter
 		IStatistics *
 		Pstats()

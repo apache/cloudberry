@@ -457,9 +457,9 @@ CEnumeratorTest::EresUnittest_CheckPlans(EOptTraceFlag eopttrace,
 										 const CHAR *rgszCheckPlans[],
 										 ULONG ulTests)
 {
-	GPOS_ASSERT(nullptr != pfpc);
-	GPOS_ASSERT(nullptr != pulTestCounter);
-	GPOS_ASSERT(nullptr != rgszCheckPlans);
+	GPOS_UNITTEST_ASSERT(nullptr != pfpc);
+	GPOS_UNITTEST_ASSERT(nullptr != pulTestCounter);
+	GPOS_UNITTEST_ASSERT(nullptr != rgszCheckPlans);
 
 	GPOS_RESULT eres = GPOS_OK;
 	GPOS_TRY

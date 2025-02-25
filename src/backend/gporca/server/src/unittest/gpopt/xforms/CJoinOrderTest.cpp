@@ -83,7 +83,7 @@ CJoinOrderTest::EresUnittest_ExpandMinCard()
 	};
 
 	const ULONG ulRels = GPOS_ARRAY_SIZE(rgscRel);
-	GPOS_ASSERT(GPOS_ARRAY_SIZE(rgulRel) == ulRels);
+	GPOS_UNITTEST_ASSERT(GPOS_ARRAY_SIZE(rgulRel) == ulRels);
 
 	// setup a file-based provider
 	CMDProviderMemory *pmdp = CTestUtils::m_pmdpf;

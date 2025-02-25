@@ -64,7 +64,7 @@ CAutoRgTest::EresUnittest_Basics()
 
 #ifdef GPOS_DEBUG
 	CHAR ch = asz3[0];
-	GPOS_ASSERT(ch == sz2[0]);
+	GPOS_UNITTEST_ASSERT(ch == sz2[0]);
 #endif	// GPOS_DEBUG
 
 	asz2 = nullptr;

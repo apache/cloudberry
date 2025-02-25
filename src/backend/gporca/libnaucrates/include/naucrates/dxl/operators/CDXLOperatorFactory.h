@@ -20,6 +20,7 @@
 #include "gpos/base.h"
 #include "gpos/common/CDouble.h"
 
+#include "gpopt/hints/CJoinHint.h"
 #include "naucrates/base/IDatum.h"
 #include "naucrates/dxl/operators/CDXLColRef.h"
 #include "naucrates/dxl/operators/CDXLCtasStorageOptions.h"
@@ -207,6 +208,10 @@ public:
 	// create a scalar OpExpr
 	static CDXLScalar *MakeDXLOpExpr(CDXLMemoryManager *dxl_memory_manager,
 									 const Attributes &attrs);
+
+	// create a scalar Param
+	static CDXLScalar *MakeDXLScalarParam(CDXLMemoryManager *dxl_memory_manager,
+										  const Attributes &attrs);
 
 	// create a scalar ArrayComp
 	static CDXLScalar *MakeDXLArrayComp(CDXLMemoryManager *dxl_memory_manager,
@@ -609,6 +614,18 @@ public:
 	// will raise an exception if list is not well-formed
 	static StringPtrArray *ExtractConvertStrsToArray(
 		CDXLMemoryManager *dxl_memory_manager, const XMLCh *xml_val);
+
+	// parse a Leading join order hint into a JoinHint::JoinNode
+	static CJoinHint::JoinNode *ExtractConvertStrToJoinNode(
+		CDXLMemoryManager *dxl_memory_manager, const XMLCh *xml_val);
+
+	// parse a directed Leading join order hint into a JoinHint::JoinNode
+	static CJoinHint::JoinNode *ExtractConvertStrToDirectionedJoinNode(
+		CMemoryPool *mp, const XMLCh *xml_val);
+
+	// parse a non-directed Leading join order hint into a JoinHint::JoinNode
+	static CJoinHint::JoinNode *ExtractConvertStrToNonDirectionedJoinNode(
+		CMemoryPool *mp, const XMLCh *xml_val);
 
 	// parses the input and output segment ids from Xerces attributes and
 	// stores them in the provided DXL Motion operator

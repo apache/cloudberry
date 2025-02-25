@@ -53,23 +53,23 @@ CMaxCardTest::EresUnittest_Basics()
 
 	CMaxCard mcOne(1);
 	CMaxCard mcTwo(1);
-	GPOS_ASSERT(mcOne == mcTwo);
+	GPOS_UNITTEST_ASSERT(mcOne == mcTwo);
 
 	CMaxCard mcThree;
-	GPOS_ASSERT(!(mcOne == mcThree));
+	GPOS_UNITTEST_ASSERT(!(mcOne == mcThree));
 
 	CMaxCard mcFour(0);
 	mcFour *= mcThree;
-	GPOS_ASSERT(0 == mcFour);
+	GPOS_UNITTEST_ASSERT(0 == mcFour);
 
 	mcFour += mcOne;
-	GPOS_ASSERT(1 == mcFour);
+	GPOS_UNITTEST_ASSERT(1 == mcFour);
 
 	mcFour *= mcThree;
-	GPOS_ASSERT(GPOPT_MAX_CARD == mcFour);
+	GPOS_UNITTEST_ASSERT(GPOPT_MAX_CARD == mcFour);
 
 	mcFour += mcThree;
-	GPOS_ASSERT(GPOPT_MAX_CARD == mcFour);
+	GPOS_UNITTEST_ASSERT(GPOPT_MAX_CARD == mcFour);
 
 #endif
 

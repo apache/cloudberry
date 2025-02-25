@@ -599,16 +599,8 @@ CDrvdPropRelational::DeriveTableDescriptor(CExpressionHandle &exprhdl)
 {
 	if (!m_is_prop_derived->ExchangeSet(EdptTableDescriptor))
 	{
-		if (exprhdl.Pop()->FLogical())
-		{
-			CLogical *popLogical = CLogical::PopConvert(exprhdl.Pop());
-			m_table_descriptor =
-				popLogical->DeriveTableDescriptor(m_mp, exprhdl);
-		}
-		else
-		{
-			m_table_descriptor = GPOS_NEW(m_mp) CTableDescriptorHashSet(m_mp);
-		}
+		COperator *pop = exprhdl.Pop();
+		m_table_descriptor = pop->DeriveTableDescriptor(m_mp, exprhdl);
 	}
 
 	return m_table_descriptor;

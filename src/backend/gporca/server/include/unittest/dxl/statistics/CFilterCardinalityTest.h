@@ -153,7 +153,7 @@ private:
 	static GPOS_RESULT EresUnittest_CStatisticsCompare(
 		CMemoryPool *mp, CMDAccessor *md_accessor,
 		CStatisticsArray *pdrgpstatBefore, CStatsPred *pred_stats,
-		const CHAR *szDXLOutput, BOOL fApplyTwice = false);
+		const CHAR *szDXLOutput);
 
 public:
 	// unittests

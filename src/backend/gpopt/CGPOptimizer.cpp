@@ -75,6 +75,20 @@ CGPOptimizer::GPOPTOptimizedPlan(
 		{
 			PG_RE_THROW();
 		}
+		else if (GPOS_MATCH_EX(ex, CException::ExmaInvalid,
+							   CException::ExmiORCAInvalidState))
+		{
+			// The fallback logic below cannot be used because the current 
+			// exception stack does not belong to the current QUERY.
+			if (errstart(LOG, TEXTDOMAIN))
+			{
+				errcode(ERRCODE_INTERNAL_ERROR);
+				errmsg(
+					"Worker is already registered! This is an invalid state, please report this error. ");
+				errfinish(ex.Filename(), ex.Line(), nullptr);
+			}
+			GPOS_RESET_EX;
+		}
 
 		// Failed to produce a plan, but it wasn't an error that should
 		// be propagated to the user. Log the failure if needed, and

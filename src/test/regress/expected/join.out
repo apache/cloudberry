@@ -2819,6 +2819,7 @@ begin;
 create type mycomptype as (id int, v bigint);
 create temp table tidv (idv mycomptype);
 create index on tidv (idv);
+analyze tidv;
 explain (costs off)
 select a.idv, b.idv from tidv a, tidv b where a.idv = b.idv;
                 QUERY PLAN                
@@ -2837,13 +2838,13 @@ set enable_hashjoin = 0;
 set enable_nestloop = 1;
 explain (costs off)
 select a.idv, b.idv from tidv a, tidv b where a.idv = b.idv;
-                        QUERY PLAN                        
-----------------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Join Filter: (a.idv = b.idv)
          ->  Seq Scan on tidv a
-         ->  Index Only Scan using tidv_idv_idx on tidv b
-               Index Cond: (idv = a.idv)
+         ->  Seq Scan on tidv b
  Optimizer: Postgres query optimizer
 (6 rows)
 

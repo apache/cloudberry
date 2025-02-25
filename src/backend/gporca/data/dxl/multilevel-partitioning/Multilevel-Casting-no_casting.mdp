@@ -32,6 +32,7 @@ explain select * from TestPartitionFilterCasting where p3 = 1.0;
         </dxl:CostParams>
       </dxl:CostModelConfig>
       <dxl:Hint MinNumOfPartsToRequireSortOnInsert="40000000"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="101000,101001,101013,102120,103001,103014,103015,103022,104004,104005"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

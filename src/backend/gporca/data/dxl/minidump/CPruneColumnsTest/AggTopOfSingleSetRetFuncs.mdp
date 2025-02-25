@@ -15,6 +15,7 @@ select count(*) from (select generate_series(1, 10) i) t1, (select generate_seri
         </dxl:CostParams>
       </dxl:CostModelConfig>
       <dxl:Hint MinNumOfPartsToRequireSortOnInsert="1000000"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,102120,103001,103003,103014,103015,103022,104004,104005,105000"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

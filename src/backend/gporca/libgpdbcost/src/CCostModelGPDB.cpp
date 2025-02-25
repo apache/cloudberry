@@ -19,7 +19,6 @@
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/engine/CHint.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
-#include "gpopt/metadata/CPartConstraint.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"
@@ -898,7 +897,8 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 				COperator::EopPhysicalLeftAntiSemiHashJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == op_id ||
 				COperator::EopPhysicalLeftOuterHashJoin == op_id ||
-				COperator::EopPhysicalRightOuterHashJoin == op_id);
+				COperator::EopPhysicalRightOuterHashJoin == op_id ||
+				COperator::EopPhysicalFullHashJoin == op_id);
 #endif	// GPOS_DEBUG
 
 	const DOUBLE num_rows_outer = pci->PdRows()[0];
@@ -1026,6 +1026,12 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	COptimizerConfig *optimizer_config =
 		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig();
 
+	// The skew ratio represents the ratio of tuples on the skewed segment
+	// to the expected tuples if data is distributed uniformly For example,
+	// a skew ratio of 2 would mean there are twice as many tuples on a
+	// segment compared to what would be expected if there was zero skew
+	// We'll then multiply this ratio by the child's cost to account for
+	// the increased tuples on a segment
 	CDouble skew_ratio = 1;
 	ULONG arity = exprhdl.Arity();
 
@@ -1057,24 +1063,61 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 
 			CPhysicalMotion *motion = CPhysicalMotion::PopConvert(popChild);
 			CColRefSet *columns = motion->Pds()->PcrsUsed(mp);
+			GPOS_ASSERT(columns->Size() > 0);
 
-			// we decide if there is a skew by calculating the NDVs of the HashRedistribute
+			// we decide if there is a skew by calculating the NDVs and frequency of nulls of the HashRedistribute
 			CDouble ndv = 1.0;
+			CDouble nullFreq = 1.0;
 			CColRefSetIter iter(*columns);
 			while (iter.Advance())
 			{
 				CColRef *colref = iter.Pcr();
 				ndv = ndv * pci->Pcstats(ul)->GetNDVs(colref);
+				nullFreq = nullFreq * pci->Pcstats(ul)->GetNullFreq(colref);
 			}
 
-			// if the NDVs are less than number of segments then there is definitely
-			// a skew. NDV < 1 implies no stats exist for the columns involved. So we don't
-			// want to take any decision.
-			// In case of a skew, penalize the local cost of HashJoin with a
-			// skew ratio = (num of segments)/ndv
+			// if the NDVs are less than number of segments then
+			// there is definitely skew. NDV < 1 implies no stats
+			// exist for the columns involved. So we don't want to
+			// take any decision. In case of a skew, penalize the
+			// local cost of HashJoin with
+			// a skew ratio = (num of segments)/ndv
+			//
+			// Note: if multiple values have skew, we
+			// don't consider that some values may hash to the same
+			// segment. This is definitely possible in practice,
+			// but hopefully considering skew of a single value is
+			// enough to choose a more optimal plan. Revisit this
+			// if we see poor plans in user workloads.
 			if (ndv < pcmgpdb->UlHosts() && (ndv >= 1))
 			{
 				CDouble sk = pcmgpdb->UlHosts() / ndv;
+				skew_ratio = CDouble(std::max(sk.Get(), skew_ratio.Get()));
+			}
+
+			// if the null frequency for this column is greater
+			// than 5% of values (arbitrary), we consider possible
+			// skew. Because distributing on a single value can
+			// cause skew, we also need to consider distributing on
+			// the null value. For example, if 40% of the values
+			// are null, then  at minimum 40% of the values would
+			// go on a single segment. If there are 2 segments, we
+			// would expect 70% of the values (40% [the nulls]+ 60%
+			// [other values] * 50%) to be on the skewed segment
+			//
+			// The formula for skew ratio is derived as follows:
+			// skewed_percent: null_fraction + (1/num_segments)
+			// expected_percent_if_uniform: 1/num_segments
+			// skew_ratio = skewed_percent / expected_percent_if_uniform
+			//
+			// As the null fraction (percentage of the nulls in the
+			// sample) or the number of segments increase, the skew
+			// ratio also increases.
+			if (nullFreq > .05)
+			{
+				CDouble skewed_percent = nullFreq + (1.0 / pcmgpdb->UlHosts());
+				CDouble expected_percent_if_uniform = 1.0 / pcmgpdb->UlHosts();
+				CDouble sk = skewed_percent / expected_percent_if_uniform;
 				skew_ratio = CDouble(std::max(sk.Get(), skew_ratio.Get()));
 			}
 
@@ -1091,7 +1134,7 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 				// The multiplier caps at 1.0307^(100-1) = 20
 				// The base 1.0307 is so chosen that if the data is slightly
 				// skewed, i.e., skew calculated from the histogram is a
-				// little above 1, we get a multiplier of 20 if we max out
+				// little above 1, while we get a multiplier of 20 if we max out
 				// the skew factor at 100
 				skew_factor = pow(1.0307, (skew_factor - 1));
 				CDouble sk1 =
@@ -1101,8 +1144,7 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 			else
 			{
 				// If user specified skew multiplier is 0
-				// Cap the skew
-				// To avoid gather motions
+				// Cap the skew to avoid gather motions
 				skew_ratio = CDouble(std::min(dPenalizeHJSkewUpperLimit.Get(),
 											  skew_ratio.Get()));
 			}
@@ -2474,6 +2516,7 @@ CCostModelGPDB::Cost(
 		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
 		case COperator::EopPhysicalLeftOuterHashJoin:
 		case COperator::EopPhysicalRightOuterHashJoin:
+		case COperator::EopPhysicalFullHashJoin:
 		{
 			return CostHashJoin(m_mp, exprhdl, this, pci);
 		}

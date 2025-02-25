@@ -132,7 +132,7 @@ CConstraintTest::EresUnittest_CInterval()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	IMDTypeInt8 *pmdtypeint8 =
 		(IMDTypeInt8 *) mda.PtMDType<IMDTypeInt8>(CTestUtils::m_sysidDefault);
@@ -171,20 +171,20 @@ CConstraintTest::EresUnittest_CInterval()
 	PrintConstraint(mp, pciComp);
 
 	// containment
-	GPOS_ASSERT(!pciFirst->Contains(pciSecond));
-	GPOS_ASSERT(pciFirst->Contains(pciDiff1));
-	GPOS_ASSERT(!pciSecond->Contains(pciFirst));
-	GPOS_ASSERT(pciSecond->Contains(pciDiff2));
+	GPOS_UNITTEST_ASSERT(!pciFirst->Contains(pciSecond));
+	GPOS_UNITTEST_ASSERT(pciFirst->Contains(pciDiff1));
+	GPOS_UNITTEST_ASSERT(!pciSecond->Contains(pciFirst));
+	GPOS_UNITTEST_ASSERT(pciSecond->Contains(pciDiff2));
 
 	// equality
 	CConstraintInterval *pciThird = PciFirstInterval(mp, mdid, colref);
 	pciThird->AddRef();
 	CConstraintInterval *pciFourth = pciThird;
-	GPOS_ASSERT(!pciFirst->Equals(pciSecond));
-	GPOS_ASSERT(!pciFirst->Equals(pciDiff1));
-	GPOS_ASSERT(!pciSecond->Equals(pciDiff2));
-	GPOS_ASSERT(pciFirst->Equals(pciThird));
-	GPOS_ASSERT(pciFourth->Equals(pciThird));
+	GPOS_UNITTEST_ASSERT(!pciFirst->Equals(pciSecond));
+	GPOS_UNITTEST_ASSERT(!pciFirst->Equals(pciDiff1));
+	GPOS_UNITTEST_ASSERT(!pciSecond->Equals(pciDiff2));
+	GPOS_UNITTEST_ASSERT(pciFirst->Equals(pciThird));
+	GPOS_UNITTEST_ASSERT(pciFourth->Equals(pciThird));
 
 	pciFirst->Release();
 	pciSecond->Release();
@@ -226,7 +226,7 @@ CConstraintTest::EresUnittest_CConjunction()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	IMDTypeInt8 *pmdtypeint8 =
 		(IMDTypeInt8 *) mda.PtMDType<IMDTypeInt8>(CTestUtils::m_sysidDefault);
@@ -242,7 +242,7 @@ CConstraintTest::EresUnittest_CConjunction()
 
 	CConstraintConjunction *pcconj1 = Pcstconjunction(mp, mdid, pcr1);
 	PrintConstraint(mp, pcconj1);
-	GPOS_ASSERT(!pcconj1->FContradiction());
+	GPOS_UNITTEST_ASSERT(!pcconj1->FContradiction());
 
 	CConstraintConjunction *pcconj2 = Pcstconjunction(mp, mdid, pcr2);
 	PrintConstraint(mp, pcconj2);
@@ -258,16 +258,16 @@ CConstraintTest::EresUnittest_CConjunction()
 	PrintConstraint(mp, pcconjTop);
 
 	// containment
-	GPOS_ASSERT(!pcconj1->Contains(pcconj2));
-	GPOS_ASSERT(!pcconj2->Contains(pcconj1));
-	GPOS_ASSERT(pcconj1->Contains(pcconjTop));
-	GPOS_ASSERT(!pcconjTop->Contains(pcconj1));
-	GPOS_ASSERT(pcconj2->Contains(pcconjTop));
-	GPOS_ASSERT(!pcconjTop->Contains(pcconj2));
+	GPOS_UNITTEST_ASSERT(!pcconj1->Contains(pcconj2));
+	GPOS_UNITTEST_ASSERT(!pcconj2->Contains(pcconj1));
+	GPOS_UNITTEST_ASSERT(pcconj1->Contains(pcconjTop));
+	GPOS_UNITTEST_ASSERT(!pcconjTop->Contains(pcconj1));
+	GPOS_UNITTEST_ASSERT(pcconj2->Contains(pcconjTop));
+	GPOS_UNITTEST_ASSERT(!pcconjTop->Contains(pcconj2));
 
 	// equality
-	GPOS_ASSERT(!pcconj1->Equals(pcconjTop));
-	GPOS_ASSERT(!pcconjTop->Equals(pcconj2));
+	GPOS_UNITTEST_ASSERT(!pcconj1->Equals(pcconjTop));
+	GPOS_UNITTEST_ASSERT(!pcconjTop->Equals(pcconj2));
 
 	pcconjTop->Release();
 	pcconj1->Release();
@@ -353,7 +353,7 @@ CConstraintTest::EresUnittest_CDisjunction()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	IMDTypeInt8 *pmdtypeint8 =
 		(IMDTypeInt8 *) mda.PtMDType<IMDTypeInt8>(CTestUtils::m_sysidDefault);
@@ -369,7 +369,7 @@ CConstraintTest::EresUnittest_CDisjunction()
 
 	CConstraintDisjunction *pcdisj1 = Pcstdisjunction(mp, mdid, pcr1);
 	PrintConstraint(mp, pcdisj1);
-	GPOS_ASSERT(!pcdisj1->FContradiction());
+	GPOS_UNITTEST_ASSERT(!pcdisj1->FContradiction());
 
 	CConstraintDisjunction *pcdisj2 = Pcstdisjunction(mp, mdid, pcr2);
 	PrintConstraint(mp, pcdisj2);
@@ -385,16 +385,16 @@ CConstraintTest::EresUnittest_CDisjunction()
 	PrintConstraint(mp, pcdisjTop);
 
 	// containment
-	GPOS_ASSERT(!pcdisj1->Contains(pcdisj2));
-	GPOS_ASSERT(!pcdisj2->Contains(pcdisj1));
-	GPOS_ASSERT(!pcdisj1->Contains(pcdisjTop));
-	GPOS_ASSERT(pcdisjTop->Contains(pcdisj1));
-	GPOS_ASSERT(!pcdisj2->Contains(pcdisjTop));
-	GPOS_ASSERT(pcdisjTop->Contains(pcdisj2));
+	GPOS_UNITTEST_ASSERT(!pcdisj1->Contains(pcdisj2));
+	GPOS_UNITTEST_ASSERT(!pcdisj2->Contains(pcdisj1));
+	GPOS_UNITTEST_ASSERT(!pcdisj1->Contains(pcdisjTop));
+	GPOS_UNITTEST_ASSERT(pcdisjTop->Contains(pcdisj1));
+	GPOS_UNITTEST_ASSERT(!pcdisj2->Contains(pcdisjTop));
+	GPOS_UNITTEST_ASSERT(pcdisjTop->Contains(pcdisj2));
 
 	// equality
-	GPOS_ASSERT(!pcdisj1->Equals(pcdisjTop));
-	GPOS_ASSERT(!pcdisjTop->Equals(pcdisj2));
+	GPOS_UNITTEST_ASSERT(!pcdisj1->Equals(pcdisjTop));
+	GPOS_UNITTEST_ASSERT(!pcdisjTop->Equals(pcdisj2));
 
 	pcdisjTop->Release();
 	pcdisj1->Release();
@@ -431,7 +431,7 @@ CConstraintTest::EresUnittest_CNegation()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	IMDTypeInt8 *pmdtypeint8 =
 		(IMDTypeInt8 *) mda.PtMDType<IMDTypeInt8>(CTestUtils::m_sysidDefault);
@@ -453,17 +453,17 @@ CConstraintTest::EresUnittest_CNegation()
 	PrintConstraint(mp, pcn2);
 
 	// containment
-	GPOS_ASSERT(!pcn1->Contains(pci));
-	GPOS_ASSERT(!pci->Contains(pcn1));
-	GPOS_ASSERT(!pcn2->Contains(pcn1));
-	GPOS_ASSERT(!pcn1->Contains(pcn2));
-	GPOS_ASSERT(pci->Contains(pcn2));
-	GPOS_ASSERT(pcn2->Contains(pci));
+	GPOS_UNITTEST_ASSERT(!pcn1->Contains(pci));
+	GPOS_UNITTEST_ASSERT(!pci->Contains(pcn1));
+	GPOS_UNITTEST_ASSERT(!pcn2->Contains(pcn1));
+	GPOS_UNITTEST_ASSERT(!pcn1->Contains(pcn2));
+	GPOS_UNITTEST_ASSERT(pci->Contains(pcn2));
+	GPOS_UNITTEST_ASSERT(pcn2->Contains(pci));
 
 	// equality
-	GPOS_ASSERT(!pcn1->Equals(pci));
-	GPOS_ASSERT(!pcn1->Equals(pcn2));
-	GPOS_ASSERT(pci->Equals(pcn2));
+	GPOS_UNITTEST_ASSERT(!pcn1->Equals(pci));
+	GPOS_UNITTEST_ASSERT(!pcn1->Equals(pcn2));
+	GPOS_UNITTEST_ASSERT(pci->Equals(pcn2));
 
 	pcn2->Release();
 	pcn1->Release();
@@ -499,7 +499,7 @@ CConstraintTest::EresUnittest_CIntervalFromScalarExpr()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	CExpression *pexprGet = CTestUtils::PexprLogicalGet(mp);
 	CColRefSet *pcrs = pexprGet->DeriveOutputColumns();
@@ -546,7 +546,7 @@ CConstraintTest::EresUnittest_CConstraintFromScalarExpr()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	CExpression *pexprGet1 = CTestUtils::PexprLogicalGet(mp);
 	CColRefSet *pcrs1 = pexprGet1->DeriveOutputColumns();
@@ -633,7 +633,7 @@ CConstraintTest::EresUnittest_CConstraintIntervalConvertsTo()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	// create a range which should convert to an IN array expression
 	const SRangeInfo rgRangeInfoIn[] = {
@@ -660,14 +660,14 @@ CConstraintTest::EresUnittest_CConstraintIntervalConvertsTo()
 	PrintConstraint(mp, pcnstin);
 
 	// should convert to in
-	GPOS_ASSERT(pcnstin->FConvertsToIn());
-	GPOS_ASSERT(!pcnstin->FConvertsToNotIn());
+	GPOS_UNITTEST_ASSERT(pcnstin->FConvertsToIn());
+	GPOS_UNITTEST_ASSERT(!pcnstin->FConvertsToNotIn());
 
 	CConstraintInterval *pcnstNotIn = pcnstin->PciComplement(mp);
 
 	// should convert to a not in statement after taking the complement
-	GPOS_ASSERT(pcnstNotIn->FConvertsToNotIn());
-	GPOS_ASSERT(!pcnstNotIn->FConvertsToIn());
+	GPOS_UNITTEST_ASSERT(pcnstNotIn->FConvertsToNotIn());
+	GPOS_UNITTEST_ASSERT(!pcnstNotIn->FConvertsToIn());
 
 	pcnstin->Release();
 	pcnstNotIn->Release();
@@ -702,7 +702,7 @@ CConstraintTest::EresUnittest_CConstraintIntervalPexpr()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_RTL_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	CAutoTraceFlag atf(EopttraceArrayConstraints, true);
 
@@ -737,11 +737,11 @@ CConstraintTest::EresUnittest_CConstraintIntervalPexpr()
 	pexpr = pcnstin->PexprScalar(mp);  // pexpr is owned by the constraint
 	PrintConstraint(mp, pcnstin);
 
-	GPOS_RTL_ASSERT(!pcnstin->FConvertsToNotIn());
-	GPOS_RTL_ASSERT(pcnstin->FConvertsToIn());
-	GPOS_RTL_ASSERT(CUtils::FScalarArrayCmp(pexpr));
-	GPOS_RTL_ASSERT(3 ==
-					CUtils::UlCountOperator(pexpr, COperator::EopScalarConst));
+	GPOS_UNITTEST_ASSERT(!pcnstin->FConvertsToNotIn());
+	GPOS_UNITTEST_ASSERT(pcnstin->FConvertsToIn());
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarArrayCmp(pexpr));
+	GPOS_UNITTEST_ASSERT(
+		3 == CUtils::UlCountOperator(pexpr, COperator::EopScalarConst));
 
 	pcnstin->Release();
 
@@ -756,13 +756,14 @@ CConstraintTest::EresUnittest_CConstraintIntervalPexpr()
 	pexpr = pcnstin->PexprScalar(mp);  // pexpr is owned by the constraint
 	PrintConstraint(mp, pcnstin);
 
-	GPOS_RTL_ASSERT(!pcnstin->FConvertsToNotIn());
-	GPOS_RTL_ASSERT(pcnstin->FConvertsToIn());
-	GPOS_RTL_ASSERT(CUtils::FScalarBoolOp(pexpr, CScalarBoolOp::EboolopOr));
-	GPOS_RTL_ASSERT(CUtils::FScalarArrayCmp((*pexpr)[0]));
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(!pcnstin->FConvertsToNotIn());
+	GPOS_UNITTEST_ASSERT(pcnstin->FConvertsToIn());
+	GPOS_UNITTEST_ASSERT(
+		CUtils::FScalarBoolOp(pexpr, CScalarBoolOp::EboolopOr));
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarArrayCmp((*pexpr)[0]));
+	GPOS_UNITTEST_ASSERT(
 		3 == CUtils::UlCountOperator((*pexpr)[0], COperator::EopScalarConst));
-	GPOS_RTL_ASSERT(CUtils::FScalarNullTest((*pexpr)[1]));
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarNullTest((*pexpr)[1]));
 
 	pcnstin->Release();
 
@@ -780,11 +781,11 @@ CConstraintTest::EresUnittest_CConstraintIntervalPexpr()
 	pexpr = pcnstNotIn->PexprScalar(mp);  // pexpr is owned by the constraint
 	PrintConstraint(mp, pcnstNotIn);
 
-	GPOS_RTL_ASSERT(pcnstNotIn->FConvertsToNotIn());
-	GPOS_RTL_ASSERT(!pcnstNotIn->FConvertsToIn());
-	GPOS_RTL_ASSERT(CUtils::FScalarArrayCmp(pexpr));
-	GPOS_RTL_ASSERT(3 ==
-					CUtils::UlCountOperator(pexpr, COperator::EopScalarConst));
+	GPOS_UNITTEST_ASSERT(pcnstNotIn->FConvertsToNotIn());
+	GPOS_UNITTEST_ASSERT(!pcnstNotIn->FConvertsToIn());
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarArrayCmp(pexpr));
+	GPOS_UNITTEST_ASSERT(
+		3 == CUtils::UlCountOperator(pexpr, COperator::EopScalarConst));
 
 	pcnstNotIn->Release();
 
@@ -802,13 +803,14 @@ CConstraintTest::EresUnittest_CConstraintIntervalPexpr()
 	pexpr = pcnstNotIn->PexprScalar(mp);  // pexpr is owned by the constraint
 	PrintConstraint(mp, pcnstNotIn);
 
-	GPOS_RTL_ASSERT(pcnstNotIn->FConvertsToNotIn());
-	GPOS_RTL_ASSERT(!pcnstNotIn->FConvertsToIn());
-	GPOS_RTL_ASSERT(CUtils::FScalarBoolOp(pexpr, CScalarBoolOp::EboolopOr));
-	GPOS_RTL_ASSERT(CUtils::FScalarArrayCmp((*pexpr)[0]));
-	GPOS_RTL_ASSERT(3 ==
-					CUtils::UlCountOperator(pexpr, COperator::EopScalarConst));
-	GPOS_RTL_ASSERT(CUtils::FScalarNullTest((*pexpr)[1]));
+	GPOS_UNITTEST_ASSERT(pcnstNotIn->FConvertsToNotIn());
+	GPOS_UNITTEST_ASSERT(!pcnstNotIn->FConvertsToIn());
+	GPOS_UNITTEST_ASSERT(
+		CUtils::FScalarBoolOp(pexpr, CScalarBoolOp::EboolopOr));
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarArrayCmp((*pexpr)[0]));
+	GPOS_UNITTEST_ASSERT(
+		3 == CUtils::UlCountOperator(pexpr, COperator::EopScalarConst));
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarNullTest((*pexpr)[1]));
 
 	pcnstNotIn->Release();
 
@@ -843,7 +845,7 @@ CConstraintTest::EresUnittest_CConstraintIntervalFromArrayExpr()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	CAutoTraceFlag atf(EopttraceArrayConstraints, true);
 
@@ -854,13 +856,13 @@ CConstraintTest::EresUnittest_CConstraintIntervalFromArrayExpr()
 
 	// remove the array child
 	CExpression *pexprArrayComp = (*pexpr->PdrgPexpr())[1];
-	GPOS_ASSERT(CUtils::FScalarArrayCmp(pexprArrayComp));
+	GPOS_UNITTEST_ASSERT(CUtils::FScalarArrayCmp(pexprArrayComp));
 
 	CConstraintInterval *pcnstIn =
 		CConstraintInterval::PciIntervalFromScalarExpr(mp, pexprArrayComp,
 													   colref);
-	GPOS_ASSERT(CConstraint::EctInterval == pcnstIn->Ect());
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(CConstraint::EctInterval == pcnstIn->Ect());
+	GPOS_UNITTEST_ASSERT(
 		pcnstIn->Pdrgprng()->Size() ==
 		CUtils::UlCountOperator(pexprArrayComp, COperator::EopScalarConst));
 
@@ -876,11 +878,12 @@ CConstraintTest::EresUnittest_CConstraintIntervalFromArrayExpr()
 	CConstraintInterval *pcnstNotIn =
 		CConstraintInterval::PciIntervalFromScalarExpr(mp, pexprArrayNotInComp,
 													   pcrNot);
-	GPOS_ASSERT(CConstraint::EctInterval == pcnstNotIn->Ect());
+	GPOS_UNITTEST_ASSERT(CConstraint::EctInterval == pcnstNotIn->Ect());
 	// a NOT IN range array should have one more element than the expression array consts
-	GPOS_ASSERT(pcnstNotIn->Pdrgprng()->Size() ==
-				1 + CUtils::UlCountOperator(pexprArrayNotInComp,
-											COperator::EopScalarConst));
+	GPOS_UNITTEST_ASSERT(
+		pcnstNotIn->Pdrgprng()->Size() ==
+		1 + CUtils::UlCountOperator(pexprArrayNotInComp,
+									COperator::EopScalarConst));
 
 	pexprNotIn->Release();
 	pcnstNotIn->Release();
@@ -902,7 +905,7 @@ CConstraintTest::EresUnittest_CConstraintIntervalFromArrayExpr()
 	CConstraintInterval *pcnstInRepeats =
 		CConstraintInterval::PciIntervalFromScalarExpr(mp, pexprArrayCmpRepeats,
 													   pcrInRepeats);
-	GPOS_ASSERT(5 == pcnstInRepeats->Pdrgprng()->Size());
+	GPOS_UNITTEST_ASSERT(5 == pcnstInRepeats->Pdrgprng()->Size());
 	pexprInRepeatsSelect->Release();
 	pcnstInRepeats->Release();
 
@@ -918,7 +921,7 @@ CConstraintTest::EresUnittest_CConstraintIntervalFromArrayExpr()
 		CConstraintInterval::PciIntervalFromScalarExpr(
 			mp, pexprNotInArrayCmpRepeats, pcrNotInRepeats);
 	// a total of 5 unique ScalarConsts in the expression will result in 6 ranges
-	GPOS_ASSERT(6 == pcnstNotInRepeats->Pdrgprng()->Size());
+	GPOS_UNITTEST_ASSERT(6 == pcnstNotInRepeats->Pdrgprng()->Size());
 	pexprNotInRepeatsSelect->Release();
 	pcnstNotInRepeats->Release();
 	pdrgpi->Release();
@@ -953,7 +956,7 @@ EresUnittest_CConstraintIntervalFromArrayExprIncludesNull()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	CAutoTraceFlag atf(EopttraceArrayConstraints, true);
 
@@ -981,8 +984,8 @@ EresUnittest_CConstraintIntervalFromArrayExprIncludesNull()
 	CColRef *colref = pexprIn->DeriveOutputColumns()->PcrAny();
 	CConstraintInterval *pci = CConstraintInterval::PciIntervalFromScalarExpr(
 		mp, (*pexprIn)[1], colref);
-	GPOS_RTL_ASSERT(!pci->FIncludesNull());
-	GPOS_RTL_ASSERT(2 == pci->Pdrgprng()->Size());
+	GPOS_UNITTEST_ASSERT(!pci->FIncludesNull());
+	GPOS_UNITTEST_ASSERT(2 == pci->Pdrgprng()->Size());
 	pexprIn->Release();
 	pci->Release();
 	pdrgpi->Release();
@@ -1302,7 +1305,7 @@ CConstraintTest::EresUnittest_NegativeTests()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	const IMDType *pmdtype = mda.RetrieveType(&CMDIdGPDB::m_mdid_text);
 	CWStringConst str(GPOS_WSZ_LIT("text_col"));
@@ -1357,7 +1360,7 @@ CConstraintTest::EresUnittest_ConstraintsOnDates()
 
 	// install opt context in TLS
 	CAutoOptCtxt aoc(mp, &mda, pceeval, CTestUtils::GetCostModel(mp));
-	GPOS_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
+	GPOS_UNITTEST_ASSERT(nullptr != COptCtxt::PoctxtFromTLS()->Pcomp());
 
 	const IMDType *pmdtype = mda.RetrieveType(&CMDIdGPDB::m_mdid_date);
 	CWStringConst str(GPOS_WSZ_LIT("date_col"));
@@ -1393,7 +1396,7 @@ CConstraintTest::EresUnittest_ConstraintsOnDates()
 		lInternalRepresentationFor2012_01_02, CRange::EriIncluded,
 		&pstrUpperDate1, lInternalRepresentationFor2012_01_21,
 		CRange::EriExcluded);
-	GPOS_ASSERT(pciIntersectExpected->Equals(pciIntersect));
+	GPOS_UNITTEST_ASSERT(pciIntersectExpected->Equals(pciIntersect));
 
 	// union
 	CConstraintInterval *pciUnion = pciFirst->PciUnion(mp, pciSecond);
@@ -1403,7 +1406,7 @@ CConstraintTest::EresUnittest_ConstraintsOnDates()
 		lInternalRepresentationFor2012_01_01, CRange::EriIncluded,
 		&pstrUpperDate2, lInternalRepresentationFor2012_01_22,
 		CRange::EriExcluded);
-	GPOS_ASSERT(pciUnionExpected->Equals(pciUnion));
+	GPOS_UNITTEST_ASSERT(pciUnionExpected->Equals(pciUnion));
 
 	// difference between pciFirst and pciSecond
 	CConstraintInterval *pciDiff1 = pciFirst->PciDifference(mp, pciSecond);
@@ -1413,7 +1416,7 @@ CConstraintTest::EresUnittest_ConstraintsOnDates()
 		lInternalRepresentationFor2012_01_01, CRange::EriIncluded,
 		&pstrLowerDate2, lInternalRepresentationFor2012_01_02,
 		CRange::EriExcluded);
-	GPOS_ASSERT(pciDiff1Expected->Equals(pciDiff1));
+	GPOS_UNITTEST_ASSERT(pciDiff1Expected->Equals(pciDiff1));
 
 	// difference between pciSecond and pciFirst
 	CConstraintInterval *pciDiff2 = pciSecond->PciDifference(mp, pciFirst);
@@ -1423,15 +1426,15 @@ CConstraintTest::EresUnittest_ConstraintsOnDates()
 		lInternalRepresentationFor2012_01_21, CRange::EriIncluded,
 		&pstrUpperDate2, lInternalRepresentationFor2012_01_22,
 		CRange::EriExcluded);
-	GPOS_ASSERT(pciDiff2Expected->Equals(pciDiff2));
+	GPOS_UNITTEST_ASSERT(pciDiff2Expected->Equals(pciDiff2));
 
 	// containment
-	GPOS_ASSERT(!pciFirst->Contains(pciSecond));
-	GPOS_ASSERT(pciFirst->Contains(pciDiff1));
-	GPOS_ASSERT(!pciSecond->Contains(pciFirst));
-	GPOS_ASSERT(pciSecond->Contains(pciDiff2));
-	GPOS_ASSERT(pciFirst->Contains(pciFirst));
-	GPOS_ASSERT(pciSecond->Contains(pciSecond));
+	GPOS_UNITTEST_ASSERT(!pciFirst->Contains(pciSecond));
+	GPOS_UNITTEST_ASSERT(pciFirst->Contains(pciDiff1));
+	GPOS_UNITTEST_ASSERT(!pciSecond->Contains(pciFirst));
+	GPOS_UNITTEST_ASSERT(pciSecond->Contains(pciDiff2));
+	GPOS_UNITTEST_ASSERT(pciFirst->Contains(pciFirst));
+	GPOS_UNITTEST_ASSERT(pciSecond->Contains(pciSecond));
 
 	// equality
 	// create a third interval identical to the first
@@ -1440,10 +1443,10 @@ CConstraintTest::EresUnittest_ConstraintsOnDates()
 		lInternalRepresentationFor2012_01_01, CRange::EriIncluded,
 		&pstrUpperDate1, lInternalRepresentationFor2012_01_21,
 		CRange::EriExcluded);
-	GPOS_ASSERT(!pciFirst->Equals(pciSecond));
-	GPOS_ASSERT(!pciFirst->Equals(pciDiff1));
-	GPOS_ASSERT(!pciSecond->Equals(pciDiff2));
-	GPOS_ASSERT(pciFirst->Equals(pciThird));
+	GPOS_UNITTEST_ASSERT(!pciFirst->Equals(pciSecond));
+	GPOS_UNITTEST_ASSERT(!pciFirst->Equals(pciDiff1));
+	GPOS_UNITTEST_ASSERT(!pciSecond->Equals(pciDiff2));
+	GPOS_UNITTEST_ASSERT(pciFirst->Equals(pciThird));
 
 	pciThird->Release();
 	pciDiff2Expected->Release();

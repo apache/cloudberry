@@ -210,6 +210,15 @@ execute test_mode_pp(1); -- 4x
 select name, generic_plans, custom_plans from pg_prepared_statements
   where  name = 'test_mode_pp';
 execute test_mode_pp(1); -- 5x
+-- should not be custom_plans
+--  - The version of CBDB before commit "Support Query Parameters in Orca"
+--    will cause the function `choose_custom_plan` always return true.
+--    because `optimizer` is on in singlenode tests
+--  - After that commit, the function `choose_custom_plan` will calculate
+--    and compare `avg_custom_cost` and `generic_cost` to decide use the
+--    custom plan or not.
+--  - SingleNode have not segment(excute in itself), current `avg_custom_cost`
+--    always less than `generic_cost`. So it won't use the custom plan.
 select name, generic_plans, custom_plans from pg_prepared_statements
   where  name = 'test_mode_pp';
 

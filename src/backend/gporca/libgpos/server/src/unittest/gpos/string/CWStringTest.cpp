@@ -83,32 +83,30 @@ CWStringTest::EresUnittest_Append()
 	pstr1->Append(pstr2);
 	ss1.Append(&ss2);
 
-#ifdef GPOS_DEBUG
 	CWStringConst cstr1(GPOS_WSZ_LIT("123456"));
 	CWStringConst cstr2(GPOS_WSZ_LIT("1234564"));
-#endif
 
-	GPOS_ASSERT(pstr1->Equals(&cstr1));
-	GPOS_ASSERT(ss1.Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(pstr1->Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(ss1.Equals(&cstr1));
 
 	// append an empty string
 	pstr1->Append(pstr3);
 	ss1.Append(&ss3);
 
 	// string should be the same as before
-	GPOS_ASSERT(pstr1->Equals(&cstr1));
-	GPOS_ASSERT(ss1.Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(pstr1->Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(ss1.Equals(&cstr1));
 
 	// append to an empty string
 	pstr3->Append(pstr1);
 	ss3.Append(&ss1);
 
-	GPOS_ASSERT(pstr3->Equals(pstr1));
-	GPOS_ASSERT(ss3.Equals(&ss1));
+	GPOS_UNITTEST_ASSERT(pstr3->Equals(pstr1));
+	GPOS_UNITTEST_ASSERT(ss3.Equals(&ss1));
 
 	// check truncation
 	ss3.Append(&ss2);
-	GPOS_ASSERT(ss3.Equals(&cstr2));
+	GPOS_UNITTEST_ASSERT(ss3.Equals(&cstr2));
 
 	// cleanup
 	GPOS_DELETE(pstr1);
@@ -149,13 +147,11 @@ CWStringTest::EresUnittest_AppendFormat()
 	ss2.AppendFormat(GPOS_WSZ_LIT(" world %d"), 123);
 
 	CWStringConst cstr1(GPOS_WSZ_LIT("Hello world 123"));
-#ifdef GPOS_DEBUG
 	CWStringConst cstr2(GPOS_WSZ_LIT("Hello world"));
-#endif
 
-	GPOS_ASSERT(pstr1->Equals(&cstr1));
-	GPOS_ASSERT(ss1.Equals(&cstr1));
-	GPOS_ASSERT(ss2.Equals(&cstr2));
+	GPOS_UNITTEST_ASSERT(pstr1->Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(ss1.Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(ss2.Equals(&cstr2));
 
 	GPOS_RESULT eres = GPOS_OK;
 
@@ -235,7 +231,7 @@ CWStringTest::EresUnittest_AppendFormatLarge()
 				<< "Expected string size:" << ulExpected << std::endl;
 	}
 
-	GPOS_ASSERT(pstr1->Length() == ulExpected);
+	GPOS_UNITTEST_ASSERT(pstr1->Length() == ulExpected);
 
 	// cleanup
 	GPOS_DELETE(pstr1);
@@ -252,9 +248,7 @@ CWStringTest::EresUnittest_AppendFormatLarge()
 	// append large string
 	CWStringDynamic *pstr3 =
 		GPOS_NEW(mp) CWStringDynamic(mp, GPOS_WSZ_LIT("Hello "));
-#ifdef GPOS_DEBUG
 	ULONG ulStartLength = pstr3->Length();
-#endif	// GPOS_DEBUG
 	const ULONG ulAppendLength = 50000;
 	CHAR *sz = GPOS_NEW_ARRAY(mp, CHAR, ulAppendLength + 1);
 	for (ULONG ul = 0; ul < ulAppendLength; ul++)
@@ -265,7 +259,7 @@ CWStringTest::EresUnittest_AppendFormatLarge()
 
 	// append a large string
 	pstr3->AppendCharArray(sz);
-	GPOS_ASSERT(ulAppendLength + ulStartLength == pstr3->Length());
+	GPOS_UNITTEST_ASSERT(ulAppendLength + ulStartLength == pstr3->Length());
 	GPOS_DELETE_ARRAY(sz);
 
 	// do another append of a small string
@@ -289,7 +283,7 @@ CWStringTest::EresUnittest_AppendFormatLarge()
 	GPOS_TRACE(pstr4->GetBuffer());
 	GPOS_TRACE(GPOS_WSZ_LIT("\n"));
 
-	GPOS_ASSERT(pstr4->GetBuffer()[pstr4->Length() - 1] == L'1');
+	GPOS_UNITTEST_ASSERT(pstr4->GetBuffer()[pstr4->Length() - 1] == L'1');
 
 	// cleanup
 	GPOS_DELETE(pstr4);
@@ -317,7 +311,7 @@ CWStringTest::EresUnittest_Initialize()
 		GPOS_NEW(mp) CWStringDynamic(mp, GPOS_WSZ_LIT("123"));
 
 	CWStringConst cstr1(GPOS_WSZ_LIT("123"));
-	GPOS_ASSERT(pstr1->Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(pstr1->Equals(&cstr1));
 
 	// empty string initialization
 	CWStringDynamic *pstr2 = GPOS_NEW(mp) CWStringDynamic(mp);
@@ -325,17 +319,17 @@ CWStringTest::EresUnittest_Initialize()
 	CWStringStatic ss(buffer, GPOS_ARRAY_SIZE(buffer));
 
 	CWStringConst cstr2(GPOS_WSZ_LIT(""));
-	GPOS_ASSERT(pstr2->Equals(&cstr2));
-	GPOS_ASSERT(ss.Equals(&cstr2));
-	GPOS_ASSERT(0 == pstr2->Length());
-	GPOS_ASSERT(0 == ss.Length());
+	GPOS_UNITTEST_ASSERT(pstr2->Equals(&cstr2));
+	GPOS_UNITTEST_ASSERT(ss.Equals(&cstr2));
+	GPOS_UNITTEST_ASSERT(0 == pstr2->Length());
+	GPOS_UNITTEST_ASSERT(0 == ss.Length());
 
 	// constant string initialization
 	CWStringConst *pcstr1 = GPOS_NEW(mp) CWStringConst(GPOS_WSZ_LIT("123"));
-	GPOS_ASSERT(pcstr1->Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(pcstr1->Equals(&cstr1));
 
 	CWStringConst *pcstr2 = GPOS_NEW(mp) CWStringConst(mp, "12345");
-	GPOS_ASSERT(5 == pcstr2->Length());
+	GPOS_UNITTEST_ASSERT(5 == pcstr2->Length());
 
 	// cleanup
 	GPOS_DELETE(pstr1);
@@ -370,11 +364,11 @@ CWStringTest::EresUnittest_Equals()
 	CWStringDynamic *str3 =
 		GPOS_NEW(mp) CWStringDynamic(mp, GPOS_WSZ_LIT("12"));
 
-	GPOS_ASSERT(str1->Equals(str2));
-	GPOS_ASSERT(!str1->Equals(str3));
-	GPOS_ASSERT(!str3->Equals(str1));
-	GPOS_ASSERT(str3->Equals(GPOS_WSZ_LIT("12")));
-	GPOS_ASSERT(!str3->Equals(GPOS_WSZ_LIT("123")));
+	GPOS_UNITTEST_ASSERT(str1->Equals(str2));
+	GPOS_UNITTEST_ASSERT(!str1->Equals(str3));
+	GPOS_UNITTEST_ASSERT(!str3->Equals(str1));
+	GPOS_UNITTEST_ASSERT(str3->Equals(GPOS_WSZ_LIT("12")));
+	GPOS_UNITTEST_ASSERT(!str3->Equals(GPOS_WSZ_LIT("123")));
 
 	// static strings
 	WCHAR buffer1[8];
@@ -385,15 +379,15 @@ CWStringTest::EresUnittest_Equals()
 	CWStringStatic ss2(buffer2, GPOS_ARRAY_SIZE(buffer2), GPOS_WSZ_LIT("123"));
 	CWStringStatic ss3(buffer3, GPOS_ARRAY_SIZE(buffer3), GPOS_WSZ_LIT("12"));
 
-	GPOS_ASSERT(ss1.Equals(&ss2));
-	GPOS_ASSERT(!ss1.Equals(&ss3));
-	GPOS_ASSERT(!ss3.Equals(&ss1));
+	GPOS_UNITTEST_ASSERT(ss1.Equals(&ss2));
+	GPOS_UNITTEST_ASSERT(!ss1.Equals(&ss3));
+	GPOS_UNITTEST_ASSERT(!ss3.Equals(&ss1));
 
 	// Const strings
 	CWStringConst *cstr1 = GPOS_NEW(mp) CWStringConst(GPOS_WSZ_LIT("123"));
 	CWStringConst *cstr2 = GPOS_NEW(mp) CWStringConst(GPOS_WSZ_LIT("12"));
-	GPOS_ASSERT(!cstr1->Equals(cstr2));
-	GPOS_ASSERT(cstr1->Equals(str1));
+	GPOS_UNITTEST_ASSERT(!cstr1->Equals(cstr2));
+	GPOS_UNITTEST_ASSERT(cstr1->Equals(str1));
 
 	// cleanup
 	GPOS_DELETE(str1);
@@ -426,15 +420,15 @@ CWStringTest::EresUnittest_Copy()
 
 	CWStringConst *pcstr1 = pstr1->Copy(mp);
 
-	GPOS_ASSERT(pstr1->Equals(pcstr1));
+	GPOS_UNITTEST_ASSERT(pstr1->Equals(pcstr1));
 
 	// character buffers should be different
-	GPOS_ASSERT(pstr1->GetBuffer() != pcstr1->GetBuffer());
+	GPOS_UNITTEST_ASSERT(pstr1->GetBuffer() != pcstr1->GetBuffer());
 
 	// cleanup
 	GPOS_DELETE(pstr1);
 
-	GPOS_ASSERT(nullptr != pcstr1->GetBuffer());
+	GPOS_UNITTEST_ASSERT(nullptr != pcstr1->GetBuffer());
 	GPOS_DELETE(pcstr1);
 
 	return GPOS_OK;
@@ -465,13 +459,13 @@ CWStringTest::EresUnittest_AppendEscape()
 	CWStringStatic strs1(buffer1, GPOS_ARRAY_SIZE(buffer1), w_str);
 	CWStringStatic strs2(buffer2, GPOS_ARRAY_SIZE(buffer2), w_str);
 
-	GPOS_ASSERT(1 == strd.Find('e'));
-	GPOS_ASSERT(1 == strs1.Find('e'));
-	GPOS_ASSERT(1 == strs2.Find('e'));
+	GPOS_UNITTEST_ASSERT(1 == strd.Find('e'));
+	GPOS_UNITTEST_ASSERT(1 == strs1.Find('e'));
+	GPOS_UNITTEST_ASSERT(1 == strs2.Find('e'));
 
-	GPOS_ASSERT(2 == strd.Find('l'));
-	GPOS_ASSERT(6 == strs1.Find(' '));
-	GPOS_ASSERT(-1 == strs2.Find('a'));
+	GPOS_UNITTEST_ASSERT(2 == strd.Find('l'));
+	GPOS_UNITTEST_ASSERT(6 == strs1.Find(' '));
+	GPOS_UNITTEST_ASSERT(-1 == strs2.Find('a'));
 
 	strd.Reset();
 	strs1.Reset();
@@ -481,27 +475,23 @@ CWStringTest::EresUnittest_AppendEscape()
 	strs1.AppendEscape(&cstr, 'e', GPOS_WSZ_LIT("yyy"));
 	strs2.AppendEscape(&cstr, 'e', GPOS_WSZ_LIT("yyy"));
 
-#ifdef GPOS_DEBUG
 	CWStringConst cstr1(GPOS_WSZ_LIT("Hyyylloyyy "));
 	CWStringConst cstr2(GPOS_WSZ_LIT("Hyyylloy"));
-#endif	// GPOS_DEBUG
 
-	GPOS_ASSERT(strd.Equals(&cstr1));
-	GPOS_ASSERT(strs1.Equals(&cstr1));
-	GPOS_ASSERT(strs2.Equals(&cstr2));
+	GPOS_UNITTEST_ASSERT(strd.Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(strs1.Equals(&cstr1));
+	GPOS_UNITTEST_ASSERT(strs2.Equals(&cstr2));
 
 	strd.AppendEscape(&cstr, 'a', GPOS_WSZ_LIT("yyy"));
 	strs1.AppendEscape(&cstr, 'a', GPOS_WSZ_LIT("yyy"));
 	strs2.AppendEscape(&cstr, 'a', GPOS_WSZ_LIT("yyy"));
 
-#ifdef GPOS_DEBUG
 	CWStringConst cstr3(GPOS_WSZ_LIT("Hyyylloyyy Helloe "));
-#endif	// GPOS_DEBUG
 
 	// should be the same
-	GPOS_ASSERT(strd.Equals(&cstr3));
-	GPOS_ASSERT(strs1.Equals(&cstr3));
-	GPOS_ASSERT(strs2.Equals(&cstr2));
+	GPOS_UNITTEST_ASSERT(strd.Equals(&cstr3));
+	GPOS_UNITTEST_ASSERT(strs1.Equals(&cstr3));
+	GPOS_UNITTEST_ASSERT(strs2.Equals(&cstr2));
 
 	// check escaped characters
 	const WCHAR *wszEscape1 = GPOS_WSZ_LIT("   \\\" ");
@@ -524,8 +514,8 @@ CWStringTest::EresUnittest_AppendEscape()
 	strs1.AppendEscape(&cstrEscape1, '"', GPOS_WSZ_LIT("\\\""));
 
 	// escape character is skipped
-	GPOS_ASSERT(strd.Equals(&cstrEscape1));
-	GPOS_ASSERT(strs1.Equals(&cstrEscape1));
+	GPOS_UNITTEST_ASSERT(strd.Equals(&cstrEscape1));
+	GPOS_UNITTEST_ASSERT(strs1.Equals(&cstrEscape1));
 
 	strd.Reset();
 	strs1.Reset();
@@ -533,8 +523,8 @@ CWStringTest::EresUnittest_AppendEscape()
 	strs1.AppendEscape(&cstrEscape2, '"', GPOS_WSZ_LIT("\\\""));
 
 	// escape character is added
-	GPOS_ASSERT(strd.Equals(&cstrEscape3));
-	GPOS_ASSERT(strs1.Equals(&cstrEscape3));
+	GPOS_UNITTEST_ASSERT(strd.Equals(&cstrEscape3));
+	GPOS_UNITTEST_ASSERT(strs1.Equals(&cstrEscape3));
 
 	strd.Reset();
 	strs1.Reset();
@@ -542,8 +532,8 @@ CWStringTest::EresUnittest_AppendEscape()
 	strs1.AppendEscape(&cstrEscape4, '"', GPOS_WSZ_LIT("\\\""));
 
 	// escape character is skipped
-	GPOS_ASSERT(strd.Equals(&cstrEscape4));
-	GPOS_ASSERT(strs1.Equals(&cstrEscape4));
+	GPOS_UNITTEST_ASSERT(strd.Equals(&cstrEscape4));
+	GPOS_UNITTEST_ASSERT(strs1.Equals(&cstrEscape4));
 
 	strd.Reset();
 	strs1.Reset();
@@ -551,8 +541,8 @@ CWStringTest::EresUnittest_AppendEscape()
 	strs1.AppendEscape(&cstrEscape5, '"', GPOS_WSZ_LIT("\\\""));
 
 	// escape character is added
-	GPOS_ASSERT(strd.Equals(&cstrEscape6));
-	GPOS_ASSERT(strs1.Equals(&cstrEscape6));
+	GPOS_UNITTEST_ASSERT(strd.Equals(&cstrEscape6));
+	GPOS_UNITTEST_ASSERT(strs1.Equals(&cstrEscape6));
 
 	return GPOS_OK;
 }

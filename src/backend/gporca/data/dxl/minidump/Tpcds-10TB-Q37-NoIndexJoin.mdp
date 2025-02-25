@@ -25,6 +25,7 @@ select  i_item_id
       <dxl:CTEConfig CTEInliningCutoff="0"/>
       <dxl:WindowOids RowNumber="7000" Rank="7001"/>
       <dxl:CostModelConfig CostModelType="1" SegmentsForCosting="96"/>
+      <dxl:PlanHint/>
       <dxl:TraceFlags Value="103027,101013,102120,103001,103014,103015,103026"/>
     </dxl:OptimizerConfig>
     <dxl:Metadata SystemIds="0.GPDB">

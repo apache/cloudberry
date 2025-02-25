@@ -52,19 +52,19 @@ CXformFactoryTest::EresUnittest_Basic()
 #ifdef GPOS_DEBUG
 
 	CXform *pxf = CXformFactory::Pxff()->Pxf(CXform::ExfGet2TableScan);
-	GPOS_ASSERT(CXform::ExfGet2TableScan == pxf->Exfid());
+	GPOS_UNITTEST_ASSERT(CXform::ExfGet2TableScan == pxf->Exfid());
 
 	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfImplementInnerJoin);
-	GPOS_ASSERT(CXform::ExfImplementInnerJoin == pxf->Exfid());
+	GPOS_UNITTEST_ASSERT(CXform::ExfImplementInnerJoin == pxf->Exfid());
 
 	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfGbAgg2HashAgg);
-	GPOS_ASSERT(CXform::ExfGbAgg2HashAgg == pxf->Exfid());
+	GPOS_UNITTEST_ASSERT(CXform::ExfGbAgg2HashAgg == pxf->Exfid());
 
-	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfJoinCommutativity);
-	GPOS_ASSERT(CXform::ExfJoinCommutativity == pxf->Exfid());
+	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfInnerJoinCommutativity);
+	GPOS_UNITTEST_ASSERT(CXform::ExfInnerJoinCommutativity == pxf->Exfid());
 
 	pxf = CXformFactory::Pxff()->Pxf(CXform::ExfJoinAssociativity);
-	GPOS_ASSERT(CXform::ExfJoinAssociativity == pxf->Exfid());
+	GPOS_UNITTEST_ASSERT(CXform::ExfJoinAssociativity == pxf->Exfid());
 
 #endif	// GPOS_DEBUG
 

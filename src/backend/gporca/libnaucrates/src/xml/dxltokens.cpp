@@ -77,6 +77,9 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenPlanHint, GPOS_WSZ_LIT("PlanHint")},
 		{EdxltokenScanHint, GPOS_WSZ_LIT("ScanHint")},
 		{EdxltokenRowHint, GPOS_WSZ_LIT("RowHint")},
+		{EdxltokenJoinHint, GPOS_WSZ_LIT("JoinHint")},
+		{EdxltokenJoinTypeHint, GPOS_WSZ_LIT("JoinTypeHint")},
+		{EdxltokenLeading, GPOS_WSZ_LIT("Leading")},
 		{EdxltokenJoinArityForAssociativityCommutativity,
 		 GPOS_WSZ_LIT("JoinArityForAssociativityCommutativity")},
 		{EdxltokenArrayExpansionThreshold,
@@ -213,6 +216,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenScalarLimitOffset, GPOS_WSZ_LIT("LimitOffset")},
 		{EdxltokenScalarOneTimeFilter, GPOS_WSZ_LIT("OneTimeFilter")},
 		{EdxltokenScalarOpExpr, GPOS_WSZ_LIT("OpExpr")},
+		{EdxltokenScalarParam, GPOS_WSZ_LIT("ExtParam")},
 		{EdxltokenScalarProjElem, GPOS_WSZ_LIT("ProjElem")},
 		{EdxltokenScalarCast, GPOS_WSZ_LIT("Cast")},
 		{EdxltokenScalarCoerceToDomain, GPOS_WSZ_LIT("CoerceToDomain")},
@@ -407,6 +411,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenColNdvRemain, GPOS_WSZ_LIT("NdvRemain")},
 		{EdxltokenColFreqRemain, GPOS_WSZ_LIT("FreqRemain")},
 		{EdxltokenColStatsMissing, GPOS_WSZ_LIT("ColStatsMissing")},
+
+		{EdxltokenParamId, GPOS_WSZ_LIT("ParamId")},
 
 		{EdxltokenCtidColName, GPOS_WSZ_LIT("ctid")},
 		{EdxltokenOidColName, GPOS_WSZ_LIT("oid")},

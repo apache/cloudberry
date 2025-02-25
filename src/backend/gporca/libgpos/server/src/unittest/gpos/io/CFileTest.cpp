@@ -139,8 +139,8 @@ CFileTest::EresUnittest_FileContent()
 		}
 
 		// test file size
-		GPOS_ASSERT((wr.FileSize() == (ulLineLength * iLineNum)) &&
-					(wr.UllSizeInternal() == wr.FileSize()));
+		GPOS_UNITTEST_ASSERT((wr.FileSize() == (ulLineLength * iLineNum)) &&
+							 (wr.UllSizeInternal() == wr.FileSize()));
 
 		// close file
 		wr.Close();
@@ -150,30 +150,27 @@ CFileTest::EresUnittest_FileContent()
 
 		CHAR szRdBuf[ulLineLength];
 		CHAR szRdData[ulLineLength];
-#ifdef GPOS_DEBUG
 		ULONG_PTR ulpRdLen = 0;
-#endif	// GPOS_DEBUG
 		CStringStatic strRdData(szRdData, GPOS_ARRAY_SIZE(szRdData));
 
 		// read file content line by line,
 		// and test if it is equal to what is written
 		for (INT i = 0; i < iLineNum; i++)
 		{
-#ifdef GPOS_DEBUG
 			ulpRdLen = rd.ReadBytesToBuffer((BYTE *) szRdBuf, ulLineLength);
-#endif	// GPOS_DEBUG
 			strRdData.AppendBuffer((const CHAR *) szRdBuf);
 
-			GPOS_ASSERT(strRdData.Equals((CHAR *) szData));
-			GPOS_ASSERT(ulpRdLen == ulLineLength);
+			GPOS_UNITTEST_ASSERT(strRdData.Equals((CHAR *) szData));
+			GPOS_UNITTEST_ASSERT(ulpRdLen == ulLineLength);
 
 			strRdData.Reset();
 		}
 
-		GPOS_ASSERT(rd.FileReadSize() == (ulLineLength * iLineNum));
+		GPOS_UNITTEST_ASSERT(rd.FileReadSize() == (ulLineLength * iLineNum));
 
 		// when the EOF is reached, read again will return zero
-		GPOS_ASSERT(0 == rd.ReadBytesToBuffer((BYTE *) szRdBuf, ulLineLength));
+		GPOS_UNITTEST_ASSERT(
+			0 == rd.ReadBytesToBuffer((BYTE *) szRdBuf, ulLineLength));
 
 		//close file
 		rd.Close();
@@ -247,8 +244,8 @@ CFileTest::EresUnittest_InconsistentSize()
 void
 CFileTest::Unittest_MkTmpFile(CHAR *szTmpDir, CHAR *szTmpFile)
 {
-	GPOS_ASSERT(nullptr != szTmpDir);
-	GPOS_ASSERT(nullptr != szTmpFile);
+	GPOS_UNITTEST_ASSERT(nullptr != szTmpDir);
+	GPOS_UNITTEST_ASSERT(nullptr != szTmpFile);
 
 	CHAR szDir[] = "/tmp/CFileTest.XXXXXX";
 	const CHAR szFile[] = "/CFileTest_file.txt";
@@ -276,8 +273,8 @@ CFileTest::Unittest_MkTmpFile(CHAR *szTmpDir, CHAR *szTmpFile)
 void
 CFileTest::Unittest_DeleteTmpDir(const CHAR *szDir, const CHAR *szFile)
 {
-	GPOS_ASSERT(nullptr != szDir);
-	GPOS_ASSERT(nullptr != szFile);
+	GPOS_UNITTEST_ASSERT(nullptr != szDir);
+	GPOS_UNITTEST_ASSERT(nullptr != szFile);
 
 	if (ioutils::PathExists(szFile))
 	{
@@ -306,8 +303,8 @@ void
 CFileTest::Unittest_CheckError(T *pt, R (T::*pfunc)(ARG1, ARG2), ARG1 argFirst,
 							   ARG2 argSec, CException::ExMinor exmi)
 {
-	GPOS_ASSERT(nullptr != pt);
-	GPOS_ASSERT(nullptr != pfunc);
+	GPOS_UNITTEST_ASSERT(nullptr != pt);
+	GPOS_UNITTEST_ASSERT(nullptr != pfunc);
 
 	GPOS_TRY
 	{
@@ -337,7 +334,7 @@ CFileTest::Unittest_CheckError(T *pt, R (T::*pfunc)(ARG1, ARG2), ARG1 argFirst,
 void
 CFileTest::Unittest_WriteInconsistentSize(const CHAR *szTmpFile)
 {
-	GPOS_ASSERT(nullptr != szTmpFile);
+	GPOS_UNITTEST_ASSERT(nullptr != szTmpFile);
 
 	const ULONG ulWdPerms = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 	const BYTE szData[] = "Test file content for CFileTest_file\n";
@@ -356,16 +353,16 @@ CFileTest::Unittest_WriteInconsistentSize(const CHAR *szTmpFile)
 	CFileWriterInternal wrInternal;
 
 	// test file size
-	GPOS_ASSERT(ulExpectSize == wr.FileSize());
-	GPOS_ASSERT(ulExpectSize == wr.UllSizeInternal());
+	GPOS_UNITTEST_ASSERT(ulExpectSize == wr.FileSize());
+	GPOS_UNITTEST_ASSERT(ulExpectSize == wr.UllSizeInternal());
 
 	// try to write data with length larger than buffer size
 	ulExpectSize += (length + ulShortfall);
 	wr.Write(szData, length + ulShortfall);
 
 	// test file size
-	GPOS_ASSERT(ulExpectSize == wr.FileSize());
-	GPOS_ASSERT(wr.UllSizeInternal() == wr.FileSize());
+	GPOS_UNITTEST_ASSERT(ulExpectSize == wr.FileSize());
+	GPOS_UNITTEST_ASSERT(wr.UllSizeInternal() == wr.FileSize());
 
 	wr.Close();
 }
@@ -382,7 +379,7 @@ CFileTest::Unittest_WriteInconsistentSize(const CHAR *szTmpFile)
 void
 CFileTest::Unittest_ReadInconsistentSize(const CHAR *szTmpFile)
 {
-	GPOS_ASSERT(nullptr != szTmpFile);
+	GPOS_UNITTEST_ASSERT(nullptr != szTmpFile);
 
 	const ULONG ulWrPerms = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 	const ULONG ulRdPerms = S_IRUSR | S_IRGRP | S_IROTH;
@@ -411,10 +408,8 @@ CFileTest::Unittest_ReadInconsistentSize(const CHAR *szTmpFile)
 	rd.Open(szTmpFile, ulRdPerms);
 
 	// read data with length smaller than read buffer size
-#ifdef GPOS_DEBUG
 	ULONG_PTR ulpRdSize =
 		rd.ReadBytesToBuffer((BYTE *) szRdBuf, length - ulShortfall);
-#endif	// GPOS_DEBUG
 	szRdBuf[length - ulShortfall] = CHAR_EOS;
 
 	CHAR strBuf[length];
@@ -422,34 +417,30 @@ CFileTest::Unittest_ReadInconsistentSize(const CHAR *szTmpFile)
 	strRdData.AppendBuffer((const CHAR *) szRdBuf);
 
 	CHAR szExpectData[] = "Test file content for CFileTest_f";
-#ifdef GPOS_DEBUG
 	ULONG ulExpectSize = length - ulShortfall;
-#endif	// GPOS_DEBUG
 
 	// test read data, and read size
-	GPOS_ASSERT(ulExpectSize == ulpRdSize);
-	GPOS_ASSERT(ulExpectSize == rd.FileReadSize());
+	GPOS_UNITTEST_ASSERT(ulExpectSize == ulpRdSize);
+	GPOS_UNITTEST_ASSERT(ulExpectSize == rd.FileReadSize());
 
 	BOOL fEqual GPOS_ASSERTS_ONLY = strRdData.Equals(szExpectData);
 
-	GPOS_ASSERT(fEqual);
+	GPOS_UNITTEST_ASSERT(fEqual);
 
 	// close file
 	rd.Close();
 
 	// try to read more data than the read buffer size
 	rd.Open(szTmpFile, ulRdPerms);
-#ifdef GPOS_DEBUG
 	ulExpectSize = length + ulShortfall;
 	ulpRdSize = rd.ReadBytesToBuffer((BYTE *) szRdBuf, ulExpectSize);
-#endif	// GPOS_DEBUG
 
 	strRdData.Reset();
 	strRdData.AppendBuffer((const CHAR *) szRdBuf);
 
 	// test read size, and read data
-	GPOS_ASSERT(ulpRdSize == ulExpectSize);
-	GPOS_ASSERT(strRdData.Equals((const CHAR *) szData));
+	GPOS_UNITTEST_ASSERT(ulpRdSize == ulExpectSize);
+	GPOS_UNITTEST_ASSERT(strRdData.Equals((const CHAR *) szData));
 
 	// close file
 	rd.Close();

@@ -76,8 +76,8 @@ COstreamStringTest::EresUnittest_Basic()
 
 	CWStringConst sexp(GPOS_WSZ_LIT("WC102-10some regular stringdeadbeef"));
 
-	GPOS_ASSERT(str.Equals(&sexp) &&
-				"Constructed string does not match expected output");
+	GPOS_UNITTEST_ASSERT(str.Equals(&sexp) &&
+						 "Constructed string does not match expected output");
 
 	return GPOS_OK;
 }

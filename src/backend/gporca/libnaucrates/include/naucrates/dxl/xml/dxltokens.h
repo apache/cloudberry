@@ -61,6 +61,9 @@ enum Edxltoken
 	EdxltokenPlanHint,
 	EdxltokenScanHint,
 	EdxltokenRowHint,
+	EdxltokenJoinHint,
+	EdxltokenJoinTypeHint,
+	EdxltokenLeading,
 	EdxltokenJoinArityForAssociativityCommutativity,
 	EdxltokenArrayExpansionThreshold,
 	EdxltokenJoinOrderDPThreshold,
@@ -84,6 +87,10 @@ enum Edxltoken
 	EdxltokenSysid,
 
 	EdxltokenThread,
+
+	EdxltokenNoPhysicalHashJoin,
+	EdxltokenNoPhysicalNLJoin,
+	EdxltokenNoPhysicalMergeJoin,
 
 	EdxltokenPhysical,
 
@@ -168,6 +175,7 @@ enum Edxltoken
 	EdxltokenScalarLimitOffset,
 	EdxltokenScalarOneTimeFilter,
 	EdxltokenScalarOpExpr,
+	EdxltokenScalarParam,
 	EdxltokenScalarProjElem,
 	EdxltokenScalarCast,
 	EdxltokenScalarCoerceToDomain,
@@ -357,6 +365,8 @@ enum Edxltoken
 	EdxltokenColNdvRemain,
 	EdxltokenColFreqRemain,
 	EdxltokenColStatsMissing,
+
+	EdxltokenParamId,
 
 	EdxltokenCtidColName,
 	EdxltokenOidColName,

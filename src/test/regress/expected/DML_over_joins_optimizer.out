@@ -1788,7 +1788,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
                                        ->  Seq Scan on tab3
                                        ->  Hash
                                              ->  Seq Scan on tab1
- Optimizer: Pivotal Optimizer (GPORCA) version 3.86.0
+ Optimizer: GPORCA
 (16 rows)
 
 -- ----------------------------------------------------------------------

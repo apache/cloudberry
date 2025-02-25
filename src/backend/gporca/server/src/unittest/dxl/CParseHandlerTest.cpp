@@ -442,7 +442,7 @@ CParseHandlerTest::EresParseAndSerializePlan(CMemoryPool *mp,
 		GPOS_TRACE(dstrExpected.GetBuffer());
 		GPOS_TRACE(strPlan.GetBuffer());
 
-		GPOS_ASSERT(!"Not matching");
+		GPOS_UNITTEST_ASSERT(!"Not matching");
 	}
 
 	// cleanup
@@ -483,7 +483,7 @@ CParseHandlerTest::EresParseAndSerializeQuery(CMemoryPool *mp,
 	// the root of the parsed DXL tree
 	CQueryToDXLResult *pq2dxlresult =
 		CDXLUtils::ParseQueryToQueryDXLTree(mp, dxl_string, szValidationPath);
-	GPOS_ASSERT(nullptr != pq2dxlresult);
+	GPOS_UNITTEST_ASSERT(nullptr != pq2dxlresult);
 
 	oss << "Serializing parsed tree" << std::endl;
 
@@ -549,7 +549,7 @@ CParseHandlerTest::EresParseAndSerializeMetadata(CMemoryPool *mp,
 	IMDCacheObjectArray *mdcache_obj_array =
 		CDXLUtils::ParseDXLToIMDObjectArray(mp, dxl_string, szValidationPath);
 
-	GPOS_ASSERT(nullptr != mdcache_obj_array);
+	GPOS_UNITTEST_ASSERT(nullptr != mdcache_obj_array);
 
 	GPOS_CHECK_ABORT;
 
@@ -566,7 +566,7 @@ CParseHandlerTest::EresParseAndSerializeMetadata(CMemoryPool *mp,
 	if (!dstrExpected.Equals(metadata_str))
 	{
 		GPOS_TRACE(metadata_str->GetBuffer());
-		GPOS_ASSERT(false);
+		GPOS_UNITTEST_ASSERT(false);
 	}
 
 	mdcache_obj_array->Release();
@@ -608,7 +608,7 @@ CParseHandlerTest::EresParseAndSerializeMDRequest(CMemoryPool *mp,
 	CMDRequest *pmdr =
 		CDXLUtils::ParseDXLToMDRequest(mp, dxl_string, szValidationPath);
 
-	GPOS_ASSERT(nullptr != pmdr);
+	GPOS_UNITTEST_ASSERT(nullptr != pmdr);
 
 	GPOS_CHECK_ABORT;
 
@@ -620,7 +620,7 @@ CParseHandlerTest::EresParseAndSerializeMDRequest(CMemoryPool *mp,
 	CWStringDynamic strExpected(mp);
 	strExpected.AppendFormat(GPOS_WSZ_LIT("%s"), dxl_string);
 
-	GPOS_ASSERT(strExpected.Equals(&str));
+	GPOS_UNITTEST_ASSERT(strExpected.Equals(&str));
 
 	pmdr->Release();
 	GPOS_DELETE_ARRAY(dxl_string);
@@ -678,10 +678,10 @@ CParseHandlerTest::EresParseAndSerializeStatistics(CMemoryPool *mp,
 	dxl_derived_rel_stats_array->Release();
 
 
-	GPOS_ASSERT(nullptr != statistics_array);
+	GPOS_UNITTEST_ASSERT(nullptr != statistics_array);
 
 	CStatistics *stats = (*statistics_array)[0];
-	GPOS_ASSERT(stats);
+	GPOS_UNITTEST_ASSERT(stats);
 
 	stats->Rows();
 	oss << "Statistics:" << std::endl;
@@ -698,7 +698,7 @@ CParseHandlerTest::EresParseAndSerializeStatistics(CMemoryPool *mp,
 	CWStringDynamic dstrExpected(mp);
 	dstrExpected.AppendFormat(GPOS_WSZ_LIT("%s"), dxl_string);
 
-	GPOS_ASSERT(dstrExpected.Equals(statistics_str));
+	GPOS_UNITTEST_ASSERT(dstrExpected.Equals(statistics_str));
 
 	statistics_array->Release();
 
@@ -754,7 +754,7 @@ CParseHandlerTest::EresParseAndSerializeScalarExpr(CMemoryPool *mp,
 		GPOS_TRACE(dstrExpected.GetBuffer());
 		GPOS_TRACE(scalar_expr_str->GetBuffer());
 
-		GPOS_ASSERT(!"Not matching");
+		GPOS_UNITTEST_ASSERT(!"Not matching");
 		eres = GPOS_FAILED;
 	}
 

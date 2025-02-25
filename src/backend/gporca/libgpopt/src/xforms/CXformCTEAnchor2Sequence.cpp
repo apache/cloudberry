@@ -60,6 +60,13 @@ CXformCTEAnchor2Sequence::Exfp(CExpressionHandle &exprhdl) const
 		return CXform::ExfpNone;
 	}
 
+	// If contains outer reference, don't attempt to generate plan with shared scans
+	// instead, Orca will generate an inlined plan
+	if (exprhdl.HasOuterRefs() > 0)
+	{
+		return CXform::ExfpNone;
+	}
+
 	return CXform::ExfpHigh;
 }
 

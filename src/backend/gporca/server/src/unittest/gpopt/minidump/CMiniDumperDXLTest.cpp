@@ -162,7 +162,7 @@ CMiniDumperDXLTest::EresUnittest_Basic()
 		IntPtrArray *pdrgpiSegments = GPOS_NEW(mp) IntPtrArray(mp);
 
 
-		GPOS_ASSERT(0 < ulSegments);
+		GPOS_UNITTEST_ASSERT(0 < ulSegments);
 
 		for (ULONG ul = 0; ul < ulSegments; ul++)
 		{
@@ -172,7 +172,7 @@ CMiniDumperDXLTest::EresUnittest_Basic()
 		CTranslatorExprToDXL ptrexprtodxl(mp, &mda, pdrgpiSegments);
 		CDXLNode *pdxlnPlan = ptrexprtodxl.PdxlnTranslate(
 			pexprPlan, pqc->PdrgPcr(), pqc->Pdrgpmdname());
-		GPOS_ASSERT(nullptr != pdxlnPlan);
+		GPOS_UNITTEST_ASSERT(nullptr != pdxlnPlan);
 
 		CSerializablePlan serPlan(
 			mp, pdxlnPlan, optimizer_config->GetEnumeratorCfg()->GetPlanId(),
@@ -185,8 +185,8 @@ CMiniDumperDXLTest::EresUnittest_Basic()
 	GPOS_CATCH_EX(ex)
 	{
 		// The exception must be OOM
-		GPOS_ASSERT(CException::ExmaSystem == ex.Major() &&
-					CException::ExmiOOM == ex.Minor());
+		GPOS_UNITTEST_ASSERT(CException::ExmaSystem == ex.Major() &&
+							 CException::ExmiOOM == ex.Minor());
 
 		mdrs.Finalize();
 
@@ -219,7 +219,7 @@ CMiniDumperDXLTest::EresUnittest_Basic()
 	// XML special characters (OPT-2996)
 	//	// try to load minidump file
 	//	CDXLMinidump *pdxlmd = CMinidumperUtils::PdxlmdLoad(mp, file_name);
-	//	GPOS_ASSERT(NULL != pdxlmd);
+	//	GPOS_UNITTEST_ASSERT(NULL != pdxlmd);
 	//	delete pdxlmd;
 
 

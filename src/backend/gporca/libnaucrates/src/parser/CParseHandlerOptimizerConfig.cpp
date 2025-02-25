@@ -193,6 +193,8 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 										 const XMLCh *const	 // element_qname
 )
 {
+#define MAX_CONFIG_FIELDS 8
+
 	if (0 != XMLString::compareString(
 				 CDXLTokens::XmlstrToken(EdxltokenOptimizerConfig),
 				 element_local_name))
@@ -204,7 +206,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 	}
 
 	GPOS_ASSERT(nullptr == m_optimizer_config);
-	GPOS_ASSERT(8 >= this->Length());
+	GPOS_ASSERT(MAX_CONFIG_FIELDS >= this->Length());
 
 	CParseHandlerEnumeratorConfig *pphEnumeratorConfig =
 		dynamic_cast<CParseHandlerEnumeratorConfig *>((*this)[0]);
@@ -229,8 +231,10 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 
 	ICostModel *pcm = nullptr;
 	CHint *phint = nullptr;
-	CPlanHint *pplanhint = nullptr;
-	if (5 == this->Length())
+	// XXX: ICostModel and CHint are special fields that have default values
+	//      and may therefore be omitted from the MDP. If they are explicitly
+	//      declared, they use slots 4 and 5 in the config
+	if ((MAX_CONFIG_FIELDS - 2) == this->Length())
 	{
 		// no cost model: use default one
 		pcm = ICostModel::PcmDefault(m_mp);
@@ -238,18 +242,13 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 	}
 	else
 	{
-		// XXX: MDP format has changed over time to add additional optimizer
-		// config parameters. We have tried to preserve the functionality of
-		// old MDPs without requiring manual changes. However, argument
-		// position is currently very rigid, hence the hardcoded index values
-		// and logic to account for missing config parameters.
 		CParseHandlerCostModel *pphCostModelConfig =
 			dynamic_cast<CParseHandlerCostModel *>((*this)[4]);
 		pcm = pphCostModelConfig->GetCostModel();
 		GPOS_ASSERT(nullptr != pcm);
 		pcm->AddRef();
 
-		if (6 == this->Length())
+		if ((MAX_CONFIG_FIELDS - 1) == this->Length())
 		{
 			phint = CHint::PhintDefault(m_mp);
 		}
@@ -260,17 +259,17 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 			phint = pphHint->GetHint();
 			GPOS_ASSERT(nullptr != phint);
 			phint->AddRef();
-			if (7 < this->Length())
-			{
-				CParseHandlerPlanHint *pphHint =
-					dynamic_cast<CParseHandlerPlanHint *>((*this)[6]);
-				pplanhint = pphHint->GetPlanHint();
-				if (nullptr != pplanhint)
-				{
-					pplanhint->AddRef();
-				}
-			}
 		}
+	}
+
+	// XXX: Add new fields to COptimizerConfig at (*this)[Length - N].
+
+	CParseHandlerPlanHint *pphHint =
+		dynamic_cast<CParseHandlerPlanHint *>((*this)[this->Length() - 2]);
+	CPlanHint *pplanhint = pphHint->GetPlanHint();
+	if (nullptr != pplanhint)
+	{
+		pplanhint->AddRef();
 	}
 
 	m_optimizer_config = GPOS_NEW(m_mp) COptimizerConfig(

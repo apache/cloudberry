@@ -1,18 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
-
-    <dxl:OptimizerConfig>
-      <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>
-      <dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.010000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/>
-      <dxl:CTEConfig CTEInliningCutoff="0"/>
-      <dxl:WindowOids RowNumber="7000" Rank="7001"/>
-      <dxl:CostModelConfig CostModelType="1" SegmentsForCosting="3">
-      <dxl:CostParams>
-          <dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/>
-        </dxl:CostParams>
-      </dxl:CostModelConfig>
-      <dxl:Hint JoinArityForAssociativityCommutativity="7" ArrayExpansionThreshold="25" JoinOrderDynamicProgThreshold="10" BroadcastThreshold="10000000" EnforceConstraintsOnDML="false"/>
-      <dxl:TraceFlags Value=""/>
-    </dxl:OptimizerConfig>
-
-</dxl:DXLMessage>
+<?xml version="1.0" encoding="UTF-8"?><dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/"><dxl:OptimizerConfig><dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/><dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.010000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/><dxl:CTEConfig CTEInliningCutoff="0"/><dxl:WindowOids RowNumber="7000" Rank="7001"/><dxl:CostModelConfig CostModelType="1" SegmentsForCosting="3"><dxl:CostParams><dxl:CostParam Name="NLJFactor" Value="1.000000" LowerBound="0.500000" UpperBound="1.500000"/></dxl:CostParams></dxl:CostModelConfig><dxl:Hint JoinArityForAssociativityCommutativity="7" ArrayExpansionThreshold="25" JoinOrderDynamicProgThreshold="10" BroadcastThreshold="10000000" EnforceConstraintsOnDML="false" PushGroupByBelowSetopThreshold="10" XformBindThreshold="0" SkewFactor="0"/><dxl:PlanHint/><dxl:TraceFlags Value=""/></dxl:OptimizerConfig></dxl:DXLMessage>

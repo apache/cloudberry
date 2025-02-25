@@ -9937,7 +9937,7 @@ create index bm_dyn_test_idx on orca.bm_dyn_test using bitmap (i);
 alter table orca.bm_dyn_test drop column to_be_dropped;
 alter table orca.bm_dyn_test add partition part5 values(5);
 insert into orca.bm_dyn_test values(2, 5, '2');
-set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 -- gather on 1 segment because of direct dispatch
 explain select * from orca.bm_dyn_test where i=2 and t='2';
                                      QUERY PLAN                                     
@@ -11925,6 +11925,12 @@ SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 (6 rows)
 
 set optimizer_expand_fulljoin = on;
+select disable_xform('CXformFullOuterJoin2HashJoin');
+              disable_xform               
+------------------------------------------
+ CXformFullOuterJoin2HashJoin is disabled
+(1 row)
+
 EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
                                              QUERY PLAN                                             
 ----------------------------------------------------------------------------------------------------
@@ -13368,6 +13374,7 @@ PARTITION BY RANGE(i)
 default partition def);
 create INDEX y_idx on y (j);
 set optimizer_enable_indexjoin=on;
+set optimizer_enable_dynamicindexscan=on;
 explain (costs off) select count(*) from x, y where (x.i > y.j AND x.j <= y.i);
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
@@ -14937,6 +14944,23 @@ SELECT CAST(a AS TEXT[]) FROM array_coerceviaio;
 ---------
  {1,2,3}
 (1 row)
+
+---------------------------------------------------------------------------------
+DROP TABLE IF EXISTS schema_test_table;
+CREATE TABLE schema_test_table(a numeric, b numeric(5,2), c char(10) NOT NULL) distributed by (a);
+-- In 7x, redundant Result nodes in planned_stmt are being removed by ORCA,
+-- which caused the loss of typmod info of column type in plan.
+-- Below query is used by external libraries to fetch schema of table.
+-- Test that the typmod of column type is correct in explain plan.
+EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM schema_test_table WHERE 1=0;
+                                                                      QUERY PLAN
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: a, b, c
+   One-Time Filter: false
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off', optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on', optimizer_segments = '3'
+(5 rows)
 
 ---------------------------------------------------------------------------------
 -- Test ALL NULL scalar array compare 

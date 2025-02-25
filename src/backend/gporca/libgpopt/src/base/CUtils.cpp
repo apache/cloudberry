@@ -1162,18 +1162,6 @@ CUtils::FPhysicalJoin(COperator *pop)
 	return FHashJoin(pop) || FNLJoin(pop);
 }
 
-// check if a given operator is a physical left outer join
-BOOL
-CUtils::FPhysicalLeftOuterJoin(COperator *pop)
-{
-	GPOS_ASSERT(nullptr != pop);
-
-	return COperator::EopPhysicalLeftOuterNLJoin == pop->Eopid() ||
-		   COperator::EopPhysicalLeftOuterIndexNLJoin == pop->Eopid() ||
-		   COperator::EopPhysicalLeftOuterHashJoin == pop->Eopid() ||
-		   COperator::EopPhysicalCorrelatedLeftOuterNLJoin == pop->Eopid();
-}
-
 // check if a given operator is a physical agg
 BOOL
 CUtils::FPhysicalScan(COperator *pop)
@@ -2189,14 +2177,15 @@ CUtils::PexprLogicalSelect(CMemoryPool *mp, CExpression *pexpr,
 	GPOS_ASSERT(nullptr != pexprPredicate);
 
 	CTableDescriptor *ptabdesc = nullptr;
-	if (pexpr->Pop()->Eopid() == CLogical::EopLogicalSelect ||
-		pexpr->Pop()->Eopid() == CLogical::EopLogicalGet ||
+	if (pexpr->Pop()->Eopid() == CLogical::EopLogicalGet ||
 		pexpr->Pop()->Eopid() == CLogical::EopLogicalDynamicGet)
 	{
 		ptabdesc = pexpr->DeriveTableDescriptor()->First();
-		// there are some cases where we don't populate LogicalSelect currently
-		GPOS_ASSERT_IMP(pexpr->Pop()->Eopid() != CLogical::EopLogicalSelect,
-						nullptr != ptabdesc);
+		GPOS_ASSERT(nullptr != ptabdesc);
+	}
+	else if (pexpr->Pop()->Eopid() == CLogical::EopLogicalSelect)
+	{
+		ptabdesc = CLogicalSelect::PopConvert(pexpr->Pop())->Ptabdesc();
 	}
 	return GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CLogicalSelect(mp, ptabdesc), pexpr, pexprPredicate);
@@ -2547,6 +2536,27 @@ CUtils::FScalarIdentNullTest(CExpression *pexpr)
 	GPOS_ASSERT(nullptr != pexpr);
 	return (CUtils::FScalarNullTest(pexpr) &&
 			CUtils::FScalarIdent((*pexpr)[0]));
+}
+
+// checks to see if expression contains a NullTest check on a column (ex: col IS NULL)
+BOOL
+CUtils::FContainsScalarIdentNullTest(CExpression *pexpr)
+{
+	GPOS_ASSERT(nullptr != pexpr);
+
+	if (CUtils::FScalarIdentNullTest(pexpr))
+	{
+		return true;
+	}
+	for (ULONG i = 0; i < pexpr->Arity(); i++)
+	{
+		if (FContainsScalarIdentNullTest((*pexpr)[i]))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // checks to see if the expression is a scalar const TRUE
@@ -5062,5 +5072,30 @@ CUtils::RemoveDuplicateMdids(CMemoryPool *mp, CTableDescriptorHashSet *tabdescs)
 	}
 	mdids->Release();
 	return result;
+}
+
+// Replace column reference with projection expr recursively
+CExpression *
+CUtils::ReplaceColrefWithProjectExpr(CMemoryPool *mp, CExpression *pexpr,
+									 CColRef *pcolref, CExpression *pprojExpr)
+{
+	// replace reference
+	if (pexpr->Pop()->Eopid() == COperator::EopScalarIdent &&
+		CColRef::Equals(CScalarIdent::PopConvert(pexpr->Pop())->Pcr(), pcolref))
+	{
+		pprojExpr->AddRef();
+		return pprojExpr;
+	}
+
+	// recurse to children
+	CExpressionArray *pdrgpexprChildren = GPOS_NEW(mp) CExpressionArray(mp);
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		pdrgpexprChildren->Append(
+			ReplaceColrefWithProjectExpr(mp, (*pexpr)[ul], pcolref, pprojExpr));
+	}
+	COperator *pop = pexpr->Pop();
+	pop->AddRef();
+	return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexprChildren);
 }
 // EOF

@@ -9,11 +9,13 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/hints/CHintUtils.h"
 #include "gpopt/operators/CLogicalIndexApply.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPhysicalInnerIndexNLJoin.h"
 #include "gpopt/operators/CPhysicalLeftOuterIndexNLJoin.h"
 #include "gpopt/operators/CPhysicalNLJoin.h"
+#include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/xforms/CXformImplementation.h"
 
 namespace gpopt
@@ -109,8 +111,17 @@ public:
 		CExpression *pexprResult = GPOS_NEW(mp)
 			CExpression(mp, pop, pexprOuter, pexprInner, pexprScalar);
 
-		// add alternative to results
-		pxfres->Add(pexprResult);
+		if (!CHintUtils::SatisfiesJoinTypeHints(
+				mp, pexprResult,
+				COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint()))
+		{
+			pexprResult->Release();
+		}
+		else
+		{
+			// add alternative to results
+			pxfres->Add(pexprResult);
+		}
 	}
 
 };	// class CXformImplementIndexApply

@@ -88,13 +88,13 @@ CKeyCollectionTest::EresUnittest_Basics()
 	}
 
 	pkc->Add(pcrs);
-	GPOS_ASSERT(pkc->FKey(pcrs));
+	GPOS_UNITTEST_ASSERT(pkc->FKey(pcrs));
 
 	CColRefArray *colref_array = pkc->PdrgpcrKey(mp);
-	GPOS_ASSERT(pkc->FKey(mp, colref_array));
+	GPOS_UNITTEST_ASSERT(pkc->FKey(mp, colref_array));
 
 	pcrs->Include(colref_array);
-	GPOS_ASSERT(pkc->FKey(pcrs));
+	GPOS_UNITTEST_ASSERT(pkc->FKey(pcrs));
 
 	colref_array->Release();
 
@@ -165,16 +165,16 @@ CKeyCollectionTest::EresUnittest_Subsumes()
 	pkc->Add(pcrs1);
 	pkc->Add(pcrs2);
 
-	GPOS_ASSERT(pkc->FKey(pcrs2));
+	GPOS_UNITTEST_ASSERT(pkc->FKey(pcrs2));
 
 	// get the second key
 	CColRefArray *colref_array = pkc->PdrgpcrKey(mp, 1);
-	GPOS_ASSERT(ulLen1 == colref_array->Size());
-	GPOS_ASSERT(pkc->FKey(mp, colref_array));
+	GPOS_UNITTEST_ASSERT(ulLen1 == colref_array->Size());
+	GPOS_UNITTEST_ASSERT(pkc->FKey(mp, colref_array));
 
 	// get the subsumed key
 	CColRefArray *pdrgpcrSubsumed = pkc->PdrgpcrTrim(mp, colref_array);
-	GPOS_ASSERT(colref_array->Size() >= pdrgpcrSubsumed->Size());
+	GPOS_UNITTEST_ASSERT(colref_array->Size() >= pdrgpcrSubsumed->Size());
 
 	CColRefSet *pcrsSubsumed = GPOS_NEW(mp) CColRefSet(mp);
 	pcrsSubsumed->Include(colref_array);
@@ -184,7 +184,7 @@ CKeyCollectionTest::EresUnittest_Subsumes()
 	for (ULONG ul = 0; ul < ulLenSubsumed; ul++)
 	{
 		CColRef *colref = (*pdrgpcrSubsumed)[ul];
-		GPOS_ASSERT(pcrsSubsumed->FMember(colref));
+		GPOS_UNITTEST_ASSERT(pcrsSubsumed->FMember(colref));
 	}
 #endif	// GPOS_DEBUG
 

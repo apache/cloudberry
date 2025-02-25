@@ -297,7 +297,6 @@ public:
 		return nullptr == First();
 	}
 
-#ifdef GPOS_DEBUG
 	// lookup a given element in the list
 	GPOS_RESULT
 	Find(T *elem) const
@@ -317,6 +316,7 @@ public:
 		return GPOS_NOT_FOUND;
 	}
 
+#ifdef GPOS_DEBUG
 	// debug print of element addresses
 	IOstream &
 	OsPrint(IOstream &os) const

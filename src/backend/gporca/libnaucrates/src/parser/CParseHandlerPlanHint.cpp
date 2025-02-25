@@ -158,6 +158,47 @@ CParseHandlerPlanHint::StartElement(
 
 		m_hint->AddHint(hint);
 	}
+	else if (0 == XMLString::compareString(
+					  CDXLTokens::XmlstrToken(EdxltokenJoinHint),
+					  element_local_name))
+	{
+		const XMLCh *attr_val_xml = CDXLOperatorFactory::ExtractAttrValue(
+			attrs, EdxltokenLeading, EdxltokenPlanHint, true);
+		CJoinHint::JoinNode *order_spec = nullptr;
+		if (nullptr != attr_val_xml)
+		{
+			order_spec = CDXLOperatorFactory::ExtractConvertStrToJoinNode(
+				m_parse_handler_mgr->GetDXLMemoryManager(), attr_val_xml);
+		}
+
+		CJoinHint *hint = GPOS_NEW(m_mp) CJoinHint(m_mp, order_spec);
+		m_hint->AddHint(hint);
+	}
+	else if (0 == XMLString::compareString(
+					  CDXLTokens::XmlstrToken(EdxltokenJoinTypeHint),
+					  element_local_name))
+	{
+		const XMLCh *attr_val_xml_hints = CDXLOperatorFactory::ExtractAttrValue(
+			attrs, EdxltokenAlias, EdxltokenPlanHint);
+		StringPtrArray *aliases = nullptr;
+		if (nullptr != attr_val_xml_hints)
+		{
+			aliases = CDXLOperatorFactory::ExtractConvertStrsToArray(
+				m_parse_handler_mgr->GetDXLMemoryManager(), attr_val_xml_hints);
+		}
+		CWStringBase *typestr =
+			CDXLOperatorFactory::ExtractConvertAttrValueToStr(
+				m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+				EdxltokenJoinType, EdxltokenPlanHint);
+
+		CJoinTypeHint::JoinType hint_type =
+			CHintUtils::JoinTypeHintStringToEnum(typestr->GetBuffer());
+		GPOS_DELETE(typestr);
+
+		CJoinTypeHint *hint =
+			GPOS_NEW(m_mp) CJoinTypeHint(m_mp, hint_type, aliases);
+		m_hint->AddHint(hint);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -182,6 +223,12 @@ CParseHandlerPlanHint::EndElement(const XMLCh *const,  // element_uri,
 		m_parse_handler_mgr->DeactivateHandler();
 	}
 	else if (0 != XMLString::compareString(
+					  CDXLTokens::XmlstrToken(EdxltokenJoinHint),
+					  element_local_name) &&
+			 0 != XMLString::compareString(
+					  CDXLTokens::XmlstrToken(EdxltokenJoinTypeHint),
+					  element_local_name) &&
+			 0 != XMLString::compareString(
 					  CDXLTokens::XmlstrToken(EdxltokenRowHint),
 					  element_local_name) &&
 			 0 != XMLString::compareString(

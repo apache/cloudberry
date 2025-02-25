@@ -1555,25 +1555,25 @@ from tenk1 t1
 join tenk1 t2 on t1.unique1 = t2.unique2
 join tenk1 t3 on t2.unique1 = t3.unique1
 order by count(*);
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Sort
    Sort Key: (count())
    ->  Finalize Aggregate
          ->  Gather Motion 3:1  (slice1; segments: 3)
                ->  Partial Aggregate
                      ->  Hash Join
-                           Hash Cond: (tenk1.unique2 = tenk1_2.unique1)
+                           Hash Cond: (t2.unique2 = t1.unique1)
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: tenk1.unique2
+                                 Hash Key: t2.unique2
                                  ->  Hash Join
-                                       Hash Cond: (tenk1.unique1 = tenk1_1.unique1)
-                                       ->  Seq Scan on tenk1
+                                       Hash Cond: (t2.unique1 = t3.unique1)
+                                       ->  Seq Scan on tenk1 t2
                                        ->  Hash
-                                             ->  Seq Scan on tenk1 tenk1_1
+                                             ->  Seq Scan on tenk1 t3
                            ->  Hash
-                                 ->  Seq Scan on tenk1 tenk1_2
- Optimizer: Pivotal Optimizer (GPORCA)
+                                 ->  Seq Scan on tenk1 t1
+ Optimizer: GPORCA
 (17 rows)
 
 -- Parallel sort but with expression (correlated subquery) that
@@ -1582,23 +1582,23 @@ explain (costs off) select distinct
   unique1,
   (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
 from tenk1 t, generate_series(1, 1000);
-                                    QUERY PLAN
+                                    QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
-         Group Key: tenk1.unique1, (SubPlan 1)
+         Group Key: t.unique1, (SubPlan 1)
          ->  Nested Loop
                Join Filter: true
-               ->  Seq Scan on tenk1
+               ->  Seq Scan on tenk1 t
                ->  Function Scan on generate_series
                SubPlan 1
                  ->  Result
                        ->  Result
-                             Filter: (tenk1_1.unique1 = tenk1.unique1)
+                             Filter: (tenk1.unique1 = t.unique1)
                              ->  Materialize
                                    ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                         ->  Seq Scan on tenk1 tenk1_1
- Optimizer: Pivotal Optimizer (GPORCA)
+                                         ->  Seq Scan on tenk1
+ Optimizer: GPORCA
 (15 rows)
 
 explain (costs off) select
@@ -1606,24 +1606,24 @@ explain (costs off) select
   (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
 from tenk1 t, generate_series(1, 1000)
 order by 1, 2;
-                                    QUERY PLAN
+                                    QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: tenk1.unique1, ((SubPlan 1))
+   Merge Key: t.unique1, ((SubPlan 1))
    ->  Sort
-         Sort Key: tenk1.unique1, ((SubPlan 1))
+         Sort Key: t.unique1, ((SubPlan 1))
          ->  Nested Loop
                Join Filter: true
-               ->  Seq Scan on tenk1
+               ->  Seq Scan on tenk1 t
                ->  Function Scan on generate_series
                SubPlan 1
                  ->  Result
                        ->  Result
-                             Filter: (tenk1_1.unique1 = tenk1.unique1)
+                             Filter: (tenk1.unique1 = t.unique1)
                              ->  Materialize
                                    ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                         ->  Seq Scan on tenk1 tenk1_1
- Optimizer: Pivotal Optimizer (GPORCA)
+                                         ->  Seq Scan on tenk1
+ Optimizer: GPORCA
 (16 rows)
 
 -- Parallel sort but with expression not available until the upper rel.

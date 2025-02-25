@@ -441,4 +441,19 @@ reset allow_system_table_mods;
 
 explain select * from a_table join cte_view on a_table.a = (select a from cte_view) where cte_view.a = 2024;
 
+-- CTE tests with outer references. Ensure Orca produces an inlined plan in these cases rather than falling back to planner
+drop table if exists foo;
+drop table if exists jazz;
+create table foo (a int) distributed by (a);
+create table jazz (a int) distributed by (a);
+insert into foo values (2);
+insert into jazz values (2);
+analyze foo,jazz;
+explain (COSTS OFF) select ((with cte as (select * from jazz) select 1 from cte cte1, cte cte2 where foo.a = 2)) as t FROM foo;
+select ((with cte as (select * from jazz) select 1 from cte cte1, cte cte2 where foo.a = 2)) as t FROM foo;
+
+-- outer ref in limit
+explain (COSTS OFF) select ((with cte as (select * from jazz) select 1 from cte cte1, cte cte2 limit foo.a)) as t FROM foo;
+select ((with cte as (select * from jazz) select 1 from cte cte1, cte cte2 limit foo.a)) as t FROM foo;
+
 reset optimizer_trace_fallback;

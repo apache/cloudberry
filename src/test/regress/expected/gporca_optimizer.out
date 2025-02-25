@@ -8830,8 +8830,6 @@ select foo.b+1, sum((with cte as (select * from jazz) select 1 from cte where ct
 
 -- ctes inside aggs
 select foo.b+1, sum((with cte as (select * from jazz) select 1 from cte cte1, cte cte2 where cte1.h = foo.b)) as t FROM foo GROUP BY foo.b;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
  ?column? | t 
 ----------+---
         3 | 1
@@ -9056,9 +9054,6 @@ CREATE FUNCTION sum_sfunc(anyelement,anyelement) returns anyelement AS 'select $
 CREATE FUNCTION sum_combinefunc(anyelement,anyelement) returns anyelement AS 'select $1+$2' LANGUAGE SQL STRICT;
 CREATE AGGREGATE myagg1(anyelement) (SFUNC = sum_sfunc, COMBINEFUNC = sum_combinefunc, STYPE = anyelement, INITCOND = '0');
 SELECT myagg1(i) FROM orca.tab1;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "sum_sfunc" during startup
  myagg1 
 --------
      55
@@ -9067,9 +9062,6 @@ CONTEXT:  SQL function "sum_sfunc" during startup
 CREATE FUNCTION sum_sfunc2(anyelement,anyelement,anyelement) returns anyelement AS 'select $1+$2+$3' LANGUAGE SQL STRICT;
 CREATE AGGREGATE myagg2(anyelement,anyelement) (SFUNC = sum_sfunc2, STYPE = anyelement, INITCOND = '0');
 SELECT myagg2(i,j) FROM orca.tab1;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "sum_sfunc2" during startup
  myagg2 
 --------
      60
@@ -9090,10 +9082,6 @@ INSERT INTO array_table values(6,array[222],'c');
 INSERT INTO array_table values(7,array[3],'a');
 INSERT INTO array_table values(8,array[3],'b');
 SELECT f3, myagg3(f1) from (select * from array_table order by f1 limit 10) as foo GROUP BY f3 ORDER BY f3;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
  f3 | myagg3  
 ----+---------
  a  | {4,1,7}
@@ -9895,24 +9883,24 @@ select c.cid cid,
 from cust c, sales s, datedim d
 where c.cid = s.cid and s.date_sk = d.date_sk and
       ((d.year = 2001 and lower(s.type) = 't1' and plusone(d.moy) = 5) or (d.moy = 4 and upper(s.type) = 'T2'));
-                                                                                            QUERY PLAN                                                                                            
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                               QUERY PLAN                                                                               
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=1 width=24)
    ->  Hash Join  (cost=0.00..1293.00 rows=1 width=24)
-         Hash Cond: (cust.cid = sales.cid)
-         ->  Seq Scan on cust  (cost=0.00..431.00 rows=1 width=20)
+         Hash Cond: (c.cid = s.cid)
+         ->  Seq Scan on cust c  (cost=0.00..431.00 rows=1 width=20)
          ->  Hash  (cost=862.00..862.00 rows=1 width=8)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
-                     Hash Key: sales.cid
+                     Hash Key: s.cid
                      ->  Hash Join  (cost=0.00..862.00 rows=1 width=8)
-                           Hash Cond: (sales.date_sk = datedim.date_sk)
-                           Join Filter: (((datedim.year = 2001) AND (lower(sales.type) = 't1'::text) AND (plusone(datedim.moy) = 5)) OR ((datedim.moy = 4) AND (upper(sales.type) = 'T2'::text)))
+                           Hash Cond: (s.date_sk = d.date_sk)
+                           Join Filter: (((d.year = 2001) AND (lower(s.type) = 't1'::text) AND (plusone(d.moy) = 5)) OR ((d.moy = 4) AND (upper(s.type) = 'T2'::text)))
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
-                                 Hash Key: sales.date_sk
-                                 ->  Seq Scan on sales  (cost=0.00..431.00 rows=1 width=16)
+                                 Hash Key: s.date_sk
+                                 ->  Seq Scan on sales s  (cost=0.00..431.00 rows=1 width=16)
                                        Filter: ((lower(type) = 't1'::text) OR (upper(type) = 'T2'::text))
                            ->  Hash  (cost=431.00..431.00 rows=1 width=12)
-                                 ->  Seq Scan on datedim  (cost=0.00..431.00 rows=1 width=12)
+                                 ->  Seq Scan on datedim d  (cost=0.00..431.00 rows=1 width=12)
                                        Filter: ((year = 2001) OR (moy = 4))
  Optimizer: Pivotal Optimizer (GPORCA)
 (18 rows)
@@ -9968,7 +9956,7 @@ create index bm_dyn_test_idx on orca.bm_dyn_test using bitmap (i);
 alter table orca.bm_dyn_test drop column to_be_dropped;
 alter table orca.bm_dyn_test add partition part5 values(5);
 insert into orca.bm_dyn_test values(2, 5, '2');
-set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 -- gather on 1 segment because of direct dispatch
 explain select * from orca.bm_dyn_test where i=2 and t='2';
                                          QUERY PLAN                                         
@@ -10324,19 +10312,19 @@ ORDER BY 1 asc ;
                                                                                                        QUERY PLAN                                                                                                       
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  GroupAggregate  (cost=0.00..862.00 rows=1 width=16)
-   Group Key: ((((my_tt_agg_opt.event_ts / 100000) / 5) * 5))
+   Group Key: ((((tt.event_ts / 100000) / 5) * 5))
    ->  Sort  (cost=0.00..862.00 rows=1 width=8)
-         Sort Key: ((((my_tt_agg_opt.event_ts / 100000) / 5) * 5))
+         Sort Key: ((((tt.event_ts / 100000) / 5) * 5))
          ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
                ->  Hash Join  (cost=0.00..862.00 rows=1 width=8)
-                     Hash Cond: ((my_tq_agg_opt_part.sym)::bpchar = my_tt_agg_opt.symbol)
-                     Join Filter: ((plusone(my_tq_agg_opt_part.bid_price) < my_tt_agg_opt.trade_price) AND (my_tt_agg_opt.event_ts >= my_tq_agg_opt_part.ets) AND (my_tt_agg_opt.event_ts < my_tq_agg_opt_part.end_ts))
+                     Hash Cond: ((tq.sym)::bpchar = tt.symbol)
+                     Join Filter: ((plusone(tq.bid_price) < tt.trade_price) AND (tt.event_ts >= tq.ets) AND (tt.event_ts < tq.end_ts))
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=32)
-                           Hash Key: my_tq_agg_opt_part.sym
-                           ->  Dynamic Seq Scan on my_tq_agg_opt_part  (cost=0.00..431.00 rows=1 width=32)
+                           Hash Key: tq.sym
+                           ->  Dynamic Seq Scan on my_tq_agg_opt_part tq  (cost=0.00..431.00 rows=1 width=32)
                                  Number of partitions to scan: 2 (out of 2)
                      ->  Hash  (cost=431.00..431.00 rows=1 width=24)
-                           ->  Seq Scan on my_tt_agg_opt  (cost=0.00..431.00 rows=1 width=24)
+                           ->  Seq Scan on my_tt_agg_opt tt  (cost=0.00..431.00 rows=1 width=24)
  Optimizer: Pivotal Optimizer (GPORCA)
 (15 rows)
 
@@ -10382,12 +10370,12 @@ where ordernum between 10 and 20;
 ------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..888833.21 rows=3 width=9)
    ->  Nested Loop  (cost=0.00..888833.21 rows=1 width=9)
-         Join Filter: (idxscan_outer.id = idxscan_inner.productid)
-         ->  Seq Scan on idxscan_outer  (cost=0.00..431.00 rows=3 width=4)
+         Join Filter: (o.id = i.productid)
+         ->  Seq Scan on idxscan_outer o  (cost=0.00..431.00 rows=3 width=4)
          ->  Materialize  (cost=0.00..6.00 rows=1 width=9)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..6.00 rows=1 width=9)
-                     Hash Key: idxscan_inner.productid
-                     ->  Index Scan using idxscan_inner_ordernum_key on idxscan_inner  (cost=0.00..6.00 rows=1 width=9)
+                     Hash Key: i.productid
+                     ->  Index Scan using idxscan_inner_ordernum_key on idxscan_inner i  (cost=0.00..6.00 rows=1 width=9)
                            Index Cond: ((ordernum >= 10) AND (ordernum <= 20))
  Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
@@ -10750,9 +10738,6 @@ CREATE TYPE rainbow AS ENUM('red','yellow','blue');
 CREATE FUNCTION func_enum_element(ANYENUM, ANYELEMENT) RETURNS TABLE(a ANYENUM, b ANYARRAY)
 AS $$ SELECT $1, ARRAY[$2] $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_enum_element('red'::rainbow, 'blue'::rainbow::anyelement);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_enum_element" during startup
   a  |   b    
 -----+--------
  red | {blue}
@@ -10763,9 +10748,6 @@ DROP FUNCTION IF EXISTS func_enum_element(ANYENUM, ANYELEMENT);
 CREATE FUNCTION func_element_array(ANYELEMENT, ANYARRAY) RETURNS TABLE(a ANYELEMENT, b ANYENUM)
 AS $$ SELECT $1, $2[1]$$ LANGUAGE SQL STABLE;
 SELECT * FROM func_element_array('red'::rainbow, ARRAY['blue'::rainbow]);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_element_array" during startup
   a  |  b   
 -----+------
  red | blue
@@ -10776,9 +10758,6 @@ DROP FUNCTION IF EXISTS func_element_array(ANYELEMENT, ANYARRAY);
 CREATE FUNCTION func_element_array(ANYARRAY, ANYENUM) RETURNS TABLE(a ANYELEMENT, b ANYELEMENT)
 AS $$ SELECT $1[1], $2 $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_element_array(ARRAY['blue'::rainbow], 'blue'::rainbow);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_element_array" during startup
   a   |  b   
 ------+------
  blue | blue
@@ -10789,9 +10768,6 @@ DROP FUNCTION IF EXISTS func_element_array(ANYARRAY, ANYENUM);
 CREATE FUNCTION func_array(ANYARRAY) RETURNS TABLE(a ANYELEMENT, b ANYENUM)
 AS $$ SELECT $1[1], $1[2] $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_array(ARRAY['blue'::rainbow, 'yellow'::rainbow]);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_array" during startup
   a   |   b    
 ------+--------
  blue | yellow
@@ -10802,9 +10778,6 @@ DROP FUNCTION IF EXISTS func_array(ANYARRAY);
 CREATE FUNCTION func_element_variadic(ANYELEMENT, VARIADIC ANYARRAY) RETURNS TABLE(a ANYARRAY)
 AS $$ SELECT array_prepend($1, $2); $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_element_variadic(1.1, 1.1, 2.2, 3.3);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_element_variadic" during startup
          a         
 -------------------
  {1.1,1.1,2.2,3.3}
@@ -10815,9 +10788,6 @@ DROP FUNCTION IF EXISTS func_element_variadic(ANYELEMENT, VARIADIC ANYARRAY);
 CREATE FUNCTION func_nonarray(ANYNONARRAY) RETURNS TABLE(a ANYNONARRAY)
 AS $$ SELECT $1; $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_nonarray(5);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_nonarray" during startup
  a 
 ---
  5
@@ -10828,9 +10798,6 @@ DROP FUNCTION IF EXISTS func_nonarray(ANYNONARRAY);
 CREATE FUNCTION func_nonarray_enum(ANYNONARRAY, ANYENUM) RETURNS TABLE(a ANYARRAY)
 AS $$ SELECT ARRAY[$1, $2]; $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_nonarray_enum('blue'::rainbow, 'red'::rainbow);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_nonarray_enum" during startup
      a      
 ------------
  {blue,red}
@@ -10841,9 +10808,6 @@ DROP FUNCTION IF EXISTS func_nonarray_enum(ANYNONARRAY, ANYENUM);
 CREATE FUNCTION func_array_nonarray_enum(ANYARRAY, ANYNONARRAY, ANYENUM) RETURNS TABLE(a ANYNONARRAY)
 AS $$ SELECT $1[1]; $$ LANGUAGE SQL STABLE;
 SELECT * FROM func_array_nonarray_enum(ARRAY['blue'::rainbow, 'red'::rainbow], 'red'::rainbow, 'yellow'::rainbow);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "func_array_nonarray_enum" during startup
   a   
 ------
  blue
@@ -10854,9 +10818,6 @@ DROP FUNCTION IF EXISTS func_array_nonarray_enum(ANYARRAY, ANYNONARRAY, ANYENUM)
 CREATE FUNCTION return_enum_as_array(ANYENUM, ANYELEMENT, ANYELEMENT) RETURNS TABLE (ae ANYENUM, aa ANYARRAY)
 AS $$ SELECT $1, array[$2, $3] $$ LANGUAGE SQL STABLE;
 SELECT * FROM return_enum_as_array('red'::rainbow, 'yellow'::rainbow, 'blue'::rainbow);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Query Parameter
-CONTEXT:  SQL function "return_enum_as_array" during startup
  ae  |      aa       
 -----+---------------
  red | {yellow,blue}
@@ -10913,16 +10874,16 @@ explain (costs off) select count(*), t2.c from input_tab1 t1 left join input_tab
 --------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
-         Group Key: input_tab2.c
+         Group Key: t2.c
          ->  Sort
-               Sort Key: input_tab2.c
+               Sort Key: t2.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: input_tab2.c
+                     Hash Key: t2.c
                      ->  Hash Left Join
-                           Hash Cond: (input_tab1.a = input_tab2.c)
-                           ->  Seq Scan on input_tab1
+                           Hash Cond: (t1.a = t2.c)
+                           ->  Seq Scan on input_tab1 t1
                            ->  Hash
-                                 ->  Seq Scan on input_tab2
+                                 ->  Seq Scan on input_tab2 t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (13 rows)
 
@@ -11292,8 +11253,8 @@ INSERT INTO onetimefilter2 SELECT i, i FROM generate_series(1,10)i;
 ANALYZE onetimefilter1;
 ANALYZE onetimefilter2;
 EXPLAIN (COSTS OFF) WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onetimefilter2 WHERE onetimefilter1.a=onetimefilter2.a) SELECT (SELECT 1 FROM abc WHERE f1.b = f2.b LIMIT 1), COALESCE((SELECT 2 FROM abc WHERE f1.a=random() AND f1.a=2), 0), (SELECT b FROM abc WHERE b=f1.b) FROM onetimefilter1 f1, onetimefilter2 f2 WHERE f1.b = f2.b;
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Sequence
          ->  Shared Scan (share slice:id 1:0)
@@ -11303,19 +11264,19 @@ EXPLAIN (COSTS OFF) WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM 
                      ->  Hash
                            ->  Seq Scan on onetimefilter2
          ->  Hash Join
-               Hash Cond: (onetimefilter1_1.b = onetimefilter2_1.b)
+               Hash Cond: (f1.b = f2.b)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: onetimefilter1_1.b
-                     ->  Seq Scan on onetimefilter1 onetimefilter1_1
+                     Hash Key: f1.b
+                     ->  Seq Scan on onetimefilter1 f1
                ->  Hash
                      ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: onetimefilter2_1.b
-                           ->  Seq Scan on onetimefilter2 onetimefilter2_1
+                           Hash Key: f2.b
+                           ->  Seq Scan on onetimefilter2 f2
                SubPlan 1
                  ->  Result
                        ->  Limit
                              ->  Result
-                                   One-Time Filter: (onetimefilter1_1.b = onetimefilter2_1.b)
+                                   One-Time Filter: (f1.b = f2.b)
                                    ->  Materialize
                                          ->  Broadcast Motion 3:3  (slice4; segments: 3)
                                                ->  Result
@@ -11323,20 +11284,20 @@ EXPLAIN (COSTS OFF) WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM 
                SubPlan 2
                  ->  Result
                        ->  Result
-                             One-Time Filter: (onetimefilter1_1.a = 2)
-                             Filter: ((onetimefilter1_1.a)::double precision = random())
+                             One-Time Filter: (f1.a = 2)
+                             Filter: ((f1.a)::double precision = random())
                              ->  Materialize
                                    ->  Broadcast Motion 3:3  (slice5; segments: 3)
                                          ->  Result
                                                ->  Shared Scan (share slice:id 5:0)
                SubPlan 3
                  ->  Result
-                       Filter: (share0_ref3.b = onetimefilter1_1.b)
+                       Filter: (share0_ref3.b = f1.b)
                        ->  Materialize
                              ->  Broadcast Motion 3:3  (slice6; segments: 3)
                                    ->  Result
                                          ->  Shared Scan (share slice:id 6:0)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (43 rows)
 
 WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onetimefilter2 WHERE onetimefilter1.a=onetimefilter2.a) SELECT (SELECT 1 FROM abc WHERE f1.b = f2.b LIMIT 1), COALESCE((SELECT 2 FROM abc WHERE f1.a=random() AND f1.a=2), 0), (SELECT b FROM abc WHERE b=f1.b) FROM onetimefilter1 f1, onetimefilter2 f2 WHERE f1.b = f2.b;
@@ -11507,16 +11468,16 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO varchar_sc_array_cmp VALUES ('a'), ('b'), ('c'), ('d');
 EXPLAIN SELECT * FROM varchar_sc_array_cmp t1, varchar_sc_array_cmp t2 where t1.a = t2.a and t1.a in ('b', 'c');
-                                                      QUERY PLAN                                                      
-----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=4 width=4)
-   ->  Hash Join  (cost=0.00..862.00 rows=2 width=4)
-         Hash Cond: ((varchar_sc_array_cmp.a)::text = (varchar_sc_array_cmp_1.a)::text)
-         ->  Seq Scan on varchar_sc_array_cmp  (cost=0.00..431.00 rows=1 width=2)
-               Filter: (((a)::text = 'b'::text) OR ((a)::text = 'c'::text))
-         ->  Hash  (cost=431.00..431.00 rows=1 width=2)
-               ->  Seq Scan on varchar_sc_array_cmp varchar_sc_array_cmp_1  (cost=0.00..431.00 rows=1 width=2)
-                     Filter: (((a)::text = ANY ('{b,c}'::text[])) AND (((a)::text = 'b'::text) OR ((a)::text = 'c'::text)))
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16)
+   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16)
+         Hash Cond: ((t1.a)::text = (t2.a)::text)
+         ->  Seq Scan on varchar_sc_array_cmp t1  (cost=0.00..431.00 rows=1 width=8)
+               Filter: (((a)::text = ANY ('{b,c}'::text[])) AND (a = ANY ('{b,c}'::character varying[])))
+         ->  Hash  (cost=431.00..431.00 rows=1 width=8)
+               ->  Seq Scan on varchar_sc_array_cmp t2  (cost=0.00..431.00 rows=1 width=8)
+                     Filter: (a = ANY ('{b,c}'::character varying[]))
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
@@ -11529,15 +11490,15 @@ SELECT * FROM varchar_sc_array_cmp t1, varchar_sc_array_cmp t2 where t1.a = t2.a
 
 SET optimizer_array_constraints=on;
 EXPLAIN SELECT * FROM varchar_sc_array_cmp t1, varchar_sc_array_cmp t2 where t1.a = t2.a and (t1.a in ('b', 'c') OR t1.a = 'a');
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=4 width=4)
-   ->  Hash Join  (cost=0.00..862.00 rows=2 width=4)
-         Hash Cond: ((varchar_sc_array_cmp.a)::text = (varchar_sc_array_cmp_1.a)::text)
-         ->  Seq Scan on varchar_sc_array_cmp  (cost=0.00..431.00 rows=1 width=2)
-               Filter: (a = ANY ('{a,b,c}'::character varying[]))
-         ->  Hash  (cost=431.00..431.00 rows=1 width=2)
-               ->  Seq Scan on varchar_sc_array_cmp varchar_sc_array_cmp_1  (cost=0.00..431.00 rows=1 width=2)
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16)
+   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16)
+         Hash Cond: ((t1.a)::text = (t2.a)::text)
+         ->  Seq Scan on varchar_sc_array_cmp t1  (cost=0.00..431.00 rows=1 width=8)
+               Filter: ((((a)::text = ANY ('{b,c}'::text[])) OR ((a)::text = 'a'::text)) AND (a = ANY ('{a,b,c}'::character varying[])))
+         ->  Hash  (cost=431.00..431.00 rows=1 width=8)
+               ->  Seq Scan on varchar_sc_array_cmp t2  (cost=0.00..431.00 rows=1 width=8)
                      Filter: (a = ANY ('{a,b,c}'::character varying[]))
  Optimizer: Pivotal Optimizer (GPORCA) version 3.65.2
 (9 rows)
@@ -12039,41 +12000,48 @@ SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 (6 rows)
 
 set optimizer_expand_fulljoin = on;
+select disable_xform('CXformFullOuterJoin2HashJoin');
+              disable_xform               
+------------------------------------------
+ CXformFullOuterJoin2HashJoin is disabled
+(1 row)
+
 EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
-                                                       QUERY PLAN                                                       
-------------------------------------------------------------------------------------------------------------------------
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2586.00 rows=10 width=8)
-   ->  Sequence  (cost=0.00..2586.00 rows=4 width=8)
-         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=1 width=1)
-               ->  Seq Scan on atab_old_hash  (cost=0.00..431.00 rows=1 width=34)
-         ->  Sequence  (cost=0.00..2155.00 rows=4 width=8)
-               ->  Shared Scan (share slice:id 1:1)  (cost=0.00..431.00 rows=2 width=1)
+   ->  Result  (cost=0.00..2586.00 rows=4 width=8)
+         ->  Sequence  (cost=0.00..2586.00 rows=4 width=8)
+               ->  Shared Scan (share slice:id 1:2)  (cost=0.00..431.00 rows=2 width=1)
                      ->  Seq Scan on btab_old_hash  (cost=0.00..431.00 rows=2 width=34)
-               ->  Append  (cost=0.00..1724.00 rows=4 width=8)
-                     ->  Hash Left Join  (cost=0.00..862.00 rows=2 width=8)
-                           Hash Cond: (share0_ref2.a |=| share1_ref2.b)
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                                 Hash Key: share0_ref2.a
-                                 ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                                       ->  Shared Scan (share slice:id 2:0)  (cost=0.00..431.00 rows=1 width=4)
-                           ->  Hash  (cost=431.00..431.00 rows=2 width=4)
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=2 width=4)
-                                       Hash Key: share1_ref2.b
+               ->  Sequence  (cost=0.00..2155.00 rows=4 width=8)
+                     ->  Shared Scan (share slice:id 1:3)  (cost=0.00..431.00 rows=1 width=1)
+                           ->  Seq Scan on atab_old_hash  (cost=0.00..431.00 rows=1 width=34)
+                     ->  Append  (cost=0.00..1724.00 rows=4 width=8)
+                           ->  Hash Left Join  (cost=0.00..862.00 rows=3 width=8)
+                                 Hash Cond: (share2_ref2.b |=| share3_ref2.a)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=2 width=4)
+                                       Hash Key: share2_ref2.b
                                        ->  Result  (cost=0.00..431.00 rows=2 width=4)
-                                             ->  Shared Scan (share slice:id 3:1)  (cost=0.00..431.00 rows=2 width=4)
-                     ->  Hash Anti Join  (cost=0.00..862.00 rows=2 width=4)
-                           Hash Cond: (share1_ref3.b |=| share0_ref3.a)
-                           ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=2 width=4)
-                                 Hash Key: share1_ref3.b
-                                 ->  Result  (cost=0.00..431.00 rows=2 width=4)
-                                       ->  Shared Scan (share slice:id 4:1)  (cost=0.00..431.00 rows=2 width=4)
-                           ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                                       Hash Key: share0_ref3.a
+                                             ->  Shared Scan (share slice:id 2:2)  (cost=0.00..431.00 rows=2 width=4)
+                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4)
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
+                                             Hash Key: share3_ref2.a
+                                             ->  Result  (cost=0.00..431.00 rows=1 width=4)
+                                                   ->  Shared Scan (share slice:id 3:3)  (cost=0.00..431.00 rows=1 width=4)
+                           ->  Hash Anti Join  (cost=0.00..862.00 rows=1 width=4)
+                                 Hash Cond: (share3_ref3.a |=| share2_ref3.b)
+                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
+                                       Hash Key: share3_ref3.a
                                        ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                                             ->  Shared Scan (share slice:id 5:0)  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA)
-(31 rows)
+                                             ->  Shared Scan (share slice:id 4:3)  (cost=0.00..431.00 rows=1 width=4)
+                                 ->  Hash  (cost=431.00..431.00 rows=2 width=4)
+                                       ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.00 rows=2 width=4)
+                                             Hash Key: share2_ref3.b
+                                             ->  Result  (cost=0.00..431.00 rows=2 width=4)
+                                                   ->  Shared Scan (share slice:id 5:2)  (cost=0.00..431.00 rows=2 width=4)
+ Optimizer: GPORCA
+(32 rows)
 
 SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
  a  | b  
@@ -12196,14 +12164,14 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entr
          Output: c, lid
          ->  GroupAggregate  (cost=0.00..431.07 rows=1 width=8)
                Output: c, lid
-               Group Key: t55.c, t55.lid
+               Group Key: l1.c, l1.lid
                ->  Sort  (cost=0.00..431.07 rows=1 width=8)
                      Output: c, lid
-                     Sort Key: t55.c, t55.lid
+                     Sort Key: l1.c, l1.lid
                      ->  Hash Join  (cost=0.00..431.07 rows=1 width=8)
                            Output: c, lid
-                           Hash Cond: (t55.lid = int4in(textout(('99'::text))))
-                           ->  Seq Scan on orca.t55  (cost=0.00..431.01 rows=334 width=8)
+                           Hash Cond: (l1.lid = int4in(textout(('99'::text))))
+                           ->  Seq Scan on orca.t55 l1  (cost=0.00..431.01 rows=334 width=8)
                                  Output: c, lid
                            ->  Hash  (cost=0.00..0.00 rows=1 width=8)
                                  Output: ('2020-01-01'::text), ('99'::text)
@@ -12449,13 +12417,13 @@ where out.b in (select coalesce(tcorr2.a, 99)
  Result  (cost=0.00..1356692031.36 rows=1 width=8)
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-         ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
      ->  Nested Loop Left Join  (cost=0.00..1324032.56 rows=2 width=4)
-           Join Filter: (tcorr1_1.a = (tcorr2.a + tcorr1.a))
+           Join Filter: (tcorr1.a = (tcorr2.a + "out".a))
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
                  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                       ->  Seq Scan on tcorr1 tcorr1_1  (cost=0.00..431.00 rows=1 width=4)
+                       ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=4)
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
                  ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                        ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=4)
@@ -12483,11 +12451,11 @@ where out.b in (select max(tcorr2.b + out.b - 1)
  Result  (cost=0.00..1324032.63 rows=1 width=8)
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-         ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
      ->  Aggregate  (cost=0.00..431.00 rows=1 width=4)
            ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                 Filter: (tcorr2.a = tcorr1.a)
+                 Filter: (tcorr2.a = "out".a)
                  ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                        ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                              ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=8)
@@ -12518,19 +12486,19 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  Result  (cost=0.00..1356692228.44 rows=1 width=8)
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-         ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
      ->  Nested Loop Left Join  (cost=0.00..1324032.75 rows=3 width=8)
-           Join Filter: (tcorr1_1.a = tcorr2.a)
+           Join Filter: (tcorr1.a = tcorr2.a)
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
                  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                       ->  Seq Scan on tcorr1 tcorr1_1  (cost=0.00..431.00 rows=1 width=4)
+                       ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=4)
            ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=12)
                  Group Key: tcorr2.a
                  ->  Sort  (cost=0.00..431.00 rows=1 width=4)
                        Sort Key: tcorr2.a
                        ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                             Filter: (tcorr2.b = tcorr1.b)
+                             Filter: (tcorr2.b = "out".b)
                              ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                                    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                                          ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=8)
@@ -12573,13 +12541,13 @@ where out.b in (select coalesce(tcorr2.a, 99)
  Result  (cost=0.00..1356692031.36 rows=1 width=8)
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-         ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
      ->  Nested Loop Left Join  (cost=0.00..1324032.56 rows=2 width=4)
-           Join Filter: (tcorr1_1.a = (tcorr2.a + tcorr1.a))
+           Join Filter: (tcorr1.a = (tcorr2.a + "out".a))
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
                  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                       ->  Seq Scan on tcorr1 tcorr1_1  (cost=0.00..431.00 rows=1 width=4)
+                       ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=4)
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
                  ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                        ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=4)
@@ -12607,11 +12575,11 @@ where out.b in (select max(tcorr2.b + out.b - 1)
  Result  (cost=0.00..1324032.63 rows=1 width=8)
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-         ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
      ->  Aggregate  (cost=0.00..431.00 rows=1 width=4)
            ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                 Filter: (tcorr2.a = tcorr1.a)
+                 Filter: (tcorr2.a = "out".a)
                  ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                        ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                              ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=8)
@@ -12642,19 +12610,19 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  Result  (cost=0.00..1356692228.44 rows=1 width=8)
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-         ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
      ->  Nested Loop Left Join  (cost=0.00..1324032.75 rows=3 width=8)
-           Join Filter: (tcorr1_1.a = tcorr2.a)
+           Join Filter: (tcorr1.a = tcorr2.a)
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
                  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                       ->  Seq Scan on tcorr1 tcorr1_1  (cost=0.00..431.00 rows=1 width=4)
+                       ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=4)
            ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=12)
                  Group Key: tcorr2.a
                  ->  Sort  (cost=0.00..431.00 rows=1 width=4)
                        Sort Key: tcorr2.a
                        ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                             Filter: (tcorr2.b = tcorr1.b)
+                             Filter: (tcorr2.b = "out".b)
                              ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                                    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                                          ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=8)
@@ -13152,13 +13120,13 @@ from foo l1 where b in (select ab
  Result
    Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on foo
+         ->  Seq Scan on foo l1
    SubPlan 1
      ->  Nested Loop
-           Join Filter: ((foo_1.a = tbtree.a) AND (foo_1.b = tbtree.b))
+           Join Filter: ((l2.a = tbtree.a) AND (l2.b = tbtree.b))
            ->  Materialize
                  ->  Gather Motion 3:1  (slice3; segments: 3)
-                       ->  Seq Scan on foo foo_1
+                       ->  Seq Scan on foo l2
                              Filter: (c = 1)
            ->  Materialize
                  ->  Result
@@ -13237,16 +13205,16 @@ explain (costs off) select count(*), t2.c from roj1 t1 left join roj2 t2 on t1.a
                             QUERY PLAN                            
 ------------------------------------------------------------------
  GroupAggregate
-   Group Key: roj2.c
+   Group Key: t2.c
    ->  Sort
-         Sort Key: roj2.c
+         Sort Key: t2.c
          ->  Hash Right Join
-               Hash Cond: (roj2.c = roj1.a)
+               Hash Cond: (t2.c = t1.a)
                ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Seq Scan on roj2
+                     ->  Seq Scan on roj2 t2
                ->  Hash
                      ->  Gather Motion 3:1  (slice2; segments: 3)
-                           ->  Seq Scan on roj1
+                           ->  Seq Scan on roj1 t1
  Optimizer: Pivotal Optimizer (GPORCA)
 (12 rows)
 
@@ -13256,16 +13224,16 @@ explain (costs off) select count(*), t2.c from roj1 t1 left join roj2 t2 on t1.a
                             QUERY PLAN                            
 ------------------------------------------------------------------
  GroupAggregate
-   Group Key: roj2.c
+   Group Key: t2.c
    ->  Sort
-         Sort Key: roj2.c
+         Sort Key: t2.c
          ->  Hash Left Join
-               Hash Cond: (roj1.a = roj2.c)
+               Hash Cond: (t1.a = t2.c)
                ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Seq Scan on roj1
+                     ->  Seq Scan on roj1 t1
                ->  Hash
                      ->  Gather Motion 3:1  (slice2; segments: 3)
-                           ->  Seq Scan on roj2
+                           ->  Seq Scan on roj2 t2
  Optimizer: GPORCA
 (12 rows)
 
@@ -13311,10 +13279,10 @@ explain (costs off) select * from tpart_dim d join t_ao_btree f on d.a=f.a where
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
-         ->  Seq Scan on tpart_dim
+         ->  Seq Scan on tpart_dim d
                Filter: (b = 1)
-         ->  Index Only Scan using t_ao_btree_ix on t_ao_btree
-               Index Cond: (a = tpart_dim.a)
+         ->  Index Only Scan using t_ao_btree_ix on t_ao_btree f
+               Index Cond: (a = d.a)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
@@ -13324,10 +13292,10 @@ explain (costs off) select * from tpart_dim d join tpart_ao_btree f on d.a=f.a w
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
-         ->  Seq Scan on tpart_dim
+         ->  Seq Scan on tpart_dim d
                Filter: (b = 1)
-         ->  Dynamic Index Only Scan on tpart_ao_btree_ix on tpart_ao_btree
-               Index Cond: (a = tpart_dim.a)
+         ->  Dynamic Index Only Scan on tpart_ao_btree_ix on tpart_ao_btree f
+               Index Cond: (a = d.a)
                Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
@@ -13479,6 +13447,7 @@ PARTITION BY RANGE(i)
 default partition def);
 create INDEX y_idx on y (j);
 set optimizer_enable_indexjoin=on;
+set optimizer_enable_dynamicindexscan=on;
 explain (costs off) select count(*) from x, y where (x.i > y.j AND x.j <= y.i);
                           QUERY PLAN                           
 ---------------------------------------------------------------
@@ -13562,10 +13531,10 @@ explain (costs off) select *  from oip oip  join ria a on ip=cidr and oip.oid=19
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (ria.ip = oip.cidr)
+         Hash Cond: (a.ip = oip.cidr)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: ria.ip
-               ->  Seq Scan on ria
+               Hash Key: a.ip
+               ->  Seq Scan on ria a
          ->  Hash
                ->  Redistribute Motion 3:3  (slice3; segments: 3)
                      Hash Key: oip.cidr
@@ -13651,9 +13620,9 @@ where d.msisdn=f.subscriberaddress and
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: ((dim_customer_device.msisdn)::text = (stg_xdr_crce_cdr.subscriberaddress)::text)
-         Join Filter: ((stg_xdr_crce_cdr.sessioncreationtimestamp >= dim_customer_device.start_dtm) AND (stg_xdr_crce_cdr.sessioncreationtimestamp < dim_customer_device.end_dtm))
-         ->  Seq Scan on dim_customer_device
+         Hash Cond: ((d.msisdn)::text = (stg_xdr_crce_cdr.subscriberaddress)::text)
+         Join Filter: ((stg_xdr_crce_cdr.sessioncreationtimestamp >= d.start_dtm) AND (stg_xdr_crce_cdr.sessioncreationtimestamp < d.end_dtm))
+         ->  Seq Scan on dim_customer_device d
                Filter: ((mkt_model)::text ~~ '%IPHONE%'::text)
          ->  Hash
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
@@ -13843,11 +13812,11 @@ explain select r.a, r.b, r.c, l.c from left_outer_index_nl_foo r left outer join
 ---------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.80 rows=7 width=16)
    ->  Nested Loop Left Join  (cost=0.00..1324033.80 rows=3 width=16)
-         Join Filter: (left_outer_index_nl_foo.b = left_outer_index_nl_bar.b)
-         ->  Seq Scan on left_outer_index_nl_foo  (cost=0.00..431.00 rows=2 width=12)
+         Join Filter: (r.b = l.b)
+         ->  Seq Scan on left_outer_index_nl_foo r  (cost=0.00..431.00 rows=2 width=12)
          ->  Materialize  (cost=0.00..431.00 rows=5 width=8)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=5 width=8)
-                     ->  Seq Scan on left_outer_index_nl_bar  (cost=0.00..431.00 rows=2 width=8)
+                     ->  Seq Scan on left_outer_index_nl_bar l  (cost=0.00..431.00 rows=2 width=8)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -13877,11 +13846,11 @@ explain select r.a, r.b, r.c, l.c from left_outer_index_nl_foo_hash r left outer
 ---------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.77 rows=7 width=14)
    ->  Nested Loop Left Join  (cost=0.00..1324033.77 rows=3 width=14)
-         Join Filter: (left_outer_index_nl_foo_hash.b = left_outer_index_nl_bar.b)
-         ->  Seq Scan on left_outer_index_nl_foo_hash  (cost=0.00..431.00 rows=2 width=10)
+         Join Filter: (r.b = l.b)
+         ->  Seq Scan on left_outer_index_nl_foo_hash r  (cost=0.00..431.00 rows=2 width=10)
          ->  Materialize  (cost=0.00..431.00 rows=5 width=8)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=5 width=8)
-                     ->  Seq Scan on left_outer_index_nl_bar  (cost=0.00..431.00 rows=2 width=8)
+                     ->  Seq Scan on left_outer_index_nl_bar l  (cost=0.00..431.00 rows=2 width=8)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -13900,11 +13869,11 @@ explain select r.a, r.b, r.c, l.c from left_outer_index_nl_foo_hash r left outer
 ------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.54 rows=7 width=12)
    ->  Nested Loop Left Join  (cost=0.00..1324033.54 rows=3 width=12)
-         Join Filter: (left_outer_index_nl_foo_hash.b = left_outer_index_nl_bar_hash.b)
-         ->  Seq Scan on left_outer_index_nl_foo_hash  (cost=0.00..431.00 rows=2 width=10)
+         Join Filter: (r.b = l.b)
+         ->  Seq Scan on left_outer_index_nl_foo_hash r  (cost=0.00..431.00 rows=2 width=10)
          ->  Materialize  (cost=0.00..431.00 rows=5 width=6)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=5 width=6)
-                     ->  Seq Scan on left_outer_index_nl_bar_hash  (cost=0.00..431.00 rows=2 width=6)
+                     ->  Seq Scan on left_outer_index_nl_bar_hash l  (cost=0.00..431.00 rows=2 width=6)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -13931,9 +13900,9 @@ explain select r.a, r.b, r.c, l.c from left_outer_index_nl_foo_repl r left outer
  Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..455.00 rows=7 width=16)
    ->  Nested Loop Left Join  (cost=0.00..455.00 rows=21 width=16)
          Join Filter: true
-         ->  Seq Scan on left_outer_index_nl_foo_repl  (cost=0.00..431.00 rows=12 width=12)
-         ->  Index Scan using left_outer_index_nl_bar_repl_idx on left_outer_index_nl_bar_repl  (cost=0.00..24.00 rows=3 width=4)
-               Index Cond: (b = left_outer_index_nl_foo_repl.b)
+         ->  Seq Scan on left_outer_index_nl_foo_repl r  (cost=0.00..431.00 rows=12 width=12)
+         ->  Index Scan using left_outer_index_nl_bar_repl_idx on left_outer_index_nl_bar_repl l  (cost=0.00..24.00 rows=3 width=4)
+               Index Cond: (b = r.b)
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
@@ -13952,11 +13921,11 @@ explain select r.a, r.b, r.c, l.c from left_outer_index_nl_foo_repl r left outer
 ------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..1324035.41 rows=7 width=14)
    ->  Nested Loop Left Join  (cost=0.00..1324035.41 rows=21 width=14)
-         Join Filter: (left_outer_index_nl_foo_repl.b = left_outer_index_nl_bar_hash.b)
-         ->  Seq Scan on left_outer_index_nl_foo_repl  (cost=0.00..431.00 rows=12 width=12)
+         Join Filter: (r.b = l.b)
+         ->  Seq Scan on left_outer_index_nl_foo_repl r  (cost=0.00..431.00 rows=12 width=12)
          ->  Materialize  (cost=0.00..431.00 rows=15 width=6)
                ->  Broadcast Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=15 width=6)
-                     ->  Seq Scan on left_outer_index_nl_bar_hash  (cost=0.00..431.00 rows=2 width=6)
+                     ->  Seq Scan on left_outer_index_nl_bar_hash l  (cost=0.00..431.00 rows=2 width=6)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -14139,9 +14108,9 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
-         Join Filter: (tone_1.a = tone.a)
-         ->  Seq Scan on tone tone_1
-         ->  Seq Scan on tone
+         Join Filter: (t1.a = t2.a)
+         ->  Seq Scan on tone t1
+         ->  Seq Scan on tone t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -14167,12 +14136,12 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
-         Join Filter: (tone_1.a = tone.b)
-         ->  Seq Scan on tone tone_1
+         Join Filter: (t1.a = t2.b)
+         ->  Seq Scan on tone t1
          ->  Materialize
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: tone.b
-                     ->  Seq Scan on tone
+                     Hash Key: t2.b
+                     ->  Seq Scan on tone t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
@@ -14196,12 +14165,12 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN (SELECT 1+t2.b as b fr
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
-         Join Filter: (tone_1.a = ((1 + tone.b)))
-         ->  Seq Scan on tone tone_1
+         Join Filter: (t1.a = ((1 + t2.b)))
+         ->  Seq Scan on tone t1
          ->  Materialize
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ((1 + tone.b))
-                     ->  Seq Scan on tone
+                     Hash Key: ((1 + t2.b))
+                     ->  Seq Scan on tone t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
@@ -14227,11 +14196,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
-         Join Filter: (tone_1.a = (tone.b - tone_1.a))
-         ->  Seq Scan on tone tone_1
+         Join Filter: (t1.a = (t2.b - t1.a))
+         ->  Seq Scan on tone t1
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on tone
+                     ->  Seq Scan on tone t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -14257,11 +14226,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
-         Join Filter: (tone_1.a = tone.b)
-         ->  Seq Scan on tone tone_1
+         Join Filter: (t1.a = t2.b)
+         ->  Seq Scan on tone t1
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on tone
+                     ->  Seq Scan on tone t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -14285,11 +14254,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Join
-         Join Filter: (tone_1.a = tone.a)
-         ->  Seq Scan on tone tone_1
+         Join Filter: (t1.a = t2.a)
+         ->  Seq Scan on tone t1
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on tone
+                     ->  Seq Scan on tone t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
@@ -14321,15 +14290,15 @@ EXPLAIN(COSTS OFF) CREATE TABLE result_tab AS
 ------------------------------------------------------------------
  Result
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
-         Hash Key: dist_tab_a.a
+         Hash Key: a.a
          ->  Hash Left Join
-               Hash Cond: ((dist_tab_a.a)::bpchar = dist_tab_b.a)
+               Hash Cond: ((a.a)::bpchar = b.a)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: dist_tab_a.a
-                     ->  Seq Scan on dist_tab_a
+                     Hash Key: a.a
+                     ->  Seq Scan on dist_tab_a a
                ->  Hash
-                     ->  Seq Scan on dist_tab_b
- Optimizer: Pivotal Optimizer (GPORCA)
+                     ->  Seq Scan on dist_tab_b b
+ Optimizer: GPORCA
 (11 rows)
 
 CREATE TABLE result_tab AS
@@ -14403,27 +14372,27 @@ ON t1.tradingday = t2.tradingday;
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
-         Join Filter: (t_clientinstrumentind2.tradingday = (t_clientproductind2.tradingday)::text)
+         Join Filter: (t.tradingday = (t_1.tradingday)::text)
          ->  GroupAggregate
-               Group Key: t_clientproductind2.tradingday
+               Group Key: t_1.tradingday
                ->  Sort
-                     Sort Key: t_clientproductind2.tradingday
+                     Sort Key: t_1.tradingday
                      ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: t_clientproductind2.tradingday
-                           ->  Dynamic Index Scan on t_clientproductind2_pkey on t_clientproductind2
+                           Hash Key: t_1.tradingday
+                           ->  Dynamic Index Scan on t_clientproductind2_pkey on t_clientproductind2 t_1
                                  Index Cond: (((tradingday)::text >= '20190715'::text) AND ((tradingday)::text <= '20190715'::text) AND ((tradingday)::text = '20190715'::text))
                                  Number of partitions to scan: 1 (out of 2)
          ->  Materialize
                ->  GroupAggregate
-                     Group Key: t_clientinstrumentind2.tradingday
+                     Group Key: t.tradingday
                      ->  Sort
-                           Sort Key: t_clientinstrumentind2.tradingday
+                           Sort Key: t.tradingday
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: t_clientinstrumentind2.tradingday
-                                 ->  Dynamic Index Scan on t_clientinstrumentind2_pkey on t_clientinstrumentind2
+                                 Hash Key: t.tradingday
+                                 ->  Dynamic Index Scan on t_clientinstrumentind2_pkey on t_clientinstrumentind2 t
                                        Index Cond: ((tradingday >= '20190715'::text) AND (tradingday <= '20190715'::text) AND (tradingday = '20190715'::text))
                                        Number of partitions to scan: 1 (out of 2)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (23 rows)
 
 RESET optimizer_enable_hashjoin;
@@ -14477,10 +14446,10 @@ EXPLAIN (COSTS OFF) SELECT (
          ->  Aggregate
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Hash Join
-                           Hash Cond: (join_null_rej1.i = join_null_rej2.i)
-                           ->  Seq Scan on join_null_rej1
+                           Hash Cond: (t1.i = t2.i)
+                           ->  Seq Scan on join_null_rej1 t1
                            ->  Hash
-                                 ->  Seq Scan on join_null_rej2
+                                 ->  Seq Scan on join_null_rej2 t2
                                        Filter: (i < join_null_rej_func())
  Optimizer: Pivotal Optimizer (GPORCA)
 (13 rows)
@@ -14509,23 +14478,23 @@ update window_agg_test t
 set i = tt.i 
 from (select (min(i) over (order by j)) as i, j from window_agg_test) tt
 where t.j = tt.j;
-                                                            QUERY PLAN                                                             
------------------------------------------------------------------------------------------------------------------------------------
- Update on window_agg_test  (cost=0.00..862.02 rows=1 width=1)
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Update on window_agg_test t  (cost=0.00..862.02 rows=1 width=1)
    ->  Result  (cost=0.00..0.00 rows=0 width=0)
          ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1)  (cost=0.00..862.00 rows=1 width=18)
                ->  Hash Join  (cost=0.00..862.00 rows=1 width=18)
-                     Hash Cond: (window_agg_test.j = window_agg_test_1.j)
+                     Hash Cond: (t.j = window_agg_test.j)
                      ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=14)
-                           ->  Seq Scan on window_agg_test  (cost=0.00..431.00 rows=1 width=14)
+                           ->  Seq Scan on window_agg_test t  (cost=0.00..431.00 rows=1 width=14)
                      ->  Hash  (cost=431.00..431.00 rows=1 width=8)
                            ->  WindowAgg  (cost=0.00..431.00 rows=1 width=8)
-                                 Order By: window_agg_test_1.j
+                                 Order By: window_agg_test.j
                                  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-                                       Merge Key: window_agg_test_1.j
+                                       Merge Key: window_agg_test.j
                                        ->  Sort  (cost=0.00..431.00 rows=1 width=8)
-                                             Sort Key: window_agg_test_1.j
-                                             ->  Seq Scan on window_agg_test window_agg_test_1  (cost=0.00..431.00 rows=1 width=8)
+                                             Sort Key: window_agg_test.j
+                                             ->  Seq Scan on window_agg_test  (cost=0.00..431.00 rows=1 width=8)
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
 
@@ -14725,14 +14694,14 @@ explain (costs off) select (x.item).a from comp_table x join comp_table y on (x.
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: ((comp_table.item).c = (comp_table_1.item).c)
+         Hash Cond: ((x.item).c = (y.item).c)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: (comp_table.item).c
-               ->  Seq Scan on comp_table
+               Hash Key: (x.item).c
+               ->  Seq Scan on comp_table x
          ->  Hash
                ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                     Hash Key: (comp_table_1.item).c
-                     ->  Seq Scan on comp_table comp_table_1
+                     Hash Key: (y.item).c
+                     ->  Seq Scan on comp_table y
  Optimizer: GPORCA
 (11 rows)
 
@@ -14749,7 +14718,7 @@ explain (costs off) select (x.item).a, (select count(*) from generate_series(1, 
                       QUERY PLAN                      
 ------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on comp_table
+   ->  Seq Scan on comp_table x
          SubPlan 1
            ->  Aggregate
                  ->  Function Scan on generate_series
@@ -14811,15 +14780,15 @@ explain (costs off) select (x.item).a from comp_part x join comp_part y on (X.it
 ----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: ((comp_part.item).c = (comp_part_1.item).c)
+         Hash Cond: ((x.item).c = (y.item).c)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: (comp_part.item).c
-               ->  Dynamic Seq Scan on comp_part
+               Hash Key: (x.item).c
+               ->  Dynamic Seq Scan on comp_part x
                      Number of partitions to scan: 3 (out of 3)
          ->  Hash
                ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                     Hash Key: (comp_part_1.item).c
-                     ->  Dynamic Seq Scan on comp_part comp_part_1
+                     Hash Key: (y.item).c
+                     ->  Dynamic Seq Scan on comp_part y
                            Number of partitions to scan: 3 (out of 3)
  Optimizer: GPORCA
 (13 rows)
@@ -15016,6 +14985,23 @@ SELECT CAST(a AS TEXT[]) FROM array_coerceviaio;
 ---------
  {1,2,3}
 (1 row)
+
+---------------------------------------------------------------------------------
+DROP TABLE IF EXISTS schema_test_table;
+CREATE TABLE schema_test_table(a numeric, b numeric(5,2), c char(10) NOT NULL) distributed by (a);
+-- In 7x, redundant Result nodes in planned_stmt are being removed by ORCA,
+-- which caused the loss of typmod info of column type in plan.
+-- Below query is used by external libraries to fetch schema of table.
+-- Test that the typmod of column type is correct in explain plan.
+EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM schema_test_table WHERE 1=0;
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: NULL::numeric, NULL::numeric(5,2), NULL::character(10)
+   One-Time Filter: false
+ Optimizer: GPORCA
+ Settings: optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on', optimizer_segments = '3'
+(5 rows)
 
 ---------------------------------------------------------------------------------
 -- Test ALL NULL scalar array compare 

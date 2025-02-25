@@ -15,10 +15,13 @@
 #include "gpos/common/CDynamicPtrArray.h"
 #include "gpos/common/CRefCount.h"
 
+#include "gpopt/hints/CJoinHint.h"
+#include "gpopt/hints/CJoinTypeHint.h"
 #include "gpopt/hints/CRowHint.h"
 #include "gpopt/hints/CScanHint.h"
 #include "gpopt/hints/IHint.h"
 #include "gpopt/metadata/CTableDescriptor.h"
+#include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/COperator.h"
 #include "naucrates/dxl/xml/CXMLSerializer.h"
 
@@ -39,6 +42,12 @@ private:
 	// List of all row hints
 	RowHintList *m_row_hints{nullptr};
 
+	// List of all join hints
+	JoinHintList *m_join_hints{nullptr};
+
+	// List of all join type hints
+	JoinTypeHintList *m_join_type_hints{nullptr};
+
 public:
 	CPlanHint(CMemoryPool *mp);
 
@@ -50,12 +59,27 @@ public:
 	// Add a row hint
 	void AddHint(CRowHint *hint);
 
+	// Add a join hint
+	void AddHint(CJoinHint *hint);
+
+	// Add a join type hint
+	void AddHint(CJoinTypeHint *hint);
+
 	// Get a scan hint that matches a name (table or alias)
 	CScanHint *GetScanHint(const char *name);
 	CScanHint *GetScanHint(const CWStringBase *name);
 
 	// Get a row hint that matches a set of table descriptors
 	CRowHint *GetRowHint(CTableDescriptorHashSet *ptabdescset);
+
+	// Get a join hint that covers an expression
+	CJoinHint *GetJoinHint(CExpression *pexpr);
+
+	// Get a join type hint that covers an expression
+	CJoinTypeHint *GetJoinTypeHint(StringPtrArray *aliases);
+
+	// Check whether an expression was created using a directed hint.
+	bool WasCreatedViaDirectedHint(CExpression *pexpr);
 
 	IOstream &OsPrint(IOstream &os) const;
 

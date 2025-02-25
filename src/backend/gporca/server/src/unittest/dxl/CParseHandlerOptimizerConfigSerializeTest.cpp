@@ -59,8 +59,8 @@ static void
 SerializeOptimizerConfig(CMemoryPool *mp, COptimizerConfig *optimizer_config,
 						 COstream &oos, BOOL indentation)
 {
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(nullptr != optimizer_config);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != optimizer_config);
 
 	CXMLSerializer xml_serializer(mp, oos, indentation);
 
@@ -92,10 +92,6 @@ CParseHandlerOptimizerConfigSerializeTest::EresUnittest()
 	BOOL fValidate = false;
 	Fixture f;
 	CMemoryPool *mp = f.Pmp();
-	// Valid input for this test requires DXL in the form of:
-	// Please note that most editors will automatically add a newline at the end of the file
-	// This will cause the test to fail, as we do a byte-wise string comparison as opposed to a
-	// comparison of canonicalized XML
 	const CHAR *dxl_string = f.SzDxl(dxl_filename);
 	const CHAR *szValidationPath = Fixture::SzValidationPath(fValidate);
 
@@ -105,7 +101,7 @@ CParseHandlerOptimizerConfigSerializeTest::EresUnittest()
 	COptimizerConfig *poc =
 		CDXLUtils::ParseDXLToOptimizerConfig(mp, dxl_string, szValidationPath);
 
-	GPOS_ASSERT(nullptr != poc);
+	GPOS_UNITTEST_ASSERT(nullptr != poc);
 
 	GPOS_CHECK_ABORT;
 
@@ -115,10 +111,16 @@ CParseHandlerOptimizerConfigSerializeTest::EresUnittest()
 	SerializeOptimizerConfig(mp, poc, oss, false);
 	GPOS_CHECK_ABORT;
 
+	// Valid input for this test requires DXL in the form of:
+	// Please note that most editors will automatically add a newline at the
+	// end of the file. Here we account for that by adding a newline to the
+	// result.
+	str.AppendFormat(GPOS_WSZ_LIT("%s"), "\n");
+
 	CWStringDynamic strExpected(mp);
 	strExpected.AppendFormat(GPOS_WSZ_LIT("%s"), dxl_string);
 
-	GPOS_ASSERT(strExpected.Equals(&str));
+	GPOS_UNITTEST_ASSERT(strExpected.Equals(&str));
 
 	poc->Release();
 

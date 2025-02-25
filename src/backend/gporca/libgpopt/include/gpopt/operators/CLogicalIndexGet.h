@@ -241,6 +241,19 @@ public:
 	IStatistics *PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							  IStatisticsArray *stats_ctxt) const override;
 
+	CTableDescriptorHashSet *
+	DeriveTableDescriptor(CMemoryPool *mp,
+						  CExpressionHandle &exprhdl GPOS_UNUSED) const override
+	{
+		CTableDescriptorHashSet *result =
+			GPOS_NEW(mp) CTableDescriptorHashSet(mp);
+		if (result->Insert(m_ptabdesc))
+		{
+			m_ptabdesc->AddRef();
+		}
+		return result;
+	}
+
 	//-------------------------------------------------------------------------------------
 	// Transformations
 	//-------------------------------------------------------------------------------------

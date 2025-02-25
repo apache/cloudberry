@@ -220,7 +220,7 @@ CExpressionTest::EresUnittest_SimpleOps()
 		}
 
 		// self-match
-		GPOS_ASSERT(pexpr->FMatchDebug(pexpr));
+		GPOS_UNITTEST_ASSERT(pexpr->FMatchDebug(pexpr));
 
 		// debug print
 		CWStringDynamic str(mp, GPOS_WSZ_LIT("\n"));
@@ -245,7 +245,7 @@ CExpressionTest::EresUnittest_SimpleOps()
 
 		BOOL result = colref_mapping->Insert(GPOS_NEW(mp) ULONG(pcrOld->Id()),
 											 new_colref);
-		GPOS_ASSERT(result);
+		GPOS_UNITTEST_ASSERT(result);
 		CExpression *pexprCopy = pexpr->PexprCopyWithRemappedColumns(
 			mp, colref_mapping, true /*must_exist*/);
 		colref_mapping->Release();
@@ -262,13 +262,13 @@ CExpressionTest::EresUnittest_SimpleOps()
 			GPOS_NEW(mp) CReqdPropRelational(GPOS_NEW(mp) CColRefSet(mp));
 		IStatisticsArray *stats_ctxt = GPOS_NEW(mp) IStatisticsArray(mp);
 		IStatistics *stats = pexpr->PstatsDerive(prprel, stats_ctxt);
-		GPOS_ASSERT(nullptr != stats);
+		GPOS_UNITTEST_ASSERT(nullptr != stats);
 
 		oss << "Expected risk: " << rgulRisk[i] << std::endl;
 		oss << std::endl << "STATS:" << *stats << std::endl;
 		GPOS_TRACE(str.GetBuffer());
 
-		GPOS_ASSERT(rgulRisk[i] == stats->StatsEstimationRisk());
+		GPOS_UNITTEST_ASSERT(rgulRisk[i] == stats->StatsEstimationRisk());
 
 		prprel->Release();
 		stats_ctxt->Release();
@@ -321,10 +321,10 @@ CExpressionTest::EresUnittest_Union()
 		GPOS_NEW(mp) CReqdPropRelational(GPOS_NEW(mp) CColRefSet(mp));
 	IStatisticsArray *stats_ctxt = GPOS_NEW(mp) IStatisticsArray(mp);
 	IStatistics *stats = pexpr->PstatsDerive(prprel, stats_ctxt);
-	GPOS_ASSERT(nullptr != stats);
+	GPOS_UNITTEST_ASSERT(nullptr != stats);
 
 	// We expect a risk of 3 because every Union increments the risk.
-	GPOS_ASSERT(3 == stats->StatsEstimationRisk());
+	GPOS_UNITTEST_ASSERT(3 == stats->StatsEstimationRisk());
 	stats_ctxt->Release();
 	prprel->Release();
 #endif	// GPOS_DEBUG
@@ -367,7 +367,7 @@ CExpressionTest::EresUnittest_BitmapGet()
 
 	// get the index associated with the table
 	const IMDRelation *pmdrel = mda.RetrieveRel(ptabdesc->MDId());
-	GPOS_ASSERT(0 < pmdrel->IndexCount());
+	GPOS_UNITTEST_ASSERT(0 < pmdrel->IndexCount());
 
 	// create an index descriptor
 	IMDId *pmdidIndex = pmdrel->IndexMDidAt(0 /*pos*/);
@@ -376,7 +376,7 @@ CExpressionTest::EresUnittest_BitmapGet()
 	CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
 
 	const ULONG num_cols = pmdrel->ColumnCount();
-	GPOS_ASSERT(2 < num_cols);
+	GPOS_UNITTEST_ASSERT(2 < num_cols);
 
 	// create an index on the first column
 	const IMDColumn *pmdcol = pmdrel->GetMdCol(0);
@@ -431,7 +431,7 @@ CExpressionTest::EresUnittest_BitmapGet()
 		"         |--CScalarIdent \"ColRef_0000\" (0)\n"
 		"         +--CScalarConst (20)\n"));
 
-	GPOS_ASSERT(str.Equals(&strExpectedDebugPrint));
+	GPOS_UNITTEST_ASSERT(str.Equals(&strExpectedDebugPrint));
 
 	// derive properties on expression
 	(void) pexprBitmapTableGet->PdpDerive();
@@ -459,8 +459,8 @@ CExpressionTest::EresUnittest_BitmapGet()
 		// clang-format on
 		));
 
-	GPOS_ASSERT(strIndex2.Equals(&strExpectedDebugPrintIndex2));
-	GPOS_ASSERT(pexprBitmapIndex2->Matches(pexprBitmapIndex));
+	GPOS_UNITTEST_ASSERT(strIndex2.Equals(&strExpectedDebugPrintIndex2));
+	GPOS_UNITTEST_ASSERT(pexprBitmapIndex2->Matches(pexprBitmapIndex));
 
 	mdid->AddRef();
 	pexprBitmapIndex->AddRef();
@@ -478,7 +478,7 @@ CExpressionTest::EresUnittest_BitmapGet()
 		GPOS_NEW(mp)
 			CScalarBitmapBoolOp(mp, CScalarBitmapBoolOp::EbitmapboolAnd, mdid),
 		pexprBitmapIndex, pexprBitmapIndex2);
-	GPOS_ASSERT(pexprBitmapBoolOp2->Matches(pexprBitmapBoolOp1));
+	GPOS_UNITTEST_ASSERT(pexprBitmapBoolOp2->Matches(pexprBitmapBoolOp1));
 
 	// cleanup
 	pexprBitmapBoolOp2->Release();
@@ -533,7 +533,6 @@ CExpressionTest::EresUnittest_Const()
 	pexprUl2nd->OsPrint(oss);
 	pexprUlOne->OsPrint(oss);
 
-#ifdef GPOS_DEBUG
 	CScalarConst *pscalarconstTrue = CScalarConst::PopConvert(pexprTrue->Pop());
 	CScalarConst *pscalarconstFalse =
 		CScalarConst::PopConvert(pexprFalse->Pop());
@@ -542,11 +541,11 @@ CExpressionTest::EresUnittest_Const()
 		CScalarConst::PopConvert(pexprUl2nd->Pop());
 	CScalarConst *pscalarconstUlOne =
 		CScalarConst::PopConvert(pexprUlOne->Pop());
-#endif	// GPOS_DEBUG
 
-	GPOS_ASSERT(pscalarconstUl->HashValue() == pscalarconstUl2nd->HashValue());
-	GPOS_ASSERT(!pscalarconstTrue->Matches(pscalarconstFalse));
-	GPOS_ASSERT(!pscalarconstTrue->Matches(pscalarconstUlOne));
+	GPOS_UNITTEST_ASSERT(pscalarconstUl->HashValue() ==
+						 pscalarconstUl2nd->HashValue());
+	GPOS_UNITTEST_ASSERT(!pscalarconstTrue->Matches(pscalarconstFalse));
+	GPOS_UNITTEST_ASSERT(!pscalarconstTrue->Matches(pscalarconstUlOne));
 
 	pexprTrue->Release();
 	pexprFalse->Release();
@@ -587,13 +586,13 @@ CExpressionTest::EresUnittest_ComparisonTypes()
 
 	const IMDType *pmdtype = mda.PtMDType<IMDTypeInt4>();
 
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		IMDType::EcmptEq ==
 		CUtils::ParseCmpType(pmdtype->GetMdidForCmpType(IMDType::EcmptEq)));
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		IMDType::EcmptL ==
 		CUtils::ParseCmpType(pmdtype->GetMdidForCmpType(IMDType::EcmptL)));
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		IMDType::EcmptG ==
 		CUtils::ParseCmpType(pmdtype->GetMdidForCmpType(IMDType::EcmptG)));
 
@@ -604,12 +603,12 @@ CExpressionTest::EresUnittest_ComparisonTypes()
 	const IMDScalarOp *pmdscopGT =
 		mda.RetrieveScOp(pmdtype->GetMdidForCmpType(IMDType::EcmptG));
 
-	GPOS_ASSERT(IMDType::EcmptNEq ==
-				CUtils::ParseCmpType(pmdscopEq->GetInverseOpMdid()));
-	GPOS_ASSERT(IMDType::EcmptLEq ==
-				CUtils::ParseCmpType(pmdscopGT->GetInverseOpMdid()));
-	GPOS_ASSERT(IMDType::EcmptGEq ==
-				CUtils::ParseCmpType(pmdscopLT->GetInverseOpMdid()));
+	GPOS_UNITTEST_ASSERT(IMDType::EcmptNEq ==
+						 CUtils::ParseCmpType(pmdscopEq->GetInverseOpMdid()));
+	GPOS_UNITTEST_ASSERT(IMDType::EcmptLEq ==
+						 CUtils::ParseCmpType(pmdscopGT->GetInverseOpMdid()));
+	GPOS_UNITTEST_ASSERT(IMDType::EcmptGEq ==
+						 CUtils::ParseCmpType(pmdscopLT->GetInverseOpMdid()));
 
 	return GPOS_OK;
 }
@@ -690,7 +689,7 @@ CExpressionTest::EresUnittest_FValidPlan()
 		CDrvdPropCtxtPlan *pdpctxtplan = GPOS_NEW(mp) CDrvdPropCtxtPlan(mp);
 
 		// Test that prpp is actually satisfied.
-		GPOS_ASSERT(pexprPlan->FValidPlan(prpp, pdpctxtplan));
+		GPOS_UNITTEST_ASSERT(pexprPlan->FValidPlan(prpp, pdpctxtplan));
 		pdpctxtplan->Release();
 		pexprPlan->Release();
 		prpp->Release();
@@ -727,7 +726,7 @@ CExpressionTest::EresUnittest_FValidPlan()
 		CDrvdPropCtxtPlan *pdpctxtplan = GPOS_NEW(mp) CDrvdPropCtxtPlan(mp);
 
 		// Test that prpp is actually unsatisfied.
-		GPOS_ASSERT(!pexprPlan->FValidPlan(prpp, pdpctxtplan));
+		GPOS_UNITTEST_ASSERT(!pexprPlan->FValidPlan(prpp, pdpctxtplan));
 		pdpctxtplan->Release();
 		pexprPlan->Release();
 		prpp->Release();
@@ -775,7 +774,7 @@ CExpressionTest::EresUnittest_FValidPlan_InvalidOrder()
 	CColRefSet *pcrsGetCopy = GPOS_NEW(mp) CColRefSet(mp, *pcrsGet);
 
 	CColRefArray *pdrgpcrGet = pcrsGetCopy->Pdrgpcr(mp);
-	GPOS_ASSERT(2 <= pdrgpcrGet->Size());
+	GPOS_UNITTEST_ASSERT(2 <= pdrgpcrGet->Size());
 
 	COrderSpec *pos = GPOS_NEW(mp) COrderSpec(mp);
 	const IMDType *pmdtypeint4 = mda.PtMDType<IMDTypeInt4>();
@@ -801,7 +800,8 @@ CExpressionTest::EresUnittest_FValidPlan_InvalidOrder()
 		GPOS_NEW(mp) CReqdPropPlan(pcrsGetCopy, peo, ped, per, pepp, pcter);
 
 	// Test that the plan is not valid.
-	GPOS_ASSERT(!pexprPlan->FValidPlan(prppIncompatibleOrder, pdpctxtplan));
+	GPOS_UNITTEST_ASSERT(
+		!pexprPlan->FValidPlan(prppIncompatibleOrder, pdpctxtplan));
 	pdpctxtplan->Release();
 	prppIncompatibleOrder->Release();
 	pdrgpcrGet->Release();
@@ -861,7 +861,7 @@ CExpressionTest::EresUnittest_FValidPlan_InvalidDistribution()
 		GPOS_NEW(mp) CReqdPropPlan(pcrsCopy, peo, ped, per, pepp, pcter);
 
 	// Test that the plan is not valid.
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		!pexprPlan->FValidPlan(prppIncompatibleDistribution, pdpctxtplan));
 	pdpctxtplan->Release();
 	pexprPlan->Release();
@@ -922,7 +922,7 @@ CExpressionTest::EresUnittest_FValidPlan_InvalidRewindability()
 	CReqdPropPlan *prppIncompatibleRewindability =
 		GPOS_NEW(mp) CReqdPropPlan(pcrsCopy, peo, ped, per, pepp, pcter);
 	// Test that the plan is not valid.
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		!pexprPlan->FValidPlan(prppIncompatibleRewindability, pdpctxtplan));
 	pdpctxtplan->Release();
 	pexprPlan->Release();
@@ -991,7 +991,8 @@ CExpressionTest::EresUnittest_FValidPlan_InvalidCTEs()
 		GPOS_NEW(mp) CReqdPropPlan(pcrsCopy, peo, ped, per, pepp, pcter);
 
 	// Test that the plan is not valid.
-	GPOS_ASSERT(!pexprPlan->FValidPlan(prppIncompatibleCTE, pdpctxtplan));
+	GPOS_UNITTEST_ASSERT(
+		!pexprPlan->FValidPlan(prppIncompatibleCTE, pdpctxtplan));
 	pdpctxtplan->Release();
 	pexprPlan->Release();
 	prppIncompatibleCTE->Release();
@@ -1030,7 +1031,7 @@ CExpressionTest::EresUnittest_FValidPlanError()
 	const IMDType *pmdtype = mda.PtMDType<IMDTypeInt4>();
 
 	GPOS_RESULT eres = GPOS_OK;
-	// Test that in debug mode GPOS_ASSERT fails for non-physical expressions.
+	// Test that in debug mode GPOS_UNITTEST_ASSERT fails for non-physical expressions.
 	{
 		CColRefSet *pcrsInvalid = GPOS_NEW(mp) CColRefSet(mp);
 		CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
@@ -1098,8 +1099,8 @@ CExpressionTest::EresCheckCachedReqdCols(CMemoryPool *mp, CExpression *pexpr,
 	}
 
 	GPOS_CHECK_STACK_SIZE;
-	GPOS_ASSERT(nullptr != mp);
-	GPOS_ASSERT(nullptr != prppInput);
+	GPOS_UNITTEST_ASSERT(nullptr != mp);
+	GPOS_UNITTEST_ASSERT(nullptr != prppInput);
 
 	CExpressionHandle exprhdl(mp);
 	exprhdl.Attach(pexpr);
@@ -1119,7 +1120,7 @@ CExpressionTest::EresCheckCachedReqdCols(CMemoryPool *mp, CExpression *pexpr,
 		{
 			continue;
 		}
-		GPOS_ASSERT(nullptr != pexprChild->Prpp());
+		GPOS_UNITTEST_ASSERT(nullptr != pexprChild->Prpp());
 
 		// extract cached required columns of the n-th child
 		CColRefSet *pcrsChildReqd = pexprChild->Prpp()->PcrsRequired();

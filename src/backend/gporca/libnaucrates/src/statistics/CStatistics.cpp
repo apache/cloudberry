@@ -904,4 +904,19 @@ CStatistics::ComputeColStats(CMemoryPool *mp, CColRef *colref, IMDId *rel_mdid)
 	return stats;
 }
 
+// look up the fraction of null values of a particular column
+CDouble
+CStatistics::GetNullFreq(const CColRef *colref)
+{
+	ULONG colid = colref->Id();
+	CHistogram *col_histogram = m_colid_histogram_mapping->Find(&colid);
+	if (nullptr != col_histogram)
+	{
+		return col_histogram->GetNullFreq();
+	}
+
+	// if no histogram is available for required column, we assume no nulls
+	return 0;
+}
+
 // EOF

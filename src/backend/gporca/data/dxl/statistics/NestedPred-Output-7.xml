@@ -3,7 +3,7 @@
   <dxl:Statistics>
     <dxl:DerivedRelationStats Rows="48.160471" EmptyRelation="false">
       <dxl:DerivedColumnStats ColId="2" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000">
-        <dxl:StatsBucket Frequency="1.000000" DistinctValues="1.000000">
+        <dxl:StatsBucket Frequency="1.00000000000000000" DistinctValues="1.00000000000000000">
           <dxl:LowerBound Closed="true" TypeMdid="0.23.1.0" Value="2"/>
           <dxl:UpperBound Closed="true" TypeMdid="0.23.1.0" Value="2"/>
         </dxl:StatsBucket>

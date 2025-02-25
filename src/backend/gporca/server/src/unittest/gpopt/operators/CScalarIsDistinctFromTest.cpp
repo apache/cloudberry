@@ -72,7 +72,7 @@ EresUnittest_Eber_WhenBothInputsAreNull()
 	CScalarIsDistinctFrom *pScalarIDF = fixture.PScalarIDF();
 
 	CScalar::EBoolEvalResult eberResult = pScalarIDF->Eber(pdrgpulChildren);
-	GPOS_RTL_ASSERT(eberResult == CScalar::EberFalse);
+	GPOS_UNITTEST_ASSERT(eberResult == CScalar::EberFalse);
 
 	pdrgpulChildren->Release();
 
@@ -92,7 +92,7 @@ EresUnittest_Eber_WhenFirstInputIsUnknown()
 	CScalarIsDistinctFrom *pScalarIDF = fixture.PScalarIDF();
 
 	CScalar::EBoolEvalResult eberResult = pScalarIDF->Eber(pdrgpulChildren);
-	GPOS_RTL_ASSERT(eberResult == CScalar::EberAny);
+	GPOS_UNITTEST_ASSERT(eberResult == CScalar::EberAny);
 
 	pdrgpulChildren->Release();
 
@@ -112,7 +112,7 @@ EresUnittest_Eber_WhenSecondInputIsUnknown()
 	CScalarIsDistinctFrom *pScalarIDF = fixture.PScalarIDF();
 
 	CScalar::EBoolEvalResult eberResult = pScalarIDF->Eber(pdrgpulChildren);
-	GPOS_RTL_ASSERT(eberResult == CScalar::EberAny);
+	GPOS_UNITTEST_ASSERT(eberResult == CScalar::EberAny);
 
 	pdrgpulChildren->Release();
 
@@ -132,7 +132,7 @@ EresUnittest_Eber_WhenFirstInputDiffersFromSecondInput()
 	CScalarIsDistinctFrom *pScalarIDF = fixture.PScalarIDF();
 
 	CScalar::EBoolEvalResult eberResult = pScalarIDF->Eber(pdrgpulChildren);
-	GPOS_RTL_ASSERT(eberResult == CScalar::EberTrue);
+	GPOS_UNITTEST_ASSERT(eberResult == CScalar::EberTrue);
 
 	pdrgpulChildren->Release();
 
@@ -152,7 +152,7 @@ EresUnittest_Eber_WhenBothInputsAreSameAndNotNull()
 	CScalarIsDistinctFrom *pScalarIDF = fixture.PScalarIDF();
 
 	CScalar::EBoolEvalResult eberResult = pScalarIDF->Eber(pdrgpulChildren);
-	GPOS_RTL_ASSERT(eberResult == CScalar::EberFalse);
+	GPOS_UNITTEST_ASSERT(eberResult == CScalar::EberFalse);
 
 	pdrgpulChildren->Release();
 

@@ -22,6 +22,7 @@
 #ifdef USE_ORCA
 
 extern PlannedStmt * optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams);
+extern Node *transformGroupedWindows(Node *node, void *context);
 
 // plan_hint_hook generates HintState by parsing a Query.
 typedef void *(*plan_hint_hook_type) (Query *parse);

@@ -156,7 +156,7 @@ CXMLSerializerTest::EresUnittest_Base64()
 	ULONG *pulRandArrCopy =
 		(ULONG *) CDXLUtils::DecodeByteArrayFromString(mp, str, &len);
 
-	GPOS_ASSERT(len == sizeof(rgulRandArr));
+	GPOS_UNITTEST_ASSERT(len == sizeof(rgulRandArr));
 
 	for (ULONG i = 0; i < ulraSize; i++)
 	{

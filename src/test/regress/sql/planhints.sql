@@ -1,3 +1,6 @@
+-- start_matchignore
+-- m/^LOG.*Missing statistics for column.*/
+-- end_matchignore
 -- Test Optimizer Plan Hints Feature
 --
 -- Purpose: Test that plan hints may be used to coerce the plan shape generated
@@ -42,6 +45,14 @@ EXPLAIN (costs off) SELECT t1.a, t2.a, t3.a FROM my_table AS t1 JOIN your_table 
 --
 --------------------------------------------------------------------
 
+SET client_min_messages TO log;
+SET pg_hint_plan.debug_print TO ON;
+
+-- Replace timestamp while logging with static string
+-- start_matchsubs
+-- m/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/
+-- s/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{6} [A-Z]{3}/YYYY-MM-DD HH:MM:SS:MSMSMS TMZ/
+-- end_matchsubs
 /*+
     SeqScan(t1)
     SeqScan(t2)
@@ -159,6 +170,14 @@ EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
  */
 EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
 
+-- CBDB_MERGE_FIXME: ao/aocs table not suport IndexOnlyScan in PG Optimizer(ORCA support it)
+-- after we cherry-pick 74246e48ed(Enable index only scan on ao/aocs table)
+-- So current case will generate a scan seq(also other IndexOnlyScan(your_table) will).
+-- See more details in indxpath.c:L817, The logic is:
+-- 
+-- if (!AMHandlerIsAO(rel->amhandler) ||
+--				index->amcostestimate == bmcostestimate)
+--				add_path(rel, (Path *) ipath, root);
 /*+
     IndexOnlyScan(t2 your_amazing_index)
  */
@@ -548,3 +567,26 @@ EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
     NoIndexScan(t1) SeqScan(t1)
  */
 EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
+
+-- Scan Hints with Semi/Anti Semi Joins
+/*+
+    SeqScan(t2) SeqScan(t1)
+ */
+EXPLAIN (costs off) SELECT t1.a, t1.b FROM my_table AS t1 WHERE EXISTS (SELECT 1 FROM your_table AS t2 WHERE t1.a = t2.a);
+/*+
+    SeqScan(t2) SeqScan(t1)
+ */
+EXPLAIN (costs off) SELECT t1.a, t1.b FROM my_table AS t1 WHERE NOT EXISTS (SELECT 1 FROM your_table AS t2 WHERE t1.a = t2.a);
+-- Missing alias in query to test Un-used Hint logging
+/*+
+    NoIndexScan(z) SeqScan(y)
+ */
+EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
+-- Invalid Scan type to test Hint logging behavior
+/*+
+ NoBitmap(t1)
+*/
+EXPLAIN (costs off) SELECT t1.a FROM my_table AS t1 WHERE t1.a<42;
+
+RESET client_min_messages;
+RESET pg_hint_plan.debug_print;

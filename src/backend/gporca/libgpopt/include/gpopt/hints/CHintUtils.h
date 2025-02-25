@@ -11,6 +11,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/hints/CPlanHint.h"
+#include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CLogicalDynamicGet.h"
 #include "gpopt/operators/CLogicalDynamicIndexGet.h"
 #include "gpopt/operators/CLogicalGet.h"
@@ -41,9 +42,25 @@ public:
 	static BOOL SatisfiesPlanHints(CScalarBitmapIndexProbe *pop,
 								   CPlanHint *plan_hint);
 
+	// Check if CExpression satisfies join type hints
+	static BOOL SatisfiesJoinTypeHints(CMemoryPool *mp, CExpression *pexpr,
+									   CPlanHint *plan_hint);
+
 	static const WCHAR *ScanHintEnumToString(CScanHint::EType type);
 
 	static CScanHint::EType ScanHintStringToEnum(const WCHAR *type);
+
+	static const WCHAR *JoinTypeHintEnumToString(CJoinTypeHint::JoinType type);
+
+	static CJoinTypeHint::JoinType JoinTypeHintStringToEnum(const WCHAR *type);
+
+	// Get set of aliases from table descriptor set
+	static StringPtrArray *GetAliasesFromTableDescriptors(
+		CMemoryPool *mp, CTableDescriptorHashSet *ptabs);
+
+	// Get set of aliases from join pair
+	static StringPtrArray *GetAliasesFromHint(
+		CMemoryPool *mp, const CJoinHint::JoinNode *joinnode);
 };
 
 }  // namespace gpopt

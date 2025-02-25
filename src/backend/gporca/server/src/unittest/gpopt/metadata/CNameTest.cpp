@@ -53,9 +53,9 @@ CNameTest::EresUnittest_Basic()
 	CName name2(name1);
 	CName name3 = name2;
 
-	GPOS_ASSERT(name1.Equals(name2));
-	GPOS_ASSERT(name1.Equals(name3));
-	GPOS_ASSERT(name2.Equals(name3));
+	GPOS_UNITTEST_ASSERT(name1.Equals(name2));
+	GPOS_UNITTEST_ASSERT(name1.Equals(name3));
+	GPOS_UNITTEST_ASSERT(name2.Equals(name3));
 
 	return GPOS_OK;
 }
@@ -81,9 +81,9 @@ CNameTest::EresUnittest_Ownership()
 	CName name2(mp, name1);
 	CName name3(mp, name2);
 
-	GPOS_ASSERT(name1.Equals(name2));
-	GPOS_ASSERT(name1.Equals(name3));
-	GPOS_ASSERT(name2.Equals(name3));
+	GPOS_UNITTEST_ASSERT(name1.Equals(name2));
+	GPOS_UNITTEST_ASSERT(name1.Equals(name3));
+	GPOS_UNITTEST_ASSERT(name2.Equals(name3));
 
 	return GPOS_OK;
 }

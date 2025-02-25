@@ -230,8 +230,8 @@ CXformTest::ApplyExprXforms(CMemoryPool *mp, IOstream &os, CExpression *pexpr)
 			{
 				if (CXform::ExfExpandNAryJoinMinCard == pxform->Exfid())
 				{
-					GPOS_ASSERT(COperator::EopLogicalNAryJoin ==
-								pexpr->Pop()->Eopid());
+					GPOS_UNITTEST_ASSERT(COperator::EopLogicalNAryJoin ==
+										 pexpr->Pop()->Eopid());
 
 					// derive stats on NAry join expression
 					CExpressionHandle exprhdl(mp);
@@ -245,7 +245,7 @@ CXformTest::ApplyExprXforms(CMemoryPool *mp, IOstream &os, CExpression *pexpr)
 				CExpression *pexprResult = pxfres->PexprNext();
 				while (nullptr != pexprResult)
 				{
-					GPOS_ASSERT(pexprResult->FMatchDebug(pexprResult));
+					GPOS_UNITTEST_ASSERT(pexprResult->FMatchDebug(pexprResult));
 
 					pexprResult = pxfres->PexprNext();
 				}
@@ -322,7 +322,7 @@ CXformTest::EresUnittest_Mapping()
 			CXform::EXformId exfid = (CXform::EXformId) ul;
 			CXform *pxform = CXformFactory::Pxff()->Pxf(exfid);
 			CXform *pxformMapped = CXformFactory::Pxff()->Pxf(pxform->SzId());
-			GPOS_ASSERT(pxform == pxformMapped);
+			GPOS_UNITTEST_ASSERT(pxform == pxformMapped);
 		}
 	}
 

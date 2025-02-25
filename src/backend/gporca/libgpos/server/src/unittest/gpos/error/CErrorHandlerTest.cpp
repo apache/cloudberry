@@ -64,7 +64,7 @@ CErrorHandlerTest::EresUnittest_Basic()
 	GPOS_CATCH_EX(ex)
 	{
 		// make sure we catch an OOM
-		GPOS_ASSERT(
+		GPOS_UNITTEST_ASSERT(
 			GPOS_MATCH_EX(ex, CException::ExmaSystem, CException::ExmiOOM));
 
 		GPOS_RESET_EX;
@@ -94,7 +94,7 @@ CErrorHandlerTest::EresUnittest_BadRethrow()
 	GPOS_CATCH_EX(ex)
 	{
 		// make sure we catch an OOM
-		GPOS_ASSERT(
+		GPOS_UNITTEST_ASSERT(
 			GPOS_MATCH_EX(ex, CException::ExmaSystem, CException::ExmiOOM));
 
 		// reset error context -- ignore, don't handle
@@ -129,7 +129,7 @@ CErrorHandlerTest::EresUnittest_BadReset()
 	GPOS_CATCH_EX(ex)
 	{
 		// make sure we catch an OOM
-		GPOS_ASSERT(
+		GPOS_UNITTEST_ASSERT(
 			GPOS_MATCH_EX(ex, CException::ExmaSystem, CException::ExmiOOM));
 
 		// reset error context
@@ -163,7 +163,7 @@ CErrorHandlerTest::EresUnittest_Unhandled()
 	GPOS_CATCH_EX(ex)
 	{
 		// make sure we catch an OOM
-		GPOS_ASSERT(
+		GPOS_UNITTEST_ASSERT(
 			GPOS_MATCH_EX(ex, CException::ExmaSystem, CException::ExmiOOM));
 
 		// do not reset or rethrow here...

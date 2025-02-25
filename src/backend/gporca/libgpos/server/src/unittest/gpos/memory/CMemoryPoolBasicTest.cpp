@@ -315,7 +315,7 @@ CMemoryPoolBasicTest::EresLeakByException()
 			rgul[2] = 1;
 		}
 
-		GPOS_ASSERT(!"Trigger leak with exception");
+		GPOS_UNITTEST_ASSERT(!"Trigger leak with exception");
 	}
 
 	return GPOS_FAILED;

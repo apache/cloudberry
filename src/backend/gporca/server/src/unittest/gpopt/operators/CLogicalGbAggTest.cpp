@@ -56,7 +56,7 @@ CLogicalGbAggTest::EresUnittest_PxfsCandidates()
 	CXformSet *xfset = pGlobalGbAgg->PxfsCandidates(mp);
 
 	// allow xform split agg on "global" aggregate
-	GPOS_ASSERT(xfset->Get(CXform::ExfSplitGbAgg));
+	GPOS_UNITTEST_ASSERT(xfset->Get(CXform::ExfSplitGbAgg));
 	if (!xfset->Get(CXform::ExfSplitGbAgg))
 	{
 		test_passed = false;
@@ -68,7 +68,7 @@ CLogicalGbAggTest::EresUnittest_PxfsCandidates()
 
 	// don't allow xform split agg on "local" aggregate
 	xfset = pLocalGbAgg->PxfsCandidates(mp);
-	GPOS_ASSERT(!xfset->Get(CXform::ExfSplitGbAgg));
+	GPOS_UNITTEST_ASSERT(!xfset->Get(CXform::ExfSplitGbAgg));
 	if (xfset->Get(CXform::ExfSplitGbAgg))
 	{
 		test_passed = false;
@@ -82,7 +82,7 @@ CLogicalGbAggTest::EresUnittest_PxfsCandidates()
 
 	// don't allow xform split agg on "intermediate" aggregate
 	xfset = pIntermediateGbAgg->PxfsCandidates(mp);
-	GPOS_ASSERT(!xfset->Get(CXform::ExfSplitGbAgg));
+	GPOS_UNITTEST_ASSERT(!xfset->Get(CXform::ExfSplitGbAgg));
 	if (xfset->Get(CXform::ExfSplitGbAgg))
 	{
 		test_passed = false;

@@ -285,9 +285,17 @@ select array_agg(a order by b)
  {3,4,2,1}
 (1 row)
 
-reset optimizer_enable_orderedagg;
+-- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
+SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
+ value | ordinality 
+-------+------------
+ "b"   |          1
+ "a"   |          2
+(2 rows)
+
 -- start_ignore
 -- FIXME: gpcheckcat fails due to mismatching distribution policy if this table isn't dropped
 -- Keep this table around once this is fixed
+reset optimizer_enable_orderedagg;
 drop table ext_part;
 -- end_ignore

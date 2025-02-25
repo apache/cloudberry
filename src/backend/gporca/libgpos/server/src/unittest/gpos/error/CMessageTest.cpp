@@ -77,8 +77,8 @@ CMessageTest::EresUnittest_Basic(const void *pv, ...)
 	// take pre-defined assertion exc message
 	CMessage *pmsg = CMessage::GetMessage(CException::ExmiAssert);
 
-	GPOS_ASSERT(GPOS_MATCH_EX(pmsg->m_exception, CException::ExmaSystem,
-							  CException::ExmiAssert));
+	GPOS_UNITTEST_ASSERT(GPOS_MATCH_EX(
+		pmsg->m_exception, CException::ExmaSystem, CException::ExmiAssert));
 
 	// target buffer for format test
 	WCHAR *wsz = GPOS_NEW_ARRAY(mp, WCHAR, size);

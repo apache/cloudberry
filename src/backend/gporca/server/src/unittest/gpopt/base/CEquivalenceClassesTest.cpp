@@ -65,34 +65,34 @@ CEquivalenceClassesTest::EresUnittest_NotDisjointEquivalanceClasses()
 			col_factory->PcrCreate(pmdtypeint4, default_type_modifier, name);
 		pcrs->Include(colref);
 
-		GPOS_ASSERT(pcrs->FMember(colref));
+		GPOS_UNITTEST_ASSERT(pcrs->FMember(colref));
 	}
 
-	GPOS_ASSERT(pcrs->Size() == num_cols);
+	GPOS_UNITTEST_ASSERT(pcrs->Size() == num_cols);
 
 	CColRefSet *pcrsTwo = GPOS_NEW(mp) CColRefSet(mp, *pcrs);
-	GPOS_ASSERT(pcrsTwo->Size() == num_cols);
+	GPOS_UNITTEST_ASSERT(pcrsTwo->Size() == num_cols);
 
 	CColRefSet *pcrsThree = GPOS_NEW(mp) CColRefSet(mp);
-	GPOS_ASSERT(pcrsThree->Size() == 0);
+	GPOS_UNITTEST_ASSERT(pcrsThree->Size() == 0);
 	CColRef *pcrThree =
 		col_factory->PcrCreate(pmdtypeint4, default_type_modifier, name);
 	pcrsThree->Include(pcrThree);
-	GPOS_ASSERT(pcrsThree->Size() == 1);
+	GPOS_UNITTEST_ASSERT(pcrsThree->Size() == 1);
 
 	CColRefSetArray *pdrgpcrs = GPOS_NEW(mp) CColRefSetArray(mp);
 	pcrs->AddRef();
 	pcrsTwo->AddRef();
 	pdrgpcrs->Append(pcrs);
 	pdrgpcrs->Append(pcrsTwo);
-	GPOS_ASSERT(!CUtils::FEquivalanceClassesDisjoint(mp, pdrgpcrs));
+	GPOS_UNITTEST_ASSERT(!CUtils::FEquivalanceClassesDisjoint(mp, pdrgpcrs));
 
 	CColRefSetArray *pdrgpcrsTwo = GPOS_NEW(mp) CColRefSetArray(mp);
 	pcrs->AddRef();
 	pcrsThree->AddRef();
 	pdrgpcrsTwo->Append(pcrs);
 	pdrgpcrsTwo->Append(pcrsThree);
-	GPOS_ASSERT(CUtils::FEquivalanceClassesDisjoint(mp, pdrgpcrsTwo));
+	GPOS_UNITTEST_ASSERT(CUtils::FEquivalanceClassesDisjoint(mp, pdrgpcrsTwo));
 
 	pcrsThree->Release();
 	pcrsTwo->Release();
@@ -137,10 +137,10 @@ CEquivalenceClassesTest::EresUnittest_IntersectEquivalanceClasses()
 			col_factory->PcrCreate(pmdtypeint4, default_type_modifier, name);
 		pcrs->Include(colref);
 
-		GPOS_ASSERT(pcrs->FMember(colref));
+		GPOS_UNITTEST_ASSERT(pcrs->FMember(colref));
 	}
 
-	GPOS_ASSERT(pcrs->Size() == num_cols);
+	GPOS_UNITTEST_ASSERT(pcrs->Size() == num_cols);
 
 	// Generate equivalence classes
 	INT setBoundaryFirst[] = {2, 5, 7};
@@ -157,9 +157,9 @@ CEquivalenceClassesTest::EresUnittest_IntersectEquivalanceClasses()
 
 	CColRefSetArray *pdrgpResult =
 		CUtils::PdrgpcrsIntersectEquivClasses(mp, pdrgpFirst, pdrgpSecond);
-	GPOS_ASSERT(CUtils::FEquivalanceClassesDisjoint(mp, pdrgpResult));
-	GPOS_ASSERT(CUtils::FEquivalanceClassesEqual(mp, pdrgpResult,
-												 pdrgpIntersectExpectedOp));
+	GPOS_UNITTEST_ASSERT(CUtils::FEquivalanceClassesDisjoint(mp, pdrgpResult));
+	GPOS_UNITTEST_ASSERT(CUtils::FEquivalanceClassesEqual(
+		mp, pdrgpResult, pdrgpIntersectExpectedOp));
 
 	pcrs->Release();
 	pdrgpFirst->Release();

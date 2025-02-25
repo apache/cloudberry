@@ -16,6 +16,7 @@
 #include "gpopt/base/CColRefSet.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"
+#include "gpopt/optimizer/COptimizerConfig.h"
 #include "naucrates/statistics/CStatsPredUtils.h"
 
 using namespace gpopt;
@@ -135,6 +136,21 @@ CLogicalLeftAntiSemiJoin::PstatsDerive(CMemoryPool *mp,
 		outer_stats->CalcLASJoinStats(mp, inner_side_stats, join_preds_stats,
 									  true /* DoIgnoreLASJHistComputation */
 		);
+
+	// Check whether a row plan hint exists for this join operators relations.
+	// And if one does exist, then evaluate the hint to overwrite the estimated
+	// rows.
+	CPlanHint *planhint =
+		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint();
+	if (nullptr != planhint)
+	{
+		CRowHint *rowhint =
+			planhint->GetRowHint(exprhdl.DeriveTableDescriptor());
+		if (nullptr != rowhint)
+		{
+			pstatsLASJoin->SetRows(rowhint->ComputeRows(pstatsLASJoin->Rows()));
+		}
+	}
 
 	// clean up
 	join_preds_stats->Release();

@@ -852,8 +852,6 @@ CExpression::PexprCopyWithRemappedColumns(CMemoryPool *mp,
 	return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexpr);
 }
 
-#ifdef GPOS_DEBUG
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CExpression::FMatchPattern
@@ -996,6 +994,8 @@ CExpression::FMatchDebug(CExpression *pexpr) const
 	return true;
 }
 
+#ifdef GPOS_DEBUG
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CExpression::PrintProperties
@@ -1030,6 +1030,8 @@ CExpression::PrintProperties(IOstream &os, CPrintPrefix &pfx) const
 	}
 }
 
+#endif	// GPOS_DEBUG
+
 // ----------------------------------------------------------------
 //	Print driving functions for use in interactive debugging;
 //	always prints to stderr.
@@ -1044,7 +1046,6 @@ CExpression::DbgPrintWithProperties() const
 	(void) this->OsPrint(at.Os());
 }
 
-#endif	// GPOS_DEBUG
 
 FORCE_GENERATE_DBGSTR(gpopt::CExpression);
 

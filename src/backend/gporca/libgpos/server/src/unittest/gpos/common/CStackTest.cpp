@@ -73,16 +73,18 @@ CStackTest::EresUnittest_Basic()
 	ULONG idx = 0;
 	while (!pstk->IsEmpty())
 	{
-		GPOS_ASSERT(idx <= 8 && "Index out of range. Problem with IsEmpty.");
+		GPOS_UNITTEST_ASSERT(idx <= 8 &&
+							 "Index out of range. Problem with IsEmpty.");
 #ifdef GPOS_DEBUG
-		GPOS_ASSERT(pstk->Pop() == rgsz[8 - idx] && "Incorrect pop value");
+		GPOS_UNITTEST_ASSERT(pstk->Pop() == rgsz[8 - idx] &&
+							 "Incorrect pop value");
 #else
 		pstk->Pop();
 #endif
 		idx++;
 	}
 
-	GPOS_ASSERT(idx == 9 && "Stack is not empty!");
+	GPOS_UNITTEST_ASSERT(idx == 9 && "Stack is not empty!");
 
 	GPOS_DELETE(pstk);
 
@@ -119,28 +121,28 @@ CStackTest::EresUnittest_PushPop()
 		ULONG ul = *(pstk->Peek());	 // ul should be 2
 		oss << "Top of stack is " << ul << std::endl;
 
-		GPOS_ASSERT(ul == rgul[1]);
+		GPOS_UNITTEST_ASSERT(ul == rgul[1]);
 
 		oss << "Popping stack" << std::endl;
 		ul = *(pstk->Pop());  //ul should be 2
 		oss << "Popped element is " << ul << std::endl;
-		GPOS_ASSERT(ul == rgul[1]);
+		GPOS_UNITTEST_ASSERT(ul == rgul[1]);
 
 		oss << "Pushing " << rgul[2] << std::endl;
 		pstk->Push(&rgul[2]);  // stack is 1,3
 		ul = *(pstk->Peek());  // ul is 3
 		oss << "Top of stack is " << ul << std::endl;
-		GPOS_ASSERT(ul == rgul[2]);
+		GPOS_UNITTEST_ASSERT(ul == rgul[2]);
 
 		oss << "Popping stack" << std::endl;
 		ul = *(pstk->Pop());  // ul is 3
 		oss << "Popped element is " << ul << std::endl;
-		GPOS_ASSERT(ul == rgul[2]);
+		GPOS_UNITTEST_ASSERT(ul == rgul[2]);
 
 		oss << "Popping stack " << std::endl;
 		ul = *(pstk->Pop());  // ul is 1
 		oss << "Popped element is " << ul << std::endl;
-		GPOS_ASSERT(ul == rgul[0]);
+		GPOS_UNITTEST_ASSERT(ul == rgul[0]);
 	}
 
 	GPOS_DELETE(pstk);
@@ -177,8 +179,8 @@ CStackTest::EresUnittest_Pop()
 	for (ULONG i = 0; i < 4; i++)
 	{
 		pstk->Push(&rgsz[i]);
-		GPOS_ASSERT((*pstk->Peek()) == 4 - i);
-		GPOS_ASSERT(pstk->Pop() == &rgsz[i]);
+		GPOS_UNITTEST_ASSERT((*pstk->Peek()) == 4 - i);
+		GPOS_UNITTEST_ASSERT(pstk->Pop() == &rgsz[i]);
 	}
 
 	// now deliberately pop when the stack is empty

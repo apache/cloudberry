@@ -152,7 +152,7 @@ CSubqueryHandlerTest::EresUnittest_Subquery2Apply()
 		while (xsi.Advance())
 		{
 			CXform *pxform = CXformFactory::Pxff()->Pxf(xsi.TBit());
-			GPOS_ASSERT(nullptr != pxform);
+			GPOS_UNITTEST_ASSERT(nullptr != pxform);
 
 			CWStringDynamic str(mp);
 			COstreamString oss(&str);

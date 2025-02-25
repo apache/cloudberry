@@ -94,8 +94,6 @@ public:
 		return NULL == m_list.First();
 	}
 
-#ifdef GPOS_DEBUG
-
 	// lookup a given element in the stack
 	// this works only when no elements are removed
 	GPOS_RESULT
@@ -104,6 +102,7 @@ public:
 		return m_list.Find(elem);
 	}
 
+#ifdef GPOS_DEBUG
 	// debug print of element addresses
 	// this works only when no elements are removed
 	IOstream &

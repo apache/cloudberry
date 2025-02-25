@@ -146,13 +146,13 @@ CFilterCardinalityTest::EresUnittest_CStatistics(
 			CDXLUtils::ParseDXLToOptimizerStatisticObjArray(
 				mp, md_accessor, dxl_derived_rel_stats_array);
 		dxl_derived_rel_stats_array->Release();
-		GPOS_ASSERT(nullptr != pdrgpstatBefore);
+		GPOS_UNITTEST_ASSERT(nullptr != pdrgpstatBefore);
 
 		GPOS_CHECK_ABORT;
 
 		// generate the disjunctive predicate
 		FnPstatspredDisj *pf = elem.m_pf;
-		GPOS_ASSERT(nullptr != pf);
+		GPOS_UNITTEST_ASSERT(nullptr != pf);
 		CStatsPred *disjunctive_pred_stats = pf(mp);
 
 		GPOS_RESULT eres = EresUnittest_CStatisticsCompare(
@@ -929,7 +929,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsBasicsFromDXLNumeric()
 	};
 
 	const ULONG length = GPOS_ARRAY_SIZE(rgStatsCmpValElem);
-	GPOS_ASSERT(length == GPOS_ARRAY_SIZE(rgtcStatistics));
+	GPOS_UNITTEST_ASSERT(length == GPOS_ARRAY_SIZE(rgtcStatistics));
 	for (ULONG ul = 0; ul < length; ul++)
 	{
 		// read input DXL file
@@ -949,7 +949,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsBasicsFromDXLNumeric()
 				mp, md_accessor, dxl_derived_rel_stats_array);
 		dxl_derived_rel_stats_array->Release();
 
-		GPOS_ASSERT(nullptr != pdrgpstatBefore);
+		GPOS_UNITTEST_ASSERT(nullptr != pdrgpstatBefore);
 
 		GPOS_CHECK_ABORT;
 
@@ -960,9 +960,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsBasicsFromDXLNumeric()
 		CStatsPredConj *pred_stats =
 			GPOS_NEW(mp) CStatsPredConj(pdrgpstatspred);
 		GPOS_RESULT eres = EresUnittest_CStatisticsCompare(
-			mp, md_accessor, pdrgpstatBefore, pred_stats, szDXLOutput,
-			true /*fApplyTwice*/
-		);
+			mp, md_accessor, pdrgpstatBefore, pred_stats, szDXLOutput);
 
 		// clean up
 		pdrgpstatBefore->Release();
@@ -986,7 +984,7 @@ CFilterCardinalityTest::PdrgpstatspredInteger(
 	CMemoryPool *mp, ULONG colid, CStatsPred::EStatsCmpType stats_cmp_type,
 	INT *piVals, ULONG ulVals)
 {
-	GPOS_ASSERT(0 < ulVals);
+	GPOS_UNITTEST_ASSERT(0 < ulVals);
 
 	CStatsPredPtrArry *pdrgpstatspred = GPOS_NEW(mp) CStatsPredPtrArry(mp);
 	for (ULONG ul = 0; ul < ulVals; ul++)
@@ -1046,7 +1044,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsBasicsFromDXL()
 		CDXLUtils::ParseDXLToOptimizerStatisticObjArray(
 			mp, md_accessor, dxl_derived_rel_stats_array);
 	dxl_derived_rel_stats_array->Release();
-	GPOS_ASSERT(nullptr != pdrgpstatsBefore);
+	GPOS_UNITTEST_ASSERT(nullptr != pdrgpstatsBefore);
 
 	GPOS_CHECK_ABORT;
 
@@ -1071,7 +1069,7 @@ GPOS_RESULT
 CFilterCardinalityTest::EresUnittest_CStatisticsCompare(
 	CMemoryPool *mp, CMDAccessor *md_accessor,
 	CStatisticsArray *pdrgpstatBefore, CStatsPred *pred_stats,
-	const CHAR *szDXLOutput, BOOL fApplyTwice)
+	const CHAR *szDXLOutput)
 {
 	CWStringDynamic str(mp);
 	COstreamString oss(&str);
@@ -1118,32 +1116,6 @@ CFilterCardinalityTest::EresUnittest_CStatisticsCompare(
 	);
 	GPOS_TRACE(str.GetBuffer());
 	str.Reset();
-
-	if (fApplyTwice && GPOS_OK == eres)
-	{
-		CStatistics *pstatsOutput2 = CFilterStatsProcessor::MakeStatsFilter(
-			mp, pstatsOutput, pred_stats, true /* do_cap_NDVs */);
-		pstatsOutput2->Rows();
-		GPOS_TRACE(GPOS_WSZ_LIT("Statistics after another filter"));
-		CCardinalityTestUtils::PrintStats(mp, pstatsOutput2);
-
-		// output array of stats objects
-		CStatisticsArray *pdrgpstatOutput2 = GPOS_NEW(mp) CStatisticsArray(mp);
-		pdrgpstatOutput2->Append(pstatsOutput2);
-
-		CWStringDynamic *pstrOutput2 = CDXLUtils::SerializeStatistics(
-			mp, md_accessor, pdrgpstatOutput2, true /*serialize_header_footer*/,
-			true /*indentation*/
-		);
-		eres = CTestUtils::EresCompare(
-			oss, pstrOutput2, &dstrExpected, false /* ignore mismatch */
-		);
-		GPOS_TRACE(str.GetBuffer());
-		str.Reset();
-
-		pdrgpstatOutput2->Release();
-		GPOS_DELETE(pstrOutput2);
-	}
 
 	pdrgpstatOutput->Release();
 	GPOS_DELETE(pstrOutput);
@@ -1225,7 +1197,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsAccumulateCard()
 
 	pstatspredConj1->Release();
 
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		num_rows1 - num_rows2 < 10 &&
 		"Disjunctive filter and point filter have very different row estimates");
 
@@ -1251,7 +1223,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsAccumulateCard()
 	CCardinalityTestUtils::PrintStats(mp, pstats3);
 
 	pstatspredConj2->Release();
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		dRows3 < num_rows2 &&
 		"Conjunctive filter passes more rows than than point filter");
 
@@ -1275,7 +1247,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsAccumulateCard()
 
 	pstatspredDisj1->Release();
 
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		dRows4 < num_rows2 &&
 		"Selective disjunctive filter passes more rows than than point filter");
 
@@ -1299,7 +1271,7 @@ CFilterCardinalityTest::EresUnittest_CStatisticsAccumulateCard()
 
 	pstatspredConj3->Release();
 
-	GPOS_RTL_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		dRows5 < num_rows2 &&
 		"Selective conjunctive filter passes more rows than than point filter");
 

@@ -138,6 +138,9 @@ public:
 	// look up the number of distinct values of a particular column
 	virtual CDouble GetNDVs(const CColRef *colref) = 0;
 
+	// look up the fraction of null values of a particular column
+	virtual CDouble GetNullFreq(const CColRef *colref) = 0;
+
 	virtual ULONG GetNumberOfPredicates() const = 0;
 
 	// Compute stats for given column

@@ -97,8 +97,18 @@ public:
 				TPhysicalJoin(mp, colref_array, popApply->EopidOriginSubq()),
 			pexprLeft, pexprRight, pexprScalar);
 
-		// add alternative to results
-		pxfres->Add(pexprPhysicalApply);
+
+		if (!CHintUtils::SatisfiesJoinTypeHints(
+				mp, pexprPhysicalApply,
+				COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint()))
+		{
+			pexprPhysicalApply->Release();
+		}
+		else
+		{
+			// add alternative to results
+			pxfres->Add(pexprPhysicalApply);
+		}
 	}
 
 };	// class CXformImplementCorrelatedApply

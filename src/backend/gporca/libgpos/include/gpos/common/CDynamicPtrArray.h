@@ -78,6 +78,9 @@ using IntPtrArray = CDynamicPtrArray<INT, CleanupDelete>;
 // array of strings
 using StringPtrArray = CDynamicPtrArray<CWStringBase, CleanupDelete>;
 
+// array of string arrays
+using StringPtr2dArray = CDynamicPtrArray<StringPtrArray, CleanupRelease>;
+
 // arrays of chars
 using CharPtrArray = CDynamicPtrArray<CHAR, CleanupDelete>;
 
@@ -230,6 +233,11 @@ public:
 	void
 	Sort(CompareFn compare_func)
 	{
+		if (m_size == 0)
+		{
+			return;
+		}
+
 		clib::Qsort(m_elems, m_size, sizeof(T *), compare_func);
 	}
 
@@ -293,7 +301,6 @@ public:
 		return gpos::ulong_max;
 	}
 
-#ifdef GPOS_DEBUG
 	// check if array is sorted
 	BOOL
 	IsSorted(CompareFn compare_func) const
@@ -308,7 +315,6 @@ public:
 
 		return true;
 	}
-#endif	// GPOS_DEBUG
 
 	// accessor for n-th element
 	T *

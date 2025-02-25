@@ -41,19 +41,21 @@ using namespace gpopt;
 CExpression *
 CConstExprEvaluatorForDates::PexprEval(CExpression *pexpr)
 {
-	GPOS_ASSERT(COperator::EopScalarCmp == pexpr->Pop()->Eopid());
-	GPOS_ASSERT(COperator::EopScalarConst == (*pexpr)[0]->Pop()->Eopid());
-	GPOS_ASSERT(COperator::EopScalarConst == (*pexpr)[1]->Pop()->Eopid());
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarCmp == pexpr->Pop()->Eopid());
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarConst ==
+						 (*pexpr)[0]->Pop()->Eopid());
+	GPOS_UNITTEST_ASSERT(COperator::EopScalarConst ==
+						 (*pexpr)[1]->Pop()->Eopid());
 
 	CScalarConst *popScalarLeft =
 		dynamic_cast<CScalarConst *>((*pexpr)[0]->Pop());
 
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		CMDIdGPDB::m_mdid_date.Equals(popScalarLeft->GetDatum()->MDId()));
 	CScalarConst *popScalarRight =
 		dynamic_cast<CScalarConst *>((*pexpr)[1]->Pop());
 
-	GPOS_ASSERT(
+	GPOS_UNITTEST_ASSERT(
 		CMDIdGPDB::m_mdid_date.Equals(popScalarRight->GetDatum()->MDId()));
 
 	CScalarCmp *popScCmp = dynamic_cast<CScalarCmp *>(pexpr->Pop());
@@ -81,7 +83,7 @@ CConstExprEvaluatorForDates::PexprEval(CExpression *pexpr)
 			result = dLeft >= dRight;
 			break;
 		default:
-			GPOS_ASSERT(false && "Unsupported comparison");
+			GPOS_UNITTEST_ASSERT(false && "Unsupported comparison");
 			return nullptr;
 	}
 	CExpression *pexprResult = CUtils::PexprScalarConstBool(m_mp, result);

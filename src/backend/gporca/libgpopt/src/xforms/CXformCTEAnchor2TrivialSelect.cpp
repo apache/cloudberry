@@ -55,7 +55,9 @@ CXformCTEAnchor2TrivialSelect::Exfp(CExpressionHandle &exprhdl) const
 	const ULONG ulConsumers = pcteinfo->UlConsumers(id);
 	GPOS_ASSERT(0 < ulConsumers);
 
-	if ((pcteinfo->FEnableInlining() || 1 == ulConsumers) &&
+	// also inline if CTE contains outer references
+	if ((pcteinfo->FEnableInlining() || 1 == ulConsumers ||
+		 exprhdl.DeriveOuterReferences()->Size() > 0) &&
 		CXformUtils::FInlinableCTE(id))
 	{
 		return CXform::ExfpHigh;

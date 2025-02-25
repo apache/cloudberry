@@ -68,8 +68,8 @@ CXformRightOuterJoin2HashJoinTest::EresUnittest_Transform()
 	CExpression *pLogicalRightOuterJoin = CTestUtils::PexprRightOuterJoin(mp);
 
 	// xform should work even if child stats aren't derived yet.
-	GPOS_ASSERT(nullptr == (*pLogicalRightOuterJoin)[0]->Pstats());
-	GPOS_ASSERT(nullptr == (*pLogicalRightOuterJoin)[1]->Pstats());
+	GPOS_UNITTEST_ASSERT(nullptr == (*pLogicalRightOuterJoin)[0]->Pstats());
+	GPOS_UNITTEST_ASSERT(nullptr == (*pLogicalRightOuterJoin)[1]->Pstats());
 
 	(void) xform->Transform(context, result, pLogicalRightOuterJoin);
 

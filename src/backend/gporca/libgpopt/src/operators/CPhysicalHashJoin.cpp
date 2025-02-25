@@ -256,19 +256,24 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 	{
 		case CDistributionSpec::EdtUniversal:
 			// One child is universal
-			// If the join outputs the universal side, request the other child
-			// to be a singleton. This way the join output ends up on one segment
-			// or the coordinator, so the data isn't duplicated. This can happen
-			// in outer and anti semi joins.
-			// If the join doesn't output the universal side, request the other
-			// child to be non duplicated, i.e. non-replicated. This is the case
-			// with inner and semi joins.
+			//
+			// If the outer child is universal (join outputs all tuples from the universal
+			// side with or without match in the other child), request the other child to
+			// be a singleton. This way the join occurs on one segment or the coordinator,
+			// eliminating the duplicate risk. This can happen in outer, anti semi and
+			// full joins. Note, full join has two outer children (both left and right).
+			//
+			// If the inner child is universal (join only outputs tuples from the universal
+			// side in case of a match in the other child), request the other child to
+			// be non duplicated, i.e. non-replicated. This is the case with inner and semi
+			// joins.
 
 			if ((EceoRightToLeft == eceo &&
 				 EopPhysicalRightOuterHashJoin == this->Eopid()) ||
 				(EceoLeftToRight == eceo &&
 				 (EopPhysicalLeftOuterHashJoin == this->Eopid() ||
-				  EopPhysicalLeftAntiSemiHashJoin == this->Eopid())))
+				  EopPhysicalLeftAntiSemiHashJoin == this->Eopid())) ||
+				EopPhysicalFullHashJoin == this->Eopid())
 			{
 				return GPOS_NEW(mp) CDistributionSpecSingleton();
 			}
@@ -292,6 +297,15 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 		default:
 			GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pds->Edt() ||
 						CDistributionSpec::EdtTaintedReplicated == pds->Edt());
+
+			// Full join has two outer children (full join outputs all the tuples of either
+			// child with or without match in the other child), if one child is replicated,
+			// we request the other child to be replicated as well.
+			if (EopPhysicalFullHashJoin == this->Eopid())
+			{
+				return GPOS_NEW(mp) CDistributionSpecReplicated(
+					CDistributionSpec::EdtStrictReplicated);
+			}
 
 			if (EceoRightToLeft == eceo)
 			{
@@ -628,12 +642,20 @@ CPhysicalHashJoin::PdshashedMatching(
 			GPOS_WSZ_LIT("Unable to create matching hashed distribution."));
 	}
 
-	// nulls colocated for inner hash joins, but not colocated in outer hash joins
+	// As of now, we cannot set nulls colocation to false for inner joins, because
+	// this logic is used by PdsDeriveFromHashedOuter and PdsDeriveFromReplicatedOuter,
+	// where the property delivered by the inner relation is calculated based on the
+	// property delivered by the outer relation in inner joins.
+	//
+	// For outer joins, this logic is only used for distribution requests, where we
+	// can safely waive the request for nulls colocation, as far as the join condition
+	// isn't null aware (not district from).
 	BOOL fNullsColocated = true;
 
 	if (!m_is_null_aware &&
 		(COperator::EopPhysicalLeftOuterHashJoin == Eopid() ||
-		 COperator::EopPhysicalRightOuterHashJoin == Eopid()))
+		 COperator::EopPhysicalRightOuterHashJoin == Eopid() ||
+		 COperator::EopPhysicalFullHashJoin == Eopid()))
 	{
 		fNullsColocated = false;
 	}
@@ -693,7 +715,7 @@ CPhysicalHashJoin::PdsRequiredSingleton(CMemoryPool *mp,
 	GPOS_ASSERT(CDistributionSpec::EdtSingleton == pdsFirst->Edt() ||
 				CDistributionSpec::EdtStrictSingleton == pdsFirst->Edt());
 
-	// require second child to have matching singleton distribution
+	// require second child to have matching singleton distribution (coordinator or segment)
 	return CPhysical::PdssMatching(
 		mp, CDistributionSpecSingleton::PdssConvert(pdsFirst));
 }
@@ -1034,6 +1056,56 @@ CPhysicalHashJoin::Ped(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		dmatch);
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalHashJoin::PedRightOrFullJoin
+//
+//	@doc:
+//		Compute required distribution of the n-th child
+//		for right outer join and full outer join
+//
+//---------------------------------------------------------------------------
+CEnfdDistribution *
+CPhysicalHashJoin::PedRightOrFullJoin(
+	CMemoryPool *mp, CExpressionHandle &exprhdl, CReqdPropPlan *prppInput,
+	ULONG child_index, CDrvdPropArray *pdrgpdpCtxt, ULONG ulOptReq)
+{
+	// create the following requests:
+	// 1) hash-hash (provided by CPhysicalHashJoin::Ped)
+	// 2) singleton-singleton
+	//
+	// We also could create a replicated-hashed and replicated-non-singleton
+	// request, but that isn't a promising alternative as we would be
+	// broadcasting the outer side. In that case, an LOJ would be better.
+
+	CDistributionSpec *const pdsInput = prppInput->Ped()->PdsRequired();
+	CEnfdDistribution::EDistributionMatching dmatch =
+		Edm(prppInput, child_index, pdrgpdpCtxt, ulOptReq);
+
+	if (exprhdl.NeedsSingletonExecution() || exprhdl.HasOuterRefs())
+	{
+		return GPOS_NEW(mp) CEnfdDistribution(
+			PdsRequireSingleton(mp, exprhdl, pdsInput, child_index), dmatch);
+	}
+
+	if (ulOptReq < NumDistrReq())
+	{
+		// requests 1 .. N are (redistribute, redistribute)
+		CDistributionSpec *pds = PdsRequiredRedistribute(
+			mp, exprhdl, pdsInput, child_index, pdrgpdpCtxt, ulOptReq);
+		if (CDistributionSpec::EdtHashed == pds->Edt())
+		{
+			CDistributionSpecHashed *pdsHashed =
+				CDistributionSpecHashed::PdsConvert(pds);
+			pdsHashed->ComputeEquivHashExprs(mp, exprhdl);
+		}
+		return GPOS_NEW(mp) CEnfdDistribution(pds, dmatch);
+	}
+	GPOS_ASSERT(ulOptReq == NumDistrReq());
+	return GPOS_NEW(mp) CEnfdDistribution(
+		PdsRequiredSingleton(mp, exprhdl, pdsInput, child_index, pdrgpdpCtxt),
+		dmatch);
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -1169,8 +1241,7 @@ CPhysicalHashJoin::CreateOptRequests(CMemoryPool *mp)
 	// Req(N + 2) (non-singleton, broadcast)
 	// Req(N + 3) (singleton, singleton)
 
-	ULONG ulDistrReqs =
-		GPOPT_NON_HASH_DIST_REQUESTS + m_pdrgpdsRedistributeRequests->Size();
+	ULONG ulDistrReqs = GPOPT_NON_HASH_DIST_REQUESTS + NumDistrReq();
 	SetDistrRequests(ulDistrReqs);
 
 	// With DP enabled, there are several (max 10 controlled by macro)

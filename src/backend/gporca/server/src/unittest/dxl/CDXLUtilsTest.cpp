@@ -207,14 +207,14 @@ CDXLUtilsTest::EresUnittest_Encoding()
 	a_pxmlbyteDecoded =
 		Base64::decode(a_pxmlbyteEncoded.Rgt(), &output_length, a_pmm.Value());
 	CHAR *szDecoded = (CHAR *) (a_pxmlbyteDecoded.Rgt());
-	GPOS_ASSERT(0 == clib::Strcmp(szDecoded, sz));
+	GPOS_UNITTEST_ASSERT(0 == clib::Strcmp(szDecoded, sz));
 
 	// get a byte array from XMLCh representation of encoded string
 	ULONG ulOutputLen = 0;
 	BYTE *byte = CDXLUtils::CreateStringFrom64XMLStr(a_pmm.Value(), pxmlch,
 													 &ulOutputLen);
 	CHAR *szPba = (CHAR *) byte;
-	GPOS_ASSERT(0 == clib::Strcmp(szPba, sz));
+	GPOS_UNITTEST_ASSERT(0 == clib::Strcmp(szPba, sz));
 
 	{
 		CAutoTrace at(mp);
