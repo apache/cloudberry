@@ -1,0 +1,9 @@
+-- Creates db on coordinator shard without distributing
+CREATE TABLE local_table (asd Int) DISTRIBUTED LOCAL;
+EXPLAIN SELECT * FROM local_table;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Seq Scan on local_table  (cost=0.00..106.30 rows=9630 width=4)
+ Optimizer: Postgres query optimizer
+(2 rows)
+
