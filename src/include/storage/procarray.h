@@ -99,7 +99,7 @@ extern void XidCacheRemoveRunningXids(TransactionId xid,
 									  int nxids, const TransactionId *xids,
 									  TransactionId latestXid);
 						  
-extern PGPROC *FindProcByGpSessionId(long gp_session_id);
+extern volatile PGPROC *FindProcByGpSessionId(long gp_session_id);
 extern void UpdateCommandIdInSnapshot(CommandId curcid);
 
 extern void updateSharedLocalSnapshot(struct DtxContextInfo *dtxContextInfo,

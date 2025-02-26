@@ -936,19 +936,24 @@ LockAcquireExtended(const LOCKTAG *locktag,
 			if (lockHolderProcPtr == MyProc)
 			{
 				/* Find the guy who should manage our locks */
-				PGPROC * proc = FindProcByGpSessionId(gp_session_id);
+				volatile PGPROC * proc = FindProcByGpSessionId(gp_session_id);
 				int count = 0;
 				while(proc==NULL && count < 5)
 				{
 					pg_usleep( /* microseconds */ 2000);
 					count++;
 					CHECK_FOR_INTERRUPTS();
+					/*
+					 * The reason for using pg_memory_barrier() is to ensure that
+					 * all CPU cores can see the latest shared memory modifications.
+					 */
+					pg_memory_barrier();
 					proc = FindProcByGpSessionId(gp_session_id);
 				}
 				if (proc != NULL)
 				{
 					elog(DEBUG1,"Found writer proc entry.  My Pid %d, his pid %d", MyProc-> pid, proc->pid);
-					lockHolderProcPtr = proc;
+					lockHolderProcPtr = (PGPROC*) proc;
 				}
 				else
 					ereport(FATAL,
