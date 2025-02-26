@@ -936,19 +936,29 @@ LockAcquireExtended(const LOCKTAG *locktag,
 			if (lockHolderProcPtr == MyProc)
 			{
 				/* Find the guy who should manage our locks */
-				PGPROC * proc = FindProcByGpSessionId(gp_session_id);
+				volatile PGPROC * proc = FindProcByGpSessionId(gp_session_id);
 				int count = 0;
 				while(proc==NULL && count < 5)
 				{
 					pg_usleep( /* microseconds */ 2000);
 					count++;
 					CHECK_FOR_INTERRUPTS();
+					/*
+					 * The reason for using pg_memory_barrier() is to ensure memory ordering
+					 * constraints are respected. In concurrent programming, memory barriers
+					 * are used to prevent the compiler and CPU from reordering memory operations
+					 * in a way that could lead to race conditions or other synchronization issues.
+					 * By using pg_memory_barrier(), we can enforce a strict ordering of memory
+					 * accesses, which is crucial for the correct functioning of lock mechanisms
+					 * and other synchronization primitives in a multi-threaded environment.
+					 */
+					pg_memory_barrier();
 					proc = FindProcByGpSessionId(gp_session_id);
 				}
 				if (proc != NULL)
 				{
 					elog(DEBUG1,"Found writer proc entry.  My Pid %d, his pid %d", MyProc-> pid, proc->pid);
-					lockHolderProcPtr = proc;
+					lockHolderProcPtr = (PGPROC*) proc;
 				}
 				else
 					ereport(FATAL,
