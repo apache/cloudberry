@@ -936,19 +936,21 @@ LockAcquireExtended(const LOCKTAG *locktag,
 			if (lockHolderProcPtr == MyProc)
 			{
 				/* Find the guy who should manage our locks */
-				PGPROC * proc = FindProcByGpSessionId(gp_session_id);
+				volatile PGPROC * proc = FindProcByGpSessionId(gp_session_id);
 				int count = 0;
 				while(proc==NULL && count < 5)
 				{
 					pg_usleep( /* microseconds */ 2000);
 					count++;
 					CHECK_FOR_INTERRUPTS();
+					// Ensure that accessing the PGPROC struct is safe 
+					pg_memory_barrier();
 					proc = FindProcByGpSessionId(gp_session_id);
 				}
 				if (proc != NULL)
 				{
 					elog(DEBUG1,"Found writer proc entry.  My Pid %d, his pid %d", MyProc-> pid, proc->pid);
-					lockHolderProcPtr = proc;
+					lockHolderProcPtr = (PGPROC*) proc;
 				}
 				else
 					ereport(FATAL,
