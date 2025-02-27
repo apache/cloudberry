@@ -149,6 +149,16 @@ main(int argc, char **argv)
 	 */
 	check_cluster_compatibility(live_check);
 
+	/* Set mask based on PGDATA permissions */
+	if (!is_skip_target_check())
+	{
+		if (!GetDataDirectoryCreatePerm(new_cluster.pgdata))
+			pg_fatal("could not read permissions of directory \"%s\": %s\n",
+					new_cluster.pgdata, strerror(errno));
+		umask(pg_mode_mask);
+	}
+
+
 	check_and_dump_old_cluster(live_check, &sequence_script_file_name);
 
 	/* -- NEW -- */
@@ -202,7 +212,7 @@ main(int argc, char **argv)
 	check_ok();
 
 	/*
-	 * In upgrading from GPDB4, copy the pg_distributedlog over in vanilla.
+	 * GPDB_UPGRADE_FIXME: Copy the pg_distributedlog over in vanilla.
 	 * The assumption that this works needs to be verified
 	 */
 	copy_subdir_files("pg_distributedlog", "pg_distributedlog");
@@ -677,7 +687,7 @@ create_new_objects(void)
 	/* update new_cluster info now that we have objects in the databases */
 	get_db_and_rel_infos(&new_cluster);
 
-	/* TODO: Bitmap indexes are not supported, so mark them as invalid. */
+	/* Bitmap indexes are not currently supported, so mark them as invalid. */
 	new_gpdb_invalidate_bitmap_indexes();
 }
 
@@ -731,7 +741,7 @@ static void
 copy_xact_xlog_xid(void)
 {
 	/*
-	 * FIXME: Definitely need more work to make pre-gp7 to gp7 upgrade
+	 * GPDB_UPGRADE_FIXME: Definitely need more work to make pre-gp7 to gp7 upgrade
 	 * work for the 64bit gxid work.
 	 */
 	/* set the next distributed transaction id of the new cluster */

@@ -158,7 +158,7 @@ old_GPDB5_check_for_unsupported_distribution_key_data_types(void)
 						 output_path, strerror(errno));
 			if (!db_used)
 			{
-				fprintf(script, "Database: %s\n", active_db->db_name);
+				fprintf(script, "In database: %s\n", active_db->db_name);
 				db_used = true;
 			}
 			fprintf(script, "  %s.%s.%s\n",
@@ -190,7 +190,7 @@ old_GPDB5_check_for_unsupported_distribution_key_data_types(void)
 }
 
 /*
- * old_GPDB6_check_for_unsupported_distribution_key_data_types()
+ * old_GPDB6_check_for_unsupported_sha256_password_hashes()
  *
  *  Support for password_hash_algorithm='sha-256' was removed in GPDB 7. Check if
  *  any roles have SHA-256 password hashes.
@@ -255,7 +255,7 @@ old_GPDB6_check_for_unsupported_sha256_password_hashes(void)
 /*
  * new_gpdb_invalidate_bitmap_indexes()
  *
- * TODO: We are currently missing the support to migrate over bitmap indexes.
+ * GPDB_UPGRADE_FIXME: We are currently missing the support to migrate over bitmap indexes.
  * Hence, mark all bitmap indexes as invalid.
  */
 void
