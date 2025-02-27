@@ -3167,6 +3167,94 @@ select count(*), sum(c1) from t where c1 > 90 limit all;
 (1 row)
 
 abort;
+--
+-- test partitioned tables
+--
+create table par(a int, b int, c int) partition by range(b)
+    subpartition by range(c) subpartition template (start (1) end (3) every (1))
+    (start(1) end(3) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+create materialized view mv_par as select    count(*) from par;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_par1 as select   count(*) from par_1_prt_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_par1_1 as select count(*) from par_1_prt_1_2_prt_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_par1_2 as select count(*) from par_1_prt_1_2_prt_2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_par2 as select   count(*) from par_1_prt_2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_par2_2 as select count(*) from par_1_prt_2_2_prt_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_par_prune as select count(*) from par where b = 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+set enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select count(*) from par;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+explain(costs off, verbose)
+select count(*) from par_1_prt_1;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par1
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+-- test partition_pruning
+set enable_partition_pruning = on;
+explain(costs off, verbose)
+select count(*) from par where b = 1;
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par_prune
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', enable_partition_pruning = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+set enable_partition_pruning = off;
+explain(costs off, verbose)
+select count(*) from par where b = 1;
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par_prune
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', enable_partition_pruning = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+reset enable_partition_pruning;
+--
+-- End of test partitioned tables
+--
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore
