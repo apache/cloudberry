@@ -104,6 +104,8 @@ static void appendonly_insert_finish_guts(AppendOnlyInsertDesc aoInsertDesc);
 
 /* Hook for plugins to get control in appendonly_delete() */
 appendonly_delete_hook_type appendonly_delete_hook = NULL;
+static void AppendOnlyScanDesc_UpdateTotalBytesRead(
+										AppendOnlyScanDesc scan);
 
 /* ----------------
  *		initscan - scan code common to appendonly_beginscan and appendonly_rescan
@@ -1250,6 +1252,8 @@ getNextBlock(AppendOnlyScanDesc scan)
 	AppendOnlyExecutorReadBlock_GetContents(
 											&scan->executorReadBlock);
 
+	AppendOnlyScanDesc_UpdateTotalBytesRead(scan);
+
 	return true;
 }
 
@@ -1580,6 +1584,9 @@ appendonly_beginrangescan_internal(Relation relation,
 							   AccessShareLock,
 							   appendOnlyMetaDataSnapshot);
 	}
+
+	scan->totalBytesRead = 0;
+
 	return scan;
 }
 
