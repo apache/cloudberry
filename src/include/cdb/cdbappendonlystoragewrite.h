@@ -54,9 +54,10 @@ typedef struct AppendOnlyStorageWrite
 	AOSegfileFormatVersion formatVersion;
 
 	/*
-	 * Name of the relation to use in system logging and error messages.
+	 * Name and Oid of the relation to use in system logging and error messages.
 	 */
 	char	   *relationName;
+	Oid			reloid;
 
 	/*
 	 * A phrase that better describes the purpose of the this open.
@@ -184,6 +185,7 @@ extern void AppendOnlyStorageWrite_Init(AppendOnlyStorageWrite *storageWrite,
 										MemoryContext memoryContext,
 										int32 maxBufferLen,
 										char *relationName,
+										Oid reloid,
 										char *title,
 										AppendOnlyStorageAttributes *storageAttributes,
 										bool needsWAL,

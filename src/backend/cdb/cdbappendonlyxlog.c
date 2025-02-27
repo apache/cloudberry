@@ -89,7 +89,7 @@ ao_insert_replay(XLogReaderState *record)
 	/* When writing from the beginning of the file, it might not exist yet. Create it. */
 	if (xlrec->target.offset == 0)
 		fileFlags |= O_CREAT;
-	file = smgr->smgr_ao->smgr_AORelOpenSegFile(path, fileFlags);
+	file = smgr->smgr_ao->smgr_AORelOpenSegFileXlog(xlrec->target.node, xlrec->target.segment_filenum, fileFlags);
 	if (file < 0)
 	{
 		XLogAOSegmentFile(xlrec->target.node, xlrec->target.segment_filenum);
@@ -147,7 +147,6 @@ ao_truncate_replay(XLogReaderState *record)
 	 */
 	smgr = smgropen(xlrec->target.node, InvalidBackendId, SMGR_AO, NULL);
 
-
 	dbPath = GetDatabasePath(xlrec->target.node.dbNode,
 							 xlrec->target.node.spcNode);
 
@@ -158,7 +157,7 @@ ao_truncate_replay(XLogReaderState *record)
 	pfree(dbPath);
 	dbPath = NULL;
 
-	file = smgr->smgr_ao->smgr_AORelOpenSegFile(path, O_RDWR | PG_BINARY);
+	file = smgr->smgr_ao->smgr_AORelOpenSegFileXlog(xlrec->target.node, xlrec->target.segment_filenum, O_RDWR | PG_BINARY);
 	if (file < 0)
 	{
 		/*

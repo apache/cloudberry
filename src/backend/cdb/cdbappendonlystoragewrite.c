@@ -67,6 +67,7 @@ AppendOnlyStorageWrite_Init(AppendOnlyStorageWrite *storageWrite,
 							MemoryContext memoryContext,
 							int32 maxBufferLen,
 							char *relationName,
+							Oid reloid,
 							char *title,
 							AppendOnlyStorageAttributes *storageAttributes,
 							bool needsWAL,
@@ -113,6 +114,7 @@ AppendOnlyStorageWrite_Init(AppendOnlyStorageWrite *storageWrite,
 		storageWrite->regularHeaderLen += 2 * sizeof(pg_crc32);
 
 	storageWrite->relationName = pstrdup(relationName);
+	storageWrite->reloid = reloid;
 	storageWrite->title = title;
 
 	/*
@@ -327,7 +329,7 @@ AppendOnlyStorageWrite_OpenFile(AppendOnlyStorageWrite *storageWrite,
 	errno = 0;
 
 	int			fileFlags = O_RDWR | PG_BINARY;
-	file = storageWrite->smgrAO->smgr_AORelOpenSegFile(path, fileFlags);
+	file = storageWrite->smgrAO->smgr_AORelOpenSegFile(storageWrite->reloid, path, fileFlags);
 	if (file < 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),

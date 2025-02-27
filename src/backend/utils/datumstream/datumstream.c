@@ -493,6 +493,7 @@ create_datumstreamwrite(
 						int32 maxsz,
 						Form_pg_attribute attr,
 						char *relname,
+						Oid reloid,
 						char *title,
 						bool needsWAL,
 						RelFileNodeBackend *rnode,
@@ -562,6 +563,7 @@ create_datumstreamwrite(
 								 /* memoryContext */ NULL,
 								acc->maxAoBlockSize,
 								relname,
+								reloid,
 								title,
 								&acc->ao_attr,
 								needsWAL,
@@ -639,6 +641,7 @@ create_datumstreamread(
 					   int32 maxsz,
 					   Form_pg_attribute attr,
 					   char *relname,
+					   Oid reloid,
 					   char *title,
 					   RelFileNode *relFileNode, const struct f_smgr_ao *smgrAO)
 {
@@ -694,6 +697,7 @@ create_datumstreamread(
 								/* memoryContext */ NULL,
 							   acc->maxAoBlockSize,
 							   relname,
+							   reloid,
 							   title,
 							   &acc->ao_attr,
 							   relFileNode,

@@ -157,12 +157,13 @@ typedef struct f_smgr
 typedef struct f_smgr_ao {
 	off_t			(*smgr_FileDiskSize) (File file);
 	void			(*smgr_FileClose) (File file);
-	int			(*smgr_FileTruncate) (File file, int64 offset, uint32 wait_event_info);
-	File			(*smgr_AORelOpenSegFile) (const char *filePath, int fileFlags);
-	int			(*smgr_FileWrite) (File file, char *buffer, int amount, off_t offset, uint32 wait_event_info);
-	int			(*smgr_FileRead) (File file, char *buffer, int amount, off_t offset, uint32 wait_event_info);
+	int				(*smgr_FileTruncate) (File file, int64 offset, uint32 wait_event_info);
+	File			(*smgr_AORelOpenSegFile) (Oid reloid, const char *filePath, int fileFlags);
+	File			(*smgr_AORelOpenSegFileXlog) (RelFileNode node, int32 segmentFileNum, int fileFlags);
+	int				(*smgr_FileWrite) (File file, char *buffer, int amount, off_t offset, uint32 wait_event_info);
+	int				(*smgr_FileRead) (File file, char *buffer, int amount, off_t offset, uint32 wait_event_info);
 	off_t			(*smgr_FileSize) (File file);
-	int			(*smgr_FileSync) (File file, uint32 wait_event_info);
+	int				(*smgr_FileSync) (File file, uint32 wait_event_info);
 } f_smgr_ao;
 
 
