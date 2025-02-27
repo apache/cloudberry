@@ -1,6 +1,6 @@
 COMMAND NAME: gpreload
 
-Reloads Cloudberry Database table data sorting the data 
+Reloads Apache Cloudberry table data sorting the data 
 based on specified columns. 
 
 *****************************************************
@@ -69,7 +69,7 @@ OPTIONS
 
 -p <port> 
 
- The Cloudberry Database coordinator port. If not specified, the value of the 
+ The Apache Cloudberry coordinator port. If not specified, the value of the 
  PGPORT environment variable is used. If the value is not available, an 
  error is returned. 
 
@@ -135,5 +135,5 @@ listed in the file data-tables.txt.
 SEE ALSO
 *****************************************************
 
-The CREATE TABLE command in the "Cloudberry Database Reference Guide."
+The CREATE TABLE command in the "Apache Cloudberry Reference Guide."
 

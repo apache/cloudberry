@@ -1,5 +1,5 @@
 # gp_exttable_fdw extension
-comment = 'External Table Foreign Data Wrapper for Cloudberry Database'
+comment = 'External Table Foreign Data Wrapper for Apache Cloudberry'
 default_version = '1.0'
 module_pathname = '$libdir/gp_exttable_fdw'
 schema = pg_catalog

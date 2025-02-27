@@ -161,7 +161,7 @@ handle_args(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_test_fsync (Cloudberry Database) " PG_VERSION);
+			puts("pg_test_fsync (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}

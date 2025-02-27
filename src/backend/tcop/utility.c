@@ -738,7 +738,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE())
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("PREPARE TRANSACTION is not yet supported in Cloudberry Database")));
+									errmsg("PREPARE TRANSACTION is not yet supported in Apache Cloudberry")));
 
 						}
 						PreventCommandDuringRecovery("PREPARE TRANSACTION");
@@ -754,7 +754,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("COMMIT PREPARED is not yet supported in Cloudberry Database")));
+									errmsg("COMMIT PREPARED is not yet supported in Apache Cloudberry")));
 						}
 						PreventInTransactionBlock(isTopLevel, "COMMIT PREPARED");
 						PreventCommandDuringRecovery("COMMIT PREPARED");
@@ -765,7 +765,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("ROLLBACK PREPARED is not yet supported in Cloudberry Database")));
+									errmsg("ROLLBACK PREPARED is not yet supported in Apache Cloudberry")));
 						}
 						PreventInTransactionBlock(isTopLevel, "ROLLBACK PREPARED");
 						PreventCommandDuringRecovery("ROLLBACK PREPARED");

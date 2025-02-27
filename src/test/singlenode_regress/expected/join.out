@@ -2973,14 +2973,14 @@ create temp table nt2 (
   b2 boolean,
   foreign key (nt1_id) references nt1(id)
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 create temp table nt3 (
   id int primary key,
   nt2_id int,
   c1 boolean,
   foreign key (nt2_id) references nt2(id)
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 insert into nt1 values (1,true,true);
 insert into nt1 values (2,true,false);
 insert into nt1 values (3,false,false);
@@ -6286,7 +6286,7 @@ select * from fkest f1
 
 alter table fkest add constraint fk
   foreign key (x, x10b, x100) references fkest (x, x10, x100);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 explain (costs off)
 select * from fkest f1
   join fkest f2 on (f1.x = f2.x and f1.x10 = f2.x10b and f1.x100 = f2.x100)
@@ -6319,7 +6319,7 @@ insert into fkest select x/10, x%10, x from generate_series(1,1000) x;
 insert into fkest1 select x/10, x%10 from generate_series(1,1000) x;
 alter table fkest1
   add constraint fkest1_a_b_fkey foreign key (a,b) references fkest;
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 analyze fkest;
 analyze fkest1;
 explain (costs off)

@@ -148,7 +148,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_restore (Cloudberry Database) " PG_VERSION);
+			puts("pg_restore (Apache Cloudberry) " PG_VERSION);
 			exit_nicely(0);
 		}
 	}

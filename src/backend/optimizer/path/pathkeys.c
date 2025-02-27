@@ -1597,7 +1597,7 @@ cdb_pull_up_eclass(PlannerInfo *root,
 		elog(ERROR, "could not pull up equivalence class using projected target list");
 
 	/*
-	 * See https://github.com/cloudberrydb/cloudberrydb/issues/593
+	 * See https://github.com/apache/cloudberry/issues/593
 	 *
 	 * Postgres have an assumption: volatile epxr must have a valid sortref index.
 	 * The sub_distkeyexpr is formed by GPDB, to avoid Assert failure, set sortref

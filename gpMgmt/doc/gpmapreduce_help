@@ -30,10 +30,10 @@ The following are required prior to running this program:
 
 * You must have your MapReduce job defined in a YAML file.
 
-* You must be a Cloudberry Database superuser to run MapReduce jobs 
+* You must be a Apache Cloudberry superuser to run MapReduce jobs 
   written in untrusted Perl or Python.
 
-* You must be a Cloudberry Database superuser to run MapReduce jobs 
+* You must be a Apache Cloudberry superuser to run MapReduce jobs 
   with EXEC and FILE inputs.
 
 * Non-superuser roles must be granted external table permissions
@@ -47,12 +47,12 @@ MapReduce is a programming model developed by Google for
 processing and generating large data sets on an array of commodity 
 servers. Cloudberry MapReduce allows programmers who are familiar 
 with the MapReduce paradigm to write map and reduce functions and 
-submit them to the Cloudberry Database parallel engine for processing.
+submit them to the Apache Cloudberry parallel engine for processing.
 
 In order for Cloudberry to be able to process MapReduce functions, 
 the functions need to be defined in a YAML document, which is then 
 passed to the Cloudberry MapReduce program, gpmapreduce, for execution 
-by the Cloudberry Database parallel engine. The Cloudberry system takes 
+by the Apache Cloudberry parallel engine. The Cloudberry system takes 
 care of the details of distributing the input data, executing the 
 program across a set of machines, handling machine failures, 
 and managing the required inter-machine communication.
@@ -66,7 +66,7 @@ OPTIONS
 -f <yaml_file>
 
 Required. The YAML file that contains the Cloudberry MapReduce 
-job definitions. See the Cloudberry Database Administrator Guide
+job definitions. See the Apache Cloudberry Administrator Guide
 for more information about creating YAML documents.
 
 
@@ -97,7 +97,7 @@ Run MapReduce jobs and produce explain-analyze plans.
 
 -k | --key <name>=<value>
 
-Sets a YAML variable.  A value is required. Defaults to “key” 
+Sets a YAML variable.  A value is required. Defaults to "key" 
 if no variable name is specified. 
 
 
@@ -141,4 +141,4 @@ SEE ALSO
 *****************************************************
 
 "Cloudberry MapReduce YAML Specification" in the 
-Cloudberry Database Administrator Guide
+Apache Cloudberry Administrator Guide

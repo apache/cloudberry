@@ -5898,7 +5898,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pgbench (Cloudberry Database) " PG_VERSION);
+			puts("pgbench (Apache Cloudberry) " PG_VERSION);
 			exit(0);
 		}
 	}

@@ -292,12 +292,12 @@ transformOptionalSelectInto(ParseState *pstate, Node *parseTree)
 		SelectStmt *stmt = (SelectStmt *) parseTree;
 
 		/*
-		 * CloudberryDB specific behavior:
+		 * Cloudberry specific behavior:
 		 * The implementation of select statement with locking clause
 		 * (for update | no key update | share | key share) in postgres
 		 * is to hold RowShareLock on tables during parsing stage, and
 		 * generate a LockRows plan node for executor to lock the tuples.
-		 * It is not easy to lock tuples in Cloudberry database, since
+		 * It is not easy to lock tuples in Apache Cloudberry, since
 		 * tuples may be fetched through motion nodes.
 		 *
 		 * But when Global Deadlock Detector is enabled, and the select
@@ -527,7 +527,7 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 
@@ -630,7 +630,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 
@@ -678,7 +678,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	}
 
 	/*
-	 * CloudberryDB specific behavior.
+	 * Cloudberry specific behavior.
 	 * conflict update may lock tuples on segments and behaves like
 	 * update. So we might consider if to upgrade lockmode for this
 	 * case.
@@ -1008,7 +1008,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 		qry->onConflict = transformOnConflictClause(pstate,
 													stmt->onConflictClause);
 	/*
-	 * CloudberryDB specific behavior.
+	 * Cloudberry specific behavior.
 	 * OnConflictUpdate may modify the distkey of the table,
 	 * this can lead to wrong data distribution. Add a check
 	 * here and raise error for such case.
@@ -2798,7 +2798,7 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Cloudberry Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 

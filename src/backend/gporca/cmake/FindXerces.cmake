@@ -1,5 +1,5 @@
 # Module to find Xerces-C.
-# We specifically try to find the CloudberryDB patched version of Xerces.
+# We specifically try to find the Cloudberry patched version of Xerces.
 
 find_path(XERCES_INCLUDE_DIR xercesc/sax2/DefaultHandler.hpp)
 
@@ -14,7 +14,7 @@ find_package_handle_standard_args(Xerces DEFAULT_MSG
 
 if (XERCES_FOUND)
   # Check for patched Xerces. DOMImplementationList is a subclass of XMemory in
-  # the CloudberryDB version of Xerces, but not (yet) in upstream.
+  # the Cloudberry version of Xerces, but not (yet) in upstream.
   set(CMAKE_REQUIRED_INCLUDES
       "${XERCES_INCLUDE_DIRS} ${CMAKE_REQUIRED_INCLUDES}")
   include(CheckCXXSourceCompiles)

@@ -1,7 +1,7 @@
 COMMAND NAME: gpactivatestandby 
 
 Activates a standby coordinator host and makes it the active coordinator for the 
-Cloudberry Database system. 
+Apache Cloudberry system. 
 
 
 *****************************************************
@@ -22,8 +22,8 @@ DESCRIPTION
 
 The gpactivatestandby utility activates a backup, standby coordinator host 
 and brings it into operation as the active coordinator instance for a 
-Cloudberry Database system. The activated standby coordinator effectively 
-becomes the Cloudberry Database coordinator, accepting client connections on 
+Apache Cloudberry system. The activated standby coordinator effectively 
+becomes the Apache Cloudberry coordinator, accepting client connections on 
 the coordinator port. 
 
 When you initialize a standby coordinator, the default is to use the same 
@@ -44,7 +44,7 @@ The utility will perform the following steps:
 * Activates the standby coordinator to be the new active coordinator for the 
   system 
 
-* Restarts the Cloudberry Database system with the new coordinator host 
+* Restarts the Apache Cloudberry system with the new coordinator host 
 
 A backup, standby Cloudberry coordinator host serves as a 'warm standby' in 
 the event of the primary Cloudberry coordinator host becoming non-operational. 
@@ -74,7 +74,7 @@ query statistics. For example:
 psql dbname -c 'ANALYZE;' 
 
 After you activate the standby coordinator as the primary coordinator, the 
-Cloudberry Database system no longer has a standby coordinator configured. You 
+Apache Cloudberry system no longer has a standby coordinator configured. You 
 might want to specify another host to be the new standby with the 
 gpinitstandby utility. 
 
@@ -134,7 +134,7 @@ EXAMPLES
 *****************************************************
 
 Activate the standby coordinator host and make it the active coordinator instance 
-for a Cloudberry Database system (run from backup coordinator host you are 
+for a Apache Cloudberry system (run from backup coordinator host you are 
 activating): 
 
 gpactivatestandby -d /gpdata 

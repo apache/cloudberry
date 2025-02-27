@@ -393,7 +393,7 @@ RemovePolicyById(Oid policy_id)
 
 	/*
 	 * CBDB GITHUB ISSUE:
-	 * https://github.com/cloudberrydb/cloudberrydb/issues/504
+	 * https://github.com/apache/cloudberry/issues/504
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
 		MetaTrackDropObject(PolicyRelationId, policy_id);

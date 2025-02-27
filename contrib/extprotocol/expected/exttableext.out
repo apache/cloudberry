@@ -10,7 +10,7 @@ NOTICE:  foreign table "exttabtest_options_r" does not exist, skipping
     SELECT * FROM exttabtest_options_r
     EXCEPT ALL
     SELECT * FROM exttabtest;
-ERROR:  This is greenplum. (gpextprotocol.c:65)
+ERROR:  This is cloudberry. (gpextprotocol.c:65)
 CONTEXT:  External table exttabtest_options_r, line 1 of file demoprot://exttabtest.txt
     DROP EXTERNAL TABLE IF EXISTS exttabtest_w;
 NOTICE:  foreign table "exttabtest_w" does not exist, skipping
@@ -23,7 +23,7 @@ NOTICE:  foreign table "exttabtest_r" does not exist, skipping
     CREATE READABLE EXTERNAL TABLE exttabtest_r(like exttabtest)
         LOCATION('demoprot://exttabtest.txt') 
     FORMAT 'text'
-    OPTIONS (database 'greenplum', foo 'bar');
+    OPTIONS (database 'cloudberry', foo 'bar');
     \d exttabtest_r
                    Foreign table "exttableext.exttabtest_r"
  Column |         Type          | Collation | Nullable | Default | FDW options 
@@ -32,7 +32,7 @@ NOTICE:  foreign table "exttabtest_r" does not exist, skipping
  name   | character varying(20) |           |          |         | 
  value1 | integer               |           |          |         | 
  value2 | integer               |           |          |         | 
-FDW options: (format 'text', delimiter '	', "null" E'\\N', escape E'\\', database 'greenplum', foo 'bar', format_type 't', location_uris 'demoprot://exttabtest.txt', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
+FDW options: (format 'text', delimiter '	', "null" E'\\N', escape E'\\', database 'cloudberry', foo 'bar', format_type 't', location_uris 'demoprot://exttabtest.txt', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
 
     \d exttabtest_w
                    Foreign table "exttableext.exttabtest_w"
