@@ -383,6 +383,12 @@ gen_salt(type text [, iter_count integer ]) returns text
    </table>
 
    <para>
+    When compiled against <productname>OpenSSL</productname> 3.0.0, the legacy
+    provider will be automatically loaded in order to support the ciphers in
+    the above table.
+   </para>
+
+   <para>
     Notes:
    </para>
 

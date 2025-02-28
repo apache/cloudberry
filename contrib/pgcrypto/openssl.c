@@ -34,6 +34,14 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
+/*
+ * OPENSSL_VERSION_MAJOR isn't defined at all until OpenSSL 3.0.0, but since
+ * OPENSSL_VERSION_NUMBER is used by both OpenSSL and LibreSSL it's safer to
+ * check for the new macro rather than the overloaded old one.
+ */
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/provider.h>
+#endif
 
 #include "px.h"
 #include "utils/memutils.h"
@@ -67,6 +75,10 @@ typedef struct OSSLDigest
 	struct OSSLDigest *prev;
 } OSSLDigest;
 
+#if OPENSSL_VERSION_MAJOR >= 3
+static OSSL_PROVIDER *legacy_provider = NULL;
+static OSSL_PROVIDER *default_provider = NULL;
+#endif
 static OSSLDigest *open_digests = NULL;
 static bool digest_resowner_callback_registered = false;
 
@@ -193,8 +205,20 @@ px_find_digest(const char *name, PX_MD **res)
 
 	if (!px_openssl_initialized)
 	{
-		px_openssl_initialized = 1;
+#if OPENSSL_VERSION_MAJOR >= 3
+		if (legacy_provider == NULL)
+			legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+		if (default_provider == NULL)
+			default_provider = OSSL_PROVIDER_load(NULL, "default");
+#endif
+
+		/*
+		 * OpenSSL_add_all_algorithms is deprecated in OpenSSL 1.1.0 and no
+		 * longer required in 1.1.0 and later versions as initialization is
+		 * performed automatically.
+		 */
 		OpenSSL_add_all_algorithms();
+		px_openssl_initialized = 1;
 	}
 
 	if (!digest_resowner_callback_registered)
@@ -775,6 +799,13 @@ px_find_cipher(const char *name, PX_Cipher **res)
 	PX_Cipher  *c = NULL;
 	EVP_CIPHER_CTX *ctx;
 	OSSLCipher *od;
+
+#if OPENSSL_VERSION_MAJOR >= 3
+	if (legacy_provider == NULL)
+		legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+	if (default_provider == NULL)
+		default_provider = OSSL_PROVIDER_load(NULL, "default");
+#endif
 
 	name = px_resolve_alias(ossl_aliases, name);
 #ifdef OPENSSL_ALLOW_REDIRECT
