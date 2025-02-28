@@ -10,6 +10,7 @@ SYNOPSIS
 gpfdist [-d <directory>] [-p <http_port>] [-l <log_file>] [-t <timeout>] 
 [-S] [-w <time>] [-v | -V] [-m <max_length>] [--ssl <certificate_path>]
 [--ssl_verify_peer <on/off>]
+[--compress]
 
 gpfdist [-? | --help] | --version
 
@@ -151,6 +152,16 @@ OPTIONS
   certification directory. If the flag is 'off', gpfdist will not check the 
   identity of clients, and it doesn't matter whether the CA certification file 
   exists on the gpfdist side. 
+
+--compress
+
+ Utilizes the Zstandard (zstd) compression method for data transfer via
+ gpfdist. Zstd is an effective compression algorithm designed to enable
+ gpfdist to transmit larger amounts of data while maintaining low network
+ usage. However, it is important to note that compression can be a
+ time-intensive process, which may potentially result in reduced
+ transmission speeds.
+
 
 -v (verbose) 
 
