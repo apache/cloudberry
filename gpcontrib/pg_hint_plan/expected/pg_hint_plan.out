@@ -7704,7 +7704,7 @@ LOG:  statement: create table parttbl(v1 int, v2 int, v3 int) PARTITION BY RANGE
   PARTITION p2 START (100) INCLUSIVE,
   PARTITION p3 START (200) INCLUSIVE,
   DEFAULT PARTITION others);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into parttbl values(generate_series(0, 300), generate_series(0, 300), generate_series(0, 300));
 LOG:  statement: insert into parttbl values(generate_series(0, 300), generate_series(0, 300), generate_series(0, 300));

@@ -245,7 +245,7 @@ ALTER RESOURCE QUEUE myqueue WITHOUT (MAX_COST, MEMORY_LIMIT);
 
   <para>
    There is no <command>ALTER RESOURCE QUEUE</command> in the SQL standard.
-   Resource scheduling is a feature of Cloudberry Database.
+   Resource scheduling is a feature of Apache Cloudberry.
   </para>
    </refsect1>
 

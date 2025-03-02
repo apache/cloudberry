@@ -1539,7 +1539,7 @@ SELECT jsonb_object_agg(1, NULL::jsonb);
 SELECT jsonb_object_agg(NULL, '{"a":1}');
 ERROR:  field name must not be null
 CREATE TEMP TABLE foo (serial_num int, name text, type text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'serial_num' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'serial_num' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo VALUES (847001,'t15','GE1043');
 INSERT INTO foo VALUES (847002,'t16','GE1043');
@@ -2750,7 +2750,7 @@ select * from jsonb_to_record('{"out": "{\"key\": 1}"}') as x(out jsonb);
 
 -- test type info caching in jsonb_populate_record()
 CREATE TEMP TABLE jsbpoptest (js jsonb);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'js' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'js' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO jsbpoptest
 SELECT '{
@@ -3673,7 +3673,7 @@ SELECT '{"a":[1,2,{"c":3,"x":4}],"c":"b"}'::jsonb @> '{"a":[{"x":4},1]}';
 
 -- check some corner cases for indexed nested containment (bug #13756)
 create temp table nestjsonb (j jsonb);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into nestjsonb (j) values ('{"a":[["b",{"x":1}],["b",{"x":2}]],"c":3}');
 insert into nestjsonb (j) values ('[[14,2,3]]');

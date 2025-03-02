@@ -36,7 +36,7 @@ CREATE
 20200923:12:05:57:014232 gpstop:mdw:gpadmin-[INFO]:-Gathering information and validating the environment...
 20200923:12:05:57:014232 gpstop:mdw:gpadmin-[INFO]:-Obtaining Cloudberry Master catalog information
 20200923:12:05:57:014232 gpstop:mdw:gpadmin-[INFO]:-Obtaining Segment details from master...
-20200923:12:05:58:014232 gpstop:mdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.7339.g02578435d1 build dev'
+20200923:12:05:58:014232 gpstop:mdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.7339.g02578435d1 build dev'
 20200923:12:05:58:014232 gpstop:mdw:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20200923:12:05:58:014232 gpstop:mdw:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/Documents/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20200923:12:05:58:014232 gpstop:mdw:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process
@@ -138,7 +138,7 @@ DROP
 20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Gathering information and validating the environment...
 20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Obtaining Cloudberry Master catalog information
 20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Obtaining Segment details from master...
-20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.7339.g02578435d1 build dev'
+20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.7339.g02578435d1 build dev'
 20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/Documents/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20200923:12:08:05:016154 gpstop:mdw:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process

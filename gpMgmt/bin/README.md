@@ -28,20 +28,20 @@ Where Things Go
 
 List of Management Scripts Written in Bash
 ------------------------------------------
-bin/gpinitsystem        -  Creates a new Cloudberry Database
+bin/gpinitsystem        -  Creates a new Apache Cloudberry
 bin/gpload              -  Sets env variables and calls gpload.py
 
 
 List of Management Scripts Written in Python (no libraries)
 -----------------------------------------------------------
-bin/gpload.py           -  Loads data into a Cloudberry Database
+bin/gpload.py           -  Loads data into a Apache Cloudberry
 
 
 List of Management Scripts Written in Python (gpmlib - old libraries)
 ---------------------------------------------------------------------
 bin/gpaddmirrors        -  Adds mirrors to an array (needs rewrite)
 bin/gprecoverseg        -  Recovers a failed segment (needs rewrite)
-bin/gpcheckperf         -  Checks the hardware for Cloudberry Database
+bin/gpcheckperf         -  Checks the hardware for Apache Cloudberry
 bin/gpsync              -  Copies files to many hosts
 bin/gpssh               -  Remote shell to many hosts
 bin/gpssh-exkeys        -  Exchange ssh keys between many hosts
@@ -51,12 +51,12 @@ List of Management Scripts Written in Python (gppylib - current libraries)
 --------------------------------------------------------------------------
 bin/gpactivatestandby   -  Activates the Standby Coordinator
 bin/gpconfig_helper     -  Edits postgresql.conf file for all segments
-bin/gpdeletesystem      -  Deletes a Cloudberry Database
-bin/gpexpand            -  Adds additional segments to a Cloudberry Database
+bin/gpdeletesystem      -  Deletes a Apache Cloudberry
+bin/gpexpand            -  Adds additional segments to a Apache Cloudberry
 bin/gpinitstandby       -  Initializes standby coordinator
 bin/gplogfilter         -  Filters log files
-bin/gpstart             -  Start a Cloudberry Database
-bin/gpstop              -  Stop a Cloudberry Database
+bin/gpstart             -  Start a Apache Cloudberry
+bin/gpstop              -  Stop a Apache Cloudberry
 
 sbin/gpconfig_helper.py -  Helper script for gpconfig
 sbin/gpsegcopy          -  Helper script for gpexpand
@@ -76,7 +76,7 @@ gparray.py
    +-  SegmentPair - Configuration information for a single content id
    |     \-  Contains multiple Segment objects
    |
-   +-  GpArray   - Configuration information for a Cloudberry Database
+   +-  GpArray   - Configuration information for a Apache Cloudberry
          \-  Contains multiple SegmentPair objects
 
 gplog.py         - Utility functions to assist in Cloudberry standard logging

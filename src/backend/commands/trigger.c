@@ -924,7 +924,7 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 	values[Anum_pg_trigger_tgtype - 1] = Int16GetDatum(tgtype);
 	
 	/*
-	 * Special for Cloudberry Database: Ignore foreign keys for now. Create
+	 * Special for Apache Cloudberry: Ignore foreign keys for now. Create
 	 * the triggers to back them as 'disabled'.
 	 */
 	char		tgenabled = trigger_fires_when;

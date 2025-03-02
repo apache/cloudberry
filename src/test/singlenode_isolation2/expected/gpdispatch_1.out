@@ -184,8 +184,8 @@ END
 !\retcode gprecoverseg -aF --no-progress;
 -- start_ignore
 20211101:14:57:13:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF --no-progress
-20211101:14:57:13:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev'
-20211101:14:57:13:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 12beta2 (Cloudberry Database 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit compiled on Nov  1 2021 11:23:12 (with assert checking)'
+20211101:14:57:13:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev'
+20211101:14:57:13:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 12beta2 (Apache Cloudberry 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit compiled on Nov  1 2021 11:23:12 (with assert checking)'
 20211101:14:57:13:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20211101:14:57:14:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
 20211101:14:57:14:101597 gprecoverseg:zlyu:gpadmin-[INFO]:-Cloudberry instance recovery parameters
@@ -252,8 +252,8 @@ select wait_until_all_segments_synchronized();
 !\retcode gprecoverseg -ar;
 -- start_ignore
 20211101:14:57:21:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Starting gprecoverseg with args: -ar
-20211101:14:57:21:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev'
-20211101:14:57:21:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 12beta2 (Cloudberry Database 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit compiled on Nov  1 2021 11:23:12 (with assert checking)'
+20211101:14:57:21:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev'
+20211101:14:57:21:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 12beta2 (Apache Cloudberry 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit compiled on Nov  1 2021 11:23:12 (with assert checking)'
 20211101:14:57:21:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20211101:14:57:22:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Cloudberry instance recovery parameters
 20211101:14:57:22:103065 gprecoverseg:zlyu:gpadmin-[INFO]:----------------------------------------------------------
@@ -300,8 +300,8 @@ select wait_until_all_segments_synchronized();
 20211101:14:57:23:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Triggering segment reconfiguration
 20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Starting segment synchronization
 20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-=============================START ANOTHER RECOVER=========================================
-20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev'
-20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 12beta2 (Cloudberry Database 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit compiled on Nov  1 2021 11:23:12 (with assert checking)'
+20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev'
+20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 12beta2 (Apache Cloudberry 7.0.0-alpha.0+dev.14950.gaf07f2a6fe build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit compiled on Nov  1 2021 11:23:12 (with assert checking)'
 20211101:14:57:28:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20211101:14:57:29:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
 20211101:14:57:29:103065 gprecoverseg:zlyu:gpadmin-[INFO]:-Cloudberry instance recovery parameters

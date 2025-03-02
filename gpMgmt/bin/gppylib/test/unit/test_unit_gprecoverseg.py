@@ -274,7 +274,7 @@ class GpRecoversegTestCase(GpTestCase):
     def test_gprecoverseg_with_mirrorless(self):
         self.gpArrayMock.hasMirrors = False
         with self.assertRaisesRegex(ExceptionNoStackTraceNeeded,
-                                    "GPDB Mirroring replication is not configured for this Cloudberry Database instance."):
+                                    "GPDB Mirroring replication is not configured for this Apache Cloudberry instance."):
             self.subject.run()
 
     def _create_gparray_with_2_primary_2_mirrors(self):

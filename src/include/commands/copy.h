@@ -111,7 +111,7 @@ typedef struct CopyFormatOptions
 	bool		fill_missing;	/* missing attrs at end of line are NULL */
 
 
-	/* Cloudberry Database specific variables */
+	/* Apache Cloudberry specific variables */
 	bool		skip_foreign_partitions;  /* skip foreign/external partitions */
 
 	bool		on_segment; /* QE save data files locally */
@@ -120,7 +120,7 @@ typedef struct CopyFormatOptions
 	char	   *eol_str;		/* optional NEWLINE from command. before eol_type is defined */
 	char	   *tags;			/* directory table */
 	SingleRowErrorDesc *sreh;
-	/* end Cloudberry Database specific variables */
+	/* end Apache Cloudberry specific variables */
 } CopyFormatOptions;
 
 /* These are private in commands/copy[from|to].c */
