@@ -83,7 +83,7 @@ SELECT gp_wait_until_triggered_fault('AppendOnlyStorageRead_ReadNextBlock_succes
 -- By now, we should have reported some blocks (of size 'block_size') as "done",
 -- as well as a total number of blocks that matches the size of col j's segfile.
 -- Note: since we already had a block directory prior to the index build on
--- column 'j', only column 'j' will be scanned.
+-- column 'j', only column 'j' will be scanned. CBDB_CHERRY_PICK_MERGE_FIXME: fix when ao blkdir will be supported
 1U: SELECT command, phase,
            ((pg_stat_file(pg_relation_filepath('aoco_index_build_progress') || '.' || 129)).size
                 + (current_setting('block_size')::int - 1)) / current_setting('block_size')::int

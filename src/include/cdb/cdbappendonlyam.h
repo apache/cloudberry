@@ -258,6 +258,11 @@ typedef struct AppendOnlyScanDescData
 	/* used in predicate pushdown */
 	ExprContext		*aos_pushdown_econtext;
 	ExprState		*aos_pushdown_qual;
+	/*
+	 * The total number of bytes read, compressed, across all segment files, so
+	 * far. This is used for scan progress reporting.
+	 */
+	int64		totalBytesRead;
 
 }	AppendOnlyScanDescData;
 
@@ -493,5 +498,20 @@ extern bool AppendOnlyExecutorReadBlock_ScanNextTuple(AppendOnlyExecutorReadBloc
 										  TupleTableSlot *slot);
 
 extern void AppendOnlyExecutorReadBlock_GetContents(AppendOnlyExecutorReadBlock *executorReadBlock);
+/*
+ * Update total bytes read for the entire scan. If the block was compressed,
+ * update it with the compressed length. If the block was not compressed, update
+ * it with the uncompressed length.
+ */
+static inline void
+AppendOnlyScanDesc_UpdateTotalBytesRead(AppendOnlyScanDesc scan)
+{
+	Assert(scan->storageRead.isActive);
+
+	if (scan->storageRead.current.isCompressed)
+		scan->totalBytesRead += scan->storageRead.current.compressedLen;
+	else
+		scan->totalBytesRead += scan->storageRead.current.uncompressedLen;
+}
 
 #endif   /* CDBAPPENDONLYAM_H */
