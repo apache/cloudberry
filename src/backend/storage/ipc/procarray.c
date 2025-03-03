@@ -5024,7 +5024,7 @@ DisplayXidCache(void)
 }
 #endif							/* XIDCACHE_DEBUG */
 
-PGPROC *
+volatile PGPROC *
 FindProcByGpSessionId(long gp_session_id)
 {
 	/* Find the guy who should manage our locks */
@@ -5037,7 +5037,7 @@ FindProcByGpSessionId(long gp_session_id)
 
 	for (index = 0; index < arrayP->numProcs; index++)
 	{
-		PGPROC	   *proc = &allProcs[arrayP->pgprocnos[index]];
+		volatile PGPROC	   *proc = &allProcs[arrayP->pgprocnos[index]];
 			
 		if (proc->pid == MyProc->pid)
 			continue;
