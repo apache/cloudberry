@@ -80,6 +80,7 @@ static bool aqumv_process_targetlist(aqumv_equivalent_transformation_context *co
 static void aqumv_sort_targetlist(aqumv_equivalent_transformation_context* context);
 static Node *aqumv_adjust_sub_matched_expr_mutator(Node *node, aqumv_equivalent_transformation_context *context);
 static bool contain_var_or_aggstar_clause_walker(Node *node, void *context);
+static bool check_partition(Query *parse, Oid origin_rel_oid);
 
 typedef struct
 {
@@ -156,6 +157,8 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 	List			*mv_final_tlist = NIL; /* Final target list we want to rewrite to. */
 	List 			*post_quals = NIL;
 	aqumv_equivalent_transformation_context	*context;
+	bool			can_be_partition;
+	char			relkind;
 
 	/* Group By without agg could be possible though IMMV doesn't support it yet. */
 	bool can_not_use_mv = (parse->commandType != CMD_SELECT) ||
@@ -173,10 +176,6 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 	if (can_not_use_mv)
 		return mv_final_rel;
 
-	/*
-	 * AQUMV_FIXME_MVP:
-	 *	Single relation, excluding catalog/inherit/partition tables.
-	 */
 	if (list_length(parse->jointree->fromlist) != 1)
 		return mv_final_rel;
 
@@ -185,18 +184,37 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 		return mv_final_rel;
 
 	varno = ((RangeTblRef *) jtnode)->rtindex;
-	rte = root->simple_rte_array[varno];
-	Assert(rte != NULL);
-	/* root's stuff like simple_rte_array may be changed during rewrite, fetch oid here. */
-	origin_rel_oid = rte->relid;
-
-	if ((rte->rtekind != RTE_RELATION) || 
-		IsSystemClassByRelid(origin_rel_oid) ||
-		has_superclass(origin_rel_oid) ||
-		has_subclass(origin_rel_oid))
+	rte = planner_rt_fetch(varno, root);
+	if ((rte->rtekind != RTE_RELATION))
 		return mv_final_rel;
 
-	if (get_rel_relkind(origin_rel_oid) == RELKIND_FOREIGN_TABLE && !aqumv_allow_foreign_table)
+	/* root's stuff like simple_rte_array may be changed during rewrite, fetch oid here. */
+	origin_rel_oid = rte->relid;
+	/* excluding catalog tables. */
+	if (IsSystemClassByRelid(origin_rel_oid))
+		return mv_final_rel;
+
+	relkind = get_rel_relkind(rte->relid);
+	if (relkind != RELKIND_RELATION &&
+		relkind != RELKIND_PARTITIONED_TABLE &&
+		relkind != RELKIND_FOREIGN_TABLE)
+		return mv_final_rel;
+
+	/* We don't know what it is. */
+	if ((relkind != RELKIND_PARTITIONED_TABLE) &&
+		(list_length(parse->rtable) > 1))
+		return mv_final_rel;
+
+	/*
+	 * excluding inherit tables.
+	 */
+	can_be_partition = (relkind == RELKIND_PARTITIONED_TABLE) || get_rel_relispartition(rte->relid);
+	if (!can_be_partition &&
+		(has_superclass(origin_rel_oid) ||
+		has_subclass(origin_rel_oid)))
+		return mv_final_rel;
+
+	if (relkind == RELKIND_FOREIGN_TABLE && !aqumv_allow_foreign_table)
 		return mv_final_rel;
 
 	ruleDesc = table_open(RewriteRelationId, AccessShareLock);
@@ -293,9 +311,17 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 
 		/*
 		 * Check if it actually has children here to match before planning.
+		 * Except for Partitioned tables.
 		 */
-		mvrte->inh = has_subclass(mvrte->relid);
+		if (get_rel_relkind(mvrte->relid) == RELKIND_PARTITIONED_TABLE)
+			mvrte->inh = false;
+		else
+			mvrte->inh = has_subclass(mvrte->relid);
+
 		if (mvrte->inh)
+			continue;
+
+		if (!check_partition(parse, origin_rel_oid))
 			continue;
 
 		subroot = (PlannerInfo *) palloc(sizeof(PlannerInfo));
@@ -348,7 +374,7 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 		{
 			if (parse->hasDistinctOn ||
 				parse->distinctClause != NIL ||
-				parse->groupClause != NIL ||
+				parse->groupClause != NIL || /* TODO: GROUP BY */
 				parse->groupingSets != NIL ||
 				parse->groupDistinct)
 				continue;
@@ -446,6 +472,9 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 			 */
 			subroot->processed_tlist = NIL;
 			preprocess_targetlist(subroot);
+
+			/* Select from a mv never have that.*/
+			subroot->append_rel_list = NIL;
 		}
 		else
 		{
@@ -519,6 +548,8 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 				continue;
 
 			viewQuery->jointree->quals = (Node *)post_quals;
+			/* Select from a mv never have that.*/
+			subroot->append_rel_list = NIL;
 		}
 
 		/*
@@ -581,6 +612,7 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 			 * See more in README.cbdb.aqumv
 			 */
 			root->eq_classes = subroot->eq_classes;
+			root->append_rel_list = subroot->append_rel_list;
 			current_rel = mv_final_rel;
 			table_close(matviewRel, NoLock);
 			need_close = false;
@@ -945,4 +977,39 @@ static Node *aqumv_adjust_varno_mutator(Node *node, aqumv_adjust_varno_context *
 		/* AQUMV_FIXME_MVP: currently we have only one relation */
 		((RangeTblRef*) node)->rtindex = context->varno;
 	return expression_tree_mutator(node, aqumv_adjust_varno_mutator, context);
+}
+
+/*
+ * check_partition - Check if the query's range table entries align with the partitioned table structure.
+ *
+ * This function verifies whether the range table entries in the query (parse->rtable) correspond to
+ * the expected structure of a partitioned table. It ensures that all range table entries beyond the
+ * first one match the name of the underlying relation (origin_rel_oid).
+ * While this behavior is not guaranteed by Postgres, we can rely on it based on our observation of
+ * the internal implementation when expanding partitioned tables.
+ * This approach is admittedly hacky, but it serves as a practical solution for now, allowing us to move forward.
+ *
+ * Parameters:
+ *   - parse: The query parse tree containing the range table entries to be checked.
+ *   - origin_rel_oid: The OID of the original relation (partitioned table) to compare against.
+ *
+ * Returns:
+ *   - true if all range table entries beyond the first match the underlying relation's name.
+ *   - false otherwise.
+ */
+static bool
+check_partition(Query *parse, Oid origin_rel_oid)
+{
+	char *underling_relname;
+
+	if (list_length(parse->rtable) == 1)
+		return true;
+	underling_relname = get_rel_name(origin_rel_oid);
+	for (int i = 2; i <= list_length(parse->rtable); i++)
+	{
+		RangeTblEntry *other_rte = rt_fetch(i, parse->rtable);
+		if (strcmp(underling_relname, other_rte->alias->aliasname) != 0)
+			return false;
+	}
+	return true;
 }
