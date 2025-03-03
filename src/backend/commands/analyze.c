@@ -1105,12 +1105,12 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 */
 	if (!inh)
 	{
-		BlockNumber relallvisible;
+		BlockNumber relallvisible = 0;
+		BlockNumber relallfrozen = 0;
 
-		if (RelationStorageIsAO(onerel))
-			relallvisible = 0;
-		else
-			relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
+		if (RELKIND_HAS_STORAGE(onerel->rd_rel->relkind) &&
+			!RelationStorageIsAO(onerel))
+			AcquireVisibilityMapCounts(onerel, &relallvisible, &relallfrozen);
 
 		/*
 		 * Update pg_class for table relation.  CCI first, in case acquirefunc
@@ -1121,6 +1121,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 							relpages,
 							totalrows,
 							relallvisible,
+							relallfrozen,
 							hasindex,
 							InvalidTransactionId,
 							InvalidMultiXactId,
@@ -1192,7 +1193,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			vac_update_relstats(Irel[ind],
 								estimatedIndexPages,
 								totalindexrows,
-								0,
+								0, 0,
 								false,
 								InvalidTransactionId,
 								InvalidMultiXactId,
@@ -1209,7 +1210,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		 */
 		CommandCounterIncrement();
 		vac_update_relstats(onerel, -1, totalrows,
-							0, hasindex, InvalidTransactionId,
+							0, 0, hasindex, InvalidTransactionId,
 							InvalidMultiXactId,
 							NULL, NULL,
 							in_outer_xact,
@@ -2433,46 +2434,39 @@ AcquireNumberOfBlocks(Relation onerel)
 }
 
 /*
- * Collect visibility map of relation in dispatcher.
- *
- * In GPDB if we're in the dispatcher, we need to collect the number of
- * visibility map in pg_class from segments.
+ * Collect both visibility-map counts locally or from the segment catalogs.
+ * Replicated relations contribute one copy, just like relpages.
  */
-BlockNumber
-AcquireNumberOfAllVisibleBlocks(Relation onerel)
+void
+AcquireVisibilityMapCounts(Relation onerel, BlockNumber *all_visible,
+						   BlockNumber *all_frozen)
 {
-    int64     totalvms;
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
+	{
+		char		relvm_sql[100];
+		int64		visible;
+		int64		frozen;
 
-    /* collect total vms from segments in master */
-    if (Gp_role == GP_ROLE_DISPATCH &&
-        onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
-    {
-        /* Query the segments pg_class. */
-        char        relvm_sql[80];
+		snprintf(relvm_sql, sizeof(relvm_sql),
+				 "select relallvisible from pg_catalog.pg_class where oid = %u",
+				 RelationGetRelid(onerel));
+		visible = get_size_from_segDBs(relvm_sql);
+		snprintf(relvm_sql, sizeof(relvm_sql),
+				 "select relallfrozen from pg_catalog.pg_class where oid = %u",
+				 RelationGetRelid(onerel));
+		frozen = get_size_from_segDBs(relvm_sql);
 
-        snprintf(relvm_sql, sizeof(relvm_sql),
-                 "select relallvisible from pg_catalog.pg_class where oid = %u", RelationGetRelid(onerel));
-        totalvms = get_size_from_segDBs(relvm_sql);
-        if (GpPolicyIsReplicated(onerel->rd_cdbpolicy))
-        {
-            /*
-             * If the distribution of the relation is replicated, we will sum up
-             * vms much twice which we expecting only once. So we need to divide
-             * up totalvms by numsegments.
-             */
-            totalvms /= onerel->rd_cdbpolicy->numsegments;
-        }
-
-        return (BlockNumber)totalvms;
-    }
-    /* get vms from local in segment */
-    else
-    {
-        BlockNumber all_visible = 0;
-        visibilitymap_count(onerel, &all_visible, NULL);
-
-        return all_visible;
-    }
+		if (GpPolicyIsReplicated(onerel->rd_cdbpolicy))
+		{
+			visible /= onerel->rd_cdbpolicy->numsegments;
+			frozen /= onerel->rd_cdbpolicy->numsegments;
+		}
+		*all_visible = (BlockNumber) visible;
+		*all_frozen = (BlockNumber) frozen;
+	}
+	else
+		visibilitymap_count(onerel, all_visible, all_frozen);
 }
 
 /*

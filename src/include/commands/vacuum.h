@@ -276,6 +276,7 @@ typedef struct VPgClassStats
 	BlockNumber rel_pages;
 	double		rel_tuples;
 	BlockNumber relallvisible;
+	BlockNumber relallfrozen;
 } VPgClassStats;
 
 typedef struct VPgClassStatsCombo
@@ -284,6 +285,7 @@ typedef struct VPgClassStatsCombo
 	BlockNumber rel_pages;
 	double		rel_tuples;
 	BlockNumber relallvisible;
+	BlockNumber relallfrozen;
 
 	int			count; /* expect to equal to the number of dispatched segments */
 } VPgClassStatsCombo;
@@ -463,11 +465,13 @@ extern double vac_estimate_reltuples(Relation relation,
 extern void vac_send_relstats_to_qd(Relation relation,
 						BlockNumber num_pages,
 						double num_tuples,
-						BlockNumber num_all_visible_pages);
+						BlockNumber num_all_visible_pages,
+						BlockNumber num_all_frozen_pages);
 extern void vac_update_relstats(Relation relation,
 								BlockNumber num_pages,
 								double num_tuples,
 								BlockNumber num_all_visible_pages,
+								BlockNumber num_all_frozen_pages,
 								bool hasindex,
 								TransactionId frozenxid,
 								MultiXactId minmulti,

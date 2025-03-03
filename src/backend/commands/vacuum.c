@@ -1800,6 +1800,7 @@ void
 vac_update_relstats(Relation relation,
 					BlockNumber num_pages, double num_tuples,
 					BlockNumber num_all_visible_pages,
+					BlockNumber num_all_frozen_pages,
 					bool hasindex, TransactionId frozenxid,
 					MultiXactId minmulti,
 					bool *frozenxid_updated, bool *minmulti_updated,
@@ -1837,13 +1838,15 @@ vac_update_relstats(Relation relation,
 			num_pages = relation->rd_rel->relpages;
 			num_tuples = relation->rd_rel->reltuples;
 			num_all_visible_pages = relation->rd_rel->relallvisible;
+			num_all_frozen_pages = relation->rd_rel->relallfrozen;
 		}
 		else if (Gp_role == GP_ROLE_EXECUTE)
 		{
 			vac_send_relstats_to_qd(relation,
 									num_pages,
 									num_tuples,
-									num_all_visible_pages);
+									num_all_visible_pages,
+									num_all_frozen_pages);
 		}
 	}
 	
@@ -1921,6 +1924,11 @@ vac_update_relstats(Relation relation,
 	if (pgcform->relallvisible != (int32) num_all_visible_pages)
 	{
 		pgcform->relallvisible = (int32) num_all_visible_pages;
+		dirty = true;
+	}
+	if (pgcform->relallfrozen != (int32) num_all_frozen_pages)
+	{
+		pgcform->relallfrozen = (int32) num_all_frozen_pages;
 		dirty = true;
 	}
 
@@ -3616,6 +3624,7 @@ vacuum_combine_stats(VacuumStatsContext *stats_context, CdbPgResults *cdb_pgresu
 				tmp_stats_combo->rel_pages += pgclass_stats_combo->rel_pages;
 				tmp_stats_combo->rel_tuples += pgclass_stats_combo->rel_tuples;
 				tmp_stats_combo->relallvisible += pgclass_stats_combo->relallvisible;
+				tmp_stats_combo->relallfrozen += pgclass_stats_combo->relallfrozen;
 				/*
 				 * Accumulate the number of QEs, assuming sending only once
 				 * per QE for each relid in the VACUUM scenario.
@@ -3669,6 +3678,7 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 			stats->rel_pages = stats->rel_pages / rel->rd_cdbpolicy->numsegments;
 			stats->rel_tuples = stats->rel_tuples / rel->rd_cdbpolicy->numsegments;
 			stats->relallvisible = stats->relallvisible / rel->rd_cdbpolicy->numsegments;
+			stats->relallfrozen = stats->relallfrozen / rel->rd_cdbpolicy->numsegments;
 		}
 
 		if (RelationIsAppendOptimized(rel))
@@ -3720,6 +3730,7 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 			vac_update_relstats(rel,
 								stats->rel_pages, stats->rel_tuples,
 								stats->relallvisible,
+								stats->relallfrozen,
 								rel->rd_rel->relhasindex,
 								InvalidTransactionId,
 								InvalidMultiXactId,
@@ -3771,7 +3782,8 @@ void
 vac_send_relstats_to_qd(Relation relation,
 						BlockNumber num_pages,
 						double num_tuples,
-						BlockNumber num_all_visible_pages)
+						BlockNumber num_all_visible_pages,
+						BlockNumber num_all_frozen_pages)
 {
 
 	StringInfoData buf;
@@ -3785,6 +3797,7 @@ vac_send_relstats_to_qd(Relation relation,
 	stats.rel_pages = num_pages;
 	stats.rel_tuples = num_tuples;
 	stats.relallvisible = num_all_visible_pages;
+	stats.relallfrozen = num_all_frozen_pages;
 	pq_sendbyte(&buf, true); /* Mark the result ready when receive this message */
 	pq_sendint(&buf, PGExtraTypeVacuumStats, sizeof(PGExtraType));
 	pq_sendint(&buf, sizeof(VPgClassStats), sizeof(int));
