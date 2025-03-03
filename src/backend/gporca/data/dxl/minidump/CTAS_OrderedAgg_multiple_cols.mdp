@@ -179,7 +179,7 @@ EXPLAIN CREATE TABLE test AS
         <dxl:SumAgg Mdid="0.0.0.0"/>
         <dxl:CountAgg Mdid="0.2147.1.0"/>
       </dxl:Type>
-      <dxl:GPDBAgg Mdid="0.7189.1.0" Name="gp_percentile_cont" IsSplittable="false" HashAggCapable="false">
+      <dxl:GPDBAgg Mdid="0.9189.1.0" Name="gp_percentile_cont" IsSplittable="false" HashAggCapable="false">
         <dxl:ResultType Mdid="0.701.1.0"/>
         <dxl:IntermediateResultType Mdid="0.701.1.0"/>
       </dxl:GPDBAgg>
@@ -2336,7 +2336,7 @@ EXPLAIN CREATE TABLE test AS
                           <dxl:GroupingColumns/>
                           <dxl:ProjList>
                             <dxl:ProjElem ColId="10" Alias="percentile_cont">
-                              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                 <dxl:ValuesList ParamType="aggargs">
                                   <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                     <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
@@ -2351,7 +2351,7 @@ EXPLAIN CREATE TABLE test AS
                               </dxl:AggFunc>
                             </dxl:ProjElem>
                             <dxl:ProjElem ColId="13" Alias="percentile_cont">
-                              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                 <dxl:ValuesList ParamType="aggargs">
                                   <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                     <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
@@ -2366,7 +2366,7 @@ EXPLAIN CREATE TABLE test AS
                               </dxl:AggFunc>
                             </dxl:ProjElem>
                             <dxl:ProjElem ColId="16" Alias="percentile_cont">
-                              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                 <dxl:ValuesList ParamType="aggargs">
                                   <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                     <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
@@ -2581,7 +2581,7 @@ EXPLAIN CREATE TABLE test AS
                             <dxl:GroupingColumns/>
                             <dxl:ProjList>
                               <dxl:ProjElem ColId="12" Alias="percentile_cont">
-                                <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                                <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                   <dxl:ValuesList ParamType="aggargs">
                                     <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                       <dxl:Ident ColId="2" ColName="c" TypeMdid="0.23.1.0"/>
@@ -2596,7 +2596,7 @@ EXPLAIN CREATE TABLE test AS
                                 </dxl:AggFunc>
                               </dxl:ProjElem>
                               <dxl:ProjElem ColId="15" Alias="percentile_cont">
-                                <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                                <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                   <dxl:ValuesList ParamType="aggargs">
                                     <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                       <dxl:Ident ColId="2" ColName="c" TypeMdid="0.23.1.0"/>
@@ -2611,7 +2611,7 @@ EXPLAIN CREATE TABLE test AS
                                 </dxl:AggFunc>
                               </dxl:ProjElem>
                               <dxl:ProjElem ColId="18" Alias="percentile_cont">
-                                <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                                <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                   <dxl:ValuesList ParamType="aggargs">
                                     <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                       <dxl:Ident ColId="2" ColName="c" TypeMdid="0.23.1.0"/>
@@ -2828,7 +2828,7 @@ EXPLAIN CREATE TABLE test AS
                           <dxl:GroupingColumns/>
                           <dxl:ProjList>
                             <dxl:ProjElem ColId="11" Alias="percentile_cont">
-                              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                 <dxl:ValuesList ParamType="aggargs">
                                   <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                     <dxl:Ident ColId="1" ColName="b" TypeMdid="0.23.1.0"/>
@@ -2843,7 +2843,7 @@ EXPLAIN CREATE TABLE test AS
                               </dxl:AggFunc>
                             </dxl:ProjElem>
                             <dxl:ProjElem ColId="14" Alias="percentile_cont">
-                              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                 <dxl:ValuesList ParamType="aggargs">
                                   <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                     <dxl:Ident ColId="1" ColName="b" TypeMdid="0.23.1.0"/>
@@ -2858,7 +2858,7 @@ EXPLAIN CREATE TABLE test AS
                               </dxl:AggFunc>
                             </dxl:ProjElem>
                             <dxl:ProjElem ColId="17" Alias="percentile_cont">
-                              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+                              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                                 <dxl:ValuesList ParamType="aggargs">
                                   <dxl:Cast TypeMdid="0.701.1.0" FuncId="0.316.1.0">
                                     <dxl:Ident ColId="1" ColName="b" TypeMdid="0.23.1.0"/>

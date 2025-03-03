@@ -126,7 +126,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a2), percentile_disc(0
         <dxl:SumAgg Mdid="0.0.0.0"/>
         <dxl:CountAgg Mdid="0.2147.1.0"/>
       </dxl:Type>
-      <dxl:GPDBAgg Mdid="0.7189.1.0" Name="gp_percentile_cont" IsSplittable="false" HashAggCapable="false">
+      <dxl:GPDBAgg Mdid="0.9189.1.0" Name="gp_percentile_cont" IsSplittable="false" HashAggCapable="false">
         <dxl:ResultType Mdid="0.701.1.0"/>
         <dxl:IntermediateResultType Mdid="0.701.1.0"/>
       </dxl:GPDBAgg>
@@ -164,7 +164,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a2), percentile_disc(0
         <dxl:SumAgg Mdid="0.2108.1.0"/>
         <dxl:CountAgg Mdid="0.2147.1.0"/>
       </dxl:Type>
-      <dxl:GPDBAgg Mdid="0.7194.1.0" Name="gp_percentile_disc" IsSplittable="false" HashAggCapable="false">
+      <dxl:GPDBAgg Mdid="0.9194.1.0" Name="gp_percentile_disc" IsSplittable="false" HashAggCapable="false">
         <dxl:ResultType Mdid="0.2283.1.0"/>
         <dxl:IntermediateResultType Mdid="0.2283.1.0"/>
       </dxl:GPDBAgg>
@@ -548,7 +548,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a2), percentile_disc(0
           <dxl:GroupingColumns/>
           <dxl:ProjList>
             <dxl:ProjElem ColId="12" Alias="percentile_cont">
-              <dxl:AggFunc AggMdid="0.7189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
+              <dxl:AggFunc AggMdid="0.9189.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" AggArgTypes="701,701,20,20">
                 <dxl:ValuesList ParamType="aggargs">
                   <dxl:Ident ColId="1" ColName="a2" TypeMdid="0.701.1.0"/>
                   <dxl:ConstValue TypeMdid="0.701.1.0" Value="AAAAAAAA4D8=" DoubleValue="0.500000"/>
@@ -561,7 +561,7 @@ EXPLAIN SELECT percentile_cont(0.5) WITHIN GROUP(ORDER BY a2), percentile_disc(0
               </dxl:AggFunc>
             </dxl:ProjElem>
             <dxl:ProjElem ColId="13" Alias="percentile_disc">
-              <dxl:AggFunc AggMdid="0.7194.1.0" AggDistinct="false" AggStage="Normal" TypeMdid="0.701.1.0" AggKind="n" AggArgTypes="701,701,20,20">
+              <dxl:AggFunc AggMdid="0.9194.1.0" AggDistinct="false" AggStage="Normal" TypeMdid="0.701.1.0" AggKind="n" AggArgTypes="701,701,20,20">
                 <dxl:ValuesList ParamType="aggargs">
                   <dxl:Ident ColId="1" ColName="a2" TypeMdid="0.701.1.0"/>
                   <dxl:ConstValue TypeMdid="0.701.1.0" Value="AAAAAAAA4D8=" DoubleValue="0.500000"/>
