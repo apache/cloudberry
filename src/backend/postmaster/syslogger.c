@@ -109,6 +109,7 @@ static char *last_csv_file_name = NULL;
 typedef struct
 {
 	int32		pid;			/* PID of source process */
+	int32		tid;			/* thread id of source thread */
 	StringInfoData data;		/* accumulated data, as a StringInfo */
 } save_buffer;
 
@@ -1504,7 +1505,12 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 			{
 				save_buffer *buf = (save_buffer *) lfirst(cell);
 
-				if (buf->pid == p.pid)
+				/*
+				 * Different threads in the same process may write
+				 * log messages concurrently. The chunk messages
+				 * should be treat differently.
+				 */
+				if (buf->pid == p.pid && buf->tid == p.thid)
 				{
 					existing_slot = buf;
 					break;
@@ -1540,6 +1546,7 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 						buffer_lists[p.pid % NBUFFER_LISTS] = buffer_list;
 					}
 					free_slot->pid = p.pid;
+					free_slot->tid = p.thid;
 					str = &(free_slot->data);
 					initStringInfo(str);
 					appendBinaryStringInfo(str,
