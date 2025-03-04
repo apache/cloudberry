@@ -380,9 +380,6 @@ private:
 
 	// translate a CTAS query
 	CDXLNode *TranslateCTASToDXL();
-	// translate CTAS storage options
-	CDXLCtasStorageOptions::CDXLCtasOptionArray *GetDXLCtasOptionArray(
-		List *options, IMDRelation::Erelstoragetype *storage_type);
 
 	// extract storage option value from defelem
 	CWStringDynamic *ExtractStorageOptionStr(DefElem *def_elem);
