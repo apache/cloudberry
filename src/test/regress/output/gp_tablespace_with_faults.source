@@ -1181,6 +1181,6 @@ select cleanup(:content_id_under_test, :'tablespace_location');
 20190628:12:36:21:009819 gpstop:Adams-MBP:adamberlin-[INFO]:-Gathering information and validating the environment...
 20190628:12:36:21:009819 gpstop:Adams-MBP:adamberlin-[INFO]:-Obtaining Cloudberry Master catalog information
 20190628:12:36:21:009819 gpstop:Adams-MBP:adamberlin-[INFO]:-Obtaining Segment details from master...
-20190628:12:36:21:009819 gpstop:Adams-MBP:adamberlin-[INFO]:-Cloudberry Version: 'postgres (Cloudberry Database) 7.0.0-alpha.0+dev.479.gb6a83cfcde build dev'
+20190628:12:36:21:009819 gpstop:Adams-MBP:adamberlin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.479.gb6a83cfcde build dev'
 20190628:12:36:21:009819 gpstop:Adams-MBP:adamberlin-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore

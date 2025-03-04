@@ -149,19 +149,19 @@ def parseargs():
 # -------------------------------------------------------------------------
 def display_params(options, dburl, standby, segments, dumpDirsExist):
     global g_warnings_generated
-    logger.info('CloudberryDB Instance Deletion Parameters')
+    logger.info('Cloudberry Instance Deletion Parameters')
     logger.info('--------------------------------------')
-    logger.info('CloudberryDB Coordinator hostname                  = %s' % dburl.pghost)
-    logger.info('CloudberryDB Coordinator data directory            = %s' % options.coordinator_data_dir)
-    logger.info('CloudberryDB Coordinator port                      = %s' % dburl.pgport)
+    logger.info('Cloudberry Coordinator hostname                  = %s' % dburl.pghost)
+    logger.info('Cloudberry Coordinator data directory            = %s' % options.coordinator_data_dir)
+    logger.info('Cloudberry Coordinator port                      = %s' % dburl.pgport)
     if standby:
-        logger.info('CloudberryDB Coordinator standby host              = %s' % standby.getSegmentHostName())
-        logger.info('CloudberryDB Coordinator standby data directory    = %s' % standby.getSegmentDataDirectory())
-        logger.info('CloudberryDB Coordinator standby port              = %s' % standby.getSegmentPort())
+        logger.info('Cloudberry Coordinator standby host              = %s' % standby.getSegmentHostName())
+        logger.info('Cloudberry Coordinator standby data directory    = %s' % standby.getSegmentDataDirectory())
+        logger.info('Cloudberry Coordinator standby port              = %s' % standby.getSegmentPort())
     if options.force:
-        logger.info('CloudberryDB Force delete of dump files       = ON')
+        logger.info('Cloudberry Force delete of dump files       = ON')
     else:
-        logger.info('CloudberryDB Force delete of dump files       = OFF')
+        logger.info('Cloudberry Force delete of dump files       = OFF')
     logger.info('Batch size                                 = %s' % options.batch_size)
     logger.info('--------------------------------------')
     logger.info(' Segment Instance List ')
@@ -173,14 +173,14 @@ def display_params(options, dburl, standby, segments, dumpDirsExist):
         port = segdb.getSegmentPort()
         logger.info('%s:%s:%s' % (host, datadir, port))
 
-    yn = ask_yesno('', 'Continue with CloudberryDB instance deletion?', 'N')
+    yn = ask_yesno('', 'Continue with Cloudberry instance deletion?', 'N')
     if yn:
-        logger.info('FINAL WARNING, you are about to delete the CloudberryDB instance')
+        logger.info('FINAL WARNING, you are about to delete the Cloudberry instance')
         logger.info('on coordinator host %s.' % dburl.pghost)
         if dumpDirsExist and options.force:
             logger.warn('There are database dump files, these will be DELETED if you continue!')
             g_warnings_generated = True
-        yn = ask_yesno('', 'Continue with CloudberryDB instance deletion?', 'N')
+        yn = ask_yesno('', 'Continue with Cloudberry instance deletion?', 'N')
         if not yn:
             raise GpDeleteSystemException('User canceled')
     else:

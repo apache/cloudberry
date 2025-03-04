@@ -44,19 +44,19 @@ DEFAULT_BATCH_SIZE=16
 PG_HBA_BACKUP = 'pg_hba.conf.gpinitstandby.bak'
 
 _description = """The gpinitstandby utility adds a backup coordinator host to your
-Cloudberry Database system. If your system has an existing backup
+Apache Cloudberry system. If your system has an existing backup
 coordinator host configured, use the -r option to remove it before adding 
 the new standby coordinator host.
 
 Before running this utility, make sure 
-that the Cloudberry Database software is installed on the backup coordinator
+that the Apache Cloudberry software is installed on the backup coordinator
 host and that you have exchanged SSH keys between hosts.  This utility
 should be run on the currently active primary coordinator host.
 
 The utility will perform the following steps:
-* Update the Cloudberry Database system catalog to remove the
+* Update the Apache Cloudberry system catalog to remove the
   existing backup coordinator host information (if the -r option is supplied)
-* Update the Cloudberry Database system catalog to add the new backup
+* Update the Apache Cloudberry system catalog to add the new backup
   coordinator host information (use the -n option to skip this step)
 * Edit the pg_hba.conf files of the segment instances to allow access
   from the newly added standby coordinator.
@@ -193,19 +193,19 @@ def print_summary(options, array, standby_datadir, unreachable_hosts=[]):
     if options.remove:
         logger.info('Warm coordinator standby removal parameters')
     else:
-        logger.info('CloudberryDB standby coordinator initialization parameters')
+        logger.info('Cloudberry standby coordinator initialization parameters')
     logger.info('-----------------------------------------------------')
-    logger.info('CloudberryDB coordinator hostname               = %s' \
+    logger.info('Cloudberry coordinator hostname               = %s' \
                     % array.coordinator.getSegmentHostName())
-    logger.info('CloudberryDB coordinator data directory         = %s' \
+    logger.info('Cloudberry coordinator data directory         = %s' \
                     % array.coordinator.getSegmentDataDirectory())
-    logger.info('CloudberryDB coordinator port                   = %s' \
+    logger.info('Cloudberry coordinator port                   = %s' \
                     % array.coordinator.getSegmentPort())
     if options.remove:
-        logger.info('CloudberryDB standby coordinator hostname       = %s' \
+        logger.info('Cloudberry standby coordinator hostname       = %s' \
                         % array.standbyCoordinator.getSegmentHostName())
     else:
-        logger.info('CloudberryDB standby coordinator hostname       = %s' \
+        logger.info('Cloudberry standby coordinator hostname       = %s' \
                         % options.standby_host)
 
     if array.standbyCoordinator:
@@ -215,22 +215,22 @@ def print_summary(options, array, standby_datadir, unreachable_hosts=[]):
     else:
         standby_port = array.coordinator.getSegmentPort()
 
-    logger.info('CloudberryDB standby coordinator port           = %d' \
+    logger.info('Cloudberry standby coordinator port           = %d' \
                     % standby_port)
 
     if array.standbyCoordinator:
-        logger.info('CloudberryDB standby coordinator data directory = %s' \
+        logger.info('Cloudberry standby coordinator data directory = %s' \
                         % array.standbyCoordinator.getSegmentDataDirectory())
     else:
         if standby_datadir:
-            logger.info('CloudberryDB standby coordinator data directory = %s' % standby_datadir)
+            logger.info('Cloudberry standby coordinator data directory = %s' % standby_datadir)
         else:
             raise GpInitStandbyException('No data directory specified for standby coordinator')
 
     if not options.remove and options.no_update:
-        logger.info('CloudberryDB update system catalog         = Off')
+        logger.info('Cloudberry update system catalog         = Off')
     elif not options.remove:
-        logger.info('CloudberryDB update system catalog         = On')
+        logger.info('Cloudberry update system catalog         = On')
 
     # Confirm the action
     if options.confirm:
@@ -391,10 +391,10 @@ def create_standby(options):
         # synchronization of packages. We should *not* disturb the user's attempts 
         # initialize a standby.
         try:
-            logger.info('Syncing Cloudberry Database extensions to standby')
+            logger.info('Syncing Apache Cloudberry extensions to standby')
             SyncPackages(options.standby_host).run()
         except Exception as e:
-            logger.warning('Syncing of Cloudberry Database extensions has failed.')
+            logger.warning('Syncing of Apache Cloudberry extensions has failed.')
             logger.warning('Please run gppkg --clean after successful standby initialization.')
 
         # Disable Ctrl-C

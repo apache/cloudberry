@@ -466,7 +466,7 @@ FETCH 1 FROM foo24;
 (1 row)
 
 FETCH BACKWARD 1 FROM foo24; -- should fail
-ERROR:  backward scan is not supported in this version of Cloudberry Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 END;
 --
 -- Cursors outside transaction blocks
@@ -1193,7 +1193,7 @@ fetch all from c;
 
 -- end_ignore
 move backward all in c;
-ERROR:  backward scan is not supported in this version of Cloudberry Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 fetch all from c;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 rollback;
@@ -1225,7 +1225,7 @@ fetch all in c1;
 (1 row)
 
 fetch backward all in c1;
-ERROR:  backward scan is not supported in this version of Cloudberry Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 rollback;
 begin;
 explain (costs off) declare c2 cursor for select generate_series(1,3) as g;
@@ -1254,7 +1254,7 @@ fetch all in c2;
 (3 rows)
 
 fetch backward all in c2;
-ERROR:  backward scan is not supported in this version of Cloudberry Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 rollback;
 -- gpdb: Test executor should return NULL directly during commit for holdable
 -- cursor if previously executor has emitted all tuples. We've seen two issues

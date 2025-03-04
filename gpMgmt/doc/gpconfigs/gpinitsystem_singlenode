@@ -1,7 +1,7 @@
 # FILE NAME: gpinitsystem_singlenode
 
 # A configuration file is needed by the gpinitsystem utility.
-# This sample file initializes a Cloudberry Database Single Node
+# This sample file initializes a Apache Cloudberry Single Node
 # Edition (SNE) system with one coordinator and  two segment instances 
 # on the local host. This file is referenced when you run gpinitsystem. 
 
@@ -21,7 +21,7 @@ MACHINE_LIST_FILE=./hostlist_singlenode
 
 # This specifies a prefix that will be used to name the data directories 
 # of the coordinator and segment instances. The naming convention for data 
-# directories in a Cloudberry Database system is SEG_PREFIX<number> 
+# directories in a Apache Cloudberry system is SEG_PREFIX<number> 
 # where <number> starts with 0 for segment instances and the coordinator 
 # is always -1. So for example, if you choose the prefix gpsne, your 
 # coordinator instance data directory would be named gpsne-1, and the segment 
@@ -54,7 +54,7 @@ PORT_BASE=6000
 declare -a DATA_DIRECTORY=(/gpdata1 /gpdata2)
 
 
-# The OS-configured hostname of the Cloudberry Database coordinator instance.
+# The OS-configured hostname of the Apache Cloudberry coordinator instance.
 
 COORDINATOR_HOSTNAME=hostname_of_machine
 
@@ -71,7 +71,7 @@ COORDINATOR_DIRECTORY=/gpmaster
 
 # The port number for the coordinator instance. This is the port number 
 # that users and client connections will use when accessing the 
-# Cloudberry Database system.
+# Apache Cloudberry system.
 
 COORDINATOR_PORT=5432
 

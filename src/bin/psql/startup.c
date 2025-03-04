@@ -828,7 +828,7 @@ process_psqlrc_file(char *filename)
 static void
 showVersion(void)
 {
-	puts("psql (Cloudberry Database) " PG_VERSION);
+	puts("psql (Apache Cloudberry) " PG_VERSION);
 }
 
 

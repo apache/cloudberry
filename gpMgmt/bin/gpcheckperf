@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gpcheckperf -- Check the hardware for Cloudberry Database
+gpcheckperf -- Check the hardware for Apache Cloudberry
 
 Usage: gpcheckperf <options>
 

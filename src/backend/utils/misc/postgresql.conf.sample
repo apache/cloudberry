@@ -66,7 +66,7 @@
       					# a Cloudberry instance. The master and 
 					# each segment has its own port number. 
 # note: Port numbers for the Cloudberry system must also be changed in the
-# gp_configuration catalog. See the Cloudberry Database Administrator Guide 
+# gp_configuration catalog. See the Apache Cloudberry Administrator Guide 
 # for instructions!
 #
 # WARNING: YOU MUST SHUT DOWN YOUR GREENPLUM SYSTEM BEFORE CHANGING 

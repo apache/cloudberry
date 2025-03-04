@@ -1,6 +1,6 @@
 COMMAND NAME: gpdeletesystem
 
-Deletes a Cloudberry Database system that was initialized 
+Deletes a Apache Cloudberry system that was initialized 
 using gpinitsystem.
 
 
@@ -29,7 +29,7 @@ The gpdeletesystem script will perform the following actions:
 Before running this script, you should move any backup files
 (created by gp_dump) out of the coordinator and segment data directories.
 
-This script will not uninstall the Cloudberry Database software.
+This script will not uninstall the Apache Cloudberry software.
 
 
 *****************************************************
@@ -58,7 +58,7 @@ segment instances it needs to delete.
 -f (force)
 
 Force a delete even if backup files are found in the data directories. 
-The default is to not delete Cloudberry Database instances if backup 
+The default is to not delete Apache Cloudberry instances if backup 
 files (created by gp_dump) are present.
 
 
@@ -86,12 +86,12 @@ Displays the version, status, last updated date, and check sum of this script.
 EXAMPLES
 *****************************************************
 
-Delete a Cloudberry Database system:
+Delete a Apache Cloudberry system:
 
 gpdeletesystem -d /gpdata/gp-1
 
 
-Delete a Cloudberry Database system even if backup files are present:
+Delete a Apache Cloudberry system even if backup files are present:
 
 gpdeletesystem -d /gpdata/gp-1 -f
 

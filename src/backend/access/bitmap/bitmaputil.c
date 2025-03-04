@@ -102,7 +102,7 @@ _bitmap_get_metapage_data(Relation rel, Buffer metabuf)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("the disk format for \"%s\" is not valid for this version of Cloudberry Database",
+				 errmsg("the disk format for \"%s\" is not valid for this version of Apache Cloudberry",
 						RelationGetRelationName(rel)),
 				 errhint("Use REINDEX to update this index.")));
 	}

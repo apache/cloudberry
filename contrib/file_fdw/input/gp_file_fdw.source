@@ -1,5 +1,5 @@
 --
--- Test foreign-data wrapper file_fdw. Cloudberry Database MPP specific
+-- Test foreign-data wrapper file_fdw. Apache Cloudberry MPP specific
 --
 
 -- Clean up in case a prior regression run failed

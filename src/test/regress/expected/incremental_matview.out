@@ -13,7 +13,7 @@ INSERT INTO mv_base_b VALUES
   (3,103),
   (4,104);
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_1 AS SELECT i,j,k FROM mv_base_a a INNER JOIN mv_base_b b USING(i) WITH NO DATA;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv_ivm_1 ORDER BY 1,2,3;
 ERROR:  materialized view "mv_ivm_1" has not been populated
@@ -102,14 +102,14 @@ SELECT * FROM mv_ivm_1 ORDER BY 1,2,3;
 
 -- rename of IVM columns
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_rename AS SELECT DISTINCT * FROM mv_base_a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER MATERIALIZED VIEW mv_ivm_rename RENAME COLUMN __ivm_count__ TO xxx;
 ERROR:  IVM column can not be renamed
 DROP MATERIALIZED VIEW mv_ivm_rename;
 -- unique index on IVM columns
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_unique AS SELECT DISTINCT * FROM mv_base_a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX ON mv_ivm_unique(__ivm_count__);
 ERROR:  unique index creation on IVM columns is not supported
@@ -140,19 +140,19 @@ BEGIN;
 CREATE FUNCTION ivm_func() RETURNS int LANGUAGE 'sql'
        AS 'SELECT 1' IMMUTABLE;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_func AS SELECT * FROM ivm_func();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'ivm_func' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'ivm_func' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_no_tbl AS SELECT 1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ROLLBACK;
 -- result of materialized view have DISTINCT clause or the duplicate result.
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_duplicate AS SELECT j FROM mv_base_a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_distinct AS SELECT DISTINCT j FROM mv_base_a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mv_base_a VALUES(6,20);
 SELECT * FROM mv_ivm_duplicate ORDER BY 1;
@@ -201,7 +201,7 @@ ROLLBACK;
 -- support SUM(), COUNT() and AVG() aggregate functions
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_agg AS SELECT i, SUM(j), COUNT(i), AVG(j) FROM mv_base_a GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv_ivm_agg ORDER BY 1,2,3,4;
  i | sum | count |         avg         
@@ -250,7 +250,7 @@ ROLLBACK;
 -- support COUNT(*) aggregate function
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_agg AS SELECT i, SUM(j), COUNT(*) FROM mv_base_a GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv_ivm_agg ORDER BY 1,2,3;
  i | sum | count 
@@ -277,7 +277,7 @@ ROLLBACK;
 -- TRUNCATE a base table in aggregate views
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_agg AS SELECT i, SUM(j), COUNT(*) FROM mv_base_a GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 TRUNCATE mv_base_a;
 SELECT sum, count FROM mv_ivm_agg;
@@ -294,7 +294,7 @@ ROLLBACK;
 -- support aggregate functions without GROUP clause
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_group AS SELECT SUM(j), COUNT(j), AVG(j) FROM mv_base_a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'sum' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'sum' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv_ivm_group ORDER BY 1;
  sum | count |         avg         
@@ -320,7 +320,7 @@ ROLLBACK;
 -- TRUNCATE a base table in aggregate views without GROUP clause
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_group AS SELECT SUM(j), COUNT(j), AVG(j) FROM mv_base_a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'sum' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'sum' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 TRUNCATE mv_base_a;
 SELECT sum, count, avg FROM mv_ivm_group;
@@ -338,10 +338,10 @@ SELECT SUM(j), COUNT(j), AVG(j) FROM mv_base_a;
 ROLLBACK;
 -- TRUNCATE a base table without transaction block.
 CREATE TABLE mv_base_simple(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_simple AS SELECT * FROM mv_base_simple;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 TRUNCATE mv_base_simple;
 DROP TABLE mv_base_simple CASCADE;
@@ -349,7 +349,7 @@ NOTICE:  drop cascades to materialized view mv_ivm_simple
 -- resolved issue: When use AVG() function and values is indivisible, result of AVG() is incorrect.
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_avg_bug AS SELECT i, SUM(j), COUNT(j), AVG(j) FROM mv_base_A GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv_ivm_avg_bug ORDER BY 1,2,3;
  i | sum | count |         avg         
@@ -392,7 +392,7 @@ ROLLBACK;
 -- aggregate views with column names specified
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_agg(a) AS SELECT i, SUM(j) FROM mv_base_a GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mv_base_a VALUES (1,100), (2,200), (3,300);
 UPDATE mv_base_a SET j = 2000 WHERE (i,j) = (2,20);
@@ -410,7 +410,7 @@ SELECT * FROM mv_ivm_agg ORDER BY 1,2;
 ROLLBACK;
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_agg(a,b) AS SELECT i, SUM(j) FROM mv_base_a GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mv_base_a VALUES (1,100), (2,200), (3,300);
 UPDATE mv_base_a SET j = 2000 WHERE (i,j) = (2,20);
@@ -428,7 +428,7 @@ SELECT * FROM mv_ivm_agg ORDER BY 1,2;
 ROLLBACK;
 BEGIN;
 CREATE INCREMENTAL MATERIALIZED VIEW mv_ivm_agg(a,b,c) AS SELECT i, SUM(j) FROM mv_base_a GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  too many column names were specified
 ROLLBACK;
@@ -438,7 +438,7 @@ CREATE TABLE base_t (i int, v int) DISTRIBUTED BY (i);
 INSERT INTO base_t VALUES (1, 10), (2, 20), (3, 30);
 CREATE INCREMENTAL MATERIALIZED VIEW mv_self(v1, v2) AS
  SELECT t1.v, t2.v FROM base_t AS t1 JOIN base_t AS t2 ON t1.i = t2.i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'v' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'v' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv_self ORDER BY v1;
  v1 | v2 
@@ -482,7 +482,7 @@ BEGIN;
 CREATE TABLE base_t (i int, v int) DISTRIBUTED BY (i);
 INSERT INTO base_t VALUES (1,10),(2, NULL);
 CREATE INCREMENTAL MATERIALIZED VIEW mv AS SELECT * FROM base_t;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv ORDER BY i;
  i | v  
@@ -503,7 +503,7 @@ ROLLBACK;
 BEGIN;
 CREATE TABLE base_t (i int) DISTRIBUTED BY (i);
 CREATE INCREMENTAL MATERIALIZED VIEW mv AS SELECT * FROM base_t;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv ORDER BY i;
  i 
@@ -523,7 +523,7 @@ BEGIN;
 CREATE TABLE base_t (i int, v int) DISTRIBUTED BY (i);
 INSERT INTO base_t VALUES (NULL, 1), (NULL, 2), (1, 10), (1, 20);
 CREATE INCREMENTAL MATERIALIZED VIEW mv AS SELECT i, sum(v) FROM base_t GROUP BY i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mv ORDER BY i;
  i | sum 
@@ -566,7 +566,7 @@ $$ LANGUAGE plpgsql;
 CREATE INCREMENTAL MATERIALIZED VIEW mv(r, si, sj, t) AS
  SELECT r.i, s.i, s.j, t.j
    FROM base_r AS r JOIN base_s AS s ON r.i=s.i JOIN base_t AS t ON s.j=t.j;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW v(r, si, sj, t) AS
  SELECT r.i, s.i, s.j, t.j
@@ -844,7 +844,7 @@ CREATE TABLE t_mytype (x mytype);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE INCREMENTAL MATERIALIZED VIEW mv_mytype AS
  SELECT * FROM t_mytype;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t_mytype VALUES ('1'::mytype);
 SELECT * FROM mv_mytype;
@@ -886,7 +886,7 @@ ERROR:  HAVING clause is not supported on incrementally maintainable materialize
 -- contain view or materialized view
 CREATE VIEW b_view AS SELECT i,k FROM mv_base_b;
 CREATE MATERIALIZED VIEW b_mview AS SELECT i,k FROM mv_base_b;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INCREMENTAL MATERIALIZED VIEW  mv_ivm07 AS SELECT a.i,a.j FROM mv_base_a a,b_view b WHERE a.i = b.i;
 ERROR:  VIEW or MATERIALIZED VIEW is not supported on incrementally maintainable materialized view
@@ -924,7 +924,7 @@ ERROR:  GROUPING SETS, ROLLUP, or CUBE clauses is not supported on incrementally
 -- inheritance parent is not supported
 BEGIN;
 CREATE TABLE parent (i int, v int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE child_a(options text) INHERITS(parent);
 NOTICE:  table has parent, setting distribution columns to match parent table

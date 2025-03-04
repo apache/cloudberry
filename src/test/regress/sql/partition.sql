@@ -3804,7 +3804,7 @@ RESET ROLE;
 -- we don't drop the table, schema and role here in order to test upgrade
 
 --
--- Github issue: https://github.com/cloudberrydb/cloudberrydb/issues/547
+-- Github issue: https://github.com/apache/cloudberry/issues/547
 -- Test COPY FROM on partitions tables.
 --
 create table t_issue_547_aoco(a int, b int) partition by range(b) (start(1) end(34) every(1)) using ao_column distributed by (a);

@@ -352,7 +352,7 @@ class gpdirtableload:
                 self.setup_connection(recurse)
             else:
                 self.log(self.ERROR, "could not connect to database: %s. Is " \
-                                     "the Cloudberry Database running on port %i?" % (errorMessage,
+                                     "the Apache Cloudberry running on port %i?" % (errorMessage,
                                                                                       self.options.port))
 
     def isDirectoryMode(self):
@@ -422,7 +422,7 @@ class gpdirtableload:
             srcfile = os.path.join(os.environ.get('GPHOME'),
                                    'greenplum_path.sh')
         if (not (srcfile and os.path.exists(srcfile))):
-            self.log(self.ERROR, 'cannot find greenplum environment ' +
+            self.log(self.ERROR, 'cannot find cloudberry environment ' +
                      'file: environment misconfigured')
 
         cmdstrbase = "source %s ;" % srcfile
@@ -490,7 +490,7 @@ class gpdirtableload:
             srcfile = os.path.join(os.environ.get('GPHOME'),
                                    'greenplum_path.sh')
         if (not (srcfile and os.path.exists(srcfile))):
-            self.log(self.ERROR, 'cannot find greenplum environment ' +
+            self.log(self.ERROR, 'cannot find cloudberry environment ' +
                      'file: environment misconfigured')
 
         cmdstrbase = "source %s ;" % srcfile
