@@ -2545,19 +2545,9 @@ CTranslatorRelcacheToDXL::RetrieveRelStorageType(Relation rel)
 		case HEAP_TABLE_AM_OID:
 			rel_storage_type = IMDRelation::ErelstorageHeap;
 			break;
-		// FIXME: need to add support for custom table am!!!
-		//
-		// Why 7047 here?
-		// Because we defined a custom table am using columnar storage,
-		// the orca optimizer does not support am other than HEAP/AO/AOCS. At present,
-		// there is no way to extend orca to support custom table am. So here we use
-		// the am_id(7047) we assigned to the custom table am, and let the orca optimizer
-		// treat this columnar storage format as AOCS to generate an execution plan
-		//
-		// Why use the magic number 7047 instead of the macro definition?
-		// Just to make it look like it doesn't make sense,
-		// so others will notice that the logic needs to be refactored
 		case PAX_AM_OID:
+			rel_storage_type = IMDRelation::ErelstoragePAX;
+			break;
 		case AO_COLUMN_TABLE_AM_OID:
 			rel_storage_type = IMDRelation::ErelstorageAppendOnlyCols;
 			break;

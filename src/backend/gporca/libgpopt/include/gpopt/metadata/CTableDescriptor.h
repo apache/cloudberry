@@ -239,10 +239,11 @@ public:
 	ULONG IndexCount();
 
 	BOOL
-	IsAORowOrColTable() const
+	IsNonBlockTable() const
 	{
 		return m_erelstoragetype == IMDRelation::ErelstorageAppendOnlyCols ||
-			   m_erelstoragetype == IMDRelation::ErelstorageAppendOnlyRows;
+			   m_erelstoragetype == IMDRelation::ErelstorageAppendOnlyRows || 
+			   m_erelstoragetype == IMDRelation::ErelstoragePAX;
 	}
 
 	ULONG

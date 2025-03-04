@@ -500,6 +500,7 @@ enum Edxltoken
 	EdxltokenRelStorageHeap,
 	EdxltokenRelStorageAppendOnlyCols,
 	EdxltokenRelStorageAppendOnlyRows,
+	EdxltokenRelStoragePAX,
 	EdxltokenRelStorageMixedPartitioned,
 	EdxltokenRelStorageForeign,
 	EdxltokenRelStorageCompositeType,

@@ -3784,6 +3784,13 @@ CDXLOperatorFactory::ParseRelationStorageType(const XMLCh *xml_val)
 	}
 
 	if (0 == XMLString::compareString(
+				 xml_val,
+				 CDXLTokens::XmlstrToken(EdxltokenRelStoragePAX)))
+	{
+		return IMDRelation::ErelstoragePAX;
+	}
+
+	if (0 == XMLString::compareString(
 				 xml_val, CDXLTokens::XmlstrToken(EdxltokenRelStorageForeign)))
 	{
 		return IMDRelation::ErelstorageForeign;

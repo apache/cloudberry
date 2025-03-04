@@ -695,7 +695,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 		plan->qual = security_query_quals;
 	}
 
-	if (md_rel->IsAORowOrColTable())
+	if (md_rel->IsNonBlockTable())
 	{
 		CheckSafeTargetListForAOTables(plan->targetlist);
 	}
@@ -870,7 +870,7 @@ CTranslatorDXLToPlStmt::TranslateDXLIndexScan(
 	index_scan->indexorderdir = CTranslatorUtils::GetScanDirection(
 		physical_idx_scan_dxlop->GetIndexScanDir());
 
-	if (md_rel->IsAORowOrColTable())
+	if (md_rel->IsNonBlockTable())
 	{
 		CheckSafeTargetListForAOTables(plan->targetlist);
 	}
@@ -4722,7 +4722,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	IMDId *mdid_target_table = phy_dml_dxlop->GetDXLTableDescr()->MDId();
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(mdid_target_table);
 
-	if (md_rel->IsAORowOrColTable())
+	if (md_rel->IsNonBlockTable())
 	{
 		isSplit = true; // AO tables are always use split updates
 	}

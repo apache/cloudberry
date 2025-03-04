@@ -50,7 +50,7 @@ CXformDynamicIndexGet2DynamicIndexScan::Exfp(CExpressionHandle &exprhdl) const
 		CLogicalDynamicIndexGet::PopConvert(exprhdl.Pop());
 
 	CTableDescriptor *ptabdesc = popGet->Ptabdesc();
-	BOOL possible_ao_table = ptabdesc->IsAORowOrColTable() ||
+	BOOL possible_ao_table = ptabdesc->IsNonBlockTable() ||
 							 ptabdesc->RetrieveRelStorageType() ==
 								 IMDRelation::ErelstorageMixedPartitioned;
 	if (possible_ao_table || exprhdl.DeriveHasSubquery(0))

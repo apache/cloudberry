@@ -50,6 +50,7 @@ public:
 		ErelstorageHeap,
 		ErelstorageAppendOnlyCols,
 		ErelstorageAppendOnlyRows,
+		ErelstoragePAX,
 		ErelstorageForeign,
 		ErelstorageMixedPartitioned,
 		ErelstorageCompositeType,
@@ -189,11 +190,12 @@ public:
 		IMDRelation::Erelstoragetype rel_storage_type);
 
 	BOOL
-	IsAORowOrColTable() const
+	IsNonBlockTable() const
 	{
 		Erelstoragetype st = RetrieveRelStorageType();
 		return st == ErelstorageAppendOnlyCols ||
-			   st == ErelstorageAppendOnlyRows;
+			   st == ErelstorageAppendOnlyRows ||
+			   st == ErelstoragePAX;
 	}
 
 	// get oid of foreign server for foreign table

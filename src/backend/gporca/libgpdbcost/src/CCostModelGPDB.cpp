@@ -1888,9 +1888,9 @@ CCostModelGPDB::CostIndexOnlyScan(CMemoryPool *mp GPOS_UNUSED,	  // mp
 	const CDouble dTableWidth =
 		CPhysicalScan::PopConvert(pop)->PstatsBaseTable()->Width();
 
-	BOOL isAO = CPhysicalScan::PopConvert(exprhdl.Pop())
+	BOOL isNonBlock = CPhysicalScan::PopConvert(exprhdl.Pop())
 					->Ptabdesc()
-					->IsAORowOrColTable();
+					->IsNonBlockTable();
 
 	CDouble dIndexFilterCostUnit =
 		pcmgpdb->GetCostModelParams()
@@ -1912,9 +1912,9 @@ CCostModelGPDB::CostIndexOnlyScan(CMemoryPool *mp GPOS_UNUSED,	  // mp
 	GPOS_ASSERT(0 < dIndexScanTupCostUnit);
 	GPOS_ASSERT(0 < dIndexScanTupRandomFactor);
 
-	if (isAO)
+	if (isNonBlock)
 	{
-		// AO specific costs related to index-scan/index-only-scan:
+		// AO(or PAX) specific costs related to index-scan/index-only-scan:
 		//
 		//   * AO tables have a variable block size layout on disk (e.g. batch
 		//     insert creates larger block than single row insert). However,
@@ -2005,7 +2005,7 @@ CCostModelGPDB::CostIndexOnlyScan(CMemoryPool *mp GPOS_UNUSED,	  // mp
 
 	CDouble dPartialVisFrac(1);
 	CDouble dCostVisibilityMapLookup(0);
-	if (isAO)
+	if (isNonBlock)
 	{
 		dPartialVisFrac = 0;
 	}
@@ -2185,9 +2185,9 @@ CCostModelGPDB::CostBitmapTableScan(CMemoryPool *mp, CExpressionHandle &exprhdl,
 				pcmgpdb->GetCostModelParams()
 					->PcpLookup(CCostModelParamsGPDB::EcpBitmapPageCost)
 					->Get();
-			BOOL isAOTable = CPhysicalScan::PopConvert(exprhdl.Pop())
+			BOOL isNonBlockTable = CPhysicalScan::PopConvert(exprhdl.Pop())
 								 ->Ptabdesc()
-								 ->IsAORowOrColTable();
+								 ->IsNonBlockTable();
 
 			// some cost constants determined with the cal_bitmap_test.py script
 			CDouble c1_cost_per_row(0.03);
@@ -2214,7 +2214,7 @@ CCostModelGPDB::CostBitmapTableScan(CMemoryPool *mp, CExpressionHandle &exprhdl,
 
 			CDouble bitmapUnionCost = 0;
 
-			if (!isAOTable && indexType == IMDIndex::EmdindBitmap && dNDV > 1.0)
+			if (!isNonBlockTable && indexType == IMDIndex::EmdindBitmap && dNDV > 1.0)
 			{
 				CDouble baseTableRows = CPhysicalScan::PopConvert(exprhdl.Pop())
 											->PstatsBaseTable()

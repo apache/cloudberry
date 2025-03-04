@@ -1925,7 +1925,7 @@ CXformUtils::FIndexApplicable(CMemoryPool *mp, const IMDIndex *pmdindex,
 							  IMDIndex::EmdindexType emdindtype,
 							  IMDIndex::EmdindexType altindtype)
 {
-	BOOL possible_ao_table = pmdrel->IsAORowOrColTable() ||
+	BOOL possible_ao_table = pmdrel->IsNonBlockTable() ||
 							 pmdrel->RetrieveRelStorageType() ==
 								 IMDRelation::ErelstorageMixedPartitioned;
 	// GiST and Hash can match with either Btree or Bitmap indexes
@@ -3010,7 +3010,7 @@ CXformUtils::PexprBitmapSelectBestIndex(
 			pexprIndex->Release();
 
 			BOOL possible_ao_table =
-				pmdrel->IsAORowOrColTable() ||
+				pmdrel->IsNonBlockTable() ||
 				pmdrel->RetrieveRelStorageType() ==
 					IMDRelation::ErelstorageMixedPartitioned;
 

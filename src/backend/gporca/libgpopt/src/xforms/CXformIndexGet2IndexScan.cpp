@@ -48,7 +48,7 @@ CXformIndexGet2IndexScan::Exfp(CExpressionHandle &exprhdl) const
 
 	CTableDescriptor *ptabdesc = popGet->Ptabdesc();
 	CIndexDescriptor *pindexdesc = popGet->Pindexdesc();
-	BOOL possible_ao_table = ptabdesc->IsAORowOrColTable() ||
+	BOOL possible_ao_table = ptabdesc->IsNonBlockTable() ||
 							 ptabdesc->RetrieveRelStorageType() ==
 								 IMDRelation::ErelstorageMixedPartitioned;
 
