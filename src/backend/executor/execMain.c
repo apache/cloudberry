@@ -192,6 +192,9 @@ static void EvalPlanQualStart(EPQState *epqstate, Plan *planTree);
 
 static void AdjustReplicatedTableCounts(EState *estate);
 
+static void
+MaintainMaterializedViewStatus(QueryDesc *queryDesc, CmdType operation);
+
 /* end of local decls */
 
 
@@ -248,6 +251,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	bool		shouldDispatch;
 	bool		needDtx;
 	List 		*volatile toplevelOidCache = NIL;
+	bool		has_writable_operation = false;
 
 	/* sanity checks: queryDesc must not be started already */
 	Assert(queryDesc != NULL);
@@ -395,7 +399,10 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 */
 			if (queryDesc->plannedstmt->rowMarks != NIL ||
 				queryDesc->plannedstmt->hasModifyingCTE)
+			{
 				estate->es_output_cid = GetCurrentCommandId(true);
+				has_writable_operation = true;
+			}
 
 			/*
 			 * A SELECT without modifying CTEs can't possibly queue triggers,
@@ -411,6 +418,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		case CMD_DELETE:
 		case CMD_UPDATE:
 			estate->es_output_cid = GetCurrentCommandId(true);
+			has_writable_operation = true;
 			break;
 
 		default:
@@ -544,6 +552,11 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	}
 	else
 		shouldDispatch = false;
+
+	if (GP_ROLE_DISPATCH == Gp_role && has_writable_operation)
+	{
+		InitExtendProtocolData();
+	}
 
 	/*
 	 * We don't eliminate aliens if we don't have an MPP plan
@@ -1037,7 +1050,8 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 			/* should never happen */
 			Assert(!"undefined parallel execution strategy");
 		}
-		if ((exec_identity == GP_IGNORE || exec_identity == GP_ROOT_SLICE) && operation != CMD_SELECT)
+		if ((exec_identity == GP_IGNORE || exec_identity == GP_ROOT_SLICE) &&
+			(operation != CMD_SELECT || (queryDesc->plannedstmt->hasModifyingCTE)))
 			es_processed = mppExecutorWait(queryDesc);
 
 		/*
@@ -1062,45 +1076,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 				queryDesc->plannedstmt->hasModifyingCTE) &&
 			((es_processed > 0 || estate->es_processed > 0) || !queryDesc->plannedstmt->canSetTag))
 		{
-			List		*rtable = queryDesc->plannedstmt->rtable;
-			int			length = list_length(rtable);
-			ListCell	*lc;
-			List		*unique_result_relations = list_concat_unique_int(NIL, queryDesc->plannedstmt->resultRelations);
-
-			foreach(lc, unique_result_relations)
-			{
-
-				int varno = lfirst_int(lc);
-				RangeTblEntry *rte = rt_fetch(varno, rtable);
-
-				/* Avoid crash in case we don't find a rte. */
-				if (varno > length + 1)
-				{
-					ereport(WARNING, (errmsg("could not find rte of varno: %u ", varno)));
-					continue;
-				}
-					
-				switch (operation)
-				{
-					case CMD_INSERT:
-						SetRelativeMatviewAuxStatus(rte->relid,
-													MV_DATA_STATUS_EXPIRED_INSERT_ONLY,
-													MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
-						break;
-					case CMD_UPDATE:
-					case CMD_DELETE:
-						SetRelativeMatviewAuxStatus(rte->relid,
-													MV_DATA_STATUS_EXPIRED,
-													MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
-						break;
-					default:
-						/* If there were writable CTE, just mark it as expired. */
-						if (queryDesc->plannedstmt->hasModifyingCTE)
-							SetRelativeMatviewAuxStatus(rte->relid, MV_DATA_STATUS_EXPIRED,
-														MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
-						break;
-				}
-			}
+			MaintainMaterializedViewStatus(queryDesc, operation);
 		}
     }
 	PG_CATCH();
@@ -4290,4 +4266,120 @@ bool
 already_under_executor_run(void)
 {
 	return executor_run_nesting_level > 0;
+}
+
+/*
+ * Maintain the status of Materialized Views in response to write operations on the underlying relations.
+ *
+ * For partitioned tables, changes are tracked using the relations of their leaf partitions rather than
+ * the parent tables themselves. This minimizes the impact on Materialized Views that depend on the
+ * partition tree, ensuring only relevant partitions are affected.
+ *
+ * In the case of cross-partition updates, an UPDATE operation on a parent table is decomposed into
+ * an INSERT on one leaf partition and a DELETE on another. As a result, the status transition follows
+ * an UP direction for both INSERT and DELETE operations, rather than an UP_AND_DOWN direction on the
+ * parent table. This approach optimizes performance and reduces unnecessary status changes avoding
+ * invalidations of unrelated materialized views.
+ *
+ * For non-partitioned tables, the status transition is handled based on the semantic relations.
+ */
+static void
+MaintainMaterializedViewStatus(QueryDesc *queryDesc, CmdType operation)
+{
+	Bitmapset *inserted = NULL;
+	Bitmapset *updated = NULL;
+	Bitmapset *deleted = NULL;
+	List		*unique_result_relations = NIL;
+	List		*rtable = queryDesc->plannedstmt->rtable;
+	int			length = list_length(rtable);
+	ListCell	*lc;
+	int relid = -1;
+
+	/*
+	 * Process epd first to get the addected relations..
+	 */
+	ConsumeExtendProtocolData(EP_TAG_I, &inserted);
+	ConsumeExtendProtocolData(EP_TAG_U, &updated);
+	ConsumeExtendProtocolData(EP_TAG_D, &deleted);
+
+	relid = -1;
+	while((relid = bms_next_member(inserted, relid)) >= 0)
+	{
+		/* Only need to transfer to UP direction. */
+		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED_INSERT_ONLY,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+
+	}
+
+	relid = -1;
+	while((relid = bms_next_member(updated, relid)) >= 0)
+	{
+		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+
+	}
+
+	relid = -1;
+	while((relid = bms_next_member(deleted, relid)) >= 0)
+	{
+		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
+
+	}
+
+	unique_result_relations = list_concat_unique_int(NIL, queryDesc->plannedstmt->resultRelations);
+	foreach(lc, unique_result_relations)
+	{
+		int varno = lfirst_int(lc);
+		RangeTblEntry *rte = rt_fetch(varno, rtable);
+
+		/* Avoid crash in case we don't find a rte. */
+		if (varno > length + 1)
+		{
+			ereport(WARNING, (errmsg("could not find rte of varno: %u ", varno)));
+			continue;
+		}
+
+		if (RELKIND_PARTITIONED_TABLE == rte->relkind)
+		{
+			/*
+			 * There should be leaf paritions if we modifed a partitioned table
+			 * Do a second check and fall back to partitioned table
+			 * in case that if we failed to find a one.
+			 */
+			if (bms_is_empty(inserted) &&
+				bms_is_empty(updated) &&
+				bms_is_empty(deleted))
+			{
+				ereport(WARNING,
+					(errmsg("fail to find leafs of partitioned table: %u ", rte->relid)));
+			}
+			/* Should already be processed, just bypass. */
+			continue;
+		}
+		else
+		{
+			/* Do a normal update. */
+			switch (operation)
+			{
+				case CMD_INSERT:
+					SetRelativeMatviewAuxStatus(rte->relid,
+												MV_DATA_STATUS_EXPIRED_INSERT_ONLY,
+												MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
+					break;
+				case CMD_UPDATE:
+				case CMD_DELETE:
+					SetRelativeMatviewAuxStatus(rte->relid,
+												MV_DATA_STATUS_EXPIRED,
+												MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
+					break;
+				default:
+					/* If there were writable CTE, just mark it as expired. */
+					if (queryDesc->plannedstmt->hasModifyingCTE)
+						SetRelativeMatviewAuxStatus(rte->relid, MV_DATA_STATUS_EXPIRED,
+													MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
+					break;
+			}
+		}
+	}
 }
