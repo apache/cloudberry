@@ -1,4 +1,4 @@
-top_builddir = ../../../../
+top_builddir = ../../../..
 
 MODULE_big = gpmmon
 OBJS = gpmmon.o gpmondb.o gpmon_agg.o  ../common/gpmonlib.o

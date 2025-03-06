@@ -1,4 +1,4 @@
-top_builddir = ../../../../
+top_builddir = ../../../..
 
 PG_CPPFLAGS = -I$(libpq_srcdir) -I../include -I. -Wno-error=vla -Wno-vla
 ifdef USE_PGXS

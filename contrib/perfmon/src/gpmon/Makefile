@@ -1,4 +1,4 @@
-top_builddir = ../../../../
+top_builddir = ../../../..
 
 MODULE_big = gpmon
 OBJS = gpmon.o pg_query_state.o signal_handler.o
