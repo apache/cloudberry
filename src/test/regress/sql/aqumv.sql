@@ -795,6 +795,41 @@ select count(*), sum(c1) from t where c1 > 90 limit all;
 
 abort;
 
+--
+-- test partitioned tables
+--
+create table par(a int, b int, c int) partition by range(b)
+    subpartition by range(c) subpartition template (start (1) end (3) every (1))
+    (start(1) end(3) every(1));
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+create materialized view mv_par as select    count(*) from par;
+create materialized view mv_par1 as select   count(*) from par_1_prt_1;
+create materialized view mv_par1_1 as select count(*) from par_1_prt_1_2_prt_1;
+create materialized view mv_par1_2 as select count(*) from par_1_prt_1_2_prt_2;
+create materialized view mv_par2 as select   count(*) from par_1_prt_2;
+create materialized view mv_par2_2 as select count(*) from par_1_prt_2_2_prt_1;
+create materialized view mv_par_prune as select count(*) from par where b = 1;
+set enable_answer_query_using_materialized_views = on;
+
+explain(costs off, verbose)
+select count(*) from par;
+explain(costs off, verbose)
+select count(*) from par_1_prt_1;
+
+-- test partition_pruning
+set enable_partition_pruning = on;
+explain(costs off, verbose)
+select count(*) from par where b = 1;
+set enable_partition_pruning = off;
+explain(costs off, verbose)
+select count(*) from par where b = 1;
+reset enable_partition_pruning;
+--
+-- End of test partitioned tables
+--
+
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore
