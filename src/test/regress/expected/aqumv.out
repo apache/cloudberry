@@ -3239,6 +3239,73 @@ reset enable_partition_pruning;
 --
 -- End of test partitioned tables
 --
+begin;
+insert into par values(1, 1, 1), (1, 1, 2);
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par2
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+insert into par_1_prt_1_2_prt_1 values (1, 1, 1);
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par2
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+delete from par_1_prt_1_2_prt_1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par2
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+update par set c = 2 where b = 1 and c = 1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par2
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count
+   ->  Seq Scan on aqumv.mv_par2
+         Output: count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+abort;
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore

@@ -809,7 +809,7 @@ create materialized view mv_par1 as select   count(*) from par_1_prt_1;
 create materialized view mv_par1_1 as select count(*) from par_1_prt_1_2_prt_1;
 create materialized view mv_par1_2 as select count(*) from par_1_prt_1_2_prt_2;
 create materialized view mv_par2 as select   count(*) from par_1_prt_2;
-create materialized view mv_par2_2 as select count(*) from par_1_prt_2_2_prt_1;
+create materialized view mv_par2_1 as select count(*) from par_1_prt_2_2_prt_1;
 create materialized view mv_par_prune as select count(*) from par where b = 1;
 set enable_answer_query_using_materialized_views = on;
 
@@ -829,6 +829,28 @@ reset enable_partition_pruning;
 --
 -- End of test partitioned tables
 --
+
+begin;
+insert into par values(1, 1, 1), (1, 1, 2);
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+insert into par_1_prt_1_2_prt_1 values (1, 1, 1);
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+delete from par_1_prt_1_2_prt_1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+update par set c = 2 where b = 1 and c = 1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+abort;
 
 reset optimizer;
 reset enable_answer_query_using_materialized_views;

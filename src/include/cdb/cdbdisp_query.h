@@ -114,4 +114,31 @@ extern void CdbDispatchCopyEnd(struct CdbCopy *cdbCopy);
 
 extern ParamListInfo deserializeExternParams(struct SerializedParams *sparams);
 
+/*
+ * Extended protocol for libpq.
+ */
+#define PQExtendProtocol 'e'
+
+typedef enum
+{
+	EP_TAG_I,	/* insert */
+	EP_TAG_U,	/* update */
+	EP_TAG_D,	/* delete */
+	EP_TAG_MAX,	/* the last, new added one should be put before this. */
+} ExtendProtocolSubTag;
+
+typedef struct ExtendProtocolDataStore
+{
+	List *subtagdata;	/* capacity of EP_TAG_MAX */
+	int	consumed_bitmap; /* bitmap to indentify subtag consumed status */
+} ExtendProtocolDataStore;
+
+typedef ExtendProtocolDataStore* ExtendProtocolData;
+
+extern ExtendProtocolData epd;
+
+extern void InitExtendProtocolData(void);
+
+extern void ConsumeExtendProtocolData(ExtendProtocolSubTag subtag, void *consume_p);
+
 #endif   /* CDBDISP_QUERY_H */

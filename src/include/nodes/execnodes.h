@@ -1349,6 +1349,12 @@ typedef struct ModifyTableState
 
 	/* controls transition table population for INSERT...ON CONFLICT UPDATE */
 	struct TransitionCaptureState *mt_oc_transition_capture;
+
+	/* Record modified leaf relation(s) */
+	bool		has_leaf_changed;
+	Bitmapset	*mt_leaf_relids_inserted;
+	Bitmapset	*mt_leaf_relids_updated;
+	Bitmapset	*mt_leaf_relids_deleted;
 } ModifyTableState;
 
 /* ----------------

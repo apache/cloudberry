@@ -39,6 +39,7 @@
 #include "libpq-int.h"
 #include "mb/pg_wchar.h"
 #include "port/pg_bswap.h"
+#include "cdb/cdbpq.h"
 
 /*
  * This macro lists the backend message types that could be "long" (more
@@ -51,7 +52,7 @@
 #define VALID_LONG_MESSAGE_TYPE(id) \
 	((id) == 'T' || (id) == 'D' || (id) == 'd' || (id) == 'V' || \
 	 (id) == 'E' || (id) == 'N' || (id) == 'A' || (id) == 'Y' || \
-	 (id) == 'y' || (id) == 'o')
+	 (id) == 'y' || (id) == 'o' || (id) == 'e')
 
 
 static void handleSyncLoss(PGconn *conn, char id, int msgLength);
@@ -475,6 +476,17 @@ pqParseInput3(PGconn *conn)
 					 */
 					break;
 #ifndef FRONTEND
+				case 'e':
+					if (conn->result == NULL)
+					{
+						conn->result = PQmakeEmptyPGresult(conn, PGRES_COMMAND_OK);
+						if (!conn->result)
+							return;
+					}
+					if (!HandleExtendProtocol(conn))
+						return;
+					conn->inCursor = conn->inStart + 5 + msgLength;
+					break;
 				case 'j':
 					/*
 					 * QE COPY reports number of rejected rows to the QD COPY

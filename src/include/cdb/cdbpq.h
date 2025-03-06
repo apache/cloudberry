@@ -25,4 +25,9 @@ extern PGcmdQueueEntry *pqAllocCmdQueueEntry(PGconn *conn);
 extern void pqRecycleCmdQueueEntry(PGconn *conn, PGcmdQueueEntry *entry);
 extern void pqAppendCmdQueueEntry(PGconn *conn, PGcmdQueueEntry *entry);
 
+/*
+ * Handle extend protocol aside from upstream.
+ */
+extern bool HandleExtendProtocol(PGconn *conn);
+
 #endif
