@@ -218,6 +218,28 @@ INSERT INTO b SELECT 1 INTO f;
 ERROR:  SELECT ... INTO is not allowed here
 LINE 1: INSERT INTO b SELECT 1 INTO f;
                                     ^
+--
+-- Empty target list 
+--
+explain (costs off) select into empty_tl from generate_series(0, 10);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Result
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Result
+               One-Time Filter: (gp_execution_segment() = 2)
+               ->  Function Scan on generate_series
+ Optimizer: GPORCA
+(6 rows)
+
+select into empty_tl from generate_series(0, 10);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+select * from empty_tl;
+--
+(11 rows)
+
+drop table empty_tl;
 -- Test CREATE TABLE AS ... IF NOT EXISTS
 CREATE TABLE ctas_ine_tbl AS SELECT 1;
 CREATE TABLE ctas_ine_tbl AS SELECT 1 / 0; -- error
