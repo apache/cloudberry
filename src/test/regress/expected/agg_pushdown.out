@@ -493,10 +493,10 @@ DROP TABLE IF EXISTS t1, t2;
 NOTICE:  table "t1" does not exist, skipping
 NOTICE:  table "t2" does not exist, skipping
 CREATE TABLE t1 (id int, val int, comment VARCHAR(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t2 (id int, val int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET enable_nestloop TO off;
 SET enable_hashjoin TO on;
@@ -733,10 +733,10 @@ DROP TABLE IF EXISTS part, lineitem;
 NOTICE:  table "part" does not exist, skipping
 NOTICE:  table "lineitem" does not exist, skipping
 CREATE TABLE part (p_partkey int, p_size int, p_price int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE lineitem (l_orderkey int, l_partkey int, l_amount int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'l_orderkey' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'l_orderkey' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET enable_nestloop TO off;
 SET enable_hashjoin TO on;
@@ -844,11 +844,11 @@ NOTICE:  table "vendor_pd" does not exist, skipping
 NOTICE:  table "customer_pd" does not exist, skipping
 NOTICE:  table "nation_pd" does not exist, skipping
 CREATE TABLE vendor_pd (v_id int, v_name VARCHAR(20)) WITH (APPENDONLY=true, ORIENTATION=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v_id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v_id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE customer_pd (c_id int primary key, c_v_id int, c_n_id int, c_type int, c_consumption int);
 CREATE TABLE nation_pd (n_id int, n_name VARCHAR(20), n_type int, n_population int) WITH (APPENDONLY=true, ORIENTATION=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO nation_pd SELECT i, 'abc', 1, 1 from generate_series(1, 100) s(i);
 INSERT INTO customer_pd SELECT i, i % 100, i % 100, 1, 100 from generate_series(1, 10000) s(i);
@@ -986,10 +986,10 @@ DROP TABLE IF EXISTS fact, dim;
 NOTICE:  table "fact" does not exist, skipping
 NOTICE:  table "dim" does not exist, skipping
 CREATE TABLE fact (id int, did int, fact_time int, val int) WITH (APPENDONLY=true, ORIENTATION=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE dim (did int, proj_name varchar(20), brand int, model int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO dim SELECT i % 100, 1, 1 FROM generate_series(1, 100) s(i);
 INSERT INTO fact SELECT i % 10, i % 100, 30, 1 FROM generate_series(1, 10000) s(i);
@@ -1070,7 +1070,7 @@ SET enable_incremental_sort TO off;
 DROP TABLE IF EXISTS pagg_pd;
 NOTICE:  table "pagg_pd" does not exist, skipping
 CREATE TABLE pagg_pd (a int, b int, c text, d int) PARTITION BY LIST(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_pd_p1 PARTITION OF pagg_pd FOR VALUES IN ('0000', '0001', '0002', '0003', '0004');
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1151,14 +1151,14 @@ SELECT t1.c, sum(t1.a)
 
 DROP TABLE pagg_pd;
 CREATE TABLE pagg_pd_p (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_pd (c text, d int) inherits (pagg_pd_p) PARTITION BY LIST(c);
 ERROR:  cannot create partitioned table as inheritance child
 DROP TABLE IF EXISTS pagg_pd, pagg_pd_p;
 NOTICE:  table "pagg_pd" does not exist, skipping
 CREATE TABLE pagg_pd_p (a int, b int, c text) PARTITION BY LIST(c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_pd (d int) inherits (pagg_pd_p);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1166,7 +1166,7 @@ ERROR:  cannot inherit from partitioned table "pagg_pd_p"
 DROP TABLE IF EXISTS pagg_pd, pagg_pd_p;
 NOTICE:  table "pagg_pd" does not exist, skipping
 CREATE TABLE pagg_pd_p (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_pd (c text, d int) inherits (pagg_pd_p);
 NOTICE:  table has parent, setting distribution columns to match parent table

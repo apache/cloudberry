@@ -1,5 +1,5 @@
 Requirements:
-	- Cloudberry Database 3.3 or higher
+	- Apache Cloudberry 3.3 or higher
 	- A "C" compiler
 
 To install:

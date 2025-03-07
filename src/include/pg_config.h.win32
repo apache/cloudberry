@@ -681,13 +681,13 @@
 #define MEMSET_LOOP_LIMIT 1024
 
 /* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "support@greenplum.com"
+#define PACKAGE_BUGREPORT "dev@cloudberry.apache.org"
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "Cloudberry Database"
+#define PACKAGE_NAME "Apache Cloudberry"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Cloudberry Database 7.0.0-alpha"
+#define PACKAGE_STRING "Apache Cloudberry 7.0.0-alpha"
 
 /* Define to the version of this package. */
 #define PACKAGE_VERSION "12beta2"
@@ -705,7 +705,7 @@
 #define PG_VERSION_NUM 120000
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "greenplum"
+#define PACKAGE_TARNAME "cloudberry"
 
 /* Define to the name of the default PostgreSQL service principal in Kerberos.
    (--with-krb-srvnam=NAME) */

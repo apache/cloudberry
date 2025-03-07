@@ -12,7 +12,7 @@ minirepro -?
 
 DESCRIPTION
 
-For any SQL commands, the minirepro utility generates Cloudberry Database
+For any SQL commands, the minirepro utility generates Apache Cloudberry
 information for the commands. The information can be analyzed by Pivotal
 support to perform root cause analysis.
 
@@ -28,18 +28,18 @@ to the input SQL commands.
 PARAMETERS
 
 <db-name>
-  Name of the Cloudberry Database.
+  Name of the Apache Cloudberry.
 
 -h <coordinator-host>
-  Cloudberry Database coordinator host. Default is localhost.
+  Apache Cloudberry coordinator host. Default is localhost.
 
 -U <username>
-  Cloudberry Database user name to log into the database and run the
+  Apache Cloudberry user name to log into the database and run the
   SQL command. Default is the PGUSER environment variable. If PGUSER
   is not defined, OS user name running the utility is used.
 
 -p <port>
-  Port that is used to connect to Cloudberry Database.
+  Port that is used to connect to Apache Cloudberry.
   Default is the PGPORT environment variable. If PGPORT is not defined,
   the default value is 5432.
 

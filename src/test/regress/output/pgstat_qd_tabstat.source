@@ -23,7 +23,7 @@ INSERT INTO data_tbl values(1,'a');
 INSERT INTO data_tbl values(1,'b');
 COPY data_tbl TO '/tmp/data_tbl<SEGID>.csv' on segment;
 create table copy_on_segment (a int,b char);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY copy_on_segment from '/tmp/data_tbl<SEGID>.csv' on segment log errors segment reject limit 3 rows;
 select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
@@ -78,7 +78,7 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 
 -- Test pgstat table stat in CTAS on QD
 create table table_for_ctas with (autovacuum_enabled=false) as select i, 'hello' || i from generate_series(1, 100) f(i);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
  pg_sleep 
@@ -93,7 +93,7 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 (1 row)
 
 select i, 'hello' || i into table_for_insert_into from generate_series(1, 100) f(i);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
  pg_sleep 
@@ -490,7 +490,7 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 create table base_table(i int, j int, z int ) distributed by (i);
 insert into base_table select i,i,i from generate_series(1, 100) i;
 create materialized view mt as select * from base_table where z>=50;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
  pg_sleep 

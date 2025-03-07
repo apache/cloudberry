@@ -41,7 +41,7 @@ DELETE FROM reindex_crtab_part_ao_btree  WHERE id < 128;
 -- Here I workaround this by instead of relying on the only one expected file which
 -- cannot checks two behaviour, SQL statement is used to directly check the correctness
 -- of one column.
--- See https://github.com/cloudberrydb/cloudberrydb/issues/26#issuecomment-1682097755
+-- See https://github.com/apache/cloudberry/issues/26#issuecomment-1682097755
 -- for more details.
 3: select relname,
           relname = 'reindex_crtab_part_ao_btree_1_prt_p_one_id_idx' and res.cnt in (1, 2) as special_case_for_p_one_id_idx,

@@ -65,7 +65,7 @@ drop aggregate if exists mysum2(int4);
 NOTICE:  aggregate mysum2(int4) does not exist, skipping
 -- end_ignore
 create table toy(id,val) as select i,i from generate_series(1,5) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create aggregate mysum1(int4) (sfunc = int4_sum, combinefunc=int8pl, stype=bigint);
 create aggregate mysum2(int4) (sfunc = int4_sum, stype=bigint);
@@ -383,7 +383,7 @@ order by 1, 2;
 --
 -- SETUP
 create table mpp23240(a int, b int, c int, d int, e int, f int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- TEST
 select a, b,

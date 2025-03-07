@@ -49,7 +49,7 @@ NOTICE:  truncate cascades to table "trunc_b"
 NOTICE:  truncate cascades to table "trunc_e"
 -- circular references
 ALTER TABLE truncate_a ADD FOREIGN KEY (col1) REFERENCES trunc_c;
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Cloudberry Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 -- Add some data to verify that truncating actually works ...
 INSERT INTO trunc_c VALUES (1);
 INSERT INTO truncate_a VALUES (1);

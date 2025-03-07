@@ -73,7 +73,7 @@ class GpEraFile:
         """
         Generate gp_era contents based on era value
         """
-        f.write("# Cloudberry Database era.\n")
+        f.write("# Apache Cloudberry era.\n")
         f.write("# Do not change the contents of this file.\n")
         f.write('era = %s\n' % self.era)
         INFO('wrote era: %s' % self.era)

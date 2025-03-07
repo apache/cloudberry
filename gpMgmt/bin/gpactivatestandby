@@ -157,7 +157,7 @@ def print_results(array, hostname, options):
     logger.info('to set this value.')
     logger.info('COORDINATOR_PORT is now %d, if this has changed, you' % array.coordinator.getSegmentPort())
     logger.info('may need to make additional configuration changes to allow access')
-    logger.info('to the CloudberryDB instance.')
+    logger.info('to the Cloudberry instance.')
     logger.info('Refer to the Administrator Guide for instructions on how to re-activate')
     logger.info('the coordinator to its previous state once it becomes available.')
     logger.info('Query planner statistics must be updated on all databases')

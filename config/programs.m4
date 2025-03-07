@@ -98,7 +98,7 @@ else
             break 2
           else
             AC_MSG_WARN([
-*** The installed version of Flex, $pgac_candidate, is too old to use with Cloudberry DB.
+*** The installed version of Flex, $pgac_candidate, is too old to use with Apache Cloudberry.
 *** Flex version 2.5.4 or later is required, but this is $pgac_flex_version.])
           fi
         fi

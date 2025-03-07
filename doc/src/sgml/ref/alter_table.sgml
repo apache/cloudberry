@@ -1149,7 +1149,7 @@ Where column_reference_storage_directive is:
    has subpartition encodings, the new partition 
    inherits the storage directives for the subpartitions. 
    For more information, search for "Precedence of Compression Settings" 
-   in the Cloudberry Database Administrator Guide.
+   in the Apache Cloudberry Administrator Guide.
   </para>
 
   <para>

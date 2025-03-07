@@ -18,7 +18,7 @@ SET search_path TO gpdb_insert;
 --
 CREATE TABLE CHECK_TBL (x int,
 	CONSTRAINT CHECK_CON CHECK (x > 3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO CHECK_TBL VALUES (5);
 INSERT INTO CHECK_TBL VALUES (4);
@@ -42,7 +42,7 @@ SELECT '' AS three, * FROM CHECK_TBL;
 
 CREATE TABLE CHECK_TBL1 (x int,
 	CONSTRAINT CHECK_CON CHECK ((x > 3) IS TRUE));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Cloudberry Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO CHECK_TBL1 VALUES (5);
 INSERT INTO CHECK_TBL1 VALUES (4);

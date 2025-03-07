@@ -161,7 +161,7 @@ FETCH ALL FROM c;
 (2 rows)
 
 FETCH BACKWARD 1 FROM c;
-ERROR:  backward scan is not supported in this version of Cloudberry Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 FETCH FIRST FROM c;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;

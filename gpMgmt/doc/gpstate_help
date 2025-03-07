@@ -1,6 +1,6 @@
 COMMAND NAME: gpstate
 
-Shows the status of a running Cloudberry Database system.
+Shows the status of a running Apache Cloudberry system.
 
 
 *****************************************************
@@ -19,11 +19,11 @@ DESCRIPTION
 *****************************************************
 
 The gpstate utility displays information about a running 
-Cloudberry Database instance. There is additional information 
-you may want to know about a Cloudberry Database system, since 
+Apache Cloudberry instance. There is additional information 
+you may want to know about a Apache Cloudberry system, since 
 it is comprised of multiple PostgreSQL database instances (segments) 
 spanning multiple machines. The gpstate utility provides 
-additional status information for a Cloudberry Database system, 
+additional status information for a Apache Cloudberry system, 
 such as:
 * Which segments are down.
 * Coordinator and segment configuration information (hosts, 
@@ -39,7 +39,7 @@ OPTIONS
 -b (brief status)
 
   Optional. Display a brief summary of the state of the 
-  Cloudberry Database system. This is the default option.
+  Apache Cloudberry system. This is the default option.
 
 
 -B <parallel_processes>
@@ -78,9 +78,9 @@ OPTIONS
   Display details of the standby coordinator host if configured.
 
 
--i (show Cloudberry Database version)
+-i (show Apache Cloudberry version)
   
-  Display the Cloudberry Database software version information 
+  Display the Apache Cloudberry software version information 
   for each instance.
 
 
@@ -97,7 +97,7 @@ OPTIONS
 
 -p (show ports)
 
-  List the port numbers used throughout the Cloudberry Database 
+  List the port numbers used throughout the Apache Cloudberry 
   system.
 
 
@@ -122,7 +122,7 @@ OPTIONS
 -s (detailed status)
 
   Optional. Displays detailed status information for the 
-  Cloudberry Database system.
+  Apache Cloudberry system.
 
 
 -v (verbose output)
@@ -158,12 +158,12 @@ COORDINATOR OUTPUT DATA
 * Cloudberry array configuration type - Standard = one NIC per host 
                                        Multi-Home = multiple NICs per host
 
-* Cloudberry initsystem version - version of Cloudberry Database when 
+* Cloudberry initsystem version - version of Apache Cloudberry when 
                                  system was first initialized
 
-* Cloudberry current version - current version of Cloudberry Database
+* Cloudberry current version - current version of Apache Cloudberry
 
-* Postgres version - version of PostgreSQL that Cloudberry Database 
+* Postgres version - version of PostgreSQL that Apache Cloudberry 
                      is based on
 
 * Cloudberry mirroring status - physical mirroring, SAN or none
@@ -213,7 +213,7 @@ SEGMENT OUTPUT DATA
 * Coordinator reports status as - segment status as reported in the system catalog:
                            Up or Down
 
-* Database status - status of Cloudberry Database to incoming requests:
+* Database status - status of Apache Cloudberry to incoming requests:
                 Up, Down, or Suspended. A Suspended state means database 
                 activity is temporarily paused while a segment transitions from 
                 one state to another.
@@ -222,7 +222,7 @@ SEGMENT OUTPUT DATA
 EXAMPLES
 *****************************************************
 
-Show detailed status information of a Cloudberry Database system:
+Show detailed status information of a Apache Cloudberry system:
 
    gpstate -s
 
