@@ -24,10 +24,15 @@ static void check_covering_aoindex(void);
 static void check_partition_indexes(void);
 static void check_orphaned_toastrels(void);
 static void check_online_expansion(void);
-static void check_gphdfs_external_tables(void);
-static void check_gphdfs_user_roles(void);
 static void check_for_array_of_partition_table_types(ClusterInfo *cluster);
-
+static void check_multi_column_list_partition_keys(ClusterInfo *cluster);
+static void check_for_plpython2_dependent_functions(ClusterInfo *cluster);
+static void check_views_with_removed_operators(void);
+static void check_views_with_removed_functions(void);
+static void check_views_with_removed_types(void);
+static void check_for_disallowed_pg_operator(void);
+static void check_for_ao_matview_with_relfrozenxid(ClusterInfo *cluster);
+static void check_views_with_changed_function_signatures(void);
 
 /*
  *	check_greenplum
@@ -45,9 +50,15 @@ check_greenplum(void)
 	check_covering_aoindex();
 	check_partition_indexes();
 	check_orphaned_toastrels();
-	check_gphdfs_external_tables();
-	check_gphdfs_user_roles();
 	check_for_array_of_partition_table_types(&old_cluster);
+	check_multi_column_list_partition_keys(&old_cluster);
+	check_for_plpython2_dependent_functions(&old_cluster);
+	check_views_with_removed_operators();
+	check_views_with_removed_functions();
+	check_views_with_removed_types();
+	check_for_disallowed_pg_operator();
+	check_views_with_changed_function_signatures();
+	check_for_ao_matview_with_relfrozenxid(&old_cluster);
 }
 
 /*
@@ -154,7 +165,9 @@ check_external_partition(void)
 
 	prep_status("Checking for external tables used in partitioning");
 
-	snprintf(output_path, sizeof(output_path), "external_partitions.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "external_partitions.txt");
+
 	/*
 	 * We need to query the inheritance catalog rather than the partitioning
 	 * catalogs since they are not available on the segments.
@@ -261,7 +274,8 @@ check_covering_aoindex(void)
 
 	prep_status("Checking for non-covering indexes on partitioned AO tables");
 
-	snprintf(output_path, sizeof(output_path), "mismatched_aopartition_indexes.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "mismatched_aopartition_indexes.txt");
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -332,7 +346,8 @@ check_orphaned_toastrels(void)
 
 	prep_status("Checking for orphaned TOAST relations");
 
-	snprintf(output_path, sizeof(output_path), "orphaned_toast_tables.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "orphaned_toast_tables.txt");
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -415,7 +430,8 @@ check_partition_indexes(void)
 
 	prep_status("Checking for indexes on partitioned tables");
 
-	snprintf(output_path, sizeof(output_path), "partitioned_tables_indexes.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "partitioned_tables_indexes.txt");
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -485,161 +501,6 @@ check_partition_indexes(void)
 			   "| indexes defined on them.  Indexes on partition parents,\n"
 			   "| as well as children, must be dropped before upgrade.\n"
 			   "| A list of the problem tables is in the file:\n"
-			   "| \t%s\n\n", output_path);
-	}
-	else
-		check_ok();
-}
-
-/*
- * check_gphdfs_external_tables
- *
- * Check if there are any remaining gphdfs external tables in the database.
- * We error if any gphdfs external tables remain and let the users know that,
- * any remaining gphdfs external tables have to be removed.
- */
-static void
-check_gphdfs_external_tables(void)
-{
-	char		output_path[MAXPGPATH];
-	FILE	   *script = NULL;
-	bool		found = false;
-	int			dbnum;
-
-	/* GPDB only supported gphdfs in this version range */
-	if (!(old_cluster.major_version >= 80215 && old_cluster.major_version < 80400))
-		return;
-
-	prep_status("Checking for gphdfs external tables");
-
-	snprintf(output_path, sizeof(output_path), "gphdfs_external_tables.txt");
-
-
-	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
-	{
-		PGresult   *res;
-		int			ntups;
-		int			rowno;
-		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
-		PGconn	   *conn;
-
-		conn = connectToServer(&old_cluster, active_db->db_name);
-		res = executeQueryOrDie(conn,
-			 "SELECT d.objid::regclass as tablename "
-			 "FROM pg_catalog.pg_depend d "
-			 "       JOIN pg_catalog.pg_exttable x ON ( d.objid = x.reloid ) "
-			 "       JOIN pg_catalog.pg_extprotocol p ON ( p.oid = d.refobjid ) "
-			 "       JOIN pg_catalog.pg_class c ON ( c.oid = d.objid ) "
-			 "       WHERE d.refclassid = 'pg_extprotocol'::regclass "
-			 "       AND p.ptcname = 'gphdfs';");
-
-		ntups = PQntuples(res);
-
-		if (ntups > 0)
-		{
-			found = true;
-
-			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
-				pg_log(PG_FATAL, "Could not create necessary file:  %s\n",
-					   output_path);
-
-			for (rowno = 0; rowno < ntups; rowno++)
-			{
-				fprintf(script, "gphdfs external table \"%s\" in database \"%s\"\n",
-						PQgetvalue(res, rowno, PQfnumber(res, "tablename")),
-						active_db->db_name);
-			}
-		}
-
-		PQclear(res);
-		PQfinish(conn);
-	}
-	if (found)
-	{
-		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains gphdfs external tables.  These \n"
-			   "| tables need to be dropped before upgrade.  A list of\n"
-			   "| external gphdfs tables to remove is provided in the file:\n"
-			   "| \t%s\n\n", output_path);
-	}
-	else
-		check_ok();
-}
-
-/*
- * check_gphdfs_user_roles
- *
- * Check if there are any remaining users with gphdfs roles.
- * We error if this is the case and let the users know how to proceed.
- */
-static void
-check_gphdfs_user_roles(void)
-{
-	char		output_path[MAXPGPATH];
-	FILE	   *script = NULL;
-	PGresult   *res;
-	int			ntups;
-	int			rowno;
-	int			i_hdfs_read;
-	int			i_hdfs_write;
-	PGconn	   *conn;
-
-	/* GPDB only supported gphdfs in this version range */
-	if (!(old_cluster.major_version >= 80215 && old_cluster.major_version < 80400))
-		return;
-
-	prep_status("Checking for users assigned the gphdfs role");
-
-	snprintf(output_path, sizeof(output_path), "gphdfs_user_roles.txt");
-
-	conn = connectToServer(&old_cluster, "template1");
-	res = executeQueryOrDie(conn,
-							"SELECT rolname as role, "
-							"       rolcreaterexthdfs as hdfs_read, "
-							"       rolcreatewexthdfs as hdfs_write "
-							"FROM pg_catalog.pg_roles"
-							"       WHERE rolcreaterexthdfs OR rolcreatewexthdfs");
-
-	ntups = PQntuples(res);
-
-	if (ntups > 0)
-	{
-		if ((script = fopen(output_path, "w")) == NULL)
-			pg_log(PG_FATAL, "Could not create necessary file:  %s\n",
-					output_path);
-
-		i_hdfs_read = PQfnumber(res, "hdfs_read");
-		i_hdfs_write = PQfnumber(res, "hdfs_write");
-
-		for (rowno = 0; rowno < ntups; rowno++)
-		{
-			bool hasReadRole = (PQgetvalue(res, rowno, i_hdfs_read)[0] == 't');
-			bool hasWriteRole =(PQgetvalue(res, rowno, i_hdfs_write)[0] == 't');
-
-			fprintf(script, "role \"%s\" has the gphdfs privileges:",
-					PQgetvalue(res, rowno, PQfnumber(res, "role")));
-			if (hasReadRole)
-				fprintf(script, " read(rolcreaterexthdfs)");
-			if (hasWriteRole)
-				fprintf(script, " write(rolcreatewexthdfs)");
-			fprintf(script, " \n");
-		}
-	}
-
-	PQclear(res);
-	PQfinish(conn);
-
-	if (ntups > 0)
-	{
-		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains roles that have gphdfs privileges.\n"
-			   "| These privileges need to be revoked before upgrade.  A list\n"
-			   "| of roles and their corresponding gphdfs privileges that\n"
-			   "| must be revoked is provided in the file:\n"
 			   "| \t%s\n\n", output_path);
 	}
 	else
@@ -723,6 +584,154 @@ check_for_array_of_partition_table_types(ClusterInfo *cluster)
 	check_ok();
 }
 
+static void
+check_multi_column_list_partition_keys(ClusterInfo *cluster)
+{
+	char			output_path[MAXPGPATH];
+	FILE		   *script = NULL;
+	bool			found = false;
+	int				dbnum;
+
+	if (GET_MAJOR_VERSION(cluster->major_version) > 904)
+		return;
+
+	prep_status("Checking for multi-column LIST partition keys");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "multi_column_list_partitions.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_nspname,
+					i_relname;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(&old_cluster, active_db->db_name);
+
+		res = executeQueryOrDie(conn,
+			 "SELECT n.nspname, c.relname "
+			 "FROM pg_class c "
+			 "JOIN pg_namespace n on n.oid=c.relnamespace "
+			 "JOIN pg_partition p on p.parrelid=c.oid "
+			 "WHERE parkind = 'l' and parnatts > 1");
+
+		ntups = PQntuples(res);
+		i_nspname = PQfnumber(res, "nspname");
+		i_relname = PQfnumber(res, "relname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n",
+						 output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s.%s\n",
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_relname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (found)
+	{
+		fclose(script);
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			   "| Your installation contains partitioned tables\n"
+			   "| with a LIST partition key containing multiple\n"
+			   "| columns, which is not supported anymore. Consider\n"
+			   "| modifying the partition key to use a single column\n"
+			   "| or dropping the tables. A list of the problem tables\n"
+			   "| is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_for_plpython2_dependent_functions(ClusterInfo *cluster)
+{
+
+	FILE		*script = NULL;
+	char		output_path[MAXPGPATH];
+	bool		found = false;
+
+	prep_status("Checking for functions dependent on plpython2");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "plpython2_dependent_functions.txt");
+
+	for (int dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_nspname,
+					i_proname;
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+
+		/* Find any functions dependent on $libdir/plpython2' */
+		res = executeQueryOrDie(conn,
+								"SELECT n.nspname, p.proname "
+								"FROM pg_catalog.pg_proc p "
+								"JOIN pg_namespace n on n.oid=p.pronamespace "
+								"JOIN pg_language l on l.oid=p.prolang "
+								"JOIN pg_pltemplate t on t.tmplname = l.lanname "
+								"WHERE t.tmpllibrary = '$libdir/plpython2'");
+
+		ntups = PQntuples(res);
+		i_nspname = PQfnumber(res, "nspname");
+		i_proname = PQfnumber(res, "proname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n",
+						 output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s.%s\n",
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_proname));
+		}
+
+		PQclear(res);
+
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+				"| Your installation contains \"plpython\" functions which rely\n"
+				"| on Python 2. These functions must be either be updated to use\n"
+				"| Python 3 or dropped before upgrade. A list of the problem functions\n"
+				"| is in the file:\n"
+				"|     %s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
 void
 setup_GPDB6_data_type_checks(ClusterInfo *cluster)
 {
@@ -734,6 +743,8 @@ setup_GPDB6_data_type_checks(ClusterInfo *cluster)
 		DbInfo *active_db = &cluster->dbarr.dbs[dbnum];
 		PGconn *conn = connectToServer(cluster, active_db->db_name);
 		PGresult *res = executeQueryOrDie(conn,
+										  "SET CLIENT_MIN_MESSAGES = WARNING; "
+										  "DROP SCHEMA IF EXISTS __gpupgrade_tmp CASCADE; "
 										  "CREATE SCHEMA __gpupgrade_tmp; "
 										  "CREATE FUNCTION __gpupgrade_tmp.data_type_checks(base_query TEXT) "
 										  "RETURNS TABLE ( "
@@ -795,7 +806,8 @@ setup_GPDB6_data_type_checks(ClusterInfo *cluster)
 										  "        AND n.nspname !~ '^pg_toast_temp_' "
 										  "        AND n.nspname NOT IN ('pg_catalog', 'information_schema'); "
 										  "END; "
-										  "$$ LANGUAGE plpgsql;");
+										  "$$ LANGUAGE plpgsql; "
+										  "RESET CLIENT_MIN_MESSAGES;");
 
 		PQclear(res);
 		PQfinish(conn);
@@ -815,10 +827,518 @@ teardown_GPDB6_data_type_checks(ClusterInfo *cluster)
 		PGresult *res = executeQueryOrDie(conn,
 										  "SET CLIENT_MIN_MESSAGES = WARNING; "
 										  "DROP SCHEMA __gpupgrade_tmp CASCADE; "
-										  "SET CLIENT_MIN_MESSAGES = NOTICE;");
+										  "RESET CLIENT_MIN_MESSAGES;");
 
 		PQclear(res);
 		PQfinish(conn);
 	}
 
+}
+
+static void
+check_views_with_removed_operators()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	int   dbnum;
+	int   i_viewname;
+
+	prep_status("Checking for views with removed operators");
+
+	snprintf(output_path, sizeof(output_path), "views_with_removed_operators.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		int			ntups;
+		int			rowno;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn;
+		bool		db_used = false;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
+		/* Install check support function */
+		PQclear(executeQueryOrDie(conn,
+								  "CREATE OR REPLACE FUNCTION "
+								  "view_has_removed_operators(OID) "
+								  "RETURNS BOOL "
+								  "AS '$libdir/pg_upgrade_support' "
+								  "LANGUAGE C STRICT;"));
+		res = executeQueryOrDie(conn,
+								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
+								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
+								"WHERE c.relkind = 'v' AND "
+								"view_has_removed_operators(c.oid) = TRUE;");
+
+		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_has_removed_operators(OID);"));
+		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		i_viewname = PQfnumber(res, "badviewname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+			if (!db_used)
+			{
+				fprintf(script, "Database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s\n", PQgetvalue(res, rowno, i_viewname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			   "| Your installation contains views using removed operators.\n"
+			   "| These operators are no longer present on the target version.\n"
+			   "| These views must be updated to use operators supported in the\n"
+			   "| target version or removed before upgrade can continue. A list\n"
+			   "| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_views_with_removed_functions()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	int   dbnum;
+	int   i_viewname;
+
+	prep_status("Checking for views with removed functions");
+
+	snprintf(output_path, sizeof(output_path), "views_with_removed_functions.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		int			ntups;
+		int			rowno;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn;
+		bool		db_used = false;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
+		/* Install check support function */
+		PQclear(executeQueryOrDie(conn,
+								  "CREATE OR REPLACE FUNCTION "
+								  "view_has_removed_functions(OID) "
+								  "RETURNS BOOL "
+								  "AS '$libdir/pg_upgrade_support' "
+								  "LANGUAGE C STRICT;"));
+		res = executeQueryOrDie(conn,
+								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
+								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
+								"WHERE c.relkind = 'v' "
+								"AND c.oid >= 16384 "
+								"AND view_has_removed_functions(c.oid) = TRUE;");
+
+		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_has_removed_functions(OID);"));
+		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		i_viewname = PQfnumber(res, "badviewname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+			if (!db_used)
+			{
+				fprintf(script, "Database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s\n", PQgetvalue(res, rowno, i_viewname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			   "| Your installation contains views using removed functions.\n"
+			   "| These functions are no longer present on the target version.\n"
+			   "| These views must be updated to use functions supported in the\n"
+			   "| target version or removed before upgrade can continue. A list\n"
+			   "| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_views_with_removed_types()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	int   dbnum;
+	int   i_viewname;
+
+	prep_status("Checking for views with removed types");
+
+	snprintf(output_path, sizeof(output_path), "views_with_removed_types.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		int			ntups;
+		int			rowno;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn;
+		bool		db_used = false;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
+		/* Install check support function */
+		PQclear(executeQueryOrDie(conn,
+								  "CREATE OR REPLACE FUNCTION "
+								  "view_has_removed_types(OID) "
+								  "RETURNS BOOL "
+								  "AS '$libdir/pg_upgrade_support' "
+								  "LANGUAGE C STRICT;"));
+		res = executeQueryOrDie(conn,
+								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
+								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
+								"WHERE c.relkind = 'v' "
+								"AND c.oid >= 16384 "
+								"AND view_has_removed_types(c.oid) = TRUE;");
+
+		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_has_removed_types(OID);"));
+		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		i_viewname = PQfnumber(res, "badviewname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+			if (!db_used)
+			{
+				fprintf(script, "Database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s\n", PQgetvalue(res, rowno, i_viewname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			   "| Your installation contains views using removed types.\n"
+			   "| These types are no longer present on the target version.\n"
+			   "| These views must be updated to use types supported in the\n"
+			   "| target version or removed before upgrade can continue. A list\n"
+			   "| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+/*
+ * check_for_disallowed_pg_operator(void)
+ *
+ * Versions greater than 9.4 disallows `CREATE OPERATOR =>`
+ */
+static void
+check_for_disallowed_pg_operator(void)
+{
+	int			dbnum;
+	char		output_path[MAXPGPATH];
+	bool		found = false;
+	FILE		*script = NULL;
+
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	prep_status("Checking for disallowed OPERATOR =>");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "databases_with_disallowed_pg_operator.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/* Find any disallowed operator '=>' in all the databases */
+		res = executeQueryOrDie(conn,
+								"SELECT * "
+								"FROM pg_operator "
+								"WHERE oprname = '=>' AND "
+								"	   oid >= 16384");
+
+		if (PQntuples(res) != 0)
+		{
+			found = true;
+			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+
+			fprintf(script, "%s\n", active_db->db_name);
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+					 "| Your installation contains disallowed OPERATOR =>.\n"
+					 "| You will need to remove the disallowed OPERATOR =>\n"
+					 "| from the list of databases in the file:\n"
+					 "|    %s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+/* Check for any AO materialized views with relfrozenxid != 0
+ *
+ * An AO materialized view must have invalid relfrozenxid (0).
+ * However, some views might have valid relfrozenxid due to a known code issue.
+ * We need to check for problematic views before upgrading.
+ * The problem can be fixed by issuing "REFRESH MATERIALIZED VIEW <viewname>"
+ * with latest code.
+ * See the PR for details:
+ *
+ * https://github.com/greenplum-db/gpdb/pull/11662/
+ */
+static void
+check_for_ao_matview_with_relfrozenxid(ClusterInfo *cluster)
+{
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	int   dbnum;
+
+	/* For now, the issue exists only for Greenplum 6.x/PostgreSQL 9.4 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) != 904)
+		return;
+
+	prep_status("Checking for AO materialized views with relfrozenxid");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+				"ao_materialized_view_with_relfrozenxid.txt");
+
+	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_nspname,
+					i_relname;
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+
+		/*
+		 * Detect any materialized view where relstorage is
+		 * RELSTORAGE_AOROWS or RELSTORAGE_AOCOLS with relfrozenxid != 0
+		 */
+		res = executeQueryOrDie(conn,
+								"select tb.relname, tb.relfrozenxid, tbsp.nspname "
+								" from pg_catalog.pg_class tb "
+								" left join pg_catalog.pg_namespace tbsp "
+								" on tb.relnamespace = tbsp.oid "
+								" where tb.relkind = 'm' "
+								" and (tb.relstorage = 'a' or tb.relstorage = 'c') "
+								" and tb.relfrozenxid::text <> '0';");
+
+		ntups = PQntuples(res);
+		i_nspname = PQfnumber(res, "nspname");
+		i_relname = PQfnumber(res, "relname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n",
+							output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+
+			fprintf(script, "  %s.%s\n",
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_relname));
+		}
+
+		PQclear(res);
+
+		PQfinish(conn);
+	}
+
+	if(script)
+	{
+		fclose(script);
+		gp_fatal_log(
+				"| Detected AO materialized views with incorrect relfrozenxid.\n"
+				"| Issue \"REFRESH MATERIALIZED VIEW <schemaname>.<viewname> on the problem\n"
+				"| views to resolve the issue.\n"
+				"| A list of the problem materialized views are in the file:\n"
+				"| %s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_views_with_changed_function_signatures()
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char  output_path[MAXPGPATH];
+	FILE *script = NULL;
+	bool  found = false;
+	int   dbnum;
+	int   i_viewname;
+
+	prep_status("Checking for views with functions having changed signatures");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "views_with_changed_function_signatures.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		int			ntups;
+		int			rowno;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn;
+		bool		db_used = false;
+
+		conn = connectToServer(&old_cluster, active_db->db_name);
+		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
+		/* Install check support function */
+		PQclear(executeQueryOrDie(conn,
+								  "CREATE OR REPLACE FUNCTION "
+								  "view_has_changed_function_signatures(OID) "
+								  "RETURNS BOOL "
+								  "AS '$libdir/pg_upgrade_support' "
+								  "LANGUAGE C STRICT;"));
+		res = executeQueryOrDie(conn,
+								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
+								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
+								"WHERE c.relkind = 'v' "
+								"AND c.oid >= 16384 "
+								"AND view_has_changed_function_signatures(c.oid) = TRUE;");
+
+		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_has_changed_function_signatures(OID);"));
+		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
+
+		ntups = PQntuples(res);
+		i_viewname = PQfnumber(res, "badviewname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+				pg_fatal("Could not create necessary file:  %s\n", output_path);
+			if (!db_used)
+			{
+				fprintf(script, "Database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s\n", PQgetvalue(res, rowno, i_viewname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains views using "
+			"| functions with changed signatures.\n"
+			"| These functions are present on the target version but with "
+			"| different arguments and/or return values.\n"
+			"| These views must be updated to use functions supported in the\n"
+			"| target version or removed before upgrade can continue. A list\n"
+			"| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
 }

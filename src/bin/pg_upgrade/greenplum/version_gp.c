@@ -39,7 +39,8 @@ check_hash_partition_usage(void)
 
 	prep_status("Checking for hash partitioned tables");
 
-	snprintf(output_path, sizeof(output_path), "hash_partitioned_tables.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "hash_partitioned_tables.txt");
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -85,7 +86,7 @@ check_hash_partition_usage(void)
 	{
 		fclose(script);
 		pg_log(PG_REPORT, "fatal\n");
-		pg_log(PG_FATAL,
+		gp_fatal_log(
 			   "| Your installation contains hash partitioned tables.\n"
 			   "| Upgrading hash partitioned tables is not supported,\n"
 			   "| so this cluster cannot currently be upgraded.  You\n"
@@ -204,7 +205,8 @@ old_GPDB6_check_for_unsupported_sha256_password_hashes(void)
 
 	prep_status("Checking for SHA-256 hashed passwords");
 
-	snprintf(output_path, sizeof(output_path), "roles_using_sha256_passwords.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "roles_using_sha256_passwords.txt");
 
 	/* It's enough to check this in one database, pg_authid is a shared catalog. */
 	{
@@ -242,11 +244,12 @@ old_GPDB6_check_for_unsupported_sha256_password_hashes(void)
 	if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("Your installation contains roles with SHA-256 hashed passwords. Using\n"
-				 "SHA-256 for password hashes is no longer supported. You can use\n"
-				 "ALTER ROLE <role name> WITH PASSWORD NULL as superuser to clear passwords,\n"
-				 "and restart the upgrade.  A list of the problem roles is in the file:\n"
-				 "    %s\n\n", output_path);
+		gp_fatal_log(
+				 "| Your installation contains roles with SHA-256 hashed passwords. Using\n"
+				 "| SHA-256 for password hashes is no longer supported. You can use\n"
+				 "| ALTER ROLE <role name> WITH PASSWORD NULL as superuser to clear passwords,\n"
+				 "| and restart the upgrade.  A list of the problem roles is in the file:\n"
+				 "|    %s\n\n", output_path);
 	}
 	else
 		check_ok();

@@ -59,7 +59,6 @@ static void copy_xact_xlog_xid(void);
 static void set_frozenxids(bool minmxid_only);
 static void make_outputdirs(char *pgdata);
 static void setup(char *argv0, bool *live_check);
-static void cleanup(void);
 
 static void copy_subdir_files(const char *old_subdir, const char *new_subdir);
 
@@ -99,6 +98,7 @@ main(int argc, char **argv)
 	char       *sequence_script_file_name = NULL;
 	char	   *analyze_script_file_name = NULL;
 	char	   *deletion_script_file_name = NULL;
+	char	   *output_dir = NULL;
 	bool		live_check = false;
 
 	pg_logging_init(argv[0]);
@@ -129,8 +129,20 @@ main(int argc, char **argv)
 	/*
 	 * This needs to happen after adjusting the data directory of the new
 	 * cluster in adjust_data_dir().
+	 *
+	 * GPDB allows for relocateable output with the --output-dir flag
+	 *
+	 * Use make_outputdirs() for the default option; this ensures that there is a
+	 * unique directory for pg_upgrade on the data directory. If not,
+	 * pg_upgrade will fail immediately. The default option will create the directory
+	 * `<data-directory>/pg_upgrade_output.d/<timestamp>` for pg_upgrade. Otherwise, use
+	 * make_outputdirs_gp() when the user knows the exact directory to put the
+	 * files and logs that pg_upgrade generates.
 	 */
-	make_outputdirs(new_cluster.pgdata);
+	if ((output_dir = get_output_dir()) != NULL)
+		make_outputdirs_gp(output_dir);
+	else
+		make_outputdirs(new_cluster.pgdata);
 
 	setup(argv[0], &live_check);
 
@@ -287,7 +299,7 @@ main(int argc, char **argv)
 	pg_free(analyze_script_file_name);
 	pg_free(deletion_script_file_name);
 
-	cleanup();
+	cleanup_output_dirs();
 
 	return 0;
 }
@@ -413,36 +425,75 @@ make_outputdirs(char *pgdata)
 	char	  **filename;
 	time_t		run_time = time(NULL);
 	char		filename_path[MAXPGPATH];
+	char		timebuf[128];
+	struct timeval time;
+	time_t		tt;
+	int			len;
 
-	log_opts.basedir = (char *) pg_malloc(MAXPGPATH);
-	snprintf(log_opts.basedir, MAXPGPATH, "%s/%s", pgdata, BASE_OUTPUTDIR);
-	log_opts.dumpdir = (char *) pg_malloc(MAXPGPATH);
-	snprintf(log_opts.dumpdir, MAXPGPATH, "%s/%s", pgdata, DUMP_OUTPUTDIR);
-	log_opts.logdir = (char *) pg_malloc(MAXPGPATH);
-	snprintf(log_opts.logdir, MAXPGPATH, "%s/%s", pgdata, LOG_OUTPUTDIR);
+	log_opts.rootdir = (char *) pg_malloc0(MAXPGPATH);
+	len = snprintf(log_opts.rootdir, MAXPGPATH, "%s/%s", pgdata, BASE_OUTPUTDIR);
+	if (len >= MAXPGPATH)
+		pg_fatal("directory path for new cluster is too long\n");
 
-	if (mkdir(log_opts.basedir, pg_dir_create_mode))
+	/* BASE_OUTPUTDIR/$timestamp/ */
+	gettimeofday(&time, NULL);
+	tt = (time_t) time.tv_sec;
+	strftime(timebuf, sizeof(timebuf), "%Y%m%dT%H%M%S", localtime(&tt));
+	/* append milliseconds */
+	snprintf(timebuf + strlen(timebuf), sizeof(timebuf) - strlen(timebuf),
+			 ".%03d", (int) (time.tv_usec / 1000));
+	log_opts.basedir = (char *) pg_malloc0(MAXPGPATH);
+	len = snprintf(log_opts.basedir, MAXPGPATH, "%s/%s", log_opts.rootdir,
+				   timebuf);
+	if (len >= MAXPGPATH)
+		pg_fatal("directory path for new cluster is too long\n");
+
+	/* BASE_OUTPUTDIR/$timestamp/dump/ */
+	log_opts.dumpdir = (char *) pg_malloc0(MAXPGPATH);
+	len = snprintf(log_opts.dumpdir, MAXPGPATH, "%s/%s/%s", log_opts.rootdir,
+				   timebuf, DUMP_OUTPUTDIR);
+	if (len >= MAXPGPATH)
+		pg_fatal("directory path for new cluster is too long\n");
+
+	/* BASE_OUTPUTDIR/$timestamp/log/ */
+	log_opts.logdir = (char *) pg_malloc0(MAXPGPATH);
+	len = snprintf(log_opts.logdir, MAXPGPATH, "%s/%s/%s", log_opts.rootdir,
+				   timebuf, LOG_OUTPUTDIR);
+	if (len >= MAXPGPATH)
+		pg_fatal("directory path for new cluster is too long\n");
+
+	/*
+	 * Ignore the error case where the root path exists, as it is kept the
+	 * same across runs.
+	 */
+	if (mkdir(log_opts.rootdir, pg_dir_create_mode) < 0 && errno != EEXIST)
+		pg_fatal("could not create directory \"%s\": %m\n", log_opts.rootdir);
+	if (mkdir(log_opts.basedir, pg_dir_create_mode) < 0)
 		pg_fatal("could not create directory \"%s\": %m\n", log_opts.basedir);
-	if (mkdir(log_opts.dumpdir, pg_dir_create_mode))
+	if (mkdir(log_opts.dumpdir, pg_dir_create_mode) < 0)
 		pg_fatal("could not create directory \"%s\": %m\n", log_opts.dumpdir);
-	if (mkdir(log_opts.logdir, pg_dir_create_mode))
+	if (mkdir(log_opts.logdir, pg_dir_create_mode) < 0)
 		pg_fatal("could not create directory \"%s\": %m\n", log_opts.logdir);
 
-	snprintf(filename_path, sizeof(filename_path), "%s/%s", log_opts.logdir,
-			 INTERNAL_LOG_FILE);
+	len = snprintf(filename_path, sizeof(filename_path), "%s/%s",
+				   log_opts.logdir, INTERNAL_LOG_FILE);
+	if (len >= sizeof(filename_path))
+		pg_fatal("directory path for new cluster is too long\n");
+
 	if ((log_opts.internal = fopen_priv(filename_path, "a")) == NULL)
 		pg_fatal("could not open log file \"%s\": %m\n", filename_path);
 
 	/* label start of upgrade in logfiles */
 	for (filename = output_files; *filename != NULL; filename++)
 	{
-		snprintf(filename_path, sizeof(filename_path), "%s/%s",
-				 log_opts.logdir, *filename);
+		len = snprintf(filename_path, sizeof(filename_path), "%s/%s",
+					   log_opts.logdir, *filename);
+		if (len >= sizeof(filename_path))
+			pg_fatal("directory path for new cluster is too long\n");
 		if ((fp = fopen_priv(filename_path, "a")) == NULL)
 			pg_fatal("could not write to log file \"%s\": %m\n", filename_path);
 
-		/* Start with newline because we might be appending to a file. */
-		fprintf(fp, "\n"
+		fprintf(fp,
 				"-----------------------------------------------------------------\n"
 				"  pg_upgrade run on %s"
 				"-----------------------------------------------------------------\n\n",
@@ -1003,14 +1054,4 @@ set_frozenxids(bool minmxid_only)
 	PQfinish(conn_template1);
 
 	check_ok();
-}
-
-static void
-cleanup(void)
-{
-	fclose(log_opts.internal);
-
-	/* Remove dump and log files? */
-	if (!log_opts.retain)
-		rmtree(log_opts.basedir, true);
 }

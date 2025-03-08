@@ -54,7 +54,6 @@ get_loadable_libraries(void)
 	PGresult  **ress;
 	int			totaltups;
 	int			dbnum;
-	bool		found_public_plpython_handler = false;
 
 	ress = (PGresult **) pg_malloc(old_cluster.dbarr.ndbs * sizeof(PGresult *));
 	totaltups = 0;
@@ -67,13 +66,17 @@ get_loadable_libraries(void)
 
 		/*
 		 * Fetch all libraries containing non-built-in C functions in this DB.
+		 * GPDB: $libdir/plpython2 was removed with GP7, which only supports
+		 * plpython3. The target GP7 cluster is not expected to have the
+		 * library, so it's excluded from the check.
 		 */
 		ress[dbnum] = executeQueryOrDie(conn,
 										"SELECT DISTINCT probin "
 										"FROM pg_catalog.pg_proc "
 										"WHERE prolang = %u AND "
 										"probin IS NOT NULL AND "
-										"oid >= %u;",
+										"probin != '$libdir/plpython2' "
+										"AND oid >= %u;",
 										ClanguageId,
 										FirstNormalObjectId);
 		totaltups += PQntuples(ress[dbnum]);
@@ -107,6 +110,8 @@ get_loadable_libraries(void)
 									FirstNormalObjectId);
 			if (PQntuples(res) > 0)
 			{
+				/* XXX: should be unneeded for gpdb6->cloudberry case */
+#if 0
 				if (!found_public_plpython_handler)
 				{
 					pg_log(PG_WARNING,
@@ -130,15 +135,13 @@ get_loadable_libraries(void)
 				}
 				pg_log(PG_WARNING, "    %s\n", active_db->db_name);
 				found_public_plpython_handler = true;
+#endif
 			}
 			PQclear(res);
 		}
 
 		PQfinish(conn);
 	}
-
-	if (found_public_plpython_handler)
-		pg_fatal("Remove the problem functions from the old cluster to continue.\n");
 
 	os_info.libraries = (LibraryInfo *) pg_malloc(totaltups * sizeof(LibraryInfo));
 	totaltups = 0;
