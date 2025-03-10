@@ -1683,7 +1683,7 @@ aoco_index_build_range_scan(Relation heapRelation,
 	ExprContext *econtext;
 	Snapshot	snapshot;
 	AOCSFileSegInfo **seginfo = NULL;
-	int32 segfile_count;
+	int32 segfile_count = 0;
 	int64 total_blockcount = 0; 
 	BlockNumber lastBlock = start_blockno;
 	int64 blockcounts = 0;

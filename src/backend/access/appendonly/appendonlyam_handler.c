@@ -1554,7 +1554,7 @@ appendonly_index_build_range_scan(Relation heapRelation,
 	ExprContext *econtext;
 	Snapshot	snapshot;
 	FileSegInfo **seginfo = NULL;
-	int segfile_count;
+	int segfile_count = 0;
 	int64 total_blockcount = 0;
 	int64 previous_blkno = -1;
 
