@@ -1218,6 +1218,10 @@ jobs:
             du -sh "${SRC_DIR}/../cloudberry"
           } 2>&1 | tee -a build-logs/details/source-extraction.log
 
+      - name: Install Python Dependencies
+        run: |
+          pip3 install psutil==5.7.0 pyyaml==5.3.1 PyGreSQL==5.2
+
       - name: Create Apache Cloudberry demo cluster
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
