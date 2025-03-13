@@ -3181,7 +3181,7 @@ create materialized view mv_par1 as select   count(*) from par_1_prt_1;
 create materialized view mv_par1_1 as select count(*) from par_1_prt_1_2_prt_1;
 create materialized view mv_par1_2 as select count(*) from par_1_prt_1_2_prt_2;
 create materialized view mv_par2 as select   count(*) from par_1_prt_2;
-create materialized view mv_par2_2 as select count(*) from par_1_prt_2_2_prt_1;
+create materialized view mv_par2_1 as select count(*) from par_1_prt_2_2_prt_1;
 create materialized view mv_par_prune as select count(*) from par where b = 1;
 set enable_answer_query_using_materialized_views = on;
 explain(costs off, verbose)

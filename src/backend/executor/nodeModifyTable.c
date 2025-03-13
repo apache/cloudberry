@@ -105,6 +105,12 @@ send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
 static void
 notify_modified_relations_to_QD(ModifyTableState *node);
 
+static void
+notify_modified_relations_local(ModifyTableState *node);
+
+static void
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids);
+
 /*
  * Verify that the tuples to be produced by INSERT match the
  * target relation's rowtype
@@ -2997,6 +3003,17 @@ ExecModifyTable(PlanState *pstate)
 
 	node->mt_done = true;
 
+	/*
+	 * For SINGLENODE mode or we are entry db, we could not use extend
+	 * libpq to send message because we actually already on kind of QD
+	 * role.
+	 * Process modified relations here instead of EndModifiyTable().
+	 * It's too late to do there because we update materialized views
+	 * when executor end.
+	 */
+	if (IS_QD_OR_SINGLENODE())
+		notify_modified_relations_local(node);
+
 	return NULL;
 }
 
@@ -3693,9 +3710,41 @@ ExecEndModifyTable(ModifyTableState *node)
 	 */
 	ExecEndNode(outerPlanState(node));
 
-	/* Send back lead_relids to QD */
+	/* Notify modified leaf relids to QD */
 	if (GP_ROLE_EXECUTE == Gp_role && node->has_leaf_changed)
 		notify_modified_relations_to_QD(node);
+}
+
+/*
+ * notify_modified_relations_local
+ * For SINGLENODE or we are entry db, update the modified relids on local.
+ * To keep consistent, we set the extend protocol data which will be processed
+ * uniformly later at the end of exetuor run.
+ */
+static void
+notify_modified_relations_local(ModifyTableState *node)
+{
+	Assert(epd);
+
+	if (!bms_is_empty(node->mt_leaf_relids_inserted))
+		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted);
+
+	if (!bms_is_empty(node->mt_leaf_relids_updated))
+		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted))
+		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted);
+}
+
+static void
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids)
+{
+	Bitmapset *data = (Bitmapset *) list_nth(epd->subtagdata, subtag);
+
+	data = bms_union(data, relids);
+	list_nth_replace(epd->subtagdata, subtag, data);
+	/* Mark subtag to be consumed. */
+	epd->consumed_bitmap |= 1 << subtag;
 }
 
 static void
