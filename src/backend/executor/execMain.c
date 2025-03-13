@@ -553,7 +553,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	else
 		shouldDispatch = false;
 
-	if (GP_ROLE_DISPATCH == Gp_role && has_writable_operation)
+	if (IS_QD_OR_SINGLENODE() && has_writable_operation)
 	{
 		InitExtendProtocolData();
 	}
