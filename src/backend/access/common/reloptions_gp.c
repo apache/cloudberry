@@ -1635,6 +1635,10 @@ find_crsd(const char *column, List *stenc)
  * 'colDefs' - list of ColumnDefs
  * 'stenc' - list of ColumnReferenceStorageDirectives
  * 'withOptions' - list of WITH options
+ * 'parentenc' - list of ColumnReferenceStorageDirectives explicitly defined for
+ * parent partition
+ * 'explicitOnly' - Only return explicitly defined column encoding values
+ *  to be used for child partitions
  *
  * ENCODING options can be attached to column definitions, like
  * "mycolumn integer ENCODING ..."; these go into ColumnDefs. They
