@@ -454,7 +454,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 create materialized view mv_par2 as select * from  par_1_prt_2;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-create materialized view mv_par2_2 as select * from  par_1_prt_2_2_prt_1;
+create materialized view mv_par2_1 as select * from  par_1_prt_2_2_prt_1;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
@@ -465,7 +465,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
- mv_par2_2 | u
+ mv_par2_1 | u
 (6 rows)
 
 insert into par_1_prt_1 values (1, 1, 1);
@@ -473,11 +473,11 @@ insert into par_1_prt_1 values (1, 1, 1);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par1_2 | u
  mv_par2   | u
- mv_par2_2 | u
- mv_par1   | i
+ mv_par2_1 | u
  mv_par1_1 | i
- mv_par1_2 | i
+ mv_par1   | i
  mv_par    | i
 (6 rows)
 
@@ -486,12 +486,12 @@ insert into par values (1, 2, 2);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
- mv_par1   | i
+ mv_par1_2 | u
+ mv_par2_1 | u
  mv_par1_1 | i
- mv_par1_2 | i
+ mv_par1   | i
  mv_par    | i
  mv_par2   | i
- mv_par2_2 | i
 (6 rows)
 
 refresh materialized view mv_par;
@@ -499,7 +499,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 begin;
 insert into par_1_prt_2_2_prt_1 values (1, 2, 1);
 -- mv_par1* should not be updated
@@ -509,7 +509,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1   | u
  mv_par1_1 | u
  mv_par1_2 | u
- mv_par2_2 | i
+ mv_par2_1 | i
  mv_par2   | i
  mv_par    | i
 (6 rows)
@@ -524,7 +524,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1   | u
  mv_par1_1 | u
  mv_par1_2 | u
- mv_par2_2 | e
+ mv_par2_1 | e
  mv_par2   | e
  mv_par    | e
 (6 rows)
@@ -538,7 +538,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1   | u
  mv_par1_1 | u
  mv_par1_2 | u
- mv_par2_2 | e
+ mv_par2_1 | e
  mv_par2   | e
  mv_par    | e
 (6 rows)
@@ -548,14 +548,14 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 vacuum full par_1_prt_1_2_prt_1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
  mv_par1_2 | u
  mv_par2   | u
- mv_par2_2 | u
+ mv_par2_1 | u
  mv_par1_1 | r
  mv_par1   | r
  mv_par    | r
@@ -566,7 +566,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 vacuum full par;
 -- all should be updated.
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
@@ -574,7 +574,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 -----------+------------
  mv_par2   | r
  mv_par    | r
- mv_par2_2 | r
+ mv_par2_1 | r
  mv_par1_2 | r
  mv_par1   | r
  mv_par1_1 | r
@@ -585,7 +585,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 begin;
 create table par_1_prt_1_2_prt_3  partition of par_1_prt_1 for values from  (3) to (4);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -596,7 +596,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
- mv_par2_2 | u
+ mv_par2_1 | u
  mv_par1   | e
  mv_par    | e
 (6 rows)
@@ -613,7 +613,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
  mv_par2   | u
- mv_par2_2 | u
+ mv_par2_1 | u
  mv_par    | e
 (3 rows)
 
@@ -627,7 +627,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
- mv_par2_2 | u
+ mv_par2_1 | u
  mv_par1   | e
  mv_par    | e
 (6 rows)
@@ -645,12 +645,177 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
- mv_par2_2 | u
+ mv_par2_1 | u
  mv_par1   | e
  mv_par    | e
 (6 rows)
 
 abort;
+--
+-- Maintain materialized views on partitioned tables from bottom to up.
+--
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+refresh materialized view mv_par;
+refresh materialized view mv_par1;
+refresh materialized view mv_par1_1;
+refresh materialized view mv_par1_2;
+refresh materialized view mv_par2;
+refresh materialized view mv_par2_1;
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par    | u
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2   | u
+ mv_par2_1 | u
+(6 rows)
+
+insert into par values(1, 1, 1), (1, 1, 2);
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par2   | u
+ mv_par2_1 | u
+ mv_par1_1 | i
+ mv_par1   | i
+ mv_par    | i
+ mv_par1_2 | i
+(6 rows)
+
+abort;
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par    | u
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2   | u
+ mv_par2_1 | u
+(6 rows)
+
+insert into par_1_prt_2_2_prt_1 values(2, 2, 1);
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2_1 | i
+ mv_par2   | i
+ mv_par    | i
+(6 rows)
+
+abort;
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par    | u
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2   | u
+ mv_par2_1 | u
+(6 rows)
+
+delete from par where b = 2  and c = 1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2_1 | e
+ mv_par2   | e
+ mv_par    | e
+(6 rows)
+
+abort;
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par    | u
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2   | u
+ mv_par2_1 | u
+(6 rows)
+
+delete from par_1_prt_1_2_prt_2;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par1_1 | u
+ mv_par2   | u
+ mv_par2_1 | u
+ mv_par1_2 | e
+ mv_par1   | e
+ mv_par    | e
+(6 rows)
+
+abort;
+-- Across partition update.
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par    | u
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2   | u
+ mv_par2_1 | u
+(6 rows)
+
+update par set c = 2 where b = 1 and c = 1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par2   | u
+ mv_par2_1 | u
+ mv_par1_2 | i
+ mv_par1_1 | e
+ mv_par1   | e
+ mv_par    | e
+(6 rows)
+
+abort;
+-- Split Update with acrosss partition update.
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par    | u
+ mv_par1   | u
+ mv_par1_1 | u
+ mv_par1_2 | u
+ mv_par2   | u
+ mv_par2_1 | u
+(6 rows)
+
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+  mvname   | datastatus 
+-----------+------------
+ mv_par2   | u
+ mv_par2_1 | u
+ mv_par1_2 | i
+ mv_par1_1 | e
+ mv_par1   | e
+ mv_par    | e
+(6 rows)
+
+abort;
+--
+-- End of Maintain materialized views on partitioned tables from bottom to up.
+--
 --start_ignore
 drop schema matview_data_schema cascade;
 NOTICE:  drop cascades to 3 other objects
