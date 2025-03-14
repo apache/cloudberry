@@ -124,9 +124,6 @@ private:
 	// hash map of the cte identifiers and the cte consumers with the same cte identifier
 	HMUlCTEConsumerInfo *m_cte_consumer_info;
 
-	// into clause
-	IntoClause *m_into_clause;
-
 	// CTAS distribution policy
 	GpPolicy *m_distribution_policy;
 
@@ -215,14 +212,7 @@ public:
 	}
 
 	// add CTAS information
-	void AddCtasInfo(IntoClause *into_clause, GpPolicy *distribution_policy);
-
-	// into clause
-	IntoClause *
-	GetIntoClause() const
-	{
-		return m_into_clause;
-	}
+	void AddCtasInfo(GpPolicy *distribution_policy);
 
 	// CTAS distribution policy
 	GpPolicy *

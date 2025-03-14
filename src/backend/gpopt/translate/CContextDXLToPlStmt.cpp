@@ -55,7 +55,6 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_subplan_sliceids_list(nullptr),
 	  m_slices_list(nullptr),
 	  m_result_relation_index(0),
-	  m_into_clause(nullptr),
 	  m_distribution_policy(nullptr),
 	  m_part_selector_to_param_map(nullptr)
 {
@@ -348,16 +347,11 @@ CContextDXLToPlStmt::AddSlice(PlanSlice *slice)
 //		Add CTAS info
 //
 //---------------------------------------------------------------------------
-// GPDB_92_MERGE_FIXME: we really should care about intoClause
-// But planner cheats. FIX that and re-enable ORCA's handling of intoClause
 void
-CContextDXLToPlStmt::AddCtasInfo(IntoClause *into_clause,
-								 GpPolicy *distribution_policy)
+CContextDXLToPlStmt::AddCtasInfo(GpPolicy *distribution_policy)
 {
-	//	GPOS_ASSERT(NULL != into_clause);
 	GPOS_ASSERT(nullptr != distribution_policy);
 
-	m_into_clause = into_clause;
 	m_distribution_policy = distribution_policy;
 }
 

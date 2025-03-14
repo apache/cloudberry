@@ -35,6 +35,10 @@ CDXLCtasStorageOptions::CDXLCtasStorageOptions(
 	GPOS_ASSERT(EctascommitSentinel > ctas_on_commit_action);
 }
 
+CDXLCtasStorageOptions::CDXLCtasStorageOptions()
+	:  CDXLCtasStorageOptions(nullptr, CDXLCtasStorageOptions::EctascommitNOOP, nullptr)
+{}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLCtasStorageOptions::~CDXLCtasStorageOptions
