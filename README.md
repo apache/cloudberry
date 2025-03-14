@@ -19,6 +19,10 @@
 ![GitHub contributors](https://img.shields.io/github/contributors/apache/cloudberry)
 ![GitHub License](https://img.shields.io/github/license/apache/cloudberry)
 [![Apache Cloudberry Build](https://github.com/apache/cloudberry/actions/workflows/build-cloudberry.yml/badge.svg)](https://github.com/apache/cloudberry/actions/workflows/build-cloudberry.yml)
+<a href="https://scan.coverity.com/projects/apache-cloudberry-1f6d497c-9dcb-4204-a37b-0d79c6c5bec3">
+  <img alt="Coverity Scan Build Status"
+       src="https://scan.coverity.com/projects/31473/badge.svg"/>
+</a>
 
 ---------
 
