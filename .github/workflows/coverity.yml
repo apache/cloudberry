@@ -80,4 +80,4 @@ jobs:
           --form file=@cov.tar.gz \
           --form version="Commit $GITHUB_SHA" \
           --form description="Build submitted via CI" \
-          https://scan.coverity.com/builds?project=cloudberry
+          https://scan.coverity.com/builds?project=apache%2Fcloudberry
