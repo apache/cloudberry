@@ -317,19 +317,19 @@ select c1 from t1 where c1 > 6 and c1 not in
 --
 explain select c1 from t1,t2 where c1 not in 
 	(select c3 from t3) and c1 = c2;
-                                              QUERY PLAN                                               
--------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=5.38..8.62 rows=4 width=4)
-   ->  Hash Join  (cost=5.38..8.62 rows=2 width=4)
-         Hash Cond: (t1.c1 = t2.c2)
-         ->  Hash Left Anti Semi (Not-In) Join  (cost=2.26..5.46 rows=2 width=4)
-               Hash Cond: (t1.c1 = t3.c3)
-               ->  Seq Scan on t1  (cost=0.00..3.10 rows=4 width=4)
-               ->  Hash  (cost=2.15..2.15 rows=3 width=4)
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2.15 rows=3 width=4)
-                           ->  Seq Scan on t3  (cost=0.00..2.03 rows=1 width=4)
-         ->  Hash  (cost=3.05..3.05 rows=2 width=4)
-               ->  Seq Scan on t2  (cost=0.00..3.05 rows=2 width=4)
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2.12..3.25 rows=4 width=4)
+   ->  Hash Left Anti Semi (Not-In) Join  (cost=2.12..3.20 rows=1 width=4)
+         Hash Cond: (t1.c1 = t3.c3)
+         ->  Hash Join  (cost=1.04..2.10 rows=2 width=4)
+               Hash Cond: (t1.c1 = t2.c2)
+               ->  Seq Scan on t1  (cost=0.00..1.03 rows=3 width=4)
+               ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+                     ->  Seq Scan on t2  (cost=0.00..1.02 rows=2 width=4)
+         ->  Hash  (cost=1.05..1.05 rows=3 width=4)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.05 rows=3 width=4)
+                     ->  Seq Scan on t3  (cost=0.00..1.01 rows=1 width=4)
  Optimizer: Postgres query optimizer
 (12 rows)
 
