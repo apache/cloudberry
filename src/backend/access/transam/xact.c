@@ -32,6 +32,7 @@
 #include "access/xloginsert.h"
 #include "access/xact_storage_tablespace.h"
 #include "access/xlogutils.h"
+#include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_enum.h"
@@ -2785,6 +2786,8 @@ CommitTransaction(void)
 	if (Gp_role == GP_ROLE_EXECUTE && !Gp_is_writer)
 		elog(DEBUG1,"CommitTransaction: called as segment Reader");
 
+	system_relation_modified = false;
+
 	/*
 	 * Do pre-commit processing that involves calling user-defined code, such
 	 * as triggers.  SECURITY_RESTRICTED_OPERATION contexts must not queue an
@@ -3518,6 +3521,8 @@ AbortTransaction(void)
 	 * abort processing
 	 */
 	s->state = TRANS_ABORT;
+
+	system_relation_modified = false;
 
 	/*
 	 * Reset user ID which might have been changed transiently.  We need this

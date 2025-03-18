@@ -2319,7 +2319,10 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 * buffer.
 	 */
 	if (IsSystemRelation(relation))
+	{
+		system_relation_modified = true;
 		CacheInvalidateHeapTuple(relation, heaptup, NULL);
+	}
 
 	/* Note: speculative insertions are counted too, even if aborted later */
 	pgstat_count_heap_insert(relation, 1);
@@ -2719,6 +2722,7 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 	 */
 	if (IsCatalogRelation(relation))
 	{
+		system_relation_modified = true;
 		for (i = 0; i < ntuples; i++)
 			CacheInvalidateHeapTuple(relation, heaptuples[i], NULL);
 	}
@@ -3202,6 +3206,11 @@ l1:
 	 * need to look at the contents of the tuple.
 	 */
 	CacheInvalidateHeapTuple(relation, &tp, NULL);
+
+	if (IsCatalogRelation(relation))
+	{
+		system_relation_modified = true;
+	}
 
 	/* Now we can release the buffer */
 	ReleaseBuffer(buffer);
@@ -4141,6 +4150,11 @@ l2:
 	 * sinval messages.)
 	 */
 	CacheInvalidateHeapTuple(relation, &oldtup, heaptup);
+
+	if (IsCatalogRelation(relation))
+	{
+		system_relation_modified = true;
+	}
 
 	/* Now we can release the buffer(s) */
 	if (newbuf != buffer)
@@ -6270,6 +6284,11 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	 */
 	if (!IsBootstrapProcessingMode())
 		CacheInvalidateHeapTuple(relation, tuple, NULL);
+
+	if (IsCatalogRelation(relation))
+	{
+		system_relation_modified = true;
+	}
 }
 
 #define		FRM_NOOP				0x0001

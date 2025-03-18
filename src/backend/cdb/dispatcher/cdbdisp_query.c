@@ -19,6 +19,7 @@
 #include "access/xact.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
+#include "catalog/catalog.h"
 #include "cdb/cdbconn.h"
 #include "cdb/cdbgang.h"
 #include "cdb/cdbutil.h"
@@ -486,7 +487,8 @@ cdbdisp_dispatchCommandInternal(DispatchCommandQueryParms *pQueryParms,
 	 * To fix this issue, we should drop the idle reader gangs after each
 	 * utility statement which may modify the catalog table.
 	 */
-	ds->destroyIdleReaderGang = true;
+	if (system_relation_modified)
+		ds->destroyIdleReaderGang = true;
 
 	queryText = buildGpQueryString(pQueryParms, &queryTextLength);
 
