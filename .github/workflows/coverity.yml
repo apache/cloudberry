@@ -71,7 +71,7 @@ jobs:
       run: |
         ./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/cloudberrydb
         export PATH=`pwd`/coverity_tool/bin:$PATH
-        cov-build --dir cov-int make -j$(nproc)
+        cov-build --dir cov-int make
     - name: Submit build result to Coverity Scan
       run: |
         tar czvf cov.tar.gz cov-int
