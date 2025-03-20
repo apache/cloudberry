@@ -57,11 +57,16 @@
 #include "access/transam.h"
 #include "cdb/cdbaocsam.h"
 #include "cdb/cdbappendonlyam.h"
+#include "cdb/cdbdisp_query.h"
 #include "cdb/cdbhash.h"
+#include "cdb/cdbpq.h"
 #include "cdb/cdbvars.h"
 #include "parser/parsetree.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
+
+#include "libpq/libpq.h"
+#include "libpq/pqformat.h"
 
 ext_dml_func_hook_type ext_dml_init_hook   = NULL;
 ext_dml_func_hook_type ext_dml_finish_hook = NULL;
@@ -93,6 +98,18 @@ static TupleTableSlot *ExecPrepareTupleRouting(ModifyTableState *mtstate,
 											   ResultRelInfo *targetRelInfo,
 											   TupleTableSlot *slot,
 											   ResultRelInfo **partRelInfo);
+
+static void
+send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids);
+
+static void
+notify_modified_relations_to_QD(ModifyTableState *node);
+
+static void
+notify_modified_relations_local(ModifyTableState *node);
+
+static void
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids);
 
 /*
  * Verify that the tuples to be produced by INSERT match the
@@ -1033,6 +1050,13 @@ ExecInsert(ModifyTableState *mtstate,
 	if (canSetTag)
 		(estate->es_processed)++;
 
+	if (resultRelationDesc->rd_rel->relispartition)
+	{
+		mtstate->mt_leaf_relids_inserted =
+			bms_add_member(mtstate->mt_leaf_relids_inserted, RelationGetRelid(resultRelationDesc));
+		mtstate->has_leaf_changed = true;
+	}
+
 	/*
 	 * If this insert is the result of a partition key update that moved the
 	 * tuple to a new partition, put this row into the transition NEW TABLE,
@@ -1493,6 +1517,14 @@ ldelete:;
 
 	if (canSetTag)
 		(estate->es_processed)++;
+
+	if (resultRelationDesc->rd_rel->relispartition)
+	{
+
+		mtstate->mt_leaf_relids_deleted =
+			bms_add_member(mtstate->mt_leaf_relids_deleted, RelationGetRelid(resultRelationDesc));
+		mtstate->has_leaf_changed = true;
+	}
 
 	/* Tell caller that the delete actually happened. */
 	if (tupleDeleted)
@@ -2135,6 +2167,13 @@ lreplace:;
 
 	if (canSetTag)
 		(estate->es_processed)++;
+
+	if (resultRelationDesc->rd_rel->relispartition)
+	{
+		mtstate->mt_leaf_relids_updated =
+			bms_add_member(mtstate->mt_leaf_relids_updated, RelationGetRelid(resultRelationDesc));
+		mtstate->has_leaf_changed = true;
+	}
 
 	/* AFTER ROW UPDATE Triggers */
 	/* GPDB: AO and AOCO tables don't support triggers */
@@ -2964,6 +3003,17 @@ ExecModifyTable(PlanState *pstate)
 
 	node->mt_done = true;
 
+	/*
+	 * For SINGLENODE mode or we are entry db, we could not use extend
+	 * libpq to send message because we actually already on kind of QD
+	 * role.
+	 * Process modified relations here instead of EndModifiyTable().
+	 * It's too late to do there because we update materialized views
+	 * when executor end.
+	 */
+	if (IS_QD_OR_SINGLENODE())
+		notify_modified_relations_local(node);
+
 	return NULL;
 }
 
@@ -3049,6 +3099,11 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	mtstate->ps.plan = (Plan *) node;
 	mtstate->ps.state = estate;
 	mtstate->ps.ExecProcNode = ExecModifyTable;
+
+	mtstate->mt_leaf_relids_inserted = NULL;
+	mtstate->mt_leaf_relids_updated = NULL;
+	mtstate->mt_leaf_relids_deleted = NULL;
+	mtstate->has_leaf_changed = false;
 
 	mtstate->operation = operation;
 	mtstate->canSetTag = node->canSetTag;
@@ -3654,6 +3709,70 @@ ExecEndModifyTable(ModifyTableState *node)
 	 * shut down subplan
 	 */
 	ExecEndNode(outerPlanState(node));
+
+	/* Notify modified leaf relids to QD */
+	if (GP_ROLE_EXECUTE == Gp_role && node->has_leaf_changed)
+		notify_modified_relations_to_QD(node);
+}
+
+/*
+ * notify_modified_relations_local
+ * For SINGLENODE or we are entry db, update the modified relids on local.
+ * To keep consistent, we set the extend protocol data which will be processed
+ * uniformly later at the end of exetuor run.
+ */
+static void
+notify_modified_relations_local(ModifyTableState *node)
+{
+	Assert(epd);
+
+	if (!bms_is_empty(node->mt_leaf_relids_inserted))
+		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted);
+
+	if (!bms_is_empty(node->mt_leaf_relids_updated))
+		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted))
+		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted);
+}
+
+static void
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids)
+{
+	Bitmapset *data = (Bitmapset *) list_nth(epd->subtagdata, subtag);
+
+	data = bms_union(data, relids);
+	list_nth_replace(epd->subtagdata, subtag, data);
+	/* Mark subtag to be consumed. */
+	epd->consumed_bitmap |= 1 << subtag;
+}
+
+static void
+send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
+{
+	int relid = -1;
+
+	/* No need to send. */
+	if (bms_is_empty(relids))
+		return;
+
+	pq_sendint32(buf, subtag); /* subtag */
+	pq_sendint32(buf, bms_num_members(relids)); /* number of relid */
+	while ((relid = bms_next_member(relids, relid)) >= 0)
+		pq_sendint32(buf, relid); /* each relid */
+}
+
+static void
+notify_modified_relations_to_QD(ModifyTableState *node)
+{
+	StringInfoData buf;
+	pq_beginmessage(&buf, PQExtendProtocol);
+	send_subtag(&buf, EP_TAG_I, node->mt_leaf_relids_inserted);
+	send_subtag(&buf, EP_TAG_U, node->mt_leaf_relids_updated);
+	send_subtag(&buf, EP_TAG_D, node->mt_leaf_relids_deleted);
+	pq_sendint32(&buf, EP_TAG_MAX); /* Finish this run. */
+	pq_endmessage(&buf);
+	pq_flush(); /* Flush to notify QD in time. */
 }
 
 void
