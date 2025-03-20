@@ -28,7 +28,7 @@
 #    - workflow run currently is limited to "apache" GitHub organization, forks are ignored
 #
 # 2. **scan Job**:
-#    - performs scan and upload result to https://scan.coverity.com/projects/cloudberry?tab=overview
+#    - performs scan and upload result to https://scan.coverity.com/builds?project=apache%2Fcloudberry
 # Triggers:
 # - daily schedule
 # - optional manual dispatch.
@@ -36,7 +36,7 @@
 # Notes:
 # - COVERITY_SCAN_TOKEN secret is used.
 # --------------------------------------------------------------------
-name: Coverity
+name: Apache Cloudberry Coverity Scan
 
 on:
   schedule:
@@ -47,31 +47,74 @@ permissions:
   contents: read
 
 jobs:
-  scan:
-    runs-on: ubuntu-latest
+  coverity-scan:
+    runs-on: ubuntu-22.04
     if: ${{ github.repository_owner == 'apache' }}
 
-    env:
-      DEBIAN_FRONTEND: noninteractive
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Install apt dependencies
+    - name: Checkout Apache Cloudberry
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+       
+    - name: Environment Initialization
       run: |
-        sudo apt-get update
-        sudo apt-get install -y bison cmake curl flex git-core gcc g++ inetutils-ping krb5-kdc krb5-admin-server libapr1-dev libbz2-dev libcurl4-gnutls-dev libevent-dev libkrb5-dev libpam-dev libperl-dev libreadline-dev libssl-dev libxerces-c-dev libxml2-dev libyaml-dev libzstd-dev locales net-tools ninja-build openssh-client openssh-server openssl pkg-config python3-dev python3-pip python3-psutil python3-pygresql python3-yaml zlib1g-dev
-        pip3 install conan
+        if ! su - gpadmin -c "/tmp/init_system.sh"; then
+          echo "::error::Container initialization failed"
+          exit 1
+        fi
 
     - name: Download Coverity build tool
       run: |
         wget -c -N https://scan.coverity.com/download/linux64 --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=apache%2Fcloudberry" -O coverity_tool.tar.gz
-        mkdir coverity_tool
+        mkdir -p coverity_tool
         tar xzf coverity_tool.tar.gz --strip 1 -C coverity_tool
+        chown -R gpadmin:gpadmin coverity_tool
+
     - name: Build with Coverity build tool
       run: |
-        ./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/cloudberrydb
-        export PATH=`pwd`/coverity_tool/bin:$PATH
-        cov-build --dir cov-int make
+        WORKSPACE="${GITHUB_WORKSPACE}"
+        sudo rm -rf /usr/local/cloudberry-db
+        sudo chmod a+w /usr/local
+        mkdir -p /usr/local/cloudberry-db/lib
+        sudo cp /usr/local/xerces-c/lib/libxerces-c.so \
+             /usr/local/xerces-c/lib/libxerces-c-3.3.so \
+             /usr/local/cloudberry-db/lib
+        sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db
+        su - gpadmin -c "cd $WORKSPACE"
+        export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
+        export PATH=$WORKSPACE/coverity_tool/bin:$PATH
+        ./configure --prefix=/usr/local/cloudberry-db \
+            --disable-external-fts \
+            --enable-gpcloud \
+            --enable-ic-proxy \
+            --enable-mapreduce \
+            --enable-orafce \
+            --enable-orca \
+            --enable-pxf \
+            --enable-tap-tests \
+            --with-gssapi \
+            --with-ldap \
+            --with-libxml \
+            --with-lz4 \
+            --with-openssl \
+            --with-pam \
+            --with-perl \
+            --with-pgport=5432 \
+            --with-python \
+            --with-pythonsrc-ext \
+            --with-ssl=openssl \
+            --with-uuid=e2fs \
+            --with-includes=/usr/local/xerces-c/include \
+            --with-libraries=/usr/local/cloudberry-db/lib
+        cov-build --dir cov-int make -j$(nproc)
+
     - name: Submit build result to Coverity Scan
       run: |
         tar czvf cov.tar.gz cov-int
