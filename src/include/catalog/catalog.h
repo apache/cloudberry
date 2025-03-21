@@ -57,4 +57,6 @@ extern void reldir_and_filename(RelFileNode rnode, BackendId backend, ForkNumber
 					char **dir, char **filename);
 extern char *aorelpathbackend(RelFileNode node, BackendId backend, int32 segno);
 
+extern bool system_relation_modified;
+
 #endif							/* CATALOG_H */

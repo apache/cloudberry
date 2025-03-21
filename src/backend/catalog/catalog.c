@@ -88,6 +88,7 @@
 
 static bool IsAoSegmentClass(Form_pg_class reltuple);
 static bool IsExtAuxClass(Form_pg_class reltuple);
+bool system_relation_modified = false;
 
 /*
  * Like relpath(), but gets the directory containing the data file
