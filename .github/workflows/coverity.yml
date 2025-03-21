@@ -94,7 +94,6 @@ jobs:
             --disable-external-fts \
             --enable-gpcloud \
             --enable-ic-proxy \
-            --enable-mapreduce \
             --enable-orafce \
             --enable-orca \
             --enable-pxf \
