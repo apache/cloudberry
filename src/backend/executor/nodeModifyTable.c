@@ -3186,6 +3186,11 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	{
 		resultRelInfo = &mtstate->resultRelInfo[i];
 
+		if (resultRelInfo->ri_RelationDesc->rd_tableam &&
+			(table_scan_flags(resultRelInfo->ri_RelationDesc) & SCAN_FORCE_BIG_WRITE_LOCK))
+		{
+			LockRelation(resultRelInfo->ri_RelationDesc, ExclusiveLock);
+		}
 		/* Let FDWs init themselves for foreign-table result rels */
 		if (!resultRelInfo->ri_usesFdwDirectModify &&
 			resultRelInfo->ri_FdwRoutine != NULL &&
