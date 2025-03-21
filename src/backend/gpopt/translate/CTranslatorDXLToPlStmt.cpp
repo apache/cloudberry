@@ -253,10 +253,6 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	planned_stmt->commandType = m_cmd_type;
 
 	planned_stmt->resultRelations = m_result_rel_list;
-	// GPDB_92_MERGE_FIXME: we really *should* be handling intoClause
-	// but currently planner cheats (c.f. createas.c)
-	// shift the intoClause handling into planner and re-enable this
-	//	pplstmt->intoClause = m_pctxdxltoplstmt->Pintocl();
 	planned_stmt->intoPolicy = m_dxl_to_plstmt_context->GetDistributionPolicy();
 
 	planned_stmt->paramExecTypes = m_dxl_to_plstmt_context->GetParamTypes();
@@ -6218,8 +6214,7 @@ void
 CTranslatorDXLToPlStmt::SetVarTypMod(const CDXLPhysicalCTAS *phy_ctas_dxlop,
 									 List *target_list)
 {
-	GPOS_ASSERT(nullptr != target_list);
-
+	// target list can be nullptr in CTAS
 	IntPtrArray *var_type_mod_array = phy_ctas_dxlop->GetVarTypeModArray();
 	GPOS_ASSERT(var_type_mod_array->Size() == gpdb::ListLength(target_list));
 
@@ -6282,15 +6277,12 @@ CTranslatorDXLToPlStmt::TranslateDXLCtas(
 	// cleanup
 	child_contexts->Release();
 
-
 	// translate operator costs
 	TranslatePlanCosts(ctas_dxlnode, plan);
 
-	//IntoClause *into_clause = TranslateDXLPhyCtasToIntoClause(phy_ctas_dxlop);
-	IntoClause *into_clause = nullptr;
 	GpPolicy *distr_policy =
 		TranslateDXLPhyCtasToDistrPolicy(phy_ctas_dxlop, target_list);
-	m_dxl_to_plstmt_context->AddCtasInfo(into_clause, distr_policy);
+	m_dxl_to_plstmt_context->AddCtasInfo(distr_policy);
 
 	GPOS_ASSERT(IMDRelation::EreldistrMasterOnly !=
 				phy_ctas_dxlop->Ereldistrpolicy());
@@ -6309,79 +6301,6 @@ CTranslatorDXLToPlStmt::TranslateDXLCtas(
 	plan = (Plan *) result;
 
 	return (Plan *) plan;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorDXLToPlStmt::TranslateDXLPhyCtasToIntoClause
-//
-//	@doc:
-//		Translates a DXL CTAS into clause
-//
-//---------------------------------------------------------------------------
-IntoClause *
-CTranslatorDXLToPlStmt::TranslateDXLPhyCtasToIntoClause(
-	const CDXLPhysicalCTAS *phy_ctas_dxlop)
-{
-	IntoClause *into_clause = MakeNode(IntoClause);
-	into_clause->rel = MakeNode(RangeVar);
-	/* GPDB_91_MERGE_FIXME: what about unlogged? */
-	into_clause->rel->relpersistence = phy_ctas_dxlop->IsTemporary()
-										   ? RELPERSISTENCE_TEMP
-										   : RELPERSISTENCE_PERMANENT;
-	into_clause->rel->relname =
-		CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-			phy_ctas_dxlop->MdName()->GetMDName()->GetBuffer());
-	into_clause->rel->schemaname = nullptr;
-	if (nullptr != phy_ctas_dxlop->GetMdNameSchema())
-	{
-		into_clause->rel->schemaname =
-			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-				phy_ctas_dxlop->GetMdNameSchema()->GetMDName()->GetBuffer());
-	}
-
-	CDXLCtasStorageOptions *dxl_ctas_storage_option =
-		phy_ctas_dxlop->GetDxlCtasStorageOption();
-	if (nullptr != dxl_ctas_storage_option->GetMdNameTableSpace())
-	{
-		into_clause->tableSpaceName =
-			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-				phy_ctas_dxlop->GetDxlCtasStorageOption()
-					->GetMdNameTableSpace()
-					->GetMDName()
-					->GetBuffer());
-	}
-
-	into_clause->onCommit =
-		(OnCommitAction) dxl_ctas_storage_option->GetOnCommitAction();
-	into_clause->options = TranslateDXLCtasStorageOptions(
-		dxl_ctas_storage_option->GetDXLCtasOptionArray());
-
-	// get column names
-	CDXLColDescrArray *dxl_col_descr_array =
-		phy_ctas_dxlop->GetDXLColumnDescrArray();
-	const ULONG num_of_cols = dxl_col_descr_array->Size();
-	into_clause->colNames = NIL;
-	for (ULONG ul = 0; ul < num_of_cols; ++ul)
-	{
-		const CDXLColDescr *dxl_col_descr = (*dxl_col_descr_array)[ul];
-
-		CHAR *col_name_char_array =
-			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-				dxl_col_descr->MdName()->GetMDName()->GetBuffer());
-
-		ColumnDef *col_def = MakeNode(ColumnDef);
-		col_def->colname = col_name_char_array;
-		col_def->is_local = true;
-
-		// GPDB_91_MERGE_FIXME: collation
-		col_def->collClause = nullptr;
-		col_def->collOid = gpdb::TypeCollation(
-			CMDIdGPDB::CastMdid(dxl_col_descr->MdidType())->Oid());
-		into_clause->colNames = gpdb::LAppend(into_clause->colNames, col_def);
-	}
-
-	return into_clause;
 }
 
 //---------------------------------------------------------------------------

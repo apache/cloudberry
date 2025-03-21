@@ -113,6 +113,8 @@ public:
 	CDXLCtasStorageOptions(CMDName *mdname_tablespace,
 						   ECtasOnCommitAction ctas_on_commit_action,
 						   CDXLCtasOptionArray *ctas_storage_option_array);
+	// ctor
+	CDXLCtasStorageOptions();
 
 	// dtor
 	~CDXLCtasStorageOptions() override;
