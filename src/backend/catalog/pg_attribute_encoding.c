@@ -256,6 +256,8 @@ RelationGetAttributeOptions(Relation rel)
 void
 AddRelationAttributeEncodings(Relation rel, List *attr_encodings)
 {
+	if (!attr_encodings)
+		return;
 	Oid relid = RelationGetRelid(rel);
 	ListCell *lc;
 	ListCell *lc_filenum;
