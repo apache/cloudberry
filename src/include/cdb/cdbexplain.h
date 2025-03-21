@@ -26,18 +26,22 @@ struct CdbExplain_ShowStatCtx;          /* private, in "cdb/cdbexplain.c" */
 typedef struct
 {
 	double		vmax;			/* maximum value of statistic */
+    double		vmin;			/* minimum value of statistic */
 	double		vsum;			/* sum of values */
 	int			vcnt;			/* count of values > 0 */
 	int			imax;			/* id of 1st observation having maximum value */
+    int			imin;			/* id of 1st observation having minimum value */
 } CdbExplain_Agg;
 
 static inline void
 cdbexplain_agg_init0(CdbExplain_Agg *agg)
 {
     agg->vmax = 0;
+    agg->vmin = 0;
     agg->vsum = 0;
     agg->vcnt = 0;
     agg->imax = 0;
+    agg->imin = 0;
 }
 
 static inline bool
@@ -47,6 +51,13 @@ cdbexplain_agg_upd(CdbExplain_Agg *agg, double v, int id)
     {
         agg->vsum += v;
         agg->vcnt++;
+
+        if (v < agg->vmin ||
+            agg->vcnt == 1)
+        {
+            agg->vmin = v;
+            agg->imin = id;
+        }
 
         if (v > agg->vmax ||
             agg->vcnt == 1)

@@ -458,6 +458,40 @@ explain analyze SELECT * FROM explaintest;
 (8 rows)
 
 set gp_enable_explain_allstat=DEFAULT;
+-- Test explain rows out.
+begin;
+set local gp_enable_explain_rows_out=on;
+create table tt (a int, b int);
+explain(costs off, summary off, timing off, analyze)
+insert into tt select * from generate_series(1,1000)a,generate_series(1,1000)b;
+QUERY PLAN
+___________
+ Insert on tt (actual rows=0 loops=1)
+   Rows out: 0.00 rows avg x 0 workers, 0 rows max (seg0), 0 rows min (seg0).
+   ->  Result (actual rows=340000 loops=1)
+         Rows out: 333333.33 rows avg x 3 workers, 340000 rows max (seg2), 322000 rows min (seg1).
+         ->  Result (actual rows=340000 loops=1)
+               Rows out: 333333.33 rows avg x 3 workers, 340000 rows max (seg2), 322000 rows min (seg1).
+               ->  Nested Loop (actual rows=1000000 loops=1)
+                     Join Filter: true
+                     Rows out: 1000000.00 rows avg x 3 workers, 1000000 rows max (seg0), 1000000 rows min (seg0).
+                     ->  Function Scan on generate_series generate_series_1 (actual rows=1000 loops=1)
+                           Rows out: 1000.00 rows avg x 3 workers, 1000 rows max (seg0), 1000 rows min (seg0).
+                     ->  Function Scan on generate_series (actual rows=999 loops=1001)
+                           Rows out: 1000001.00 rows avg x 3 workers, 1000001 rows max (seg0), 1000001 rows min (seg0).
+
+explain(costs off, summary off, timing off, analyze)
+select * from tt where a > b;
+QUERY PLAN
+___________
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=499500 loops=1)
+   Rows out: 499500.00 rows avg x 1 workers, 499500 rows max (seg-1), 499500 rows min (seg-1).
+   ->  Seq Scan on tt (actual rows=172218 loops=1)
+         Filter: (a > b)
+         Rows Removed by Filter: 167782
+         Rows out: 166500.00 rows avg x 3 workers, 172218 rows max (seg2), 160958 rows min (seg1).
+
+abort;
 --
 -- Test GPDB-specific EXPLAIN (SLICETABLE) option.
 --
