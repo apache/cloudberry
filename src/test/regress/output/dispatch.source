@@ -836,6 +836,8 @@ create or replace function fault_exec_plan(explain_analyze bool default true) re
 declare
     query text;
 begin
+    -- close parallel when fault inject
+    set enable_parallel = off;
     perform gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration;
     perform gp_inject_fault('send_exec_stats', 'reset', dbid) from gp_segment_configuration;
 

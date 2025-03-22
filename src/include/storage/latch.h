@@ -180,5 +180,8 @@ extern int	WaitLatchOrSocket(Latch *latch, int wakeEvents,
 							  pgsocket sock, long timeout, uint32 wait_event_info);
 extern void InitializeLatchWaitSet(void);
 extern int	GetNumRegisteredWaitEvents(WaitEventSet *set);
+/* specifial function for gpdb */
+extern void ResetWaitEventSet(WaitEventSet **pset, MemoryContext context, int nevents);
+
 
 #endif							/* LATCH_H */
