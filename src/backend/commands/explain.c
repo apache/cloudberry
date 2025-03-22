@@ -139,6 +139,9 @@ static void show_incremental_sort_info(IncrementalSortState *incrsortstate,
 static void show_hash_info(HashState *hashstate, ExplainState *es);
 static void show_runtime_filter_info(RuntimeFilterState *rfstate,
 									 ExplainState *es);
+static void show_pushdown_runtime_filter_info(const char *qlabel,
+											  PlanState *planstate,
+											  ExplainState *es);
 static void show_memoize_info(MemoizeState *mstate, List *ancestors,
 							  ExplainState *es);
 static void show_hashagg_info(AggState *hashstate, ExplainState *es);
@@ -2495,6 +2498,10 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			/* fall through to print additional fields the same as SeqScan */
 			/* FALLTHROUGH */
 		case T_SeqScan:
+			if (gp_enable_runtime_filter_pushdown && IsA(planstate, SeqScanState))
+				show_pushdown_runtime_filter_info("Rows Removed by Pushdown Runtime Filter",
+												  planstate, es);
+			/* FALLTHROUGH */
 		case T_DynamicSeqScan:
 		case T_ValuesScan:
 		case T_CteScan:
@@ -4363,6 +4370,24 @@ show_instrumentation_count(const char *qlabel, int which,
 		else
 			ExplainPropertyFloat(qlabel, NULL, 0.0, 0, es);
 	}
+}
+
+/*
+ * If it's EXPLAIN ANALYZE, show instrumentation information with pushdown
+ * runtime filter.
+ */
+static void
+show_pushdown_runtime_filter_info(const char *qlabel,
+								  PlanState *planstate,
+								  ExplainState *es)
+{
+	Assert(gp_enable_runtime_filter_pushdown && IsA(planstate, SeqScanState));
+
+	if (!es->analyze || !planstate->instrument)
+		return;
+
+	if (planstate->instrument->prf_work)
+		ExplainPropertyFloat(qlabel, NULL, planstate->instrument->nfilteredPRF, 0, es);
 }
 
 /*
