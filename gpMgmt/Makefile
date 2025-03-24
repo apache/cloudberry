@@ -14,21 +14,13 @@ generate_greenplum_path_file:
 install: generate_greenplum_path_file
 	mkdir -p $(DESTDIR)$(prefix)/lib/python
 
-	# Setup /lib/python contents
-	if [ -e bin/ext/__init__.py ]; then \
-	    cp -rp bin/ext/__init__.py $(DESTDIR)$(prefix)/lib/python ; \
-	fi
-	if [ -e bin/ext/psutil ]; then \
-	    cp -rp bin/ext/psutil $(DESTDIR)$(prefix)/lib/python ; \
-	fi
-	if [ -e bin/ext/pgdb.py ]; then \
-	    cp -rp bin/ext/pgdb.py $(DESTDIR)$(prefix)/lib/python && \
-	    cp -rp bin/ext/pg.py $(DESTDIR)$(prefix)/lib/python && \
-	    cp -rp bin/ext/_pg*.so $(DESTDIR)$(prefix)/lib/python ; \
-	fi
-	if [ -e bin/ext/yaml ]; then \
-	    cp -rp bin/ext/yaml $(DESTDIR)$(prefix)/lib/python ; \
-	fi
+	# Install Python packages using pip
+	pip install --target=$(DESTDIR)$(prefix)/lib/python psutil==5.7.0
+	pip install --target=$(DESTDIR)$(prefix)/lib/python PyGreSQL==5.2
+	pip install --target=$(DESTDIR)$(prefix)/lib/python PyYAML==5.3.1
 
+	# Create __init__.py if not exists
+	touch $(DESTDIR)$(prefix)/lib/python/__init__.py
+	
 clean distclean:
 	$(MAKE) -C bin $@
