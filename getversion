@@ -23,7 +23,11 @@ if type git >/dev/null 2>&1 && [ -d '.git' ] ; then
 	# overwrite the VERSION from autoconf with the output, else append
 	# HEAD commit info
 	if git describe >/dev/null 2>&1 ; then
-		VERSION=$(generate_dev_version)
+		GIT_VERSION=$(generate_dev_version)
+	# Compare versions and use the newer one
+		if [ "$(printf '%s\n' "$VERSION" "$GIT_VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
+			VERSION=$GIT_VERSION
+		fi
 	else
 		VERSION+=+
 		VERSION+=$(git rev-parse --short HEAD)
