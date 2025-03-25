@@ -209,10 +209,10 @@ datumstreamread_get(DatumStreamRead * acc, Datum *datum, bool *null)
 }
 
 extern int	datumstreamread_advancelarge(DatumStreamRead * ds);
-inline static int
+static pg_attribute_always_inline int
 datumstreamread_advance(DatumStreamRead * acc)
 {
-	if (acc->largeObjectState == DatumStreamLargeObjectState_None)
+	if (unlikely(acc->largeObjectState == DatumStreamLargeObjectState_None))
 	{
 		/*
 		 * Small objects are handled by the DatumStreamBlockRead module.
