@@ -23,7 +23,9 @@
   <img alt="Coverity Scan Build Status"
        src="https://scan.coverity.com/projects/31473/badge.svg"/>
 </a>
-
+<a href="https://sonarcloud.io/summary/new_code?id=apache_cloudberry">
+  <img alt="SonarQube Cloud" src="https://sonarcloud.io/images/project_badges/sonarcloud-highlight.svg" width="100px">
+</a>
 ---------
 
 ## Introduction
