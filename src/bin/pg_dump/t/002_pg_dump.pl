@@ -2190,12 +2190,12 @@ my %tests = (
 		create_order => 28,
 		create_sql   => 'CREATE DYNAMIC TABLE dump_test.dynamic_table (col1) AS
 					   SELECT col1 FROM dump_test.test_table;',
-		regexp => qr/^
-			\QCREATE DYNAMIC TABLE dump_test.dynamic_table AS\E
+		regexp => qr{^
+			\QCREATE DYNAMIC TABLE dump_test.dynamic_table SCHEDULE '\E\*/5\ \*\ \*\ \*\ \*\Q' AS\E
 			\n\s+\QSELECT test_table.col1\E
 			\n\s+\QFROM dump_test.test_table\E
 			\n\s+\QWITH NO DATA;\E
-			/xm,
+			}xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
 		unlike => { exclude_dump_test_schema => 1, },
