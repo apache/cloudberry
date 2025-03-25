@@ -133,6 +133,14 @@ SELECT * FROM (SELECT 1 INTO f) bar;
 CREATE VIEW foo AS SELECT 1 INTO b;
 INSERT INTO b SELECT 1 INTO f;
 
+--
+-- Empty target list 
+--
+explain (costs off) select into empty_tl from generate_series(0, 10);
+select into empty_tl from generate_series(0, 10);
+select * from empty_tl;
+drop table empty_tl;
+
 -- Test CREATE TABLE AS ... IF NOT EXISTS
 CREATE TABLE ctas_ine_tbl AS SELECT 1;
 CREATE TABLE ctas_ine_tbl AS SELECT 1 / 0; -- error
