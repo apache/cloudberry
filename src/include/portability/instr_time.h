@@ -75,7 +75,9 @@
  * CLOCK_MONOTONIC_RAW which is both faster to read and higher resolution than
  * their version of CLOCK_MONOTONIC.
  */
-#if defined(__darwin__) && defined(CLOCK_MONOTONIC_RAW)
+#ifdef CLOCK_MONOTONIC_COARSE
+#define PG_INSTR_CLOCK CLOCK_MONOTONIC_COARSE
+#elif defined(__darwin__) && defined(CLOCK_MONOTONIC_RAW)
 #define PG_INSTR_CLOCK	CLOCK_MONOTONIC_RAW
 #elif defined(CLOCK_MONOTONIC)
 #define PG_INSTR_CLOCK	CLOCK_MONOTONIC
