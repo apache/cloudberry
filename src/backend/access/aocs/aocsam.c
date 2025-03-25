@@ -675,8 +675,140 @@ aocs_endscan(AOCSScanDesc scan)
 	pfree(scan);
 }
 
-bool
-aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
+
+static pg_attribute_hot_inline bool
+aocs_getnext_noqual(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+	AOTupleId	aoTupleId;
+	int64		rowNum = INT64CONST(-1);
+	int			err = 0;
+	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
+	AttrNumber	natts;
+
+	Assert(ScanDirectionIsForward(direction));
+
+	if (scan->columnScanInfo.relationTupleDesc == NULL)
+	{
+		scan->columnScanInfo.relationTupleDesc = slot->tts_tupleDescriptor;
+		/* Pin it! ... and of course release it upon destruction / rescan */
+		PinTupleDesc(scan->columnScanInfo.relationTupleDesc);
+		initscan_with_colinfo(scan);
+	}
+
+	natts = slot->tts_tupleDescriptor->natts;
+	Assert(natts <= scan->columnScanInfo.relationTupleDesc->natts);
+
+	while (1)
+	{
+		AOCSFileSegInfo *curseginfo;
+		bool visible_pass;
+
+ReadNext:
+		/* If necessary, open next seg */
+		if (scan->cur_seg < 0 || err < 0)
+		{
+			err = open_next_scan_seg(scan);
+			if (err < 0)
+			{
+				/* No more seg, we are at the end */
+				ExecClearTuple(slot);
+				scan->cur_seg = -1;
+				return false;
+			}
+			scan->segrowsprocessed = 0;
+		}
+
+		Assert(scan->cur_seg >= 0);
+		curseginfo = scan->seginfo[scan->cur_seg];
+
+		/* Read from cur_seg */
+		visible_pass = true;
+		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		{
+			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+			err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+			Assert(err >= 0);
+			if (err == 0)
+			{
+				err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
+				if (err < 0)
+				{
+					/*
+					 * Ha, cannot read next block, we need to go to next seg
+					 */
+					close_cur_scan_seg(scan);
+					goto ReadNext;
+				}
+
+				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+
+				err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+				Assert(err > 0);
+			}
+			if (!visible_pass)
+				continue; /* not break, need advance for other cols */
+
+			/*
+			 * Get the column's datum right here since the data structures
+			 * should still be hot in CPU data cache memory.
+			 */
+			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
+
+			if (i == 0)
+			{
+				if (rowNum == INT64CONST(-1) &&
+					scan->columnScanInfo.ds[attno]->blockFirstRowNum != INT64CONST(-1))
+				{
+					Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0);
+					rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum +
+						datumstreamread_nth(scan->columnScanInfo.ds[attno]);
+				}
+				scan->segrowsprocessed++;
+				if (rowNum == INT64CONST(-1))
+				{
+					AOTupleIdInit(&aoTupleId, curseginfo->segno, scan->segrowsprocessed);
+				}
+				else
+				{
+					AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
+				}
+
+				if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
+				{
+					/*
+					 * The tuple is invisible.
+					 * In `analyze`, we can simply return false
+					 */
+					if ((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) != 0)
+						return false;
+
+					rowNum = INT64CONST(-1);
+					visible_pass = false;
+					continue; /* not break, need advance for other cols */
+				}
+			}
+		}
+		if (!visible_pass)
+		{
+			rowNum = INT64CONST(-1);
+			goto ReadNext;
+		}
+		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
+
+		slot->tts_nvalid = natts;
+		slot->tts_tid = scan->cdb_fake_ctid;
+		return true;
+	}
+
+	Assert(!"Never here");
+	return false;
+}
+
+static bool
+aocs_getnext_withqual(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
 	if (scan->aos_pushdown_qual && scan->aos_scaned_rows < scan->aos_sample_rows)
 	{
@@ -825,6 +957,21 @@ ReadNext:
 
 	Assert(!"Never here");
 	return false;
+}
+
+
+pg_attribute_hot bool
+aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
+{
+	/*
+	* [0] = noqual, [1] = withqual
+	*/
+	static bool (* const getnext_impl[2])(AOCSScanDesc, ScanDirection, TupleTableSlot*) = {
+		aocs_getnext_noqual,
+		aocs_getnext_withqual
+	};
+
+	return getnext_impl[!!scan->aos_pushdown_qual](scan, direction, slot);
 }
 
 
@@ -2272,6 +2419,8 @@ aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 								ExprContext *ecxt,
 								PlanState *ps)
 {
+	if (!qual)
+		return state;
 	int  ncol  = scan->rs_base.rs_rd->rd_att->natts;
 
 	List **qual_list = (List **)palloc0(sizeof(List *) * ncol);
@@ -2283,8 +2432,6 @@ aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 	scan->aos_scaned_rows       = 0;
 	scan->aos_qual_rows         = (int *)palloc0(sizeof(int) * ncol);
 
-	if (!qual)
-		return state;
 	bool *proj = palloc0(ncol * sizeof(bool));
 	int num_qual_atts = 0;
 	int *qual_atts    = palloc(ncol * sizeof(int));

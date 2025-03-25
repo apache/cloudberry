@@ -182,6 +182,38 @@
 #endif
 
 /*
+ * Cross-platform macro for hot+inline function attributes
+ * Combines HOT path optimization with forced inlining
+ */
+#if (defined(__GNUC__) && __GNUC__ >= 4 && defined(__OPTIMIZE__)) || defined(__clang__)
+/*
+ * Native support in GCC >= 4 and Clang:
+ * - always_inline: Force inlining regardless of optimization level
+ * - hot: Mark as frequently executed function (prioritize optimization)
+ */
+#define pg_attribute_hot_inline __attribute__((hot, always_inline)) inline
+#elif defined(_MSC_VER)
+/*
+ * MSVC equivalent:
+ * - __forceinline: Similar to always_inline
+ * Note: MSVC lacks direct HOT attribute equivalent
+ */
+#define pg_attribute_hot_inline __forceinline
+#elif defined(__SUNPRO_C) || defined(__IBMC__)
+/*
+ * SunPro and IBM XL C compilers:
+ * Only partial support - gets always_inline but not hot marking
+ */
+#define pg_attribute_hot_inline __attribute__((always_inline)) inline
+#else
+/*
+ * Universal fallback for other compilers:
+ * Basic inlining without optimization hints
+ */
+#define pg_attribute_hot_inline inline
+#endif
+
+/*
  * Use "pg_attribute_always_inline" in place of "inline" for functions that
  * we wish to force inlining of, even when the compiler's heuristics would
  * choose not to.  But, if possible, don't force inlining in unoptimized
