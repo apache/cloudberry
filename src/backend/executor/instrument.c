@@ -46,6 +46,9 @@ static int  scanNodeCounter = 0;
 static int  shmemNumSlots = -1;
 static bool instrumentResownerCallbackRegistered = false;
 static InstrumentationResownerSet *slotsOccupied = NULL;
+static void InstrStopNodeAsync(Instrumentation *instr, uint64 nTuples);
+static void InstrStopNodeSync(Instrumentation *instr, uint64 nTuples);
+
 
 /* Allocate new instrumentation structure(s) */
 Instrumentation *
@@ -103,10 +106,9 @@ InstrStartNode(Instrumentation *instr)
 }
 
 /* Exit from a plan node */
-void
-InstrStopNode(Instrumentation *instr, double nTuples)
+static void
+InstrStopNodeSync(Instrumentation *instr, uint64 nTuples)
 {
-	double		save_tuplecount = instr->tuplecount;
 	instr_time	endtime;
 	instr_time	starttime;
 
@@ -144,20 +146,36 @@ InstrStopNode(Instrumentation *instr, double nTuples)
 		/* CDB: save this start time as the first start */
 		instr->firststart = starttime;
 	}
-	else
+}
+
+static void
+InstrStopNodeAsync(Instrumentation *instr, uint64 nTuples)
+{
+	uint64 save_tuplecount = instr->tuplecount;
+	InstrStopNodeSync(instr, nTuples);
+	if (instr->running)
 	{
 		/*
-		 * In async mode, if the plan node hadn't emitted any tuples before,
-		 * this might be the first tuple
-		 */
-		if (instr->async_mode && save_tuplecount < 1.0)
+		* In async mode, if the plan node hadn't emitted any tuples before,
+		* this might be the first tuple
+		*/
+		if (instr->async_mode && save_tuplecount < 1)
 			instr->firsttuple = INSTR_TIME_GET_DOUBLE(instr->counter);
 	}
 }
 
+void
+InstrStopNode(Instrumentation *instr, uint64 nTuples)
+{
+	if (unlikely(instr->async_mode))
+		InstrStopNodeAsync(instr, nTuples);
+	else
+		InstrStopNodeSync(instr, nTuples);
+}
+
 /* Update tuple count */
 void
-InstrUpdateTupleCount(Instrumentation *instr, double nTuples)
+InstrUpdateTupleCount(Instrumentation *instr, uint64 nTuples)
 {
 	/* count the returned tuples */
 	instr->tuplecount += nTuples;
