@@ -59,6 +59,7 @@ GTAGS
 lib*dll.def
 lib*.pc
 .idea
+.DS_Store
 # Local excludes in root directory
 /GNUmakefile
 /config.cache
