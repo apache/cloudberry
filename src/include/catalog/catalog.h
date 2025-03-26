@@ -50,7 +50,7 @@ extern bool IsSharedRelation(Oid relationId);
 
 extern Oid GetNewOidWithIndex(Relation relation, Oid indexId,
 							  AttrNumber oidcolumn);
-extern RelFileNodeId GetNewRelFileNode(Oid reltablespace, Relation pg_class,
+extern Oid GetNewRelFileNode(Oid reltablespace, Relation pg_class,
 							 char relpersistence);
 
 extern void reldir_and_filename(RelFileNode rnode, BackendId backend, ForkNumber forknum,

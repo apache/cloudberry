@@ -140,7 +140,7 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 		bufHdr = GetLocalBufferDescriptor(b);
 		Assert(BUFFERTAGS_EQUAL(bufHdr->tag, newTag));
 #ifdef LBDEBUG
-		fprintf(stderr, "LB ALLOC (%lu,%d,%d) %d\n",
+		fprintf(stderr, "LB ALLOC (%u,%d,%d) %d\n",
 				smgr->smgr_rnode.node.relNode, forkNum, blockNum, -b - 1);
 #endif
 		buf_state = pg_atomic_read_u32(&bufHdr->state);
@@ -168,7 +168,7 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 	}
 	
 #ifdef LBDEBUG
-	fprintf(stderr, "LB ALLOC (%lu,%d,%d) %d\n",
+	fprintf(stderr, "LB ALLOC (%u,%d,%d) %d\n",
 			smgr->smgr_rnode.node.relNode, forkNum, blockNum,
 			-nextFreeLocalBuf - 1);
 #endif

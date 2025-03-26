@@ -1170,7 +1170,7 @@ Datum
 pg_relation_filenode(PG_FUNCTION_ARGS)
 {
 	Oid			relid = PG_GETARG_OID(0);
-	RelFileNodeId result;
+	Oid 		result;
 	HeapTuple	tuple;
 	Form_pg_class relform;
 
@@ -1209,7 +1209,7 @@ pg_relation_filenode(PG_FUNCTION_ARGS)
 	if (!OidIsValid(result))
 		PG_RETURN_NULL();
 
-	PG_RETURN_UINT64(result);
+	PG_RETURN_OID(result);
 }
 
 /*
@@ -1229,7 +1229,7 @@ Datum
 pg_filenode_relation(PG_FUNCTION_ARGS)
 {
 	Oid			reltablespace = PG_GETARG_OID(0);
-	RelFileNodeId relfilenode = PG_GETARG_INT64(1);
+	Oid 		relfilenode = PG_GETARG_OID(1);
 	Oid			heaprel;
 
 	/* test needed so RelidByRelfilenode doesn't misbehave */

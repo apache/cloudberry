@@ -273,7 +273,7 @@ restart:
 			BlockNumber blknum;
 
 			BufferGetTag(buf, &rnode, &forknum, &blknum);
-			elog(DEBUG1, "fixing corrupt FSM block %u, relation %u/%u/%lu",
+			elog(DEBUG1, "fixing corrupt FSM block %u, relation %u/%u/%u",
 				 blknum, rnode.spcNode, rnode.dbNode, rnode.relNode);
 
 			/* make sure we hold an exclusive lock */

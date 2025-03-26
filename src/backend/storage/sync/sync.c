@@ -394,11 +394,11 @@ ProcessSyncRequests(void)
 			if (MyAuxProcType == CheckpointerProcess)
 			{
 				if (entry->tag.segno == 0)
-					elog(LOG, "checkpoint performing fsync for %d/%d/%lu",
+					elog(LOG, "checkpoint performing fsync for %d/%d/%u",
 						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
 						 entry->tag.rnode.relNode);
 				else
-					elog(LOG, "checkpoint performing fsync for %d/%d/%lu.%d",
+					elog(LOG, "checkpoint performing fsync for %d/%d/%u.%d",
 						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
 						 entry->tag.rnode.relNode, entry->tag.segno);
 			}
@@ -407,12 +407,12 @@ ProcessSyncRequests(void)
 				int level = (SIMPLE_FAULT_INJECTOR("fsync_counter") == FaultInjectorTypeSkip) ? ERROR : LOG;
 				if (entry->tag.segno == 0)
 					elog(level, "non checkpoint process trying to fsync "
-						 "%d/%d/%lu when fsync_counter fault is set",
+						 "%d/%d/%u when fsync_counter fault is set",
 						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
 						 entry->tag.rnode.relNode);
 				else
 					elog(level, "non checkpoint process trying to fsync "
-						 "%d/%d/%lu.%d when fsync_counter fault is set",
+						 "%d/%d/%u.%d when fsync_counter fault is set",
 						 entry->tag.rnode.spcNode, entry->tag.rnode.dbNode,
 						 entry->tag.rnode.relNode, entry->tag.segno);
 			}

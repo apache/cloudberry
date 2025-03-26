@@ -615,7 +615,7 @@ CreateFakeRelcacheEntry(RelFileNode rnode)
 	rel->rd_rel->relpersistence = RELPERSISTENCE_PERMANENT;
 
 	/* We don't know the name of the relation; use relfilenode instead */
-	sprintf(RelationGetRelationName(rel), "%lu", rnode.relNode);
+	sprintf(RelationGetRelationName(rel), "%u", rnode.relNode);
 
 	/*
 	 * We set up the lockRelId in case anything tries to lock the dummy

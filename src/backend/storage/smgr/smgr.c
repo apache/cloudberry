@@ -116,9 +116,9 @@ static File	AORelOpenSegFileXlog(RelFileNode node, int32 segmentFileNum, int fil
 							 node.spcNode);
 
 	if (segmentFileNum == 0)
-		snprintf(path, MAXPGPATH, "%s/%lu", dbPath, node.relNode);
+		snprintf(path, MAXPGPATH, "%s/%u", dbPath, node.relNode);
 	else
-		snprintf(path, MAXPGPATH, "%s/%lu.%u", dbPath, node.relNode, segmentFileNum);
+		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, node.relNode, segmentFileNum);
 	pfree(dbPath);
 
 	return PathNameOpenFile(path, fileFlags);

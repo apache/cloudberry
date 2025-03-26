@@ -107,7 +107,6 @@ extern char *output_files[];
 
 
 #define atooid(x)  ((Oid) strtoul((x), NULL, 10))
-#define atorelfilenodeid(x) ((RelFileNodeId) strtoul((x), NULL, 10))
 
 /*
  * The format of visibility map is changed with this 9.6 commit,
@@ -210,7 +209,7 @@ typedef struct
 	char	   *relname;		/* relation name */
 	Oid			reloid;			/* relation OID */
 	char		relstorage;
-	RelFileNodeId relfilenode;	/* relation file node */
+	Oid 		relfilenode;	/* relation file node */
 	Oid			indtable;		/* if index, OID of its table, else 0 */
 	Oid			toastheap;		/* if toast table, OID of base table, else 0 */
 	char	   *tablespace;		/* tablespace path; "" for cluster default */
@@ -257,8 +256,8 @@ typedef struct
 	 * old/new relfilenodes might differ for pg_largeobject(_metadata) indexes
 	 * due to VACUUM FULL or REINDEX.  Other relfilenodes are preserved.
 	 */
-	RelFileNodeId old_relfilenode;
-	RelFileNodeId new_relfilenode;
+	Oid 		old_relfilenode;
+	Oid 		new_relfilenode;
 	/* the rest are used only for logging and error reporting */
 	char	   *nspname;		/* namespaces */
 	char	   *relname;

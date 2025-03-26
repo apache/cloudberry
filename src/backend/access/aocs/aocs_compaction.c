@@ -138,7 +138,7 @@ AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVa
 		MakeAOSegmentFileName(aorel, segno, filenum, &fileSegNo, filenamepath);
 
 		elogif(Debug_appendonly_print_compaction, LOG,
-			   "Opening AO COL relation \"%s.%s\", relation id %u, relfilenode %lu column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
+			   "Opening AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
 			   get_namespace_name(RelationGetNamespace(aorel)),
 			   relname,
 			   aorel->rd_id,
@@ -155,7 +155,7 @@ AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVa
 			CloseAOSegmentFile(fd, aorel);
 
 			elogif(Debug_appendonly_print_compaction, LOG,
-				   "Successfully truncated AO COL relation \"%s.%s\", relation id %u, relfilenode %lu column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
+				   "Successfully truncated AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
 				   get_namespace_name(RelationGetNamespace(aorel)),
 				   relname,
 				   aorel->rd_id,
@@ -168,7 +168,7 @@ AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVa
 		else
 		{
 			elogif(Debug_appendonly_print_compaction, LOG,
-				   "No gp_relation_node entry for AO COL relation \"%s.%s\", relation id %u, relfilenode %lu column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
+				   "No gp_relation_node entry for AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
 				   get_namespace_name(RelationGetNamespace(aorel)),
 				   relname,
 				   aorel->rd_id,

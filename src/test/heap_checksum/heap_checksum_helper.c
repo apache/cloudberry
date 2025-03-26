@@ -31,7 +31,7 @@ invalidate_buffers(PG_FUNCTION_ARGS)
 
 	rnodebackend.node.spcNode = PG_GETARG_OID(0);
 	rnodebackend.node.dbNode  = PG_GETARG_OID(1);
-	rnodebackend.node.relNode = PG_GETARG_INT64(2);
+	rnodebackend.node.relNode = PG_GETARG_OID(2);
 
 	rnodebackend.backend = InvalidBackendId; /* not temporary/local */
 	Assert(!InRecovery); /* can't be used in recovery mode */

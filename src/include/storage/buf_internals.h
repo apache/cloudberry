@@ -300,7 +300,7 @@ extern BufferDesc *LocalBufferDescriptors;
 typedef struct CkptSortItem
 {
 	Oid			tsId;
-	RelFileNodeId relNode;
+	Oid 		relNode;
 	ForkNumber	forkNum;
 	BlockNumber blockNum;
 	int			buf_id;

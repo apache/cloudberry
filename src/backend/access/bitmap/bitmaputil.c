@@ -1286,7 +1286,7 @@ _dump_page(char *file, XLogRecPtr recptr, RelFileNode *relfilenode, Buffer buf)
 		}
 	}
 
-	fprintf(dump_file, "LSN %X/%08X relfilenode %u/%u/%lu blk %u\n",
+	fprintf(dump_file, "LSN %X/%08X relfilenode %u/%u/%u blk %u\n",
 			(uint32) (recptr >> 32), (uint32) recptr,
 			relfilenode->spcNode,
 			relfilenode->dbNode,

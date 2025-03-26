@@ -340,7 +340,7 @@ test_xlog_ao(PG_FUNCTION_ARGS)
 		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "recordlen", INT4OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "spcNode", OIDOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "dbNode", OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "relNode", INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "relNode", OIDOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "segment_filenum", INT4OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "file_offset", INT8OID, -1, 0);
 
@@ -413,7 +413,7 @@ test_xlog_ao(PG_FUNCTION_ARGS)
 		values[2] = Int32GetDatum(result->len);
 		values[3] = ObjectIdGetDatum(result->target.node.spcNode);
 		values[4] = ObjectIdGetDatum(result->target.node.dbNode);
-		values[5] = Int64GetDatum(result->target.node.relNode);
+		values[5] = ObjectIdGetDatum(result->target.node.relNode);
 		values[6] = Int32GetDatum(result->target.segment_filenum);
 		values[7] = Int64GetDatum(result->target.offset);
 

@@ -310,7 +310,7 @@ SetNextFileSegForRead(AppendOnlyScanDesc scan)
 
 
 	elogif(Debug_appendonly_print_scan, LOG,
-		   "Append-only scan initialize for table '%s', %u/%u/%lu, segment file %u, EOF " INT64_FORMAT ", "
+		   "Append-only scan initialize for table '%s', %u/%u/%u, segment file %u, EOF " INT64_FORMAT ", "
 		   "(compression = %s, usable blocksize %d)",
 		   NameStr(scan->aos_rd->rd_rel->relname),
 		   scan->aos_rd->rd_node.spcNode,
@@ -2162,7 +2162,7 @@ appendonly_fetch(AppendOnlyFetchDesc aoFetchDesc,
 	if (aoFetchDesc->lastSequence[segmentFileNum] == InvalidAORowNum)
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %lu.",
+				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %u.",
 				 		rowNum, segmentFileNum, aoFetchDesc->relation->rd_node.relNode)));
 
 	/*

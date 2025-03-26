@@ -31,7 +31,7 @@ dirty_buffers(PG_FUNCTION_ARGS)
 		attno = 1;
 		TupleDescInitEntry(tupdesc, attno++, "tablespace", OIDOID, -1, 0);
 		TupleDescInitEntry(tupdesc, attno++, "database", OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, attno++, "relfilenode", INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, attno++, "relfilenode", OIDOID, -1, 0);
 		TupleDescInitEntry(tupdesc, attno++, "block", INT4OID, -1, 0);
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 

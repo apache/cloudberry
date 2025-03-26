@@ -707,7 +707,7 @@ ao_segfile_get_physical_size(Relation aorel, int segno, FileNumber filenum)
 
 	MakeAOSegmentFileName(aorel, segno, filenum, &fileSegNo, filenamepath);
 	elogif(Debug_appendonly_print_compaction, LOG,
-		   "Opening append-optimized relation \"%s\", relation id %u, relfilenode %lu filenum #%d, logical segment #%d (physical segment file #%d)",
+		   "Opening append-optimized relation \"%s\", relation id %u, relfilenode %u filenum #%d, logical segment #%d (physical segment file #%d)",
 		   relname,
 		   aorel->rd_id,
 		   aorel->rd_node.relNode,
@@ -719,7 +719,7 @@ ao_segfile_get_physical_size(Relation aorel, int segno, FileNumber filenum)
 		physical_size = FileDiskSize(fd);
 	else
 		elogif(Debug_appendonly_print_compaction, LOG,
-			   "No gp_relation_node entry for append-optimized relation \"%s\", relation id %u, relfilenode %lu filenum #%d, logical segment #%d (physical segment file #%d)",
+			   "No gp_relation_node entry for append-optimized relation \"%s\", relation id %u, relfilenode %u filenum #%d, logical segment #%d (physical segment file #%d)",
 			   relname,
 			   aorel->rd_id,
 			   aorel->rd_node.relNode,

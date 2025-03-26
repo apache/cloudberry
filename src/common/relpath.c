@@ -146,7 +146,7 @@ GetDatabasePath(Oid dbNode, Oid spcNode)
  * TempRelBackendId.
  */
 char *
-GetRelationPath(Oid dbNode, Oid spcNode, RelFileNodeId relNode,
+GetRelationPath(Oid dbNode, Oid spcNode, Oid relNode,
 				int backendId, ForkNumber forkNumber)
 {
 	char	   *path;
@@ -157,10 +157,10 @@ GetRelationPath(Oid dbNode, Oid spcNode, RelFileNodeId relNode,
 		Assert(dbNode == 0);
 		Assert(backendId == InvalidBackendId);
 		if (forkNumber != MAIN_FORKNUM)
-			path = psprintf("global/%lu_%s",
+			path = psprintf("global/%u_%s",
 							relNode, forkNames[forkNumber]);
 		else
-			path = psprintf("global/%lu", relNode);
+			path = psprintf("global/%u", relNode);
 	}
 	else if (spcNode == DEFAULTTABLESPACE_OID)
 	{
@@ -168,21 +168,21 @@ GetRelationPath(Oid dbNode, Oid spcNode, RelFileNodeId relNode,
 		if (backendId == InvalidBackendId)
 		{
 			if (forkNumber != MAIN_FORKNUM)
-				path = psprintf("base/%u/%lu_%s",
+				path = psprintf("base/%u/%u_%s",
 								dbNode, relNode,
 								forkNames[forkNumber]);
 			else
-				path = psprintf("base/%u/%lu",
+				path = psprintf("base/%u/%u",
 								dbNode, relNode);
 		}
 		else
 		{
 			if (forkNumber != MAIN_FORKNUM)
-				path = psprintf("base/%u/t_%lu_%s",
+				path = psprintf("base/%u/t_%u_%s",
 								dbNode, relNode,
 								forkNames[forkNumber]);
 			else
-				path = psprintf("base/%u/t_%lu",
+				path = psprintf("base/%u/t_%u",
 								dbNode, relNode);
 		}
 	}
@@ -192,24 +192,24 @@ GetRelationPath(Oid dbNode, Oid spcNode, RelFileNodeId relNode,
 		if (backendId == InvalidBackendId)
 		{
 			if (forkNumber != MAIN_FORKNUM)
-				path = psprintf("pg_tblspc/%u/%s/%u/%lu_%s",
+				path = psprintf("pg_tblspc/%u/%s/%u/%u_%s",
 								spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
 								dbNode, relNode,
 								forkNames[forkNumber]);
 			else
-				path = psprintf("pg_tblspc/%u/%s/%u/%lu",
+				path = psprintf("pg_tblspc/%u/%s/%u/%u",
 								spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
 								dbNode, relNode);
 		}
 		else
 		{
 			if (forkNumber != MAIN_FORKNUM)
-				path = psprintf("pg_tblspc/%u/%s/%u/t_%lu_%s",
+				path = psprintf("pg_tblspc/%u/%s/%u/t_%u_%s",
 								spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
 								dbNode, relNode,
 								forkNames[forkNumber]);
 			else
-				path = psprintf("pg_tblspc/%u/%s/%u/t_%lu",
+				path = psprintf("pg_tblspc/%u/%s/%u/t_%u",
 								spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
 								dbNode, relNode);
 		}

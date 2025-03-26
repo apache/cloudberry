@@ -1365,7 +1365,7 @@ retry:
 static void
 RelationInitPhysicalAddr(Relation relation)
 {
-	RelFileNodeId	oldnode = relation->rd_node.relNode;
+	Oid		oldnode = relation->rd_node.relNode;
 
 	/* these relations kinds never have storage */
 	if (!RELKIND_HAS_STORAGE(relation->rd_rel->relkind))
@@ -2250,7 +2250,7 @@ RelationDecrementReferenceCount(Relation rel)
 #else
 		elog(ERROR,
 #endif
-			 "Relation decrement reference count found relation %u/%u/%lu with bad count (reference count %d)",
+			 "Relation decrement reference count found relation %u/%u/%u with bad count (reference count %d)",
 			 rel->rd_node.spcNode,
 			 rel->rd_node.dbNode,
 			 rel->rd_node.relNode,
@@ -3614,7 +3614,7 @@ RelationBuildLocalRelation(const char *relname,
 						   TupleDesc tupDesc,
 						   Oid relid,
 						   Oid accessmtd,
-						   RelFileNodeId relfilenode,
+						   Oid relfilenode,
 						   Oid reltablespace,
 						   bool shared_relation,
 						   bool mapped_relation,
@@ -3894,7 +3894,7 @@ RelationBuildLocalRelation(const char *relname,
 void
 RelationSetNewRelfilenode(Relation relation, char persistence)
 {
-	RelFileNodeId newrelfilenode;
+	Oid newrelfilenode;
 	Relation	pg_class;
 	HeapTuple	tuple;
 	Form_pg_class classform;

@@ -310,10 +310,10 @@ static char *
 localFormatPathName(RelFileNode *relFileNode)
 {
 	if (relFileNode->spcNode == DEFAULTTABLESPACE_OID)
-		return psprintf("base/%u/"UINT64_FORMAT"_dirtable",
+		return psprintf("base/%u/%u_dirtable",
 				  		relFileNode->dbNode, relFileNode->relNode);
 	else
-		return psprintf("pg_tblspc/%u/%s/%u/"UINT64_FORMAT"_dirtable",
+		return psprintf("pg_tblspc/%u/%s/%u/%u_dirtable",
 						relFileNode->spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
 						relFileNode->dbNode, relFileNode->relNode);
 }

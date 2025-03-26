@@ -79,9 +79,9 @@ ao_insert_replay(XLogReaderState *record)
 							 xlrec->target.node.spcNode);
 
 	if (xlrec->target.segment_filenum == 0)
-		snprintf(path, MAXPGPATH, "%s/%lu", dbPath, xlrec->target.node.relNode);
+		snprintf(path, MAXPGPATH, "%s/%u", dbPath, xlrec->target.node.relNode);
 	else
-		snprintf(path, MAXPGPATH, "%s/%lu.%u", dbPath, xlrec->target.node.relNode, xlrec->target.segment_filenum);
+		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, xlrec->target.node.relNode, xlrec->target.segment_filenum);
 	pfree(dbPath);
 
 	fileFlags = O_RDWR | PG_BINARY;
@@ -151,9 +151,9 @@ ao_truncate_replay(XLogReaderState *record)
 							 xlrec->target.node.spcNode);
 
 	if (xlrec->target.segment_filenum == 0)
-		snprintf(path, MAXPGPATH, "%s/%lu", dbPath, xlrec->target.node.relNode);
+		snprintf(path, MAXPGPATH, "%s/%u", dbPath, xlrec->target.node.relNode);
 	else
-		snprintf(path, MAXPGPATH, "%s/%lu.%u", dbPath, xlrec->target.node.relNode, xlrec->target.segment_filenum);
+		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, xlrec->target.node.relNode, xlrec->target.segment_filenum);
 	pfree(dbPath);
 	dbPath = NULL;
 

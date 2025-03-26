@@ -691,7 +691,7 @@ updatesetbit_inpage(Relation rel, uint64 tidnum,
 				(errcode(ERRCODE_INDEX_CORRUPTED),
 				 errmsg("could not find bitmap word for tid " INT64_FORMAT
 						" in bitmap index %u"
-						" (relfilenode %u/%u/%lu, bitmap block %d, LOV block %d, LOV offset %d)",
+						" (relfilenode %u/%u/%u, bitmap block %d, LOV block %d, LOV offset %d)",
 						tidnum, RelationGetRelid(rel),
 						rel->rd_node.spcNode, rel->rd_node.dbNode, rel->rd_node.relNode,
 						BufferGetBlockNumber(bitmapBuffer),
@@ -791,7 +791,7 @@ updatesetbit_inpage(Relation rel, uint64 tidnum,
 			ereport(ERROR,
 					(errcode(ERRCODE_INDEX_CORRUPTED),
 					 errmsg("incorrect header bit found in bitmap index %u; expected header bit 1"
-							" (relfilenode %u/%u/%lu, bitmap block %d, LOV block %d, LOV offset %d)",
+							" (relfilenode %u/%u/%u, bitmap block %d, LOV block %d, LOV offset %d)",
 							RelationGetRelid(rel),
 							rel->rd_node.spcNode, rel->rd_node.dbNode, rel->rd_node.relNode,
 							BufferGetBlockNumber(bitmapBuffer),
@@ -911,7 +911,7 @@ updatesetbit_inpage(Relation rel, uint64 tidnum,
 			ereport(ERROR,
 					(errcode(ERRCODE_INDEX_CORRUPTED),
 					 errmsg("incorrect header bit found in bitmap index %u; expected header bit 1"
-							" (relfilenode %u/%u/%lu, bitmap block %d, LOV block %d, LOV offset %d)",
+							" (relfilenode %u/%u/%u, bitmap block %d, LOV block %d, LOV offset %d)",
 							RelationGetRelid(rel),
 							rel->rd_node.spcNode, rel->rd_node.dbNode, rel->rd_node.relNode,
 							BufferGetBlockNumber(bitmapBuffer),
@@ -1048,7 +1048,7 @@ findbitmappage(Relation rel, BMLOVItem lovitem,
 	ereport(ERROR,
 			(errcode(ERRCODE_INDEX_CORRUPTED),
 			 errmsg("could not find bitmap page containing tid " INT64_FORMAT
-					" in bitmap index %u (relfilenode %u/%u/%lu"
+					" in bitmap index %u (relfilenode %u/%u/%u"
 					", next block %d, LOV head %d, LOV tail %d"
 					", firstTidNumber " INT64_FORMAT
 					", bm_last_tid_location " INT64_FORMAT
@@ -1102,7 +1102,7 @@ verify_bitmappages(Relation rel, BMLOVItem lovitem)
 		if (bitmapOpaque->bm_last_tid_location != tidnum)
 		{
 			elog(ERROR, "unexpected bm_last_tid_location " INT64_FORMAT
-				 " found for bitmap block %d in bitmap index %u (relfilenode %u/%u/%lu);"
+				 " found for bitmap block %d in bitmap index %u (relfilenode %u/%u/%u);"
 				 " expected tid " INT64_FORMAT,
 				 bitmapOpaque->bm_last_tid_location, nextBlockNo, RelationGetRelid(rel),
 				 rel->rd_node.spcNode, rel->rd_node.dbNode, rel->rd_node.relNode, tidnum);
@@ -1314,7 +1314,7 @@ _bitmap_write_new_bitmapwords(Relation rel,
 
 			if (list_length(perpage_buffers) > MAX_BITMAP_PAGES_PER_INSERT)
 				elog(ERROR, "too many bitmap pages in one insert batch into bitmap index %u"
-					 " (relfilenode %u/%u/%lu, LOV block %d, LOV offset %d)",
+					 " (relfilenode %u/%u/%u, LOV block %d, LOV offset %d)",
 					 RelationGetRelid(rel),
 					 rel->rd_node.spcNode, rel->rd_node.dbNode, rel->rd_node.relNode,
 					 BufferGetBlockNumber(lovBuffer), lovOffset);
@@ -1685,7 +1685,7 @@ create_lovitem(Relation rel, Buffer metabuf, uint64 tidnum,
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("failed to add LOV item in bitmap index \"%s\""
-						" (relfilenode %u/%u/%lu, LOV block %d, LOV offset %d)",
+						" (relfilenode %u/%u/%u, LOV block %d, LOV offset %d)",
 						RelationGetRelationName(rel),
 						rel->rd_node.spcNode, rel->rd_node.dbNode, rel->rd_node.relNode,
 						*lovBlockP, *lovOffsetP)));

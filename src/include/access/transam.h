@@ -229,7 +229,7 @@ typedef struct VariableCacheData
 	/*
 	 * These fields are protected by RelfilenodeGenLock.
 	 */
-	RelFileNodeId nextRelfilenode;	/* next relfilenode to assign */
+	Oid 		nextRelfilenode;	/* next relfilenode to assign */
 	uint32		relfilenodeCount;	/* relfilenodes available before we must do XLOG work */
 
 	/*
@@ -304,7 +304,7 @@ extern int xid_warn_limit;
 extern bool gp_pause_on_restore_point_replay;
 
 /* hook for plugins to assign new relfilenode */
-typedef RelFileNodeId (*NewSegRelfilenode_assign_hook_type)(void);
+typedef Oid (*NewSegRelfilenode_assign_hook_type)(void);
 extern PGDLLIMPORT NewSegRelfilenode_assign_hook_type NewSegRelfilenode_assign_hook;
 
 /*
@@ -335,7 +335,7 @@ extern void AdvanceOldestClogXid(TransactionId oldest_datfrozenxid);
 extern bool ForceTransactionIdLimitUpdate(void);
 extern Oid	GetNewObjectId(void);
 extern void AdvanceObjectId(Oid newOid);
-extern RelFileNodeId	GetNewSegRelfilenode(void);
+extern Oid	GetNewSegRelfilenode(void);
 extern bool OidFollowsNextOid(Oid id);
 
 #ifdef USE_ASSERT_CHECKING

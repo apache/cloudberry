@@ -1674,7 +1674,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	if (aocsFetchDesc->lastSequence[segmentFileNum] == InvalidAORowNum)
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %lu.",
+				 errmsg("Row No. %ld in segment file No. %d is out of scanning scope for target relfilenode %u.",
 				 		rowNum, segmentFileNum, aocsFetchDesc->relation->rd_node.relNode)));
 
 	/*

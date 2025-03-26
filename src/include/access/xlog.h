@@ -381,7 +381,7 @@ extern bool CreateRestartPoint(int flags);
 extern WALAvailability GetWALAvailability(XLogRecPtr targetLSN);
 extern XLogRecPtr CalculateMaxmumSafeLSN(void);
 extern void XLogPutNextOid(Oid nextOid);
-extern void XLogPutNextRelfilenode(RelFileNodeId nextRelfilenode);
+extern void XLogPutNextRelfilenode(Oid nextRelfilenode);
 extern void XLogPutNextGxid(DistributedTransactionId nextGxid);
 extern XLogRecPtr XLogRestorePoint(const char *rpName);
 extern void UpdateFullPageWrites(void);

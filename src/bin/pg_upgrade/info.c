@@ -312,7 +312,7 @@ print_maps(FileNameMap *maps, int n_maps, const char *db_name)
 		pg_log(PG_VERBOSE, "mappings for database \"%s\":\n", db_name);
 
 		for (mapnum = 0; mapnum < n_maps; mapnum++)
-			pg_log(PG_VERBOSE, "%s.%s: %lu to %lu\n",
+			pg_log(PG_VERBOSE, "%s.%s: %u to %u\n",
 				   maps[mapnum].nspname, maps[mapnum].relname,
 				   maps[mapnum].old_relfilenode,
 				   maps[mapnum].new_relfilenode);
@@ -612,7 +612,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 		relname = PQgetvalue(res, relnum, i_relname);
 		curr->relname = pg_strdup(relname);
 
-		curr->relfilenode = atorelfilenodeid(PQgetvalue(res, relnum, i_relfilenode));
+		curr->relfilenode = atooid(PQgetvalue(res, relnum, i_relfilenode));
 		curr->tblsp_alloc = false;
 
 		/* Is the tablespace oid non-default? */

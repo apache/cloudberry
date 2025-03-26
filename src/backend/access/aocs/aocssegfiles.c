@@ -865,7 +865,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 		}
 		else
 		{
-			elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %lu, segment file %d coln %d. "
+			elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %u, segment file %d coln %d. "
 				 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aocsseg",
 				 RelationGetRelationName(prel), prel->rd_node.relNode,
 				 idesc->cur_segno, i, idesc->ds[i]->eof, oldvpinfo->entry[i].eof);
@@ -877,7 +877,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 		}
 		else
 		{
-			elog(ERROR, "Unexpected EOF for relation %s, relfilenode %lu, segment file %d coln %d. "
+			elog(ERROR, "Unexpected EOF for relation %s, relfilenode %u, segment file %d coln %d. "
 				 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aocsseg",
 				 RelationGetRelationName(prel), prel->rd_node.relNode,
 				 idesc->cur_segno, i, idesc->ds[i]->eofUncompress, oldvpinfo->entry[i].eof_uncompressed);

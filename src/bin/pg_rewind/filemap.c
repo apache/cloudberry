@@ -635,7 +635,7 @@ isRelDataFile(const char *path)
 	segNo = 0;
 	matched = false;
 
-	nmatch = sscanf(path, "global/%lu.%u", &rnode.relNode, &segNo);
+	nmatch = sscanf(path, "global/%u.%u", &rnode.relNode, &segNo);
 	if (nmatch == 1 || nmatch == 2)
 	{
 		rnode.spcNode = GLOBALTABLESPACE_OID;
@@ -644,7 +644,7 @@ isRelDataFile(const char *path)
 	}
 	else
 	{
-		nmatch = sscanf(path, "base/%u/%lu.%u",
+		nmatch = sscanf(path, "base/%u/%u.%u",
 						&rnode.dbNode, &rnode.relNode, &segNo);
 		if (nmatch == 2 || nmatch == 3)
 		{
@@ -653,7 +653,7 @@ isRelDataFile(const char *path)
 		}
 		else
 		{
-			nmatch = sscanf(path, "pg_tblspc/%u/" GP_TABLESPACE_VERSION_DIRECTORY "/%u/%lu.%u",
+			nmatch = sscanf(path, "pg_tblspc/%u/" GP_TABLESPACE_VERSION_DIRECTORY "/%u/%u.%u",
 							&rnode.spcNode, &rnode.dbNode, &rnode.relNode,
 							&segNo);
 			if (nmatch == 3 || nmatch == 4)

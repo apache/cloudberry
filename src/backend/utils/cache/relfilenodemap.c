@@ -37,7 +37,7 @@ static ScanKeyData relfilenode_skey[2];
 typedef struct
 {
 	Oid			reltablespace;
-	RelFileNodeId relfilenode;
+	Oid relfilenode;
 } RelfilenodeMapKey;
 
 typedef struct
@@ -135,7 +135,7 @@ InitializeRelfilenodeMap(void)
  * Returns InvalidOid if no relation matching the criteria could be found.
  */
 Oid
-RelidByRelfilenode(Oid reltablespace, RelFileNodeId relfilenode)
+RelidByRelfilenode(Oid reltablespace, Oid relfilenode)
 {
 	RelfilenodeMapKey key;
 	RelfilenodeMapEntry *entry;
@@ -213,7 +213,7 @@ RelidByRelfilenode(Oid reltablespace, RelFileNodeId relfilenode)
 
 			if (found)
 				elog(ERROR,
-					 "unexpected duplicate for tablespace %u, relfilenode %lu",
+					 "unexpected duplicate for tablespace %u, relfilenode %u",
 					 reltablespace, relfilenode);
 			found = true;
 
