@@ -91,6 +91,12 @@ typedef struct timespec instr_time;
 
 #define INSTR_TIME_SET_CURRENT(t)	((void) clock_gettime(PG_INSTR_CLOCK, &(t)))
 
+#ifdef CLOCK_MONOTONIC_COARSE
+#define INSTR_TIME_SET_CURRENT_COARSE(t)	((void) clock_gettime(CLOCK_MONOTONIC_COARSE, &(t)))
+#else
+#define INSTR_TIME_SET_CURRENT_COARSE(t)	INSTR_TIME_SET_CURRENT(t)
+#endif
+
 #define INSTR_TIME_ASSIGN(x,y) ((x).tv_sec = (y).tv_sec, (x).tv_nsec = (y).tv_nsec)
 
 #define INSTR_TIME_ADD(x,y) \
@@ -156,6 +162,8 @@ typedef struct timeval instr_time;
 #define INSTR_TIME_SET_ZERO(t)	((t).tv_sec = 0, (t).tv_usec = 0)
 
 #define INSTR_TIME_SET_CURRENT(t)	gettimeofday(&(t), NULL)
+
+#define INSTR_TIME_SET_CURRENT_COARSE(t)	INSTR_TIME_SET_CURRENT(t)
 
 #define INSTR_TIME_ASSIGN(x,y) ((x).tv_sec = (y).tv_sec, (x).tv_usec = (y).tv_usec)
 
@@ -223,6 +231,8 @@ typedef LARGE_INTEGER instr_time;
 
 #define INSTR_TIME_SET_CURRENT(t)	QueryPerformanceCounter(&(t))
 
+#define INSTR_TIME_SET_CURRENT_COARSE(t)	INSTR_TIME_SET_CURRENT(t)
+
 #define INSTR_TIME_ASSIGN(x,y) ((x).QuadPart = (y).QuadPart)
 
 #define INSTR_TIME_ADD(x,y) \
@@ -257,6 +267,6 @@ GetTimerFrequency(void)
 /* same macro on all platforms */
 
 #define INSTR_TIME_SET_CURRENT_LAZY(t) \
-	(INSTR_TIME_IS_ZERO(t) ? INSTR_TIME_SET_CURRENT(t), true : false)
+	(INSTR_TIME_IS_ZERO(t) ? INSTR_TIME_SET_CURRENT_COARSE(t), true : false)
 
 #endif							/* INSTR_TIME_H */
