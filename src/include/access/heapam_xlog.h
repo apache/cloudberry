@@ -108,7 +108,9 @@ typedef struct xl_heap_delete
 {
 	TransactionId xmax;			/* xmax of the deleted tuple */
 	OffsetNumber offnum;		/* deleted tuple's offset */
+#ifdef SERVERLESS
 	uint32       t_cid;         /* current command id */
+#endif
 	uint8		infobits_set;	/* infomask bits */
 	uint8		flags;
 } xl_heap_delete;
@@ -146,7 +148,9 @@ typedef struct xl_heap_header
 {
 	uint16		t_infomask2;
 	uint16		t_infomask;
+#ifdef SERVERLESS
 	uint32      t_cid;          /* current command id */
+#endif
 	uint8		t_hoff;
 } xl_heap_header;
 
@@ -188,7 +192,9 @@ typedef struct xl_multi_insert_tuple
 	uint16		datalen;		/* size of tuple data that follows */
 	uint16		t_infomask2;
 	uint16		t_infomask;
+#ifdef SERVERLESS
 	uint32      t_cid;          /* current command id */
+#endif
 	uint8		t_hoff;
 	/* TUPLE DATA FOLLOWS AT END OF STRUCT */
 } xl_multi_insert_tuple;
@@ -218,7 +224,9 @@ typedef struct xl_heap_update
 	OffsetNumber old_offnum;	/* old tuple's offset */
 	uint8		old_infobits_set;	/* infomask bits to set on old tuple */
 	uint8		flags;
+#ifdef SERVERLESS
 	uint32       t_cid;         /* current command id */
+#endif
 	TransactionId new_xmax;		/* xmax of the new tuple */
 	OffsetNumber new_offnum;	/* new tuple's offset */
 
@@ -283,7 +291,9 @@ typedef struct xl_heap_lock
 {
 	TransactionId locking_xid;	/* might be a MultiXactId not xid */
 	OffsetNumber offnum;		/* locked tuple's offset on page */
+#ifdef SERVERLESS
 	uint32       t_cid;         /* current command id */
+#endif
 	int8		infobits_set;	/* infomask and infomask2 bits to set */
 	uint8		flags;			/* XLH_LOCK_* flag bits */
 } xl_heap_lock;

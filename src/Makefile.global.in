@@ -223,6 +223,7 @@ enable_strong_random	= @enable_strong_random@
 enable_largefile	= @enable_largefile@
 enable_orca		= @enable_orca@
 enable_catalog_ext  = @enable_catalog_ext@
+enable_serverless = @enable_serverless@
 enable_gpfdist		= @enable_gpfdist@
 enable_pxf			= @enable_pxf@
 enable_debug_extensions = @enable_debug_extensions@
