@@ -313,6 +313,13 @@ private:
 							CDistributionSpecArray *pdrgpdsBaseTables,
 							ULONG *pulNonGatherMotions, BOOL *pfDML);
 
+	// translate a dynamic scan to append
+	template <class PhysicalScanType>
+	CDXLNode *PdxlnDynamicScanToAppend(
+		CExpression *pexprDTS, CColRefArray *colref_array,
+		CDistributionSpecArray *pdrgpdsBaseTables, CExpression *pexprScalarCond,
+		CDXLPhysicalProperties *dxl_properties);
+
 	// translate a dynamic table scan
 	CDXLNode *PdxlnDynamicTableScan(CExpression *pexprDTS,
 									CColRefArray *colref_array,
