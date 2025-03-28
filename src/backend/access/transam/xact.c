@@ -6870,8 +6870,8 @@ XactLogCommitRecord(TimestampTz commit_time,
 	xl_xact_distrib xl_distrib;
 	xl_xact_deldbs xl_deldbs;
 	XLogRecPtr recptr;
+	bool isOnePhaseQE = (Gp_role == GP_ROLE_EXECUTE && MyTmGxactLocal->isOnePhaseCommit);
 	bool isDtxPrepared = isPreparedDtxTransaction();
-	DistributedTransactionId distrib_xid = getDistributedTransactionId();
 
 	uint8		info;
 
@@ -6961,11 +6961,10 @@ XactLogCommitRecord(TimestampTz commit_time,
 		xl_origin.origin_timestamp = replorigin_session_origin_timestamp;
 	}
 
-	/* include distributed xid if there's one */
-	if (distrib_xid != InvalidDistributedTransactionId)
+	if (isDtxPrepared || isOnePhaseQE)
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_DISTRIB;
-		xl_distrib.distrib_xid = distrib_xid;
+		xl_distrib.distrib_xid = getDistributedTransactionId();
 	}
 
 #if 0
