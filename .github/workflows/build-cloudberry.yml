@@ -581,6 +581,8 @@ jobs:
             os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
             RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
             cp "${RPM_FILE}" "${SRC_DIR}"
+            RPM_DEBUG="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-debuginfo-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
+            cp "${RPM_DEBUG}" "${SRC_DIR}"
 
             # Get package information
             echo "Package Information:"
@@ -723,7 +725,7 @@ jobs:
         run: |
           set -eo pipefail
 
-          RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating*.rpm)
+          RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating-[0-9]*.rpm | grep -v "debuginfo")
           if [ ! -f "${RPM_FILE}" ]; then
             echo "::error::RPM file not found"
             exit 1
@@ -1113,7 +1115,7 @@ jobs:
 
           } 2>&1 | tee -a build-logs/details/src-tarball-verification.log
 
-          RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating*.rpm)
+          RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating-[0-9]*.rpm | grep -v "debuginfo")
           if [ ! -f "${RPM_FILE}" ]; then
             echo "::error::RPM file not found"
             exit 1
