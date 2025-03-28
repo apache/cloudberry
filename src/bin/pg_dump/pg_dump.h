@@ -198,16 +198,6 @@ typedef struct _typeInfo
 	struct _constraintInfo *domChecks;
 } TypeInfo;
 
-typedef struct _typeCache
-{
-	DumpableObject dobj;
-
-	Oid			typnsp;
-
-	Oid			arraytypoid;
-	char	   *arraytypname;
-	Oid			arraytypnsp;
-} TypeCache;
 
 typedef struct _typeStorageOptions
 {
@@ -704,17 +694,6 @@ typedef struct _SubscriptionInfo
 } SubscriptionInfo;
 
 /*
- * We build an array of these with an entry for each object that is an
- * extension member according to pg_depend.
- */
-typedef struct _extensionMemberId
-{
-	CatalogId	catId;			/* tableoid+oid of some member object */
-	ExtensionInfo *ext;			/* owning extension */
-} ExtensionMemberId;
-
-extern const char *EXT_PARTITION_NAME_POSTFIX;
-/*
  *	common utility functions
  */
 
@@ -739,7 +718,7 @@ extern NamespaceInfo *findNamespaceByOid(Oid oid);
 extern ExtensionInfo *findExtensionByOid(Oid oid);
 extern PublicationInfo *findPublicationByOid(Oid oid);
 
-extern void setExtensionMembership(ExtensionMemberId *extmems, int nextmems);
+extern void recordExtensionMembership(CatalogId catId, ExtensionInfo *ext);
 extern ExtensionInfo *findOwningExtension(CatalogId catalogId);
 
 extern void parseOidArray(const char *str, Oid *array, int arraysize);
