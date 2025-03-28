@@ -49,12 +49,17 @@
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbcopy.h"
 #include "executor/execUtils.h"
+#include "cdb/cdbpq.h"
 
 #define QUERY_STRING_TRUNCATE_SIZE (1024)
 
 extern bool Test_print_direct_dispatch_info;
 
 extern bool gp_print_create_gang_time;
+
+ExtendProtocolDataStore epd_storage = {0};
+ExtendProtocolData epd = &epd_storage;
+
 typedef struct ParamWalkerContext
 {
 	plan_tree_base_prefix base; /* Required prefix for
@@ -1677,4 +1682,105 @@ findParamType(List *params, int paramid)
 	}
 
 	return InvalidOid;
+}
+
+/*
+ * process data in pointer cosume_p, ex: copy everything interested in.
+ * For EP_TAG_I, EP_TAG_U, EP_TAG_D, consume_p is a Bitmapset**, we just
+ * copy the content and process them later.
+ */
+void
+ConsumeExtendProtocolData(ExtendProtocolSubTag subtag, void *consume_p)
+{
+	Assert(epd);
+
+	if ((epd->consumed_bitmap & (1 << subtag)) == 0)
+		return;
+
+	switch (subtag)
+	{
+		case EP_TAG_I:
+		case EP_TAG_U:
+		case EP_TAG_D:
+			Assert(consume_p != NULL);
+			*((Bitmapset **) consume_p) = bms_copy(list_nth(epd->subtagdata, subtag));
+			bms_free(list_nth(epd->subtagdata, subtag)); /* clean up */
+			break;
+		default:
+			Assert(false);
+	}
+
+	/* Mark subtag consumed. */
+	epd->consumed_bitmap &= ~(1 << subtag);
+}
+
+/*
+ * Contents must be allocated in TopTransactionMemoryContext.
+ */
+void InitExtendProtocolData(void)
+{
+	MemoryContext oldctx = MemoryContextSwitchTo(TopTransactionContext);
+
+	/* Make bitmapset allocated under the context we set. */
+	Bitmapset *inserted = bms_make_singleton(0);
+	inserted = bms_del_member(inserted, 0);
+	Bitmapset *updated = bms_make_singleton(0);
+	updated = bms_del_member(updated, 0);
+	Bitmapset *deleted = bms_make_singleton(0);
+	deleted = bms_del_member(deleted, 0);
+
+	epd->subtagdata = list_make1(inserted);
+	epd->subtagdata = lappend(epd->subtagdata, updated);
+	epd->subtagdata = lappend(epd->subtagdata, deleted);
+
+	epd->consumed_bitmap = 0;
+
+	MemoryContextSwitchTo(oldctx);
+}
+
+/*
+ * Handle extend protocol aside from upstream.
+ * Store everything in TopTransactionMemoryContext.
+ * Do not error here, let libpq work.
+ * End of each process when we reached a EP_TAG_MAX, callers
+ * should follow this behaviour!.
+ */
+bool HandleExtendProtocol(PGconn *conn)
+{
+	int		subtag;
+	int		num;
+	if (Gp_role != GP_ROLE_DISPATCH)
+		return false;
+
+	for (;;)
+	{
+		if (pqGetInt(&subtag, 4, conn))
+			return false;
+		switch (subtag)
+		{
+			case EP_TAG_I:
+			case EP_TAG_U:
+			case EP_TAG_D:
+				if (pqGetInt(&num, 4, conn))
+					return false;
+				for (int i = 0; i < num; i++)
+				{
+					Bitmapset *relids = (Bitmapset *) list_nth(epd->subtagdata, subtag);
+					int relid;
+					if (pqGetInt(&relid, 4, conn))
+						return false;
+					relids = bms_add_member(relids, relid);
+					list_nth_replace(epd->subtagdata, subtag, relids);
+					/* Mark subtag to be consumed. */
+					epd->consumed_bitmap |= 1 << subtag;
+				}
+				break;
+			case EP_TAG_MAX:
+				/* End of this run. */
+				return true;
+			default:
+				Assert(false);
+				return false;
+		}
+	}
 }
