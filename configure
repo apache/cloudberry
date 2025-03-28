@@ -759,6 +759,7 @@ enable_gpcloud
 enable_shared_postgres_backend
 enable_mapreduce
 enable_catalog_ext
+enable_serverless
 enable_orca
 autodepend
 PKG_CONFIG_LIBDIR
@@ -893,6 +894,7 @@ enable_depend
 enable_cassert
 enable_orca
 enable_catalog_ext
+enable_serverless
 enable_mapreduce
 enable_shared_postgres_backend
 enable_gpcloud
@@ -1604,6 +1606,7 @@ Optional Features:
   --enable-cassert        enable assertion checks (for debugging)
   --disable-orca          disable ORCA optimizer
   --enable-catalog-ext    enable Cloudberry catalog extension
+  --enable-serverless     enable Cloudberry serverless mode
   --enable-mapreduce      enable Cloudberry Mapreduce support
   --disable-shared-postgres-backend
                           enable Cloudberry shared postgres backend support
@@ -8371,6 +8374,38 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with catalog extension... $enable_catalog_ext" >&5
 $as_echo "checking whether to build with catalog extension... $enable_catalog_ext" >&6; }
+
+
+#
+# Enable serverless mode
+#
+
+
+# Check whether --enable-serverless was given.
+if test "${enable_serverless+set}" = set; then :
+  enableval=$enable_serverless;
+  case $enableval in
+    yes)
+
+$as_echo "#define SERVERLESS 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-serverless option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_serverless=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to use serverless architecture of Cloudberry ... $enable_serverless" >&5
+$as_echo "checking whether to use serverless architecture of Cloudberry ... $enable_serverless" >&6; }
 
 
 #

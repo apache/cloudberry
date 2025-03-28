@@ -963,6 +963,9 @@
    RELSEG_SIZE requires an initdb. */
 #undef RELSEG_SIZE
 
+/*  Define to 1 to use serverless mode of Cloudberry. (--enable-serverless) */
+#undef SERVERLESS
+
 /* The size of `bool', as computed by sizeof. */
 #undef SIZEOF_BOOL
 

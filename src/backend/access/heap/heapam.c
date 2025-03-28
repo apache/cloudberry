@@ -2284,7 +2284,9 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 		xlhdr.t_infomask2 = heaptup->t_data->t_infomask2;
 		xlhdr.t_infomask = heaptup->t_data->t_infomask;
 		xlhdr.t_hoff = heaptup->t_data->t_hoff;
+#ifdef SERVERLESS
 		xlhdr.t_cid = HeapTupleHeaderGetRawCommandId(heaptup->t_data);
+#endif
 
 		/*
 		 * note we mark xlhdr as belonging to buffer; if XLogInsert decides to
@@ -2611,7 +2613,9 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 				tuphdr->t_infomask2 = heaptup->t_data->t_infomask2;
 				tuphdr->t_infomask = heaptup->t_data->t_infomask;
 				tuphdr->t_hoff = heaptup->t_data->t_hoff;
+#ifdef SERVERLESS
 				tuphdr->t_cid =  HeapTupleHeaderGetRawCommandId(heaptup->t_data);
+#endif
 
 				/* write bitmap [+ padding] [+ oid] + data */
 				datalen = heaptup->t_len - SizeofHeapTupleHeader;
@@ -3138,7 +3142,9 @@ l1:
 											  tp.t_data->t_infomask2);
 		xlrec.offnum = ItemPointerGetOffsetNumber(&tp.t_self);
 		xlrec.xmax = new_xmax;
+#ifdef SERVERLESS
 		xlrec.t_cid = HeapTupleHeaderGetRawCommandId(tp.t_data);
+#endif
 
 		if (old_key_tuple != NULL)
 		{
@@ -3160,7 +3166,9 @@ l1:
 		{
 			xlhdr.t_infomask2 = old_key_tuple->t_data->t_infomask2;
 			xlhdr.t_infomask = old_key_tuple->t_data->t_infomask;
+#ifdef SERVERLESS
 			xlhdr.t_cid = HeapTupleHeaderGetRawCommandId(old_key_tuple->t_data);
+#endif
 			xlhdr.t_hoff = old_key_tuple->t_data->t_hoff;
 
 			XLogRegisterData((char *) &xlhdr, SizeOfHeapHeader);
@@ -3893,7 +3901,9 @@ l2:
 												  oldtup.t_data->t_infomask2);
 			xlrec.flags =
 				cleared_all_frozen ? XLH_LOCK_ALL_FROZEN_CLEARED : 0;
+#ifdef SERVERLESS
 			xlrec.t_cid = HeapTupleHeaderGetRawCommandId(oldtup.t_data);
+#endif
 
 			XLogRegisterData((char *) &xlrec, SizeOfHeapLock);
 			recptr = XLogInsert(RM_HEAP_ID, XLOG_HEAP_LOCK);
@@ -5100,7 +5110,9 @@ failed:
 		xlrec.infobits_set = compute_infobits(new_infomask,
 											  tuple->t_data->t_infomask2);
 		xlrec.flags = cleared_all_frozen ? XLH_LOCK_ALL_FROZEN_CLEARED : 0;
+#ifdef SERVERLESS
 		xlrec.t_cid = HeapTupleHeaderGetRawCommandId(tuple->t_data);
+#endif
 
 		XLogRegisterData((char *) &xlrec, SizeOfHeapLock);
 
@@ -8400,7 +8412,9 @@ log_heap_update(Relation reln, Buffer oldbuf,
 	/* Prepare WAL data for the new page */
 	xlrec.new_offnum = ItemPointerGetOffsetNumber(&newtup->t_self);
 	xlrec.new_xmax = HeapTupleHeaderGetRawXmax(newtup->t_data);
+#ifdef SERVERLESS
 	xlrec.t_cid = HeapTupleHeaderGetRawCommandId(newtup->t_data);
+#endif
 
 	bufflags = REGBUF_STANDARD;
 	if (init)
@@ -8438,7 +8452,9 @@ log_heap_update(Relation reln, Buffer oldbuf,
 	xlhdr.t_infomask2 = newtup->t_data->t_infomask2;
 	xlhdr.t_infomask = newtup->t_data->t_infomask;
 	xlhdr.t_hoff = newtup->t_data->t_hoff;
+#ifdef SERVERLESS
 	xlhdr.t_cid = HeapTupleHeaderGetRawCommandId(newtup->t_data);
+#endif
 
 	Assert(SizeofHeapTupleHeader + prefixlen + suffixlen <= newtup->t_len);
 
@@ -8481,7 +8497,9 @@ log_heap_update(Relation reln, Buffer oldbuf,
 		xlhdr_idx.t_infomask2 = old_key_tuple->t_data->t_infomask2;
 		xlhdr_idx.t_infomask = old_key_tuple->t_data->t_infomask;
 		xlhdr_idx.t_hoff = old_key_tuple->t_data->t_hoff;
+#ifdef SERVERLESS
 		xlhdr_idx.t_cid = HeapTupleHeaderGetRawCommandId(old_key_tuple->t_data);
+#endif
 
 		XLogRegisterData((char *) &xlhdr_idx, SizeOfHeapHeader);
 
@@ -9126,7 +9144,11 @@ heap_xlog_delete(XLogReaderState *record)
 		else
 			HeapTupleHeaderSetXmin(htup, InvalidTransactionId);
 
+#ifdef SERVERLESS
 		HeapTupleHeaderSetCmax(htup, xlrec->t_cid, false);
+#else
+		HeapTupleHeaderSetCmax(htup, FirstCommandId, false);
+#endif
 
 		/* Mark the page as a candidate for pruning */
 		PageSetPrunable(page, XLogRecGetXid(record));
@@ -9227,7 +9249,11 @@ heap_xlog_insert(XLogReaderState *record)
 		htup->t_infomask = xlhdr.t_infomask;
 		htup->t_hoff = xlhdr.t_hoff;
 		HeapTupleHeaderSetXmin(htup, XLogRecGetXid(record));
+#ifdef SERVERLESS
 		HeapTupleHeaderSetCmin(htup, xlhdr.t_cid);
+#else
+		HeapTupleHeaderSetCmin(htup, FirstCommandId);
+#endif
 		htup->t_ctid = target_tid;
 
 		if (PageAddItem(page, (Item) htup, newlen, xlrec->offnum,
@@ -9370,7 +9396,11 @@ heap_xlog_multi_insert(XLogReaderState *record)
 			htup->t_infomask = xlhdr->t_infomask;
 			htup->t_hoff = xlhdr->t_hoff;
 			HeapTupleHeaderSetXmin(htup, XLogRecGetXid(record));
+#ifdef SERVERLESS
 			HeapTupleHeaderSetCmin(htup, xlhdr->t_cid);
+#else
+			HeapTupleHeaderSetCmin(htup, FirstCommandId);
+#endif
 			ItemPointerSetBlockNumber(&htup->t_ctid, blkno);
 			ItemPointerSetOffsetNumber(&htup->t_ctid, offnum);
 
@@ -9510,7 +9540,11 @@ heap_xlog_update(XLogReaderState *record, bool hot_update)
 		fix_infomask_from_infobits(xlrec->old_infobits_set, &htup->t_infomask,
 								   &htup->t_infomask2);
 		HeapTupleHeaderSetXmax(htup, xlrec->old_xmax);
+#ifdef SERVERLESS
 		HeapTupleHeaderSetCmax(htup, xlrec->t_cid, false);
+#else
+		HeapTupleHeaderSetCmax(htup, FirstCommandId, false);
+#endif
 
 		/* Set forward chain link in t_ctid */
 		htup->t_ctid = newtid;
@@ -9644,7 +9678,11 @@ heap_xlog_update(XLogReaderState *record, bool hot_update)
 		htup->t_hoff = xlhdr.t_hoff;
 
 		HeapTupleHeaderSetXmin(htup, XLogRecGetXid(record));
+#ifdef SERVERLESS
 		HeapTupleHeaderSetCmin(htup, xlhdr.t_cid);
+#else
+		HeapTupleHeaderSetCmin(htup, FirstCommandId);
+#endif
 		HeapTupleHeaderSetXmax(htup, xlrec->new_xmax);
 		/* Make sure there is no forward chain link in t_ctid */
 		htup->t_ctid = newtid;
@@ -9785,7 +9823,11 @@ heap_xlog_lock(XLogReaderState *record)
 						   offnum);
 		}
 		HeapTupleHeaderSetXmax(htup, xlrec->locking_xid);
+#ifdef SERVERLESS
 		HeapTupleHeaderSetCmax(htup, xlrec->t_cid, false);
+#else
+		HeapTupleHeaderSetCmax(htup, FirstCommandId, false);
+#endif
 
 		PageSetLSN(page, lsn);
 		MarkBufferDirty(buffer);
