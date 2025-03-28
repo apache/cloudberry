@@ -1,0 +1,5 @@
+-- start_ignore
+DROP DATABASE IF EXISTS partition_append;
+NOTICE:  database "partition_append" does not exist, skipping
+-- end_ignore
+create database partition_append;

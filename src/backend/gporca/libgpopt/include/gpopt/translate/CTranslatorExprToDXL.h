@@ -313,6 +313,26 @@ private:
 							CDistributionSpecArray *pdrgpdsBaseTables,
 							ULONG *pulNonGatherMotions, BOOL *pfDML);
 
+	// translate a dynamic seq/foreign scan to append
+	template <class PhysicalScanType>
+	CDXLNode *PdxlnDynamicScanToAppend(
+		CExpression *pexprDTS, CColRefArray *colref_array,
+		CDistributionSpecArray *pdrgpdsBaseTables, CExpression *pexprScalarCond,
+		CDXLPhysicalProperties *dxl_properties);
+	
+	// translate a dynamic index/index only scan to append
+	template <class PhysicalScanType>
+	CDXLNode *PdxlnDynamicIndexScanToAppend(CExpression *pexprDIS,
+		CColRefArray *colref_array,
+		CDXLPhysicalProperties *dxl_properties,
+		CReqdPropPlan *prpp);
+
+	// translate a dynamic bitmap scan to append
+	CDXLNode *PdxlnDynamicBitmapScanToAppend(
+		CExpression *pexprDTS, CColRefArray *colref_array,
+		CDistributionSpecArray *pdrgpdsBaseTables, CExpression *pexprScalarCond,
+		CDXLPhysicalProperties *dxl_properties);
+
 	// translate a dynamic table scan
 	CDXLNode *PdxlnDynamicTableScan(CExpression *pexprDTS,
 									CColRefArray *colref_array,
@@ -561,6 +581,16 @@ private:
 									const CColRefArray *part_colrefs,
 									const CColRefArray *root_colrefs,
 									CExpression *pred);
+
+	CDXLNode *PdxlnBitmapIndexProbeForChildPart(
+		const ColRefToUlongMap *root_col_mapping,
+		const CColRefArray *part_colrefs, const CColRefArray *root_colrefs,
+		const IMDRelation *part, CExpression *pexprBitmapIndexProbe);
+								
+	CDXLNode *PdxlnBitmapIndexPathForChildPart(
+		const ColRefToUlongMap *root_col_mapping,
+		const CColRefArray *part_colrefs, const CColRefArray *root_colrefs,
+		const IMDRelation *part, CExpression *pexprBitmapIndexPath);
 
 	// translate a project list expression into a DXL proj list node
 	// according to the order specified in the dynamic array

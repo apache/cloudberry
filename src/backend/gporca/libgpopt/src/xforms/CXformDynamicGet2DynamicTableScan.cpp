@@ -77,6 +77,12 @@ CXformDynamicGet2DynamicTableScan::Transform(CXformContext *pxfctxt,
 		return;
 	}
 
+	// Append implemention of dynamic any scan not support row-level security
+	if (GPOS_FTRACE(EopttraceDisableDynamicTableScan) && popGet->HasSecurityQuals()) 
+	{
+		return;
+	}
+
 	CMemoryPool *mp = pxfctxt->Pmp();
 
 	// create/extract components for alternative
