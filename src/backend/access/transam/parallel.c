@@ -1680,6 +1680,13 @@ void GpDestroyParallelDSMEntry()
 
 	ParallelEntryTag tag;
 
+	if (!ParallelSession || !ParallelSession->segment)
+	{
+		ParallelWorkerNumberOfSlice = -1;
+		TotalParallelWorkerNumberOfSlice = 0;
+		return;
+	}
+
 	INIT_PARALLELENTRYTAG(tag, gp_command_count, currentSliceId, gp_session_id);
 
 	LWLockAcquire(GpParallelDSMHashLock, LW_EXCLUSIVE);
