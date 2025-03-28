@@ -3988,7 +3988,7 @@ CheckRelationTableSpaceMove(Relation rel, Oid newTableSpaceId)
 void
 SetRelationTableSpace(Relation rel,
 					  Oid newTableSpaceId,
-					  RelFileNodeId newRelFileNode)
+					  Oid newRelFileNode)
 {
 	Relation	pg_class;
 	HeapTuple	tuple;
@@ -16401,7 +16401,7 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 	Oid         relaovisimapidxid = InvalidOid;
 	Oid			relbmrelid = InvalidOid;
 	Oid			relbmidxid = InvalidOid;
-	RelFileNodeId newrelfilenode;
+	Oid newrelfilenode;
 	RelFileNode newrnode;
 	List	   *reltoastidxids = NIL;
 	ListCell   *lc;

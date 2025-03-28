@@ -1557,7 +1557,7 @@ checkXLogConsistency(XLogReaderState *record)
 		if (memcmp(replay_image_masked, primary_image_masked, BLCKSZ) != 0)
 		{
 			elog(FATAL,
-				 "inconsistent page found, rel %u/%u/%lu, forknum %u, blkno %u",
+				 "inconsistent page found, rel %u/%u/%u, forknum %u, blkno %u",
 				 rnode.spcNode, rnode.dbNode, rnode.relNode,
 				 forknum, blkno);
 		}
@@ -7211,7 +7211,7 @@ StartupXLOG(void)
 							 LSN_FORMAT_ARGS(checkPoint.redo),
 							 wasShutdown ? "true" : "false")));
 	ereport(DEBUG1,
-			(errmsg_internal("next transaction ID: " UINT64_FORMAT "; next OID: %u; next relfilenode: %lu",
+			(errmsg_internal("next transaction ID: " UINT64_FORMAT "; next OID: %u; next relfilenode: %u",
 							 U64FromFullTransactionId(checkPoint.nextXid),
 							 checkPoint.nextOid, checkPoint.nextRelfilenode)));
 	ereport(DEBUG1,
@@ -10611,10 +10611,10 @@ XLogPutNextOid(Oid nextOid)
  * Write a NEXTRELFILENODE log record similar to XLogPutNextOid
  */
 void
-XLogPutNextRelfilenode(RelFileNodeId nextRelfilenode)
+XLogPutNextRelfilenode(Oid nextRelfilenode)
 {
 	XLogBeginInsert();
-	XLogRegisterData((char *) (&nextRelfilenode), sizeof(RelFileNodeId));
+	XLogRegisterData((char *) (&nextRelfilenode), sizeof(Oid));
 	(void) XLogInsert(RM_XLOG_ID, XLOG_NEXTRELFILENODE);
 }
 
@@ -10914,9 +10914,9 @@ xlog_redo(XLogReaderState *record)
 	}
 	else if (info == XLOG_NEXTRELFILENODE)
 	{
-	    RelFileNodeId nextRelfilenode;
+	    Oid nextRelfilenode;
 
-	    memcpy(&nextRelfilenode, XLogRecGetData(record), sizeof(RelFileNodeId));
+	    memcpy(&nextRelfilenode, XLogRecGetData(record), sizeof(Oid));
 		LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
 		ShmemVariableCache->nextRelfilenode = nextRelfilenode;
 		ShmemVariableCache->relfilenodeCount = 0;
@@ -11341,13 +11341,13 @@ xlog_block_info(StringInfo buf, XLogReaderState *record)
 
 		XLogRecGetBlockTag(record, block_id, &rnode, &forknum, &blk);
 		if (forknum != MAIN_FORKNUM)
-			appendStringInfo(buf, "; blkref #%u: rel %u/%u/%lu, fork %u, blk %u",
+			appendStringInfo(buf, "; blkref #%u: rel %u/%u/%u, fork %u, blk %u",
 							 block_id,
 							 rnode.spcNode, rnode.dbNode, rnode.relNode,
 							 forknum,
 							 blk);
 		else
-			appendStringInfo(buf, "; blkref #%u: rel %u/%u/%lu, blk %u",
+			appendStringInfo(buf, "; blkref #%u: rel %u/%u/%u, blk %u",
 							 block_id,
 							 rnode.spcNode, rnode.dbNode, rnode.relNode,
 							 blk);

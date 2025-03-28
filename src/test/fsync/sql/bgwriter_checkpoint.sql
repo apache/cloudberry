@@ -27,8 +27,8 @@ begin;
 create or replace function wait_until_dirty_buffer_flushed() returns text as $$
 begin
 	for i in 1..60 loop
-		if ((select count(*) = 0 from dirty_buffers_on_qes() as (tablespace oid, database oid, relfilenode int8, block int)) AND 
-         (select count(*) = 0 from dirty_buffers_on_qd() as (tablespace oid, database oid, relfilenode int8, block int))) then
+		if ((select count(*) = 0 from dirty_buffers_on_qes() as (tablespace oid, database oid, relfilenode oid, block int)) AND 
+         (select count(*) = 0 from dirty_buffers_on_qd() as (tablespace oid, database oid, relfilenode oid, block int))) then
 			return 'OK'; /* in func */
 		end if; /* in func */
 		perform pg_sleep(0.1); /* in func */
@@ -41,13 +41,13 @@ $$ language plpgsql;
 create function num_dirty_on_qes(relid oid) returns setof bigint as
 $$
 declare
-  rfnode int8;
+  rfnode oid;
   result int4;
 begin
    select relfilenode into rfnode from pg_class where oid=$1;
 
    select count(*) into result from dirty_buffers_on_qes()
-     as (tablespace oid, database oid, relfilenode int8, block int)
+     as (tablespace oid, database oid, relfilenode oid, block int)
      where relfilenode = rfnode;
    return next result;
 end
@@ -147,7 +147,7 @@ checkpoint;
 
 -- There should be no dirty buffers after checkpoint.
 select * from dirty_buffers_on_qes()
- as (tablespace oid, database oid, relfilenode int8, block int);
+ as (tablespace oid, database oid, relfilenode oid, block int);
 
 -- Validate that the number of files fsync'ed by checkpointer is at
 -- least 2.  The two files fsync'ed should be corresponding to

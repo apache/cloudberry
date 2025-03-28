@@ -54,7 +54,7 @@ CATALOG(pg_class,1259,RelationRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(83,Relat
 
 	/* identifier of physical storage file */
 	/* relfilenode == 0 means it is a "mapped" relation, see relmapper.c */
-	RelFileNodeId relfilenode BKI_DEFAULT(0);
+	Oid			relfilenode BKI_DEFAULT(0);
 
 	/* identifier of table space for relation (0 means default for database) */
 	Oid			reltablespace BKI_DEFAULT(0) BKI_LOOKUP_OPT(pg_tablespace);
@@ -170,7 +170,7 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_class_oid_index, 2662, on pg_class using btree(oid 
 #define ClassOidIndexId  2662
 DECLARE_UNIQUE_INDEX(pg_class_relname_nsp_index, 2663, on pg_class using btree(relname name_ops, relnamespace oid_ops));
 #define ClassNameNspIndexId  2663
-DECLARE_INDEX(pg_class_tblspc_relfilenode_index, 3455, on pg_class using btree(reltablespace oid_ops, relfilenode int8_ops));
+DECLARE_INDEX(pg_class_tblspc_relfilenode_index, 3455, on pg_class using btree(reltablespace oid_ops, relfilenode oid_ops));
 #define ClassTblspcRelfilenodeIndexId  3455
 
 #ifdef EXPOSE_TO_CLIENT_CODE

@@ -715,10 +715,10 @@ AdvanceObjectId(Oid newOid)
 /*
  * Requires RelfilenodeGenLock to be held by caller.
  */
-static RelFileNodeId
+static Oid
 GetNewSegRelfilenodeUnderLock(void)
 {
-	RelFileNodeId result;
+	Oid result;
 
 	Assert(LWLockHeldByMe(RelfilenodeGenLock));
 
@@ -755,10 +755,10 @@ GetNewSegRelfilenodeUnderLock(void)
  * trying to use the newly generated OIDs (QD) or preassigned OIDs (QE) as the
  * relfilenode.
  */
-RelFileNodeId
+Oid
 GetNewSegRelfilenode(void)
 {
-	RelFileNodeId result;
+	Oid result;
 
 	LWLockAcquire(RelfilenodeGenLock, LW_EXCLUSIVE);
 

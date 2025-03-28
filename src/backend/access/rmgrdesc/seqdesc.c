@@ -25,7 +25,7 @@ seq_desc(StringInfo buf, XLogReaderState *record)
 	xl_seq_rec *xlrec = (xl_seq_rec *) rec;
 
 	if (info == XLOG_SEQ_LOG)
-		appendStringInfo(buf, "rel %u/%u/%lu",
+		appendStringInfo(buf, "rel %u/%u/%u",
 						 xlrec->node.spcNode, xlrec->node.dbNode,
 						 xlrec->node.relNode);
 }

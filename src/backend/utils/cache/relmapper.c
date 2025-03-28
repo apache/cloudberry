@@ -79,14 +79,14 @@
  * additional GPDB specific shared relations. Increased to 126 to occupy
  * exactly 1 kilobyte.
  *
- * New math: 126 * 16 + 16 = 2032
+ * New math: 126 * 8 + 16 = 1024
  */
 #define MAX_MAPPINGS			126		/* 62 * 8 + 16 = 512 */
 
 typedef struct RelMapping
 {
 	Oid			    mapoid;			/* OID of a catalog */
-	RelFileNodeId   mapfilenode;	/* its filenode number */
+	Oid   			mapfilenode;	/* its filenode number */
 } RelMapping;
 
 typedef struct RelMapFile
@@ -139,7 +139,7 @@ static RelMapFile pending_local_updates;
 
 
 /* non-export function prototypes */
-static void apply_map_update(RelMapFile *map, Oid relationId, RelFileNodeId fileNode,
+static void apply_map_update(RelMapFile *map, Oid relationId, Oid fileNode,
 							 bool add_okay);
 static void merge_map_updates(RelMapFile *map, const RelMapFile *updates,
 							  bool add_okay);
@@ -162,7 +162,7 @@ static void perform_relmap_update(bool shared, const RelMapFile *updates);
  * Returns InvalidOid if the OID is not known (which should never happen,
  * but the caller is in a better position to report a meaningful error).
  */
-RelFileNodeId
+Oid
 RelationMapOidToFilenode(Oid relationId, bool shared)
 {
 	const RelMapFile *map;
@@ -216,7 +216,7 @@ RelationMapOidToFilenode(Oid relationId, bool shared)
  * relfilenode doesn't pertain to a mapped relation.
  */
 Oid
-RelationMapFilenodeToOid(RelFileNodeId filenode, bool shared)
+RelationMapFilenodeToOid(Oid filenode, bool shared)
 {
 	const RelMapFile *map;
 	int32		i;
@@ -265,7 +265,7 @@ RelationMapFilenodeToOid(RelFileNodeId filenode, bool shared)
  * immediately.  Otherwise it is made pending until CommandCounterIncrement.
  */
 void
-RelationMapUpdateMap(Oid relationId, RelFileNodeId fileNode, bool shared,
+RelationMapUpdateMap(Oid relationId, Oid fileNode, bool shared,
 					 bool immediate)
 {
 	RelMapFile *map;
@@ -323,7 +323,7 @@ RelationMapUpdateMap(Oid relationId, RelFileNodeId fileNode, bool shared,
  * add_okay = false to draw an error if not.
  */
 static void
-apply_map_update(RelMapFile *map, Oid relationId, RelFileNodeId fileNode, bool add_okay)
+apply_map_update(RelMapFile *map, Oid relationId, Oid fileNode, bool add_okay)
 {
 	int32		i;
 

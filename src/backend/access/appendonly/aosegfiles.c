@@ -826,7 +826,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	}
 	else if (eof < old_eof)
 	{
-		elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %lu, segment file %d. "
+		elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %u, segment file %d. "
 			 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aoseg",
 			 RelationGetRelationName(parentrel), parentrel->rd_node.relNode,
 			 segno, eof, old_eof);
@@ -847,7 +847,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	}
 	else if (eof_uncompressed < old_eof_uncompressed)
 	{
-		elog(ERROR, "Unexpected EOF for relation %s, relfilenode %lu, segment file %d."
+		elog(ERROR, "Unexpected EOF for relation %s, relfilenode %u, segment file %d."
 			 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aoseg",
 			 RelationGetRelationName(parentrel), parentrel->rd_node.relNode,
 			 segno, eof_uncompressed, old_eof_uncompressed);

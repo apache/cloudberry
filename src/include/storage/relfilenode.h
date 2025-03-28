@@ -58,7 +58,7 @@ typedef struct RelFileNode
 {
 	Oid				spcNode;		/* tablespace */
 	Oid				dbNode;			/* database */
-	RelFileNodeId	relNode;		/* relation */
+	Oid				relNode;		/* relation */
 } RelFileNode;
 
 /*

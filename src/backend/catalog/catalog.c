@@ -819,7 +819,7 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
  * Note: we don't support using this in bootstrap mode.  All relations
  * created by bootstrap have preassigned OIDs, so there's no need.
  */
-RelFileNodeId
+Oid
 GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 {
 	RelFileNodeBackend rnode;
@@ -889,7 +889,7 @@ GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 		}
 	} while (collides);
 
-	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %lu", rnode.node.relNode);
+	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %u", rnode.node.relNode);
 
 	return rnode.node.relNode;
 }

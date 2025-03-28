@@ -48,7 +48,7 @@ typedef struct CheckPoint
 	FullTransactionId nextXid;	/* next free transaction ID */
 	DistributedTransactionId nextGxid;	/* next free gxid */
 	Oid			nextOid;		/* next free OID */
-	RelFileNodeId nextRelfilenode;	/* next free Relfilenode */
+	Oid 		nextRelfilenode;	/* next free Relfilenode */
 	MultiXactId nextMulti;		/* next free MultiXactId */
 	MultiXactOffset nextMultiOffset;	/* next free MultiXact offset */
 	TransactionId oldestXid;	/* cluster-wide minimum datfrozenxid */

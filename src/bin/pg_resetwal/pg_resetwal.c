@@ -72,7 +72,7 @@ static DistributedTransactionId set_gxid = 0;
 static TransactionId set_oldest_commit_ts_xid = 0;
 static TransactionId set_newest_commit_ts_xid = 0;
 static Oid	set_oid = 0;
-static RelFileNodeId set_relfilenode = 0;
+static Oid	set_relfilenode = 0;
 static MultiXactId set_mxid = 0;
 static MultiXactOffset set_mxoff = (MultiXactOffset) -1;
 static int32 set_data_checksum_version = -1;
@@ -937,7 +937,7 @@ PrintControlValues(bool guessed)
 		   ControlFile.checkPointCopy.nextGxid);
 	printf(_("Latest checkpoint's NextOID:          %u\n"),
 		   ControlFile.checkPointCopy.nextOid);
-	printf(_("Latest checkpoint's NextRelfilenode:  %lu\n"),
+	printf(_("Latest checkpoint's NextRelfilenode:  %u\n"),
 		   ControlFile.checkPointCopy.nextRelfilenode);
 	printf(_("Latest checkpoint's NextMultiXactId:  %u\n"),
 		   ControlFile.checkPointCopy.nextMulti);
@@ -1027,7 +1027,7 @@ PrintNewControlValues(void)
 
 	if (set_relfilenode != 0)
 	{
-		printf(_("NextRelfilenode:                      %lu\n"),
+		printf(_("NextRelfilenode:                      %u\n"),
 			   ControlFile.checkPointCopy.nextRelfilenode);
 	}
 

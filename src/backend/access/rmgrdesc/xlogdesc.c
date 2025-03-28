@@ -83,7 +83,7 @@ xlog_desc(StringInfo buf, XLogReaderState *record)
 		CheckpointExtendedRecord ckptExtended;
 
 		appendStringInfo(buf, "redo %X/%X; "
-						 "tli %u; prev tli %u; fpw %s; xid %u:%u; gxid "UINT64_FORMAT"; oid %u; relfilenode %lu; multi %u; offset %u; "
+						 "tli %u; prev tli %u; fpw %s; xid %u:%u; gxid "UINT64_FORMAT"; oid %u; relfilenode %u; multi %u; offset %u; "
 						 "oldest xid %u in DB %u; oldest multi %u in DB %u; "
 						 "oldest/newest commit timestamp xid: %u/%u; "
 						 "oldest running xid %u; %s",
@@ -134,10 +134,10 @@ xlog_desc(StringInfo buf, XLogReaderState *record)
 	}
 	else if (info == XLOG_NEXTRELFILENODE)
 	{
-	    RelFileNodeId   nextRelfilenode;
+	    Oid   nextRelfilenode;
 
-	    memcpy(&nextRelfilenode, rec, sizeof(RelFileNodeId));
-		appendStringInfo(buf, "%lu", nextRelfilenode);
+	    memcpy(&nextRelfilenode, rec, sizeof(Oid));
+		appendStringInfo(buf, "%u", nextRelfilenode);
 	}
 	else if (info == XLOG_RESTORE_POINT)
 	{

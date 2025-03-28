@@ -31,7 +31,7 @@ appendonly_desc(StringInfo buf, XLogReaderState *record)
 
 				appendStringInfo(
 					buf,
-					"insert: rel %u/%u/%lu seg/offset:%u/" INT64_FORMAT " len:%lu",
+					"insert: rel %u/%u/%u seg/offset:%u/" INT64_FORMAT " len:%lu",
 					xlrec->target.node.spcNode, xlrec->target.node.dbNode,
 					xlrec->target.node.relNode, xlrec->target.segment_filenum,
 					xlrec->target.offset, XLogRecGetDataLen(record) - SizeOfAOInsert);
@@ -43,7 +43,7 @@ appendonly_desc(StringInfo buf, XLogReaderState *record)
 
 				appendStringInfo(
 					buf,
-					"truncate: rel %u/%u/%lu seg/offset:%u/" INT64_FORMAT,
+					"truncate: rel %u/%u/%u seg/offset:%u/" INT64_FORMAT,
 					xlrec->target.node.spcNode, xlrec->target.node.dbNode,
 					xlrec->target.node.relNode, xlrec->target.segment_filenum,
 					xlrec->target.offset);

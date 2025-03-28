@@ -21,12 +21,12 @@ AND dbNode = (SELECT oid FROM pg_database WHERE datname = current_database())
 ORDER BY gp_segment_id, xrecoff;
  gp_segment_id |        relname         |      record_type       | segment_filenum | recordlen | file_offset 
 ---------------+------------------------+------------------------+-----------------+-----------+-------------
-             0 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |        32 |           0
-             0 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |       160 |           0
-             1 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |        32 |           0
-             1 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |       120 |           0
-             2 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |        32 |           0
-             2 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |       192 |           0
+             0 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |        24 |           0
+             0 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |       152 |           0
+             1 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |        24 |           0
+             1 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |       112 |           0
+             2 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |        24 |           0
+             2 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT |               1 |       184 |           0
 (6 rows)
 
 -- Store the latest xlog offset
@@ -50,11 +50,11 @@ AND dbNode = (SELECT oid FROM pg_database WHERE datname = current_database())
 ORDER BY gp_segment_id, xrecoff;
  gp_segment_id |        relname         |       record_type        | segment_filenum | recordlen | file_offset 
 ---------------+------------------------+--------------------------+-----------------+-----------+-------------
-             0 | generate_ao_xlog_table | XLOG_APPENDONLY_TRUNCATE |               1 |        32 |         128
-             0 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT   |               1 |       160 |         128
-             1 | generate_ao_xlog_table | XLOG_APPENDONLY_TRUNCATE |               1 |        32 |          88
-             1 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT   |               1 |        72 |          88
-             2 | generate_ao_xlog_table | XLOG_APPENDONLY_TRUNCATE |               1 |        32 |         160
-             2 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT   |               1 |       136 |         160
+             0 | generate_ao_xlog_table | XLOG_APPENDONLY_TRUNCATE |               1 |        24 |         128
+             0 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT   |               1 |       152 |         128
+             1 | generate_ao_xlog_table | XLOG_APPENDONLY_TRUNCATE |               1 |        24 |          88
+             1 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT   |               1 |        64 |          88
+             2 | generate_ao_xlog_table | XLOG_APPENDONLY_TRUNCATE |               1 |        24 |         160
+             2 | generate_ao_xlog_table | XLOG_APPENDONLY_INSERT   |               1 |       128 |         160
 (6 rows)
 

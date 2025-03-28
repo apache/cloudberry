@@ -27,7 +27,7 @@ PG_MODULE_MAGIC;
 typedef struct
 {
 	uint32		bufferid;
-	RelFileNodeId relfilenode;
+	Oid relfilenode;
 	Oid			reltablespace;
 	Oid			reldatabase;
 	ForkNumber	forknum;
@@ -105,7 +105,7 @@ pg_buffercache_pages(PG_FUNCTION_ARGS)
 		TupleDescInitEntry(tupledesc, (AttrNumber) 1, "bufferid",
 						   INT4OID, -1, 0);
 		TupleDescInitEntry(tupledesc, (AttrNumber) 2, "relfilenode",
-                           INT8OID, -1, 0);
+						   OIDOID, -1, 0);
 		TupleDescInitEntry(tupledesc, (AttrNumber) 3, "reltablespace",
 						   OIDOID, -1, 0);
 		TupleDescInitEntry(tupledesc, (AttrNumber) 4, "reldatabase",
@@ -211,7 +211,7 @@ pg_buffercache_pages(PG_FUNCTION_ARGS)
 		}
 		else
 		{
-			values[1] = Int64GetDatum(fctx->record[i].relfilenode);
+			values[1] = ObjectIdGetDatum(fctx->record[i].relfilenode);
 			nulls[1] = false;
 			values[2] = ObjectIdGetDatum(fctx->record[i].reltablespace);
 			nulls[2] = false;

@@ -35,11 +35,11 @@ typedef struct xl_relmap_update
 #define MinSizeOfRelmapUpdate offsetof(xl_relmap_update, data)
 
 
-extern RelFileNodeId    RelationMapOidToFilenode(Oid relationId, bool shared);
+extern Oid  RelationMapOidToFilenode(Oid relationId, bool shared);
 
-extern Oid	RelationMapFilenodeToOid(RelFileNodeId filenode, bool shared);
+extern Oid	RelationMapFilenodeToOid(Oid filenode, bool shared);
 
-extern void RelationMapUpdateMap(Oid relationId, RelFileNodeId fileNode, bool shared,
+extern void RelationMapUpdateMap(Oid relationId, Oid fileNode, bool shared,
 								 bool immediate);
 
 extern void RelationMapRemoveMapping(Oid relationId);
