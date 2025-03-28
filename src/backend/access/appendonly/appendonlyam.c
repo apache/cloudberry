@@ -1632,30 +1632,36 @@ appendonly_endscan(TableScanDesc scan)
 	pfree(aoscan);
 }
 
-/* ----------------
- *		appendonly_getnextslot - retrieve next tuple in scan
- * ----------------
- */
-bool
-appendonly_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
+
+static pg_attribute_hot_inline bool
+appendonly_getnextslot_noqual(AppendOnlyScanDesc aoscan, ScanDirection direction, TupleTableSlot *slot)
 {
-	AppendOnlyScanDesc aoscan = (AppendOnlyScanDesc) scan;
 	while (appendonlygettup(aoscan, direction, aoscan->rs_base.rs_nkeys, aoscan->aos_key, slot))
 	{
-		/* predicate pushdown test */
-		if (aoscan->aos_pushdown_qual)
-		{
-			/*
-			 * place the current tuple into the expr context
-			 */
-			aoscan->aos_pushdown_econtext->ecxt_scantuple = slot;
+		pgstat_count_heap_getnext(aoscan->aos_rd);
+		return true;
+	}
+	if (slot)
+		ExecClearTuple(slot);
+	return false;
+}
 
-			if (!ExecQual(aoscan->aos_pushdown_qual, aoscan->aos_pushdown_econtext))
-			{
-				/* Tuple fails qual, so free per-tuple memory and try again. */
-				ResetExprContext(aoscan->aos_pushdown_econtext);
-				continue;
-			}
+static bool
+appendonly_getnextslot_withqual(AppendOnlyScanDesc aoscan, ScanDirection direction, TupleTableSlot *slot)
+{
+	while (appendonlygettup(aoscan, direction, aoscan->rs_base.rs_nkeys, aoscan->aos_key, slot))
+	{
+		Assert(aoscan->aos_pushdown_qual);
+		/*
+		* place the current tuple into the expr context
+		*/
+		aoscan->aos_pushdown_econtext->ecxt_scantuple = slot;
+		/* predicate pushdown test */
+		if (!ExecQual(aoscan->aos_pushdown_qual, aoscan->aos_pushdown_econtext))
+		{
+			/* Tuple fails qual, so free per-tuple memory and try again. */
+			ResetExprContext(aoscan->aos_pushdown_econtext);
+			continue;
 		}
 
 		pgstat_count_heap_getnext(aoscan->aos_rd);
@@ -1667,6 +1673,25 @@ appendonly_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSl
 		ExecClearTuple(slot);
 
 	return false;
+}
+
+/* ----------------
+ *		appendonly_getnextslot - retrieve next tuple in scan
+ * ----------------
+ */
+pg_attribute_hot bool
+appendonly_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
+{
+	AppendOnlyScanDesc aoscan = (AppendOnlyScanDesc) scan;
+	/*
+	* [0] = noqual, [1] = withqual
+	*/
+	static bool (* const getnext_impl[2])(AppendOnlyScanDesc, ScanDirection, TupleTableSlot*) = {
+		appendonly_getnextslot_noqual,
+		appendonly_getnextslot_withqual
+	};
+
+	return getnext_impl[!!aoscan->aos_pushdown_qual](aoscan, direction, slot);
 }
 
 uint32
