@@ -235,6 +235,9 @@ enum EOptTraceFlag
 	// Force split the window function
 	EopttraceForceSplitWindowFunc = 103048,
 
+	// Disable dynamic seq/bitmap/index scan
+	EopttraceDisableDynamicTableScan = 103049,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

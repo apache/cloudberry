@@ -528,6 +528,11 @@ CTranslatorQueryToDXL::CheckRangeTable(Query *query)
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 					   GPOS_WSZ_LIT("TABLESAMPLE in the FROM clause"));
 		}
+
+		if (rte->relkind == RELKIND_PARTITIONED_TABLE && query->hasRowSecurity && GPOS_FTRACE(EopttraceDisableDynamicTableScan)) {
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				GPOS_WSZ_LIT("ORCA not support row-level security if dynamic table scan is disabled."));
+		}
 	}
 }
 
