@@ -5,7 +5,6 @@ project(gpopt_master LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 14)
 
-ADD_DEFINITIONS(-DUNITTEST_debug_gpos_assert)
 # Default to shared libraries.
 option(BUILD_SHARED_LIBS "build shared libraries" ON)
 

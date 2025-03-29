@@ -88,13 +88,10 @@ CScheduler::~CScheduler()
 //		Main job processing task
 //
 //---------------------------------------------------------------------------
-void *
-CScheduler::Run(void *pv)
+void
+CScheduler::Run(CSchedulerContext *psc)
 {
-	CSchedulerContext *psc = reinterpret_cast<CSchedulerContext *>(pv);
 	psc->Psched()->ExecuteJobs(psc);
-
-	return nullptr;
 }
 
 

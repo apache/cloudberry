@@ -135,19 +135,14 @@ CMemo::Add(
 
 	ULONG id = m_aul++;
 	pdp->AddRef();
-#ifdef GPOS_DEBUG
-	CGroupExpression *pgexpr = nullptr;
-#endif	// GPOS_DEBUG
 	{
 		CGroupProxy gp(pgroup);
+		GPOS_ASSERT(nullptr != gp.PgexprFirst());
+
 		gp.SetId(id);
 		gp.InitProperties(pdp);
-#ifdef GPOS_DEBUG
-		pgexpr = gp.PgexprFirst();
-#endif	// GPOS_DEBUG
 	}
 
-	GPOS_ASSERT(nullptr != pgexpr);
 	m_listGroups.Push(pgroup);
 	m_ulpGrps++;
 }

@@ -483,9 +483,8 @@ CExpression::PdpDerive(
 	// see if suitable prop is already cached. This only applies to plan properties.
 	// relational properties are never null and are handled in the next case
 	if (nullptr == Pdp(ept))
-	{
-		GPOS_ASSERT(CDrvdProp::EptRelational != ept);
-		GPOS_ASSERT(CDrvdProp::EptScalar != ept);
+	{	
+		GPOS_ASSERT(CDrvdProp::EptPlan == ept);
 
 		const ULONG arity = Arity();
 		for (ULONG ul = 0; ul < arity; ul++)
@@ -498,16 +497,7 @@ CExpression::PdpDerive(
 		}
 
 		exprhdl.CopyStats();
-
-		switch (ept)
-		{
-			case CDrvdProp::EptPlan:
-				m_pdpplan = GPOS_NEW(m_mp) CDrvdPropPlan();
-				break;
-			default:
-				break;
-		}
-
+		m_pdpplan = GPOS_NEW(m_mp) CDrvdPropPlan();
 		Pdp(ept)->Derive(m_mp, exprhdl, pdpctxt);
 	}
 	// If we havn't derived all properties, do that now. If we've derived some

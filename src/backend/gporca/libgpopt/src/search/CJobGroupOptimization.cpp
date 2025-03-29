@@ -62,25 +62,26 @@ const CJobGroupOptimization::EEvent
 	rgeev[CJobGroupOptimization::estSentinel]
 		 [CJobGroupOptimization::estSentinel] = {
 			 {// estInitialized
-			  CJobGroupOptimization::eevImplementing,
-			  CJobGroupOptimization::eevImplemented,
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevOptimized},
+			  CJobGroupOptimization::eevImplementing, // estInitialized
+			  CJobGroupOptimization::eevImplemented,  // estOptimizingChildren
+			  CJobGroupOptimization::eevSentinel,	  // prohibit
+			  CJobGroupOptimization::eevOptimized},   // estCompleted (Final)
 			 {// estOptimizingChildren
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevOptimizing,
-			  CJobGroupOptimization::eevOptimizedCurrentLevel,
-			  CJobGroupOptimization::eevSentinel},
+			  CJobGroupOptimization::eevSentinel,	  // prohibit
+			  CJobGroupOptimization::eevOptimizing,   // estOptimizingChildren
+			  CJobGroupOptimization::eevOptimizedCurrentLevel, // estDampingOptimizationLevel
+			  CJobGroupOptimization::eevSentinel},    // prohibit
 			 {// estDampingOptimizationLevel
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevOptimizing,
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevOptimized},
+			  CJobGroupOptimization::eevSentinel,     // prohibit
+			  CJobGroupOptimization::eevOptimizing,   // estOptimizingChildren
+			  CJobGroupOptimization::eevSentinel,     // prohibit
+			  CJobGroupOptimization::eevOptimized},   // estCompleted (Final)
 			 {// estCompleted
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevSentinel,
-			  CJobGroupOptimization::eevSentinel},
+			  CJobGroupOptimization::eevSentinel,     // prohibit
+			  CJobGroupOptimization::eevSentinel,     // prohibit
+			  CJobGroupOptimization::eevSentinel,     // prohibit
+			  CJobGroupOptimization::eevSentinel      // prohibit
+			},
 };
 
 #ifdef GPOS_DEBUG
@@ -377,7 +378,8 @@ CJobGroupOptimization::ScheduleJob(CSchedulerContext *psc, CGroup *pgroup,
 IOstream &
 CJobGroupOptimization::OsPrint(IOstream &os) const
 {
-	return m_jsm.OsHistory(os);
+	m_jsm.OsHistory(os);
+	return CJob::OsPrint(os);
 }
 
 #endif	// GPOS_DEBUG

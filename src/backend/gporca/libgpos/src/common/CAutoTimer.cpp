@@ -25,7 +25,7 @@ using namespace gpos;
 //
 //---------------------------------------------------------------------------
 CAutoTimer::CAutoTimer(const CHAR *sz, BOOL fPrint)
-	: m_timer_text_label(sz), m_print_text_label(fPrint)
+	: m_clock(fPrint), m_timer_text_label(sz), m_print_text_label(fPrint)
 {
 	GPOS_ASSERT(nullptr != sz);
 }

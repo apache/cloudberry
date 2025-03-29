@@ -78,11 +78,13 @@ CJob::FResumeParent() const
 IOstream &
 CJob::OsPrint(IOstream &os) const
 {
-	os << "ID=" << Id();
+	os << "ID=" << Id() << ", type=" << typeid(*this).name();
 
 	if (nullptr != PjParent())
 	{
 		os << " parent=" << PjParent()->Id() << std::endl;
+		os << std::endl;
+		PjParent()->OsPrint(os);
 	}
 	else
 	{

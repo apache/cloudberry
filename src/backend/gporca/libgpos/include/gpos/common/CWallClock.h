@@ -31,9 +31,10 @@ private:
 
 public:
 	// ctor
-	CWallClock()
+	CWallClock(BOOL start)
 	{
-		Restart();
+		if (start)
+			Restart();
 	}
 
 	// retrieve elapsed wall-clock time in micro-seconds

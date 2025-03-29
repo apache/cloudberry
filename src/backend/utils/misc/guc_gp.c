@@ -4867,7 +4867,7 @@ struct config_string ConfigureNamesString_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_search_strategy_path,
-		"default",
+		"",
 		NULL, NULL, NULL
 	},
 

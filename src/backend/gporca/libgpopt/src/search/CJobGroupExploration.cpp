@@ -284,7 +284,8 @@ CJobGroupExploration::ScheduleJob(CSchedulerContext *psc, CGroup *pgroup,
 IOstream &
 CJobGroupExploration::OsPrint(IOstream &os) const
 {
-	return m_jsm.OsHistory(os);
+	m_jsm.OsHistory(os);
+	return CJob::OsPrint(os);
 }
 
 #endif	// GPOS_DEBUG

@@ -308,7 +308,6 @@ COptTasks::ConvertToPlanStmtFromDXL(
 		dxlnode, orig_query, can_set_tag);
 }
 
-
 //---------------------------------------------------------------------------
 //	@function:
 //		COptTasks::LoadSearchStrategy
@@ -325,7 +324,7 @@ COptTasks::LoadSearchStrategy(CMemoryPool *mp, char *path)
 
 	GPOS_TRY
 	{
-		if (nullptr != path)
+		if (nullptr != path && strlen(path) != 0)
 		{
 			dxl_parse_handler =
 				CDXLUtils::GetParseHandlerForDXLFile(mp, path, nullptr);
@@ -349,7 +348,8 @@ COptTasks::LoadSearchStrategy(CMemoryPool *mp, char *path)
 	}
 	GPOS_CATCH_END;
 
-	GPOS_DELETE(dxl_parse_handler);
+	if (dxl_parse_handler)
+		GPOS_DELETE(dxl_parse_handler);
 
 	return search_strategy_arr;
 }

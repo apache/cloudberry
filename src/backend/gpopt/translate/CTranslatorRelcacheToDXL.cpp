@@ -143,13 +143,7 @@ CTranslatorRelcacheToDXL::RetrieveObject(CMemoryPool *mp,
 			break;
 
 		default:
-			break;
-	}
-
-	if (nullptr == md_obj)
-	{
-		// no match found
-		GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDCacheEntryNotFound,
+			GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDCacheEntryNotFound,
 				   mdid->GetBuffer());
 	}
 

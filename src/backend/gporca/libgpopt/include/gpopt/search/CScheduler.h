@@ -168,7 +168,7 @@ public:
 	virtual ~CScheduler();
 
 	// main job processing task
-	static void *Run(void *);
+	static void Run(CSchedulerContext *psc);
 
 	// transition job to completed
 	void Complete(CJob *pj);

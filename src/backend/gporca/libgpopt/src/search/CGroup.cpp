@@ -997,11 +997,7 @@ CGroup::CreateScalarExpression()
 	GPOS_ASSERT(FScalar());
 	GPOS_ASSERT(nullptr == m_pexprScalarRep);
 
-	CGroupExpression *pgexprFirst = nullptr;
-	{
-		CGroupProxy gp(this);
-		pgexprFirst = gp.PgexprFirst();
-	}
+	CGroupExpression *pgexprFirst = PgexprFirst();
 	GPOS_ASSERT(nullptr != pgexprFirst);
 	COperator *pop = pgexprFirst->Pop();
 
@@ -1068,11 +1064,7 @@ CGroup::CreateDummyCostContext()
 	GPOS_ASSERT(FScalar());
 	GPOS_ASSERT(nullptr == m_pccDummy);
 
-	CGroupExpression *pgexprFirst = nullptr;
-	{
-		CGroupProxy gp(this);
-		pgexprFirst = gp.PgexprFirst();
-	}
+	CGroupExpression *pgexprFirst = PgexprFirst();
 	GPOS_ASSERT(nullptr != pgexprFirst);
 
 	COptimizationContext *poc = GPOS_NEW(m_mp) COptimizationContext(
@@ -1090,11 +1082,7 @@ CGroup::CreateDummyCostContext()
 	m_pccDummy->SetState(CCostContext::estCosted);
 
 #ifdef GPOS_DEBUG
-	CGroupExpression *pgexprNext = nullptr;
-	{
-		CGroupProxy gp(this);
-		pgexprNext = gp.PgexprNext(pgexprFirst);
-	}
+	CGroupExpression *pgexprNext = PgexprNext(pgexprFirst);
 	GPOS_ASSERT(nullptr == pgexprNext &&
 				"scalar group can only have one group expression");
 #endif	// GPOS_DEBUG

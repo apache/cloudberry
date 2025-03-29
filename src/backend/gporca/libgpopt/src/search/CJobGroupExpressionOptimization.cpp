@@ -794,11 +794,12 @@ CJobGroupExpressionOptimization::FScheduleCTEOptimization(
 IOstream &
 CJobGroupExpressionOptimization::OsPrint(IOstream &os) const
 {
+	m_jsm.OsHistory(os);
 	os << "Group expr: ";
 	m_pgexpr->OsPrint(os);
 	os << std::endl;
 
-	return m_jsm.OsHistory(os);
+	return CJob::OsPrint(os);
 }
 
 #endif	// GPOS_DEBUG

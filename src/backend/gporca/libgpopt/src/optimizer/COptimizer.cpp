@@ -131,7 +131,7 @@ COptimizer::DumpSamples(CMemoryPool *mp, CEnumeratorConfig *pec,
 
 //---------------------------------------------------------------------------
 //	@function:
-//		COptimizer::DumpQueryOrPlan
+//		COptimizer::PrintQueryOrPlan
 //
 //	@doc:
 //		Print query tree or plan tree
