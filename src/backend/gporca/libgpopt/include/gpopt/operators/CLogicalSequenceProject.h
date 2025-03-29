@@ -33,6 +33,9 @@ class CDistributionSpec;
 class CLogicalSequenceProject : public CLogicalUnary
 {
 private:
+	// type of sequence project
+	COperator::ESPType m_sptype;
+
 	// partition by keys
 	CDistributionSpec *m_pds;
 
@@ -58,8 +61,8 @@ public:
 	CLogicalSequenceProject(const CLogicalSequenceProject &) = delete;
 
 	// ctor
-	CLogicalSequenceProject(CMemoryPool *mp, CDistributionSpec *pds,
-							COrderSpecArray *pdrgpos,
+	CLogicalSequenceProject(CMemoryPool *mp, COperator::ESPType sptype,
+							CDistributionSpec *pds, COrderSpecArray *pdrgpos,
 							CWindowFrameArray *pdrgpwf);
 
 	// ctor for pattern
@@ -80,6 +83,13 @@ public:
 	SzId() const override
 	{
 		return "CLogicalSequenceProject";
+	}
+
+	// window type
+	COperator::ESPType
+	Pspt() const
+	{
+		return m_sptype;
 	}
 
 	// distribution spec
@@ -123,7 +133,8 @@ public:
 										  BOOL must_exist) override;
 
 	// return true if we can pull projections up past this operator from its given child
-	BOOL FCanPullProjectionsUp(ULONG  //child_index
+	BOOL
+	FCanPullProjectionsUp(ULONG	 //child_index
 	) const override
 	{
 		return false;
@@ -179,6 +190,9 @@ public:
 
 	// print
 	IOstream &OsPrint(IOstream &os) const override;
+
+	static IOstream &OsPrintWindowType(IOstream &os,
+									   COperator::ESPType wintype);
 
 	// remove outer references from Order By/ Partition By clauses, and return a new operator
 	CLogicalSequenceProject *PopRemoveLocalOuterRefs(

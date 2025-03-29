@@ -1594,12 +1594,19 @@ CCostModelGPDB::CostSequenceProject(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	GPOS_ASSERT(COperator::EopPhysicalSequenceProject ==
 				exprhdl.Pop()->Eopid());
 
+	CPhysicalSequenceProject *psp = CPhysicalSequenceProject::PopConvert(exprhdl.Pop());
+
+	if (GPOS_FTRACE(EopttraceForceSplitWindowFunc) && 
+		psp->Pspt() == COperator::EsptypeGlobalTwoStep) {
+		return CCost(0);
+	}
+
 	const DOUBLE num_rows_outer = pci->PdRows()[0];
 	const DOUBLE dWidthOuter = pci->GetWidth()[0];
 
 	ULONG ulSortCols = 0;
 	COrderSpecArray *pdrgpos =
-		CPhysicalSequenceProject::PopConvert(exprhdl.Pop())->Pdrgpos();
+		CPhysicalSequenceProject::PopConvert(psp)->Pdrgpos();
 	const ULONG ulOrderSpecs = pdrgpos->Size();
 	for (ULONG ul = 0; ul < ulOrderSpecs; ul++)
 	{
@@ -1619,7 +1626,7 @@ CCostModelGPDB::CostSequenceProject(CMemoryPool *mp, CExpressionHandle &exprhdl,
 								   dTupDefaultProcCostUnit));
 	CCost costChild =
 		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
-
+	
 	return costLocal + costChild;
 }
 

@@ -400,6 +400,7 @@ bool		optimizer_force_multistage_agg;
 bool		optimizer_force_three_stage_scalar_dqa;
 bool		optimizer_force_expanded_distinct_aggs;
 bool		optimizer_force_agg_skew_avoidance;
+bool		optimizer_force_split_window_function;
 bool		optimizer_penalize_skew;
 bool		optimizer_prune_computed_columns;
 bool		optimizer_push_requirements_from_consumer_to_producer;
@@ -2407,6 +2408,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&optimizer_force_agg_skew_avoidance,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_force_split_window_function", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Always split the window function."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_force_split_window_function,
+		false,
 		NULL, NULL, NULL
 	},
 
