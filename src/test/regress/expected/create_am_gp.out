@@ -102,3 +102,14 @@ Distributed by: (a)
 Access method: ao_col_testam
 Options: compresstype=rle_type
 
+-- Cleanup
+drop table if exists create_am_gp_ao1;
+drop table if exists create_am_gp_ao2;
+drop table if exists create_am_gp_ao3;
+drop table if exists create_am_gp_ao4;
+NOTICE:  table "create_am_gp_ao4" does not exist, skipping
+drop table if exists create_am_gp_ao5;
+NOTICE:  table "create_am_gp_ao5" does not exist, skipping
+drop table if exists create_am_gp_ao6;
+drop table if exists create_am_gp_ao7;
+drop table if exists create_am_gp_heap;

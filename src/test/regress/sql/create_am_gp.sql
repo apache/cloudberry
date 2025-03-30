@@ -39,3 +39,13 @@ create table create_am_gp_ao6(a int, b int) using ao_row_testam with (compressty
 
 create table create_am_gp_ao7(a int, b int encoding (compresstype=zlib)) using ao_col_testam distributed by (a);
 \d+ create_am_gp_ao7
+
+-- Cleanup
+drop table if exists create_am_gp_ao1;
+drop table if exists create_am_gp_ao2;
+drop table if exists create_am_gp_ao3;
+drop table if exists create_am_gp_ao4;
+drop table if exists create_am_gp_ao5;
+drop table if exists create_am_gp_ao6;
+drop table if exists create_am_gp_ao7;
+drop table if exists create_am_gp_heap;
