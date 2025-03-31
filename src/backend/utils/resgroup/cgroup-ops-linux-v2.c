@@ -694,7 +694,7 @@ setcpuweight_v2(Oid group, int shares)
 {
 	CGroupComponentType component = CGROUP_COMPONENT_PLAIN;
 	writeInt64(group, BASEDIR_GPDB, component,
-			   "cpu.weight", (int64)(shares * 1024 / 100));
+			   "cpu.weight", ((int64) shares * 1024 / 100));
 }
 
 /*

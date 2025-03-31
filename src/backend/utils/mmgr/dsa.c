@@ -777,7 +777,9 @@ dsa_allocate_extended(dsa_area *area, size_t size, int flags)
 
 		while (min < max)
 		{
-			uint16		mid = (min + max) / 2;
+			/* Avoid overflow in the middle calculation */
+			uint16		mid = min + (max - min) / 2;
+
 			uint16		class_size = dsa_size_classes[mid];
 
 			if (class_size < size)

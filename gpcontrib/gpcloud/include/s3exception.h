@@ -127,7 +127,7 @@ class S3QueryAbort : public S3Exception {
 // AccessDenied, NoSuchBucket or other kinds of InvalidRequest
 class S3LogicError : public S3Exception {
    public:
-    S3LogicError(string code, string msg) : message(msg), awscode(code) {
+    S3LogicError(string code, string msg) : message(std::move(msg)), awscode(code) {
     }
     virtual ~S3LogicError() {
     }

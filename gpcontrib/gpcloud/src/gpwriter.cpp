@@ -2,7 +2,7 @@
 #include "s3memory_mgmt.h"
 
 GPWriter::GPWriter(const S3Params& params, string fmt)
-    : format(fmt), params(params), restfulService(this->params), s3InterfaceService(this->params) {
+    : format(std::move(fmt)), params(params), restfulService(this->params), s3InterfaceService(this->params) {
     restfulServicePtr = &restfulService;
 }
 
