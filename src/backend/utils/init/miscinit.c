@@ -1764,31 +1764,13 @@ static char*
 expand_shared_preload_libraries_string()
 {
 	List	   *elemlist = NIL;
+	List	   *pg_elemlist = NIL;
 	List	   *deduplicate_elemlist = NIL;
 	ListCell   *l;
 	char	   *rawstring;
 	char	   *libraries = shared_preload_libraries_string;
 
-	/* Need a modifiable copy of string */
-	rawstring = pstrdup(libraries);
-	if (libraries != NULL && libraries[0] != '\0')
-	{
-		/* Parse string into list of filename paths */
-		if (!SplitDirectoriesString(rawstring, ',', &elemlist))
-		{
-			/* syntax error in list */
-			list_free_deep(elemlist);
-			pfree(rawstring);
-			ereport(LOG,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					errmsg("invalid list syntax in parameter \"%s\"",
-							libraries)));
-			return NULL;
-		}
-
-	}
-
-	/* load expand libraries */
+	/* load process_shared_preload_libraries.h libraries */
 	int shared_preload_libraries_num = sizeof(process_shared_preload_libraries_array) / sizeof(char *);
 	if (shared_preload_libraries_num > 0)
 	{
@@ -1796,8 +1778,27 @@ expand_shared_preload_libraries_string()
 		{
 			elemlist = lappend(elemlist, pstrdup((char*)process_shared_preload_libraries_array[i]));
 		}
-
 	}
+
+	/* Need a modifiable copy of string */
+	rawstring = pstrdup(libraries);
+	if (libraries != NULL && libraries[0] != '\0')
+	{
+		/* Parse string into list of filename paths */
+		if (!SplitDirectoriesString(rawstring, ',', &pg_elemlist))
+		{
+			/* syntax error in list */
+			list_free_deep(pg_elemlist);
+			pfree(rawstring);
+			ereport(LOG,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("invalid list syntax in parameter \"%s\"",
+							libraries)));
+			return NULL;
+		}
+	}
+
+	elemlist = list_concat(elemlist, pg_elemlist);
 
 	if (list_length(elemlist) == 0)
 	{
@@ -1805,7 +1806,6 @@ expand_shared_preload_libraries_string()
 		pfree(rawstring);
 		return NULL;
 	}
-
 
 	/* deduplicate list string */
 	deduplicate_elemlist = removeDuplicates(elemlist);
