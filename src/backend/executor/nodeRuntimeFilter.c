@@ -28,7 +28,10 @@
 
 #include "postgres.h"
 
+#include "access/tableam.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_statistic.h"
+#include "catalog/pg_namespace.h"
 #include "executor/executor.h"
 #include "executor/hashjoin.h"
 #include "executor/nodeRuntimeFilter.h"
@@ -36,6 +39,7 @@
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
+#include "utils/datum.h"
 #include "utils/lsyscache.h"
 
 #include "cdb/cdbvars.h"
@@ -324,5 +328,29 @@ RFFillTupleValues(RuntimeFilterState *rfstate, List *values)
 
 		rfstate->value_buf[idx] = *dp;
 		idx++;
+	}
+}
+
+void
+ExecRFExplainEnd(HashState *hashState, struct StringInfoData *buf)
+{
+	ListCell	*lc;
+	AttrFilter	*attr_filter;
+	SeqScanState *sss;
+
+	if (!hashState->filters)
+		return;
+
+	foreach (lc, hashState->filters)
+	{
+		attr_filter = lfirst(lc);
+		if (attr_filter->empty || attr_filter->hasnulls)
+			continue;
+
+		sss = castNode(SeqScanState, attr_filter->target);
+		appendStringInfo(buf, "RF: %s attrno: %d, range[%ld, %ld], n_distinct: %.2f\n",
+						 RelationGetRelationName(sss->ss.ss_currentRelation),
+						 attr_filter->lattno, (int64_t) attr_filter->min,
+						 (int64_t) attr_filter->max, attr_filter->n_distinct);
 	}
 }

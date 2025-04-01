@@ -31,18 +31,24 @@
 #include "access/relscan.h"
 #include "access/session.h"
 #include "access/tableam.h"
+#include "catalog/pg_namespace.h"
 #include "executor/execdebug.h"
 #include "executor/nodeSeqscan.h"
+#include "utils/datum.h"
 #include "utils/rel.h"
 #include "utils/builtins.h"
+#include "utils/syscache.h"
+#include "utils/lsyscache.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/makefuncs.h"
 
 #include "cdb/cdbaocsam.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbvars.h"
 
 static TupleTableSlot *SeqNext(SeqScanState *node);
-static ScanKey ScanKeyListToArray(List *keys, int *num);
+static List *ConvertScanKeysToQuals(List *scankeys, Index scanrelid);
+static void ExecSeqScanExplainEnd(PlanState *planstate, struct StringInfoData *buf);
 
 /* ----------------------------------------------------------------
  *						Scan Support
@@ -72,16 +78,22 @@ SeqNext(SeqScanState *node)
 
 	if (scandesc == NULL)
 	{
-		int nkeys = 0;
-		ScanKey keys = NULL;
-
 		/*
 		 * Just when gp_enable_runtime_filter_pushdown enabled and
 		 * node->filter_in_seqscan is false means scankey need to be pushed to
 		 * AM.
 		 */
-		if (gp_enable_runtime_filter_pushdown && !node->filter_in_seqscan)
-			keys = ScanKeyListToArray(node->filters, &nkeys);
+		if (gp_enable_runtime_filter_pushdown && !node->filter_in_seqscan &&
+			!estate->useMppParallelMode)
+		{
+			List *quals = NIL;
+			Scan *scan = (Scan *)node->ss.ps.plan;
+			quals = ConvertScanKeysToQuals(node->filters, scan->scanrelid);
+			if (quals)
+			{
+				node->ss.ps.plan->qual = list_concat(node->ss.ps.plan->qual, quals);
+			}
+		}
 
 		/*
 		* We reach here if the scan is not parallel, or if we're serially
@@ -89,7 +101,7 @@ SeqNext(SeqScanState *node)
 		*/
 		scandesc = table_beginscan_es(node->ss.ss_currentRelation,
 									  estate->es_snapshot,
-									  nkeys, keys,
+									  0, NULL,
 									  NULL,
 									  &node->ss.ps);
 		node->ss.ss_currentScanDesc = scandesc;
@@ -188,6 +200,14 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	scanstate->ss.ps.state = estate;
 	scanstate->ss.ps.ExecProcNode = ExecSeqScan;
 
+	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
+	{
+		/* Allocate string buffer. */
+		scanstate->ss.ps.cdbexplainbuf = makeStringInfo();
+
+		/* Request a callback at end of query. */
+		scanstate->ss.ps.cdbexplainfun = ExecSeqScanExplainEnd;
+	}
 	/*
 	 * Miscellaneous initialization
 	 *
@@ -223,7 +243,7 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	if (gp_enable_runtime_filter_pushdown
 		&& !estate->useMppParallelMode)
 	{
-		scanstate->filter_in_seqscan = true;
+		scanstate->filter_in_seqscan = !(table_scan_flags(currentRelation) & SCAN_SUPPORT_RUNTIME_FILTER);
 	}
 
 	return scanstate;
@@ -440,28 +460,137 @@ PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
 }
 
 /*
- * Convert the list of ScanKey to the array, and append an emtpy ScanKey as
- * the end flag of the array.
+ * ConvertScanKeysToQuals
+ *		Convert a list of ScanKeys to a list of Expr nodes.
+ *
+ * This is used to convert the scan keys into a form that can be used as
+ * runtime filter qual.
  */
-static ScanKey
-ScanKeyListToArray(List *keys, int *num)
+static List *
+ConvertScanKeysToQuals(List *scankeys, Index scanrelid)
 {
-	ScanKey sk;
+	List *result = NIL;
+	ListCell *lc;
 
-	if (list_length(keys) == 0)
-		return NULL;
+	foreach (lc, scankeys)
+	{
+		ScanKey skey = (ScanKey) lfirst(lc);
+		Expr *qual;
+		const char *opname;
+		Oid oproid;
+		int16 typlen;
+		bool typbyval;
+		/* support SK_BLOOM_FILTER by PassByBloomFilter */
+		if (skey->sk_flags == SK_BLOOM_FILTER)
+			continue;
 
-	Assert(num);
-	*num = list_length(keys);
+		/* Create Var node representing the scan attribute */
+		Var *var = makeVar(scanrelid,		 /* ID of scan relation */
+						   skey->sk_attno,	 /* Attribute number */
+						   skey->sk_subtype, /* Attribute type */
+						   -1,				 /* Type modifier */
+						   skey->sk_collation, /* Collation */
+						   0);				 /* Variable level */
+		get_typlenbyval(skey->sk_subtype, &typlen, &typbyval);
+		/* Create Const node representing the comparison value */
+		Const *constant =
+			makeConst(skey->sk_subtype,					/* Constant type */
+					  -1,								/* Type modifier */
+					  skey->sk_collation,						/* Collation */
+					  typlen,							/* Length */
+					  datumCopy(skey->sk_argument, typbyval, typlen), /* Value */
+					  false,							/* Is null */
+					  typbyval);							/* By value */
 
-	sk = (ScanKey)palloc(sizeof(ScanKeyData) * (*num + 1));
-	for (int i = 0; i < *num; ++i)
-		memcpy(&sk[i], list_nth(keys, i), sizeof(ScanKeyData));
+		/* Determine operator name based on B-tree strategy number */
+		switch (skey->sk_strategy)
+		{
+			case BTGreaterEqualStrategyNumber:
+				opname = ">=";
+				break;
+			case BTLessEqualStrategyNumber:
+				opname = "<=";
+				break;
+			default:
+				elog(ERROR, "unsupported strategy number: %d",
+					 skey->sk_strategy);
+		}
 
-	/*
-	 * SK_EMPYT means the end of the array of the ScanKey
-	 */
-	sk[*num].sk_flags = SK_EMPYT;
+		/* Look up operator OID dynamically */
+		oproid = get_operator(InvalidOid, skey->sk_subtype, skey->sk_subtype,
+							  PG_CATALOG_NAMESPACE, opname, false);
 
-	return sk;
+
+		/* Create operator expression node */
+		OpExpr *opexpr = makeNode(OpExpr);
+		opexpr->opno = oproid;				   /* Operator OID */
+		opexpr->opfuncid = get_opcode(oproid); /* Implementing function's OID */
+		opexpr->opresulttype = BOOLOID;		   /* Result is always boolean */
+		opexpr->opretset = false;		  /* Not a set returning operator */
+		opexpr->opcollid = InvalidOid;	  /* No collation */
+		opexpr->inputcollid = InvalidOid; /* No collation for input */
+
+		/* Add the comparison arguments */
+		opexpr->args = list_make2(var, constant);
+
+		qual = (Expr *) opexpr;
+		result = lappend(result, qual);
+	}
+
+	/* If we have multiple conditions, combine them with AND */
+	if (list_length(result) > 1)
+	{
+		BoolExpr *andExpr = makeNode(BoolExpr);
+		andExpr->boolop = AND_EXPR;
+		andExpr->args = result;
+		andExpr->location = -1;
+		return list_make1(andExpr);
+	}
+
+	return result;
+}
+
+static void
+ExecSeqScanExplainEnd(PlanState *planstate, struct StringInfoData *buf)
+{
+	SeqScanState *scanstate = (SeqScanState *) planstate;
+	ListCell	*lc;
+	int idx = 0;
+	Relation rel;
+	TupleDesc tupdesc;
+
+	if (!scanstate->filters)
+		return;
+
+	rel = scanstate->ss.ss_currentRelation;
+	tupdesc = RelationGetDescr(rel);
+
+	foreach_with_count (lc, scanstate->filters, idx)
+	{
+		ScanKey sk = lfirst(lc);
+		if (sk->sk_flags == SK_BLOOM_FILTER && scanstate->filter_in_seqscan)
+		{
+			bloom_filter *bf = (bloom_filter *) DatumGetPointer(sk->sk_argument);
+			if (bf)
+				appendStringInfo(buf, "BloomFilter[%d]: fpr:%f ", idx, bloom_false_positive_rate(bf));
+		}
+		if (sk->sk_flags == 0 && !scanstate->filter_in_seqscan)
+		{
+			Form_pg_attribute attr = TupleDescAttr(tupdesc, sk->sk_attno - 1);
+
+			switch(sk->sk_strategy)
+			{
+				case BTGreaterEqualStrategyNumber:
+					appendStringInfo(buf, "ScanKey[%s] >= %ld, ",
+									NameStr(attr->attname), DatumGetInt64(sk->sk_argument));
+					break;
+				case BTLessEqualStrategyNumber:
+					appendStringInfo(buf, "ScanKey[%s] <= %ld ",
+									NameStr(attr->attname), DatumGetInt64(sk->sk_argument));
+					break;
+				default:
+					break;
+			}
+		}
+	}
 }

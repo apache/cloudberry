@@ -2584,6 +2584,7 @@ ExecHashTableExplainEnd(PlanState *planstate, struct StringInfoData *buf)
     Instrumentation    *jinstrument = hjstate->js.ps.instrument;
     int                 total_buckets;
     int                 i;
+    HashState *hashState = (HashState *) innerPlanState(hjstate);
 
     if (!hashtable ||
         !hashtable->stats ||
@@ -2598,10 +2599,12 @@ ExecHashTableExplainEnd(PlanState *planstate, struct StringInfoData *buf)
 
 	if (!hashtable->eagerlyReleased)
 	{		
-		HashState *hashState = (HashState *) innerPlanState(hjstate);
-
 		/* Report on batch in progress, in case the join is being ended early. */
 		ExecHashTableExplainBatchEnd(hashState, hashtable);
+	}
+	if (gp_enable_runtime_filter_pushdown && hashState->filters)
+	{
+		ExecRFExplainEnd(hashState, buf);
 	}
 	
     /* Report actual work_mem high water mark. */
@@ -4161,52 +4164,83 @@ PushdownRuntimeFilter(HashState *node)
 		scankeys = NIL;
 
 		attr_filter = lfirst(lc);
-		if (attr_filter->empty ||
+		if (attr_filter->empty || attr_filter->hasnulls ||
 			(!IsA(attr_filter->target, SeqScanState) &&
 			 !IsA(attr_filter->target, DynamicSeqScanState)))
 			continue;
 
+		SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
 		/* bloom filter */
 		sk = (ScanKey)palloc0(sizeof(ScanKeyData));
 		sk->sk_flags    = SK_BLOOM_FILTER;
 		sk->sk_attno    = attr_filter->lattno;
 		sk->sk_subtype  = INT8OID;
 		sk->sk_argument = PointerGetDatum(attr_filter->blm_filter);
+		sk->sk_collation = attr_filter->collation;
 		scankeys = lappend(scankeys, sk);
 
+		if (attr_filter->n_distinct > 0)
+		{
+			int64 range = attr_filter->max - attr_filter->min + 1;
+			if ((range / attr_filter->n_distinct) > gp_runtime_filter_selectivity_threshold)
+			{
+				/* push previous scankeys */
+				sss->filters = list_concat(sss->filters, scankeys);
+				continue;
+			}
+		}
 		/* range filter */
 		sk = (ScanKey)palloc0(sizeof(ScanKeyData));
 		sk->sk_flags    = 0;
 		sk->sk_attno    = attr_filter->lattno;
 		sk->sk_strategy = BTGreaterEqualStrategyNumber;
-		sk->sk_subtype  = INT8OID;
+		sk->sk_subtype  = attr_filter->vartype;
 		sk->sk_argument = attr_filter->min;
+		sk->sk_collation = attr_filter->collation;
 		scankeys = lappend(scankeys, sk);
 
 		sk = (ScanKey)palloc0(sizeof(ScanKeyData));
 		sk->sk_flags    = 0;
 		sk->sk_attno    = attr_filter->lattno;
 		sk->sk_strategy = BTLessEqualStrategyNumber;
-		sk->sk_subtype  = INT8OID;
+		sk->sk_subtype  = attr_filter->vartype;
 		sk->sk_argument = attr_filter->max;
+		sk->sk_collation = attr_filter->collation;
 		scankeys = lappend(scankeys, sk);
 
 		/* append new runtime filters to target node */
 		if (IsA(attr_filter->target, SeqScanState))
 		{
 			SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
-			sss->filters = list_concat(sss->filters, scankeys);
+			if (sss->ss.ss_currentScanDesc != NULL)
+			{
+				/* if seqscan is started, we can't pushdown the runtime filter */
+				list_free_deep(scankeys);
+			}
+			else
+			{
+				sss->filters = list_concat(sss->filters, scankeys);
+			}
 		}
 		else if (IsA(attr_filter->target, DynamicSeqScanState))
 		{
 			DynamicSeqScanState *dsss = castNode(DynamicSeqScanState, attr_filter->target);
-			dsss->filters = list_concat(dsss->filters, scankeys);
+			if (dsss->ss.ss_currentScanDesc != NULL)
+			{
+				/* if dynamic seqscan is started, we can't pushdown the runtime filter */
+				list_free_deep(scankeys);
+			}
+			else
+			{
+				dsss->filters = list_concat(dsss->filters, scankeys);
+			}
 		}
 		else
 		{
 			/* never reach here */
 			pg_unreachable();
 		}
+
 	}
 }
 
@@ -4221,10 +4255,15 @@ AddTupleValuesIntoRF(HashState *node, TupleTableSlot *slot)
 	foreach (lc, node->filters)
 	{
 		attr_filter = (AttrFilter *) lfirst(lc);
+		if (attr_filter->hasnulls)
+			continue;
 
 		val = slot_getattr(slot, attr_filter->rattno, &isnull);
 		if (isnull)
+		{
+			attr_filter->hasnulls = true;
 			continue;
+		}
 
 		attr_filter->empty = false;
 
@@ -4274,6 +4313,7 @@ ResetRuntimeFilter(HashState *node)
 	{
 		attr_filter = lfirst(lc);
 		attr_filter->empty  = true;
+		attr_filter->hasnulls = false;
 
 		if (IsA(attr_filter->target, SeqScanState))
 		{
@@ -4304,7 +4344,7 @@ ResetRuntimeFilter(HashState *node)
 
 		attr_filter->blm_filter = bloom_create_aggresive(node->ps.plan->plan_rows,
 														 work_mem,
-														 random());
+														 gp_session_id);
 
 		StaticAssertDecl(sizeof(LONG_MAX) == sizeof(Datum), "sizeof(LONG_MAX) should be equal to sizeof(Datum)");
 		StaticAssertDecl(sizeof(LONG_MIN) == sizeof(Datum), "sizeof(LONG_MIN) should be equal to sizeof(Datum)");

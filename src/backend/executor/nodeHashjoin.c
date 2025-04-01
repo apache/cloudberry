@@ -110,6 +110,8 @@
 
 #include "access/htup_details.h"
 #include "access/parallel.h"
+#include "catalog/pg_statistic.h"
+#include "catalog/pg_namespace.h"
 #include "executor/executor.h"
 #include "executor/hashjoin.h"
 #include "executor/instrument.h"	/* Instrumentation */
@@ -118,9 +120,12 @@
 #include "executor/nodeRuntimeFilter.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "utils/datum.h"
 #include "utils/guc.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/rel.h"
 #include "utils/sharedtuplestore.h"
 
 #include "cdb/cdbvars.h"
@@ -168,10 +173,10 @@ static bool IsEqualOp(Expr *expr);
 static bool CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno);
 static bool CheckTargetNode(PlanState *node,
 							AttrNumber attno,
-							AttrNumber *lattno);
+							AttrNumber *lattno, Oid *collation, Oid *var_type);
 static List *FindTargetNodes(HashJoinState *hjstate,
 							 AttrNumber attno,
-							 AttrNumber *lattno);
+							 AttrNumber *lattno, Oid *collation, Oid *var_type);
 static AttrFilter *CreateAttrFilter(PlanState *target,
 									AttrNumber lattno,
 									AttrNumber rattno,
@@ -2192,6 +2197,8 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	AttrFilter	*attr_filter;
 	ListCell	*lc;
 	List		*targets;
+	Oid			var_type;
+	Oid			collation;
 
 	/*
 	 * A build-side Bloom filter tells us if a row is definitely not in the build
@@ -2232,7 +2239,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		if (lattno < 1 || rattno < 1)
 			continue;
 
-		targets = FindTargetNodes(hjstate, lattno, &lattno);
+		targets = FindTargetNodes(hjstate, lattno, &lattno, &collation, &var_type);
 		if (lattno == -1 || targets == NULL)
 			continue;
 
@@ -2243,6 +2250,8 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
 					hstate->ps.plan->plan_rows);
+			attr_filter->vartype = var_type;
+			attr_filter->collation = collation;
 			if (attr_filter->blm_filter)
 				hstate->filters = lappend(hstate->filters, attr_filter);
 			else
@@ -2329,7 +2338,7 @@ CheckEqualArgs(Expr *expr, AttrNumber *lattno, AttrNumber *rattno)
 }
 
 static bool
-CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
+CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno, Oid *collation, Oid *var_type)
 {
 	Var *var;
 	TargetEntry *te;
@@ -2360,6 +2369,8 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 		return false;
 
 	*lattno = var->varattno;
+	*collation = var->varcollid;
+	*var_type = var->vartype;
 
 	return true;
 }
@@ -2372,7 +2383,7 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
  *          SeqScan <- target
  */
 static List *
-FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
+FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno, Oid *collation, Oid *var_type)
 {
 	Var *var;
 	PlanState *child, *parent;
@@ -2396,7 +2407,7 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 			 *   [result]
 			 *     seqscan | dynamicseqscan
 			 */
-			if (!CheckTargetNode(child, attno, lattno))
+			if (!CheckTargetNode(child, attno, lattno, collation, var_type))
 				return NULL;
 
 			targetNodes = lappend(targetNodes, child);
@@ -2414,7 +2425,7 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 			for (int i = 0; i < as->as_nplans; i++)
 			{
 				child = as->appendplans[i];
-				if (!CheckTargetNode(child, attno, lattno))
+				if (!CheckTargetNode(child, attno, lattno, collation, var_type))
 					return NULL;
 
 				targetNodes = lappend(targetNodes, child);
@@ -2462,12 +2473,25 @@ CreateAttrFilter(PlanState *target, AttrNumber lattno, AttrNumber rattno,
 {
 	AttrFilter *attr_filter = palloc0(sizeof(AttrFilter));
 	attr_filter->empty  = true;
+	attr_filter->hasnulls = false;
 	attr_filter->target = target;
 
 	attr_filter->lattno = lattno;
 	attr_filter->rattno = rattno;
+	attr_filter->n_distinct = 0.0;
 
-	attr_filter->blm_filter = bloom_create_aggresive(plan_rows, work_mem, random());
+	attr_filter->blm_filter = bloom_create_aggresive(plan_rows, work_mem, gp_session_id);
+
+	if (target && IsA(target, SeqScanState))
+	{
+		HeapTuple statstuple;
+		SeqScanState *scan = (SeqScanState *)target;
+		statstuple = get_att_stats(RelationGetRelid(scan->ss.ss_currentRelation), lattno);
+		if (HeapTupleIsValid(statstuple))
+		{
+			attr_filter->n_distinct = ((Form_pg_statistic) GETSTRUCT(statstuple))->stadistinct;
+		}
+	}
 
 	StaticAssertDecl(sizeof(LONG_MAX) == sizeof(Datum), "sizeof(LONG_MAX) should be equal to sizeof(Datum)");
 	StaticAssertDecl(sizeof(LONG_MIN) == sizeof(Datum), "sizeof(LONG_MIN) should be equal to sizeof(Datum)");
