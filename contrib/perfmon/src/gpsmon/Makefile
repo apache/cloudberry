@@ -1,6 +1,6 @@
 top_builddir = ../../../..
 
-PG_CPPFLAGS = -I$(libpq_srcdir) -I../include -I. -Wno-error=vla -Wno-vla
+PG_CPPFLAGS = -I$(libpq_srcdir) -I../include -I. $(apr_includes) -Wno-error=vla -Wno-vla -Wno-unused-result
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
