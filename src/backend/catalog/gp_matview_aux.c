@@ -58,6 +58,8 @@ static void RemoveMatviewTablesEntries(Oid mvoid);
 
 static void SetMatviewAuxStatus_guts(Oid mvoid, char status);
 
+static void addRelationMVRefCount(Oid relid, int32 mvrefcount);
+
 /*
  * GetViewBaseRelids
  * Get all base tables's oid of a query tree.
@@ -230,6 +232,9 @@ InsertMatviewTablesEntries(Oid mvoid, List *relids)
 		values[Anum_gp_matview_tables_mvoid - 1] = ObjectIdGetDatum(mvoid);
 		tup = heap_form_tuple(RelationGetDescr(mtRel), values, nulls);
 		CatalogTupleInsert(mtRel, tup);
+
+		/* update relation's pg_class entry */
+		addRelationMVRefCount(relid, 1);
 	}
 
 	table_close(mtRel, RowExclusiveLock);
@@ -278,6 +283,7 @@ RemoveMatviewTablesEntries(Oid mvoid)
 	Relation	mtRel;
 	CatCList   *catlist;
 	int			i;
+	Oid			relid;
 
 	mtRel = table_open(GpMatviewTablesId, RowExclusiveLock);
 
@@ -289,6 +295,10 @@ RemoveMatviewTablesEntries(Oid mvoid)
 		/* This shouldn't happen, in case for that. */
 		if (!HeapTupleIsValid(tuple))
 			continue;
+
+		/* update relation's pg_class entry */
+		relid = ((Form_gp_matview_tables) GETSTRUCT(tuple))->relid;
+		addRelationMVRefCount(relid, -1);
 
 		CatalogTupleDelete(mtRel, &tuple->t_self);
 	}
@@ -314,6 +324,12 @@ SetRelativeMatviewAuxStatus(Oid relid, char status, char direction)
 	SysScanDesc desc;
 	List		*base_oids;
 	ListCell   *cell;
+
+	/*
+	 * Do a quick check if relation has relative materialized views.
+	 */
+	if (get_rel_relmvrefcount(relid) <= 0)
+		return;
 
 	mvauxRel = table_open(GpMatviewAuxId, RowExclusiveLock);
 
@@ -554,4 +570,28 @@ MatviewIsUpToDate(Oid mvoid)
 
 	Form_gp_matview_aux auxform = (Form_gp_matview_aux) GETSTRUCT(mvauxtup);
 	return (auxform->datastatus == MV_DATA_STATUS_UP_TO_DATE);
+}
+
+static void
+addRelationMVRefCount(Oid relid, int32 mvrefcount)
+{
+	Relation	pgrel;
+	HeapTuple	tuple;
+
+	pgrel = table_open(RelationRelationId, RowExclusiveLock);
+	/*
+	 * Update relation's pg_class entry.
+	 */
+	tuple = SearchSysCacheCopy1(RELOID,
+								ObjectIdGetDatum(relid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for relation %u", relid);
+
+	((Form_pg_class) GETSTRUCT(tuple))->relmvrefcount += mvrefcount;
+
+	CatalogTupleUpdate(pgrel, &tuple->t_self, tuple);
+
+	heap_freetuple(tuple);
+
+	table_close(pgrel, RowExclusiveLock);
 }

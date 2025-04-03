@@ -1987,6 +1987,7 @@ formrdesc(const char *relationName, Oid relationReltype,
 	relation->rd_rel->relisivm = false;
 	/* ... and they're always not dynamic, too */
 	relation->rd_rel->relisdynamic = false;
+	relation->rd_rel->relmvrefcount = 0;
 
 	relation->rd_rel->relreplident = REPLICA_IDENTITY_NOTHING;
 	relation->rd_rel->relpages = 0;

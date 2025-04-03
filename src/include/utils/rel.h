@@ -783,6 +783,8 @@ typedef struct ViewOptions
 
 #define RelationIsIVM(relation) ((relation)->rd_rel->relisivm)
 
+#define RelationHasRelativeMV(relation) (((relation)->rd_rel->relmvrefcount) > 0)
+
 /*
  * RelationIsAccessibleInLogicalDecoding
  *		True if we need to log enough information to have access via

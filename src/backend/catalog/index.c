@@ -1074,6 +1074,7 @@ index_create_internal(Relation heapRelation,
 	indexRelation->rd_rel->relispartition = OidIsValid(parentIndexRelid);
 	indexRelation->rd_rel->relisivm = false;
 	indexRelation->rd_rel->relisdynamic = false;
+	indexRelation->rd_rel->relmvrefcount = 0;
 
 	/*
 	 * store index's pg_class entry

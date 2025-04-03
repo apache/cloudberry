@@ -1328,6 +1328,7 @@ InsertPgClassTuple(Relation pg_class_desc,
 	values[Anum_pg_class_relminmxid - 1] = MultiXactIdGetDatum(rd_rel->relminmxid);
 	values[Anum_pg_class_relisivm - 1] = BoolGetDatum(rd_rel->relisivm);
 	values[Anum_pg_class_relisdynamic - 1] = BoolGetDatum(rd_rel->relisdynamic);
+	values[Anum_pg_class_relmvrefcount - 1] = Int32GetDatum(rd_rel->relmvrefcount);
 	if (relacl != (Datum) 0)
 		values[Anum_pg_class_relacl - 1] = relacl;
 	else

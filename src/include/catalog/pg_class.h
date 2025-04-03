@@ -125,6 +125,9 @@ CATALOG(pg_class,1259,RelationRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(83,Relat
 	/* is relation a dynamic table? */
 	bool		relisdynamic BKI_DEFAULT(f);
 
+	/* count of materialized views referred to the relation */
+	int32		relmvrefcount	BKI_DEFAULT(0);
+
 	/* link to original rel during table rewrite; otherwise 0 */
 	Oid			relrewrite BKI_DEFAULT(0) BKI_LOOKUP_OPT(pg_class);
 

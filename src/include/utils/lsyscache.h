@@ -173,6 +173,7 @@ extern char get_rel_relkind(Oid relid);
 extern bool get_rel_relispartition(Oid relid);
 extern bool get_rel_relisivm(Oid relid);
 extern bool get_rel_relisdynamic(Oid relid);
+extern int32 get_rel_relmvrefcount(Oid relid);
 extern Oid	get_rel_tablespace(Oid relid);
 extern char get_rel_persistence(Oid relid);
 extern Oid	get_transform_fromsql(Oid typid, Oid langid, List *trftypes);

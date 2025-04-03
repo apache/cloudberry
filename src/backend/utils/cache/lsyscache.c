@@ -2143,6 +2143,30 @@ get_rel_relisdynamic(Oid relid)
 }
 
 /*
+ * get_rel_relmvrefcount
+ *
+ *		Returns the count of materialzed views associated with a given relation.
+ */
+int32
+get_rel_relmvrefcount(Oid relid)
+{
+	HeapTuple	tp;
+
+	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	if (HeapTupleIsValid(tp))
+	{
+		Form_pg_class reltup = (Form_pg_class) GETSTRUCT(tp);
+		int32	result;
+
+		result = reltup->relmvrefcount;
+		ReleaseSysCache(tp);
+		return result;
+	}
+	else
+		return 0;
+}
+
+/*
  * get_rel_tablespace
  *
  *		Returns the pg_tablespace OID associated with a given relation.
