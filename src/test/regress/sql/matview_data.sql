@@ -168,7 +168,7 @@ create materialized view mv_par1 as select * from  par_1_prt_1;
 create materialized view mv_par1_1 as select * from par_1_prt_1_2_prt_1;
 create materialized view mv_par1_2 as select * from par_1_prt_1_2_prt_2;
 create materialized view mv_par2 as select * from  par_1_prt_2;
-create materialized view mv_par2_2 as select * from  par_1_prt_2_2_prt_1;
+create materialized view mv_par2_1 as select * from  par_1_prt_2_2_prt_1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 insert into par_1_prt_1 values (1, 1, 1);
 -- mv_par1* shoud be updated
@@ -182,7 +182,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 begin;
 insert into par_1_prt_2_2_prt_1 values (1, 2, 1);
 -- mv_par1* should not be updated
@@ -203,7 +203,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 vacuum full par_1_prt_1_2_prt_1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 
@@ -212,7 +212,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 vacuum full par;
 -- all should be updated.
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
@@ -222,7 +222,7 @@ refresh materialized view mv_par1;
 refresh materialized view mv_par1_1;
 refresh materialized view mv_par1_2;
 refresh materialized view mv_par2;
-refresh materialized view mv_par2_2;
+refresh materialized view mv_par2_1;
 begin;
 create table par_1_prt_1_2_prt_3  partition of par_1_prt_1 for values from  (3) to (4);
 -- update status when partition of
@@ -247,6 +247,58 @@ create table new_par(a int, b int, c int);
 alter table par_1_prt_1 attach partition new_par for values from (4) to (5);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 abort;
+
+--
+-- Maintain materialized views on partitioned tables from bottom to up.
+--
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+refresh materialized view mv_par;
+refresh materialized view mv_par1;
+refresh materialized view mv_par1_1;
+refresh materialized view mv_par1_2;
+refresh materialized view mv_par2;
+refresh materialized view mv_par2_1;
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+insert into par values(1, 1, 1), (1, 1, 2);
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+insert into par_1_prt_2_2_prt_1 values(2, 2, 1);
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+delete from par where b = 2  and c = 1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+delete from par_1_prt_1_2_prt_2;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+-- Across partition update.
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+update par set c = 2 where b = 1 and c = 1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+
+-- Split Update with acrosss partition update.
+begin;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
+abort;
+--
+-- End of Maintain materialized views on partitioned tables from bottom to up.
+--
+
 
 --start_ignore
 drop schema matview_data_schema cascade;
