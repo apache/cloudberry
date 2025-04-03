@@ -1,0 +1,31 @@
+-- @Description Ensures that a delete before a vacuum operation is ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 100) AS i;
+INSERT 100
+
+
+DELETE FROM pax_tbl WHERE a < 12;
+DELETE 11
+1: BEGIN;
+BEGIN
+1: SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 89    
+(1 row)
+1>: DELETE FROM pax_tbl WHERE a < 90;COMMIT;  <waiting ...>
+2: VACUUM pax_tbl;
+VACUUM
+1<:  <... completed>
+DELETE
+1: SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 11    
+(1 row)
+3: INSERT INTO pax_tbl VALUES (0);
+INSERT 1

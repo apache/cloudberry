@@ -1,0 +1,228 @@
+# ----------
+# src/test/regress/parallel_schedule
+#
+# By convention, we put no more than twenty tests in any one parallel group;
+# this limits the number of connections needed to run the tests.
+# ----------
+
+# run tablespace by itself, and first, because it forces a checkpoint;
+# we'd prefer not to have checkpoints later in the tests because that
+# interferes with crash-recovery testing.
+test: tablespace
+# ----------
+# The first group of parallel tests
+# ----------
+test: boolean char name varchar text int2 int4 int8 oid float4 float8 bit numeric txid uuid enum money rangetypes pg_lsn regproc
+
+# ----------
+# The second group of parallel tests
+# strings depends on char, varchar and text
+# numerology depends on int2, int4, int8, float4, float8
+# multirangetypes depends on rangetypes
+# multirangetypes shouldn't run concurrently with type_sanity
+# ----------
+test: strings numerology point lseg line box path polygon circle date time timetz timestamp timestamptz interval inet macaddr macaddr8 multirangetypes create_function_0
+
+# ----------
+# Another group of parallel tests
+# geometry depends on point, lseg, box, path, polygon and circle
+# horology depends on interval, timetz, timestamp, timestamptz
+# opr_sanity depends on create_function_0
+# ----------
+test: geometry horology tstypes regex type_sanity opr_sanity misc_sanity comments expressions unicode xid mvcc
+
+# ----------
+# These four each depend on the previous one
+# ----------
+test: create_function_1
+test: create_type
+test: create_table
+test: create_function_2
+
+# ----------
+# Load huge amounts of data
+# We should split the data files into single files and then
+# execute two copy tests parallel, to check that copy itself
+# is concurrent safe.
+# ----------
+test: copy copyselect copydml insert
+
+# ignore reason: Pax have not implements tuple_insert_speculative and tuple_lock
+# test: insert_conflict
+
+# ----------
+# More groups of parallel tests
+# ----------
+test: create_misc create_operator create_procedure
+# These depend on create_misc and create_operator
+
+test: create_index create_view index_including 
+# PAX not support spgist
+# test: create_index_spgist 
+
+# ignore reason: Pax not support gist
+# test: index_including_gist
+
+# Depends on things setup for create_index
+test: gp_gin_index
+
+# ----------
+# Another group of parallel tests
+# ----------
+
+test: create_aggregate create_function_3 create_cast select inherit typed_table drop_if_exists roleattributes create_am hash_func errors infinite_recurse
+
+# ignore reason:
+#  1. Pax have not implements tuple_insert_speculative and tuple_lock
+#  2. Pax not support almost of triggers
+# test: constraints triggers vacuum updatable_views
+
+# ----------
+# Because vacuum will detect concurrently running transactions, it is necessary to
+# run this test on its own, or it might not detect the pages are 'all visible'
+# ----------
+# test: disable_autovacuum
+# test: vacuum_stats
+# test: enable_autovacuum
+
+# ----------
+# sanity_check does a vacuum, affecting the sort order of SELECT *
+# results. So it should not run parallel to other tests.
+test: sanity_check
+
+# ----------
+# Another group of parallel tests
+# Note: the ignore: line does not run random, just mark it as ignorable
+# ----------
+# ignore: random
+test: select_into select_distinct select_distinct_on select_implicit select_having subselect union case join aggregates arrays btree_index hash_index update delete
+
+# ignore reason: not allow simple update in function `isSimplyUpdatableRelation`
+# test: portals
+
+# In PostgreSQL, namespace test is run as part of the previous group, but there
+# are some GPDB additions in it that will show diff if concurrent tests use
+# temporary tables. So run it separately.
+test: namespace
+
+# 2-phase commit is not supported by GPDB.
+#test: prepared_xacts
+
+test: transactions
+
+# ----------
+# Another group of parallel tests
+# ----------
+test: privileges init_privs security_label collate lock replica_identity rowsecurity object_address tablesample groupingsets drop_operator password identity appendonly_sample aocs_sample
+
+test: matview
+# ignore reason: 
+#   1. Pax not support trigger
+#   2. Pax not support parallel_workers
+#   3. Pax not support brin
+# test: generated join_hash brin 
+
+# ignore reason: Pax not support gin gist spgist indexes
+# test: gin gist spgist 
+test: gin
+
+# ----------
+# Additional BRIN tests
+# ----------
+# test: brin_bloom brin_multi
+
+# ----------
+# Additional Task tests
+# ----------
+test: task
+
+# ----------
+# Another group of parallel tests
+# ----------
+test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid collate.icu.utf8 incremental_sort
+# ignore reason: tidrangescan assumes the ctid is organized by heap
+# test: tidrangescan 
+# ignore reason: pax not support incremental matview
+# test: incremental_matview
+
+# ignore reason: have not implements tuple_tid_valid
+# test: tidscan
+
+# ----------
+# Additional incremental view maintenance tests
+# ----------
+# test: ivm
+
+# rules cannot run concurrently with any test that creates
+# a view or rule in the public schema
+#
+# 'rules' test is disabled in GPDB. Maintaining the list of views in it is
+# too painful, and there are also errors because of cross-segment UPDATEs
+# and functions.
+#
+# GPDB_84_MERGE_FIXME: While disabling this was not really an effect of the 8.4
+# merge, it was done a long time ago, it's time to revisit this so we can re-
+# enable it
+#test: rules
+# collate.*.utf8 tests cannot be run in parallel with each other
+test: psql psql_crosstab amutils stats_ext collate.linux.utf8
+
+# run by itself so it can run parallel workers
+# ignore reason: Pax not support parallel workers
+# test: select_parallel
+# test: write_parallel
+# test: vacuum_parallel
+
+# no relation related tests can be put in this group
+test: publication subscription
+
+# ----------
+# Another group of parallel tests
+# ----------
+test: select_views portals_p2  dependency guc bitmapops tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
+
+# ignore reason:
+#   1. virtual tuple table slot does not have system attributes
+# test: combocid
+
+test: cluster
+
+# 'foreign_key' test is disabled, because it contains several tables with
+# multiple UNIQUE constraints, which is not supported in GPDB.
+#test: foreign_key
+
+# ----------
+# Another group of parallel tests (JSON related)
+# ----------
+test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath
+
+# ----------
+# Another group of parallel tests
+# NB: temp.sql does a reconnect which transiently uses 2 connections,
+# so keep this parallel group to at most 19 tests
+# ----------
+test: plancache limit copy2 temp domain rangefuncs prepare conversion truncate alter_table sequence polymorphism rowtypes xml
+# large objects are not supported by GPDB
+# test: largeobject
+
+# ignore reason: Pax not support almost of triggers and have not implements tuple_fetch_row_version
+# test: plpgsql returning with 
+
+test: gp_foreign_data
+
+# ----------
+# Another group of parallel tests
+# ----------
+test: partition_join partition_prune hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize
+
+# ignore reason: pax not support standary options
+# test: reloptions
+
+# event triggers cannot run concurrently with any test that runs DDL
+# oidjoins is read-only, though, and should run late for best coverage
+test: event_trigger oidjoins
+# this test also uses event triggers, so likewise run it by itself
+test: fast_default
+
+# run stats by itself because its delay may be insufficient under heavy load
+test: stats

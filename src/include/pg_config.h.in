@@ -1064,6 +1064,8 @@
 /* Define to 1 to build with Cloudberry ORCA optimizer. (--enable-orca) */
 #undef USE_ORCA
 
+/* Define to 1 to build with pax support. (--enable-pax) */
+#undef USE_PAX_STORAGE
 
 /* Define to 1 to build with PAM support. (--with-pam) */
 #undef USE_PAM

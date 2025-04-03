@@ -1,0 +1,13 @@
+LOAD '@abs_builddir@/hooktest/test_hook@DLSUFFIX@';
+-----------------------------------
+-- Test planner hook
+-----------------------------------
+SET client_min_messages='log';
+SELECT 1 AS a;
+LOG:  statement: SELECT 1 AS a;
+LOG:  In test_planner_hook
+ a 
+---
+ 1
+(1 row)
+

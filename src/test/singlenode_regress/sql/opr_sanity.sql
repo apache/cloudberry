@@ -364,7 +364,8 @@ WHERE p2.oid = p1.prosupport AND
 SELECT p1.oid, p1.proname
 FROM pg_proc as p1 LEFT JOIN pg_description as d
      ON p1.tableoid = d.classoid and p1.oid = d.objoid and d.objsubid = 0
-WHERE d.classoid IS NULL AND p1.oid <= 9999;
+WHERE d.classoid IS NULL AND p1.oid <= 9999
+    AND pronamespace not in (select oid from pg_namespace where nspname='pg_ext_aux');
 
 -- List of built-in leakproof functions
 --
@@ -412,7 +413,8 @@ order by 1;
 -- Check that all immutable functions are marked parallel safe
 SELECT p1.oid, p1.proname
 FROM pg_proc AS p1
-WHERE provolatile = 'i' AND proparallel = 'u';
+WHERE provolatile = 'i' AND proparallel = 'u'
+    AND pronamespace not in (select oid from pg_namespace where nspname='pg_ext_aux');
 
 
 -- **************** pg_cast ****************
@@ -1390,6 +1392,8 @@ WHERE c.oid = attrelid AND c.oid < 16384 AND
     c.relkind != 'v' AND  -- we don't care about columns in views
     c.relkind != 'f' AND  -- GPDB: foreign/external tables are also OK.
     c.relkind != 'c' AND  -- GPDB: as well as composite types
+    -- CBDB: ignore relations in extension namespace
+    c.relnamespace != (select oid from pg_namespace where nspname='pg_ext_aux') AND
     attcollation != 0 AND
     attcollation != (SELECT oid FROM pg_collation WHERE collname = 'C');
 

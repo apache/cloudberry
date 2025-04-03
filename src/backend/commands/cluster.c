@@ -1471,6 +1471,27 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 	}
 
 	/*
+	 * Swap auxiliary tables if the table AM has non-standard structure.
+	 * See the details of the callback swap_relation_files.
+	 */
+	if ((relform1->relkind == RELKIND_RELATION ||
+		relform1->relkind == RELKIND_MATVIEW)
+		&& (relform1->relam == PAX_AM_OID || 
+			relform2->relam == PAX_AM_OID))
+	{
+		const TableAmRoutine *tam;
+		Oid relam;
+
+		relam = relform1->relam;
+		if (relam != relform2->relam)
+			elog(ERROR, "PAX not allow swap relation files for different AM");
+
+		tam = GetTableAmRoutineByAmId(relam);
+		if (tam->swap_relation_files)
+			tam->swap_relation_files(r1, r2, frozenXid, cutoffMulti);
+	}
+
+	/*
 	 * Update the tuples in pg_class --- unless the target relation of the
 	 * swap is pg_class itself.  In that case, there is zero point in making
 	 * changes because we'd be updating the old data that we're about to throw

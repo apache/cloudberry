@@ -1,0 +1,238 @@
+-- Try to verify that a session fatal due to OOM should have no effect on other sessions.
+-- Report on https://github.com/greenplum-db/gpdb/issues/12399
+
+create extension if not exists gp_inject_fault;
+CREATE
+
+1: select gp_inject_fault('make_dispatch_result_error', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: begin;
+BEGIN
+
+-- session1 will be fatal.
+1: select count(*) > 0 from gp_dist_random('pg_class');
+FATAL:  could not allocate resources for segworker communication (cdbdisp_async.c:319)
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+-- session2 should be ok.
+2: select count(*) > 0 from gp_dist_random('pg_class');
+ ?column? 
+----------
+ t        
+(1 row)
+2: commit;
+COMMIT
+1q: ... <quitting>
+2q: ... <quitting>
+
+select gp_inject_fault('make_dispatch_result_error', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+--
+-- Test case for the WaitEvent of ShareInputScan
+--
+
+create table test_waitevent(i int);
+CREATE
+insert into test_waitevent select generate_series(1,1000);
+INSERT 1000
+
+1: set optimizer = off;
+SET
+1: set gp_cte_sharing to on;
+SET
+1: set max_parallel_workers_per_gather = 0;
+SET
+1: select gp_inject_fault_infinite('shareinput_writer_notifyready', 'suspend', 2);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1&: WITH a1 as (select * from test_waitevent), a2 as (select * from test_waitevent) SELECT sum(a1.i)  FROM a1 INNER JOIN a2 ON a2.i = a1.i  UNION ALL SELECT count(a1.i)  FROM a1 INNER JOIN a2 ON a2.i = a1.i;  <waiting ...>
+-- start_ignore
+2: copy (select pg_stat_get_activity(NULL) from gp_dist_random('gp_id') where gp_segment_id=0) to '/tmp/_gpdb_test_output.txt';
+COPY 9
+-- end_ignore
+2: select gp_wait_until_triggered_fault('shareinput_writer_notifyready', 1, 2);
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+2: select gp_inject_fault_infinite('shareinput_writer_notifyready', 'resume', 2);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+2: select gp_inject_fault_infinite('shareinput_writer_notifyready', 'reset', 2);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+2q: ... <quitting>
+1<:  <... completed>
+ sum    
+--------
+ 500500 
+ 1000   
+(2 rows)
+1q: ... <quitting>
+
+!\retcode grep ShareInputScan /tmp/_gpdb_test_output.txt;
+-- start_ignore
+(100897,9460,10,"",active,"WITH a1 as (select * from test_waitevent), a2 as (select * from test_waitevent) SELECT sum(a1.i)  FROM a1 INNER JOIN a2 ON a2.i = a1.i  UNION ALL SELECT count(a1.i)  FROM a1 INNER JOIN a2 ON a2.i = a1.i;",IPC,ShareInputScan,"Sat Mar 12 23:51:16.151757 2022 PST","Sat Mar 12 23:51:16.151757 2022 PST","Sat Mar 12 23:51:16.14545 2022 PST","Sat Mar 12 23:51:16.151797 2022 PST",127.0.0.1,,63602,,7398,"client backend",f,,,,,,,,f,,f,247,0,unknown)
+
+-- end_ignore
+(exited with code 0)
+
+--
+-- Test for issue https://github.com/greenplum-db/gpdb/issues/12703
+--
+
+-- Case for cdbgang_createGang_async
+1: create table t_12703(a int);
+CREATE
+
+1:begin;
+BEGIN
+-- make a cursor so that we have a named portal
+1: declare cur12703 cursor for select * from t_12703;
+DECLARE
+
+2: select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=1), 'stop');
+ pg_ctl 
+--------
+ OK     
+(1 row)
+-- next sql will trigger FTS to mark seg1 as down
+2: select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t                         
+(1 row)
+!\retcode gpfts -A -D;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+-- sleep some seconds until the promotion of mirror 0 is done
+2: select pg_sleep(2);
+ pg_sleep 
+----------
+          
+(1 row)
+
+-- this will go to cdbgang_createGang_async's code path
+-- for some segments are DOWN. It should not PANIC even
+-- with a named portal existing.
+1: select * from t_12703;
+ERROR:  gang was lost due to cluster reconfiguration (cdbgang_async.c:98)
+1: abort;
+ABORT
+
+1q: ... <quitting>
+2q: ... <quitting>
+
+-- Case for cdbCopyEndInternal
+-- Provide some data to copy in
+4: insert into t_12703 select * from generate_series(1, 10)i;
+INSERT 10
+4: copy t_12703 to '/tmp/t_12703';
+COPY 10
+-- make copy in statement hang at the entry point of cdbCopyEndInternal
+4: select gp_inject_fault('cdb_copy_end_internal_start', 'suspend', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+4q: ... <quitting>
+1&: copy t_12703 from '/tmp/t_12703';  <waiting ...>
+select gp_wait_until_triggered_fault('cdb_copy_end_internal_start', 1, dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+-- make Gang connection is BAD
+select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=2), 'stop');
+ pg_ctl 
+--------
+ OK     
+(1 row)
+!\retcode gpfts -A -D;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+2: select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t                         
+(1 row)
+2: begin;
+BEGIN
+select gp_inject_fault('cdb_copy_end_internal_start', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-- continue copy it should not PANIC
+1<:  <... completed>
+ERROR:  MPP detected 1 segment failures, system is reconnected
+1q: ... <quitting>
+-- session 2 still alive (means not PANIC happens)
+2: select 1;
+ ?column? 
+----------
+ 1        
+(1 row)
+2: end;
+END
+2q: ... <quitting>
+
+!\retcode gprecoverseg -aF --no-progress;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+
+-- loop while segments come in sync
+!\retcode gpfts -A -D;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+select wait_until_all_segments_synchronized();
+ wait_until_all_segments_synchronized 
+--------------------------------------
+ OK                                   
+(1 row)
+
+!\retcode gprecoverseg -ar;
+-- start_ignore
+-- end_ignore
+(exited with code 0)
+
+-- loop while segments come in sync
+!\retcode gpfts -A -D;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+select wait_until_all_segments_synchronized();
+ wait_until_all_segments_synchronized 
+--------------------------------------
+ OK                                   
+(1 row)
+
+-- verify no segment is down after recovery
+select count(*) from gp_segment_configuration where status = 'd';
+ count 
+-------
+ 0     
+(1 row)

@@ -1,0 +1,158 @@
+-- This test is to verify the order of reusing idle gangs.
+--
+-- For example:
+-- In the same session,
+-- query 1 has 3 slices and it creates gang B, gang C and gang D.
+-- query 2 has 2 slices, we hope it reuses gang B and gang C instead of other
+-- cases like gang D and gang C.
+--
+-- In this way, the two queries can have the same send-receive port pair. It's
+-- useful in platform like Azure. Because Azure limits the number of different
+-- send-receive port pairs (AKA flow) in a certain time period.
+-- To verify the order we show the gang id in EXPLAIN ANALYZE output when
+-- gp_log_gang is 'debug', turn on this output.
+set gp_log_gang to 'debug';
+set gp_cached_segworkers_threshold to 10;
+set gp_vmem_idle_resource_timeout to '60s';
+set optimizer_enable_motion_broadcast to off;
+set optimizer_force_multistage_agg to on;
+create table test_gang_reuse_t1 (c1 int, c2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze test_gang_reuse_t1;
+-- this query will create 3 reader gangs with ids C, D and E, we expect they
+-- will always be reused in the same order
+explain analyze select count(*) from test_gang_reuse_t1 a
+  join test_gang_reuse_t1 b using (c2)
+  join test_gang_reuse_t1 c using (c2)
+;
+                                                                                  QUERY PLAN                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=8.425..8.437 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; gang0; segments: 3)  (cost=0.00..1293.00 rows=1 width=8) (actual time=7.120..8.391 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=6.288..6.301 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1) (actual time=6.271..6.284 rows=0 loops=1)
+                     Hash Cond: (b.c2 = a.c2)
+                     ->  Redistribute Motion 3:3  (slice2; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                           Hash Key: b.c2
+                           ->  Seq Scan on test_gang_reuse_t1 b  (cost=0.00..431.00 rows=1 width=4) (actual time=0.788..0.790 rows=0 loops=1)
+                     ->  Hash  (cost=862.00..862.00 rows=1 width=4) (actual time=2.739..2.751 rows=0 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 2048kB
+                           ->  Hash Join  (cost=0.00..862.00 rows=1 width=4) (actual time=2.738..2.749 rows=0 loops=1)
+                                 Hash Cond: (a.c2 = c.c2)
+                                 ->  Redistribute Motion 3:3  (slice3; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                       Hash Key: a.c2
+                                       ->  Seq Scan on test_gang_reuse_t1 a  (cost=0.00..431.00 rows=1 width=4) (actual time=0.674..0.676 rows=0 loops=1)
+                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.023..0.029 rows=0 loops=1)
+                                       Buckets: 262144  Batches: 1  Memory Usage: 2048kB
+                                       ->  Redistribute Motion 3:3  (slice4; gang9; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.018..0.019 rows=0 loops=1)
+                                             Hash Key: c.c2
+                                             ->  Seq Scan on test_gang_reuse_t1 c  (cost=0.00..431.00 rows=1 width=4) (actual time=0.729..0.732 rows=0 loops=1)
+ Planning Time: 136.820 ms
+   (slice0)    Executor memory: 68K bytes.
+   (slice1)    Executor memory: 4133K bytes avg x 3 workers, 4133K bytes max (seg0).  Work_mem: 2048K bytes max.
+   (slice2)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).
+   (slice3)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).
+   (slice4)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).
+ Memory used:  129024kB
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Execution Time: 37.723 ms
+(29 rows)
+
+-- so in this query the gangs C and D should be used
+explain analyze select count(*) from test_gang_reuse_t1 a
+  join test_gang_reuse_t1 b using (c2)
+;
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=4.041..4.045 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; gang0; segments: 3)  (cost=0.00..862.00 rows=1 width=8) (actual time=3.745..4.031 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=3.489..3.494 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (actual time=3.481..3.485 rows=0 loops=1)
+                     Hash Cond: (a.c2 = b.c2)
+                     ->  Redistribute Motion 3:3  (slice2; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                           Hash Key: a.c2
+                           ->  Seq Scan on test_gang_reuse_t1 a  (cost=0.00..431.00 rows=1 width=4) (actual time=0.435..0.435 rows=0 loops=1)
+                     ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.016..0.018 rows=0 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4096kB
+                           ->  Redistribute Motion 3:3  (slice3; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.014..0.014 rows=0 loops=1)
+                                 Hash Key: b.c2
+                                 ->  Seq Scan on test_gang_reuse_t1 b  (cost=0.00..431.00 rows=1 width=4) (actual time=0.371..0.372 rows=0 loops=1)
+ Planning Time: 43.425 ms
+   (slice0)    Executor memory: 49K bytes.
+   (slice1)    Executor memory: 4121K bytes avg x 3 workers, 4121K bytes max (seg0).  Work_mem: 4096K bytes max.
+   (slice2)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+   (slice3)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+ Memory used:  129024kB
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Execution Time: 10.260 ms
+(21 rows)
+
+-- so in this query the gangs C, D and E should be used
+explain analyze select count(*) from test_gang_reuse_t1 a
+  join test_gang_reuse_t1 b using (c2)
+  join test_gang_reuse_t1 c using (c2)
+;
+                                                                                  QUERY PLAN                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=5.900..5.906 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; gang0; segments: 3)  (cost=0.00..1293.00 rows=1 width=8) (actual time=4.876..5.889 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=4.573..4.580 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1) (actual time=4.564..4.569 rows=0 loops=1)
+                     Hash Cond: (b.c2 = a.c2)
+                     ->  Redistribute Motion 3:3  (slice2; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                           Hash Key: b.c2
+                           ->  Seq Scan on test_gang_reuse_t1 b  (cost=0.00..431.00 rows=1 width=4) (actual time=0.335..0.336 rows=0 loops=1)
+                     ->  Hash  (cost=862.00..862.00 rows=1 width=4) (actual time=3.069..3.074 rows=0 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 2048kB
+                           ->  Hash Join  (cost=0.00..862.00 rows=1 width=4) (actual time=3.068..3.072 rows=0 loops=1)
+                                 Hash Cond: (a.c2 = c.c2)
+                                 ->  Redistribute Motion 3:3  (slice3; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                       Hash Key: a.c2
+                                       ->  Seq Scan on test_gang_reuse_t1 a  (cost=0.00..431.00 rows=1 width=4) (actual time=0.277..0.278 rows=0 loops=1)
+                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=1.691..1.693 rows=0 loops=1)
+                                       Buckets: 262144  Batches: 1  Memory Usage: 2048kB
+                                       ->  Redistribute Motion 3:3  (slice4; gang9; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=1.689..1.689 rows=0 loops=1)
+                                             Hash Key: c.c2
+                                             ->  Seq Scan on test_gang_reuse_t1 c  (cost=0.00..431.00 rows=1 width=4) (actual time=1.224..1.225 rows=0 loops=1)
+ Planning Time: 68.273 ms
+   (slice0)    Executor memory: 68K bytes.
+   (slice1)    Executor memory: 4133K bytes avg x 3 workers, 4133K bytes max (seg1).  Work_mem: 2048K bytes max.
+   (slice2)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+   (slice3)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+   (slice4)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+ Memory used:  129024kB
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Execution Time: 8.619 ms
+(29 rows)
+
+-- so in this query the gangs C and D should be used
+explain analyze select count(*) from test_gang_reuse_t1 a
+  join test_gang_reuse_t1 b using (c2)
+;
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=4.176..4.180 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; gang0; segments: 3)  (cost=0.00..862.00 rows=1 width=8) (actual time=4.010..4.160 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=3.684..3.689 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (actual time=3.675..3.679 rows=0 loops=1)
+                     Hash Cond: (a.c2 = b.c2)
+                     ->  Redistribute Motion 3:3  (slice2; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                           Hash Key: a.c2
+                           ->  Seq Scan on test_gang_reuse_t1 a  (cost=0.00..431.00 rows=1 width=4) (actual time=0.276..0.277 rows=0 loops=1)
+                     ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.852..0.854 rows=0 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4096kB
+                           ->  Redistribute Motion 3:3  (slice3; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.848..0.849 rows=0 loops=1)
+                                 Hash Key: b.c2
+                                 ->  Seq Scan on test_gang_reuse_t1 b  (cost=0.00..431.00 rows=1 width=4) (actual time=0.326..0.327 rows=0 loops=1)
+ Planning Time: 35.557 ms
+   (slice0)    Executor memory: 49K bytes.
+   (slice1)    Executor memory: 4121K bytes avg x 3 workers, 4121K bytes max (seg0).  Work_mem: 4096K bytes max.
+   (slice2)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+   (slice3)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+ Memory used:  129024kB
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Execution Time: 7.474 ms
+(21 rows)
+
+reset optimizer_force_multistage_agg;

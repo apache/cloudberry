@@ -1,0 +1,881 @@
+CREATE TABLE tenk_heap (
+	unique1 	int4,
+	unique2 	int4,
+	two 	 	int4,
+	four 		int4,
+	ten			int4,
+	twenty 		int4,
+	hundred 	int4,
+	thousand 	int4,
+	twothousand int4,
+	fivethous 	int4,
+	tenthous	int4,
+	odd			int4,
+	even		int4,
+	stringu1	name,
+	stringu2	name,
+	string4		name
+) with (appendonly=false) distributed by(unique1);
+
+--
+-- create few AO tables. test various reloptions combinations. use a sample
+-- of them (the first 4) for later testing.
+--
+-- valid
+CREATE TABLE tenk_ao1 (like tenk_heap) with (appendonly=true, checksum=true) distributed by(unique1);
+
+-- We used to check xmin here and other places in this test, but now the new gp_fastsequence
+-- rows are frozen via hintbits (HEAP_XMIN_FROZEN) so not checking that anymore.
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='tenk_ao1'));
+
+CREATE TABLE tenk_ao2 (like tenk_heap) with (appendonly=true, compresslevel=0, blocksize=262144) distributed by(unique1);
+CREATE TABLE tenk_ao3 (like tenk_heap) with (appendonly=true, compresslevel=6, blocksize=1048576, checksum=true) distributed by(unique1);
+CREATE TABLE tenk_ao4 (like tenk_heap) with (appendonly=true, compresslevel=1, compresstype=zlib) distributed by(unique1);
+CREATE TABLE tenk_ao5 (like tenk_heap) with (appendonly=true, compresslevel=6, compresstype=zlib, blocksize=1048576, checksum=true) distributed by(unique1);
+-- invalid
+CREATE TABLE tenk_ao6 (like tenk_heap) with (appendonly=false, compresslevel=6, checksum=true) distributed by(unique1);
+CREATE TABLE tenk_ao7 (like tenk_heap) with (appendonly=true, compresslevel=16, compresstype=zlib) distributed by(unique1);
+CREATE TABLE tenk_ao8 (like tenk_heap) with (appendonly=true, blocksize=100) distributed by(unique1);
+CREATE TABLE tenk_ao9 (like tenk_heap) with (appendonly=true, compresslevel=0, compresstype=zlib) distributed by(unique1);
+-- these should not work without appendonly=true
+CREATE TABLE tenk_ao10 (like tenk_heap) with (compresslevel=5);
+CREATE TABLE tenk_ao11 (like tenk_heap) with (blocksize=8192);
+CREATE TABLE tenk_ao12 (like tenk_heap) with (appendonly=false,blocksize=8192);
+
+-- appendoptimized is an alias for appendonly
+CREATE TABLE tenk_ao13 (like tenk_heap) with (appendoptimized=true);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendonly=true, appendoptimized=false);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendoptimized=maybe);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendoptimized=true, appendoptimized=true);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (orientation=row);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendoptimized=false, orientation=row);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendoptimized=true, orientation=foo);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendoptimized=true, orientation);
+CREATE TABLE tenk_ao14 (like tenk_heap) with (appendoptimized=true, orientation=row, orientation=row);
+CREATE TABLE tenk_ao15 (like tenk_heap) with (appendoptimized=true) 
+PARTITION BY RANGE(unique2)
+(
+START (0) end (1) WITH (appendoptimized=true),
+START (1) end (2) WITH (appendoptimized=true),
+START (2) end (3) WITH (appendoptimized=true)
+);
+CREATE TABLE tenk_ao16 (like tenk_heap) with (appendoptimized=true)
+PARTITION BY RANGE(unique2)
+(
+START (0) end (1) WITH (appendonly=true, appendoptimized=false),
+START (1) end (2) WITH (appendoptimized=true),
+START (2) end (3) WITH (appendoptimized=true)
+);
+
+-- also make sure appendoptimized works in the gp_default_storage_options GUC
+SET gp_default_storage_options = 'blocksize=32768,compresstype=none,checksum=true,orientation=row,appendoptimized=false';
+SET gp_default_storage_options = 'blocksize=32768,compresstype=none,checksum=true,orientation=row';
+SET gp_default_storage_options = 'blocksize=32768,compresstype=none,checksum=true,blocksize=8';
+SET gp_default_storage_options = 'blocksize=65536,compresstype=none,checksum=true';
+SHOW gp_default_storage_options;
+SET default_table_access_method = ao_row;
+SHOW default_table_access_method;
+CREATE TABLE tenk_ao14 (like tenk_heap);
+SELECT amhandler, reloptions FROM pg_class c, PG_AM a WHERE c.relname = 'tenk_ao14' AND c.relam = a.oid;
+RESET gp_default_storage_options;
+RESET default_table_access_method;
+
+-------------------- 
+-- catalog checks
+--------------------
+
+-- check pg_appendonly
+SELECT c.relname, a.blocksize, a.compresstype, a.compresslevel, a.checksum FROM pg_class c, pg_appendonly a
+       WHERE c.relname LIKE 'tenk_ao%' AND c.oid=a.relid AND c.relname not like 'tenk_aocs%' ORDER BY c.relname;
+
+--------------------
+-- fn needed later
+--------------------
+create  or replace function aototal(relname text) returns float8 as $$
+declare
+  aosegname text;
+  tupcount float8 := 0;
+  rc int := 0;
+begin
+
+  execute 'select relname from pg_class where oid=(select segrelid from pg_class, pg_appendonly where relname=''' || relname || ''' and relid = pg_class.oid)' into aosegname;
+  if aosegname is not null then
+          execute 'select sum(tupcount) from gp_dist_random(''pg_aoseg.' || aosegname || ''')' into tupcount;
+  end if;
+  return tupcount;
+end; $$ language plpgsql volatile READS SQL DATA;
+
+-- ------------------
+-- functions for snapshotting the current mod counts, and checking the diff
+-- vs last snapshot
+-- ------------------
+create temp table modcounts_snapshot (segment_id int, aosegno int, modcount bigint) distributed randomly;
+
+create or replace function snapshot_modcounts(relname regclass) returns void as $$
+begin
+  delete from modcounts_snapshot;
+
+  insert into modcounts_snapshot select segment_id, segno, modcount from  gp_toolkit.__gp_aoseg(relname);
+end;
+$$ language plpgsql volatile;
+
+create or replace function diff_modcounts(relname regclass, segment_id out int, aosegno out int, modcount_diff out bigint) returns setof record as $$
+  select a.segment_id, a.segno, a.modcount - coalesce(b.modcount, 0) mod_diff from gp_toolkit.__gp_aoseg($1) a left outer join modcounts_snapshot b on a.segment_id = b.segment_id and a.segno = b.aosegno;
+$$ language sql;
+
+-------------------- 
+-- supported sql
+--------------------
+
+-- COPY
+COPY tenk_heap FROM '@abs_srcdir@/data/tenk.data';
+COPY tenk_ao1 FROM '@abs_srcdir@/data/tenk.data';
+COPY tenk_ao2 FROM '@abs_srcdir@/data/tenk.data';
+COPY tenk_ao3 FROM '@abs_srcdir@/data/tenk.data';
+COPY tenk_ao4 FROM '@abs_srcdir@/data/tenk.data';
+ANALYZE tenk_heap;
+ANALYZE tenk_ao1;
+ANALYZE tenk_ao2;
+ANALYZE tenk_ao3;
+ANALYZE tenk_ao4;
+
+-- SELECT
+SELECT count(*) FROM tenk_heap;
+SELECT count(*) FROM tenk_ao1;
+SELECT count(*) FROM tenk_ao2;
+SELECT count(*) FROM tenk_ao3;
+SELECT count(*) FROM tenk_ao4;
+SELECT aototal('tenk_ao1'), aototal('tenk_ao2'), aototal('tenk_ao3'), aototal('tenk_ao4');
+
+-- INSERT SELECT
+INSERT INTO tenk_ao1 SELECT * FROM tenk_heap;
+INSERT INTO tenk_ao2 SELECT * FROM tenk_heap;
+INSERT INTO tenk_ao3 SELECT * FROM tenk_heap;
+INSERT INTO tenk_ao4 SELECT * FROM tenk_heap;
+
+-- mix and match some
+INSERT INTO tenk_ao1 SELECT * FROM tenk_ao1;
+INSERT INTO tenk_ao2 SELECT * FROM tenk_ao3;
+INSERT INTO tenk_ao3 SELECT * FROM tenk_ao2;
+INSERT INTO tenk_ao4 SELECT * FROM tenk_ao3;
+SELECT aototal('tenk_ao1'), aototal('tenk_ao2'), aototal('tenk_ao3'), aototal('tenk_ao4');
+
+-- SELECT
+SELECT count(*) FROM tenk_heap;
+SELECT count(*) FROM tenk_ao1;
+SELECT count(*) FROM tenk_ao2;
+SELECT count(*) FROM tenk_ao3;
+SELECT count(*) FROM tenk_ao4;
+
+--
+-- Test that the catalog eof entry doesn't change even if the file gets
+-- larger due to bad data that isn't cleaned up until the next VACUUM. 
+-- make sure the SELECT stops at eof (count is the same). 
+-- The first row is good (so it grows the file), the second is bad.
+--
+COPY tenk_ao1 FROM STDIN;
+88888800	0	0	0	0	0	0	800	800	3800	8800	0	1	MAAAAA	AAAAAA	AAAAxx
+bad data row
+\.
+COPY tenk_ao2 FROM STDIN;
+88888800	0	0	0	0	0	0	800	800	3800	8800	0	1	MAAAAA	AAAAAA	AAAAxx
+bad data row
+\.
+COPY tenk_ao3 FROM STDIN;
+88888800	0	0	0	0	0	0	800	800	3800	8800	0	1	MAAAAA	AAAAAA	AAAAxx
+bad data row
+\.
+COPY tenk_ao4 FROM STDIN;
+88888800	0	0	0	0	0	0	800	800	3800	8800	0	1	MAAAAA	AAAAAA	AAAAxx
+bad data row
+\.
+SELECT count(*) FROM tenk_ao1;
+SELECT count(*) FROM tenk_ao2;
+SELECT count(*) FROM tenk_ao3;
+SELECT count(*) FROM tenk_ao4;
+SELECT aototal('tenk_ao1'), aototal('tenk_ao2'), aototal('tenk_ao3'), aototal('tenk_ao4');
+
+-------------------- 
+-- transactionality
+--------------------
+-- rollback
+BEGIN;
+INSERT INTO tenk_ao1 SELECT * FROM tenk_heap;
+SELECT count(*) FROM tenk_ao1; -- should show new count
+ROLLBACK;
+SELECT count(*) FROM tenk_ao1; -- should show previous count
+SELECT aototal('tenk_ao1');
+-- gp_fastsequence should reflect bump in lastsequence, even if above
+-- transaction aborted as its tuples is in place updated.
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='tenk_ao1'));
+
+-- commit
+BEGIN;
+INSERT INTO tenk_ao1 SELECT * FROM tenk_heap;
+SELECT count(*) FROM tenk_ao1; -- should show new count
+COMMIT;
+SELECT count(*) FROM tenk_ao1; -- should show new count
+SELECT aototal('tenk_ao1');
+
+-- same txn inserts
+BEGIN;
+INSERT INTO tenk_ao1(unique1) VALUES(12345678);
+INSERT INTO tenk_ao1(unique1) VALUES(12345678);
+INSERT INTO tenk_ao1(unique1) VALUES(12345678);
+INSERT INTO tenk_ao1(unique1) VALUES(12345678);
+INSERT INTO tenk_ao1(unique1) VALUES(12345678);
+ROLLBACK;
+BEGIN;
+INSERT INTO tenk_ao1(unique1) VALUES(87654321);
+INSERT INTO tenk_ao1(unique1) VALUES(87654321);
+INSERT INTO tenk_ao1(unique1) VALUES(87654321);
+INSERT INTO tenk_ao1(unique1) VALUES(87654321);
+INSERT INTO tenk_ao1(unique1) VALUES(87654321);
+COMMIT;
+SELECT count(*) FROM tenk_ao1 WHERE unique1 = 12345678; -- should be 0
+SELECT count(*) FROM tenk_ao1 WHERE unique1 = 87654321; -- should be 5
+
+--------------------
+-- cursors (basic)
+--------------------
+BEGIN;
+
+DECLARE foo1 CURSOR FOR SELECT * FROM tenk_ao1 ORDER BY 1,2,3,4;
+DECLARE foo2 CURSOR FOR SELECT * FROM tenk_ao2 ORDER BY 1,2,3,4;
+FETCH 1 in foo1;
+FETCH 2 in foo2;
+FETCH 1 in foo1;
+FETCH 2 in foo2;
+CLOSE foo1;
+CLOSE foo2;
+END;
+
+BEGIN;
+DECLARE foo3 NO SCROLL CURSOR FOR SELECT * FROM tenk_ao1 ORDER BY 1,2,3,4;
+FETCH 1 FROM foo3;
+FETCH BACKWARD 1 FROM foo3; -- should fail
+END;
+
+-- Cursors outside transaction blocks
+BEGIN;
+DECLARE foo4 CURSOR WITH HOLD FOR SELECT * FROM tenk_ao1 ORDER BY 1,2,3,4;
+FETCH FROM foo4;
+FETCH FROM foo4;
+COMMIT;
+FETCH FROM foo4;
+SELECT name, statement, is_holdable, is_binary, is_scrollable FROM pg_cursors ORDER BY name;
+CLOSE foo4;
+
+-- DROP
+DROP TABLE tenk_ao1;
+DROP TABLE tenk_ao2;
+DROP TABLE tenk_ao3;
+DROP TABLE tenk_ao4;
+
+-- CTAS
+CREATE TABLE tenk_ao1 with(appendonly=true, checksum=true) AS SELECT * FROM tenk_heap DISTRIBUTED BY (unique1);
+-- Incase of CTAS also, gp_fastsequence entries must get created and use segfile 0
+
+-- With and without ORCA last_sequence fluctuates bit and hence using >= 3300 as
+-- inserting 10k tuples to 3 node system must atleast have last_sequence >= 3300
+-- on each node.
+SELECT objmod,
+       CASE WHEN last_sequence = 0 THEN 'zero'
+            WHEN last_sequence >= 3300 THEN '>= 3300'
+	    ELSE '1-2900' END AS last_sequence,
+       gp_segment_id
+FROM gp_dist_random('gp_fastsequence')
+WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (
+  SELECT oid FROM pg_class WHERE relname='tenk_ao1'));
+-- Since we check last_sequence for the tenk_ao2 table later, the data distribution should be same for orca and planner.
+-- If we don't specify the DISTRIBUTED BY caluse, ORCA will mark the table distributed randomly.
+CREATE TABLE tenk_ao2 with(appendonly=true, compresslevel=0, blocksize=262144) AS SELECT * FROM tenk_heap DISTRIBUTED BY (unique1);
+CREATE TABLE tenk_ao3 with(appendonly=true, compresslevel=6, blocksize=1048576, checksum=true) AS SELECT * FROM tenk_heap;
+CREATE TABLE tenk_ao4 with(appendonly=true, compresslevel=1, compresstype=zlib) AS SELECT * FROM tenk_heap;
+ANALYZE tenk_ao1;
+ANALYZE tenk_ao2;
+ANALYZE tenk_ao3;
+ANALYZE tenk_ao4;
+SELECT c.relname, a.blocksize, a.compresstype, a.compresslevel, a.checksum FROM pg_class c, pg_appendonly a
+       WHERE c.relname LIKE 'tenk_ao%' AND c.oid=a.relid AND c.relname not like 'tenk_aocs%' ORDER BY c.relname;
+SELECT count(*) FROM tenk_ao1;
+SELECT count(*) FROM tenk_ao2;
+SELECT count(*) FROM tenk_ao3;
+SELECT count(*) FROM tenk_ao4;
+
+-- Perform same transaction CREATE, followed by INSERT to validate
+-- gp_fastseqeunce is using normal xid and not frozen transaction id.
+BEGIN;
+CREATE TABLE appendonly_sametxn_create_insert(a int, b int) with (appendonly=true);
+INSERT INTO appendonly_sametxn_create_insert select * from generate_series(1, 10);
+-- Make sure insert is using segfile 0 for the insert, as part of create table itself.
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='appendonly_sametxn_create_insert'));
+INSERT INTO appendonly_sametxn_create_insert select * from generate_series(1, 10);
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='appendonly_sametxn_create_insert'));
+ABORT;
+
+-- test get_ao_compression_ratio. use uncompressed table, so result is always 1.
+SELECT get_ao_compression_ratio('tenk_ao2');
+
+-- VACUUM
+VACUUM tenk_ao1;
+VACUUM tenk_ao2;
+VACUUM tenk_ao3;
+VACUUM tenk_ao4;
+VACUUM FULL tenk_ao1;
+ANALYZE tenk_ao2;
+ANALYZE tenk_ao4;
+VACUUM ANALYZE tenk_ao3;
+
+SELECT count(*) FROM tenk_ao1;
+SELECT count(*) FROM tenk_ao2;
+SELECT count(*) FROM tenk_ao3;
+SELECT count(*) FROM tenk_ao4;
+
+-- JOIN
+SELECT count(*) FROM tenk_ao1 t1, tenk_ao2 t2 where t1.unique1 = t2.unique2;
+SELECT count(*) FROM tenk_ao1 t1, tenk_heap t2 where t1.unique1 = t2.unique2;
+SELECT count(*) FROM tenk_ao1 t1 INNER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2);
+SELECT count(*) FROM tenk_ao1 t1 LEFT OUTER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2);
+SELECT count(*) FROM tenk_ao1 t1 RIGHT OUTER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2);
+SELECT count(*) FROM tenk_ao1 t1 FULL OUTER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2);
+SELECT count(*) FROM tenk_ao1 t1 INNER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2) where t1.unique1 = 8095;
+SELECT count(*) FROM tenk_ao1 t1 LEFT OUTER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2) where t1.unique1 = 8095;
+SELECT count(*) FROM tenk_ao1 t1 RIGHT OUTER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2) where t1.unique1 = 8095;
+SELECT count(*) FROM tenk_ao1 t1 FULL OUTER JOIN tenk_ao2 t2 ON (t1.unique1 = t2.unique2) where t1.unique1 = 8095;
+
+CREATE TABLE empty_ao_table_for_join (like tenk_heap) with (appendonly=true) distributed by(unique1);
+SELECT count(*) FROM tenk_ao1 t1 INNER JOIN empty_ao_table_for_join t2 ON (t1.unique1 = t2.unique2);
+SELECT count(*) FROM tenk_ao1 t1 LEFT OUTER JOIN empty_ao_table_for_join t2 ON (t1.unique1 = t2.unique2);
+
+-- EXCEPT
+SELECT unique1 FROM tenk_ao1 EXCEPT SELECT unique1 FROM tenk_ao1;
+SELECT unique1 FROM tenk_heap EXCEPT SELECT unique1 FROM tenk_ao3;
+
+-- Get gp_fastsequence details before truncate
+SELECT objmod,
+       CASE WHEN last_sequence = 0 THEN 'zero'
+            WHEN last_sequence >= 3300 THEN '>= 3300'
+           ELSE '1-2900' END AS last_sequence,
+       gp_segment_id
+FROM gp_dist_random('gp_fastsequence')
+WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (
+  SELECT oid FROM pg_class WHERE relname='tenk_ao2'));
+
+-- TRUNCATE
+TRUNCATE tenk_ao2;
+
+-- Truncate changes relfilnode, as a result old pg_aoseg table is truncated and
+-- gp_fastsequence entries are also reinitialized.
+SELECT objmod,
+       CASE WHEN last_sequence = 0 THEN 'zero'
+            WHEN last_sequence >= 3300 THEN '>= 3300'
+           ELSE '1-2900' END AS last_sequence,
+       gp_segment_id
+FROM gp_dist_random('gp_fastsequence')
+WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (
+  SELECT oid FROM pg_class WHERE relname='tenk_ao2'));
+
+-- WITH OIDS is no longer supported
+CREATE TABLE aowithoids(a int, b int) WITH (appendonly=true,oids=true);
+
+-- CREATE INDEX
+CREATE INDEX tenk_ao1_unique1 ON tenk_ao1 USING btree(unique1 int4_ops);
+
+-- Verify that the visimap and block-directory indexes have unique and
+-- primary key constraints on them
+select indisunique, indisprimary from pg_index
+       where indexrelid = (select oid from pg_class where relname = 'pg_aovisimap_' || (select oid from pg_class where relname = 'tenk_ao1') || '_index');
+select indisunique, indisprimary from pg_index
+       where indexrelid = (select oid from pg_class where relname = 'pg_aoblkdir_' || (select oid from pg_class where relname = 'tenk_ao1') || '_index');
+
+drop table if exists ao;
+create table ao (i int, j int, k varchar) with(appendonly=true);
+insert into ao values (1,1,'a'), (2,2,'aa'), (3,3,'aaa'), (4,4,'aaaa'),
+	(5,5,'aaaaa'), (6,6,'aaaaaa'), (7,7,'aaaaaaa'), (8,8,'aaaaaaaa');
+analyze ao;
+create index ao_j on ao using btree(j);
+create index ao_k on ao using btree(k);
+create index ao_jk on ao using btree((j + length(k)));
+set enable_seqscan=off;
+select * from ao where j = 2;
+insert into ao values (9,1,'b'), (10,2,'bb'), (11,3,'bbb'), (12,4,'bbbb'),
+	(13,5,'aaaaa'), (14,6,'aaaaaa'), (15,7,'aaaaaaa'), (16,8,'aaaaaaaa');
+select * from ao where j = 2;
+insert into ao values (9,2,'b'), (10,2,'bb'), (11,2,'bbb'), (12,2,'bbbb'),
+	(13,5,'aaaaa'), (14,6,'aaaaaa'), (15,7,'aaaaaaa'), (16,8,'aaaaaaaa');
+select * from ao where j = 2;
+
+create index ao_ij on ao (i, j) with (fillfactor=10);
+alter index ao_ij set (fillfactor=20);
+reindex index ao_ij;
+select indexname from pg_indexes where tablename = 'ao' order by indexname;
+alter table ao alter j type bigint;
+alter table ao rename j to j_renamed;
+alter table ao drop column j_renamed;
+select tablename, attname, avg_width, n_distinct from pg_stats where tablename = 'ao' order by attname, tablename;
+create index ao_i on ao (i) where i = 9;
+analyze ao;
+select tablename, attname, avg_width, n_distinct from pg_stats where tablename = 'ao' order by attname, tablename;
+select indexname from pg_indexes where tablename = 'ao' order by indexname;
+select * from ao where i = 9;
+alter index ao_i rename to ao_i_renamed;
+select indexname from pg_indexes where tablename = 'ao' order by indexname;
+drop index if exists ao_i_renamed;
+
+drop table if exists ao;
+create table ao (i int, j int, k varchar) with(appendonly=true);
+insert into ao values (1,1,'a'), (2,2,'aa'), (3,3,'aaa'), (4,4,'aaaa'),
+	(5,5,'aaaaa'), (6,6,'aaaaaa'), (7,7,'aaaaaaa'), (8,8,'aaaaaaaa');
+create index ao_j on ao using bitmap(j);
+create index ao_k on ao using bitmap(k);
+create index ao_jk on ao using bitmap((j + length(k)));
+set enable_seqscan=off;
+select * from ao where j = 2;
+insert into ao values (9,1,'b'), (10,2,'bb'), (11,3,'bbb'), (12,4,'bbbb'),
+	(13,5,'aaaaa'), (14,6,'aaaaaa'), (15,7,'aaaaaaa'), (16,8,'aaaaaaaa');
+select * from ao where j = 2;
+insert into ao values (9,2,'b'), (10,2,'bb'), (11,2,'bbb'), (12,2,'bbbb'),
+	(13,5,'aaaaa'), (14,6,'aaaaaa'), (15,7,'aaaaaaa'), (16,8,'aaaaaaaa');
+select * from ao where j = 2;
+
+-- small test on a performance bug in bitmap indexes due to large tid gaps
+insert into ao select i, 0, 'aaaaaaa' from generate_series(1, 20) i;
+insert into ao select i, 1, 'aaa' from generate_series(1, 20) i;
+insert into ao select i, 2, 'a' from generate_series(1, 20) i;
+select distinct j from ao where j > -1 and j < 3 order by j;
+
+-- TEMP TABLES w/ INDEXES
+create temp table temp_tenk_ao5 with (appendonly=true, compresstype=zlib, compresslevel=1)
+    as select * from tenk_ao5 distributed by (unique1);
+create index temp_even_index on temp_tenk_ao5 (even);
+select count(*) from temp_tenk_ao5;
+select i.tablename, i.indexname, pg_get_indexdef(c.oid, 0, TRUE) from pg_indexes i join pg_class c on i.indexname=c.relname and i.tablename='temp_tenk_ao5';
+insert into temp_tenk_ao5(unique1, unique2) values (99998888, 99998888);
+update temp_tenk_ao5 set unique2 = 99998889 where unique2 = 99998888;
+delete from temp_tenk_ao5 where unique2 = 99998889;
+select count(*) from temp_tenk_ao5;
+vacuum analyze temp_tenk_ao5;
+truncate table temp_tenk_ao5;
+\d temp_tenk_ao5
+insert into temp_tenk_ao5(unique1, unique2) values (99998888, 99998888);
+select unique1 from temp_tenk_ao5;
+
+-- TEMP TABLES w/ COMMIT DROP AND USING PREPARE
+begin;
+prepare tenk_ao5_prep(int4) as select * from tenk_ao5 where unique1 > 8000;
+create temp table tenk_ao5_temp_drop with (appendonly=true, compresstype=zlib, compresslevel=1)
+    on commit drop as execute tenk_ao5_prep(8095);
+select count(*) from tenk_ao5_temp_drop;
+commit;
+select count(*) from tenk_ao5_temp_drop;
+
+-- TEMP TABLES w/ COMMIT DELETE ROWS
+begin;
+create temp table tenk_ao5_temp_delete_rows with (appendonly=true, compresstype=zlib, compresslevel=1)
+    on commit delete rows as select * from tenk_ao5 where unique1 > 8000 distributed by (unique1);
+select count(*) from tenk_ao5_temp_delete_rows;
+commit;
+select count(*) from tenk_ao5_temp_delete_rows;
+
+-- TEMP TABLES w/ COMMIT PRESERVE ROWS
+begin;
+create temp table tenk_ao5_temp_pres_rows with (appendonly=true, compresstype=zlib, compresslevel=1)
+    on commit preserve rows as select * from tenk_ao5 where unique1 > 8000 distributed by (unique1);
+select count(*) from tenk_ao5_temp_pres_rows;
+commit;
+select count(*) from tenk_ao5_temp_pres_rows;
+
+-- RULES
+insert into tenk_ao5(unique1, unique2) values (1, 99998889);
+create rule ao_rule_update as on insert to tenk_ao5 do instead update tenk_ao5 set two=2;
+insert into tenk_ao5(unique1, unique2) values (2, 99998889);
+select distinct two from tenk_ao5;
+create rule ao_rule_delete as on update to tenk_ao5 do instead delete from tenk_ao5 where unique1=1;
+insert into tenk_ao5(unique1, unique2) values (3, 99998889); -- should go through both rules
+select * from tenk_ao5 where unique1=1;
+
+---------------------
+-- UAO
+---------------------
+-- DELETE
+select count(*) from tenk_ao1;
+select snapshot_modcounts('tenk_ao1');
+select count(*) from diff_modcounts('tenk_ao1') where modcount_diff > 0; --sanity check our test function
+DELETE FROM tenk_ao1 WHERE unique1 = 1;
+-- modcount after DELETE must increment to flag table should be included in
+-- incremental backup
+select count(*) from diff_modcounts('tenk_ao1') where modcount_diff > 0;
+select count(*) from tenk_ao1;
+-- UPDATE
+select snapshot_modcounts('tenk_ao1');
+select count(*) from tenk_ao1 where unique2 < 0;
+select count(*) from diff_modcounts('tenk_ao1') where modcount_diff > 0; --sanity check our test function
+UPDATE tenk_ao1 SET unique2 = -unique1 WHERE unique2 <= 5;
+UPDATE tenk_ao1 SET two = 2;
+-- modcount after UPDATE must increment to flag table should be included in
+-- incremental backup
+select count(*) from diff_modcounts('tenk_ao1') where modcount_diff > 0;
+select count(*) from tenk_ao1 where unique2 < 0;
+
+-- ALTER
+ALTER TABLE tenk_ao1 RENAME TO tenk_renamed;
+ALTER TABLE tenk_renamed ADD COLUMN newcol int default 10;
+-- Validate post alter gp_fastsequence reflects correctly
+SELECT objmod, CASE
+WHEN objmod = 0 THEN last_sequence >= 3300 WHEN objmod = 1 THEN last_sequence =
+0 END, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid IN (SELECT
+segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class WHERE
+relname='tenk_renamed'));
+
+ALTER TABLE tenk_renamed ALTER COLUMN twothousand SET NOT NULL;
+ALTER TABLE tenk_renamed ADD COLUMN sercol serial; -- MPP-10015
+ALTER TABLE tenk_renamed ADD COLUMN newcol2 int NOT NULL; -- should fail
+SELECT count(*) FROM tenk_renamed;
+ALTER TABLE tenk_renamed RENAME TO tenk_ao1;
+
+--------------------
+-- system columns
+--------------------
+CREATE TABLE syscoltest(a int) WITH (appendonly=true);
+INSERT INTO syscoltest VALUES(1);
+SELECT ctid FROM syscoltest;
+DROP TABLE syscoltest;
+
+--------------------
+-- relation size tests -- make sure can execute without block directory, sanity checks on relative sizes
+--
+--
+--------------------
+CREATE TABLE aosizetest_1(a int) WITH (appendonly=true);
+CREATE TABLE aosizetest_2(a int) WITH (appendonly=true);
+--
+-- size will be < total size because of segrelid
+--
+SELECT pg_relation_size('aosizetest_1') < pg_total_relation_size('aosizetest_1') as total_exceeds_regular;
+--
+-- create currently build block directory, but dropping last index does not delete block directory...
+--  so we will verify that the size of _2 is greater than the size of _1 after this
+--
+CREATE INDEX aosizetest_2_idx on aosizetest_2(a);
+DROP INDEX aosizetest_2_idx;
+SELECT pg_total_relation_size('aosizetest_1') < pg_total_relation_size('aosizetest_2') as with_block_dir_exceeds_without;
+DROP TABLE aosizetest_1;
+DROP TABLE aosizetest_2;
+
+
+-- Check that pg_total_relation_size() returns a sane value for an AO table.
+-- (As of this writing, 1436104 bytes, but leave some slack for minor changes
+-- to indexes etc.)
+CREATE TABLE aosizetest_3(a text) WITH (appendonly=true);
+insert into aosizetest_3 select repeat('x', 100) from generate_series(1, 10000);
+SELECT pg_total_relation_size('aosizetest_3') between 1400000 and 1500000;
+
+
+-- These tests validate current segfile selection algorithm
+DROP TABLE IF EXISTS ao_selection;
+CREATE TABLE ao_selection (a INT, b INT) WITH (appendonly=true);
+INSERT INTO ao_selection VALUES (generate_series(1,100000), generate_series(1,10000));
+-- Validates insert is using single segfile to perform the insert to gp_fastsequence.
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='ao_selection'));
+-- Following insert without concurrency is also using same segfile as above
+INSERT INTO ao_selection values (generate_series(1,100000), generate_series(1,10000));
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='ao_selection'));
+
+-- Check compression and distribution
+create table ao_compress_table (id int, v varchar)
+    with (appendonly=true, compresstype=zlib, compresslevel=1) distributed by (id);
+create table ao_compress_results(table_size int, ao_compress_id_index_size int, ao_compress_v_index_size int) distributed randomly;
+create index ao_compress_id_index on ao_compress_table (id);
+create index ao_compress_v_index on ao_compress_table (v);
+insert into ao_compress_results values (pg_relation_size('ao_compress_table'), pg_relation_size('ao_compress_id_index'), pg_relation_size('ao_compress_v_index'));
+
+insert into ao_compress_table (id, v) values (1, 'ifyouwantto99knowwhatist8329histhenkeepreadingit;;untilyou]findoutyoureyeshurtandyoustil0ldontknow103kwhatitisdoyouunderstandmeyetandifyoustillwanttoknowthenyoupleasekeepreading');
+insert into ao_compress_results values (pg_relation_size('ao_compress_table'), pg_relation_size('ao_compress_id_index'), pg_relation_size('ao_compress_v_index'));
+
+select get_ao_compression_ratio('ao_compress_table');
+select get_ao_distribution('ao_compress_table');
+
+truncate table ao_compress_table; -- after truncate, reclaim space from the table and index
+insert into ao_compress_results values (pg_relation_size('ao_compress_table'), pg_relation_size('ao_compress_id_index'), pg_relation_size('ao_compress_v_index'));
+
+select count(*) from (select distinct * from ao_compress_results) temp; -- should give 2 after reclaiming space
+
+-- Same transaction truncate multiple times. This performs unsafe truncate means
+-- direct file truncate and not flipping the relfilenode.
+
+create table ao_truncate_multiple_times(a int) with (appendonly=true);
+insert into ao_truncate_multiple_times select * from generate_series(0, 9);
+begin;
+select * from ao_truncate_multiple_times;
+truncate table ao_truncate_multiple_times;
+select * from ao_truncate_multiple_times;
+insert into ao_truncate_multiple_times select * from generate_series(10, 19);
+select * from ao_truncate_multiple_times;
+truncate table ao_truncate_multiple_times;
+select * from ao_truncate_multiple_times;
+insert into ao_truncate_multiple_times select * from generate_series(20, 29);
+select * from ao_truncate_multiple_times;
+abort;
+select * from ao_truncate_multiple_times;
+
+-------------------- 
+-- supported sql 
+--------------------
+DROP TABLE tenk_heap;
+DROP TABLE tenk_ao1;
+DROP TABLE tenk_ao2;
+DROP TABLE tenk_ao3;
+DROP TABLE tenk_ao4;
+DROP TABLE tenk_ao5;
+DROP TABLE ao_selection;
+
+---------------------------------------------------------------
+-- Sub-transaction tests to validate AO behavior
+---------------------------------------------------------------
+-- create table in sub-transaction aborts but top transaction commits
+BEGIN;
+SAVEPOINT sp1;
+CREATE TABLE appendonly_subxans_test(a int, b int) WITH (appendonly=true);
+INSERT INTO appendonly_subxans_test SELECT * FROM generate_series(1, 10);
+SELECT objmod, last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='appendonly_subxans_test'));
+ROLLBACK TO SAVEPOINT sp1;
+COMMIT;
+
+-- create table and insert in nested subtransaction.
+-- The original purpose of this test is to validate that insert to gp_fastsequence
+-- is using NormalXid and not FrozenXid. But since now we do not set the xmin to
+-- FrozenTransactionXid anymore, it makes less sense in that regard, but this
+-- nested transaction case might still be valuable, so keep running it.
+BEGIN;
+SAVEPOINT sp1;
+CREATE TABLE appendonly_subxans_test(a int, b int) WITH (appendonly=true);
+
+select oid as appendonly_subxans_test_oid from pg_class
+where relname = 'appendonly_subxans_test' \gset
+
+SAVEPOINT sp2;
+
+INSERT INTO appendonly_subxans_test SELECT * FROM generate_series(1, 10);
+
+SELECT CASE WHEN xmin = 2 THEN 'FrozenXid' ELSE 'NormalXid' END, objmod,
+last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence')
+WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid =:appendonly_subxans_test_oid);
+
+ROLLBACK TO SAVEPOINT sp1;
+COMMIT;
+
+-- No entry should have leaked in gp_fastsequence after subtransaction
+-- rollback.
+SELECT CASE WHEN xmin = 2 THEN 'FrozenXid' ELSE 'NormalXid' END, objmod,
+last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence')
+WHERE objid IN (SELECT segrelid FROM pg_appendonly WHERE relid =:appendonly_subxans_test_oid);
+
+-- create table and insert in independent subtransactions, validate insert to
+-- gp_fastsequence is using NormalXid and not FrozenXid and stays despite
+-- inserting subtransaction aborting.
+BEGIN;
+SAVEPOINT sp1;
+CREATE TABLE appendonly_subxans_test1(a int, b int) WITH (appendonly=true);
+RELEASE SAVEPOINT sp1;
+SAVEPOINT sp2;
+INSERT INTO appendonly_subxans_test1 SELECT * FROM generate_series(1, 10);
+SELECT CASE WHEN xmin = 2 THEN 'FrozenXid' ELSE 'NormalXid' END, objmod,
+last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='appendonly_subxans_test1'));
+ROLLBACK TO SAVEPOINT sp2;
+COMMIT;
+ANALYZE appendonly_subxans_test1;
+SELECT * FROM appendonly_subxans_test1;
+SELECT CASE WHEN xmin = 2 THEN 'FrozenXid' ELSE 'NormalXid' END, objmod,
+last_sequence, gp_segment_id from gp_dist_random('gp_fastsequence') WHERE objid
+IN (SELECT segrelid FROM pg_appendonly WHERE relid IN (SELECT oid FROM pg_class
+WHERE relname='appendonly_subxans_test1'));
+
+-- create table in top transaction but first insert in sub-transaction
+BEGIN;
+CREATE TABLE appendonly_subxans_test(a int, b int) WITH (appendonly=true);
+create index appendonly_subxans_test_idx on appendonly_subxans_test using btree(a);
+SAVEPOINT sp1;
+insert into appendonly_subxans_test select * from generate_series(1, 10);
+ROLLBACK TO SAVEPOINT sp1;
+insert into appendonly_subxans_test select * from generate_series(11, 20);
+COMMIT;
+ANALYZE appendonly_subxans_test;
+-- Validation to make sure gp_fastsequence is not broken. If gp_fastsequence is
+-- malfunctioning then this will return wrong result.
+SELECT * FROM appendonly_subxans_test WHERE a < 10;
+
+CREATE ROLE appendony_test_user2;
+BEGIN;
+CREATE TABLE fo(a int, b int) WITH (appendonly=true);
+CREATE INDEX foidx ON fo USING btree(a);
+SAVEPOINT sp1;
+ALTER TABLE fo OWNER TO appendony_test_user2;
+INSERT INTO fo SELECT i,i FROM generate_series(1, 10)i;
+ROLLBACK TO SAVEPOINT sp1;
+INSERT INTO fo SELECT i,i FROM generate_series(11, 20)i;
+COMMIT;
+SET enable_seqscan=off;
+SET enable_indexscan=on;
+SET enable_bitmapscan=on;
+SELECT * FROM fo WHERE a < 10;
+RESET enable_seqscan;
+RESET enable_indexscan;
+RESET enable_bitmapscan;
+DROP OWNED BY appendony_test_user2 CASCADE;
+DROP ROLE IF EXISTS appendony_test_user2;
+
+---------------------------------------------------------------
+-- Triggers
+---------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION ao_trigger_func() RETURNS trigger LANGUAGE plpgsql AS $$
+begin
+  raise notice 'new: %', NEW;
+  return new;
+end;
+$$;
+create table trigger_ao_test (id int4, t text) with (appendonly=true, orientation=row);
+create table trigger_aocs_test (id int4, t text) with (appendonly=true, orientation=column);
+
+CREATE TRIGGER show_trigger_data_trig_on_insert BEFORE INSERT ON trigger_ao_test
+FOR EACH ROW EXECUTE PROCEDURE ao_trigger_func();
+CREATE TRIGGER show_trigger_data_trig_on_insert BEFORE INSERT ON trigger_aocs_test
+FOR EACH ROW EXECUTE PROCEDURE ao_trigger_func();
+
+-- UPDATE or DELETE triggers are not supporeted on AO tables
+CREATE TRIGGER show_trigger_data_trig_on_update BEFORE UPDATE ON trigger_ao_test
+FOR EACH ROW EXECUTE PROCEDURE ao_trigger_func();
+CREATE TRIGGER show_trigger_data_trig_on_update BEFORE UPDATE ON trigger_aocs_test
+FOR EACH ROW EXECUTE PROCEDURE ao_trigger_func();
+CREATE TRIGGER show_trigger_data_trig_on_delete BEFORE DELETE ON trigger_ao_test
+FOR EACH ROW EXECUTE PROCEDURE ao_trigger_func();
+CREATE TRIGGER show_trigger_data_trig_on_delete BEFORE DELETE ON trigger_aocs_test
+FOR EACH ROW EXECUTE PROCEDURE ao_trigger_func();
+
+INSERT INTO trigger_ao_test VALUES (1, 'foo');
+INSERT INTO trigger_aocs_test VALUES (1, 'bar');
+
+COPY trigger_ao_test FROM STDIN;
+2	foocopy
+\.
+
+COPY trigger_aocs_test FROM STDIN;
+2	barcopy
+\.
+
+SELECT * FROM trigger_ao_test;
+SELECT * FROM trigger_aocs_test;
+
+-----------------
+-- Inheritance
+-----------------
+
+CREATE TABLE ao_inh_p1(a int, b int) WITH (appendonly = true) DISTRIBUTED RANDOMLY;
+CREATE TABLE ao_inh_p2(a int, b int) INHERITS (ao_inh_p1) WITH (appendonly = true) DISTRIBUTED RANDOMLY;
+CREATE TABLE ao_inh_p3(a int, b int) INHERITS (ao_inh_p1) WITH (appendonly = true);
+CREATE TABLE ao_inh_p4(a int, b int, c int) INHERITS (ao_inh_p2) WITH (appendonly = true);
+
+insert into ao_inh_p1 values (1, 1);
+insert into ao_inh_p2 values (2, 2);
+insert into ao_inh_p3 values (3, 3);
+insert into ao_inh_p4 values (4, 4);
+insert into ao_inh_p4 select g, g, g from generate_series(10, 15) g;
+
+select * from ao_inh_p1;
+select * from ao_inh_p2;
+select * from ao_inh_p4;
+
+update ao_inh_p1 set a = a + 1;
+update ao_inh_p2 set b = b + 1;
+
+delete from ao_inh_p1 where a = 13;
+
+select * from ao_inh_p1;
+select * from ao_inh_p4;
+
+
+--------------------------------------------------------------------------------
+-- Finally check to detect if any dangling gp_fastsequence entries are left
+-- behind by this SQL file
+--------------------------------------------------------------------------------
+SELECT objid FROM gp_fastsequence AS gfs LEFT OUTER JOIN (SELECT oid FROM
+pg_class) AS pgc ON (gfs.objid = pgc.oid) WHERE pgc.oid IS NULL;
+
+-- test case for append optimized columnar bitmap scan when row level bitmap is promoted to page level
+
+drop table if exists bms_ao_bug;
+create table bms_ao_bug
+(c1 int not null,
+c2 int not null,
+c3 char(100) not null)
+with (appendonly=true, compresstype=zlib)
+distributed by (c1)
+;
+
+insert into bms_ao_bug select 1, 1, a.c1::char(100) from generate_series(1, 2000000) a(c1);
+
+create index bms_ao_bug_ix1 on bms_ao_bug (c2);
+
+set enable_seqscan=off;
+set work_mem=256;
+
+select
+a.c1,
+count(*) row_cnt
+from bms_ao_bug a
+where a.c2 = 1
+group by
+a.c1
+;
+
+drop table bms_ao_bug;
+
+
+-- test truncate ao table in current transaction and sub-transaction
+-- more details can look at https://github.com/greenplum-db/gpdb/issues/13699
+
+-- should success, create and truncate ao table in the same transaction;
+begin;
+create table fix_ao_truncate_last_sequence(a int, b int) with (appendonly = true);
+create index index_fix_ao_truncate_last_sequence on fix_ao_truncate_last_sequence(b);
+insert into fix_ao_truncate_last_sequence select i, i from generate_series(1, 5) i;
+select count(*) from fix_ao_truncate_last_sequence;
+truncate table fix_ao_truncate_last_sequence;
+select count(*) from fix_ao_truncate_last_sequence;
+abort;
+
+-- should success, create and truncate ao table in the different transaction,
+-- and create index for it.
+begin;
+create table fix_ao_truncate_last_sequence(a int, b int) with (appendonly = true);
+create index index_fix_ao_truncate_last_sequence on fix_ao_truncate_last_sequence(b);
+insert into fix_ao_truncate_last_sequence select i, i from generate_series(1, 5) i;
+select count(*) from fix_ao_truncate_last_sequence;
+savepoint s1;
+truncate table fix_ao_truncate_last_sequence;
+insert into fix_ao_truncate_last_sequence select 1, 1 from generate_series(1, 10);
+select count(*) from fix_ao_truncate_last_sequence;
+rollback to s1;
+select count(*) from fix_ao_truncate_last_sequence;
+truncate table fix_ao_truncate_last_sequence;
+insert into fix_ao_truncate_last_sequence select 1, 1 from generate_series(1, 5);
+select count(*) from fix_ao_truncate_last_sequence;
+abort;
+

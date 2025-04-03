@@ -1,0 +1,110 @@
+--
+-- Cloudberry disallows concurrent index creation. It allows concurrent index
+-- drops, so we want to test for it. Though, due to this difference with
+-- upstream we can not keep the tests completely in sync and we add them here.
+-- Original tests are in create_index.sql
+--
+CREATE TABLE tbl_drop_ind_concur (f1 text, f2 text, dk text) distributed by (dk);
+CREATE INDEX tbl_drop_index1 ON tbl_drop_ind_concur(f2,f1);
+INSERT INTO tbl_drop_ind_concur VALUES  ('a','b', '1');
+INSERT INTO tbl_drop_ind_concur VALUES  ('b','b', '1');
+INSERT INTO tbl_drop_ind_concur VALUES  ('c','c', '2');
+INSERT INTO tbl_drop_ind_concur VALUES  ('d','d', '3');
+CREATE UNIQUE INDEX tbl_drop_index2 ON tbl_drop_ind_concur(dk, f1);
+CREATE INDEX tbl_drop_index3 on tbl_drop_ind_concur(f2) WHERE f1='a';
+CREATE INDEX tbl_drop_index4 on tbl_drop_ind_concur(f2) WHERE f1='x';
+DROP INDEX CONCURRENTLY "tbl_drop_index2";				-- works
+DROP INDEX CONCURRENTLY IF EXISTS "tbl_drop_index2";		-- notice
+NOTICE:  index "tbl_drop_index2" does not exist, skipping
+-- failures
+DROP INDEX CONCURRENTLY "tbl_drop_index2", "tbl_drop_index3";
+ERROR:  DROP INDEX CONCURRENTLY does not support dropping multiple objects
+BEGIN;
+DROP INDEX CONCURRENTLY "tbl_drop_index4";
+ERROR:  DROP INDEX CONCURRENTLY cannot run inside a transaction block
+ROLLBACK;
+-- successes
+DROP INDEX CONCURRENTLY IF EXISTS "tbl_drop_index3";
+DROP INDEX CONCURRENTLY "tbl_drop_index4";
+DROP INDEX CONCURRENTLY "tbl_drop_index1";
+\d tbl_drop_ind_concur
+       Table "public.tbl_drop_ind_concur"
+ Column | Type | Collation | Nullable | Default 
+--------+------+-----------+----------+---------
+ f1     | text |           |          | 
+ f2     | text |           |          | 
+ dk     | text |           |          | 
+Distributed by: (dk)
+
+DROP TABLE tbl_drop_ind_concur;
+-- Creating UNIQUE/PRIMARY KEY index is disallowed to change the distribution
+-- keys implicitly
+CREATE TABLE tbl_create_index(i int, j int, k int) distributed by(i, j);
+-- should fail
+CREATE UNIQUE INDEX ON tbl_create_index(i);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "j" is not included in the constraint.
+CREATE UNIQUE INDEX ON tbl_create_index(k);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "i" is not included in the constraint.
+CREATE UNIQUE INDEX ON tbl_create_index(i, k);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "j" is not included in the constraint.
+ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(i);
+ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "j" is not included in the constraint.
+ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(k);
+ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "i" is not included in the constraint.
+ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(i, k);
+ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "j" is not included in the constraint.
+-- should success
+CREATE UNIQUE INDEX tbl_create_index_ij ON tbl_create_index(i, j);
+CREATE UNIQUE INDEX tbl_create_index_ijk ON tbl_create_index(i, j, k);
+\d tbl_create_index
+          Table "public.tbl_create_index"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ i      | integer |           |          | 
+ j      | integer |           |          | 
+ k      | integer |           |          | 
+Indexes:
+    "tbl_create_index_ij" UNIQUE, btree (i, j)
+    "tbl_create_index_ijk" UNIQUE, btree (i, j, k)
+Distributed by: (i, j)
+
+DROP INDEX tbl_create_index_ij;
+DROP INDEX tbl_create_index_ijk;
+ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(i, j, k);
+\d tbl_create_index
+          Table "public.tbl_create_index"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ i      | integer |           | not null | 
+ j      | integer |           | not null | 
+ k      | integer |           | not null | 
+Indexes:
+    "pkey" PRIMARY KEY, btree (i, j, k)
+Distributed by: (i, j)
+
+ALTER TABLE tbl_create_index DROP CONSTRAINT PKEY;
+-- after changing the distribution keys, the above failed clause should success
+ALTER TABLE tbl_create_index SET DISTRIBUTED BY(k);
+CREATE UNIQUE INDEX ON tbl_create_index(k);
+CREATE UNIQUE INDEX ON tbl_create_index(i, k);
+ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(i, k);
+\d tbl_create_index
+          Table "public.tbl_create_index"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ i      | integer |           | not null | 
+ j      | integer |           | not null | 
+ k      | integer |           | not null | 
+Indexes:
+    "pkey" PRIMARY KEY, btree (i, k)
+    "tbl_create_index_i_k_idx" UNIQUE, btree (i, k)
+    "tbl_create_index_k_idx" UNIQUE, btree (k)
+Distributed by: (k)
+
+DROP TABLE tbl_create_index;

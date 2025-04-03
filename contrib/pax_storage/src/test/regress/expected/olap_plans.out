@@ -1,0 +1,335 @@
+--
+-- Test the planner's ability to produce different kinds of plans to implement
+-- grouping and aggregation.
+--
+drop table if exists olap_test;
+NOTICE:  table "olap_test" does not exist, skipping
+drop table if exists olap_test_single;
+NOTICE:  table "olap_test_single" does not exist, skipping
+create table olap_test(a int4, b int4, c int4, d int4) distributed by (a, b);
+insert into olap_test select g / 5000, g / 1000, g / 500, g from generate_series(1, 10000) g;
+analyze olap_test;
+create table olap_test_single(a int4, b int4, c int4, d int4) distributed by (a);
+insert into olap_test_single select g / 5000, g / 1000, g / 500, g from generate_series(1, 10000) g;
+analyze olap_test_single;
+-- If the GROUP BY is a superset of the table's distribution keys, the
+-- aggregation can be independently in segments, and just gather the
+-- results. (1-phase agg)
+explain select a, b, sum(d) from olap_test group by a, b;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=190.93..191.26 rows=33 width=16)
+   ->  HashAggregate  (cost=190.93..191.26 rows=11 width=16)
+         Group Key: a, b
+         ->  Seq Scan on olap_test  (cost=0.00..116.00 rows=3334 width=12)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select a, b, sum(d) from olap_test group by a, b;
+ a | b  |   sum   
+---+----+---------
+ 1 |  6 | 6499500
+ 0 |  2 | 2499500
+ 0 |  1 | 1499500
+ 1 |  5 | 5499500
+ 1 |  8 | 8499500
+ 1 |  9 | 9499500
+ 0 |  3 | 3499500
+ 1 |  7 | 7499500
+ 0 |  0 |  499500
+ 2 | 10 |   10000
+ 0 |  4 | 4499500
+(11 rows)
+
+explain select a, b, c, sum(d) from olap_test group by a, b, c;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=215.30..222.23 rows=693 width=20)
+   ->  HashAggregate  (cost=215.30..222.23 rows=231 width=20)
+         Group Key: a, b, c
+         ->  Seq Scan on olap_test  (cost=0.00..116.00 rows=3334 width=16)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select a, b, c, sum(d) from olap_test group by a, b, c;
+ a | b  | c  |   sum   
+---+----+----+---------
+ 1 |  6 | 13 | 3374750
+ 1 |  6 | 12 | 3124750
+ 0 |  2 |  4 | 1124750
+ 1 |  5 | 11 | 2874750
+ 1 |  5 | 10 | 2624750
+ 0 |  2 |  5 | 1374750
+ 0 |  1 |  2 |  624750
+ 0 |  1 |  3 |  874750
+ 0 |  4 |  8 | 2124750
+ 0 |  0 |  1 |  374750
+ 1 |  7 | 14 | 3624750
+ 1 |  7 | 15 | 3874750
+ 0 |  4 |  9 | 2374750
+ 2 | 10 | 20 |   10000
+ 1 |  8 | 16 | 4124750
+ 0 |  3 |  6 | 1624750
+ 0 |  3 |  7 | 1874750
+ 1 |  8 | 17 | 4374750
+ 1 |  9 | 18 | 4624750
+ 0 |  0 |  0 |  124750
+ 1 |  9 | 19 | 4874750
+(21 rows)
+
+-- If it's not a superset, redistribution is needed.
+explain select a, sum(d) from olap_test group by a;
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=56.11..56.16 rows=3 width=12)
+   ->  Finalize HashAggregate  (cost=56.11..56.12 rows=1 width=12)
+         Group Key: a
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=56.00..56.09 rows=3 width=12)
+               Hash Key: a
+               ->  Partial HashAggregate  (cost=56.00..56.03 rows=3 width=12)
+                     Group Key: a
+                     ->  Seq Scan on olap_test  (cost=0.00..39.33 rows=3333 width=8)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select a, sum(d) from olap_test group by a;
+ a |   sum    
+---+----------
+ 2 |    10000
+ 1 | 37497500
+ 0 | 12497500
+(3 rows)
+
+-- Two-phase plain agg
+explain select sum(d) from olap_test;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=141.03..141.04 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=141.00..141.03 rows=1 width=8)
+         ->  Partial Aggregate  (cost=141.00..141.01 rows=1 width=8)
+               ->  Seq Scan on olap_test  (cost=0.00..116.00 rows=3334 width=4)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select sum(d) from olap_test;
+   sum    
+----------
+ 50005000
+(1 row)
+
+--
+-- DISTINCT aggregates
+--
+-- If the DISTINCT argument matches the distribution key, two-stage aggregation
+-- is possible.
+explain select sum(distinct a) from olap_test_single;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=140.03..140.04 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=140.00..140.03 rows=1 width=8)
+         ->  Partial Aggregate  (cost=140.00..140.01 rows=1 width=8)
+               ->  Seq Scan on olap_test_single  (cost=0.00..115.00 rows=3334 width=4)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select sum(distinct a) from olap_test_single;
+ sum 
+-----
+   3
+(1 row)
+
+-- Otherwise, need a more complicated plans
+explain select sum(distinct b) from olap_test_single;
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=166.23..166.24 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=166.19..166.22 rows=1 width=8)
+         ->  Partial Aggregate  (cost=166.19..166.20 rows=1 width=8)
+               ->  HashAggregate  (cost=166.16..166.19 rows=1 width=4)
+                     Group Key: b
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=165.00..165.99 rows=11 width=4)
+                           Hash Key: b
+                           ->  Streaming HashAggregate  (cost=165.00..165.33 rows=11 width=4)
+                                 Group Key: b
+                                 ->  Seq Scan on olap_test_single  (cost=0.00..115.00 rows=3334 width=4)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select sum(distinct b) from olap_test_single;
+ sum 
+-----
+  55
+(1 row)
+
+-- If there are a lot of distinct values, then the preliminary aggregation and
+-- redistribution steps are not worth the trouble, it's cheaper to just gather
+-- all the input
+explain select sum(distinct d) from olap_test_single;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Aggregate  (cost=340.00..340.01 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..315.00 rows=10000 width=4)
+         ->  Seq Scan on olap_test_single  (cost=0.00..115.00 rows=3334 width=4)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select sum(distinct d) from olap_test_single;
+   sum    
+----------
+ 50005000
+(1 row)
+
+--
+-- GROUPING SETS
+--
+set gp_motion_cost_per_row=1.0;
+-- If the query produces a relatively small number of groups in comparison to
+-- the number of input rows, two-stage aggregation will be picked.
+explain select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c));
+                                         QUERY PLAN                                         
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=379.01..557.90 rows=267 width=20)
+   ->  Finalize HashAggregate  (cost=379.01..379.90 rows=89 width=20)
+         Group Key: a, b, c, (GROUPINGSET_ID())
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=64.33..375.67 rows=267 width=20)
+               Hash Key: a, b, c, (GROUPINGSET_ID())
+               ->  Partial HashAggregate  (cost=64.33..108.67 rows=267 width=20)
+                     Hash Key: a, b
+                     Hash Key: a
+                     Hash Key: b, c
+                           ->  Seq Scan on olap_test  (cost=0.00..39.33 rows=3333 width=16)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c));
+ a | b  | c  |   sum    
+---+----+----+----------
+ 0 |  0 |    |   499500
+ 0 |  1 |    |  1499500
+ 0 |  2 |    |  2499500
+ 0 |  3 |    |  3499500
+ 0 |  4 |    |  4499500
+ 1 |  5 |    |  5499500
+ 1 |  6 |    |  6499500
+ 1 |  7 |    |  7499500
+ 1 |  8 |    |  8499500
+ 1 |  9 |    |  9499500
+ 2 | 10 |    |    10000
+ 0 |    |    | 12497500
+ 1 |    |    | 37497500
+ 2 |    |    |    10000
+   |  0 |  0 |   124750
+   |  0 |  1 |   374750
+   |  1 |  2 |   624750
+   |  1 |  3 |   874750
+   |  2 |  4 |  1124750
+   |  2 |  5 |  1374750
+   |  3 |  6 |  1624750
+   |  3 |  7 |  1874750
+   |  4 |  8 |  2124750
+   |  4 |  9 |  2374750
+   |  5 | 10 |  2624750
+   |  5 | 11 |  2874750
+   |  6 | 12 |  3124750
+   |  6 | 13 |  3374750
+   |  7 | 14 |  3624750
+   |  7 | 15 |  3874750
+   |  8 | 16 |  4124750
+   |  8 | 17 |  4374750
+   |  9 | 18 |  4624750
+   |  9 | 19 |  4874750
+   | 10 | 20 |    10000
+(35 rows)
+
+-- If the query produces a relatively large number of groups in comparison to
+-- the number of input rows, one-stage aggregation will be picked.
+explain select a, b, d, sum(d) from olap_test group by grouping sets((a, b), (a), (b, d));
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ HashAggregate  (cost=392.00..617.36 rows=10036 width=20)
+   Hash Key: a, b
+   Hash Key: a
+   Hash Key: b, d
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..317.00 rows=10000 width=12)
+         ->  Seq Scan on olap_test  (cost=0.00..117.00 rows=3334 width=12)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+-- do not execute this query as it would produce too many tuples.
+-- Test that when the second-stage Agg doesn't try to preserve the
+-- GROUPINGSET_ID(), used internally in the plan, in the result order. We had
+-- a bug like that at one point.
+--
+-- The notable thing in the plan is that the Sort node has GROUPINGSET_ID() in
+-- the Sort Key, as needed for the Finalize GroupAggregate, but in the Motion
+-- above the Finalize GroupAggregate, the GROUPINGSET_ID() has been dropped
+-- from the Merge Key.
+set enable_hashagg=off;
+explain select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c)) limit 200;
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=777.19..912.19 rows=200 width=20)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=777.19..1182.19 rows=600 width=20)
+         Merge Key: a, b, c
+         ->  Limit  (cost=777.19..782.19 rows=200 width=20)
+               ->  Finalize GroupAggregate  (cost=776.52..783.20 rows=267 width=20)
+                     Group Key: a, b, c, (GROUPINGSET_ID())
+                     ->  Sort  (cost=776.52..777.19 rows=267 width=20)
+                           Sort Key: a, b, c, (GROUPINGSET_ID())
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=234.38..765.76 rows=267 width=20)
+                                 Hash Key: a, b, c, (GROUPINGSET_ID())
+                                 ->  Partial GroupAggregate  (cost=234.38..498.76 rows=267 width=20)
+                                       Group Key: a, b
+                                       Group Key: a
+                                       Sort Key: b, c
+                                         Group Key: b, c
+                                       ->  Sort  (cost=234.38..242.71 rows=3333 width=16)
+                                             Sort Key: a, b
+                                             ->  Seq Scan on olap_test  (cost=0.00..39.33 rows=3333 width=16)
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+reset enable_hashagg;
+--
+-- Test an optimization in the grouping planner for CREATE TABLE AS, where
+-- partial aggregation results are redistributed directly according to the
+-- target table's distribution keys, if they're a subset of the GROUP BY
+-- columns.
+--
+create table foo_ctas(a int, b int) distributed randomly;
+insert into foo_ctas select g%5, g%2 from generate_series(1, 100) g;
+analyze foo_ctas;
+explain create table bar_ctas as select * from foo_ctas group by a, b distributed by (b);
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ HashAggregate  (cost=11.47..11.51 rows=3 width=8)
+   Group Key: a, b
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=1.50..11.42 rows=10 width=8)
+         Hash Key: b
+         ->  HashAggregate  (cost=1.50..1.60 rows=10 width=8)
+               Group Key: a, b
+               ->  Seq Scan on foo_ctas  (cost=0.00..1.33 rows=33 width=8)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+create table bar_ctas as select * from foo_ctas group by a, b distributed by (b);
+-- Currently, the planner misses this optimization with INSERT, so this
+-- needs an extra Redistribute Motion.
+explain insert into bar_ctas select * from foo_ctas group by a, b;
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Insert on bar_ctas  (cost=11.47..14.87 rows=3 width=8)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=11.47..14.87 rows=3 width=8)
+         Hash Key: foo_ctas.b
+         ->  HashAggregate  (cost=11.47..11.51 rows=3 width=8)
+               Group Key: foo_ctas.a, foo_ctas.b
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=1.50..11.42 rows=10 width=8)
+                     Hash Key: foo_ctas.a, foo_ctas.b
+                     ->  HashAggregate  (cost=1.50..1.60 rows=10 width=8)
+                           Group Key: foo_ctas.a, foo_ctas.b
+                           ->  Seq Scan on foo_ctas  (cost=0.00..1.33 rows=33 width=8)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+drop table foo_ctas;
+drop table bar_ctas;

@@ -1,0 +1,623 @@
+-- TODO: incremental sort is turned off by default, because it may have
+-- wrong result for some core case. Turn it on to run the existing tests
+-- and minimize the difference from upstream.
+set enable_incremental_sort=on;
+-- only use parallelism when explicitly intending to do so
+SET max_parallel_maintenance_workers = 0;
+SET max_parallel_workers = 0;
+-- A table with contents that, when sorted, triggers abbreviated
+-- key aborts. One easy way to achieve that is to use uuids that all
+-- have the same prefix, as abbreviated keys for uuids just use the
+-- first sizeof(Datum) bytes.
+CREATE TEMP TABLE abbrev_abort_uuids (
+    id serial not null,
+    abort_increasing uuid,
+    abort_decreasing uuid,
+    noabort_increasing uuid,
+    noabort_decreasing uuid);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO abbrev_abort_uuids (abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing)
+    SELECT
+        ('00000000-0000-0000-0000-'||to_char(g.i, '000000000000FM'))::uuid abort_increasing,
+        ('00000000-0000-0000-0000-'||to_char(20000 - g.i, '000000000000FM'))::uuid abort_decreasing,
+        (to_char(g.i % 10009, '00000000FM')||'-0000-0000-0000-'||to_char(g.i, '000000000000FM'))::uuid noabort_increasing,
+        (to_char(((20000 - g.i) % 10009), '00000000FM')||'-0000-0000-0000-'||to_char(20000 - g.i, '000000000000FM'))::uuid noabort_decreasing
+    FROM generate_series(0, 20000, 1) g(i);
+-- and a few NULLs
+INSERT INTO abbrev_abort_uuids(id) VALUES(0);
+INSERT INTO abbrev_abort_uuids DEFAULT VALUES;
+INSERT INTO abbrev_abort_uuids DEFAULT VALUES;
+-- add just a few duplicates
+INSERT INTO abbrev_abort_uuids (abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing)
+    SELECT abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+    FROM abbrev_abort_uuids
+    WHERE (id < 10 OR id > 19990) AND id % 3 = 0 AND abort_increasing is not null AND gp_segment_id = 0;
+----
+-- Check sort node uses of tuplesort wrt. abbreviated keys
+----
+-- plain sort triggering abbreviated abort
+SELECT abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing OFFSET 20000 - 4;
+           abort_increasing           |           abort_decreasing           
+--------------------------------------+--------------------------------------
+ 00000000-0000-0000-0000-000000019995 | 00000000-0000-0000-0000-000000000005
+ 00000000-0000-0000-0000-000000019996 | 00000000-0000-0000-0000-000000000004
+ 00000000-0000-0000-0000-000000019997 | 00000000-0000-0000-0000-000000000003
+ 00000000-0000-0000-0000-000000019998 | 00000000-0000-0000-0000-000000000002
+ 00000000-0000-0000-0000-000000019999 | 00000000-0000-0000-0000-000000000001
+ 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
+                                      | 
+                                      | 
+                                      | 
+(9 rows)
+
+SELECT abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing NULLS FIRST OFFSET 20000 - 4;
+           abort_increasing           |           abort_decreasing           
+--------------------------------------+--------------------------------------
+ 00000000-0000-0000-0000-000000000007 | 00000000-0000-0000-0000-000000019993
+ 00000000-0000-0000-0000-000000000006 | 00000000-0000-0000-0000-000000019994
+ 00000000-0000-0000-0000-000000000005 | 00000000-0000-0000-0000-000000019995
+ 00000000-0000-0000-0000-000000000004 | 00000000-0000-0000-0000-000000019996
+ 00000000-0000-0000-0000-000000000003 | 00000000-0000-0000-0000-000000019997
+ 00000000-0000-0000-0000-000000000002 | 00000000-0000-0000-0000-000000019998
+ 00000000-0000-0000-0000-000000000002 | 00000000-0000-0000-0000-000000019998
+ 00000000-0000-0000-0000-000000000001 | 00000000-0000-0000-0000-000000019999
+ 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000
+(9 rows)
+
+-- plain sort not triggering abbreviated abort
+SELECT noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing OFFSET 20000 - 4;
+          noabort_increasing          |          noabort_decreasing          
+--------------------------------------+--------------------------------------
+ 00010003-0000-0000-0000-000000010003 | 00009997-0000-0000-0000-000000009997
+ 00010004-0000-0000-0000-000000010004 | 00009996-0000-0000-0000-000000009996
+ 00010005-0000-0000-0000-000000010005 | 00009995-0000-0000-0000-000000009995
+ 00010006-0000-0000-0000-000000010006 | 00009994-0000-0000-0000-000000009994
+ 00010007-0000-0000-0000-000000010007 | 00009993-0000-0000-0000-000000009993
+ 00010008-0000-0000-0000-000000010008 | 00009992-0000-0000-0000-000000009992
+                                      | 
+                                      | 
+                                      | 
+(9 rows)
+
+SELECT noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing NULLS FIRST OFFSET 20000 - 4;
+          noabort_increasing          |          noabort_decreasing          
+--------------------------------------+--------------------------------------
+ 00010000-0000-0000-0000-000000010000 | 00010000-0000-0000-0000-000000010000
+ 00009999-0000-0000-0000-000000009999 | 00010001-0000-0000-0000-000000010001
+ 00009998-0000-0000-0000-000000009998 | 00010002-0000-0000-0000-000000010002
+ 00009997-0000-0000-0000-000000009997 | 00010003-0000-0000-0000-000000010003
+ 00009996-0000-0000-0000-000000009996 | 00010004-0000-0000-0000-000000010004
+ 00009995-0000-0000-0000-000000009995 | 00010005-0000-0000-0000-000000010005
+ 00009994-0000-0000-0000-000000009994 | 00010006-0000-0000-0000-000000010006
+ 00009993-0000-0000-0000-000000009993 | 00010007-0000-0000-0000-000000010007
+ 00009992-0000-0000-0000-000000009992 | 00010008-0000-0000-0000-000000010008
+(9 rows)
+
+-- bounded sort (disables abbreviated keys)
+SELECT abort_increasing, noabort_increasing FROM abbrev_abort_uuids ORDER BY abort_increasing LIMIT 5;
+           abort_increasing           |          noabort_increasing          
+--------------------------------------+--------------------------------------
+ 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000000000
+ 00000000-0000-0000-0000-000000000001 | 00000001-0000-0000-0000-000000000001
+ 00000000-0000-0000-0000-000000000002 | 00000002-0000-0000-0000-000000000002
+ 00000000-0000-0000-0000-000000000002 | 00000002-0000-0000-0000-000000000002
+ 00000000-0000-0000-0000-000000000003 | 00000003-0000-0000-0000-000000000003
+(5 rows)
+
+SELECT abort_increasing, noabort_increasing FROM abbrev_abort_uuids ORDER BY noabort_increasing NULLS FIRST LIMIT 5;
+           abort_increasing           |          noabort_increasing          
+--------------------------------------+--------------------------------------
+                                      | 
+                                      | 
+                                      | 
+ 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000000000
+ 00000000-0000-0000-0000-000000010009 | 00000000-0000-0000-0000-000000010009
+(5 rows)
+
+----
+-- Check index creation uses of tuplesort wrt. abbreviated keys
+----
+-- index creation using abbreviated keys successfully
+CREATE INDEX abbrev_abort_uuids__noabort_increasing_idx ON abbrev_abort_uuids (noabort_increasing);
+CREATE INDEX abbrev_abort_uuids__noabort_decreasing_idx ON abbrev_abort_uuids (noabort_decreasing);
+-- verify
+EXPLAIN (COSTS OFF)
+SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing, id LIMIT 5;
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: noabort_increasing, id
+         ->  Limit
+               ->  Incremental Sort
+                     Sort Key: noabort_increasing, id
+                     Presorted Key: noabort_increasing
+                     ->  Index Scan using abbrev_abort_uuids__noabort_increasing_idx on abbrev_abort_uuids
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing, id LIMIT 5;
+  id   |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------
+     1 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000
+ 10010 | 00000000-0000-0000-0000-000000010009 | 00009991-0000-0000-0000-000000009991
+     2 | 00000001-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999
+ 10011 | 00000001-0000-0000-0000-000000010010 | 00009990-0000-0000-0000-000000009990
+     3 | 00000002-0000-0000-0000-000000000002 | 00009989-0000-0000-0000-000000019998
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing, id LIMIT 5;
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: noabort_decreasing, id
+         ->  Limit
+               ->  Incremental Sort
+                     Sort Key: noabort_decreasing, id
+                     Presorted Key: noabort_decreasing
+                     ->  Index Scan using abbrev_abort_uuids__noabort_decreasing_idx on abbrev_abort_uuids
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing, id LIMIT 5;
+  id   |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------
+ 20001 | 00009991-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
+  9992 | 00009991-0000-0000-0000-000000009991 | 00000000-0000-0000-0000-000000010009
+ 20000 | 00009990-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001
+  9991 | 00009990-0000-0000-0000-000000009990 | 00000001-0000-0000-0000-000000010010
+ 19999 | 00009989-0000-0000-0000-000000019998 | 00000002-0000-0000-0000-000000000002
+(5 rows)
+
+-- index creation using abbreviated keys, hitting abort
+CREATE INDEX abbrev_abort_uuids__abort_increasing_idx ON abbrev_abort_uuids (abort_increasing);
+CREATE INDEX abbrev_abort_uuids__abort_decreasing_idx ON abbrev_abort_uuids (abort_decreasing);
+-- verify
+EXPLAIN (COSTS OFF)
+SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing, id LIMIT 5;
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: abort_increasing, id
+         ->  Limit
+               ->  Incremental Sort
+                     Sort Key: abort_increasing, id
+                     Presorted Key: abort_increasing
+                     ->  Index Scan using abbrev_abort_uuids__abort_increasing_idx on abbrev_abort_uuids
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing, id LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           
+-------+--------------------------------------+--------------------------------------
+     1 | 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000
+     2 | 00000000-0000-0000-0000-000000000001 | 00000000-0000-0000-0000-000000019999
+     3 | 00000000-0000-0000-0000-000000000002 | 00000000-0000-0000-0000-000000019998
+ 20004 | 00000000-0000-0000-0000-000000000002 | 00000000-0000-0000-0000-000000019998
+     4 | 00000000-0000-0000-0000-000000000003 | 00000000-0000-0000-0000-000000019997
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing, id LIMIT 5;
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: abort_decreasing, id
+         ->  Limit
+               ->  Incremental Sort
+                     Sort Key: abort_decreasing, id
+                     Presorted Key: abort_decreasing
+                     ->  Index Scan using abbrev_abort_uuids__abort_decreasing_idx on abbrev_abort_uuids
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing, id LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           
+-------+--------------------------------------+--------------------------------------
+ 20001 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
+ 20000 | 00000000-0000-0000-0000-000000019999 | 00000000-0000-0000-0000-000000000001
+ 19999 | 00000000-0000-0000-0000-000000019998 | 00000000-0000-0000-0000-000000000002
+ 19998 | 00000000-0000-0000-0000-000000019997 | 00000000-0000-0000-0000-000000000003
+ 19997 | 00000000-0000-0000-0000-000000019996 | 00000000-0000-0000-0000-000000000004
+(5 rows)
+
+----
+-- Check CLUSTER uses of tuplesort wrt. abbreviated keys
+----
+-- when aborting, increasing order
+BEGIN;
+SET LOCAL enable_indexscan = false;
+CLUSTER abbrev_abort_uuids USING abbrev_abort_uuids__abort_increasing_idx;
+-- head
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid LIMIT 5;
+ id |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+----+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+  2 | 00000000-0000-0000-0000-000000000001 | 00000000-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999
+  1 | 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000
+  5 | 00000000-0000-0000-0000-000000000004 | 00000000-0000-0000-0000-000000019996 | 00000004-0000-0000-0000-000000000004 | 00009987-0000-0000-0000-000000019996
+  6 | 00000000-0000-0000-0000-000000000005 | 00000000-0000-0000-0000-000000019995 | 00000005-0000-0000-0000-000000000005 | 00009986-0000-0000-0000-000000019995
+  3 | 00000000-0000-0000-0000-000000000002 | 00000000-0000-0000-0000-000000019998 | 00000002-0000-0000-0000-000000000002 | 00009989-0000-0000-0000-000000019998
+(5 rows)
+
+-- tail
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid DESC LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+     0 |                                      |                                      |                                      | 
+ 20000 | 00000000-0000-0000-0000-000000019999 | 00000000-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001
+ 19999 | 00000000-0000-0000-0000-000000019998 | 00000000-0000-0000-0000-000000000002 | 00009989-0000-0000-0000-000000019998 | 00000002-0000-0000-0000-000000000002
+ 19998 | 00000000-0000-0000-0000-000000019997 | 00000000-0000-0000-0000-000000000003 | 00009988-0000-0000-0000-000000019997 | 00000003-0000-0000-0000-000000000003
+ 19997 | 00000000-0000-0000-0000-000000019996 | 00000000-0000-0000-0000-000000000004 | 00009987-0000-0000-0000-000000019996 | 00000004-0000-0000-0000-000000000004
+(5 rows)
+
+ROLLBACK;
+-- when aborting, decreasing order
+BEGIN;
+SET LOCAL enable_indexscan = false;
+CLUSTER abbrev_abort_uuids USING abbrev_abort_uuids__abort_decreasing_idx;
+-- head
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+ 19994 | 00000000-0000-0000-0000-000000019993 | 00000000-0000-0000-0000-000000000007 | 00009984-0000-0000-0000-000000019993 | 00000007-0000-0000-0000-000000000007
+ 20000 | 00000000-0000-0000-0000-000000019999 | 00000000-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001
+ 20001 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
+ 19995 | 00000000-0000-0000-0000-000000019994 | 00000000-0000-0000-0000-000000000006 | 00009985-0000-0000-0000-000000019994 | 00000006-0000-0000-0000-000000000006
+ 19989 | 00000000-0000-0000-0000-000000019988 | 00000000-0000-0000-0000-000000000012 | 00009979-0000-0000-0000-000000019988 | 00000012-0000-0000-0000-000000000012
+(5 rows)
+
+-- tail
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid DESC LIMIT 5;
+ id |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+----+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+  0 |                                      |                                      |                                      | 
+  1 | 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000
+ 12 | 00000000-0000-0000-0000-000000000011 | 00000000-0000-0000-0000-000000019989 | 00000011-0000-0000-0000-000000000011 | 00009980-0000-0000-0000-000000019989
+ 15 | 00000000-0000-0000-0000-000000000014 | 00000000-0000-0000-0000-000000019986 | 00000014-0000-0000-0000-000000000014 | 00009977-0000-0000-0000-000000019986
+ 20 | 00000000-0000-0000-0000-000000000019 | 00000000-0000-0000-0000-000000019981 | 00000019-0000-0000-0000-000000000019 | 00009972-0000-0000-0000-000000019981
+(5 rows)
+
+ROLLBACK;
+-- when not aborting, increasing order
+BEGIN;
+SET LOCAL enable_indexscan = false;
+CLUSTER abbrev_abort_uuids USING abbrev_abort_uuids__noabort_increasing_idx;
+-- head
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+ 10010 | 00000000-0000-0000-0000-000000010009 | 00000000-0000-0000-0000-000000009991 | 00000000-0000-0000-0000-000000010009 | 00009991-0000-0000-0000-000000009991
+     1 | 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000
+ 10011 | 00000000-0000-0000-0000-000000010010 | 00000000-0000-0000-0000-000000009990 | 00000001-0000-0000-0000-000000010010 | 00009990-0000-0000-0000-000000009990
+ 10012 | 00000000-0000-0000-0000-000000010011 | 00000000-0000-0000-0000-000000009989 | 00000002-0000-0000-0000-000000010011 | 00009989-0000-0000-0000-000000009989
+     2 | 00000000-0000-0000-0000-000000000001 | 00000000-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999
+(5 rows)
+
+-- tail
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid DESC LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+     0 |                                      |                                      |                                      | 
+ 10007 | 00000000-0000-0000-0000-000000010006 | 00000000-0000-0000-0000-000000009994 | 00010006-0000-0000-0000-000000010006 | 00009994-0000-0000-0000-000000009994
+ 20000 | 00000000-0000-0000-0000-000000019999 | 00000000-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001
+ 19999 | 00000000-0000-0000-0000-000000019998 | 00000000-0000-0000-0000-000000000002 | 00009989-0000-0000-0000-000000019998 | 00000002-0000-0000-0000-000000000002
+  9990 | 00000000-0000-0000-0000-000000009989 | 00000000-0000-0000-0000-000000010011 | 00009989-0000-0000-0000-000000009989 | 00000002-0000-0000-0000-000000010011
+(5 rows)
+
+ROLLBACK;
+-- when no aborting, decreasing order
+BEGIN;
+SET LOCAL enable_indexscan = false;
+CLUSTER abbrev_abort_uuids USING abbrev_abort_uuids__noabort_decreasing_idx;
+-- head
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+  9989 | 00000000-0000-0000-0000-000000009988 | 00000000-0000-0000-0000-000000010012 | 00009988-0000-0000-0000-000000009988 | 00000003-0000-0000-0000-000000010012
+ 20000 | 00000000-0000-0000-0000-000000019999 | 00000000-0000-0000-0000-000000000001 | 00009990-0000-0000-0000-000000019999 | 00000001-0000-0000-0000-000000000001
+ 20001 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000
+  9992 | 00000000-0000-0000-0000-000000009991 | 00000000-0000-0000-0000-000000010009 | 00009991-0000-0000-0000-000000009991 | 00000000-0000-0000-0000-000000010009
+  9988 | 00000000-0000-0000-0000-000000009987 | 00000000-0000-0000-0000-000000010013 | 00009987-0000-0000-0000-000000009987 | 00000004-0000-0000-0000-000000010013
+(5 rows)
+
+-- tail
+SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
+FROM abbrev_abort_uuids
+ORDER BY ctid DESC LIMIT 5;
+  id   |           abort_increasing           |           abort_decreasing           |          noabort_increasing          |          noabort_decreasing          
+-------+--------------------------------------+--------------------------------------+--------------------------------------+--------------------------------------
+     0 |                                      |                                      |                                      | 
+ 10007 | 00000000-0000-0000-0000-000000010006 | 00000000-0000-0000-0000-000000009994 | 00010006-0000-0000-0000-000000010006 | 00009994-0000-0000-0000-000000009994
+     1 | 00000000-0000-0000-0000-000000000000 | 00000000-0000-0000-0000-000000020000 | 00000000-0000-0000-0000-000000000000 | 00009991-0000-0000-0000-000000020000
+ 10014 | 00000000-0000-0000-0000-000000010013 | 00000000-0000-0000-0000-000000009987 | 00000004-0000-0000-0000-000000010013 | 00009987-0000-0000-0000-000000009987
+    12 | 00000000-0000-0000-0000-000000000011 | 00000000-0000-0000-0000-000000019989 | 00000011-0000-0000-0000-000000000011 | 00009980-0000-0000-0000-000000019989
+(5 rows)
+
+ROLLBACK;
+----
+-- test forward and backward scans for in-memory and disk based tuplesort
+----
+-- in-memory
+BEGIN;
+SET LOCAL enable_indexscan = false;
+-- unfortunately can't show analyze output confirming sort method,
+-- the memory used output wouldn't be stable
+EXPLAIN (COSTS OFF) DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: noabort_decreasing
+   ->  Sort
+         Sort Key: noabort_decreasing
+         ->  Seq Scan on abbrev_abort_uuids
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
+-- first and second
+FETCH NEXT FROM c;
+          noabort_decreasing          
+--------------------------------------
+ 00000000-0000-0000-0000-000000000000
+(1 row)
+
+FETCH NEXT FROM c;
+          noabort_decreasing          
+--------------------------------------
+ 00000000-0000-0000-0000-000000010009
+(1 row)
+
+--start_ignore
+--GDPB doesn't support backward fetch.
+/*
+ * scroll beyond beginning
+ * FETCH BACKWARD FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH NEXT FROM c;
+ * 
+ * -- scroll beyond end end
+ * FETCH LAST FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH NEXT FROM c;
+ * FETCH NEXT FROM c;
+ * FETCH NEXT FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH NEXT FROM c;
+ */
+--end_ignore
+COMMIT;
+-- disk based
+BEGIN;
+SET LOCAL enable_indexscan = false;
+SET LOCAL work_mem = '100kB';
+-- unfortunately can't show analyze output confirming sort method,
+-- the memory used output wouldn't be stable
+EXPLAIN (COSTS OFF) DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: noabort_decreasing
+   ->  Sort
+         Sort Key: noabort_decreasing
+         ->  Seq Scan on abbrev_abort_uuids
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+DECLARE c SCROLL CURSOR FOR SELECT noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing;
+-- first and second
+FETCH NEXT FROM c;
+          noabort_decreasing          
+--------------------------------------
+ 00000000-0000-0000-0000-000000000000
+(1 row)
+
+FETCH NEXT FROM c;
+          noabort_decreasing          
+--------------------------------------
+ 00000000-0000-0000-0000-000000010009
+(1 row)
+
+--start_ignore
+-- scroll beyond beginning
+/*
+ * FETCH BACKWARD FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH NEXT FROM c;
+ * 
+ * -- scroll beyond end end
+ * FETCH LAST FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH NEXT FROM c;
+ * FETCH NEXT FROM c;
+ * FETCH NEXT FROM c;
+ * FETCH BACKWARD FROM c;
+ * FETCH NEXT FROM c;
+ */
+--end_ignore
+COMMIT;
+----
+-- test tuplesort using both in-memory and disk sort
+---
+-- memory based
+SELECT
+    -- fixed-width by-value datum
+    (array_agg(id ORDER BY id DESC NULLS FIRST))[0:5],
+    -- fixed-width by-ref datum
+    (array_agg(abort_increasing ORDER BY abort_increasing DESC NULLS LAST))[0:5],
+    -- variable-width datum
+    (array_agg(id::text ORDER BY id::text DESC NULLS LAST))[0:5],
+    -- fixed width by-value datum tuplesort
+    percentile_disc(0.99) WITHIN GROUP (ORDER BY id),
+    -- ensure state is shared
+    percentile_disc(0.01) WITHIN GROUP (ORDER BY id),
+    -- fixed width by-ref datum tuplesort
+    percentile_disc(0.8) WITHIN GROUP (ORDER BY abort_increasing),
+    -- variable width by-ref datum tuplesort
+    percentile_disc(0.2) WITHIN GROUP (ORDER BY id::text),
+    -- multi-column tuplesort
+    rank('00000000-0000-0000-0000-000000000000', '2', '2') WITHIN GROUP (ORDER BY noabort_increasing, id, id::text)
+FROM (
+    SELECT * FROM abbrev_abort_uuids
+    UNION ALL
+    SELECT NULL, NULL, NULL, NULL, NULL) s;
+           array_agg            |                                                                                         array_agg                                                                                          |         array_agg          | percentile_disc | percentile_disc |           percentile_disc            | percentile_disc | rank 
+--------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+-----------------+-----------------+--------------------------------------+-----------------+------
+ {NULL,20004,20003,20002,20001} | {00000000-0000-0000-0000-000000020000,00000000-0000-0000-0000-000000019999,00000000-0000-0000-0000-000000019998,00000000-0000-0000-0000-000000019997,00000000-0000-0000-0000-000000019996} | {9999,9998,9997,9996,9995} |           19804 |             200 | 00000000-0000-0000-0000-000000016000 | 13598           |    2
+(1 row)
+
+-- disk based (see also above)
+BEGIN;
+SET LOCAL work_mem = '100kB';
+SELECT
+    (array_agg(id ORDER BY id DESC NULLS FIRST))[0:5],
+    (array_agg(abort_increasing ORDER BY abort_increasing DESC NULLS LAST))[0:5],
+    (array_agg(id::text ORDER BY id::text DESC NULLS LAST))[0:5],
+    percentile_disc(0.99) WITHIN GROUP (ORDER BY id),
+    percentile_disc(0.01) WITHIN GROUP (ORDER BY id),
+    percentile_disc(0.8) WITHIN GROUP (ORDER BY abort_increasing),
+    percentile_disc(0.2) WITHIN GROUP (ORDER BY id::text),
+    rank('00000000-0000-0000-0000-000000000000', '2', '2') WITHIN GROUP (ORDER BY noabort_increasing, id, id::text)
+FROM (
+    SELECT * FROM abbrev_abort_uuids
+    UNION ALL
+    SELECT NULL, NULL, NULL, NULL, NULL) s;
+           array_agg            |                                                                                         array_agg                                                                                          |         array_agg          | percentile_disc | percentile_disc |           percentile_disc            | percentile_disc | rank 
+--------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+-----------------+-----------------+--------------------------------------+-----------------+------
+ {NULL,20004,20003,20002,20001} | {00000000-0000-0000-0000-000000020000,00000000-0000-0000-0000-000000019999,00000000-0000-0000-0000-000000019998,00000000-0000-0000-0000-000000019997,00000000-0000-0000-0000-000000019996} | {9999,9998,9997,9996,9995} |           19804 |             200 | 00000000-0000-0000-0000-000000016000 | 13598           |    2
+(1 row)
+
+ROLLBACK;
+----
+-- test tuplesort mark/restore
+---
+CREATE TEMP TABLE test_mark_restore(col1 int, col2 int, col12 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- need a few duplicates for mark/restore to matter
+INSERT INTO test_mark_restore(col1, col2, col12)
+   SELECT a.i, b.i, a.i * b.i FROM generate_series(1, 500) a(i), generate_series(1, 5) b(i);
+BEGIN;
+SET LOCAL enable_nestloop = off;
+SET LOCAL enable_hashjoin = off;
+SET LOCAL enable_material = off;
+-- set query into variable once, to avoid repetition of the fairly long query
+SELECT $$
+    SELECT col12, count(distinct a.col1), count(distinct a.col2), count(distinct b.col1), count(distinct b.col2), count(*)
+    FROM test_mark_restore a
+        JOIN test_mark_restore b USING(col12)
+    GROUP BY 1
+    HAVING count(*) > 1
+    ORDER BY 2 DESC, 1 DESC, 3 DESC, 4 DESC, 5 DESC, 6 DESC
+    LIMIT 10
+$$ AS qry \gset
+-- test mark/restore with in-memory sorts
+EXPLAIN (COSTS OFF) :qry;
+                                                                                       QUERY PLAN                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: (count(DISTINCT a.col1)), a.col12, (count(DISTINCT a.col2)), (count(DISTINCT b.col1)), (count(DISTINCT b.col2)), (count(*))
+         ->  Limit
+               ->  Sort
+                     Sort Key: (count(DISTINCT a.col1)) DESC, a.col12 DESC, (count(DISTINCT a.col2)) DESC, (count(DISTINCT b.col1)) DESC, (count(DISTINCT b.col2)) DESC, (count(*)) DESC
+                     ->  GroupAggregate
+                           Group Key: a.col12
+                           Filter: (count(*) > 1)
+                           ->  Merge Join
+                                 Merge Cond: (a.col12 = b.col12)
+                                 ->  Sort
+                                       Sort Key: a.col12 DESC
+                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                             Hash Key: a.col12
+                                             ->  Seq Scan on test_mark_restore a
+                                 ->  Sort
+                                       Sort Key: b.col12 DESC
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: b.col12
+                                             ->  Seq Scan on test_mark_restore b
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+:qry;
+ col12 | count | count | count | count | count 
+-------+-------+-------+-------+-------+-------
+   480 |     5 |     5 |     5 |     5 |    25
+   420 |     5 |     5 |     5 |     5 |    25
+   360 |     5 |     5 |     5 |     5 |    25
+   300 |     5 |     5 |     5 |     5 |    25
+   240 |     5 |     5 |     5 |     5 |    25
+   180 |     5 |     5 |     5 |     5 |    25
+   120 |     5 |     5 |     5 |     5 |    25
+    60 |     5 |     5 |     5 |     5 |    25
+   960 |     4 |     4 |     4 |     4 |    16
+   900 |     4 |     4 |     4 |     4 |    16
+(10 rows)
+
+-- test mark/restore with on-disk sorts
+SET LOCAL work_mem = '100kB';
+EXPLAIN (COSTS OFF) :qry;
+                                                                                       QUERY PLAN                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: (count(DISTINCT a.col1)), a.col12, (count(DISTINCT a.col2)), (count(DISTINCT b.col1)), (count(DISTINCT b.col2)), (count(*))
+         ->  Limit
+               ->  Sort
+                     Sort Key: (count(DISTINCT a.col1)) DESC, a.col12 DESC, (count(DISTINCT a.col2)) DESC, (count(DISTINCT b.col1)) DESC, (count(DISTINCT b.col2)) DESC, (count(*)) DESC
+                     ->  GroupAggregate
+                           Group Key: a.col12
+                           Filter: (count(*) > 1)
+                           ->  Merge Join
+                                 Merge Cond: (a.col12 = b.col12)
+                                 ->  Sort
+                                       Sort Key: a.col12 DESC
+                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                             Hash Key: a.col12
+                                             ->  Seq Scan on test_mark_restore a
+                                 ->  Sort
+                                       Sort Key: b.col12 DESC
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: b.col12
+                                             ->  Seq Scan on test_mark_restore b
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+:qry;
+ col12 | count | count | count | count | count 
+-------+-------+-------+-------+-------+-------
+   480 |     5 |     5 |     5 |     5 |    25
+   420 |     5 |     5 |     5 |     5 |    25
+   360 |     5 |     5 |     5 |     5 |    25
+   300 |     5 |     5 |     5 |     5 |    25
+   240 |     5 |     5 |     5 |     5 |    25
+   180 |     5 |     5 |     5 |     5 |    25
+   120 |     5 |     5 |     5 |     5 |    25
+    60 |     5 |     5 |     5 |     5 |    25
+   960 |     4 |     4 |     4 |     4 |    16
+   900 |     4 |     4 |     4 |     4 |    16
+(10 rows)
+
+COMMIT;

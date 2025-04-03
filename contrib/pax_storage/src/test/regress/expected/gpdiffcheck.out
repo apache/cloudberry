@@ -1,0 +1,346 @@
+--
+-- BOOLEAN
+--
+create table gpd1 (c1 char(1), c2 numeric, c3 numeric) distributed by (c1);
+insert into gpd1 values ('a', 1, 1);
+analyze gpd1;
+insert into gpd1 values ('a', 1, 2);
+insert into gpd1 values ('b', 2, 1);
+insert into gpd1 values ('b', 1, 2);
+insert into gpd1 values ('c', 3, 2);
+insert into gpd1 values ('c', 2, 3);
+insert into gpd1 values ('d', 4, 4);
+insert into gpd1 values ('d', 4, 3);
+--
+-- ignore
+--
+select c1 from gpd1;
+ c1 
+----
+ a
+ a
+ c
+ c
+ b
+ b
+ d
+ d
+(8 rows)
+
+--
+-- order 1, 2
+--
+select c1, c1, c2, c3 from gpd1 order by 1,2;
+ c1 | c1 | c2 | c3 
+----+----+----+----
+ a  | a  |  1 |  1
+ a  | a  |  1 |  2
+ b  | b  |  2 |  1
+ b  | b  |  1 |  2
+ c  | c  |  3 |  2
+ c  | c  |  2 |  3
+ d  | d  |  4 |  4
+ d  | d  |  4 |  3
+(8 rows)
+
+--
+--
+select c1, c1, c2, c3 from gpd1 order by 1,2,3,4; -- order 1, 2     , 3    , 4
+ c1 | c1 | c2 | c3 
+----+----+----+----
+ a  | a  |  1 |  1
+ a  | a  |  1 |  2
+ b  | b  |  1 |  2
+ b  | b  |  2 |  1
+ c  | c  |  2 |  3
+ c  | c  |  3 |  2
+ d  | d  |  4 |  3
+ d  | d  |  4 |  4
+(8 rows)
+
+--
+-- ignore
+-- order 1, 2
+--
+select c1, c1, c2, c3 from gpd1 order by 1,2;
+ c1 | c1 | c2 | c3 
+----+----+----+----
+ a  | a  |  1 |  1
+ a  | a  |  1 |  2
+ b  | b  |  2 |  1
+ b  | b  |  1 |  2
+ c  | c  |  3 |  2
+ c  | c  |  2 |  3
+ d  | d  |  4 |  4
+ d  | d  |  4 |  3
+(8 rows)
+
+--
+--  mvd 2,3->1 ; 2,3->4,5
+-- order 4
+--
+select c1, c2, c3, c1, c1, c2 from gpd1 order by 4;
+ c1 | c2 | c3 | c1 | c1 | c2 
+----+----+----+----+----+----
+ a  |  1 |  1 | a  | a  |  1
+ a  |  1 |  2 | a  | a  |  1
+ b  |  2 |  1 | b  | b  |  2
+ b  |  1 |  2 | b  | b  |  1
+ c  |  3 |  2 | c  | c  |  3
+ c  |  2 |  3 | c  | c  |  2
+ d  |  4 |  4 | d  | d  |  4
+ d  |  4 |  3 | d  | d  |  4
+(8 rows)
+
+--  Brian: the contents of column 1 are not determined by any other 
+--  column -- the column "specifies itself"
+--
+--  mvd 1->1
+--
+select row_number() over (), c1, c2, c3 from gpd1;
+ row_number | c1 | c2 | c3 
+------------+----+----+----
+          1 | b  |  2 |  1
+          2 | b  |  1 |  2
+          3 | d  |  4 |  4
+          4 | d  |  4 |  3
+          5 | a  |  1 |  1
+          6 | a  |  1 |  2
+          7 | c  |  3 |  2
+          8 | c  |  2 |  3
+(8 rows)
+
+-- Brian: 1 specifies 2
+--  
+--
+    select -- mvd 1 -> 2
+        x,
+        row_number() over (partition by x) as y,
+        z 
+    from (values (1,'A'),(1,'B'),(2,'C'),(2,'D')) r(x,z);
+ x | y | z 
+---+---+---
+ 1 | 1 | A
+ 1 | 2 | B
+ 2 | 1 | C
+ 2 | 2 | D
+(4 rows)
+
+-- start_ignore
+--
+-- whatever is here is ignored until we reach end_ignore
+--
+-- end_ignore
+--
+-- explain testing
+--
+set gp_segments_for_planner=4;
+set optimizer_segments=4;
+set gp_cost_hashjoin_chainwalk=on;
+set optimizer_nestloop_factor = 1.0;
+explain analyze select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c1) from gpd1);
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.09..10000000003.37 rows=4 width=12) (actual time=16.057..16.061 rows=16 loops=1)
+   ->  Hash Join  (cost=10000000001.09..10000000003.30 rows=2 width=12) (actual time=11.988..12.243 rows=16 loops=1)
+         Hash Cond: (b.c1 = (max(gpd1.c1)))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000002.17 rows=2 width=14) (actual time=0.005..0.030 rows=16 loops=1)
+               Hash Key: b.c1
+               ->  Nested Loop  (cost=10000000000.00..10000000002.10 rows=2 width=14) (actual time=1.131..6.969 rows=32 loops=1)
+                     ->  Seq Scan on gpd1 a  (cost=0.00..1.01 rows=1 width=12) (actual time=0.036..0.041 rows=4 loops=1)
+                     ->  Materialize  (cost=0.00..1.06 rows=1 width=2) (actual time=0.272..1.724 rows=8 loops=4)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.05 rows=1 width=2) (actual time=0.008..0.023 rows=8 loops=1)
+                                 ->  Seq Scan on gpd1 b  (cost=0.00..1.01 rows=1 width=2) (actual time=0.035..0.039 rows=4 loops=1)
+         ->  Hash  (cost=1.07..1.07 rows=1 width=32) (actual time=10.579..10.581 rows=1 loops=1)
+               ->  Redistribute Motion 1:3  (slice4; segments: 1)  (cost=1.03..1.07 rows=1 width=32) (actual time=10.569..10.572 rows=1 loops=1)
+                     Hash Key: (max(gpd1.c1))
+                     ->  Aggregate  (cost=1.03..1.04 rows=1 width=32) (actual time=2.762..2.765 rows=1 loops=1)
+                           ->  Gather Motion 3:1  (slice5; segments: 3)  (cost=0.00..1.03 rows=1 width=2) (actual time=0.008..2.731 rows=8 loops=1)
+                                 ->  Seq Scan on gpd1  (cost=0.00..1.01 rows=1 width=2) (actual time=0.038..0.041 rows=4 loops=1)
+ Planning Time: 1.881 ms
+   (slice0)    Executor memory: 60K bytes.
+   (slice1)    Executor memory: 1055K bytes avg x 3 workers, 1077K bytes max (seg0).  Work_mem: 1025K bytes max.
+   (slice2)    Executor memory: 39K bytes avg x 3 workers, 39K bytes max (seg0).  Work_mem: 17K bytes max.
+   (slice3)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).
+   (slice4)    Executor memory: 43K bytes (seg0).
+   (slice5)    Executor memory: 38K bytes avg x 3 workers, 38K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution Time: 81.577 ms
+(26 rows)
+
+explain select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c1) from gpd1);
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.09..10000000003.37 rows=4 width=12)
+   ->  Hash Join  (cost=10000000001.09..10000000003.30 rows=2 width=12)
+         Hash Cond: (b.c1 = (max(gpd1.c1)))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000002.17 rows=2 width=14)
+               Hash Key: b.c1
+               ->  Nested Loop  (cost=10000000000.00..10000000002.10 rows=2 width=14)
+                     ->  Seq Scan on gpd1 a  (cost=0.00..1.01 rows=1 width=12)
+                     ->  Materialize  (cost=0.00..1.06 rows=1 width=2)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.05 rows=1 width=2)
+                                 ->  Seq Scan on gpd1 b  (cost=0.00..1.01 rows=1 width=2)
+         ->  Hash  (cost=1.07..1.07 rows=1 width=32)
+               ->  Redistribute Motion 1:3  (slice4; segments: 1)  (cost=1.03..1.07 rows=1 width=32)
+                     Hash Key: (max(gpd1.c1))
+                     ->  Aggregate  (cost=1.03..1.04 rows=1 width=32)
+                           ->  Gather Motion 3:1  (slice5; segments: 3)  (cost=0.00..1.03 rows=1 width=2)
+                                 ->  Seq Scan on gpd1  (cost=0.00..1.01 rows=1 width=2)
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c1) from gpd1);
+ c1 | c2 | c3 
+----+----+----
+ b  |  2 |  1
+ b  |  1 |  2
+ d  |  4 |  4
+ d  |  4 |  3
+ b  |  2 |  1
+ b  |  1 |  2
+ d  |  4 |  4
+ d  |  4 |  3
+ a  |  1 |  1
+ a  |  1 |  2
+ c  |  3 |  2
+ c  |  2 |  3
+ a  |  1 |  1
+ a  |  1 |  2
+ c  |  3 |  2
+ c  |  2 |  3
+(16 rows)
+
+set gp_segments_for_planner=40;
+set optimizer_segments=40;
+set optimizer_nestloop_factor = 1.0;
+explain select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c1) from gpd1);
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.09..10000000003.37 rows=4 width=12)
+   ->  Hash Join  (cost=10000000001.09..10000000003.30 rows=2 width=12)
+         Hash Cond: (b.c1 = (max(gpd1.c1)))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000002.17 rows=2 width=14)
+               Hash Key: b.c1
+               ->  Nested Loop  (cost=10000000000.00..10000000002.10 rows=2 width=14)
+                     ->  Seq Scan on gpd1 a  (cost=0.00..1.01 rows=1 width=12)
+                     ->  Materialize  (cost=0.00..1.06 rows=1 width=2)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.05 rows=1 width=2)
+                                 ->  Seq Scan on gpd1 b  (cost=0.00..1.01 rows=1 width=2)
+         ->  Hash  (cost=1.07..1.07 rows=1 width=32)
+               ->  Redistribute Motion 1:3  (slice4; segments: 1)  (cost=1.03..1.07 rows=1 width=32)
+                     Hash Key: (max(gpd1.c1))
+                     ->  Aggregate  (cost=1.03..1.04 rows=1 width=32)
+                           ->  Gather Motion 3:1  (slice5; segments: 3)  (cost=0.00..1.03 rows=1 width=2)
+                                 ->  Seq Scan on gpd1  (cost=0.00..1.01 rows=1 width=2)
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c1) from gpd1);
+ c1 | c2 | c3 
+----+----+----
+ a  |  1 |  1
+ a  |  1 |  2
+ c  |  3 |  2
+ c  |  2 |  3
+ a  |  1 |  1
+ a  |  1 |  2
+ c  |  3 |  2
+ c  |  2 |  3
+ b  |  2 |  1
+ b  |  1 |  2
+ d  |  4 |  4
+ d  |  4 |  3
+ b  |  2 |  1
+ b  |  1 |  2
+ d  |  4 |  4
+ d  |  4 |  3
+(16 rows)
+
+explain analyze select a.* from gpd1 as a, gpd1 as b where b.c1 in (select max(c1) from gpd1);
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.09..10000000003.37 rows=4 width=12) (actual time=8.904..8.908 rows=16 loops=1)
+   ->  Hash Join  (cost=10000000001.09..10000000003.30 rows=2 width=12) (actual time=4.192..6.677 rows=16 loops=1)
+         Hash Cond: (b.c1 = (max(gpd1.c1)))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000002.17 rows=2 width=14) (actual time=0.005..2.391 rows=16 loops=1)
+               Hash Key: b.c1
+               ->  Nested Loop  (cost=10000000000.00..10000000002.10 rows=2 width=14) (actual time=0.970..4.132 rows=32 loops=1)
+                     ->  Seq Scan on gpd1 a  (cost=0.00..1.01 rows=1 width=12) (actual time=0.018..0.022 rows=4 loops=1)
+                     ->  Materialize  (cost=0.00..1.06 rows=1 width=2) (actual time=0.236..1.021 rows=8 loops=4)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.05 rows=1 width=2) (actual time=0.007..0.021 rows=8 loops=1)
+                                 ->  Seq Scan on gpd1 b  (cost=0.00..1.01 rows=1 width=2) (actual time=0.014..0.016 rows=4 loops=1)
+         ->  Hash  (cost=1.07..1.07 rows=1 width=32) (actual time=4.120..4.122 rows=1 loops=1)
+               ->  Redistribute Motion 1:3  (slice4; segments: 1)  (cost=1.03..1.07 rows=1 width=32) (actual time=4.111..4.114 rows=1 loops=1)
+                     Hash Key: (max(gpd1.c1))
+                     ->  Aggregate  (cost=1.03..1.04 rows=1 width=32) (actual time=0.051..0.054 rows=1 loops=1)
+                           ->  Gather Motion 3:1  (slice5; segments: 3)  (cost=0.00..1.03 rows=1 width=2) (actual time=0.009..0.027 rows=8 loops=1)
+                                 ->  Seq Scan on gpd1  (cost=0.00..1.01 rows=1 width=2) (actual time=0.017..0.020 rows=4 loops=1)
+ Planning Time: 1.185 ms
+   (slice0)    Executor memory: 60K bytes.
+   (slice1)    Executor memory: 1055K bytes avg x 3 workers, 1077K bytes max (seg0).  Work_mem: 1025K bytes max.
+   (slice2)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).  Work_mem: 17K bytes max.
+   (slice3)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+   (slice4)    Executor memory: 16K bytes (seg0).
+   (slice5)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution Time: 11.063 ms
+(26 rows)
+
+--
+-- Clean up
+--
+DROP TABLE  gpd1;
+-- start_matchsubs
+--
+-- # create a match/subs expression to handle a value which always changes
+--
+-- # use zero-width negative look-behind assertion to match "gpmatchsubs1"
+-- # that does not follow substring
+--
+-- m/(?<!substring..)gpmatchsubs1/
+-- s/gpmatchsubs1.*/happy sub1/
+--
+-- m/(?<!substring..)gpmatchsubs2/
+-- s/gpmatchsubs2.*/happy sub2/
+--
+-- end_matchsubs
+-- substitute constant values for results
+-- use substring because length of time string varies which changes output
+select substring('gpmatchsubs1' || now(), 1,  25);
+         substring         
+---------------------------
+ gpmatchsubs1Mon Jul 21 14
+(1 row)
+
+select substring('gpmatchsubs2' || now(), 1,  25);
+         substring         
+---------------------------
+ gpmatchsubs2Mon Jul 21 14
+(1 row)
+
+-- start_matchignore
+--
+-- # create a match expression to handle a value which always changes
+--
+-- m/(?<!substring..)gpmatchignore1/
+-- m/(?<!substring..)gpmatchignore2/
+--
+-- end_matchignore
+-- just ignore the results
+select substring('gpmatchignore1' || now(), 1,  25);
+         substring         
+---------------------------
+ gpmatchignore1Mon Jul 21 
+(1 row)
+
+select substring('gpmatchignore2' || now(), 1,  25);
+         substring         
+---------------------------
+ gpmatchignore2Mon Jul 21 
+(1 row)
+
+reset optimizer_nestloop_factor;
+-- 

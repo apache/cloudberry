@@ -1,0 +1,121 @@
+-- start_ignore
+create language plpython3u;
+-- end_ignore
+
+--list all database oid relevant directories in all node(master, segments, mirrors, etc.)
+CREATE OR REPLACE FUNCTION db_dirs(dboid oid) RETURNS setof text
+  STRICT STABLE LANGUAGE plpython3u
+as $$
+import os
+bash_cmd = "find " + os.getcwd() + "/../../ " + "-name %d -type d"
+p = os.popen(bash_cmd % dboid)
+return p.readlines()
+$$;
+
+
+
+--
+--CASE 0: createdb do well
+--
+create database dowell;
+select force_mirrors_to_catch_up();
+select count(*)=0 as result from
+  (select db_dirs(oid) from pg_database where datname = 'dowell') as foo;
+
+\! psql -d dowell -c "create table test1(a int, b text)"
+\! psql -d dowell -c "insert into test1 values (1, '111'), (2, '222'), (3, '333')"
+\! psql -d dowell -c "select * from test1" 
+
+drop database dowell;
+
+
+
+--
+--CASE 1: error in segment after db file physically created
+--
+--reset status
+select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+-- inject fault on content0 primary to error out after copying
+-- template db directory
+select gp_inject_fault('create_db_after_file_copy', 'error', dbid)
+from gp_segment_configuration where content=0 and role='p';
+
+-- should fail
+create database db_with_leftover_files;
+
+-- Wait until replay_lsn = flush_lsn.
+select force_mirrors_to_catch_up();
+
+-- since this is a failed case, db oid is invisible, however we need it to search 
+-- our tablespace to check if has db files left over.
+set gp_select_invisible=on;
+select db_dirs(oid) from pg_database where datname = 'db_with_leftover_files';
+
+-- cleanup
+set gp_select_invisible=off;
+
+
+
+--
+--CASE 2: error after XLOG_DBASE_CREATE on master
+--
+select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+select gp_inject_fault('after_xlog_create_database', 'error', dbid)
+from gp_segment_configuration where content=-1 and role='p';
+-- should fail
+create database db2;
+
+select force_mirrors_to_catch_up();
+
+-- since this is a failed case, db oid is invisible, however we need it to search 
+-- our tablespace to check if has db files left over.
+set gp_select_invisible=on;
+select db_dirs(oid) from pg_database where datname = 'db2';
+
+set gp_select_invisible=off;
+
+
+
+--
+--CASE 3: error after XLOG_DBASE_CREATE on segment
+--
+select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+select gp_inject_fault('after_xlog_create_database', 'error', dbid)
+from gp_segment_configuration where content=0 and role='p';
+-- should fail
+create database db3;
+
+select force_mirrors_to_catch_up();
+
+-- since this is a failed case, db oid is invisible, however we need it to search 
+-- our tablespace to check if has db files left over.
+set gp_select_invisible=on;
+select db_dirs(oid) from pg_database where datname = 'db3';
+
+set gp_select_invisible=off;
+
+
+
+--
+--CASE 4: panic after XLOG_XACT_PREPARE on segment
+--
+select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+select gp_inject_fault_infinite('fts_probe', 'skip', dbid)
+from gp_segment_configuration where content=-1 and role='p';
+select gp_inject_fault('end_prepare_two_phase', 'panic', dbid)
+from gp_segment_configuration where content=0 and role='p';
+-- should fail
+create database db4;
+
+select force_mirrors_to_catch_up();
+
+-- since this is a failed case, db oid is invisible, however we need it to search 
+-- our tablespace to check if has db files left over.
+set gp_select_invisible=on;
+select db_dirs(oid) from pg_database where datname = 'db4';
+
+set gp_select_invisible=off;
+-- start_ignore
+select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+select force_mirrors_to_catch_up();
+-- end_ignore

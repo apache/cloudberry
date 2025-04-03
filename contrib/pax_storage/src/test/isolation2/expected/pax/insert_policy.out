@@ -1,0 +1,100 @@
+-- @Description Tests the pax_tbl segment file selection policy
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT);
+CREATE
+-- Case 1: Both transactions insert initial segment files into pax_tbl.
+1: BEGIN;
+BEGIN
+2: BEGIN;
+BEGIN
+1: INSERT INTO pax_tbl VALUES (1);
+INSERT 1
+-- Segment file 1 should be created
+3: SELECT ptblockname FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname 
+-------------
+(0 rows)
+2: INSERT INTO pax_tbl VALUES (1);
+INSERT 1
+-- Segment file 2 should be created
+3: SELECT ptblockname FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname 
+-------------
+(0 rows)
+2: COMMIT;
+COMMIT
+-- Transaction 2 should commit before 1.  It validates that
+-- transaction 2 chose a different segfile than transaction 1.
+1: COMMIT;
+COMMIT
+3: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname | pttupcount 
+-------------+------------
+ 0           | 1          
+ 1           | 1          
+(2 rows)
+
+-- Case 2: Concurrent inserts with existing segment files in pax_tbl.
+1: INSERT INTO pax_tbl VALUES (1);
+INSERT 1
+3: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname | pttupcount 
+-------------+------------
+ 0           | 1          
+ 1           | 1          
+ 2           | 1          
+(3 rows)
+-- Here we aim to insert a tuple to the same seg as (1).
+-- Under jump jash, (15) and (1) are on the same seg(seg1).
+1: INSERT INTO pax_tbl VALUES (15);
+INSERT 1
+3: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname | pttupcount 
+-------------+------------
+ 0           | 1          
+ 1           | 1          
+ 2           | 1          
+ 3           | 1          
+(4 rows)
+1: BEGIN;
+BEGIN
+1: INSERT INTO pax_tbl VALUES (15);
+INSERT 1
+2: BEGIN;
+BEGIN
+2: INSERT INTO pax_tbl VALUES (15);
+INSERT 1
+1: COMMIT;
+COMMIT
+2: COMMIT;
+COMMIT
+3: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname | pttupcount 
+-------------+------------
+ 0           | 1          
+ 1           | 1          
+ 2           | 1          
+ 3           | 1          
+ 4           | 1          
+ 5           | 1          
+(6 rows)
+1: insert into pax_tbl select generate_series(1,100000);
+INSERT 100000
+1: INSERT INTO pax_tbl VALUES (15);
+INSERT 1
+3: SELECT ptblockname, case when pttupcount = 0 then 'zero' when pttupcount <= 5 then 'few' else 'many' end FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname | case 
+-------------+------
+ 0           | few  
+ 1           | few  
+ 2           | few  
+ 3           | few  
+ 4           | few  
+ 5           | few  
+ 6           | many 
+ 7           | few  
+ 0           | many 
+ 0           | many 
+(10 rows)

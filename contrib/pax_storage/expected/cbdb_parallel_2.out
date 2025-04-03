@@ -1,0 +1,2305 @@
+--
+-- CBDB PARALLEL
+-- Test CBDB style parallel plan.
+-- GUCs shoule be set with local, do not disturb other parallel plans.
+-- Should not use force_parallel_mode as it will ignore plan and check results only.
+-- We want to check plan in this file!
+-- If there is need to do that, set it local inside a transaction.
+-- Set optimizer off in this file, ORCA parallel is not supported.
+--
+-- Locus check expression:
+-- This is just used to check locus codes in cdbpath_motion_for_parallel_join/cdbpathlocus_parallel_join
+-- with corresponding examples quickly for parallel join.
+-- Format:
+--  1_2_3 means locus 1 join locus 2 generate locus 3.
+--  1_P_2_3 means locus 1 Join(with shared hash table) locus 2 generate locus 3.
+--  All this format represents for parallel join, while P implies it's a parallel_aware join.
+--
+-- The numbers steal from CdbLocusType enum.
+--  0   CdbLocusType_Null
+--  1   CdbLocusType_Entry
+--  2   CdbLocusType_SingleQE
+--  3   CdbLocusType_General
+--  4   CdbLocusType_SegmentGeneral
+--  5   CdbLocusType_SegmentGeneralWorkers
+--  6   CdbLocusType_OuterQuery
+--  7   CdbLocusType_Replicated
+--  8   CdbLocusType_ReplicatedWorkers
+--  9   CdbLocusType_Hashed
+--  10  CdbLocusType_HashedOJ
+--  11  CdbLocusType_Strewn
+--  12  CdbLocusType_HashedWorkers
+--
+--
+set force_parallel_mode = 0;
+set optimizer = off;
+create schema test_parallel;
+set search_path to test_parallel;
+-- set this to default in case regress change it by gpstop.
+set gp_appendonly_insert_files = 4;
+-- CBDB(#131): test parallel_workers during create AO/AOCO table take effect
+begin;
+set local enable_parallel = on;
+create table test_131_ao1(x int, y int) using ao_row with(parallel_workers=2);
+create table test_131_ao2(x int, y int) using ao_row with(parallel_workers=2);
+create table test_131_ao3(x int, y int) using ao_row with(parallel_workers=0);
+create table test_131_ao4(x int, y int) using ao_row with(parallel_workers=0);
+create table test_131_aoco1(x int, y int) using ao_column with(parallel_workers=2);
+create table test_131_aoco2(x int, y int) using ao_column with(parallel_workers=2);
+create table test_131_aoco3(x int, y int) using ao_column with(parallel_workers=0);
+create table test_131_aoco4(x int, y int) using ao_column with(parallel_workers=0);
+select relname, reloptions from pg_catalog.pg_class where relname like 'test_131_ao%';
+    relname     |      reloptions      
+----------------+----------------------
+ test_131_ao1   | {parallel_workers=2}
+ test_131_ao2   | {parallel_workers=2}
+ test_131_ao3   | {parallel_workers=0}
+ test_131_ao4   | {parallel_workers=0}
+ test_131_aoco1 | {parallel_workers=2}
+ test_131_aoco2 | {parallel_workers=2}
+ test_131_aoco3 | {parallel_workers=0}
+ test_131_aoco4 | {parallel_workers=0}
+(8 rows)
+
+explain(locus, costs off) select count(*) from test_131_ao1, test_131_ao2 where test_131_ao1.x = test_131_ao2.x;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               ->  Parallel Hash Join
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+                     Hash Cond: (test_131_ao1.x = test_131_ao2.x)
+                     ->  Parallel Seq Scan on test_131_ao1
+                           Locus: HashedWorkers
+                           Parallel Workers: 2
+                     ->  Parallel Hash
+                           Locus: Hashed
+                           ->  Parallel Seq Scan on test_131_ao2
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+explain(locus, costs off) select count(*) from test_131_ao3, test_131_ao4 where test_131_ao3.x = test_131_ao4.x;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: Hashed
+               ->  Hash Join
+                     Locus: Hashed
+                     Hash Cond: (test_131_ao3.x = test_131_ao4.x)
+                     ->  Seq Scan on test_131_ao3
+                           Locus: Hashed
+                     ->  Hash
+                           Locus: Hashed
+                           ->  Seq Scan on test_131_ao4
+                                 Locus: Hashed
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+explain(locus, costs off) select count(*) from test_131_aoco1, test_131_aoco2 where test_131_aoco1.x = test_131_aoco2.x;
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               ->  Parallel Hash Join
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+                     Hash Cond: (test_131_aoco1.x = test_131_aoco2.x)
+                     ->  Parallel Seq Scan on test_131_aoco1
+                           Locus: HashedWorkers
+                           Parallel Workers: 2
+                     ->  Parallel Hash
+                           Locus: Hashed
+                           ->  Parallel Seq Scan on test_131_aoco2
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+explain(locus, costs off) select count(*) from test_131_aoco3, test_131_aoco4 where test_131_aoco3.x = test_131_aoco4.x;
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Vec Finalize Vec Aggregate
+   ->  Vec Gather Motion 3:1  (slice1; segments: 3)
+         ->  Vec Partial Vec Aggregate
+               ->  Vec Hash Join
+                     Hash Cond: (test_131_aoco3.x = test_131_aoco4.x)
+                     ->  Vec Seq Scan on test_131_aoco3
+                     ->  Vec Hash
+                           ->  Vec Seq Scan on test_131_aoco4
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+abort;
+create table ao1(x int, y int);
+create table ao2(x int, y int);
+create table aocs1(x int, y int);
+begin;
+-- encourage use of parallel plans
+set local min_parallel_table_scan_size = 0;
+set local max_parallel_workers_per_gather = 4;
+-- test insert into multiple files even enable_parallel is off.
+set local enable_parallel = off;
+-- insert multiple segfiles for parallel
+set local gp_appendonly_insert_files = 4;
+set local gp_appendonly_insert_files_tuples_range = 50000;
+-- test appendonly table parallel 
+insert into ao1 select i, i from generate_series(1, 1200000) g(i);
+analyze ao1;
+insert into ao2 select i%10, i from generate_series(1, 1200000) g(i);
+analyze ao2;
+set local enable_parallel = on;
+explain(costs off) select count(*) from ao1;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on ao1
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(*) from ao1;
+  count  
+---------
+ 1200000
+(1 row)
+
+-- test aocs table parallel 
+set local enable_parallel = off;
+insert into aocs1 select i, i from generate_series(1, 1200000) g(i);
+analyze aocs1;
+set local enable_parallel = on;
+explain(costs off) select count(*) from aocs1;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on aocs1
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(*) from aocs1;
+  count  
+---------
+ 1200000
+(1 row)
+
+-- test locus of HashedWorkers can parallel join without motion
+explain(locus, costs off) select count(*) from ao1, ao2 where ao1.x = ao2.x;
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 12:1  (slice1; segments: 12)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedWorkers
+               Parallel Workers: 4
+               ->  Parallel Hash Join
+                     Locus: HashedWorkers
+                     Parallel Workers: 4
+                     Hash Cond: (ao1.x = ao2.x)
+                     ->  Parallel Seq Scan on ao1
+                           Locus: HashedWorkers
+                           Parallel Workers: 4
+                     ->  Parallel Hash
+                           Locus: Hashed
+                           ->  Parallel Seq Scan on ao2
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 4
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+select count(*) from ao1, ao2 where ao1.x = ao2.x;
+  count  
+---------
+ 1080000
+(1 row)
+
+reset enable_parallel;
+commit;
+--
+-- test parallel with indices
+--
+create index on ao1(y);
+create index on aocs1(y);
+analyze ao1;
+analyze aocs1;
+-- test AO/AOCS should not be IndexScan
+begin;
+set local enable_parallel = on;
+set local enable_seqscan = off;
+set local enable_indexscan = on;
+set local enable_bitmapscan = on;
+set local max_parallel_workers_per_gather=1;
+explain(costs off) select y from ao1 where y > 1000000;
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using ao1_y_idx on ao1
+         Index Cond: (y > 1000000)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain(costs off) select y from aocs1 where y > 1000000;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using aocs1_y_idx on aocs1
+         Index Cond: (y > 1000000)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+set local max_parallel_workers_per_gather=0;
+explain(costs off) select y from ao1 where y > 1000000;
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using ao1_y_idx on ao1
+         Index Cond: (y > 1000000)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain(costs off) select y from aocs1 where y > 1000000;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using aocs1_y_idx on aocs1
+         Index Cond: (y > 1000000)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+commit;
+drop table ao1;
+drop table ao2;
+drop table aocs1;
+-- test Parallel Bitmap Heap Scan
+begin;
+create table t1(c1 int, c2 int) with(parallel_workers=2) distributed by (c1);
+set local enable_parallel = on;
+create index on t1(c2);
+insert into t1 select i, i from generate_series(1, 1000000) i;
+analyze t1;
+set local force_parallel_mode = 1;
+set local enable_seqscan = off;
+explain(locus, costs off) select c2 from t1;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Index Only Scan using t1_c2_idx on t1
+         Locus: HashedWorkers
+         Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+-- results check
+explain(locus, costs off) select count(c2) from t1;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               ->  Parallel Index Only Scan using t1_c2_idx on t1
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(c2) from t1;
+  count  
+---------
+ 1000000
+(1 row)
+
+set local enable_parallel = off;
+explain(locus, costs off) select count(c2) from t1;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: Hashed
+               ->  Index Only Scan using t1_c2_idx on t1
+                     Locus: Hashed
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select count(c2) from t1;
+  count  
+---------
+ 1000000
+(1 row)
+
+abort;
+-- test replicated tables parallel
+begin;
+set local max_parallel_workers_per_gather = 2;
+create table t1(a int, b int) with(parallel_workers=2);
+create table rt1(a int, b int) with(parallel_workers=2) distributed replicated;
+create table rt2(a int, b int) distributed replicated;
+create table rt3(a int, b int) distributed replicated;
+insert into t1 select i, i from generate_series(1, 100000) i;
+insert into t1 select i, i+1 from generate_series(1, 10) i;
+insert into rt1 select i, i+1 from generate_series(1, 10) i;
+insert into rt2 select i, i+1 from generate_series(1, 10000) i;
+insert into rt3 select i, i+1 from generate_series(1, 10) i;
+analyze t1;
+analyze rt1;
+analyze rt2;
+analyze rt3;
+-- replica parallel select
+set local enable_parallel = off;
+explain(locus, costs off) select * from rt1;
+                  QUERY PLAN                  
+----------------------------------------------
+ Vec Gather Motion 1:1  (slice1; segments: 1)
+   ->  Vec Seq Scan on rt1
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select * from rt1;
+ a  | b  
+----+----
+  1 |  2
+  2 |  3
+  3 |  4
+  4 |  5
+  5 |  6
+  6 |  7
+  7 |  8
+  8 |  9
+  9 | 10
+ 10 | 11
+(10 rows)
+
+set local enable_parallel = on;
+explain(locus, costs off) select * from rt1;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   Locus: Entry
+   ->  Parallel Seq Scan on rt1
+         Locus: SegmentGeneralWorkers
+         Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select * from rt1;
+ a  | b  
+----+----
+  1 |  2
+  2 |  3
+  3 |  4
+  4 |  5
+  5 |  6
+  6 |  7
+  7 |  8
+  8 |  9
+  9 | 10
+ 10 | 11
+(10 rows)
+
+-- replica join replica
+set local enable_parallel = off;
+select * from rt1 join rt2 on rt2.b = rt1.a;
+ a  | b  | a | b  
+----+----+---+----
+  2 |  3 | 1 |  2
+  3 |  4 | 2 |  3
+  4 |  5 | 3 |  4
+  5 |  6 | 4 |  5
+  6 |  7 | 5 |  6
+  7 |  8 | 6 |  7
+  8 |  9 | 7 |  8
+  9 | 10 | 8 |  9
+ 10 | 11 | 9 | 10
+(9 rows)
+
+set local enable_parallel = on;
+explain(locus, costs off) select * from rt1 join rt2 on rt2.b = rt1.a;
+                  QUERY PLAN                  
+----------------------------------------------
+ Vec Gather Motion 1:1  (slice1; segments: 1)
+   ->  Vec Hash Join
+         Hash Cond: (rt2.b = rt1.a)
+         ->  Vec Seq Scan on rt2
+         ->  Vec Hash
+               ->  Vec Seq Scan on rt1
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select * from rt1 join rt2 on rt2.b = rt1.a;
+ a  | b  | a | b  
+----+----+---+----
+  2 |  3 | 1 |  2
+  3 |  4 | 2 |  3
+  4 |  5 | 3 |  4
+  5 |  6 | 4 |  5
+  6 |  7 | 5 |  6
+  7 |  8 | 6 |  7
+  8 |  9 | 7 |  8
+  9 | 10 | 8 |  9
+ 10 | 11 | 9 | 10
+(9 rows)
+
+--
+-- ex 5_P_5_5
+-- SegmentGeneralWorkers parallel join SegmentGeneralWorkers when parallel_aware generate SegmentGeneralWorerks locus.
+--
+set local min_parallel_table_scan_size = 0;
+explain(locus, costs off) select * from rt1 join rt2 on rt2.b = rt1.a;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   Locus: Entry
+   ->  Parallel Hash Join
+         Locus: SegmentGeneralWorkers
+         Parallel Workers: 2
+         Hash Cond: (rt2.b = rt1.a)
+         ->  Parallel Seq Scan on rt2
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: SegmentGeneral
+               ->  Parallel Seq Scan on rt1
+                     Locus: SegmentGeneralWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select * from rt1 join rt2 on rt2.b = rt1.a;
+ a  | b  | a | b  
+----+----+---+----
+  2 |  3 | 1 |  2
+  3 |  4 | 2 |  3
+  4 |  5 | 3 |  4
+  5 |  6 | 4 |  5
+  6 |  7 | 5 |  6
+  7 |  8 | 6 |  7
+  8 |  9 | 7 |  8
+  9 | 10 | 8 |  9
+ 10 | 11 | 9 | 10
+(9 rows)
+
+--
+-- ex 5_4_5
+-- SegmentGeneralWorkers parallel join SegmentGeneral generate SegmentGeneralWorkers locus. 
+--
+set local enable_parallel_hash = off;
+explain(locus, costs off) select * from rt1 join rt2 on rt2.b = rt1.a;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   Locus: Entry
+   ->  Hash Join
+         Locus: SegmentGeneralWorkers
+         Parallel Workers: 2
+         Hash Cond: (rt2.b = rt1.a)
+         ->  Parallel Seq Scan on rt2
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Hash
+               Locus: SegmentGeneral
+               ->  Seq Scan on rt1
+                     Locus: SegmentGeneral
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select * from rt1 join rt2 on rt2.b = rt1.a;
+ a  | b  | a | b  
+----+----+---+----
+  2 |  3 | 1 |  2
+  3 |  4 | 2 |  3
+  4 |  5 | 3 |  4
+  5 |  6 | 4 |  5
+  6 |  7 | 5 |  6
+  7 |  8 | 6 |  7
+  8 |  9 | 7 |  8
+  9 | 10 | 8 |  9
+ 10 | 11 | 9 | 10
+(9 rows)
+
+--
+--  t1 join rt1 join rt2
+--
+set local enable_parallel = off;
+explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Vec Gather Motion 3:1  (slice1; segments: 3)
+   ->  Vec Hash Join
+         Hash Cond: (t1.b = rt1.a)
+         ->  Vec Seq Scan on t1
+         ->  Vec Hash
+               ->  Vec Hash Join
+                     Hash Cond: (rt2.a = rt1.a)
+                     ->  Vec Seq Scan on rt2
+                     ->  Vec Hash
+                           ->  Vec Seq Scan on rt1
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+  2 |  3 |  2 |  2 |  2 |  3
+  3 |  4 |  3 |  3 |  3 |  4
+  4 |  5 |  4 |  4 |  4 |  5
+  7 |  8 |  7 |  7 |  7 |  8
+  8 |  9 |  8 |  8 |  8 |  9
+  3 |  4 |  2 |  3 |  3 |  4
+  4 |  5 |  3 |  4 |  4 |  5
+  5 |  6 |  4 |  5 |  5 |  6
+  8 |  9 |  7 |  8 |  8 |  9
+  9 | 10 |  8 |  9 |  9 | 10
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
+(19 rows)
+
+-- parallel hash join
+set local enable_parallel = on;
+set local enable_parallel_hash = on;
+--
+-- SegmentGeneralWorkers parallel join HashedWorkers when parallel_aware generate HashedWorkers.
+-- ex 12_P_5_12
+-- HashedWorkers parallel join SegmentGeneralWorkers when parallel_aware generate HashedWorkers.
+--
+explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Hash Join
+         Locus: HashedWorkers
+         Parallel Workers: 2
+         Hash Cond: (rt2.a = rt1.a)
+         ->  Parallel Seq Scan on rt2
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: Hashed
+               ->  Parallel Hash Join
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+                     Hash Cond: (t1.b = rt1.a)
+                     ->  Parallel Seq Scan on t1
+                           Locus: HashedWorkers
+                           Parallel Workers: 2
+                     ->  Parallel Hash
+                           Locus: SegmentGeneral
+                           ->  Parallel Seq Scan on rt1
+                                 Locus: SegmentGeneralWorkers
+                                 Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(24 rows)
+
+select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  5 |  6 |  6 |  7
+  6 |  7 |  6 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 |  9 | 10 | 10 | 11
+ 10 | 11 | 10 | 10 | 10 | 11
+  2 |  3 |  2 |  2 |  2 |  3
+  3 |  4 |  2 |  3 |  3 |  4
+  3 |  4 |  3 |  3 |  3 |  4
+  4 |  5 |  3 |  4 |  4 |  5
+  4 |  5 |  4 |  4 |  4 |  5
+  5 |  6 |  4 |  5 |  5 |  6
+  7 |  8 |  7 |  7 |  7 |  8
+  8 |  9 |  7 |  8 |  8 |  9
+  8 |  9 |  8 |  8 |  8 |  9
+  9 | 10 |  8 |  9 |  9 | 10
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
+(19 rows)
+
+--
+--  t1 join rt1 join rt3
+--
+set local enable_parallel = off;
+explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
+                  QUERY PLAN                  
+----------------------------------------------
+ Vec Gather Motion 3:1  (slice1; segments: 3)
+   ->  Vec Hash Join
+         Hash Cond: (t1.b = rt1.a)
+         ->  Vec Hash Join
+               Hash Cond: (t1.b = rt3.a)
+               ->  Vec Seq Scan on t1
+               ->  Vec Hash
+                     ->  Vec Seq Scan on rt3
+         ->  Vec Hash
+               ->  Vec Seq Scan on rt1
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+  2 |  3 |  2 |  2 |  2 |  3
+  3 |  4 |  3 |  3 |  3 |  4
+  4 |  5 |  4 |  4 |  4 |  5
+  7 |  8 |  7 |  7 |  7 |  8
+  8 |  9 |  8 |  8 |  8 |  9
+  3 |  4 |  2 |  3 |  3 |  4
+  4 |  5 |  3 |  4 |  4 |  5
+  5 |  6 |  4 |  5 |  5 |  6
+  8 |  9 |  7 |  8 |  8 |  9
+  9 | 10 |  8 |  9 |  9 | 10
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
+(19 rows)
+
+-- parallel join without parallel hash
+set local enable_parallel = on;
+set local enable_parallel_hash = off;
+-- HashedWorkers parallel join SegmentGeneral generate HashedWorkers.
+explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Hash Join
+         Locus: HashedWorkers
+         Parallel Workers: 2
+         Hash Cond: (t1.b = rt1.a)
+         ->  Hash Join
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               Hash Cond: (t1.b = rt3.a)
+               ->  Parallel Seq Scan on t1
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+               ->  Hash
+                     Locus: SegmentGeneral
+                     ->  Seq Scan on rt3
+                           Locus: SegmentGeneral
+         ->  Hash
+               Locus: SegmentGeneral
+               ->  Seq Scan on rt1
+                     Locus: SegmentGeneral
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
+ a  | b  | a  | b  | a  | b  
+----+----+----+----+----+----
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
+  2 |  3 |  2 |  2 |  2 |  3
+  3 |  4 |  3 |  3 |  3 |  4
+  4 |  5 |  4 |  4 |  4 |  5
+  7 |  8 |  7 |  7 |  7 |  8
+  8 |  9 |  8 |  8 |  8 |  9
+  3 |  4 |  2 |  3 |  3 |  4
+  4 |  5 |  3 |  4 |  4 |  5
+  5 |  6 |  4 |  5 |  5 |  6
+  8 |  9 |  7 |  8 |  8 |  9
+  9 | 10 |  8 |  9 |  9 | 10
+(19 rows)
+
+create table t2(a int, b int) with(parallel_workers=0);
+create table rt4(a int, b int) with(parallel_workers=2) distributed replicated;
+insert into t2 select i, i+1 from generate_series(1, 10) i;
+insert into rt4 select i, i+1 from generate_series(1, 10000) i;
+analyze t2;
+analyze rt4;
+set local enable_parallel = off;
+select * from rt4 join t2 using(b);
+ b  | a  | a  
+----+----+----
+  2 |  1 |  1
+  6 |  5 |  5
+  7 |  6 |  6
+ 10 |  9 |  9
+ 11 | 10 | 10
+  3 |  2 |  2
+  4 |  3 |  3
+  5 |  4 |  4
+  8 |  7 |  7
+  9 |  8 |  8
+(10 rows)
+
+set local enable_parallel = on;
+set local enable_parallel_hash = off;
+--
+-- ex 5_9_12
+-- SegmentGeneralWorkers(w=N) parallel join Hashed(W=0) generate HashedWorkers(w=N).
+--
+explain(locus, costs off) select * from rt4 join t2 using(b);
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Hash Join
+         Locus: HashedWorkers
+         Parallel Workers: 2
+         Hash Cond: (rt4.b = t2.b)
+         ->  Parallel Seq Scan on rt4
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Hash
+               Locus: Hashed
+               ->  Seq Scan on t2
+                     Locus: Hashed
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select * from rt4 join t2 using(b);
+ b  | a  | a  
+----+----+----
+  2 |  1 |  1
+  3 |  2 |  2
+  4 |  3 |  3
+  5 |  4 |  4
+  8 |  7 |  7
+  9 |  8 |  8
+  6 |  5 |  5
+  7 |  6 |  6
+ 10 |  9 |  9
+ 11 | 10 | 10
+(10 rows)
+
+create table t3(a int, b int) with(parallel_workers=2);
+insert into t3 select i, i+1 from generate_series(1, 9000) i;
+analyze t3;
+set local enable_parallel = off;
+select count(*) from rt4 join t3 using(b);
+ count 
+-------
+  9000
+(1 row)
+
+set local enable_parallel = on;
+set local enable_parallel_hash = on;
+--
+-- ex 5_P_12_12
+-- SegmentGeneralWorkers parallel join HashedWorkers when parallel_aware generate HashedWorkers.
+--
+explain(locus, costs off) select * from rt4 join t3 using(b);
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Hash Join
+         Locus: HashedWorkers
+         Parallel Workers: 2
+         Hash Cond: (rt4.b = t3.b)
+         ->  Parallel Seq Scan on rt4
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: Hashed
+               ->  Parallel Seq Scan on t3
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select count(*) from rt4 join t3 using(b);
+ count 
+-------
+  9000
+(1 row)
+
+abort;
+--
+-- ex 5_11_11
+-- SegmentGeneralWorkers(workers=N) join Strewn(worker=0) without shared hash table.
+-- Join locus: Strewn(worker=N).
+--
+begin;
+create table t_replica_workers_2(a int, b int) with(parallel_workers=2) distributed replicated;
+insert into t_replica_workers_2 select i, i+1 from generate_series(1, 10) i;
+analyze t_replica_workers_2;
+create table t_random_workers_0(a int, b int) with(parallel_workers=0) distributed randomly;
+insert into t_random_workers_0 select i, i+1 from generate_series(1, 5) i;
+analyze t_random_workers_0;
+set local enable_parallel= true;
+set local enable_parallel_hash= false;
+explain(locus, costs off) select * from t_replica_workers_2 join t_random_workers_0 using(a);
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Hash Join
+         Locus: Strewn
+         Parallel Workers: 2
+         Hash Cond: (t_replica_workers_2.a = t_random_workers_0.a)
+         ->  Parallel Seq Scan on t_replica_workers_2
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Hash
+               Locus: Strewn
+               ->  Seq Scan on t_random_workers_0
+                     Locus: Strewn
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select * from t_replica_workers_2 join t_random_workers_0 using(a);
+ a | b | b 
+---+---+---
+ 2 | 3 | 3
+ 3 | 4 | 4
+ 1 | 2 | 2
+ 4 | 5 | 5
+ 5 | 6 | 6
+(5 rows)
+
+-- non parallel results
+set local enable_parallel=false;
+select * from t_replica_workers_2 join t_random_workers_0 using(a);
+ a | b | b 
+---+---+---
+ 2 | 3 | 3
+ 3 | 4 | 4
+ 1 | 2 | 2
+ 4 | 5 | 5
+ 5 | 6 | 6
+(5 rows)
+
+abort;
+--
+-- ex 11_P_5_11
+-- Strewn(worker=N) join SegmentGeneralWorkers(workers=N) with shared hash table.
+-- Join locus: Strewn(worker=N).
+--
+begin;
+create table t_replica_workers_2(a int, b int) with(parallel_workers=2) distributed replicated;
+insert into t_replica_workers_2 select i, i+1 from generate_series(1, 10) i;
+analyze t_replica_workers_2;
+create table t_random_workers_2(a int, b int) with(parallel_workers=2) distributed randomly;
+insert into t_random_workers_2 select i, i+1 from generate_series(1, 5) i;
+analyze t_random_workers_2;
+set local enable_parallel= true;
+set local enable_parallel_hash= true;
+explain(locus, costs off) select * from t_replica_workers_2 right join t_random_workers_2 using(a);
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Hash Left Join
+         Locus: Strewn
+         Parallel Workers: 2
+         Hash Cond: (t_random_workers_2.a = t_replica_workers_2.a)
+         ->  Parallel Seq Scan on t_random_workers_2
+               Locus: Strewn
+               Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: SegmentGeneral
+               ->  Parallel Seq Scan on t_replica_workers_2
+                     Locus: SegmentGeneralWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select * from t_replica_workers_2 right join t_random_workers_2 using(a);
+ a | b | b 
+---+---+---
+ 5 | 6 | 6
+ 1 | 2 | 2
+ 2 | 3 | 3
+ 3 | 4 | 4
+ 4 | 5 | 5
+(5 rows)
+
+-- non parallel results
+set local enable_parallel=false;
+select * from t_replica_workers_2 right join t_random_workers_2 using(a);
+ a | b | b 
+---+---+---
+ 1 | 2 | 2
+ 2 | 3 | 3
+ 3 | 4 | 4
+ 4 | 5 | 5
+ 5 | 6 | 6
+(5 rows)
+
+abort;
+--
+-- ex 5_P_11_11
+-- SegmentGeneralWorkers(workers=N) join Strewn(workers=N) with shared hash table.
+-- Join locus: Strewn(workers=N).
+--
+begin;
+create table t_replica_workers_2(a int, b int) with(parallel_workers=2) distributed replicated;
+insert into t_replica_workers_2 select i, i+1 from generate_series(1, 10) i;
+analyze t_replica_workers_2;
+create table t_random_workers_2(a int, b int) with(parallel_workers=2) distributed randomly;
+insert into t_random_workers_2 select i, i+1 from generate_series(1, 5) i;
+analyze t_random_workers_2;
+set local enable_parallel= true;
+set local enable_parallel_hash= true;
+explain(locus, costs off) select * from t_replica_workers_2 join t_random_workers_2 using(a);
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Hash Join
+         Locus: Strewn
+         Parallel Workers: 2
+         Hash Cond: (t_replica_workers_2.a = t_random_workers_2.a)
+         ->  Parallel Seq Scan on t_replica_workers_2
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: Strewn
+               ->  Parallel Seq Scan on t_random_workers_2
+                     Locus: Strewn
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select * from t_replica_workers_2 join t_random_workers_2 using(a);
+ a | b | b 
+---+---+---
+ 2 | 3 | 3
+ 1 | 2 | 2
+ 3 | 4 | 4
+ 4 | 5 | 5
+ 5 | 6 | 6
+(5 rows)
+
+-- non parallel results
+set local enable_parallel=false;
+select * from t_replica_workers_2 join t_random_workers_2 using(a);
+ a | b | b 
+---+---+---
+ 2 | 3 | 3
+ 1 | 2 | 2
+ 3 | 4 | 4
+ 4 | 5 | 5
+ 5 | 6 | 6
+(5 rows)
+
+abort;
+--
+-- Test final join path's parallel_workers should be same with join_locus whose
+-- parallel_workers is different from origin outer path(without motion).
+--
+begin;
+create table t1(a int, b int) with(parallel_workers=3);
+create table t2(b int, a int) with(parallel_workers=2);
+insert into t1 select i, i+1 from generate_series(1, 10) i;
+insert into t2 select i, i+1 from generate_series(1, 5) i;
+analyze t1;
+analyze t2;
+set local optimizer=off;
+set local enable_parallel=on;
+set local max_parallel_workers_per_gather= 4;
+explain(costs off) select * from t1 right join t2 on t1.b = t2.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 9:1  (slice1; segments: 9)
+   ->  Parallel Hash Left Join
+         Hash Cond: (t2.a = t1.b)
+         ->  Redistribute Motion 6:9  (slice2; segments: 6)
+               Hash Key: t2.a
+               Hash Module: 3
+               ->  Parallel Seq Scan on t2
+         ->  Parallel Hash
+               ->  Redistribute Motion 9:9  (slice3; segments: 9)
+                     Hash Key: t1.b
+                     Hash Module: 3
+                     ->  Parallel Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+abort;
+--
+-- Test SingleQE locus could particapte in parallel plan.
+--
+begin;
+create table t1(a int, b int) with(parallel_workers=2);
+create table t2(a int, b int) with(parallel_workers=2);
+insert into t1 select i%10, i from generate_series(1, 5) i;
+insert into t1 values (100000);
+insert into t2 select i%10, i from generate_series(1, 100000) i;
+analyze t1;
+analyze t2;
+set local enable_parallel = on;
+-- parallel hash join with shared table, SinglQE as outer partial path.
+explain(locus, costs off) select * from (select count(*) as a from t2) t2 left join t1 on t1.a = t2.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Hash Left Join
+         Locus: Hashed
+         Parallel Workers: 2
+         Hash Cond: ((count(*)) = t1.a)
+         ->  Redistribute Motion 1:6  (slice2; segments: 1)
+               Locus: Hashed
+               Parallel Workers: 2
+               Hash Key: (count(*))
+               Hash Module: 3
+               ->  Finalize Aggregate
+                     Locus: SingleQE
+                     ->  Gather Motion 6:1  (slice3; segments: 6)
+                           Locus: SingleQE
+                           ->  Partial Aggregate
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+                                 ->  Parallel Seq Scan on t2
+                                       Locus: HashedWorkers
+                                       Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: Hashed
+               ->  Parallel Seq Scan on t1
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(27 rows)
+
+select * from (select count(*) as a from t2) t2 left join t1 on t1.a = t2.a;
+   a    |   a    | b 
+--------+--------+---
+ 100000 | 100000 |  
+(1 row)
+
+set local enable_parallel = off;
+select * from (select count(*) as a from t2) t2 left join t1 on t1.a = t2.a;
+   a    |   a    | b 
+--------+--------+---
+ 100000 | 100000 |  
+(1 row)
+
+set local enable_parallel = on;
+-- parallel hash join with shared table, SinglQE as inner partial path.
+explain(locus, costs off) select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Hash Join
+         Locus: HashedWorkers
+         Parallel Workers: 2
+         Hash Cond: (t1.a = (count(*)))
+         ->  Parallel Seq Scan on t1
+               Locus: HashedWorkers
+               Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: Hashed
+               ->  Redistribute Motion 1:6  (slice2; segments: 1)
+                     Locus: Hashed
+                     Parallel Workers: 2
+                     Hash Key: (count(*))
+                     Hash Module: 3
+                     ->  Finalize Aggregate
+                           Locus: SingleQE
+                           ->  Gather Motion 6:1  (slice3; segments: 6)
+                                 Locus: SingleQE
+                                 ->  Partial Aggregate
+                                       Locus: HashedWorkers
+                                       Parallel Workers: 2
+                                       ->  Parallel Seq Scan on t2
+                                             Locus: HashedWorkers
+                                             Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(27 rows)
+
+select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+   a    | b |   a    
+--------+---+--------
+ 100000 |   | 100000
+(1 row)
+
+set local enable_parallel = off;
+select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+   a    | b |   a    
+--------+---+--------
+ 100000 |   | 100000
+(1 row)
+
+set local enable_parallel = on;
+-- parallel hash join without shared table.
+set local enable_parallel_hash = off;
+explain(locus, costs off) select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Locus: Entry
+   ->  Hash Join
+         Locus: Hashed
+         Hash Cond: ((count(*)) = t1.a)
+         ->  Redistribute Motion 1:3  (slice2; segments: 1)
+               Locus: Hashed
+               Hash Key: (count(*))
+               ->  Finalize Aggregate
+                     Locus: SingleQE
+                     ->  Gather Motion 6:1  (slice3; segments: 6)
+                           Locus: SingleQE
+                           ->  Partial Aggregate
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+                                 ->  Parallel Seq Scan on t2
+                                       Locus: HashedWorkers
+                                       Parallel Workers: 2
+         ->  Hash
+               Locus: Hashed
+               ->  Seq Scan on t1
+                     Locus: Hashed
+ Optimizer: Postgres query optimizer
+(23 rows)
+
+select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+   a    | b |   a    
+--------+---+--------
+ 100000 |   | 100000
+(1 row)
+
+-- parallel merge join
+set local enable_hashjoin = off;
+explain(locus, costs off) select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Locus: Entry
+   ->  Merge Join
+         Locus: Hashed
+         Merge Cond: ((count(*)) = t1.a)
+         ->  Sort
+               Locus: Hashed
+               Sort Key: (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Locus: Hashed
+                     Hash Key: (count(*))
+                     ->  Finalize Aggregate
+                           Locus: SingleQE
+                           ->  Gather Motion 6:1  (slice3; segments: 6)
+                                 Locus: SingleQE
+                                 ->  Partial Aggregate
+                                       Locus: HashedWorkers
+                                       Parallel Workers: 2
+                                       ->  Parallel Seq Scan on t2
+                                             Locus: HashedWorkers
+                                             Parallel Workers: 2
+         ->  Sort
+               Locus: Hashed
+               Sort Key: t1.a
+               ->  Seq Scan on t1
+                     Locus: Hashed
+ Optimizer: Postgres query optimizer
+(27 rows)
+
+select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+   a    | b |   a    
+--------+---+--------
+ 100000 |   | 100000
+(1 row)
+
+-- parallel nestloop join
+set local enable_mergejoin = off;
+set local enable_nestloop = on;
+explain(locus, costs off) select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Locus: Entry
+   ->  Nested Loop
+         Locus: Hashed
+         Join Filter: (t1.a = (count(*)))
+         ->  Redistribute Motion 1:3  (slice2; segments: 1)
+               Locus: Hashed
+               Hash Key: (count(*))
+               ->  Finalize Aggregate
+                     Locus: SingleQE
+                     ->  Gather Motion 6:1  (slice3; segments: 6)
+                           Locus: SingleQE
+                           ->  Partial Aggregate
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+                                 ->  Parallel Seq Scan on t2
+                                       Locus: HashedWorkers
+                                       Parallel Workers: 2
+         ->  Seq Scan on t1
+               Locus: Hashed
+ Optimizer: Postgres query optimizer
+(21 rows)
+
+select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+   a    | b |   a    
+--------+---+--------
+ 100000 |   | 100000
+(1 row)
+
+-- non-parallel results
+set local enable_parallel = off;
+select * from t1 join (select count(*) as a from t2) t2 on t1.a = t2.a;
+   a    | b |   a    
+--------+---+--------
+ 100000 |   | 100000
+(1 row)
+
+abort;
+begin;
+-- use rt1 to generate locus of SegmentGeneralWorkers
+-- use rt2 to generate locus of SegmentGeneral
+-- use t1 to generate locus of HashedWorkers
+-- use t2 to generate locus of Hahsed
+-- use pg_class to generate locus of Entry
+-- use generate_series(1, 1000) to generate locus of General
+-- use select count(*) as a from sq1 to generate locus of SingleQE
+create table rt1(a int, b int) distributed replicated;
+create table rt2(a int, b int) with (parallel_workers = 0) distributed replicated;
+create table t1(a int, b int);
+create table t2(a int, b int) with (parallel_workers = 0);
+insert into t1 select i, i+1 from generate_series(1, 10000) i;
+insert into t2 select i, i+1 from generate_series(1, 10000) i;
+insert into rt1 select i, i+1 from generate_series(1, 10000) i;
+insert into rt2 select i, i+1 from generate_series(1, 10000) i;
+CREATE TABLE sq1 AS SELECT a, b FROM t1 WHERE gp_segment_id = 0;
+set local optimizer=off;
+set local enable_parallel=on;
+set local min_parallel_table_scan_size to 0;
+set local max_parallel_workers_per_gather= 4;
+analyze rt1;
+analyze rt2;
+analyze t1;
+analyze t2;
+analyze sq1;
+-- SegmentGeneralWorkers + SegmengGeneralWorkers = SegmentGeneralWorkers
+explain (locus, costs off) select * from rt1 union all select * from rt1;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   Locus: Entry
+   ->  Parallel Append
+         Locus: SegmentGeneralWorkers
+         Parallel Workers: 2
+         ->  Parallel Seq Scan on rt1
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+         ->  Parallel Seq Scan on rt1 rt1_1
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+-- SegmentGeneralWorkers + SegmentGeneral = SegmentGeneralWorkers
+explain (locus, costs off) select * from rt1 union all select * from rt2;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   Locus: Entry
+   ->  Parallel Append
+         Locus: SegmentGeneralWorkers
+         Parallel Workers: 2
+         ->  Seq Scan on rt2
+               Locus: SegmentGeneral
+         ->  Parallel Seq Scan on rt1
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- SegmentGeneralWorkers (Converted to Strewn, Limited on One Segment) + HashedWorkers = Strewn
+explain (locus, costs off) select * from rt1 union all select * from t1;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Append
+         Locus: Strewn
+         Parallel Workers: 2
+         ->  Result
+               Locus: Strewn
+               Parallel Workers: 2
+               One-Time Filter: (gp_execution_segment() = 1)
+               ->  Parallel Seq Scan on rt1
+                     Locus: SegmentGeneralWorkers
+                     Parallel Workers: 2
+         ->  Parallel Seq Scan on t1
+               Locus: HashedWorkers
+               Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+-- SegmentGeneralWorkers (Converted to Strewn, Limited on One Segment) + Hashed = Strewn
+explain (locus, costs off) select * from rt1 union all select * from t2;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Locus: Entry
+   ->  Parallel Append
+         Locus: Strewn
+         Parallel Workers: 2
+         ->  Seq Scan on t2
+               Locus: Hashed
+         ->  Result
+               Locus: Strewn
+               Parallel Workers: 2
+               One-Time Filter: (gp_execution_segment() = 1)
+               ->  Parallel Seq Scan on rt1
+                     Locus: SegmentGeneralWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+-- SingleQE as subquery seems cannot produce partial_pathlist and don't have chance to parallel append.
+explain (locus, costs off) select a from rt1 union all select count(*) as a from sq1;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Vec Append
+   ->  Vec Gather Motion 1:1  (slice1; segments: 1)
+         ->  Vec Subquery Scan on "*SELECT* 1"
+               ->  Vec Seq Scan on rt1
+   ->  Vec Finalize Vec Aggregate
+         ->  Vec Gather Motion 3:1  (slice2; segments: 3)
+               ->  Vec Partial Vec Aggregate
+                     ->  Vec Seq Scan on sq1
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- SegmentGeneralWorkers + General = SegmentGeneralWorkers
+explain (locus, costs off) select a from rt1 union all select a from generate_series(1, 1000) a;
+                   QUERY PLAN                   
+------------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   Locus: Entry
+   ->  Parallel Append
+         Locus: SegmentGeneralWorkers
+         Parallel Workers: 2
+         ->  Function Scan on generate_series a
+               Locus: General
+         ->  Parallel Seq Scan on rt1
+               Locus: SegmentGeneralWorkers
+               Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- Entry as subquery seems cannot produce partial_pathlist and don't have chance to parallel append.
+-- flaky case failed: expected use seqscan on pg_class but choose indexscan sometimes.
+set local enable_indexscan = off;
+set local enable_indexonlyscan = off;
+explain (locus, costs off) select a from rt1 union all select oid as a from pg_class;
+                   QUERY PLAN                   
+------------------------------------------------
+ Append
+   Locus: Entry
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         Locus: Entry
+         ->  Subquery Scan on "*SELECT* 1"
+               Locus: SegmentGeneral
+               ->  Seq Scan on rt1
+                     Locus: SegmentGeneral
+   ->  Seq Scan on pg_class
+         Locus: Entry
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+abort;
+--
+-- Test two-phase parallel Limit
+--
+begin;
+create table t1(c1 int, c2 int) with(parallel_workers=2);
+insert into t1 select i, i+1 from generate_series(1, 100000) i;
+analyze t1;
+set local optimizer = off;
+set local enable_parallel = on;
+explain(costs off, locus) select * from t1 order by c2 asc limit 3 offset 5;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Limit
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         Merge Key: c2
+         ->  Limit
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               ->  Sort
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+                     Sort Key: c2
+                     ->  Parallel Seq Scan on t1
+                           Locus: HashedWorkers
+                           Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select * from t1 order by c2 asc limit 3 offset 5;
+ c1 | c2 
+----+----
+  6 |  7
+  7 |  8
+  8 |  9
+(3 rows)
+
+-- non-parallel results
+set local enable_parallel = off;
+explain(costs off, locus) select * from t1 order by c2 asc limit 3 offset 5;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         Merge Key: c2
+         ->  Limit
+               Locus: Hashed
+               ->  Sort
+                     Locus: Hashed
+                     Sort Key: c2
+                     ->  Seq Scan on t1
+                           Locus: Hashed
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select * from t1 order by c2 asc limit 3 offset 5;
+ c1 | c2 
+----+----
+  6 |  7
+  7 |  8
+  8 |  9
+(3 rows)
+
+abort;
+--
+-- Test one-phase Limit with parallel subpath
+--
+begin;
+create table t1(c1 int, c2 int) with(parallel_workers=2);
+insert into t1 select i, i+1 from generate_series(1, 100000) i;
+analyze t1;
+set local optimizer = off;
+set local gp_enable_multiphase_limit = off;
+set local enable_parallel = on;
+explain(costs off, locus) select * from t1 order by c2 asc limit 3 offset 5;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         Merge Key: c2
+         ->  Sort
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               Sort Key: c2
+               ->  Parallel Seq Scan on t1
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select * from t1 order by c2 asc limit 3 offset 5;
+ c1 | c2 
+----+----
+  6 |  7
+  7 |  8
+  8 |  9
+(3 rows)
+
+-- non-parallel results
+set local enable_parallel = off;
+explain(costs off, locus) select * from t1 order by c2 asc limit 3 offset 5;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Vec Limit
+   ->  Vec Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: c2
+         ->  Vec Sort
+               Sort Key: c2
+               ->  Vec Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select * from t1 order by c2 asc limit 3 offset 5;
+ c1 | c2 
+----+----
+  6 |  7
+  7 |  8
+  8 |  9
+(3 rows)
+
+abort;
+--
+-- Test Parallel Hash Left Anti Semi (Not-In) Join(parallel-oblivious).
+--
+create table t1(c1 int, c2 int) using ao_row distributed by (c1);
+create table t2(c1 int, c2 int) using ao_row distributed by (c1);
+create table t3_null(c1 int, c2 int) using ao_row distributed by (c1);
+begin;
+set local enable_parallel = on;
+set local gp_appendonly_insert_files = 2;
+set local gp_appendonly_insert_files_tuples_range = 100;
+set local max_parallel_workers_per_gather = 2;
+set local enable_parallel_hash = off;
+insert into t1 select i, i from generate_series(1, 5000000) i;
+insert into t2 select i+1, i from generate_series(1, 1200) i;
+insert into t3_null select i+1, i from generate_series(1, 1200) i;
+insert into t3_null values(NULL, NULL);
+analyze t1;
+analyze t2;
+analyze t3_null;
+explain(costs off) select sum(t1.c1) from t1 where c1 not in (select c1 from t2);
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Hash Left Anti Semi (Not-In) Join
+                     Hash Cond: (t1.c1 = t2.c1)
+                     ->  Parallel Seq Scan on t1
+                     ->  Hash
+                           ->  Broadcast Motion 3:6  (slice2; segments: 3)
+                                 ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select sum(t1.c1) from t1 where c1 not in (select c1 from t2);
+      sum       
+----------------
+ 12500001778200
+(1 row)
+
+explain(costs off) select * from t1 where c1 not in (select c1 from t3_null);
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Hash Left Anti Semi (Not-In) Join
+         Hash Cond: (t1.c1 = t3_null.c1)
+         ->  Parallel Seq Scan on t1
+         ->  Hash
+               ->  Broadcast Motion 3:6  (slice2; segments: 3)
+                     ->  Seq Scan on t3_null
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select * from t1 where c1 not in (select c1 from t3_null);
+ c1 | c2 
+----+----
+(0 rows)
+
+-- non-parallel results.
+set local enable_parallel = off;
+select sum(t1.c1) from t1 where c1 not in (select c1 from t2);
+      sum       
+----------------
+ 12500001778200
+(1 row)
+
+select * from t1 where c1 not in (select c1 from t3_null);
+ c1 | c2 
+----+----
+(0 rows)
+
+end;
+drop table t1;
+drop table t2;
+drop table t3_null;
+--
+-- End of Test Parallel Hash Left Anti Semi (Not-In) Join.
+--
+--
+-- Test Parallel-aware Hash Left Anti Semi (Not-In) Join.
+--
+begin;
+create table t1(c1 int, c2 int) with(parallel_workers=2) distributed by (c1);
+create table t2(c1 int, c2 int) with(parallel_workers=2) distributed by (c1);
+create table t3_null(c1 int, c2 int) with(parallel_workers=2) distributed by (c1);
+set local enable_parallel = on;
+set local max_parallel_workers_per_gather = 2;
+insert into t1 select i, i from generate_series(1, 500000) i;
+insert into t2 select i, i+1 from generate_series(1, 500000) i;
+insert into t3_null select i, i+1 from generate_series(1, 500000) i;
+insert into t3_null values(NULL, NULL);
+analyze t1;
+analyze t2;
+analyze t3_null;
+explain(costs off) select sum(t1.c1) from t1 where c1 not in (select c2 from t2);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Hash Left Anti Semi (Not-In) Join
+                     Hash Cond: (t1.c1 = t2.c2)
+                     ->  Parallel Seq Scan on t1
+                     ->  Parallel Hash
+                           ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)
+                                 ->  Parallel Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select sum(t1.c1) from t1 where c1 not in (select c2 from t2);
+ sum 
+-----
+   1
+(1 row)
+
+explain(costs off) select * from t1 where c1 not in (select c2 from t3_null);
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Parallel Hash Left Anti Semi (Not-In) Join
+         Hash Cond: (t1.c1 = t3_null.c2)
+         ->  Parallel Seq Scan on t1
+         ->  Parallel Hash
+               ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)
+                     ->  Parallel Seq Scan on t3_null
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select * from t1 where c1 not in (select c2 from t3_null);
+ c1 | c2 
+----+----
+(0 rows)
+
+-- non-parallel results.
+set local enable_parallel = off;
+select sum(t1.c1) from t1 where c1 not in (select c2 from t2);
+ sum 
+-----
+   1
+(1 row)
+
+select * from t1 where c1 not in (select c2 from t3_null);
+ c1 | c2 
+----+----
+(0 rows)
+
+drop table t1;
+drop table t2;
+drop table t3_null;
+end;
+--
+-- End of Test Parallel-aware Hash Left Anti Semi (Not-In) Join.
+--
+--
+-- Test alter ao/aocs table parallel_workers options
+--
+begin;
+set local optimizer = off;
+set local enable_parallel = on;
+-- ao table
+create table ao (a INT, b INT) using ao_row;
+insert into ao select i as a, i as b from generate_series(1, 100) AS i;
+alter table ao set (parallel_workers = 2);
+explain(costs off) select count(*) from ao;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on ao
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(*) from ao;
+ count 
+-------
+   100
+(1 row)
+
+alter table ao reset (parallel_workers);
+-- aocs table
+create table aocs (a INT, b INT) using ao_column;
+insert into aocs select i as a, i as b from generate_series(1, 100) AS i;
+alter table aocs set (parallel_workers = 2);
+explain(costs off) select count(*) from aocs;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on aocs
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(*) from aocs;
+ count 
+-------
+   100
+(1 row)
+
+alter table aocs reset (parallel_workers);
+abort;
+--
+-- Test locus after eliding mtion node.
+--
+begin;
+create table t1(c1 int) distributed by (c1);
+insert into t1 values(11), (12);
+analyze t1;
+explain(costs off, locus) select distinct min(c1), max(c1) from t1;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Vec Aggregate
+   ->  Vec Gather Motion 3:1  (slice1; segments: 3)
+         ->  Vec Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+abort;
+begin;
+create table t1(id int) distributed by (id);
+create index on t1(id);
+insert into t1 values(generate_series(1, 100));
+analyze t1;
+set enable_seqscan =off;
+explain (locus, costs off)
+select * from
+  (select count(id) from t1 where id > 10) ss
+  right join (values (1),(2),(3)) v(x) on true;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Nested Loop Left Join
+   Locus: Entry
+   ->  Values Scan on "*VALUES*"
+         Locus: General
+   ->  Materialize
+         Locus: Entry
+         ->  Finalize Aggregate
+               Locus: Entry
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Locus: Entry
+                     ->  Partial Aggregate
+                           Locus: Hashed
+                           ->  Index Only Scan using t1_id_idx on t1
+                                 Locus: Hashed
+                                 Index Cond: (id > 10)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+abort;
+begin;
+create table pagg_tab (a int, b int, c text, d int) partition by list(c);
+create table pagg_tab_p1 partition of pagg_tab for values in ('0000', '0001', '0002', '0003', '0004');
+create table pagg_tab_p2 partition of pagg_tab for values in ('0005', '0006', '0007', '0008');
+create table pagg_tab_p3 partition of pagg_tab for values in ('0009', '0010', '0011');
+insert into pagg_tab select i % 20, i % 30, to_char(i % 12, 'FM0000'), i % 30 from generate_series(0, 2999) i;
+analyze pagg_tab;
+set local enable_parallel to off;
+set local enable_partitionwise_aggregate to true;
+set local enable_partitionwise_join to true;
+set local enable_incremental_sort to off;
+set local enable_hashagg to false;
+set local enable_parallel = off;
+explain (costs off, locus)
+select c, sum(a), avg(b), count(*) from pagg_tab group by 1 having avg(d) < 15 order by 1, 2, 3;
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Vec Sort
+   Sort Key: pagg_tab.c, (sum(pagg_tab.a)), (avg(pagg_tab.b))
+   ->  Vec Append
+         ->  Vec Finalize Vec GroupAggregate
+               Group Key: pagg_tab.c
+               Filter: (avg(pagg_tab.d) < '15'::numeric)
+               ->  Vec Gather Motion 3:1  (slice1; segments: 3)
+                     Merge Key: pagg_tab.c
+                     ->  Vec Partial Vec GroupAggregate
+                           Group Key: pagg_tab.c
+                           ->  Vec Sort
+                                 Sort Key: pagg_tab.c
+                                 ->  Vec Seq Scan on pagg_tab_p1 pagg_tab
+         ->  Vec Finalize Vec GroupAggregate
+               Group Key: pagg_tab_1.c
+               Filter: (avg(pagg_tab_1.d) < '15'::numeric)
+               ->  Vec Gather Motion 3:1  (slice2; segments: 3)
+                     Merge Key: pagg_tab_1.c
+                     ->  Vec Partial Vec GroupAggregate
+                           Group Key: pagg_tab_1.c
+                           ->  Vec Sort
+                                 Sort Key: pagg_tab_1.c
+                                 ->  Vec Seq Scan on pagg_tab_p2 pagg_tab_1
+         ->  Vec Finalize Vec GroupAggregate
+               Group Key: pagg_tab_2.c
+               Filter: (avg(pagg_tab_2.d) < '15'::numeric)
+               ->  Vec Gather Motion 3:1  (slice3; segments: 3)
+                     Merge Key: pagg_tab_2.c
+                     ->  Vec Partial Vec GroupAggregate
+                           Group Key: pagg_tab_2.c
+                           ->  Vec Sort
+                                 Sort Key: pagg_tab_2.c
+                                 ->  Vec Seq Scan on pagg_tab_p3 pagg_tab_2
+ Optimizer: Postgres query optimizer
+(34 rows)
+
+abort;
+--
+-- End of Test locus after eliding mtion node.
+--
+--
+-- Test outer path has Motion of parallel plan. 
+--
+begin;
+create table t1(a int, b int) with(parallel_workers=3);
+create table t2(b int, a int) with(parallel_workers=2);
+insert into t1 select i, i+1 from generate_series(1, 10) i;
+insert into t2 select i, i+1 from generate_series(1, 5) i;
+analyze t1;
+analyze t2;
+set local optimizer=off;
+set local enable_parallel=on;
+set local enable_parallel_hash=off;
+set local max_parallel_workers_per_gather= 4;
+explain(costs off) select * from t1 right join t2 on t1.b = t2.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Hash Left Join
+         Hash Cond: (t2.a = t1.b)
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: t2.a
+               Hash Module: 3
+               ->  Parallel Seq Scan on t2
+         ->  Hash
+               ->  Redistribute Motion 3:6  (slice3; segments: 3)
+                     Hash Key: t1.b
+                     Hash Module: 3
+                     ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+abort;
+--
+-- Parallel Refresh AO Materialized View
+--
+-- start_ignore
+create or replace function refresh_compare(ao_row bool, verbose bool, OUT parallel_is_better bool) as $$
+declare
+ t timestamptz;
+ dur0 interval;
+ dur1 interval;
+ results0 RECORD;
+ results1 RECORD;
+begin
+  create table t_p(c1 int, c2 int) with(parallel_workers=8) distributed by(c1);
+  insert into t_p select i, i+1 from generate_series(1, 10000000)i;
+  analyze t_p;
+  if ao_row then
+    create materialized view matv using ao_row as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p a join t_p b on a.c1 = b.c1 with no data distributed by(c2);
+  else
+    create materialized view matv using ao_column as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p a join t_p b on a.c1 = b.c1 with no data distributed by(c2);
+  end if;
+  -- refresh
+  set enable_parallel=off;
+  t = clock_timestamp();
+  refresh materialized view matv;
+  dur0 = age(clock_timestamp(), t);
+  select * into results0 from matv;
+  if refresh_compare.verbose then
+    raise notice 'Non-parallel refresh duration=%', dur0;
+    raise notice 'Non-parallel results=%', results0;
+  end if;
+  -- parallel refresh
+  set enable_parallel=on;
+  t = clock_timestamp();
+  refresh materialized view matv;
+  dur1 = age(clock_timestamp(), t);
+  select * into results1 from matv;
+  if refresh_compare.verbose then
+    raise notice 'Parallel refresh duration=%', dur1;
+    raise notice 'Parallel results=%', results1;
+  end if;
+  -- compare
+  if results0 <> results1 then
+    raise notice 'results of non-parallel % are not equal to parallel %', results0, results1;
+  end if;
+  parallel_is_better = dur0 > dur1;
+  if NOT parallel_is_better then
+    raise notice 'Non-parallel refresh duration=%', dur0;
+    raise notice 'Parallel refresh duration=%', dur1;
+  end if;
+  drop materialized view  matv;
+  drop table t_p;
+  reset enable_parallel;
+end
+$$ language plpgsql;
+begin;
+set local max_parallel_workers_per_gather = 8;
+select * from refresh_compare(true, false);
+ parallel_is_better 
+--------------------
+ t
+(1 row)
+
+select * from refresh_compare(false, false);
+ parallel_is_better 
+--------------------
+ t
+(1 row)
+
+drop function refresh_compare;
+reset max_parallel_workers_per_gather;
+end;
+-- end_ignore
+--
+-- Parallel Create AO/AOCO Table AS
+--
+begin;
+create table t_p2(c1 int, c2 int) with(parallel_workers=2) distributed by(c1);
+insert into t_p2 select i, i+1 from generate_series(1, 10000000)i;
+analyze t_p2;
+set local enable_parallel = off;
+explain(costs off) create table ctas_ao using ao_row as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p2 a join t_p2 b on a.c1 = b.c1 distributed by(c2);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Vec Redistribute Motion 1:3  (slice1; segments: 1)
+   Hash Key: (sum(a.c2))
+   ->  Vec Finalize Vec Aggregate
+         ->  Vec Gather Motion 3:1  (slice2; segments: 3)
+               ->  Vec Partial Vec Aggregate
+                     ->  Vec Hash Join
+                           Hash Cond: (a.c1 = b.c1)
+                           ->  Vec Seq Scan on t_p2 a
+                           ->  Vec Hash
+                                 ->  Vec Seq Scan on t_p2 b
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+explain(costs off) create table ctas_aoco using ao_column as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p2 a join t_p2 b on a.c1 = b.c1 distributed by(c2);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Vec Redistribute Motion 1:3  (slice1; segments: 1)
+   Hash Key: (sum(a.c2))
+   ->  Vec Finalize Vec Aggregate
+         ->  Vec Gather Motion 3:1  (slice2; segments: 3)
+               ->  Vec Partial Vec Aggregate
+                     ->  Vec Hash Join
+                           Hash Cond: (a.c1 = b.c1)
+                           ->  Vec Seq Scan on t_p2 a
+                           ->  Vec Hash
+                                 ->  Vec Seq Scan on t_p2 b
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+set local enable_parallel = on;
+explain(costs off) create table ctas_ao using ao_row as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p2 a join t_p2 b on a.c1 = b.c1 distributed by(c2);
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1)
+   Hash Key: (sum(a.c2))
+   ->  Finalize Aggregate
+         ->  Gather Motion 6:1  (slice2; segments: 6)
+               ->  Partial Aggregate
+                     ->  Parallel Hash Join
+                           Hash Cond: (a.c1 = b.c1)
+                           ->  Parallel Seq Scan on t_p2 a
+                           ->  Parallel Hash
+                                 ->  Parallel Seq Scan on t_p2 b
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+explain(costs off) create table ctas_aoco using ao_column as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p2 a join t_p2 b on a.c1 = b.c1 distributed by(c2);
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1)
+   Hash Key: (sum(a.c2))
+   ->  Finalize Aggregate
+         ->  Gather Motion 6:1  (slice2; segments: 6)
+               ->  Partial Aggregate
+                     ->  Parallel Hash Join
+                           Hash Cond: (a.c1 = b.c1)
+                           ->  Parallel Seq Scan on t_p2 a
+                           ->  Parallel Hash
+                                 ->  Parallel Seq Scan on t_p2 b
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+abort;
+--
+-- Parallel Semi Join
+--
+begin;
+set local optimizer=off;
+set local enable_parallel=on;
+set local force_parallel_mode =1 ;
+set local min_parallel_table_scan_size = 0;
+create table semi_t1 (c1 integer) with(parallel_workers=2) distributed randomly;
+create table semi_t2 (c2 integer) with(parallel_workers=2) distributed randomly;
+insert into semi_t1 values (generate_series (1,20000));
+insert into semi_t2 values (generate_series (1,10000));
+analyze semi_t1;
+analyze semi_t2;
+-- Parallel-aware Hash Semi Join
+explain(costs off) select c1 from semi_t1 where not c1 >=all (select c2 from semi_t2 where c2 = c1);
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Parallel Hash Semi Join
+         Hash Cond: (semi_t1.c1 = semi_t2.c2)
+         Join Filter: (semi_t1.c1 < semi_t2.c2)
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: semi_t1.c1
+               Hash Module: 3
+               ->  Parallel Seq Scan on semi_t1
+         ->  Parallel Hash
+               ->  Redistribute Motion 6:6  (slice3; segments: 6)
+                     Hash Key: semi_t2.c2
+                     Hash Module: 3
+                     ->  Parallel Seq Scan on semi_t2
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+-- Parallel-oblivious Hash Semi Join
+set local enable_parallel_hash = off;
+explain(costs off) select c1 from semi_t1 where not c1 >=all (select c2 from semi_t2 where c2 = c1);
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Hash Semi Join
+         Hash Cond: (semi_t1.c1 = semi_t2.c2)
+         Join Filter: (semi_t1.c1 < semi_t2.c2)
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: semi_t1.c1
+               Hash Module: 3
+               ->  Parallel Seq Scan on semi_t1
+         ->  Hash
+               ->  Redistribute Motion 3:6  (slice3; segments: 3)
+                     Hash Key: semi_t2.c2
+                     Hash Module: 3
+                     ->  Seq Scan on semi_t2
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+-- Parallel Merge Semi Join
+set local enable_hashjoin = off;
+explain(costs off) select c1 from semi_t1 where not c1 >=all (select c2 from semi_t2 where c2 = c1);
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Merge Semi Join
+         Merge Cond: (semi_t1.c1 = semi_t2.c2)
+         Join Filter: (semi_t1.c1 < semi_t2.c2)
+         ->  Sort
+               Sort Key: semi_t1.c1
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: semi_t1.c1
+                     Hash Module: 3
+                     ->  Parallel Seq Scan on semi_t1
+         ->  Sort
+               Sort Key: semi_t2.c2
+               ->  Redistribute Motion 3:6  (slice3; segments: 3)
+                     Hash Key: semi_t2.c2
+                     Hash Module: 3
+                     ->  Seq Scan on semi_t2
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+set local enable_mergejoin = off;
+set local enable_nestloop = on;
+-- Parallel Nested Loop Semi Join
+explain(costs off) select c1 from semi_t1 where not c1 >=all (select c2 from semi_t2 where c2 = c1);
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Nested Loop Semi Join
+         Join Filter: ((semi_t1.c1 < semi_t2.c2) AND (semi_t1.c1 = semi_t2.c2))
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: semi_t1.c1
+               Hash Module: 3
+               ->  Parallel Seq Scan on semi_t1
+         ->  Materialize
+               ->  Redistribute Motion 3:6  (slice3; segments: 3)
+                     Hash Key: semi_t2.c2
+                     Hash Module: 3
+                     ->  Seq Scan on semi_t2
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+abort;
+--
+-- Test Materialize locus when enable_material is off.
+--
+begin;
+create table t1(id int) distributed by (id);
+create index on t1(id);
+insert into t1 values(generate_series(1, 100));
+analyze t1;
+set enable_seqscan =off;
+set enable_material =off;
+explain (locus, costs off)
+select * from
+  (select count(id) from t1 where id > 10) ss
+  right join (values (1),(2),(3)) v(x) on true;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Nested Loop Left Join
+   Locus: Entry
+   ->  Values Scan on "*VALUES*"
+         Locus: General
+   ->  Materialize
+         Locus: Entry
+         ->  Finalize Aggregate
+               Locus: Entry
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Locus: Entry
+                     ->  Partial Aggregate
+                           Locus: Hashed
+                           ->  Index Only Scan using t1_id_idx on t1
+                                 Locus: Hashed
+                                 Index Cond: (id > 10)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+abort;
+-- Subplan locus, One-time flter locus is null
+begin;
+drop table if exists mrs_t1;
+NOTICE:  table "mrs_t1" does not exist, skipping
+create table mrs_t1(x int) distributed by (x);
+insert into mrs_t1 select generate_series(1,20);
+analyze mrs_t1;
+explain(locus, costs off) select * from mrs_t1 where exists (select x from mrs_t1 where x < -1);
+                      QUERY PLAN                      
+------------------------------------------------------
+ Vec Gather Motion 3:1  (slice1; segments: 3)
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Vec Gather Motion 3:1  (slice3; segments: 3)
+           ->  Vec Seq Scan on mrs_t1 mrs_t1_1
+                 Filter: (x < '-1'::integer)
+   ->  Vec Result
+         One-Time Filter: $0
+         ->  Vec Seq Scan on mrs_t1
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain(locus, costs off) select * from mrs_t1 where exists (select x from mrs_t1 where x = 1);
+                      QUERY PLAN                      
+------------------------------------------------------
+ Vec Gather Motion 3:1  (slice1; segments: 3)
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Vec Gather Motion 1:1  (slice3; segments: 1)
+           ->  Vec Seq Scan on mrs_t1 mrs_t1_1
+                 Filter: (x = 1)
+   ->  Vec Result
+         One-Time Filter: $0
+         ->  Vec Seq Scan on mrs_t1
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain(locus, costs off) select * from mrs_t1 where x in (select x-95 from mrs_t1) or x < 5;
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Locus: Entry
+   ->  Seq Scan on mrs_t1
+         Locus: Hashed
+         Filter: ((hashed SubPlan 1) OR (x < 5))
+         SubPlan 1
+           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 Locus: Replicated
+                 ->  Seq Scan on mrs_t1 mrs_t1_1
+                       Locus: Hashed
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+explain(locus, costs off) select * from pg_class where oid in (select x-95 from mrs_t1) or oid < 5;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Seq Scan on pg_class
+   Locus: Entry
+   Filter: ((hashed SubPlan 1) OR (oid < '5'::oid))
+   SubPlan 1
+     ->  Gather Motion 3:1  (slice1; segments: 3)
+           Locus: Entry
+           ->  Seq Scan on mrs_t1
+                 Locus: Hashed
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+drop table if exists mrs_t1;
+abort;
+-- prepare, execute locus is null
+begin;
+create table t1(c1 int, c2 int);
+analyze t1;
+prepare t1_count(integer) as select count(*) from t1;
+explain(locus, costs off) execute t1_count(1);
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         ->  Seq Scan on t1
+               Locus: Hashed
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+abort;
+-- Result locus is null
+begin;
+create table t1(id int) distributed by (id);
+create index on t1(id);
+insert into t1 values(generate_series(1, 10));
+analyze t1;
+explain(costs off, locus) select max(100) from t1;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Result
+   Locus: Entry
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Limit
+           Locus: Entry
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 Locus: Entry
+                 ->  Result
+                       Locus: Hashed
+                       One-Time Filter: (100 IS NOT NULL)
+                       ->  Seq Scan on t1
+                             Locus: Hashed
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+abort;
+-- start_ignore
+drop schema test_parallel cascade;
+-- end_ignore
+reset gp_appendonly_insert_files;
+reset force_parallel_mode;
+reset optimizer;

@@ -16,6 +16,8 @@ SELECT relname, relhasindex
    WHERE relkind IN ('r', 'p') AND (nspname ~ '^pg_temp_') IS NOT TRUE
    AND relname NOT LIKE 'gp_%'
    AND relname NOT LIKE '__gp_%'
+   -- CBDB: ignore relations in extension namespace
+   AND nspname <> 'pg_ext_aux'
    AND relname <> 'pg_resqueue'
    AND n.nspname <> 'singleseg'
    ORDER BY relname;

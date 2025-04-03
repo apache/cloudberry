@@ -1,0 +1,2 @@
+recursive-include *.cc
+include MANIFEST.in setup.py setup.cfg 

@@ -232,7 +232,7 @@ enable_mapreduce    = @enable_mapreduce@
 enable_shared_postgres_backend    = @enable_shared_postgres_backend@
 enable_gpcloud 	    = @enable_gpcloud@
 enable_ic_proxy     = @enable_ic_proxy@
-
+enable_pax          = @enable_pax@
 enable_tap_tests = @enable_tap_tests@
 
 python_includespec	= @python_includespec@

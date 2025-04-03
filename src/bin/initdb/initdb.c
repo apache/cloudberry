@@ -3259,6 +3259,12 @@ initialize_data_directory(void)
 
 	make_postgres(cmdfd);
 
+	/*
+	 * vacuum template1 to remove the dead tuples. otherwise, some mismatch error 
+	 * will be reported in gp_replica_check.
+	 */
+	vacuum_db(cmdfd);
+
 	PG_CMD_CLOSE;
 
 	check_ok();

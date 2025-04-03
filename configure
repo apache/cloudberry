@@ -751,6 +751,7 @@ ICU_CFLAGS
 with_icu
 enable_thread_safety
 INCLUDES
+enable_pax
 enable_preload_ic_module
 enable_ic_proxy
 enable_external_fts
@@ -901,6 +902,7 @@ enable_gpcloud
 enable_external_fts
 enable_ic_proxy
 enable_preload_ic_module
+enable_pax
 enable_thread_safety
 with_icu
 with_tcl
@@ -1616,6 +1618,7 @@ Optional Features:
                           library)
   --disable-preload-ic-module
                           disable preload interconnect module
+  --enable-pax            enable pax support
   --disable-thread-safety disable thread-safety in client libraries
   --enable-openssl-redirect
                           enable redirect openssl interface to internal
@@ -9098,6 +9101,36 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with preload ic module ... $enable_preload_ic_module" >&5
 $as_echo "checking whether to build with preload ic module ... $enable_preload_ic_module" >&6; }
 
+#
+# pax support
+#
+
+
+# Check whether --enable-pax was given.
+if test "${enable_pax+set}" = set; then :
+  enableval=$enable_pax;
+  case $enableval in
+    yes)
+
+$as_echo "#define USE_PAX_STORAGE 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-pax option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_pax=yes
+  
+  $as_echo "#define USE_PAX_STORAGE 1" >>confdefs.h
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with pax support ... $enable_pax" >&5
+$as_echo "checking whether to build with pax support ... $enable_pax" >&6; }
 
 #
 # Include directories

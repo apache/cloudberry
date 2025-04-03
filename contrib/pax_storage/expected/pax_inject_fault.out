@@ -1,0 +1,44 @@
+create table t_insert(a int);
+select gp_inject_fault_infinite('fts_probe','skip',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t
+(1 row)
+
+select gp_inject_fault('orc_writer_write_tuple','panic',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+WARNING:  consider disabling FTS probes while injecting a panic.
+HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
+WARNING:  consider disabling FTS probes while injecting a panic.
+HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
+WARNING:  consider disabling FTS probes while injecting a panic.
+HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+-- failed because of fault injection
+insert into t_insert select generate_series(1,10);
+ERROR:  fault triggered, fault name:'orc_writer_write_tuple' fault type:'panic'
+-- start_ignore
+-- clear the fault inject, so the next insert will success.
+-- put the reset operation in ignore range
+select gp_inject_fault('orc_writer_write_tuple','reset',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+select gp_inject_fault('fts_probe','reset',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- end_ignore
+-- success 
+insert into t_insert select generate_series(1,10);
+drop table t_insert;

@@ -4991,6 +4991,7 @@ Indexes:
     "pg_toast_2619_index" PRIMARY KEY, btree (chunk_id, chunk_seq)
 
 -- check printing info about access methods
+-- start_ignore
 \dA
 List of access methods
    Name    | Type  
@@ -5005,10 +5006,31 @@ List of access methods
  hash      | Index
  heap      | Table
  heap2     | Table
+ pax       | Table
  spgist    | Index
-(11 rows)
+(12 rows)
 
 \dA *
+List of access methods
+   Name    | Type  
+-----------+-------
+ ao_column | Table
+ ao_row    | Table
+ bitmap    | Index
+ brin      | Index
+ btree     | Index
+ gin       | Index
+ gist      | Index
+ hash      | Index
+ heap      | Table
+ heap2     | Table
+ pax       | Table
+ spgist    | Index
+(12 rows)
+
+-- end_ignore
+-- CBDB: ignore pax AM
+\dA [^p]*
 List of access methods
    Name    | Type  
 -----------+-------
@@ -5047,6 +5069,7 @@ List of access methods
 (0 rows)
 
 \dA: extra argument "bar" ignored
+-- start_ignore
 \dA+
                                         List of access methods
    Name    | Type  |          Handler          |                     Description                      
@@ -5061,10 +5084,31 @@ List of access methods
  hash      | Index | hashhandler               | hash index access method
  heap      | Table | heap_tableam_handler      | heap table access method
  heap2     | Table | heap_tableam_handler      | 
+ pax       | Table | pax_tableam_handler       | 
  spgist    | Index | spghandler                | SP-GiST index access method
-(11 rows)
+(12 rows)
 
 \dA+ *
+                                        List of access methods
+   Name    | Type  |          Handler          |                     Description                      
+-----------+-------+---------------------------+------------------------------------------------------
+ ao_column | Table | ao_column_tableam_handler | column-oriented append-optimized table access method
+ ao_row    | Table | ao_row_tableam_handler    | row-oriented append-optimized table access method
+ bitmap    | Index | bmhandler                 | bitmap index access method
+ brin      | Index | brinhandler               | block range index (BRIN) access method
+ btree     | Index | bthandler                 | b-tree index access method
+ gin       | Index | ginhandler                | GIN index access method
+ gist      | Index | gisthandler               | GiST index access method
+ hash      | Index | hashhandler               | hash index access method
+ heap      | Table | heap_tableam_handler      | heap table access method
+ heap2     | Table | heap_tableam_handler      | 
+ pax       | Table | pax_tableam_handler       | 
+ spgist    | Index | spghandler                | SP-GiST index access method
+(12 rows)
+
+-- end_ignore
+-- CBDB: ignore pax AM
+\dA+ [^p]*
                                         List of access methods
    Name    | Type  |          Handler          |                     Description                      
 -----------+-------+---------------------------+------------------------------------------------------

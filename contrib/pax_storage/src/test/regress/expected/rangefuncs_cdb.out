@@ -1,0 +1,898 @@
+--
+-- Will run in parallel mode with enable_parallel=on and non-parallel mode.
+-- Filter this gucs to pass regression.
+--
+SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%' and
+name not in ('enable_parallel',
+ 'enable_answer_query_using_materialized_views',
+ 'enable_parallel_dedup_semi_join',
+ 'enable_parallel_dedup_semi_reverse_join',
+ 'enable_parallel_semi_join');
+              name              | setting 
+--------------------------------+---------
+ enable_async_append            | on
+ enable_bitmapscan              | on
+ enable_gathermerge             | on
+ enable_groupagg                | on
+ enable_hashagg                 | on
+ enable_hashjoin                | on
+ enable_incremental_sort        | off
+ enable_indexonlyscan           | on
+ enable_indexscan               | on
+ enable_material                | on
+ enable_memoize                 | on
+ enable_mergejoin               | off
+ enable_nestloop                | off
+ enable_parallel_append         | on
+ enable_parallel_hash           | on
+ enable_partition_pruning       | on
+ enable_partitionwise_aggregate | off
+ enable_partitionwise_join      | off
+ enable_password_profile        | on
+ enable_seqscan                 | on
+ enable_sort                    | on
+ enable_tidscan                 | on
+(22 rows)
+
+-- start_ignore
+create schema rangefuncs_cdb;
+set search_path to rangefuncs_cdb, public;
+-- end_ignore
+DROP TABLE IF EXISTS foo;
+NOTICE:  table "foo" does not exist, skipping
+CREATE TABLE foo(
+  fooid int, foosubid int, fooname text, primary key(fooid,foosubid)
+  ) DISTRIBUTED BY (fooid, foosubid);
+INSERT INTO foo VALUES
+  (1,1,'Joe'),
+  (1,2,'Ed'),
+  (2,1,'Mary');
+CREATE TABLE foo2(fooid int, f2 int) DISTRIBUTED BY (fooid);
+INSERT INTO foo2 VALUES
+  (1, 11),
+  (2, 22),
+  (1, 111);
+-- In Cloudberry we do not support functions which call SQL from the segments
+-- for this reason we have rewritten this test to use plpgsql functions rather
+-- than SQL language functions.
+set optimizer_segments = 3;
+--
+-- RETURNS SETOF foo2
+--
+CREATE OR REPLACE FUNCTION foost(int) returns setof foo2 as
+$$
+DECLARE
+r foo2%rowtype;
+BEGIN
+  r.fooid := $1; r.f2 := 11;
+  RETURN NEXT r;
+  r.fooid := $1; r.f2 := 33;
+  RETURN NEXT r;
+  RETURN;
+END
+$$ language plpgsql;
+-- function in select clause
+select foost(1);
+ foost  
+--------
+ (1,11)
+ (1,33)
+(2 rows)
+
+-- expanding columns in the select list
+select (foost(1)).*;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function in from clause
+select * from foost(1);
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function over function (executed on master)
+select foost(fooid), * from foost(3);
+ foost  | fooid | f2 
+--------+-------+----
+ (3,11) |     3 | 11
+ (3,33) |     3 | 11
+ (3,11) |     3 | 33
+ (3,33) |     3 | 33
+(4 rows)
+
+-- function over table (executed on segments)
+select foost(fooid), * from foo2;
+ foost  | fooid | f2  
+--------+-------+-----
+ (2,11) |     2 |  22
+ (2,33) |     2 |  22
+ (1,11) |     1 |  11
+ (1,33) |     1 |  11
+ (1,11) |     1 | 111
+ (1,33) |     1 | 111
+(6 rows)
+
+-- Joining with a table
+select * from foo2, foost(3) z where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     3 | 11
+(1 row)
+
+-- Lateral function. (If it was a subquery, this would require the LATERAL
+-- keyword, but for a function, we're more lenient.)
+select * from foo2, foost(foo2.fooid) z where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     1 | 11
+(1 row)
+
+-- function in subselect, without correlation
+select * from foo2 
+where f2 in (select f2 from foost(1) z where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from foost(foo2.fooid) z where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from foost(foo2.fooid) z where z.fooid = 1) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation - master only
+select * from foost(4) x 
+where f2 in (select f2 from foost(x.fooid) z where x.fooid = z.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     4 | 11
+     4 | 33
+(2 rows)
+
+-- nested functions
+select z.fooid, z.f2 from foost(sin(pi()/2)::int) z ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+DROP FUNCTION foost(int);
+--
+-- RETURNS SETOF record
+--
+CREATE OR REPLACE FUNCTION foor(int) RETURNS setof record AS
+$$
+DECLARE
+rec record;
+BEGIN
+   rec:= ($1, 11);
+   RETURN NEXT rec;
+   rec:= ($1, 33);
+   RETURN NEXT rec;
+   return;
+END
+$$  LANGUAGE plpgsql;
+-- function in select clause
+--   Fails: plpgsql does not support SFRM_Materialize
+select foor(1);
+ERROR:  set-valued function called in context that cannot accept a set
+CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
+-- expanding columns in the select list
+--    Fails: record type not registered
+select (foor(1)).*;
+ERROR:  record type has not been registered
+-- function in from clause 
+--    Fails: column definition list needed for "record"
+select * from foor(1);
+ERROR:  a column definition list is required for functions returning "record"
+LINE 1: select * from foor(1);
+                      ^
+-- function in from clause, explicit typing
+select * from foor(1) as (fooid int, f2 int);
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function over function (executed on master) 
+--    Fails: plpgsql does not support SFRM_Materialize
+select foor(fooid), * from foor(3) as (fooid int, f2 int);
+ERROR:  set-valued function called in context that cannot accept a set
+CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
+-- Joining with a table
+select * from foo2, foor(3) z(fooid int, f2 int) where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     3 | 11
+(1 row)
+
+-- Lateral function. (If it was a subquery, this would require the LATERAL
+-- keyword, but for a function, we're more lenient.)
+select * from foo2, foor(foo2.fooid) z(fooid int, f2 int) 
+where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     1 | 11
+(1 row)
+
+-- function in subselect, without correlation
+select * from foo2 
+where f2 in (select f2 from foor(1) z(fooid int, f2 int) 
+             where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int) 
+             where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int) 
+             where z.fooid = 1) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation - master only
+select * from foor(4) x(fooid int, f2 int)
+where f2 in (select f2 from foor(x.fooid) z(fooid int, f2 int)
+             where x.fooid = z.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     4 | 11
+     4 | 33
+(2 rows)
+
+-- nested functions
+select z.fooid, z.f2 
+from foor(sin(pi()/2)::int) z(fooid int, f2 int)
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+DROP FUNCTION foor(int);
+--
+-- RETURNS SETOF record, with OUT parameters
+--
+CREATE OR REPLACE FUNCTION fooro(int, out fooid int, out f2 int) RETURNS SETOF RECORD AS
+$$
+BEGIN
+  fooid := $1; f2 := 11;
+  RETURN NEXT;
+  fooid := $1; f2 := 33;
+  RETURN NEXT;
+  RETURN;
+END;
+$$ LANGUAGE plpgsql;
+-- function in select clause
+select fooro(1);
+ fooro  
+--------
+ (1,11)
+ (1,33)
+(2 rows)
+
+-- expanding columns in the select list
+select (fooro(1)).*;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function in from clause
+select * from fooro(1);
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function over function (executed on master)
+select fooro(fooid), * from fooro(3);
+ fooro  | fooid | f2 
+--------+-------+----
+ (3,11) |     3 | 11
+ (3,33) |     3 | 11
+ (3,11) |     3 | 33
+ (3,33) |     3 | 33
+(4 rows)
+
+-- Joining with a table
+select * from foo2, fooro(3) z where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     3 | 11
+(1 row)
+
+-- Lateral function. (If it was a subquery, this would require the LATERAL
+-- keyword, but for a function, we're more lenient.)
+select * from foo2, fooro(foo2.fooid) z where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     1 | 11
+(1 row)
+
+-- function in subselect, without correlation
+select * from foo2 
+where f2 in (select f2 from fooro(1) z where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = 1) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation - master only
+select * from fooro(4) x 
+where f2 in (select f2 from fooro(x.fooid) z where x.fooid = z.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     4 | 11
+     4 | 33
+(2 rows)
+
+-- nested functions
+select z.fooid, z.f2 from fooro(sin(pi()/2)::int) z ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+DROP FUNCTION fooro(int);
+--
+-- RETURNS TABLE
+--
+CREATE OR REPLACE FUNCTION foot(int) returns TABLE(fooid int, f2 int) as
+$$
+BEGIN
+  fooid := $1; f2 := 11;
+  RETURN NEXT;
+  fooid := $1; f2 := 33;
+  RETURN NEXT;
+  RETURN;
+END
+$$ language plpgsql;
+-- function in select clause
+select foot(1);
+  foot  
+--------
+ (1,11)
+ (1,33)
+(2 rows)
+
+-- expanding columns in the select list
+select (foot(1)).*;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function in from clause
+select * from foot(1);
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+-- function over function (executed on master)
+select foot(fooid), * from foot(3);
+  foot  | fooid | f2 
+--------+-------+----
+ (3,11) |     3 | 11
+ (3,33) |     3 | 11
+ (3,11) |     3 | 33
+ (3,33) |     3 | 33
+(4 rows)
+
+-- Joining with a table
+select * from foo2, foot(3) z where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     3 | 11
+(1 row)
+
+-- Lateral function. (If it was a subquery, this would require the LATERAL
+-- keyword, but for a function, we're more lenient.)
+select * from foo2, foot(foo2.fooid) z where foo2.f2 = z.f2;
+ fooid | f2 | fooid | f2 
+-------+----+-------+----
+     1 | 11 |     1 | 11
+(1 row)
+
+-- function in subselect, without correlation
+select * from foo2 
+where f2 in (select f2 from foot(1) z where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation
+select * from foo2 
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = 1) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+(1 row)
+
+-- function in subselect, with correlation - master only
+select * from foot(4) x 
+where f2 in (select f2 from foot(x.fooid) z where x.fooid = z.fooid) 
+ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     4 | 11
+     4 | 33
+(2 rows)
+
+-- nested functions
+select z.fooid, z.f2 from foot(sin(pi()/2)::int) z ORDER BY 1,2;
+ fooid | f2 
+-------+----
+     1 | 11
+     1 | 33
+(2 rows)
+
+DROP FUNCTION foot(int);
+-- sql, proretset = f, prorettype = b
+CREATE FUNCTION getfoo(int) RETURNS int AS 'SELECT $1;' LANGUAGE SQL CONTAINS SQL;
+SELECT * FROM getfoo(1) AS t1;
+ t1 
+----
+  1
+(1 row)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ getfoo 
+--------
+      1
+(1 row)
+
+-- sql, proretset = t, prorettype = b
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS setof int AS 'SELECT fooid FROM foo WHERE fooid = $1;' LANGUAGE SQL READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1;
+ t1 
+----
+  1
+  1
+(2 rows)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ getfoo 
+--------
+      1
+      1
+(2 rows)
+
+-- sql, proretset = t, prorettype = b
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS setof text AS 'SELECT fooname FROM foo WHERE fooid = $1;' LANGUAGE SQL READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1;
+ t1  
+-----
+ Ed
+ Joe
+(2 rows)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ getfoo 
+--------
+ Joe
+ Ed
+(2 rows)
+
+-- sql, proretset = f, prorettype = c
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS foo AS 'SELECT * FROM foo WHERE fooid = $1 ORDER BY 1,2,3;' LANGUAGE SQL READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+(1 row)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+(1 row)
+
+-- sql, proretset = t, prorettype = c
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS setof foo AS 'SELECT * FROM foo WHERE fooid = $1 ORDER BY 1,2,3;' LANGUAGE SQL READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+     1 |        2 | Ed
+(2 rows)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+     1 |        2 | Ed
+(2 rows)
+
+-- sql, proretset = f, prorettype = record
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS RECORD AS 'SELECT * FROM foo WHERE fooid = $1 ORDER BY 1,2,3;' LANGUAGE SQL READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1(fooid int, foosubid int, fooname text);
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+(1 row)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1) AS 
+(fooid int, foosubid int, fooname text);
+SELECT * FROM vw_getfoo;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+(1 row)
+
+-- sql, proretset = t, prorettype = record
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS setof record AS 'SELECT * FROM foo WHERE fooid = $1 ORDER BY 1,2,3;' LANGUAGE SQL READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1(fooid int, foosubid int, fooname text);
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+     1 |        2 | Ed
+(2 rows)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1) AS
+(fooid int, foosubid int, fooname text);
+SELECT * FROM vw_getfoo;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+     1 |        2 | Ed
+(2 rows)
+
+-- plpgsql, proretset = f, prorettype = b
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS int AS 'DECLARE fooint int; BEGIN SELECT fooid into fooint FROM foo WHERE fooid = $1; RETURN fooint; END;' LANGUAGE plpgsql READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1;
+ t1 
+----
+  1
+(1 row)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ getfoo 
+--------
+      1
+(1 row)
+
+-- plpgsql, proretset = f, prorettype = c
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+CREATE FUNCTION getfoo(int) RETURNS foo AS 'DECLARE footup foo%ROWTYPE; BEGIN SELECT * into footup FROM foo WHERE fooid = $1 ORDER BY 1,2,3; RETURN footup; END;' LANGUAGE plpgsql READS SQL DATA;
+SELECT * FROM getfoo(1) AS t1;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+(1 row)
+
+CREATE VIEW vw_getfoo AS SELECT * FROM getfoo(1);
+SELECT * FROM vw_getfoo;
+ fooid | foosubid | fooname 
+-------+----------+---------
+     1 |        1 | Joe
+(1 row)
+
+DROP VIEW vw_getfoo;
+DROP FUNCTION getfoo(int);
+DROP TABLE foo2;
+DROP TABLE foo;
+-- Rescan tests --
+--   see rangefuncs.sql
+--   Removed in greenplum, can't execute sql on segments
+--
+-- Test cases involving OUT parameters
+--
+CREATE FUNCTION foo(in f1 int, out f2 int)
+AS 'select $1+1' LANGUAGE sql;
+SELECT foo(42);
+ foo 
+-----
+  43
+(1 row)
+
+SELECT * FROM foo(42);
+ f2 
+----
+ 43
+(1 row)
+
+SELECT * FROM foo(42) AS p(x);
+ x  
+----
+ 43
+(1 row)
+
+-- explicit spec of return type is OK
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int) RETURNS int
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+-- error, wrong result type
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int) RETURNS float
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+ERROR:  function result type must be integer because of OUT parameters
+-- Can switch from output parmeters to non-ouput parameters
+CREATE OR REPLACE FUNCTION foo(in f1 int) RETURNS int
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+-- Can't change the output type with CREATE OR REPLACE
+CREATE OR REPLACE FUNCTION foo(in f1 int) RETURNS record
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+ERROR:  cannot change return type of existing function
+HINT:  Use DROP FUNCTION foo(integer) first.
+-- with multiple OUT params you must get a RECORD result
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int, out f3 text) RETURNS int
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+ERROR:  function result type must be record because of OUT parameters
+DROP FUNCTION foo(int);
+CREATE OR REPLACE FUNCTION foo(in f1 int) RETURNS record
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+-- Can't change the result type, previously record now typed record
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int, out f3 text)
+RETURNS record
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+ERROR:  cannot change return type of existing function
+DETAIL:  Row type defined by OUT parameters is different.
+HINT:  Use DROP FUNCTION foo(integer) first.
+-- Can't change the result type, previously record now typed record (implied)
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int, out f3 text)
+AS 'select $1+1' LANGUAGE sql;
+ERROR:  cannot change return type of existing function
+DETAIL:  Row type defined by OUT parameters is different.
+HINT:  Use DROP FUNCTION foo(integer) first.
+-- okay - output type is still record
+CREATE OR REPLACE FUNCTION foo(in f1 int, out x record)
+AS 'select $1+1' LANGUAGE sql;
+-- Can't change the result type, previously record, now setof record
+CREATE OR REPLACE FUNCTION foo(in f1 int) RETURNS setof record
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+ERROR:  cannot change return type of existing function
+HINT:  Use DROP FUNCTION foo(integer) first.
+DROP FUNCTION foo(int);
+CREATE OR REPLACE FUNCTION foo(in f1 int) RETURNS setof record
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+-- Can't convert between setof record and setof (typed) record.
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int, out f3 text) 
+RETURNS setof record
+AS 'select $1+1, null' LANGUAGE sql CONTAINS SQL;
+ERROR:  cannot change return type of existing function
+DETAIL:  Row type defined by OUT parameters is different.
+HINT:  Use DROP FUNCTION foo(integer) first.
+-- Can't convert between setof record and TABLE
+CREATE OR REPLACE FUNCTION foo(in f1 int)
+RETURNS TABLE(f2 int, f3 text)
+AS 'select $1+1' LANGUAGE sql CONTAINS SQL;
+ERROR:  cannot change return type of existing function
+DETAIL:  Row type defined by OUT parameters is different.
+HINT:  Use DROP FUNCTION foo(integer) first.
+DROP FUNCTION foo(int);
+CREATE OR REPLACE FUNCTION foo(in f1 int, out f2 int, out f3 text) 
+RETURNS setof record
+AS 'select $1+1, null::text' LANGUAGE sql CONTAINS SQL;
+-- CAN convert between setof (typed) record and TABLE
+CREATE OR REPLACE FUNCTION foo(in f1 int)
+RETURNS TABLE(f2 int, f3 text)
+AS 'select $1+1, null::text' LANGUAGE sql CONTAINS SQL;
+-- Can't change the definition of a (typed) record or table
+CREATE OR REPLACE FUNCTION foo(in f1 int)
+RETURNS TABLE(f2 int, different text)
+AS 'select $1+1, null::text' LANGUAGE sql CONTAINS SQL;
+ERROR:  cannot change return type of existing function
+DETAIL:  Row type defined by OUT parameters is different.
+HINT:  Use DROP FUNCTION foo(integer) first.
+CREATE OR REPLACE FUNCTION foor(in f1 int, out f2 int, out text)
+AS $$select $1-1, $1::text || 'z'$$ LANGUAGE sql;
+SELECT f1, foor(f1) FROM int4_tbl;
+     f1      |            foor            
+-------------+----------------------------
+           0 | (-1,0z)
+      123456 | (123455,123456z)
+     -123456 | (-123457,-123456z)
+  2147483647 | (2147483646,2147483647z)
+ -2147483647 | (-2147483648,-2147483647z)
+(5 rows)
+
+SELECT * FROM foor(42);
+ f2 | column2 
+----+---------
+ 41 | 42z
+(1 row)
+
+SELECT * FROM foor(42) AS p(a,b);
+ a  |  b  
+----+-----
+ 41 | 42z
+(1 row)
+
+CREATE OR REPLACE FUNCTION foob(in f1 int, inout f2 int, out text)
+AS $$select $2-1, $1::text || 'z'$$ LANGUAGE sql;
+SELECT f1, foob(f1, f1/2) FROM int4_tbl;
+     f1      |            foob            
+-------------+----------------------------
+           0 | (-1,0z)
+      123456 | (61727,123456z)
+     -123456 | (-61729,-123456z)
+  2147483647 | (1073741822,2147483647z)
+ -2147483647 | (-1073741824,-2147483647z)
+(5 rows)
+
+SELECT * FROM foob(42, 99);
+ f2 | column2 
+----+---------
+ 98 | 42z
+(1 row)
+
+SELECT * FROM foob(42, 99) AS p(a,b);
+ a  |  b  
+----+-----
+ 98 | 42z
+(1 row)
+
+-- Can reference function with or without OUT params for DROP, etc
+DROP FUNCTION foo(int);
+DROP FUNCTION foor(in f2 int, out f1 int, out text);
+DROP FUNCTION foob(in f1 int, inout f2 int);
+--
+-- For my next trick, polymorphic OUT parameters
+--
+CREATE FUNCTION dup (f1 anyelement, f2 out anyelement, f3 out anyarray)
+AS 'select $1, array[$1,$1]' LANGUAGE sql;
+SELECT dup(22);
+      dup       
+----------------
+ (22,"{22,22}")
+(1 row)
+
+SELECT dup('xyz');	-- fails
+ERROR:  could not determine polymorphic type because input has type unknown
+SELECT dup('xyz'::text);
+        dup        
+-------------------
+ (xyz,"{xyz,xyz}")
+(1 row)
+
+SELECT * FROM dup('xyz'::text);
+ f2  |    f3     
+-----+-----------
+ xyz | {xyz,xyz}
+(1 row)
+
+-- equivalent specification
+CREATE OR REPLACE FUNCTION dup (inout f2 anyelement, out f3 anyarray)
+AS 'select $1, array[$1,$1]' LANGUAGE sql;
+ERROR:  cannot change name of input parameter "f1"
+HINT:  Use DROP FUNCTION dup(anyelement) first.
+SELECT dup(22);
+      dup       
+----------------
+ (22,"{22,22}")
+(1 row)
+
+DROP FUNCTION dup(anyelement);
+-- fails, no way to deduce outputs
+CREATE FUNCTION bad (f1 int, out f2 anyelement, out f3 anyarray)
+AS 'select $1, array[$1,$1]' LANGUAGE sql;
+ERROR:  cannot determine result data type
+DETAIL:  A result of type anyelement requires at least one input of type anyelement, anyarray, anynonarray, anyenum, anyrange, or anymultirange.
+--
+-- Test that a set-returning function is not called unnecessarily.
+--
+-- The planner could legitimately call an immutable function as many times it
+-- wishes, but there's no need to call it more than once. (ORCA used to create
+-- plans where the FunctionScan was executed on every segment, but a Result
+-- on top of it filtered all the rows, except on one segment.
+--
+CREATE FUNCTION notice_srf() RETURNS SETOF text AS $$
+begin
+   RAISE NOTICE 'notice_srf called in segment %', gp_execution_segment();
+
+   RETURN NEXT 'foo';
+   RETURN NEXT 'bar';
+end;
+$$ LANGUAGE plpgsql IMMUTABLE;
+-- gpdiff suppresses identical NOTICEs coming from multiple segments. But we
+-- specifically want to check that we get the NOTICE only from one segment.
+-- To defeat gpdiff's duplicate-elimination, the NOTICE includes the segment
+-- number in the message, so that the message is different on every segment.
+-- But we don't actually don't care which segment it executes on, so filter
+-- out the segment number for comparison.
+--
+-- start_matchsubs
+-- m/NOTICE:  notice_srf called in segment (\d+)/
+-- s/in segment (\d+)/in segment ###/
+-- end_matchsubs
+CREATE TEMPORARY TABLE srfdest (t text) DISTRIBUTED RANDOMLY;
+INSERT INTO srfdest select * FROM notice_srf();
+NOTICE:  notice_srf called in segment 1  (seg1 slice1 127.0.0.1:40001 pid=21879)
+reset optimizer_segments;

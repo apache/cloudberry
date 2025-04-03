@@ -1,0 +1,437 @@
+-- create failed, cause out of range
+create table pax_vec_numeric_tbl1 (v numeric) using pax with(storage_format=porc_vec);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  column 'v' created with not support precision(-1) and scale(-1). (pax_access_handle.cc:1164)
+create table pax_vec_numeric_tbl2 (v numeric(100)) using pax with(storage_format=porc_vec);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  column 'v' precision(100) out of range, precision should be (0, 35] (pax_access_handle.cc:1173)
+create table pax_vec_numeric_tbl3 (v numeric(36,36)) using pax with(storage_format=porc_vec);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  column 'v' precision(36) out of range, precision should be (0, 35] (pax_access_handle.cc:1173)
+create table pax_vec_numeric_tbl (v numeric(35,0)) using pax with(storage_format=porc_vec);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_vec_numeric_tbl values(1);
+insert into pax_vec_numeric_tbl values(1.00);
+insert into pax_vec_numeric_tbl values(0.11);
+select v from pax_vec_numeric_tbl;
+ v 
+---
+ 1
+ 1
+ 0
+(3 rows)
+
+insert into pax_vec_numeric_tbl values(repeat('1',35)::numeric);
+insert into pax_vec_numeric_tbl values(repeat('9',35)::numeric);
+insert into pax_vec_numeric_tbl values(-repeat('1',35)::numeric);
+insert into pax_vec_numeric_tbl values(-repeat('9',35)::numeric);
+insert into pax_vec_numeric_tbl values(10000000000000000000000000000000000);
+insert into pax_vec_numeric_tbl values(90000000000000000000000000000000000);
+select v from pax_vec_numeric_tbl;
+                  v                   
+--------------------------------------
+                                    1
+                                    1
+                                    0
+  11111111111111111111111111111111111
+  99999999999999999999999999999999999
+ -11111111111111111111111111111111111
+ -99999999999999999999999999999999999
+  10000000000000000000000000000000000
+  90000000000000000000000000000000000
+(9 rows)
+
+-- failed, numeric field overflow
+insert into pax_vec_numeric_tbl values(100000000000000000000000000000000000); -- 36 precision
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 0 must round to an absolute value less than 10^35.
+insert into pax_vec_numeric_tbl values(repeat('9',36)::numeric);
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 0 must round to an absolute value less than 10^35.
+drop table pax_vec_numeric_tbl;
+create table pax_vec_numeric_tbl (v numeric(35,35)) using pax with(storage_format=porc_vec);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_vec_numeric_tbl values(0.11111111111111111111111111111111111);
+insert into pax_vec_numeric_tbl values(0.99999999999999999999999999999999999);
+insert into pax_vec_numeric_tbl values(-0.11111111111111111111111111111111111);
+insert into pax_vec_numeric_tbl values(-0.99999999999999999999999999999999999);
+insert into pax_vec_numeric_tbl values(0.00000000000000000000000000000000001);
+insert into pax_vec_numeric_tbl values(-0.00000000000000000000000000000000001);
+select v from pax_vec_numeric_tbl;
+                   v                    
+----------------------------------------
+  0.99999999999999999999999999999999999
+ -0.99999999999999999999999999999999999
+  0.00000000000000000000000000000000001
+ -0.00000000000000000000000000000000001
+  0.11111111111111111111111111111111111
+ -0.11111111111111111111111111111111111
+(6 rows)
+
+-- won't failed, but will be 0
+insert into pax_vec_numeric_tbl values(0.000000000000000000000000000000000001);
+insert into pax_vec_numeric_tbl values(-0.000000000000000000000000000000000001);
+select v from pax_vec_numeric_tbl;
+                   v                    
+----------------------------------------
+  0.99999999999999999999999999999999999
+ -0.99999999999999999999999999999999999
+  0.00000000000000000000000000000000001
+ -0.00000000000000000000000000000000001
+  0.11111111111111111111111111111111111
+ -0.11111111111111111111111111111111111
+  0.00000000000000000000000000000000000
+  0.00000000000000000000000000000000000
+(8 rows)
+
+-- failed, numeric field overflow
+insert into pax_vec_numeric_tbl values(1.0);
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 35 must round to an absolute value less than 1.
+insert into pax_vec_numeric_tbl values(-100000.000000000000000000000000000000000001);
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 35 must round to an absolute value less than 1.
+drop table pax_vec_numeric_tbl;
+create table pax_vec_numeric_tbl (v numeric(35,17)) using pax with(storage_format=porc_vec);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_vec_numeric_tbl values(1234567890.0123456789);
+insert into pax_vec_numeric_tbl values(999999999999999999.99999999999999999); -- 18 nweight, 17 scale
+insert into pax_vec_numeric_tbl values(-999999999999999999.99999999999999999); -- negative, 18 nweight, 17 scale
+insert into pax_vec_numeric_tbl values(99999999999999999.999999999999999999); -- negative, 18 nweight, 17 scale
+insert into pax_vec_numeric_tbl values(999999999999999999.999999999999999990); -- 18 nweight, 18 scale with zero
+insert into pax_vec_numeric_tbl values(999999999999999999.9999999999999999900000);
+select v from pax_vec_numeric_tbl;
+                   v                   
+---------------------------------------
+          1234567890.01234567890000000
+  999999999999999999.99999999999999999
+ -999999999999999999.99999999999999999
+  100000000000000000.00000000000000000
+  999999999999999999.99999999999999999
+  999999999999999999.99999999999999999
+(6 rows)
+
+insert into pax_vec_numeric_tbl values(0.00000000000000001);  -- 17 scale
+insert into pax_vec_numeric_tbl values(0.00000000000000009);  -- 17 scale
+insert into pax_vec_numeric_tbl values(0.000000000000000001); -- 18 scale
+insert into pax_vec_numeric_tbl values(0.000000000000000009); -- 18 scale
+select v from pax_vec_numeric_tbl;
+                   v                   
+---------------------------------------
+          1234567890.01234567890000000
+                   0.00000000000000001
+                   0.00000000000000000
+                   0.00000000000000001
+  999999999999999999.99999999999999999
+ -999999999999999999.99999999999999999
+  100000000000000000.00000000000000000
+  999999999999999999.99999999999999999
+  999999999999999999.99999999999999999
+                   0.00000000000000009
+(10 rows)
+
+insert into pax_vec_numeric_tbl values(-0.00000000000000001);  -- negative, 17 scale
+insert into pax_vec_numeric_tbl values(-0.00000000000000009);  -- negative, 17 scale
+insert into pax_vec_numeric_tbl values(-0.000000000000000001); -- negative, 18 scale, last scale < 5
+insert into pax_vec_numeric_tbl values(-0.000000000000000009); -- negative, 18 scale, last scale > 5
+select v from pax_vec_numeric_tbl;
+                   v                   
+---------------------------------------
+  999999999999999999.99999999999999999
+ -999999999999999999.99999999999999999
+  100000000000000000.00000000000000000
+  999999999999999999.99999999999999999
+  999999999999999999.99999999999999999
+                   0.00000000000000009
+                  -0.00000000000000009
+          1234567890.01234567890000000
+                   0.00000000000000001
+                   0.00000000000000000
+                   0.00000000000000001
+                  -0.00000000000000001
+                   0.00000000000000000
+                  -0.00000000000000001
+(14 rows)
+
+truncate pax_vec_numeric_tbl;
+insert into pax_vec_numeric_tbl values('NaN');
+select v from pax_vec_numeric_tbl;
+  v  
+-----
+ NaN
+(1 row)
+
+-- failed, numeric field overflow
+insert into pax_vec_numeric_tbl values('+Inf');
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 cannot hold an infinite value.
+insert into pax_vec_numeric_tbl values('Inf');
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 cannot hold an infinite value.
+insert into pax_vec_numeric_tbl values('-Inf');
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 cannot hold an infinite value.
+insert into pax_vec_numeric_tbl values(999999999999999999.999999999999999999); -- 18 nweight, 18 scale, last scale > 5
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 must round to an absolute value less than 10^18.
+insert into pax_vec_numeric_tbl values(9999999999999999999.9999999999999999);  -- 19 nweight, 17 scale
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 must round to an absolute value less than 10^18.
+-- test with null datum
+truncate pax_vec_numeric_tbl;
+insert into pax_vec_numeric_tbl values(1), (1.00), (2.22), (NULL), (NULL);
+insert into pax_vec_numeric_tbl values(NULL), (NULL);
+insert into pax_vec_numeric_tbl values(NULL), (3.33), (44.44);
+insert into pax_vec_numeric_tbl values(6.667), (NULL), (77.77), (NULL), (88.888);
+select v from pax_vec_numeric_tbl;
+          v           
+----------------------
+  2.22000000000000000
+  3.33000000000000000
+  6.66700000000000000
+                     
+                     
+                     
+                     
+                     
+ 44.44000000000000000
+                     
+ 77.77000000000000000
+                     
+ 88.88800000000000000
+  1.00000000000000000
+  1.00000000000000000
+(15 rows)
+
+drop table pax_vec_numeric_tbl;
+-- without option `storage_format=porc_vec`, pax should store numeric as non fixed column
+create table pax_numeric_tbl1 (v numeric) using pax with(storage_format=porc);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_numeric_tbl1 values(repeat('1',100)::numeric);
+insert into pax_numeric_tbl1 values(0.9999999999999999999999999999999999999999999999999999); -- 52 scale
+select v from pax_numeric_tbl1;
+                                                  v                                                   
+------------------------------------------------------------------------------------------------------
+ 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+                                               0.9999999999999999999999999999999999999999999999999999
+(2 rows)
+
+create table pax_numeric_tbl2 (v numeric) using pax;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_numeric_tbl2 select v from pax_numeric_tbl1;
+select v from pax_numeric_tbl2;
+                                                  v                                                   
+------------------------------------------------------------------------------------------------------
+                                               0.9999999999999999999999999999999999999999999999999999
+ 1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+(2 rows)
+
+drop table pax_numeric_tbl1;
+drop table pax_numeric_tbl2;
+-- without option `storage_format=porc_vec`， should pass the same test cases
+create table pax_numeric_tbl (v numeric(35,0)) using pax with(storage_format=porc);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_numeric_tbl values(1);
+insert into pax_numeric_tbl values(1.00);
+insert into pax_numeric_tbl values(0.11);
+select v from pax_numeric_tbl;
+ v 
+---
+ 1
+ 1
+ 0
+(3 rows)
+
+insert into pax_numeric_tbl values(repeat('1',35)::numeric);
+insert into pax_numeric_tbl values(repeat('9',35)::numeric);
+insert into pax_numeric_tbl values(-repeat('1',35)::numeric);
+insert into pax_numeric_tbl values(-repeat('9',35)::numeric);
+insert into pax_numeric_tbl values(10000000000000000000000000000000000);
+insert into pax_numeric_tbl values(90000000000000000000000000000000000);
+select v from pax_numeric_tbl;
+                  v                   
+--------------------------------------
+                                    1
+                                    1
+                                    0
+  11111111111111111111111111111111111
+  99999999999999999999999999999999999
+ -11111111111111111111111111111111111
+ -99999999999999999999999999999999999
+  10000000000000000000000000000000000
+  90000000000000000000000000000000000
+(9 rows)
+
+-- failed, numeric field overflow
+insert into pax_numeric_tbl values(100000000000000000000000000000000000); -- 36 precision
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 0 must round to an absolute value less than 10^35.
+insert into pax_numeric_tbl values(repeat('9',36)::numeric);
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 0 must round to an absolute value less than 10^35.
+drop table pax_numeric_tbl;
+create table pax_numeric_tbl (v numeric(35,35)) using pax with(storage_format=porc);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_numeric_tbl values(0.11111111111111111111111111111111111);
+insert into pax_numeric_tbl values(0.99999999999999999999999999999999999);
+insert into pax_numeric_tbl values(-0.11111111111111111111111111111111111);
+insert into pax_numeric_tbl values(-0.99999999999999999999999999999999999);
+insert into pax_numeric_tbl values(0.00000000000000000000000000000000001);
+insert into pax_numeric_tbl values(-0.00000000000000000000000000000000001);
+select v from pax_numeric_tbl;
+                   v                    
+----------------------------------------
+  0.11111111111111111111111111111111111
+ -0.11111111111111111111111111111111111
+  0.99999999999999999999999999999999999
+ -0.99999999999999999999999999999999999
+  0.00000000000000000000000000000000001
+ -0.00000000000000000000000000000000001
+(6 rows)
+
+-- won't failed, but will be 0
+insert into pax_numeric_tbl values(0.000000000000000000000000000000000001);
+insert into pax_numeric_tbl values(-0.000000000000000000000000000000000001);
+select v from pax_numeric_tbl;
+                   v                    
+----------------------------------------
+  0.11111111111111111111111111111111111
+ -0.11111111111111111111111111111111111
+  0.00000000000000000000000000000000000
+  0.00000000000000000000000000000000000
+  0.99999999999999999999999999999999999
+ -0.99999999999999999999999999999999999
+  0.00000000000000000000000000000000001
+ -0.00000000000000000000000000000000001
+(8 rows)
+
+insert into pax_numeric_tbl values(1.0);
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 35 must round to an absolute value less than 1.
+insert into pax_numeric_tbl values(-100000.000000000000000000000000000000000001);
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 35 must round to an absolute value less than 1.
+drop table pax_numeric_tbl;
+create table pax_numeric_tbl (v numeric(35,17)) using pax with(storage_format=porc);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into pax_numeric_tbl values(1234567890.0123456789);
+insert into pax_numeric_tbl values(999999999999999999.99999999999999999); -- 18 nweight, 17 scale
+insert into pax_numeric_tbl values(-999999999999999999.99999999999999999); -- negative, 18 nweight, 17 scale
+insert into pax_numeric_tbl values(99999999999999999.999999999999999999); -- negative, 18 nweight, 17 scale
+insert into pax_numeric_tbl values(999999999999999999.999999999999999990); -- 18 nweight, 18 scale with zero
+insert into pax_numeric_tbl values(999999999999999999.9999999999999999900000);
+select v from pax_numeric_tbl;
+                   v                   
+---------------------------------------
+          1234567890.01234567890000000
+  999999999999999999.99999999999999999
+ -999999999999999999.99999999999999999
+  100000000000000000.00000000000000000
+  999999999999999999.99999999999999999
+  999999999999999999.99999999999999999
+(6 rows)
+
+insert into pax_numeric_tbl values(0.00000000000000001);  -- 17 scale
+insert into pax_numeric_tbl values(0.00000000000000009);  -- 17 scale
+insert into pax_numeric_tbl values(0.000000000000000001); -- 18 scale
+insert into pax_numeric_tbl values(0.000000000000000009); -- 18 scale
+select v from pax_numeric_tbl;
+                   v                   
+---------------------------------------
+          1234567890.01234567890000000
+                   0.00000000000000001
+                   0.00000000000000000
+                   0.00000000000000001
+  999999999999999999.99999999999999999
+ -999999999999999999.99999999999999999
+  100000000000000000.00000000000000000
+  999999999999999999.99999999999999999
+  999999999999999999.99999999999999999
+                   0.00000000000000009
+(10 rows)
+
+insert into pax_numeric_tbl values(-0.00000000000000001);  -- negative, 17 scale
+insert into pax_numeric_tbl values(-0.00000000000000009);  -- negative, 17 scale
+insert into pax_numeric_tbl values(-0.000000000000000001); -- negative, 18 scale, last scale < 5
+insert into pax_numeric_tbl values(-0.000000000000000009); -- negative, 18 scale, last scale > 5
+select v from pax_numeric_tbl;
+                   v                   
+---------------------------------------
+  999999999999999999.99999999999999999
+ -999999999999999999.99999999999999999
+  100000000000000000.00000000000000000
+  999999999999999999.99999999999999999
+  999999999999999999.99999999999999999
+                   0.00000000000000009
+                  -0.00000000000000009
+          1234567890.01234567890000000
+                   0.00000000000000001
+                   0.00000000000000000
+                   0.00000000000000001
+                  -0.00000000000000001
+                   0.00000000000000000
+                  -0.00000000000000001
+(14 rows)
+
+truncate pax_numeric_tbl;
+insert into pax_numeric_tbl values('NaN');
+select v from pax_numeric_tbl;
+  v  
+-----
+ NaN
+(1 row)
+
+-- failed, numeric field overflow
+insert into pax_numeric_tbl values('+Inf');
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 cannot hold an infinite value.
+insert into pax_numeric_tbl values('Inf');
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 cannot hold an infinite value.
+insert into pax_numeric_tbl values('-Inf');
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 cannot hold an infinite value.
+insert into pax_numeric_tbl values(999999999999999999.999999999999999999); -- 18 nweight, 18 scale, last scale > 5
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 must round to an absolute value less than 10^18.
+insert into pax_numeric_tbl values(9999999999999999999.9999999999999999);  -- 19 nweight, 17 scale
+ERROR:  numeric field overflow
+DETAIL:  A field with precision 35, scale 17 must round to an absolute value less than 10^18.
+-- test with null datum
+truncate pax_numeric_tbl;
+insert into pax_numeric_tbl values(1), (1.00), (2.22), (NULL), (NULL);
+insert into pax_numeric_tbl values(NULL), (NULL);
+insert into pax_numeric_tbl values(NULL), (3.33), (44.44);
+insert into pax_numeric_tbl values(6.667), (NULL), (77.77), (NULL), (88.888);
+select v from pax_numeric_tbl;
+          v           
+----------------------
+                     
+                     
+                     
+                     
+                     
+ 44.44000000000000000
+                     
+ 77.77000000000000000
+                     
+ 88.88800000000000000
+  2.22000000000000000
+  3.33000000000000000
+  6.66700000000000000
+  1.00000000000000000
+  1.00000000000000000
+(15 rows)
+
+drop table pax_numeric_tbl;

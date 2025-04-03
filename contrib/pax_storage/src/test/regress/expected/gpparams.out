@@ -1,0 +1,260 @@
+--
+-- All derived from MPP-3613: use of incorrect parameters in queries
+-- which intermix initPlans with "internal" parameters.
+--
+--
+-- Name: in_crm; Type: TABLE; Schema: public; Owner: gpadmin; Tablespace: 
+--
+CREATE TABLE in_crm (
+    alias_id integer,
+    subs_type character(8),
+    pay_type character(7),
+    switch_on_date date,
+    switch_off_date date,
+    rem_mnths integer,
+    gender character(1),
+    age integer,
+    handset_age integer,
+    value real,
+    tariff_plan character(9),
+    handset_type character(6),
+    segment character(2),
+    flg integer,
+    zip integer,
+    inact integer,
+    name_origin character(9),
+    churned boolean,
+    churn_score real,
+    churn_date date,
+    product_x1_propensity_score real,
+    product_x1_taken boolean,
+    product_x1_taken_date date,
+    product_x1_possible boolean,
+    date_inserted date,
+    last_call_date timestamp without time zone
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'alias_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+--
+-- Name: in_product; Type: TABLE; Schema: public; Owner: gpadmin; Tablespace: 
+--
+CREATE TABLE in_product (
+    alias_id integer NOT NULL,
+    product_id smallint NOT NULL,
+    product_name character varying(100),
+    product_taken smallint,
+    product_score double precision,
+    date_inserted date NOT NULL
+) distributed by (alias_id);
+--
+-- Name: module_job_parameters; Type: TABLE; Schema: public; Owner: xsl; Tablespace: 
+--
+CREATE TABLE module_job_parameters (
+    mod_job_id integer NOT NULL,
+    key character varying(50) NOT NULL,
+    value character varying(50)
+) distributed by (mod_job_id);
+--
+-- Name: module_targets; Type: TABLE; Schema: public; Owner: gpadmin; Tablespace: 
+--
+DROP TABLE IF EXISTS module_targets;
+NOTICE:  table "module_targets" does not exist, skipping
+CREATE TABLE module_targets (
+    mod_job_id integer NOT NULL,
+    alias_id integer NOT NULL,
+    target smallint
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'mod_job_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+--
+-- Data for Name: in_crm; Type: TABLE DATA; Schema: public; Owner: gpadmin
+--
+COPY in_crm (alias_id, subs_type, pay_type, switch_on_date, switch_off_date, rem_mnths, gender, age, handset_age, value, tariff_plan, handset_type, segment, flg, zip, inact, name_origin, churned, churn_score, churn_date, product_x1_propensity_score, product_x1_taken, product_x1_taken_date, product_x1_possible, date_inserted, last_call_date) FROM stdin;
+--
+-- Data for Name: in_product; Type: TABLE DATA; Schema: public; Owner: gpadmin
+--
+COPY in_product (alias_id, product_id, product_name, product_taken, product_score, date_inserted) FROM stdin;
+COPY module_job_parameters (mod_job_id, key, value) FROM stdin;
+COPY module_targets (mod_job_id, alias_id, target) FROM stdin;
+ALTER TABLE ONLY in_product
+    ADD CONSTRAINT in_product_pkey PRIMARY KEY (alias_id, product_id, date_inserted);
+ALTER TABLE ONLY module_job_parameters
+    ADD CONSTRAINT module_job_parameters_pkey PRIMARY KEY (mod_job_id, key);
+--
+-- Name: create_target_list(integer, integer); Type: FUNCTION; Schema: public; Owner: gpadmin
+--
+CREATE OR REPLACE FUNCTION create_target_list(integer, integer) RETURNS SETOF integer
+    AS $_$
+DECLARE 
+    retval integer;
+
+    BEGIN
+
+    RETURN NEXT $1;
+    RETURN NEXT $2;
+
+    IF $2=1::integer THEN
+
+      INSERT INTO module_targets
+      SELECT DISTINCT $1 as mod_job_id, a.alias_id,b.target 
+      FROM in_crm a LEFT JOIN
+        (SELECT DISTINCT alias_id, 
+          CASE
+            WHEN max(churn_date) IS NOT NULL 
+              AND max(churn_date) <= 
+                (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+                 FROM module_job_parameters pt
+                 WHERE pt.mod_job_id = $1
+                 AND pt."key"::text = 't5'::text
+                )
+              AND max(churn_date) >= 
+                (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+                 FROM module_job_parameters pt
+                 WHERE pt.mod_job_id = $1 
+                 AND pt."key"::text = 't4'::text
+                )
+              THEN 1
+              ELSE -1
+           END AS target
+           FROM in_crm
+           GROUP BY alias_id) b on a.alias_id=b.alias_id
+        WHERE a.date_inserted = 
+           (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+            FROM module_job_parameters pt
+            WHERE pt.mod_job_id = $1 
+            AND pt."key"::text = 'tCRM'::text
+           )
+        AND a.subs_type='Consumer'::text
+        AND a.pay_type='PostPay';
+
+      RETURN NEXT 1;
+
+    ELSIF $2=2 THEN 
+
+      INSERT INTO module_targets
+      SELECT DISTINCT $1 as mod_job_id, ip.alias_id, 
+	  CASE
+              WHEN ip.alias_id IS NOT NULL AND ip.product_taken = 1 THEN 1
+              ELSE -1
+          END AS target
+      FROM in_product ip
+      WHERE ip.product_id = 
+            (SELECT pt.value::text::integer 
+	     FROM module_job_parameters pt
+      	     WHERE pt.mod_job_id = $1
+               AND pt."key"::text = 'product_id'::text
+	    )
+        AND ip.date_inserted =
+	    (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+	     FROM module_job_parameters pt
+      	     WHERE pt.mod_job_id = $1 
+               AND pt."key"::text = 'tCRM'::text);
+
+
+      INSERT INTO module_modelling_exceptions
+      SELECT cr.alias_id,
+	CASE WHEN ip.product_taken=1 THEN 1 
+	     WHEN ip.product_taken IS NULL THEN -1
+	     ELSE 0 
+	END AS prod_status
+      FROM (
+      	   select alias_id 
+	   from in_crm 
+	   where date_inserted =
+	     (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+	      FROM module_job_parameters pt
+      	      WHERE pt.mod_job_id = $1 
+                AND pt."key"::text = 'tCRM'::text)
+	   ) cr 
+      LEFT JOIN in_product ip on ip.alias_id=cr.alias_id 
+      WHERE ip.product_id = 
+            (SELECT pt.value::text::integer 
+	     FROM module_job_parameters pt
+      	     WHERE pt.mod_job_id = $1
+               AND pt."key"::text = 'product_id'::text
+	    )
+        AND ip.date_inserted =
+	    (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+	     FROM module_job_parameters pt
+      	     WHERE pt.mod_job_id = $1 
+               AND pt."key"::text = 'tCRM'::text);
+
+
+      RETURN NEXT 2;
+
+    ELSE 
+
+      SELECT 0 into retval;
+      RETURN NEXT 3;
+    END IF;
+
+    SELECT count(*) FROM module_targets into retval;
+ 
+RETURN NEXT retval;
+END;
+$_$
+    LANGUAGE plpgsql MODIFIES SQL DATA;
+CREATE OR REPLACE FUNCTION create_target_list_sql(integer) RETURNS int4
+    AS $$
+      INSERT INTO module_targets
+      SELECT DISTINCT $1 as mod_job_id, a.alias_id,b.target 
+      FROM in_crm a LEFT JOIN
+        (SELECT DISTINCT alias_id, 
+          CASE
+            WHEN max(churn_date) IS NOT NULL 
+              AND max(churn_date) <= 
+                (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+                 FROM module_job_parameters pt
+                 WHERE pt.mod_job_id = $1
+                 AND pt."key"::text = 't5'::text
+                )
+              AND max(churn_date) >= 
+                (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+                 FROM module_job_parameters pt
+                 WHERE pt.mod_job_id = $1 
+                 AND pt."key"::text = 't4'::text
+                )
+              THEN 1
+              ELSE -1
+           END AS target
+           FROM in_crm
+           GROUP BY alias_id) b on a.alias_id=b.alias_id
+        WHERE a.date_inserted = 
+           (SELECT to_date(pt.value::text, 'YYYY-MM-DD'::text)
+            FROM module_job_parameters pt
+            WHERE pt.mod_job_id = $1 
+            AND pt."key"::text = 'tCRM'::text
+           )
+        AND a.subs_type='Consumer'::text
+        AND a.pay_type='PostPay';
+
+	select count(*)::int4 from module_targets;
+$$
+    LANGUAGE sql MODIFIES SQL DATA;
+truncate module_targets;
+select * from create_target_list(30, 1);
+ create_target_list 
+--------------------
+                 30
+                  1
+                  1
+                 63
+(4 rows)
+
+truncate module_targets;
+select * from create_target_list_sql(30);
+ create_target_list_sql 
+------------------------
+                     63
+(1 row)
+
+--DROP TABLE IF EXISTS module_targets;
+--CREATE TABLE module_targets (
+--    mod_job_id integer NOT NULL,
+--    alias_id integer NOT NULL,
+--    target integer
+--);
+--truncate module_targets;
+--select * from create_target_list(30, 1);
+--truncate module_targets;
+--select * from create_target_list_sql(30);

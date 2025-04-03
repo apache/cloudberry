@@ -35,6 +35,9 @@
 #include "access/bitmap_xlog.h"
 #include "access/distributedlog.h"
 #include "cdb/cdbappendonlyxlog.h"
+#ifdef USE_PAX_STORAGE
+#include "paxc_desc.h"
+#endif
 
 #define PG_RMGR(symname,name,redo,desc,identify,startup,cleanup,mask,decode) \
 	{ name, desc, identify},
@@ -84,6 +87,12 @@ initialize_custom_rmgrs(void)
 		CustomRmgrDesc[i].rm_desc = default_desc;
 		CustomRmgrDesc[i].rm_identify = default_identify;
 	}
+
+#ifdef USE_PAX_STORAGE
+	CustomRmgrDesc[PAX_RMGR_ID - RM_MIN_CUSTOM_ID].rm_name = "pax";
+	CustomRmgrDesc[PAX_RMGR_ID - RM_MIN_CUSTOM_ID].rm_desc = pax_rmgr_desc;
+	CustomRmgrDesc[PAX_RMGR_ID - RM_MIN_CUSTOM_ID].rm_identify = pax_rmgr_identify;
+#endif
 	CustomRmgrDescInitialized = true;
 }
 

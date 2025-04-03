@@ -61,6 +61,7 @@ WHERE p1.typtype not in ('c','d','p') AND p1.typname NOT LIKE E'\\_%'
     (SELECT 1 FROM pg_type as p2
      WHERE p2.typname = ('_' || p1.typname)::name AND
            p2.typelem = p1.oid and p1.typarray = p2.oid)
+    AND typnamespace != (select oid from pg_namespace where nspname='pg_ext_aux')
 ORDER BY p1.oid;
 
 -- Make sure typarray points to a "true" array type of our own base
@@ -611,6 +612,8 @@ SELECT oid, typname, typtype, typelem, typarray, typarray
                      'pg_brin_minmax_multi_summary', 'xml']::regtype[]) AND
     -- GPDB_14_MERGE_FIXME: Discard the GP-specific type gp_hyperloglog_estimator?
     oid != 'gp_hyperloglog_estimator'::regtype AND
+    -- CBDB: ignore types defined in extension namespace
+    typnamespace != (select oid from pg_namespace where nspname='pg_ext_aux') AND
     -- Discard arrays.
     NOT EXISTS (SELECT 1 FROM pg_type u WHERE u.typarray = t.oid)
     -- Exclude everything from the table created above.  This checks

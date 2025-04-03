@@ -1,0 +1,40 @@
+-- @Description Ensures that a vacuum with serializable works ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 100) AS i;
+INSERT 100
+
+DELETE FROM pax_tbl WHERE a <= 30;
+DELETE 30
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+SET
+SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 70    
+(1 row)
+SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
+ ptblockname | pttupcount 
+-------------+------------
+ 0           | 38         
+ 0           | 37         
+ 0           | 25         
+(3 rows)
+VACUUM pax_tbl;
+VACUUM
+-- in case there's autovacuum worker running in the backend, the pax_tbl will not be dropped which has state = 2
+SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl') where pttupcount > 0;
+ ptblockname | pttupcount 
+-------------+------------
+ 0           | 25         
+ 0           | 38         
+ 0           | 37         
+(3 rows)
+SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 70    
+(1 row)

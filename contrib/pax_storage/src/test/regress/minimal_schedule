@@ -1,0 +1,4 @@
+# do not include any partition table tests in this group
+# test 'partition' checks on pg_partition, pg_partition_templates without
+# any filters.
+test: boolean char name varchar text int2 int4

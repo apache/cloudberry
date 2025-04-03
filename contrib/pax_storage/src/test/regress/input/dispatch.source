@@ -1,0 +1,559 @@
+-- Misc tests related to dispatching queries to segments.
+CREATE DATABASE dispatch_test_db;
+\c dispatch_test_db;
+
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+
+-- Mask out the whoami message
+-- start_matchsubs
+-- m/^ \(seg\d .*:\d+\)/
+-- s/^ \(seg\d .*:\d+\)//
+-- m/^DETAIL:  Internal error: No motion listener port \(seg\d.*:.*\)/
+-- s/^DETAIL:  Internal error: No motion listener port \(seg\d.*:.*\)/DETAIL:  Internal error: No motion listener port/
+-- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected/
+-- s/session id \=\s*\d+/session id \= DUMMY/gm
+-- m/^DETAIL:  connection to server at .*, port \d+ failed: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'/
+-- s/^DETAIL:  connection to server at .*, port \d+ failed: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'/^DETAIL:  connection to server at XX, port XX failed: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'/
+-- m/ERROR:  Query plan size limit exceeded, current size: 1[1-2]KB, max allowed size: 10KB/
+-- s/ERROR:  Query plan size limit exceeded, current size: 1[1-2]KB, max allowed size: 10KB/ERROR:  Query plan size limit exceeded, current size: /
+-- end_matchsubs
+
+-- skip FTS probes always
+select gp_inject_fault_infinite('fts_probe', 'skip', 1);
+select gp_request_fts_probe_scan();
+
+-- Test cdbdisp_getDispatchResults() fail in CdbDispatchCopyStart()
+
+create table dispatch_tbl (a int) distributed by (a);
+insert into dispatch_tbl values (2),(1),(5);
+
+-- fault on seg1 to block insert command into the dispatch_tbl table
+select gp_inject_fault('DoCopyToFail', 'error', '', '', '',
+   1, 1, 0, dbid) from gp_segment_configuration
+   where content = 1 and role = 'p';
+
+copy dispatch_tbl to stdout;
+
+--select gp_wait_until_triggered_fault('DoCopyToFail', 1, dbid)
+--  from gp_segment_configuration where content = 1 and role = 'p';
+
+select gp_inject_fault('DoCopyToFail', 'reset', dbid)
+   from gp_segment_configuration
+   where content = 1 and role = 'p';
+
+select * from dispatch_tbl;
+drop table dispatch_tbl;
+
+-- Test quoting of GUC values and database names when they're sent to segments
+set client_min_messages='warning';
+DROP DATABASE IF EXISTS "funny""db'with\\quotes";
+reset client_min_messages;
+
+CREATE DATABASE "funny""db'with\\quotes";
+ALTER DATABASE "funny""db'with\\quotes" SET search_path="funny""schema'with\\quotes";
+
+-- GPDB_91_MERGE_FIXME: It would be good to leave the database in place, to
+-- also test gpcheckcat and pg_upgrade after all the regression tests have
+-- completed. As of this writing pg_upgrade does not in fact handle that well.
+-- Remove this DROP DATABASE once it's fixed. That should happen when we
+-- reach commit a2385cac13, which was backported to PostgreSQL 9.1.
+DROP DATABASE "funny""db'with\\quotes";
+
+-- set_config() used to have quoting problems as well when dispatching to
+-- segments.
+CREATE TABLE IF NOT EXISTS should_be_visible();
+CREATE OR REPLACE FUNCTION visible_to_segments(tbl oid)
+    RETURNS SETOF boolean
+    EXECUTE ON ALL SEGMENTS
+    LANGUAGE plpgsql AS
+$$
+BEGIN
+    RETURN NEXT pg_catalog.pg_table_is_visible(tbl);
+END
+$$;
+
+-- Spin up any gangs necessary to handle the SELECT DISTINCT so that they
+-- receive the new search_path setting from the set_config() dispatch.
+SELECT DISTINCT visible_to_segments('public.should_be_visible'::regclass);
+
+-- Now change search_path. This setting should not affect the visibility of the
+-- public schema if it's dispatched correctly.
+SELECT set_config('search_path', 'pg_catalog,public', false);
+
+-- Check that our test table is still visible.
+SELECT DISTINCT visible_to_segments('public.should_be_visible'::regclass);
+
+RESET search_path;
+
+-- There used to be a bug in the quoting when the search_path setting was sent
+-- to the segment. It was not easily visible when search_path was set with a
+-- SET command, only when the setting was sent as part of the startup packet.
+-- Set search_path as a per-user setting so that we can test that.
+CREATE DATABASE "dispatch test db";
+ALTER DATABASE "dispatch test db" SET search_path="my schema",public;
+
+\c "dispatch test db"
+
+CREATE SCHEMA "my schema";
+
+-- Reconnect so that the search_path includes "my schema".
+\c
+
+-- Create a table with the same name in both schemas, "my schema" and public.
+CREATE TABLE "my table" (t text);
+INSERT INTO "my table" VALUES ('myschema.mytable');
+
+CREATE TABLE public."my table" (t text);
+INSERT INTO public."my table" VALUES ('public.mytable');
+
+SELECT t as unquoted FROM "my table";
+SELECT t as myschema FROM "my schema"."my table";
+SELECT t as public FROM public."my table";
+
+DROP TABLE "my table";
+DROP TABLE public."my table";
+
+-- Create another table with the same name. To make sure the DROP worked
+-- and dropped the correct table.
+CREATE TABLE "my table" (id integer);
+DROP TABLE "my table";
+
+-- test ALTER DATABASE SET FROM CURRENT
+SHOW search_path;
+ALTER DATABASE "dispatch test db" RESET ALL;
+\c
+SHOW search_path;
+SET search_path="my schema", public;
+SHOW search_path;
+ALTER DATABASE "dispatch test db" SET search_path FROM CURRENT;
+\c
+SHOW search_path;
+SELECT 0 as gp_segment_id, setconfig FROM gp_dist_random('pg_db_role_setting')
+WHERE setdatabase = (SELECT oid FROM pg_database WHERE datname='dispatch test db') and gp_segment_id = 0
+UNION
+SELECT -1 as gp_segment_id, setconfig FROM pg_db_role_setting
+WHERE setdatabase = (SELECT oid FROM pg_database WHERE datname='dispatch test db')
+ORDER BY gp_segment_id;
+
+-- Clean up
+\c dispatch_test_db
+DROP DATABASE "dispatch test db";
+
+-- Test gp_max_plan_size limit
+set gp_max_plan_size='10 kB';
+create table dispatchtesttab(t text);
+select * from dispatchtesttab where t = repeat('x', 1024*11);
+
+--
+-- test QD will report failure if QE fails to send its motion_listener back
+-- during backend initialization
+--
+
+select gp_inject_fault('send_qe_details_init_backend', 'reset', 2);
+-- inject a 'skip' fault before QE sends its motion_listener
+select gp_inject_fault('send_qe_details_init_backend', 'skip', 2);
+
+-- terminate exiting QEs first
+\c dispatch_test_db
+-- verify failure will be reported
+SELECT 1 FROM gp_dist_random('gp_id');
+
+-- reset fault injector
+select gp_inject_fault('send_qe_details_init_backend', 'reset', 2);
+
+
+--
+-- Test suit : test gang creation and commands dispatching 
+--
+--start_ignore
+drop table if exists dispatch_test;
+drop table if exists dispatch_test_t1;
+drop table if exists dispatch_test_t2;
+drop table if exists dispatch_test_t3;
+--end_ignore
+create table dispatch_test as select i as c1 from generate_series(1, 10) i;
+create table dispatch_test_t1 (c1 int, c2 int, c3 int);
+create table dispatch_test_t2 (c1 int, c2 int, c3 int);
+create table dispatch_test_t3 (c1 int, c2 int, c3 int);
+insert into dispatch_test_t1 values (1,1,2);
+insert into dispatch_test_t2 values (2,1,2);
+insert into dispatch_test_t3 values (3,1,2);
+
+CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
+AS '@abs_builddir@/regress@DLSUFFIX@', 'cleanupAllGangs' LANGUAGE C;
+
+-- check if segments has backend running
+CREATE OR REPLACE FUNCTION hasBackendsExist(int) RETURNS SETOF BOOL
+AS '@abs_builddir@/regress@DLSUFFIX@', 'hasBackendsExist' LANGUAGE C EXECUTE ON ALL SEGMENTS;
+
+-- check if QD has reusable gangs
+CREATE OR REPLACE FUNCTION hasGangsExist() RETURNS BOOL
+AS '@abs_builddir@/regress@DLSUFFIX@', 'hasGangsExist' LANGUAGE C;
+
+-- test log debug related code within dispatch
+set gp_log_gang to debug;
+set log_min_messages to DEBUG;
+
+-- Case 1.1
+-- A segment in recovery mode, writer gang retry gp_gang_creation_retry_count times and finally success
+
+-- set maximum retry time to 120 seconds, this should be long enough for segment
+-- recovery back. otherwise it should be bug somewhere
+set gp_gang_creation_retry_count to 120;
+set gp_gang_creation_retry_timer to 1000;
+
+select cleanupAllGangs();
+
+set max_parallel_workers_per_gather=0;
+-- trigger fault and report segment 0 in recovery for 5 times
+select gp_inject_fault('process_startup_packet', 'skip', '', 'dispatch_test_db', '', 1, 5, 0, 2::smallint);
+select cleanupAllGangs();
+
+-- should success after retry
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+select gp_inject_fault('process_startup_packet', 'reset', 2);
+
+-- Case 1.2
+-- A segment in recovery mode for long time, writer gang retry gp_gang_creation_retry_count times and finally failed
+-- set maximun retry time to 0.4s, so we can test if gp_gang_creation_retry_count
+-- is actually work
+set gp_gang_creation_retry_count to 2;
+set gp_gang_creation_retry_timer to 200;
+select cleanupAllGangs();
+
+-- trigger fault and put segment 0 into recovery mode
+select gp_inject_fault('process_startup_packet', 'skip', '', 'dispatch_test_db', '', 1, 5, 0, 2::smallint);
+select cleanupAllGangs();
+
+-- should fail after 2 retries
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+set gp_gang_creation_retry_count to 10;
+-- should success and process_startup_packet will be invalid after this query
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+select gp_inject_fault('process_startup_packet', 'reset', 2);
+
+--start_ignore
+-- enlarge the retry count
+set gp_gang_creation_retry_count to 128 ;
+-- this will block until segment 0 recovery back, or report an error
+-- after 24 seconds.
+select 'wait recovery finish' from gp_dist_random('gp_id');
+--end_ignore
+
+-- cleanup all reusable gangs 
+select cleanupAllGangs();
+
+-- expect no zombie backends left on segments 
+select sum(case when h = 't' then 1 else 0 end) > 0 as hasbackends from hasbackendsexist(30) as h;
+
+-- should success 
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+-- Case 1.3
+-- segment has non in-recovery-mode errors
+-- when creating writer gang, an error reported and all gangs should be cleaned.
+-- when creating reader gang, an error reported and only current gang is cleaned.
+select cleanupAllGangs();
+
+-- segment 0 report an error when get a request 
+-- the fault may be triggered by other backend process, such as dtx recovery process, specify a session id.
+select gp_inject_fault('send_qe_details_init_backend', 'error', 2, current_setting('gp_session_id')::int);
+select cleanupAllGangs();
+
+-- expect failure
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+-- expect no resuable gang exist
+select * from hasGangsExist();
+
+-- expect no zombie backends left on segments.
+select sum(case when h = 't' then 1 else 0 end) > 0 as hasbackends from hasbackendsexist(30) as h;
+
+-- cleanupAllGangs();
+select cleanupAllGangs();
+
+select gp_inject_fault('send_qe_details_init_backend', 'reset', 2);
+-- segment 0 report an error when get the second request (reader gang creation request)
+-- the fault may be triggered by other backend process, such as dtx recovery process, specify a session id.
+select gp_inject_fault('send_qe_details_init_backend', 'error', '', '', '', 3, 3, 0, 2::smallint, current_setting('gp_session_id')::int);
+select cleanupAllGangs();
+
+-- expect failure
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+-- expect resuable gang exist
+select * from hasGangsExist();
+
+-- expect QEs exist.
+select sum(case when h = 't' then 1 else 0 end) > 0 as hasbackends from hasbackendsexist(0) as h;
+
+select gp_inject_fault('send_qe_details_init_backend', 'reset', 2);
+
+-- Case 1.4
+-- Test createGang timeout.
+-- gp_segment_connect_timeout = 0 : wait forever
+-- gp_segment_connect_timeout = 1 : wait 1 second
+
+set gp_segment_connect_timeout to 1;
+select gp_inject_fault('process_startup_packet', 'suspend', '', 'dispatch_test_db', '', 1, 1, 0, 2::smallint);
+
+select cleanupAllGangs();
+
+-- expect timeout failure
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+set gp_segment_connect_timeout to 0;
+
+select gp_inject_fault('process_startup_packet', 'resume', 2);
+select gp_inject_fault('process_startup_packet', 'reset', 2);
+
+select gp_inject_fault('process_startup_packet', 'sleep', '', '', '', 1, 1, 2, 2::smallint);
+
+select cleanupAllGangs();
+
+-- expect success 
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+select gp_inject_fault('process_startup_packet', 'reset', 2);
+
+-- Case 1.5
+-- query was cancelled when dispatching commands to one gang.
+-- query should be cancelled as expected.
+
+-- must set log_min_messages to default when using interrupt, there is a bug in fault injection.
+set log_min_messages to default;
+
+select gp_inject_fault('after_one_slice_dispatched', 'interrupt', 1);
+
+-- should fail and report error
+select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+select gp_inject_fault('after_one_slice_dispatched', 'reset', 1);
+
+-- Case 1.6
+-- For a query need two phase commit, if error happens before commands are actually
+-- dispatched, the query can be cancelled correctly.
+-- 
+select gp_inject_fault('before_one_slice_dispatched', 'error', 1);
+update dispatch_test_t1 set c2 = 3 from dispatch_test_t2, dispatch_test_t3
+where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
+
+select gp_inject_fault('before_one_slice_dispatched', 'reset', 1);
+reset max_parallel_workers_per_gather;
+
+-- test logging of gang management
+SET gp_log_gang = 'debug';
+
+-- test INFO raised from segments with various kinds of fields
+CREATE OR REPLACE FUNCTION udf_raise_info() RETURNS BOOL
+AS '@abs_builddir@/regress@DLSUFFIX@', 'gangRaiseInfo' LANGUAGE C;
+
+SELECT udf_raise_info() FROM gp_dist_random('gp_id') WHERE gp_segment_id = 0;
+
+--
+-- Error out when dispatching DTX command to busy primary writer gang
+--
+CREATE TABLE dtx_dispatch_t AS SELECT i AS c1 FROM generate_series(1,10) i;
+
+CREATE or REPLACE FUNCTION dtx_dispatch_f(integer)
+RETURNS INTEGER
+AS
+$$
+BEGIN
+        return $1 + 1;
+EXCEPTION
+        WHEN division_by_zero THEN
+        RAISE NOTICE 'caught division_by_zero';
+        return 0;
+END
+$$
+LANGUAGE plpgSQL READS SQL DATA;
+
+SELECT dtx_dispatch_f(foo.c1) FROM (SELECT c1 FROM dtx_dispatch_t WHERE c1='1' limit 1) foo;
+
+DROP FUNCTION dtx_dispatch_f(integer);
+DROP TABLE dtx_dispatch_t;
+
+-- Test interconnect is shut down under portal failure
+CREATE OR REPLACE FUNCTION numActiveMotionConns() RETURNS INT
+AS '@abs_builddir@/regress@DLSUFFIX@', 'numActiveMotionConns' LANGUAGE C;
+
+CREATE TABLE foo_test AS SELECT i AS c1 FROM generate_series(1, 10) i;
+
+SELECT c1/0 FROM foo_test WHERE c1 = 1;
+SELECT numActiveMotionConns();
+
+BEGIN;
+DECLARE C1 CURSOR FOR SELECT * FROM foo_test;
+FETCH BACKWARD 1 FROM C1;
+END;
+
+SELECT numActiveMotionConns();
+
+DROP FUNCTION numActiveMotionConns();
+DROP TABLE foo_test;
+
+--
+-- Test dangling Gang would be destroyed if interrupted during the creation
+--
+select cleanupAllGangs();
+select gp_inject_fault('gang_created', 'reset', 1);
+select gp_inject_fault('gang_created', 'error', 1);
+select 1 from gp_dist_random('gp_id') limit 1;
+-- if previous gang is not destroyed, snapshot collision would happen
+select 1 from gp_dist_random('gp_id') limit 1;
+select gp_inject_fault('gang_created', 'reset', 1);
+
+--
+-- Test that an error happens after a big command is dispatched.
+--
+select gp_inject_fault('after_one_slice_dispatched', 'error', 1);
+select * from gp_dist_random('gp_id')
+	where gpname > (select * from repeat('sssss', 10000000));
+select gp_inject_fault('after_one_slice_dispatched', 'reset', 1);
+select * from gp_dist_random('gp_id')
+	where gpname > (select * from repeat('sssss', 10000000));
+
+-- Cover all transaction isolation levels to ensure that a gang can be
+-- created.  Connect again so that existing gangs are destroyed.
+\connect
+begin isolation level serializable;
+end;
+\connect
+begin isolation level repeatable read;
+end;
+\connect
+begin isolation level read committed;
+end;
+\connect
+begin isolation level read uncommitted;
+end;
+
+-- Test session will be reset if the writer gang of current global
+-- transaction is lost
+begin;
+create temp table disp_temp_test (c1 int, c2 int);
+insert into disp_temp_test values (1, 2);
+savepoint s1;
+create temp table disp_temp_test1 (c1 int, c2 int);
+insert into disp_temp_test1 values (1, 2);
+-- Let cleanupSegdb() return false and writer gang be destroyed
+select gp_inject_fault('cleanup_qe', 'skip', 1);
+select * from disp_temp_test1 where c1 / 0 = 9;
+rollback to savepoint s1;
+rollback;
+-- session is reset, temp table is dropped.
+select * from disp_temp_test;
+select * from disp_temp_test1;
+-- reset fault
+select gp_inject_fault('cleanup_qe', 'reset', 1);
+
+-- resume FTS probes
+select gp_inject_fault('fts_probe', 'reset', 1);
+
+--
+-- Test portal cleanup
+-- prepare a query contains init plan, main plan create a unnamed portal
+-- and will need multiple slices , init plan also need to allocated multiple
+-- slices in a named portal (eg: a cursor). The executing order is:
+-- 1. gangs of main plan is pre-assigned 2. init plan is executed 3. main plan
+-- is executed. This test it meant to test that cleanup of the named portal in
+-- the end of step2 will not affect the pre-allocated gangs of the main plan.
+--
+create table dispatch_foo (c1 int, c2 int);
+create table dispatch_bar (c1 int, c2 int);
+create or replace function dispatch_foo_func()
+returns int
+as
+$BODY$
+declare
+t_record record;
+BEGIN
+	drop table if exists tmp1;
+	create temp table tmp1 as select dispatch_foo.c1, dispatch_bar.c2 from dispatch_foo, dispatch_bar;
+	for t_record in (select count(*) from dispatch_foo, dispatch_bar)
+	loop
+		NULL;
+	end loop;
+	return 1;
+END;
+$BODY$
+language plpgsql volatile;
+set gp_cached_segworkers_threshold to 1;
+select count(*) from dispatch_foo, dispatch_bar where exists (select dispatch_foo_func());
+reset gp_cached_segworkers_threshold;
+
+--
+-- Test executor double fault
+-- check PG_TRY/PG_CATCH - we should always return an original error
+-- (for a query and its explain analyze)
+--
+drop table if exists double_fault;
+create table double_fault(a int) distributed by (a);
+insert into double_fault select generate_series(1, 10);
+create or replace function fault_exec_plan(explain_analyze bool default true) returns void as $_$
+declare
+    query text;
+begin
+    perform gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration;
+    perform gp_inject_fault('send_exec_stats', 'reset', dbid) from gp_segment_configuration;
+
+    perform gp_inject_fault('executor_pre_tuple_processed', 'error', dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+    perform gp_inject_fault('send_exec_stats', 'error', dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+
+    if explain_analyze then
+        query := 'explain analyze select count(*) from double_fault';
+    else
+        query := 'select count(*) from double_fault';
+    end if;
+    execute query;
+
+    perform gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration;
+    perform gp_inject_fault('send_exec_stats', 'reset', dbid) from gp_segment_configuration;
+exception when fault_inject then
+    perform gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration;
+    perform gp_inject_fault('send_exec_stats', 'reset', dbid) from gp_segment_configuration;
+
+    raise exception $$'%' fault triggered$$, case
+        when coalesce(substring(sqlerrm from 'send_exec_stats'), '') != '' then 'send_exec_stats'
+        when coalesce(substring(sqlerrm from 'executor_pre_tuple_processed'), '') != '' then 'executor_pre_tuple_processed'
+    end;
+end;
+$_$ language plpgsql;
+-- Query raising 'executor_pre_tuple_processed' error
+select fault_exec_plan(false);
+-- Same query with explain analyze (should raise
+-- 'executor_pre_tuple_processed' not 'send_exec_stats')
+select fault_exec_plan(true);
+\c regression
+DROP DATABASE dispatch_test_db;
+
+-- issue: https://github.com/greenplum-db/gpdb/issues/13393
+-- We should avoid a double free and resultant PANIC if the
+-- process of recycling the gang is interrupted by a signal
+CREATE EXTENSION if not exists gp_inject_fault;
+create table t13393(tc1 int);
+insert into t13393 select generate_series(1,10000);
+-- start_ignore
+analyze gp_segment_configuration;
+-- end_ignore
+SELECT gp_inject_fault('cdbcomponent_recycle_idle_qe_error', 'interrupt', dbid, current_setting('gp_session_id')::int)
+ from gp_segment_configuration where content=-1 and role='p';
+select count(*) from gp_segment_configuration a, t13393 ,gp_segment_configuration b where a.dbid = t13393.tc1 limit 0;
+SELECT gp_inject_fault('cdbcomponent_recycle_idle_qe_error', 'reset', dbid, current_setting('gp_session_id')::int)
+ from gp_segment_configuration where content=-1 and role='p';
+drop table t13393;

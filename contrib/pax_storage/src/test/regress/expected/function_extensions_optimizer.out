@@ -1,0 +1,703 @@
+-- -----------------------------------------------------------------
+-- Test extensions to functions (MPP-16060)
+-- 	1. data access indicators
+-- -----------------------------------------------------------------
+-- start_ignore
+CREATE LANGUAGE plpython3u;
+-- end_ignore
+-- test prodataaccess
+create function func1(int, int) returns int as
+$$
+  select $1 + $2;
+$$ language sql immutable contains sql;
+-- check prodataaccess column in pg_proc
+select proname, prodataaccess from pg_proc where proname = 'func1';
+ proname | prodataaccess 
+---------+---------------
+ func1   | c
+(1 row)
+
+-- check prodataaccess in pg_attribute
+select relname, attname, attlen from pg_class c, pg_attribute
+where attname = 'prodataaccess' and attrelid = c.oid and c.relname = 'pg_proc';
+ relname |    attname    | attlen 
+---------+---------------+--------
+ pg_proc | prodataaccess |      1
+(1 row)
+
+create function func2(a anyelement, b anyelement, flag bool)
+returns anyelement as
+$$
+  select $1 + $2;
+$$ language sql reads sql data;
+-- check prodataaccess column in pg_proc
+select proname, prodataaccess from pg_proc where proname = 'func2';
+ proname | prodataaccess 
+---------+---------------
+ func2   | r
+(1 row)
+
+create function func3() returns oid as
+$$
+  select oid from pg_class where relname = 'pg_type';
+$$ language sql modifies sql data volatile;
+-- check prodataaccess column in pg_proc
+select proname, prodataaccess from pg_proc where proname = 'func3';
+ proname | prodataaccess 
+---------+---------------
+ func3   | m
+(1 row)
+
+-- check default value of prodataaccess
+drop function func1(int, int);
+create function func1(int, int) returns varchar as $$
+declare
+	v_name varchar(20) DEFAULT 'zzzzz';
+begin
+	select relname from pg_class into v_name where oid=$1;
+	return v_name;
+end;
+$$ language plpgsql READS SQL DATA;
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func1';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func1   |             | r
+(1 row)
+
+create function func4(int, int) returns int as
+$$
+  select $1 + $2;
+$$ language sql CONTAINS SQL;
+-- check prodataaccess column
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func4';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func4   |             | c
+(1 row)
+
+-- change prodataaccess option
+create or replace function func4(int, int) returns int as
+$$
+  select $1 + $2;
+$$ language sql modifies sql data;
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func4';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func4   |             | m
+(1 row)
+
+-- upper case language name
+create or replace function func5(int) returns int as
+$$
+  select $1;
+$$ language SQL;
+-- check prodataaccess column
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func5';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func5   |             | c
+(1 row)
+
+-- alter function with data access
+alter function func5(int) reads sql data;
+-- check prodataaccess column
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func5';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func5   |             | r
+(1 row)
+
+-- alter function with data access
+alter function func5(int) modifies sql data;
+-- check prodataaccess column
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func5';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func5   |             | m
+(1 row)
+
+-- alter function with data access
+alter function func5(int) no sql;
+ERROR:  conflicting options
+HINT:  A SQL function cannot specify NO SQL.
+-- alter function with data access
+alter function func5(int) volatile contains sql;
+alter function func5(int) immutable reads sql data;
+ERROR:  conflicting options
+HINT:  IMMUTABLE conflicts with READS SQL DATA.
+alter function func5(int) immutable modifies sql data;
+ERROR:  conflicting options
+HINT:  IMMUTABLE conflicts with MODIFIES SQL DATA.
+-- data_access indicators for plpgsql
+drop function func1(int, int);
+create or replace function func1(int, int) returns varchar as $$
+declare
+	v_name varchar(20) DEFAULT 'zzzzz';
+begin
+	select relname from pg_class into v_name where oid=$1;
+	return v_name;
+end;
+$$ language plpgsql reads sql data;
+select proname, proargnames, prodataaccess from pg_proc where proname = 'func1';
+ proname | proargnames | prodataaccess 
+---------+-------------+---------------
+ func1   |             | r
+(1 row)
+
+-- check conflicts
+drop function func1(int, int);
+create function func1(int, int) returns int as
+$$
+  select $1 + $2;
+$$ language sql immutable no sql;
+ERROR:  conflicting options
+HINT:  A SQL function cannot specify NO SQL.
+create function func1(int, int) returns int as
+$$
+  select $1 + $2;
+$$ language sql immutable reads sql data;
+ERROR:  conflicting options
+HINT:  IMMUTABLE conflicts with READS SQL DATA.
+-- stable function with modifies data_access
+create table bar (c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create function func1_mod_int_stb(x int) returns int as $$
+begin
+	update bar set d = d+1 where c = $1;
+	return $1 + 1;
+end
+$$ language plpgsql stable modifies sql data;
+select * from func1_mod_int_stb(5) order by 1;
+ERROR:  UPDATE is not allowed in a non-volatile function
+CONTEXT:  SQL statement "update bar set d = d+1 where c = $1"
+PL/pgSQL function func1_mod_int_stb(integer) line 3 at SQL statement
+drop function func2(anyelement, anyelement, bool);
+drop function func3();
+drop function func4(int, int);
+drop function func5(int);
+drop function func1_mod_int_stb(int);
+-- Test EXECUTE ON [ANY | COORDINATOR | ALL SEGMENTS ]
+CREATE TABLE srf_testtab (t text) DISTRIBUTED BY (t);
+INSERT INTO srf_testtab VALUES ('foo 0');
+INSERT INTO srf_testtab VALUES ('foo 1');
+INSERT INTO srf_testtab VALUES ('foo -1');
+ANALYZE srf_testtab;
+create function srf_on_coordinator () returns setof text as $$
+begin
+  return next 'foo ' || current_setting('gp_contentid');
+  return next 'bar ' || current_setting('gp_contentid');
+end;
+$$ language plpgsql EXECUTE ON COORDINATOR;
+-- A function with ON COORDINATOR or ON ALL SEGMENTS is only allowed in the target list
+-- in the simple case with no FROM.
+select srf_on_coordinator();
+ srf_on_coordinator 
+--------------------
+ foo -1
+ bar -1
+(2 rows)
+
+select srf_on_coordinator() FROM srf_testtab;
+ERROR:  function with EXECUTE ON restrictions cannot be used in the SELECT list of a query with FROM
+-- In both these cases, the function should run on coordinator and hence return
+-- ('foo -1'), ('bar -1')
+select * from srf_on_coordinator();
+ srf_on_coordinator 
+--------------------
+ foo -1
+ bar -1
+(2 rows)
+
+select * from srf_testtab, srf_on_coordinator();
+   t    | srf_on_coordinator 
+--------+--------------------
+ foo 1  | foo -1
+ foo 0  | foo -1
+ foo -1 | foo -1
+ foo 1  | bar -1
+ foo 0  | bar -1
+ foo -1 | bar -1
+(6 rows)
+
+-- Should run on coordinator, even when used in a join. (With EXECUTE ON ANY,
+-- it would be pushed to segments.)
+select * from srf_testtab, srf_on_coordinator() where srf_on_coordinator = srf_testtab.t;
+   t    | srf_on_coordinator 
+--------+--------------------
+ foo -1 | foo -1
+(1 row)
+
+-- Repeat, with ON MASTER (this will be removed starting GPDB8 and forward)
+create function srf_on_master() returns setof text as $$
+begin
+  return next 'foo ' || current_setting('gp_contentid');
+  return next 'bar ' || current_setting('gp_contentid');
+end;
+$$ language plpgsql EXECUTE ON MASTER;
+-- A function with ON MASTER or ON ALL SEGMENTS is only allowed in the target list
+-- in the simple case with no FROM.
+select srf_on_master();
+ srf_on_master 
+---------------
+ foo -1
+ bar -1
+(2 rows)
+
+select srf_on_master() FROM srf_testtab;
+ERROR:  function with EXECUTE ON restrictions cannot be used in the SELECT list of a query with FROM
+-- In both these cases, the function should run on master and hence return
+-- ('foo -1'), ('bar -1')
+select * from srf_on_master();
+ srf_on_master 
+---------------
+ foo -1
+ bar -1
+(2 rows)
+
+select * from srf_testtab, srf_on_master();
+   t    | srf_on_master 
+--------+---------------
+ foo 0  | foo -1
+ foo 0  | bar -1
+ foo -1 | foo -1
+ foo -1 | bar -1
+ foo 1  | foo -1
+ foo 1  | bar -1
+(6 rows)
+
+-- Should run on master, even when used in a join. (With EXECUTE ON ANY,
+-- it would be pushed to segments.)
+select * from srf_testtab, srf_on_master() where srf_on_master = srf_testtab.t;
+   t    | srf_on_master 
+--------+---------------
+ foo -1 | foo -1
+(1 row)
+
+-- Repeat, with EXECUTE ON ALL SEGMENTS
+create function srf_on_all_segments () returns setof text as $$
+begin
+
+  -- To make the output reproducible, regardless of the number of segments in
+  -- the cluster, only return rows on segments 0 and 1
+  if current_setting('gp_contentid')::integer < 2 then
+    return next 'foo ' || current_setting('gp_contentid');
+    return next 'bar ' || current_setting('gp_contentid');
+  end if;
+end;
+$$ language plpgsql EXECUTE ON ALL SEGMENTS;
+select srf_on_all_segments();
+ srf_on_all_segments 
+---------------------
+ foo 1
+ bar 1
+ foo 0
+ bar 0
+(4 rows)
+
+select srf_on_all_segments() FROM srf_testtab;
+ERROR:  function with EXECUTE ON restrictions cannot be used in the SELECT list of a query with FROM
+select * from srf_on_all_segments();
+ srf_on_all_segments 
+---------------------
+ foo 1
+ bar 1
+ foo 0
+ bar 0
+(4 rows)
+
+select * from srf_testtab, srf_on_all_segments();
+   t    | srf_on_all_segments 
+--------+---------------------
+ foo -1 | foo 0
+ foo 1  | foo 0
+ foo 0  | foo 0
+ foo -1 | bar 0
+ foo 1  | bar 0
+ foo 0  | bar 0
+ foo 1  | foo 1
+ foo 0  | foo 1
+ foo -1 | foo 1
+ foo 1  | bar 1
+ foo 0  | bar 1
+ foo -1 | bar 1
+(12 rows)
+
+select * from srf_testtab, srf_on_all_segments() where srf_on_all_segments = srf_testtab.t;
+   t   | srf_on_all_segments 
+-------+---------------------
+ foo 1 | foo 1
+ foo 0 | foo 0
+(2 rows)
+
+-- And with EXEUCTE ON ANY.
+create function test_srf () returns setof text as $$
+begin
+  return next 'foo';
+end;
+$$ language plpgsql EXECUTE ON ANY IMMUTABLE;
+-- Set the owner, to make the output of the \df+ tests below repeatable,
+-- regardless of the name of the current user.
+CREATE ROLE srftestuser;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+ALTER FUNCTION test_srf() OWNER TO srftestuser;
+select test_srf();
+ test_srf 
+----------
+ foo
+(1 row)
+
+select test_srf() FROM srf_testtab;
+ test_srf 
+----------
+ foo
+ foo
+ foo
+(3 rows)
+
+select * from test_srf();
+ test_srf 
+----------
+ foo
+(1 row)
+
+-- Since the function is marked as EXECUTE ON ANY, and IMMUTABLE, the planner
+-- can choose to run it anywhere.
+explain select * from srf_testtab, test_srf();
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..882719.56 rows=1000 width=14)
+   ->  Nested Loop  (cost=0.00..882719.51 rows=334 width=14)
+         Join Filter: true
+         ->  Seq Scan on srf_testtab  (cost=0.00..431.00 rows=1 width=6)
+         ->  Function Scan on test_srf  (cost=0.00..0.01 rows=334 width=8)
+ Settings:  optimizer=on
+ Optimizer status: Pivotal Optimizer (GPORCA) version 2.45.0
+(7 rows)
+
+explain select * from srf_testtab, test_srf() where test_srf = srf_testtab.t;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.16 rows=1000 width=14)
+   ->  Hash Join  (cost=0.00..431.10 rows=334 width=14)
+         Hash Cond: test_srf.test_srf = srf_testtab.t
+         ->  Result  (cost=0.00..0.03 rows=334 width=8)
+               ->  Function Scan on test_srf  (cost=0.00..0.01 rows=334 width=8)
+         ->  Hash  (cost=431.00..431.00 rows=1 width=6)
+               ->  Seq Scan on srf_testtab  (cost=0.00..431.00 rows=1 width=6)
+ Settings:  optimizer=on
+ Optimizer status: Pivotal Optimizer (GPORCA) version 2.45.0
+(9 rows)
+
+-- Test ALTER FUNCTION, and that \df displays the EXECUTE ON correctly
+\df+ test_srf
+                                                                                                 List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
+--------+----------+------------------+---------------------+------+-------------+------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | any        | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          | begin               +| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          |   return next 'foo';+| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          | end;                +| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          |                      | 
+(1 row)
+
+alter function test_srf() EXECUTE ON COORDINATOR;
+\df+ test_srf
+                                                                                                 List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on  | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
+--------+----------+------------------+---------------------+------+-------------+-------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | coordinator | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
+        |          |                  |                     |      |             |             |            |          |             |          |                   |          | begin               +| 
+        |          |                  |                     |      |             |             |            |          |             |          |                   |          |   return next 'foo';+| 
+        |          |                  |                     |      |             |             |            |          |             |          |                   |          | end;                +| 
+        |          |                  |                     |      |             |             |            |          |             |          |                   |          |                      | 
+(1 row)
+
+alter function test_srf() EXECUTE ON ALL SEGMENTS;
+\df+ test_srf
+                                                                                                  List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access |  Execute on  | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
+--------+----------+------------------+---------------------+------+-------------+--------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | all segments | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
+        |          |                  |                     |      |             |              |            |          |             |          |                   |          | begin               +| 
+        |          |                  |                     |      |             |              |            |          |             |          |                   |          |   return next 'foo';+| 
+        |          |                  |                     |      |             |              |            |          |             |          |                   |          | end;                +| 
+        |          |                  |                     |      |             |              |            |          |             |          |                   |          |                      | 
+(1 row)
+
+alter function test_srf() EXECUTE ON ANY;
+\df+ test_srf
+                                                                                                 List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
+--------+----------+------------------+---------------------+------+-------------+------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | any        | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          | begin               +| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          |   return next 'foo';+| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          | end;                +| 
+        |          |                  |                     |      |             |            |            |          |             |          |                   |          |                      | 
+(1 row)
+
+DROP FUNCTION test_srf();
+DROP ROLE srftestuser;
+-- Test error propagation from segments
+CREATE TABLE uniq_test(id int primary key);
+CREATE OR REPLACE FUNCTION trigger_unique() RETURNS void AS $$
+BEGIN
+	INSERT INTO uniq_test VALUES (1);
+	INSERT INTO uniq_test VALUES (1);
+	EXCEPTION WHEN unique_violation THEN
+		raise notice 'unique_violation';
+END;
+$$ LANGUAGE plpgsql volatile;
+SELECT trigger_unique();
+NOTICE:  unique_violation
+ trigger_unique 
+----------------
+ 
+(1 row)
+
+-- Test CTAS select * from f()
+-- Above query will fail in past in f() contains DDLs.
+-- Since CTAS is write gang and f() could only be run at EntryDB(QE)
+-- But EntryDB and QEs cannot run DDLs which needs to do dispatch.
+-- We introduce new function location 'EXECUTE ON INITPLAN' to run
+-- the function on initplan to overcome the above issue.
+-- Helper function to count the number of temporary files in
+-- pgsql_tmp.
+CREATE or replace FUNCTION get_temp_file_num() returns text as
+$$
+import os
+fileNum = 0
+dirNum = 0
+for root, directories, filenames in os.walk('base/pgsql_tmp'):
+  for filename in filenames:
+    fileNum += 1
+  for dir in directories:
+    dirNum += 1
+return '{} files and {} directories'.format(fileNum, dirNum)
+$$ language plpython3u;
+CREATE OR REPLACE FUNCTION get_country()
+ RETURNS TABLE (
+  country_id integer,
+  country character varying(50)
+  )
+AS $$
+  begin
+  drop table if exists public.country;
+  create table public.country( country_id integer,
+    country character varying(50));
+  insert into public.country
+  (country_id, country)
+  select 111,'INDIA'
+  union all select 222,'CANADA'
+  union all select 333,'USA' ;
+  RETURN QUERY
+  SELECT
+  c.country_id,
+  c.country
+  FROM
+  public.country c order by country_id;
+  end; $$
+LANGUAGE 'plpgsql' EXECUTE ON INITPLAN;
+-- Temp file number before running INITPLAN function
+SELECT get_temp_file_num();
+     get_temp_file_num     
+---------------------------
+ 0 files and 0 directories
+(1 row)
+
+SELECT * FROM get_country();
+NOTICE:  table "country" does not exist, skipping
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ country_id | country 
+------------+---------
+        111 | INDIA
+        222 | CANADA
+        333 | USA
+(3 rows)
+
+SELECT get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ get_country  
+--------------
+ (111,INDIA)
+ (222,CANADA)
+ (333,USA)
+(3 rows)
+
+DROP TABLE IF EXISTS t1_function_scan;
+NOTICE:  table "t1_function_scan" does not exist, skipping
+EXPLAIN CREATE TABLE t1_function_scan AS SELECT * FROM get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1)  (cost=0.25..30.25 rows=1000 width=36)
+   Hash Key: get_country.country_id
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Function Scan on get_country get_country_1  (cost=0.25..10.25 rows=1000 width=36)
+   ->  Function Scan on get_country  (cost=0.25..10.25 rows=1000 width=36)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+CREATE TABLE t1_function_scan AS SELECT * FROM get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  table "country" does not exist, skipping
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t1_function_scan SELECT * FROM get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t1_function_scan SELECT * FROM get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t1_function_scan;
+ count 
+-------
+     9
+(1 row)
+
+-- test with limit clause
+DROP TABLE IF EXISTS t1_function_scan_limit;
+NOTICE:  table "t1_function_scan_limit" does not exist, skipping
+CREATE TABLE t1_function_scan_limit AS SELECT * FROM get_country() limit 2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t1_function_scan_limit;
+ count 
+-------
+     2
+(1 row)
+
+-- test with order by clause
+DROP TABLE IF EXISTS t1_function_scan_order_by;
+NOTICE:  table "t1_function_scan_order_by" does not exist, skipping
+CREATE TABLE t1_function_scan_order_by AS SELECT * FROM get_country() f1 ORDER BY f1.country_id DESC limit 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM t1_function_scan_order_by;
+ country_id | country 
+------------+---------
+        333 | USA
+(1 row)
+
+-- test with group by clause
+DROP TABLE IF EXISTS t1_function_scan_group_by;
+NOTICE:  table "t1_function_scan_group_by" does not exist, skipping
+CREATE TABLE t1_function_scan_group_by AS SELECT f1.country_id, count(*) FROM get_country() f1 GROUP BY f1.country_id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t1_function_scan_group_by;
+ count 
+-------
+     3
+(1 row)
+
+-- test join table
+DROP TABLE IF EXISTS t1_function_scan_join;
+NOTICE:  table "t1_function_scan_join" does not exist, skipping
+CREATE TABLE t1_function_scan_join AS SELECT f1.country_id, f1.country FROM get_country() f1, t1_function_scan_limit;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t1_function_scan_join;
+ count 
+-------
+     6
+(1 row)
+
+DROP TABLE IF EXISTS t2_function_scan;
+NOTICE:  table "t2_function_scan" does not exist, skipping
+CREATE TABLE t2_function_scan (id int, val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t2_function_scan SELECT k, k+1 FROM generate_series(1,100000) AS k;
+CREATE OR REPLACE FUNCTION get_id()
+ RETURNS TABLE (
+  id integer,
+  val integer
+  )
+AS $$
+  begin
+  RETURN QUERY
+  SELECT * FROM t2_function_scan;
+  END; $$
+LANGUAGE 'plpgsql' EXECUTE ON INITPLAN;
+DROP TABLE IF EXISTS t3_function_scan;
+NOTICE:  table "t3_function_scan" does not exist, skipping
+CREATE TABLE t3_function_scan AS SELECT * FROM get_id();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t3_function_scan;
+ count  
+--------
+ 100000
+(1 row)
+
+-- abort case 1: abort before entrydb run the function scan
+DROP TABLE IF EXISTS t4_function_scan;
+NOTICE:  table "t4_function_scan" does not exist, skipping
+CREATE TABLE t4_function_scan AS SELECT 444, (1 / (0* random()))::text UNION ALL SELECT * FROM get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  division by zero  (entry db 10.146.0.4:7000 pid=20360)
+-- Temp file number after running INITPLAN function. All the files should've
+-- been cleaned up, but it's normal that the temp directory to hold them is
+-- still around.
+SELECT get_temp_file_num();
+     get_temp_file_num     
+---------------------------
+ 0 files and 1 directories
+(1 row)
+
+-- test join case with two INITPLAN functions
+DROP TABLE IF EXISTS t5_function_scan;
+NOTICE:  table "t5_function_scan" does not exist, skipping
+CREATE TABLE t5_function_scan AS SELECT * FROM get_id(), get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t5_function_scan;
+ count  
+--------
+ 300000
+(1 row)
+
+-- test union all 
+DROP TABLE IF EXISTS t6_function_scan;
+NOTICE:  table "t6_function_scan" does not exist, skipping
+CREATE TABLE t6_function_scan AS SELECT 100/(1+ 1* random())::int id, 'cc'::text cc UNION ALL SELECT * FROM  get_country();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t6_function_scan;
+ count 
+-------
+     4
+(1 row)
+
+DROP TABLE IF EXISTS t7_function_scan;
+NOTICE:  table "t7_function_scan" does not exist, skipping
+CREATE TABLE t7_function_scan AS SELECT * FROM  get_country() UNION ALL SELECT 100/(1+ 1* random())::int, 'cc'::text;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'country_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT count(*) FROM t7_function_scan;
+ count 
+-------
+     4
+(1 row)
+

@@ -1,0 +1,111 @@
+drop table if exists r;
+NOTICE:  table "r" does not exist, skipping
+create table r(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+set enable_bitmapscan=off;
+set enable_indexscan=off;
+-- force_explain
+explain
+SELECT attnum::information_schema.cardinal_number 
+from pg_attribute 
+where attnum > 0 and attrelid = 'r'::regclass;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Seq Scan on pg_attribute  (cost=0.00..49.89 rows=11 width=2)
+   Filter: attnum > 0 AND attrelid = 8609819::oid
+ Settings:  optimizer=off; optimizer_segments=3
+(3 rows)
+
+SELECT attnum::information_schema.cardinal_number 
+from pg_attribute 
+where attnum > 0 and attrelid = 'r'::regclass;
+ attnum 
+--------
+      1
+      2
+(2 rows)
+
+-- this one should fail
+SELECT attnum::information_schema.cardinal_number 
+from pg_attribute 
+where attrelid = 'r'::regclass;
+ERROR:  value for domain information_schema.cardinal_number violates check constraint "cardinal_number_domain_check"
+-- force_explain
+explain SELECT *
+from (SELECT attnum::information_schema.cardinal_number 
+      from pg_attribute 
+      where attnum > 0 and attrelid = 'r'::regclass) q
+where attnum=2;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Seq Scan on pg_attribute  (cost=0.00..62.83 rows=2 width=2)
+   Filter: attnum > 0 AND attrelid = 8609819::oid AND attnum::information_schema.cardinal_number::integer = 2
+ Settings:  optimizer=off; optimizer_segments=3
+(3 rows)
+
+SELECT *
+from (SELECT attnum::information_schema.cardinal_number 
+      from pg_attribute 
+      where attnum > 0 and attrelid = 'r'::regclass) q
+where attnum=2;
+ attnum 
+--------
+      2
+(1 row)
+
+select table_schema, table_name,column_name,ordinal_position
+from information_schema.columns
+where table_name ='r';
+ table_schema | table_name | column_name | ordinal_position 
+--------------+------------+-------------+------------------
+ public       | r          | b           |                2
+ public       | r          | a           |                1
+(2 rows)
+
+select table_schema, table_name,column_name,ordinal_position
+from information_schema.columns
+where table_name ='r'
+and ordinal_position =1;
+ table_schema | table_name | column_name | ordinal_position 
+--------------+------------+-------------+------------------
+ public       | r          | a           |                1
+(1 row)
+
+-- MPP-25724
+create table mpp_25724(mpp_25724_col int) distributed by (mpp_25724_col);
+select a.column_name
+from information_schema.columns a
+where a.table_name
+in
+(select b.table_name from information_schema.tables b where
+	a.column_name like 'mpp_25724_col');
+  column_name  
+---------------
+ mpp_25724_col
+(1 row)
+
+select c.relname
+from pg_class c
+where c.relname
+in
+(select b.table_name from information_schema.tables b where
+	c.relname like 'mpp_25724');
+  relname  
+-----------
+ mpp_25724
+(1 row)
+
+select a.table_name
+from information_schema.tables a
+where a.table_name
+in
+(select b.relname from pg_class b where
+	a.table_name like 'mpp_25724');
+ table_name 
+------------
+ mpp_25724
+(1 row)
+
+drop table mpp_25724;
+drop table r;

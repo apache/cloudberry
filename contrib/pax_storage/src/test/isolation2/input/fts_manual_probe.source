@@ -1,0 +1,77 @@
+-- See src/backend/fts/README for background information
+--
+-- This tests two scenarios:
+-- 1) Piggyback Test
+-- Ensure multiple probe requests come in before the start of a new ftsLoop, 
+-- then all those requests share the same result.
+--
+-- 2) Fresh Result Test
+-- Ensure fresh results when a probe request occurs during an in progress 
+-- ftsLoop.
+--
+-- It is useful to remember that the FtsLoop and each FtsNotifyProbe are 
+-- individual processes. Careful use of fault injectors are needed to have 
+-- complete and consistent control over the flow of the two independent 
+-- processes - the ftsLoop and FtsNotifyProber's.
+--
+-- NOTE: you must add '--load-extension=gp_inject_fault' to the commandline
+--   for a manual test.
+
+select gp_inject_fault('all', 'reset', 1) from master();
+
+create temp table fts_probe_results(seq serial, seq_name varchar(20),
+                                    current_started int, expected_start_delta int,
+                                    current_done int, expected_done_delta int);
+
+create or replace view get_raw_stats as
+select
+  seq,
+  seq_name,
+  current_started,
+  expected_start_delta,
+  current_started - min(current_started) over () as actual_start_delta, -- actual_start_delta = current_started - initial_started
+  current_done,
+  expected_done_delta,
+  current_done - min(current_done) over () as actual_done_delta -- actual_done_delta = current_done - initial_done
+from fts_probe_results order by seq;
+
+create or replace view get_stats as
+select seq, seq_name,
+       expected_start_delta, actual_start_delta,
+       expected_done_delta, actual_done_delta
+from get_raw_stats order by seq desc limit 1;
+
+-- ensure there is no in progress ftsLoop after reloading the gp_fts_probe_interval
+select gp_request_fts_probe_scan();
+
+select * from get_stats;
+
+-- piggyback test: start multiple probes
+select gp_inject_fault_infinite('ftsNotify_before', 'suspend', 1) from master();
+
+1&: select gp_request_fts_probe_scan();
+2&: select gp_request_fts_probe_scan();
+3&: select gp_request_fts_probe_scan();
+
+-- piggyback: ensure the probe requests are at a known starting location
+select gp_wait_until_triggered_fault('ftsNotify_before', 3, 1) from master();
+
+-- piggyback: ensure the ftsLoop is at a known starting location
+select * from get_stats;
+select gp_inject_fault('ftsNotify_before', 'resume', 1) from master();
+
+select * from get_stats;
+
+-- fresh result test: issue a new probe request during the in progress piggyback ftsLoop
+4: select gp_request_fts_probe_scan();
+
+1<:
+2<:
+3<:
+
+select * from get_stats;
+
+-- show all raw stats for debugging
+-- start_ignore
+select * from get_raw_stats;
+-- end_ignore

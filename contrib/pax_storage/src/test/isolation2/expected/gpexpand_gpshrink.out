@@ -1,0 +1,397 @@
+!\retcode yes | gpexpand -c;
+-- start_ignore
+
+-- end_ignore
+(exited with code 3)
+
+!\retcode gpshrink -c;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode rm -r /tmp/datadirs/;
+-- start_ignore
+
+-- end_ignore
+(exited with code 1)
+
+-- expand one segment and shrink
+!\retcode echo "localhost|localhost|7008|/tmp/datadirs/dbfast4/demoDataDir3|9|3|p localhost|localhost|7009|/tmp/datadirs/dbfast_mirror4/demoDataDir3|10|3|m" > /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+create table test(a int);
+CREATE
+
+insert into test select i from generate_series(1,100) i;
+INSERT 100
+
+select gp_segment_id, count(*) from test group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 0             | 38    
+ 1             | 37    
+ 2             | 25    
+(3 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 8     
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+select gp_segment_id, count(*) from test group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 1             | 30    
+ 3             | 26    
+ 0             | 28    
+ 2             | 16    
+(4 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 10    
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 4           | 1       
+(1 row)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+select gp_segment_id, count(*) from test group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 0             | 38    
+ 1             | 37    
+ 2             | 25    
+(3 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 8     
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+!\retcode yes | gpexpand -c;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -c;
+-- start_ignore
+
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode rm -r /tmp/datadirs/;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+drop table test;
+DROP
+
+
+-- expand one segment and shrink
+!\retcode echo "localhost|localhost|7008|/tmp/datadirs/dbfast4/demoDataDir3|9|3|p localhost|localhost|7009|/tmp/datadirs/dbfast_mirror4/demoDataDir3|10|3|m" > /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+create table test_partitioned (a int, b int) partition by range (b) (start(1) end(101) every(20),default partition def);
+CREATE
+
+insert into test_partitioned select i,i from generate_series(1,100) i;
+INSERT 100
+
+select gp_segment_id, count(*) from test_partitioned group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 1             | 37    
+ 2             | 25    
+ 0             | 38    
+(3 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 8     
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test_partitioned' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test_partitioned_1_prt_2' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+select gp_segment_id, count(*) from test_partitioned group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 1             | 30    
+ 2             | 16    
+ 0             | 28    
+ 3             | 26    
+(4 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 10    
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test_partitioned' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 4           | 1       
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test_partitioned_1_prt_2' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 4           | 1       
+(1 row)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+select gp_segment_id, count(*) from test_partitioned group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 0             | 38    
+ 2             | 25    
+ 1             | 37    
+(3 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 8     
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test_partitioned' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test_partitioned_1_prt_2' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+drop table test_partitioned;
+DROP
+
+!\retcode yes | gpexpand -c;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -c;
+-- start_ignore
+
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode rm -r /tmp/datadirs/;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+
+-- expand two segment and shrink
+!\retcode echo "localhost|localhost|7008|/tmp/datadirs/dbfast4/demoDataDir3|9|3|p localhost|localhost|7009|/tmp/datadirs/dbfast_mirror4/demoDataDir3|10|3|m localhost|localhost|7010|/tmp/datadirs/dbfast5/demoDataDir4|11|4|p localhost|localhost|7011|/tmp/datadirs/dbfast_mirror5/demoDataDir4|12|4|m" > /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+create table test(a int);
+CREATE
+
+insert into test select i from generate_series(1,100) i;
+INSERT 100
+
+select gp_segment_id, count(*) from test group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 1             | 37    
+ 2             | 25    
+ 0             | 38    
+(3 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 8     
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+select gp_segment_id, count(*) from test group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 3             | 22    
+ 2             | 13    
+ 1             | 20    
+ 0             | 24    
+ 4             | 21    
+(5 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 12    
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 5           | 1       
+(1 row)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+select gp_segment_id, count(*) from test group by gp_segment_id;
+ gp_segment_id | count 
+---------------+-------
+ 1             | 37    
+ 2             | 25    
+ 0             | 38    
+(3 rows)
+
+select count(*) from gp_segment_configuration;
+ count 
+-------
+ 8     
+(1 row)
+
+select policytype, numsegments, distkey from gp_distribution_policy d, pg_class c where c.relname='test' and  c.oid=d.localoid;
+ policytype | numsegments | distkey 
+------------+-------------+---------
+ p          | 3           | 1       
+(1 row)
+
+drop table test;
+DROP
+
+!\retcode yes | gpexpand -c;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -c;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode rm -r /tmp/datadirs/;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)

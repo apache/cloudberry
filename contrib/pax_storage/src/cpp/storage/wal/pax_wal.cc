@@ -1,0 +1,55 @@
+/*-------------------------------------------------------------------------
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ * pax_wal.cc
+ *
+ * IDENTIFICATION
+ *	  contrib/pax_storage/src/cpp/storage/wal/pax_wal.cc
+ *
+ *-------------------------------------------------------------------------
+ */
+
+
+#include "storage/wal/pax_wal.h"
+
+#include "comm/cbdb_wrappers.h"
+#include "storage/wal/paxc_wal.h"
+
+namespace cbdb {
+
+void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
+                   void *buffer, int32 bufferLen) {
+  CBDB_WRAP_START;
+  { paxc::XLogPaxInsert(node, filename, offset, buffer, bufferLen); }
+  CBDB_WRAP_END;
+}
+
+void XLogPaxCreateDirectory(RelFileNode node) {
+  CBDB_WRAP_START;
+  { paxc::XLogPaxCreateDirectory(node); }
+  CBDB_WRAP_END;
+}
+
+void XLogPaxTruncate(RelFileNode node) {
+  CBDB_WRAP_START;
+  { paxc::XLogPaxTruncate(node); }
+  CBDB_WRAP_END;
+}
+
+}  // namespace cbdb

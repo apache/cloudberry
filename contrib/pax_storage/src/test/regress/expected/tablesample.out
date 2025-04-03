@@ -1,0 +1,480 @@
+CREATE TABLE test_tablesample (dist int, id int, name text) DISTRIBUTED BY (dist);
+-- use fillfactor so we don't have to load too much data to get multiple pages
+-- Changed the column length in order to match the expected results based on relation's blocksz
+INSERT INTO test_tablesample SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+-- Verify that each segment has the same amount of rows;
+SELECT gp_segment_id, count(dist) FROM test_tablesample GROUP BY 1 ORDER BY 1;
+ gp_segment_id | count 
+---------------+-------
+             0 |    10
+             1 |    10
+             2 |    10
+(3 rows)
+
+SELECT t.id FROM test_tablesample AS t TABLESAMPLE SYSTEM (50) REPEATABLE (0);
+ id 
+----
+ 21
+ 22
+ 24
+ 28
+ 29
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+(15 rows)
+
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (100.0/11) REPEATABLE (0);
+ id 
+----
+(0 rows)
+
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
+ id 
+----
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+ 21
+ 22
+ 24
+ 28
+ 29
+(15 rows)
+
+SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (50) REPEATABLE (0);
+ id 
+----
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+ 21
+ 22
+ 24
+ 28
+ 29
+(15 rows)
+
+SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (5.5) REPEATABLE (0);
+ id 
+----
+(0 rows)
+
+-- 100% should give repeatable count results (ie, all rows) in any case
+SELECT count(*) FROM test_tablesample TABLESAMPLE SYSTEM (100);
+ count 
+-------
+    30
+(1 row)
+
+SELECT count(*) FROM test_tablesample TABLESAMPLE SYSTEM (100) REPEATABLE (1+2);
+ count 
+-------
+    30
+(1 row)
+
+SELECT count(*) FROM test_tablesample TABLESAMPLE SYSTEM (100) REPEATABLE (0.4);
+ count 
+-------
+    30
+(1 row)
+
+CREATE VIEW test_tablesample_v1 AS
+  SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (10*2) REPEATABLE (2);
+CREATE VIEW test_tablesample_v2 AS
+  SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (99);
+\d+ test_tablesample_v1
+                     View "public.test_tablesample_v1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Description 
+--------+---------+-----------+----------+---------+---------+-------------
+ id     | integer |           |          |         | plain   | 
+View definition:
+ SELECT test_tablesample.id
+   FROM test_tablesample TABLESAMPLE system ((10 * 2)) REPEATABLE (2);
+
+\d+ test_tablesample_v2
+                     View "public.test_tablesample_v2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Description 
+--------+---------+-----------+----------+---------+---------+-------------
+ id     | integer |           |          |         | plain   | 
+View definition:
+ SELECT test_tablesample.id
+   FROM test_tablesample TABLESAMPLE system (99);
+
+-- check a sampled query doesn't affect cursor in progress
+BEGIN;
+DECLARE tablesample_cur CURSOR FOR
+  SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0) ORDER BY id;
+FETCH FIRST FROM tablesample_cur;
+ id 
+----
+  1
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  2
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  4
+(1 row)
+
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
+ id 
+----
+ 21
+ 22
+ 24
+ 28
+ 29
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+(15 rows)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  8
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  9
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+ 11
+(1 row)
+
+-- Cloudberry: Going backwards on cursors is not supported. By closing the
+-- cursor and starting again we pass the tests and keep the file closer to
+-- upstream. We do test the rescan methods of tablesample afterwards.
+CLOSE tablesample_cur;
+DECLARE tablesample_cur CURSOR FOR SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0) ORDER BY id;
+FETCH FIRST FROM tablesample_cur;
+ id 
+----
+  1
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  2
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  4
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  8
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  9
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+ 11
+(1 row)
+
+CLOSE tablesample_cur;
+END;
+EXPLAIN (COSTS OFF)
+  SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sample Scan on test_tablesample
+         Sampling: system ('50'::real) REPEATABLE ('2'::double precision)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+  SELECT * FROM test_tablesample_v1;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sample Scan on test_tablesample
+         Sampling: system ('20'::real) REPEATABLE ('2'::double precision)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- check inheritance behavior
+explain (costs off)
+  select count(*) from person tablesample bernoulli (100);
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Sample Scan on person person_1
+                           Sampling: bernoulli ('100'::real)
+                     ->  Sample Scan on emp person_2
+                           Sampling: bernoulli ('100'::real)
+                     ->  Sample Scan on student person_3
+                           Sampling: bernoulli ('100'::real)
+                     ->  Sample Scan on stud_emp person_4
+                           Sampling: bernoulli ('100'::real)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select count(*) from person tablesample bernoulli (100);
+ count 
+-------
+    58
+(1 row)
+
+select count(*) from person;
+ count 
+-------
+    58
+(1 row)
+
+-- check that collations get assigned within the tablesample arguments
+SELECT count(*) FROM test_tablesample TABLESAMPLE bernoulli (('1'::text < '0'::text)::int);
+ count 
+-------
+     0
+(1 row)
+
+-- Cloudberry: Test rescan paths by forcing a nested loop
+CREATE TABLE ttr1 (a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE ttr2 (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO ttr1 VALUES (1, 1), (12, 1), (31, 1), (NULL, NULL);
+INSERT INTO ttr2 VALUES (1, 2), (12, 2), (31, 2), (NULL, 6);
+ANALYZE ttr1;
+ANALYZE ttr2;
+SET enable_hashjoin TO OFF;
+SET enable_mergejoin TO OFF;
+SET enable_nestloop TO ON;
+EXPLAIN (COSTS OFF) SELECT * FROM ttr1 TABLESAMPLE BERNOULLI (50) REPEATABLE (1), ttr2 TABLESAMPLE BERNOULLI (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (ttr1.a = ttr2.a)
+         ->  Sample Scan on ttr1
+               Sampling: bernoulli ('50'::real) REPEATABLE ('1'::double precision)
+         ->  Sample Scan on ttr2
+               Sampling: bernoulli ('50'::real) REPEATABLE ('1'::double precision)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+SELECT * FROM ttr1 TABLESAMPLE BERNOULLI (50) REPEATABLE (1), ttr2 TABLESAMPLE BERNOULLI (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
+ a | b | a | b 
+---+---+---+---
+ 1 | 1 | 1 | 2
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT * FROM ttr1 TABLESAMPLE SYSTEM (50) REPEATABLE (1), ttr2 TABLESAMPLE SYSTEM (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (ttr1.a = ttr2.a)
+         ->  Sample Scan on ttr1
+               Sampling: system ('50'::real) REPEATABLE ('1'::double precision)
+         ->  Sample Scan on ttr2
+               Sampling: system ('50'::real) REPEATABLE ('1'::double precision)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+SELECT * FROM ttr1 TABLESAMPLE SYSTEM (50) REPEATABLE (1), ttr2 TABLESAMPLE SYSTEM (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
+ a | b | a | b 
+---+---+---+---
+ 1 | 1 | 1 | 2
+(1 row)
+
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+RESET enable_nestloop;
+-- check behavior during rescans, as well as correct handling of min/max pct
+-- Cloudberry: does not support laterals completely, rescan specific tests above
+-- start_ignore
+select * from
+  (values (0),(100)) v(pct),
+  lateral (select count(*) from tenk1 tablesample bernoulli (pct)) ss;
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
+HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
+select * from
+  (values (0),(100)) v(pct),
+  lateral (select count(*) from tenk1 tablesample system (pct)) ss;
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
+HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
+explain (costs off)
+select pct, count(unique1) from
+  (values (0),(100)) v(pct),
+  lateral (select * from tenk1 tablesample bernoulli (pct)) ss
+  group by pct;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Finalize GroupAggregate
+   Group Key: "*VALUES*".column1
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: "*VALUES*".column1
+         ->  Partial GroupAggregate
+               Group Key: "*VALUES*".column1
+               ->  Sort
+                     Sort Key: "*VALUES*".column1
+                     ->  Nested Loop
+                           ->  Values Scan on "*VALUES*"
+                           ->  Sample Scan on tenk1
+                                 Sampling: bernoulli ("*VALUES*".column1)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select pct, count(unique1) from
+  (values (0),(100)) v(pct),
+  lateral (select * from tenk1 tablesample bernoulli (pct)) ss
+  group by pct;
+ pct | count 
+-----+-------
+(0 rows)
+
+select pct, count(unique1) from
+  (values (0),(100)) v(pct),
+  lateral (select * from tenk1 tablesample system (pct)) ss
+  group by pct;
+ pct | count 
+-----+-------
+(0 rows)
+
+-- end_ignore
+-- Cloudberry: we do have to test min/max pct tests though
+select 0 as pct, count(*) from tenk1 tablesample bernoulli (0)
+union all
+select 100 as pct, count(*) from tenk1 tablesample bernoulli (100);
+ pct | count 
+-----+-------
+   0 |     0
+ 100 | 10000
+(2 rows)
+
+select 0 as pct, count(*) from tenk1 tablesample system (0)
+union all
+select 100 as pct, count(*) from tenk1 tablesample system (100);
+ pct | count 
+-----+-------
+   0 |     0
+ 100 | 10000
+(2 rows)
+
+select 0 as pct, count(unique1) from tenk1 tablesample bernoulli (0)
+union all
+select 100 as pct, count(unique1) from tenk1 tablesample bernoulli (100);
+ pct | count 
+-----+-------
+   0 |     0
+ 100 | 10000
+(2 rows)
+
+select 0 as pct, count(unique1) from tenk1 tablesample system (0)
+union all
+select 100 as pct, count(unique1) from tenk1 tablesample system (100);
+ pct | count 
+-----+-------
+   0 |     0
+ 100 | 10000
+(2 rows)
+
+-- errors
+SELECT id FROM test_tablesample TABLESAMPLE FOOBAR (1);
+ERROR:  tablesample method foobar does not exist
+LINE 1: SELECT id FROM test_tablesample TABLESAMPLE FOOBAR (1);
+                                                    ^
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (NULL);
+ERROR:  TABLESAMPLE parameter cannot be null
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (NULL);
+ERROR:  TABLESAMPLE REPEATABLE parameter cannot be null
+SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (-1);
+ERROR:  sample percentage must be between 0 and 100
+SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (200);
+ERROR:  sample percentage must be between 0 and 100
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (-1);
+ERROR:  sample percentage must be between 0 and 100
+SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (200);
+ERROR:  sample percentage must be between 0 and 100
+SELECT id FROM test_tablesample_v1 TABLESAMPLE BERNOULLI (1);
+ERROR:  TABLESAMPLE clause can only be applied to tables and materialized views
+LINE 1: SELECT id FROM test_tablesample_v1 TABLESAMPLE BERNOULLI (1)...
+                       ^
+INSERT INTO test_tablesample_v1 VALUES(1);
+ERROR:  cannot insert into view "test_tablesample_v1"
+DETAIL:  Views containing TABLESAMPLE are not automatically updatable.
+HINT:  To enable inserting into the view, provide an INSTEAD OF INSERT trigger or an unconditional ON INSERT DO INSTEAD rule.
+WITH query_select AS (SELECT * FROM test_tablesample)
+SELECT * FROM query_select TABLESAMPLE BERNOULLI (5.5) REPEATABLE (1);
+ERROR:  TABLESAMPLE clause can only be applied to tables and materialized views
+LINE 2: SELECT * FROM query_select TABLESAMPLE BERNOULLI (5.5) REPEA...
+                      ^
+SELECT q.* FROM (SELECT * FROM test_tablesample) as q TABLESAMPLE BERNOULLI (5);
+ERROR:  syntax error at or near "TABLESAMPLE"
+LINE 1: ...CT q.* FROM (SELECT * FROM test_tablesample) as q TABLESAMPL...
+                                                             ^
+-- check partitioned tables support tablesample
+create table parted_sample (a int) partition by list (a);
+create table parted_sample_1 partition of parted_sample for values in (1);
+create table parted_sample_2 partition of parted_sample for values in (2);
+explain (costs off)
+  select * from parted_sample tablesample bernoulli (100);
+                   QUERY PLAN                    
+-------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Sample Scan on parted_sample_1
+               Sampling: bernoulli ('100'::real)
+         ->  Sample Scan on parted_sample_2
+               Sampling: bernoulli ('100'::real)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+drop table parted_sample, parted_sample_1, parted_sample_2;

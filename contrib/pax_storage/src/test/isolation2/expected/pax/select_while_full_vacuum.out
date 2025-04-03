@@ -1,0 +1,60 @@
+-- @Description Ensures that a select during a full vacuum operation is ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT);
+CREATE
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+
+DELETE FROM pax_tbl WHERE a < 128;
+DELETE 2667
+1: BEGIN;
+BEGIN
+1>: SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;SELECT COUNT(*) FROM pax_tbl;COMMIT;  <waiting ...>
+2: VACUUM FULL pax_tbl;
+VACUUM
+1<:  <... completed>
+SELECT
+3: INSERT INTO pax_tbl VALUES (0);
+INSERT 1

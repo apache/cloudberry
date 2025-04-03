@@ -1,0 +1,1335 @@
+--
+-- This test suite tests COPY code that is unique to greenplum db.
+--
+
+-- ######################################################
+-- different distribution columns and distribution types
+-- ######################################################
+
+CREATE TABLE copy_regression_hash1(a text, b text, c text) distributed by (b);
+CREATE TABLE copy_regression_hash2(a text, b text, c text) distributed by (a,c);
+CREATE TABLE copy_regression_hash3(a varchar, b int, c int, d text) distributed by (a,c,d);
+CREATE TABLE copy_regression_hash4(a int[], b text) distributed by (a);
+CREATE TABLE copy_regression_hash5(a text[][]) distributed by (a);
+CREATE TABLE copy_regression_hash6(a int[], b text[]) distributed by (a,b);
+CREATE TABLE copy_regression_hash7(a text,b text) distributed randomly;
+
+-- single key, not first
+
+COPY copy_regression_hash1 from stdin;
+a data	b data	c data
+\.
+COPY copy_regression_hash1(b,c,a) from stdin;
+b data	c data	a data
+\.
+SELECT * FROM copy_regression_hash1;
+
+-- two keys
+
+COPY copy_regression_hash2 from stdin;
+a data	b data	c data
+\.
+COPY copy_regression_hash2(b,c,a) from stdin;
+b data	c data	a data
+\.
+SELECT * FROM copy_regression_hash2;
+
+-- three keys
+
+COPY copy_regression_hash3 from stdin;
+a data	2	3	d data
+\.
+COPY copy_regression_hash3(c,d,b,a) from stdin;
+3	d data	2	a data
+\.
+COPY copy_regression_hash3(a,c) from stdin;
+a data	3
+\.
+COPY copy_regression_hash3(d) from stdin;
+d data
+\.
+SELECT * FROM copy_regression_hash3;
+
+-- hash on int array
+
+COPY copy_regression_hash4 from stdin;
+{1,2,3,4,5}	hashed on an integer array
+{10,20,30,40,50}	hashed on an integer array
+\.
+SELECT * FROM copy_regression_hash4 ORDER BY a;
+
+-- hash on 2 dim varchar array
+
+COPY copy_regression_hash5 from stdin;
+{{hashing,on},{two dimentional,text array}}
+\.
+SELECT * FROM copy_regression_hash5 ORDER BY a;
+
+-- hash on int array and varchar array
+
+COPY copy_regression_hash6 from stdin;
+{1,2,3,4,5}	{hashing,on,intarray,and,varchararray}
+\.
+SELECT * FROM copy_regression_hash6 ORDER BY a;
+
+-- hash randomly
+
+COPY copy_regression_hash7 from stdin;
+a data	b data
+a data	b data
+\.
+SELECT * FROM copy_regression_hash7;
+
+DROP TABLE copy_regression_hash1;
+DROP TABLE copy_regression_hash2;
+DROP TABLE copy_regression_hash3;
+DROP TABLE copy_regression_hash4;
+DROP TABLE copy_regression_hash5;
+DROP TABLE copy_regression_hash6;
+DROP TABLE copy_regression_hash7;
+
+-- ######################################################
+-- default values and default functions
+-- ######################################################
+
+CREATE TABLE copy_regression_default1(a text not null default 'a default data', b text not null default 'b default data') distributed by(a);
+CREATE TABLE copy_regression_default2(a text, b serial, c text) distributed by(a);
+CREATE TABLE copy_regression_default3(a serial, b text, c text) distributed by(a);
+
+-- constant defaults on key and non key attributes
+
+COPY copy_regression_default1(a) from stdin;
+a data
+\.
+COPY copy_regression_default1(b) from stdin;
+b data
+\.
+SELECT * FROM copy_regression_default1;
+
+-- non constant default on non hash key in both text and csv
+
+COPY copy_regression_default2(a,c) from stdin;
+a data	c data
+a data	c data 
+a data	c data
+\.
+COPY copy_regression_default2(a,c) from stdin csv;
+a data,c data
+a data,c data
+a data,c data
+\.
+SELECT * FROM copy_regression_default2;
+
+-- non constant default on hash key in both text and csv
+
+COPY copy_regression_default3(b,c) from stdin;
+b data	c data
+b data	c data
+b data	c data
+\.
+COPY copy_regression_default3(b,c) from stdin csv;
+b data,c data
+b data,c data
+b data,c data
+\.
+SELECT * FROM copy_regression_default2;
+
+DROP TABLE copy_regression_default1;
+DROP TABLE copy_regression_default2;
+DROP TABLE copy_regression_default3;
+
+-- ######################################################
+-- COPY OUT
+-- ######################################################
+
+CREATE TABLE copy_regression_out1(a text, b varchar, c int[], d bool) distributed by(a);
+
+-- populating table with data for copy out tests. NOTE: since we can't control the order
+-- of rows COPY OUT produces from the segdb, we must have only one row for each test table.
+
+COPY copy_regression_out1 from stdin null 'nullval';
+a copyout data line 2	nullval	{2,2,2}	true
+\.
+
+-- copy out default parameters text format..
+COPY copy_regression_out1 to stdout;
+
+-- copy out '|' delimiter 'mynull' null..
+COPY copy_regression_out1 to stdout with delimiter '|' null 'mynull';
+
+-- copy out '|' delimiter "i'm null" null..
+COPY copy_regression_out1 to stdout with delimiter '|' null 'i''m null';
+
+-- copy out default parameters csv format..
+COPY copy_regression_out1 to stdout with csv;
+
+-- copy out default parameters csv format with header..
+COPY copy_regression_out1 to stdout with csv header;
+
+-- copy out partial and mixed column list (c,a,b)..
+COPY copy_regression_out1(c,a,b) to stdout;
+
+-- copy out csv default quotes and escapes and special cases..
+COPY copy_regression_out1 to stdout with csv quote ''''; -- escape should be the same as quote
+COPY copy_regression_out1 to stdout with csv escape '''';
+COPY copy_regression_out1 to stdout with csv quote '''' escape E'\\'; -- make sure E'' is accepted
+
+DROP TABLE copy_regression_out1;
+
+
+-- ######################################################
+-- Zero column table
+-- ######################################################
+
+CREATE TABLE copy_regression_nocol();
+
+-- copy in and out of zero column table..
+COPY copy_regression_nocol from stdin;
+\.
+COPY copy_regression_nocol from stdin;
+we should get an "extra data" error here
+\.
+COPY copy_regression_nocol from stdin with csv;
+\.
+COPY copy_regression_nocol from stdin with csv; -- should fail
+we should get an "extra data" error here
+\.
+COPY copy_regression_nocol to stdout;
+COPY copy_regression_nocol to stdout with csv;
+
+DROP TABLE copy_regression_nocol;
+
+
+-- ######################################################
+-- Various text format escape and default format tests
+-- ######################################################
+
+-- for text format
+CREATE TABLE copy_regression_text1(a varchar ,b varchar, c text, d text, e text) distributed by(a);
+CREATE TABLE copy_regression_text2(a varchar ,b varchar, c text, d text, e text) distributed by(a);
+CREATE TABLE copy_regression_text3(a varchar ,b varchar, c text, d text, e text) distributed by(a);
+
+-- column order tests
+
+COPY copy_regression_text1 from stdin; 
+a text data	b text data	c text data	d text data	e text data
+\.
+COPY copy_regression_text1(a,b,c,d,e) from stdin;
+a text data	b text data	c text data	d text data	e text data
+\.
+COPY copy_regression_text1(e,d,c,b,a) from stdin;
+e text data	d text data	c text data	b text data	a text data
+\.
+COPY copy_regression_text1(c,a,b,e,d) from stdin;
+c text data	a text data	b text data	e text data	d text data
+\.
+COPY copy_regression_text1(a,c) from stdin;
+a text data	c text data
+\.
+SELECT * FROM copy_regression_text1;
+
+-- null print tests
+
+COPY copy_regression_text2 from stdin;
+a text data	\N	c text data	\N	e text data
+\.
+COPY copy_regression_text2 from stdin with null 'nullvalue';
+a text data	nullvalue	c text data	nullvalue	nullvalue
+\.
+COPY copy_regression_text2 from stdin with delimiter '|' null '';
+a text data||c text data||e text data
+|b text data|c text data||e text data
+\.
+COPY copy_regression_text2 from stdin with delimiter '|' null 'i''m null';
+a text data|b text data|i'm null|i'm null|e text data
+\.
+SELECT * FROM copy_regression_text2;
+
+-- escape tests
+
+COPY copy_regression_text3 from stdin with delimiter '|' escape '#';
+the at sign: #100 |1|c text data|d text data|e text data 
+an embedded delimiter #| character |2|c text data|d text data|e text data
+a single backslash \ in col a|3|c text data|d text data|e text data
+\.
+COPY copy_regression_text3 from stdin with delimiter '|' escape 'off';
+a single backslash \ in col a|4|c text data|d text data|e text data
+c:\\file\data\neew\path|5|c text data|d text data|e text data
+\.
+COPY copy_regression_text3 from stdin with delimiter '|';
+the at sign: \100|6|c text data|d text data|e text data
+a single backslash \\ in col a|8|c text data|d text data|e text data
+\.
+COPY copy_regression_text3 from stdin with delimiter '|';
+an embedded linefeed \
+and another one\
+ in column a|7|c text data|d text data|e text data
+\.
+COPY copy_regression_text3 from stdin with delimiter '|';
+an embedded linefeed sequence\nin column a|7|c text data|d text data|e text data
+\.
+
+SELECT * FROM copy_regression_text3 ORDER BY b,a;
+
+DROP TABLE copy_regression_text1;
+DROP TABLE copy_regression_text2;
+DROP TABLE copy_regression_text3;
+
+
+
+-- ######################################################
+-- Various text format escape and default format tests
+-- ######################################################
+
+-- for csv format
+CREATE TABLE copy_regression_csv1(a varchar ,b varchar, c text, d text, e text) distributed by(a);
+CREATE TABLE copy_regression_csv2(a varchar ,b varchar, c text, d text, e text) distributed by(a);
+CREATE TABLE copy_regression_csv3(a varchar ,b varchar, c text, d text, e text) distributed by(a);
+
+-- column order tests
+
+COPY copy_regression_csv1 from stdin with csv; 
+a  csv data,b  csv data,c  csv data,d  csv data,e  csv data
+\.
+COPY copy_regression_csv1(a,b,c,d,e) from stdin with csv;
+a  csv data,b  csv data,c  csv data,d  csv data,e csv  data
+\.
+COPY copy_regression_csv1(e,d,c,b,a) from stdin with csv;
+e  csv data,d  csv data,c  csv data,b  csv data,a  csv data
+\.
+COPY copy_regression_csv1(c,a,b,e,d) from stdin with csv;
+c  csv data,a  csv data,b  csv data,e  csv data,d  csv data
+\.
+COPY copy_regression_csv1(a,c) from stdin with csv;
+a  csv data,c  csv data
+\.
+SELECT * FROM copy_regression_csv1;
+
+-- null print tests
+
+COPY copy_regression_csv2 from stdin with null E'\\N' csv ;
+a  csv data,\N,c  csv data,\N,e  csv data
+\.
+COPY copy_regression_csv2 from stdin with null 'nullvalue' csv;
+a  csv data,nullvalue,c  csv data,nullvalue,nullvalue
+\.
+COPY copy_regression_csv2 from stdin with delimiter '|' null '' csv;
+a  csv data||c  csv data||e  csv data
+|b  csv data|c  csv data||e  csv data
+\.
+SELECT * FROM copy_regression_csv2;
+
+-- escape tests
+
+COPY copy_regression_csv3 from stdin with csv escape E'\\';
+"an embedded delimiter (comma), is printed",01,c  csv data,d  csv data,e  csv data 
+"an embedded quote (doubleq)\" is printed",02,c  csv data,d  csv data,e  csv data 
+"an embedded escape \\ is printed",03,c  csv data,d  csv data,e  csv data
+"an embedded line feed
+is printed",04,c  csv data,d  csv data,e  csv data
+\.
+COPY copy_regression_csv3 from stdin with delimiter E'\t' csv; --default quote and escape - "
+"an embedded delimiter (tab)	 is printed"	05	c  csv data	d  csv data	e  csv data 
+"an embedded quote or escape (doubleq)"" is printed"	06	c  csv data	d  csv data	e  csv data 
+"an embedded line feed
+is printed"	07	c  csv data	d  csv data	e  csv data
+\.
+COPY copy_regression_csv3 from stdin with delimiter '|' csv quote ';' escape '*';
+;an embedded delimiter (pipe)| is printed;|08|c  csv data|d  csv data|e  csv data 
+;an embedded quote (semicolon)*; is printed;|09|c  csv data|d  csv data|e  csv data 
+;an embedded escape (asterisk)** is printed;|10|c  csv data|d  csv data|e  csv data
+;an embedded line feed
+is printed;|11|c  csv data|d  csv data|e  csv data
+\.
+
+-- check defaults
+COPY copy_regression_csv3 from stdin with csv quote ''''; -- escape should be the same as quote
+'an embedded single quote '' here',12,c csv data,d csv data,e csv data 
+\.
+COPY copy_regression_csv3 from stdin with csv escape '''';
+"an embedded single quote '' here",13,c csv data,d csv data,e csv data 
+\.
+COPY copy_regression_csv3 from stdin with csv quote '''' escape E'\\'; -- make sure E'' is accepted
+'an embedded backslash \\ here',14,c csv data,d csv data,e csv data 
+\.
+SELECT * FROM copy_regression_csv3 ORDER BY b;
+
+DROP TABLE copy_regression_csv1;
+DROP TABLE copy_regression_csv2;
+DROP TABLE copy_regression_csv3;
+
+-- ######################################################
+-- FILL MISSING FIELDS
+-- ######################################################
+
+CREATE TABLE copy_regression_fill1(a int, b int, c text) distributed by(a);
+CREATE TABLE copy_regression_fill2(a int, b int, c text) distributed by(c);
+
+-- text
+COPY copy_regression_fill1 from stdin with delimiter '|' fill missing fields;
+1|1|one
+2|2
+3
+\.
+COPY copy_regression_fill1(c,b) from stdin with delimiter '|' fill missing fields;
+one|1
+two
+three
+\.
+COPY copy_regression_fill2(a,c) from stdin with delimiter '|' fill missing fields;
+1|one
+2
+3|three
+\.
+SELECT * FROM copy_regression_fill1 ORDER BY a,b,c;
+SELECT * FROM copy_regression_fill2 ORDER BY a,b,c;
+TRUNCATE copy_regression_fill1;
+TRUNCATE copy_regression_fill2;
+
+-- csv
+COPY copy_regression_fill1 from stdin with csv delimiter '|' fill missing fields;
+1|1|one
+2|2
+3
+\.
+COPY copy_regression_fill1(c,b) from stdin with csv delimiter '|' fill missing fields;
+one|1
+two
+three
+\.
+COPY copy_regression_fill2(a,c) from stdin with csv delimiter '|' fill missing fields;
+1|one
+2
+3|three
+\.
+SELECT * FROM copy_regression_fill1 ORDER BY a,b,c;
+SELECT * FROM copy_regression_fill2 ORDER BY a,b,c;
+
+-- empty row should fail
+COPY copy_regression_fill1 from stdin with delimiter '|' fill missing fields;
+
+\.
+COPY copy_regression_fill2 from stdin with delimiter '|' fill missing fields;
+
+\.
+COPY copy_regression_fill1 from stdin with csv delimiter '|' fill missing fields;
+
+\.
+COPY copy_regression_fill2 from stdin with csv delimiter '|' fill missing fields;
+
+\.
+DROP TABLE copy_regression_fill1;
+DROP TABLE copy_regression_fill2;
+
+-- ######################################################
+-- FORCE NOT NULL
+-- ######################################################
+
+CREATE TABLE copy_regression_fnn(a text, b text, c text) distributed by(a);
+
+COPY copy_regression_fnn from stdin with csv;
+one,,one
+two,,
+\.
+SELECT * FROM copy_regression_fnn WHERE b is null order by a;
+SELECT * FROM copy_regression_fnn WHERE c is null order by a;
+TRUNCATE copy_regression_fnn;
+
+COPY copy_regression_fnn from stdin with csv force not null b;
+one,,one
+two,,
+\.
+SELECT * FROM copy_regression_fnn WHERE b is null order by a;
+SELECT * FROM copy_regression_fnn WHERE c is null order by a;
+TRUNCATE copy_regression_fnn;
+
+COPY copy_regression_fnn from stdin with csv force not null b,c;
+one,,one
+two,,
+\.
+SELECT * FROM copy_regression_fnn WHERE b is null order by a;
+SELECT * FROM copy_regression_fnn WHERE c is null order by a;
+TRUNCATE copy_regression_fnn;
+
+-- now combine with fill missing fields
+COPY copy_regression_fnn from stdin with csv fill missing fields force not null b;
+one,,one
+two,
+\.
+SELECT * FROM copy_regression_fnn WHERE b is null order by a;
+SELECT * FROM copy_regression_fnn WHERE c is null order by a;
+
+DROP TABLE copy_regression_fnn;
+
+-- ###########################################################
+-- distributed data error consolidation + original row numbers
+-- ###########################################################
+
+CREATE TABLE copy_regression_error1(a int, b int) distributed by(a);
+
+-- parse error on QE (extra column on line 6)
+
+COPY copy_regression_error1 from stdin;
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6	6
+7	7
+\.
+
+-- parse error on QD (missing column on line 3)
+COPY copy_regression_error1 from stdin;
+1	1
+2	2
+3
+4	4
+\.
+
+-- convert error on QD (invalid type line 2)
+
+COPY copy_regression_error1 from stdin;
+1	1
+two	2
+3	3
+\.
+
+-- convert error on QE (invalid type line 5)
+COPY copy_regression_error1 from stdin;
+1	1
+2	2
+3	3
+4	4
+5	five
+6	6
+7	7
+\.
+
+DROP TABLE copy_regression_error1;
+
+-- ######################################################
+-- NEWLINE
+-- ######################################################
+
+CREATE TABLE copy_regression_newline(a text, b text) distributed by(a);
+
+-- positive: text
+COPY copy_regression_newline from stdin with delimiter '|' newline 'lf';
+1|1
+2|2
+\.
+
+-- positive: csv
+COPY copy_regression_newline from stdin with delimiter '|' newline 'lf' csv;
+1|1
+2|2
+\.
+
+-- negative: text
+COPY copy_regression_newline from stdin with delimiter '|' newline 'cr';
+1|1
+2|2
+\.
+
+-- negative: csv
+COPY copy_regression_newline from stdin with delimiter '|' newline 'cr' csv;
+1|1
+2|2
+\.
+
+-- negative: invalid newline
+COPY copy_regression_newline from stdin with delimiter '|' newline 'blah';
+-- negative: newline not yet supported for COPY TO
+COPY copy_regression_newline to stdout with delimiter '|' newline 'blah';
+
+DROP TABLE copy_regression_newline;
+
+-- Test that FORCE QUOTE option works with the fastpath for integers and
+-- numerics
+COPY (
+  SELECT 123::integer as intcol, 456::numeric as numcol, 'foo' as textcol
+) TO stdout CSV FORCE QUOTE intcol, numcol, textcol;
+
+-- Do the same with a real table, to test that the option also works when
+-- doing a "dispatched" COPY, i.e. when the COPY output is produced in
+-- segments
+CREATE TABLE force_quotes_tbl(intcol integer, numcol numeric, textcol text) DISTRIBUTED BY (intcol);
+INSERT INTO force_quotes_tbl VALUES (123, 456, 'foo');
+
+COPY force_quotes_tbl TO stdout CSV FORCE QUOTE intcol, numcol, textcol;
+DROP TABLE force_quotes_tbl;
+
+-- Tests for error log
+DROP TABLE IF EXISTS errcopy, errcopy_err, errcopy_temp;
+
+CREATE TABLE errcopy(a int, b int, c text) distributed by (a);
+INSERT INTO errcopy select i, i, case when i <> 5 then i end || '_text' from generate_series(1, 10)i;
+COPY errcopy to '/tmp/errcopy.csv' csv null '';
+
+-- check if not null constraint not affect error log.
+TRUNCATE errcopy;
+ALTER table errcopy ALTER c SET NOT null;
+
+COPY errcopy from '/tmp/errcopy.csv' csv null '' log errors segment reject limit 10 rows;
+
+SELECT * FROM errcopy;
+
+-- reject rows with invalid format for int 
+ALTER table errcopy ALTER c DROP NOT null;
+ALTER table errcopy DROP COLUMN c;
+ALTER table errcopy ADD COLUMN c int;
+
+COPY errcopy from '/tmp/errcopy.csv' csv null '' log errors segment reject limit 10 rows;
+SELECT * FROM errcopy;
+SELECT relname, errmsg, rawdata FROM gp_read_error_log('errcopy');
+
+-- reject one row with extra column, one row with fewer columns
+TRUNCATE errcopy;
+SELECT gp_truncate_error_log('errcopy');
+
+COPY (select i::text || ',' || i::text || case when i = 4 then '' else ',' || i::text || case when i = 5 then ',5' else '' end end from generate_series(1, 10)i) to '/tmp/errcopy.csv';
+COPY errcopy from '/tmp/errcopy.csv' csv null '' log errors segment reject limit 10 rows;
+
+SELECT * FROM errcopy ORDER BY a;
+SELECT relname, errmsg, rawdata FROM gp_read_error_log('errcopy');
+
+-- metacharacter
+TRUNCATE errcopy;
+COPY errcopy from stdin csv newline 'LF' log errors segment reject limit 3 rows;
+1,2,0
+1,3,4^M
+1,3,3
+\.
+
+SELECT * FROM errcopy;
+
+-- exceed reject limit
+TRUNCATE errcopy;
+SELECT gp_truncate_error_log('errcopy');
+
+COPY errcopy from stdin delimiter E'\t' log errors segment reject limit 3 rows;
+1       2       0
+1       3       4
+1       4
+1       2
+1
+1       3       0
+1       30      999
+\.
+SELECT * FROM errcopy;
+SELECT relname, filename, bytenum, errmsg FROM gp_read_error_log('errcopy');
+
+-- abort and keep
+TRUNCATE errcopy;
+SELECT gp_truncate_error_log('errcopy');
+
+COPY errcopy from stdin delimiter '/' log errors segment reject limit 3 rows;
+1/2/3
+1/5
+7/8/9
+1/11/12/
+1
+1/17/18
+\.
+SELECT relname, filename, bytenum, errmsg FROM gp_read_error_log('errcopy');
+
+-- exceed reject limit on segment
+DROP TABLE IF EXISTS segment_reject_limit;
+CREATE TABLE segment_reject_limit (a int,b char) distributed by (a);
+INSERT INTO segment_reject_limit values(1,'1');
+INSERT INTO segment_reject_limit values(1,'2');
+INSERT INTO segment_reject_limit values(1,'a');
+INSERT INTO segment_reject_limit values(1,'b');
+
+COPY segment_reject_limit TO '/tmp/segment_reject_limit<SEGID>.csv' on segment;
+
+DROP TABLE IF EXISTS segment_reject_limit_from;
+CREATE TABLE segment_reject_limit_from (a int,b int);
+COPY segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' on segment log errors segment reject limit 2 rows;
+
+SELECT * FROM segment_reject_limit_from;
+SELECT relname, filename, bytenum, errmsg FROM gp_read_error_log('segment_reject_limit_from');
+-- not exceed reject limit on segment
+COPY segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' on segment log errors segment reject limit 3 rows;
+SELECT * FROM segment_reject_limit_from;
+
+-- STDIN is not support by copy from on segment and copy program
+COPY segment_reject_limit_from from STDIN on segment;
+COPY segment_reject_limit_from from PROGRAM STDIN;
+SELECT * FROM segment_reject_limit_from;
+
+-- STDOUT is not support by copy to on segment and copy program
+COPY segment_reject_limit_from to STDOUT on segment;
+COPY segment_reject_limit_from to PROGRAM STDOUT;
+
+-- 'COPY (SELECT ...) TO' has supported 'ON SEGMENT'
+COPY (SELECT * FROM segment_reject_limit_from) TO '/tmp/segment_reject_limit<SEGID>.csv' ON SEGMENT;
+
+-- 'COPY (SELECT ...) TO' on utility mode
+CREATE EXTERNAL WEB TABLE copy_cmd_utility(a text, b int)
+  EXECUTE E'PGOPTIONS="-c gp_role=utility" \\
+    psql -p $GP_MASTER_PORT $GP_DATABASE $GP_USER -c \\
+      "COPY (SELECT * FROM pg_class) TO \'/dev/null\'"'
+  ON COORDINATOR FORMAT 'text' (DELIMITER ' ');
+SELECT a FROM copy_cmd_utility;
+DROP EXTERNAL WEB TABLE copy_cmd_utility;
+
+-- SREH is not supported by COPY TO.
+COPY segment_reject_limit_from to STDOUT log errors segment reject limit 3 rows;
+
+-- \copy from doesn't support on segment
+--on segment lower case
+\COPY segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' on segment;
+--on segment with spaces
+\COPY segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' on   segment;
+--on segment are capital
+\COPY segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' ON SEGMENT;
+--on segment with \t
+\copy segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' on	segment;  
+
+-- \copy to doesn't support on segment
+--on segment lower case
+\COPY segment_reject_limit_from to '/tmp/copy_on_segment<SEGID>.csv' on segment;
+--on segment with spaces
+\COPY segment_reject_limit_from to '/tmp/copy_on_segment<SEGID>.csv' on  segment;
+--on segment are capital
+\COPY segment_reject_limit_from to '/tmp/copy_on_segment<SEGID>.csv' ON SEGMENT;
+--on segment with \t
+\copy segment_reject_limit_from from '/tmp/copy_on_segment<SEGID>.csv' on	segment;  
+
+-- \copy to/from 'stdin'/'stdout' (quoted)
+\copy segment_reject_limit_from to 'stdin';
+\copy segment_reject_limit_from from 'stdin';
+\copy segment_reject_limit_from to 'stdout';
+\copy segment_reject_limit_from from 'stdout';
+
+-- gp_initial_bad_row_limit guc test. This guc allows user to set the initial
+-- number of rows which can contain errors before the database stops loading
+-- the data. If there is a valid row within the first 'n' rows specified by
+-- this guc, the database continues to load the data. 
+DROP TABLE IF EXISTS test_first_segment_reject_limit;
+CREATE TABLE test_first_segment_reject_limit (a int, b text);
+SET gp_initial_bad_row_limit = 2;
+COPY test_first_segment_reject_limit FROM STDIN WITH DELIMITER '|' segment reject limit 20;
+error0
+error1
+error2
+error3
+1|1_number
+2|2_number
+3|3_number
+4|4_number
+5|5_number
+5|5_number
+6|6_number
+7|7_number
+\.
+
+-- should go through fine
+SET gp_initial_bad_row_limit = 6;
+COPY test_first_segment_reject_limit FROM STDIN WITH DELIMITER '|' segment reject limit 20;
+error0
+error1
+error2
+error3
+1|1_number
+2|2_number
+3|3_number
+4|4_number
+5|5_number
+5|5_number
+6|6_number
+7|7_number
+\.
+SELECT COUNT(*) FROM test_first_segment_reject_limit;
+
+-- start_ignore
+DROP TABLE IF EXISTS test_copy_on_segment;
+DROP TABLE IF EXISTS test_copy_on_segment_nocol;
+DROP TABLE IF EXISTS test_copy_on_segment_array;
+DROP TABLE IF EXISTS test_copy_on_segment_array_1;
+DROP TABLE IF EXISTS test_copy_on_segment_2dim_array;
+DROP TABLE IF EXISTS test_copy_on_segment_2dim_array_1;
+DROP TABLE IF EXISTS test_copy_on_segment_withoids;
+DROP TABLE IF EXISTS test_copy_from_on_segment_txt;
+DROP TABLE IF EXISTS test_copy_from_on_segment_binary;
+DROP TABLE IF EXISTS test_copy_from_on_segment_csv;
+DROP TABLE IF EXISTS test_copy_from_on_segment_withoids;
+DROP TABLE IF EXISTS onek_copy_from_onsegment;
+DROP EXTERNAL TABLE IF EXISTS rm_copy_onsegment_files;
+-- end_ignore
+
+CREATE TABLE test_copy_on_segment_nocol ();
+COPY test_copy_on_segment_nocol TO '/tmp/valid_filename_nocol<SEGID>.txt' ON SEGMENT;
+COPY test_copy_on_segment_nocol FROM '/tmp/valid_filename_nocol<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_on_segment_nocol;
+
+COPY (select * from test_copy_on_segment_nocol) TO '/tmp/valid_filename_nocol<SEGID>.txt' ON SEGMENT;
+COPY test_copy_on_segment_nocol FROM '/tmp/valid_filename_nocol<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_on_segment_nocol;
+
+CREATE TABLE test_copy_on_segment_array (a int[], b text) DISTRIBUTED BY (a);
+INSERT INTO test_copy_on_segment_array VALUES ('{1,2,3}', 'sd');
+INSERT INTO test_copy_on_segment_array VALUES ('{2,2,3}', 'fg');
+INSERT INTO test_copy_on_segment_array VALUES ('{3,2,1}', 'hj');
+INSERT INTO test_copy_on_segment_array VALUES ('{233,2,1}', 'hj');
+INSERT INTO test_copy_on_segment_array VALUES ('{666,2,1}', 'hj');
+INSERT INTO test_copy_on_segment_array VALUES ('{3,555,1}', 'hj');
+COPY test_copy_on_segment_array TO '/tmp/valid_filename_array<SEGID>.txt' ON SEGMENT;
+
+CREATE TABLE test_copy_on_segment_array_1 (a int[], b text) DISTRIBUTED BY (a);
+COPY test_copy_on_segment_array_1 FROM '/tmp/valid_filename_array<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_on_segment_array EXCEPT SELECT * FROM test_copy_on_segment_array_1;
+
+delete from test_copy_on_segment_array_1;
+COPY (select * from test_copy_on_segment_array) TO '/tmp/valid_filename_array_select<SEGID>.txt' ON SEGMENT;
+COPY test_copy_on_segment_array_1 FROM '/tmp/valid_filename_array_select<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_on_segment_array EXCEPT SELECT * FROM test_copy_on_segment_array_1;
+
+CREATE TABLE test_copy_on_segment_2dim_array (a int[][]) DISTRIBUTED BY (a);
+INSERT INTO test_copy_on_segment_2dim_array VALUES ('{{1,2,3},{2,5,9}}');
+INSERT INTO test_copy_on_segment_2dim_array VALUES ('{{1,8,3},{2,5,9}}');
+INSERT INTO test_copy_on_segment_2dim_array VALUES ('{{1,9,3},{2,9,9}}');
+INSERT INTO test_copy_on_segment_2dim_array VALUES ('{{1,3,3},{2,6,9}}');
+INSERT INTO test_copy_on_segment_2dim_array VALUES ('{{1,233,3},{2,5,9}}');
+INSERT INTO test_copy_on_segment_2dim_array VALUES ('{{1,666,3},{2,555,9}}');
+COPY test_copy_on_segment_2dim_array TO '/tmp/valid_filename_2dim_array<SEGID>.txt' ON SEGMENT;
+
+CREATE TABLE test_copy_on_segment_2dim_array_1 (a int[][]) DISTRIBUTED BY (a);
+COPY test_copy_on_segment_2dim_array_1 FROM '/tmp/valid_filename_2dim_array<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_on_segment_2dim_array EXCEPT SELECT * FROM test_copy_on_segment_2dim_array_1;
+
+delete from test_copy_on_segment_2dim_array_1;
+COPY (select * from test_copy_on_segment_2dim_array) TO '/tmp/valid_filename_2dim_array_select<SEGID>.txt' ON SEGMENT;
+COPY test_copy_on_segment_2dim_array_1 FROM '/tmp/valid_filename_2dim_array_select<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_on_segment_2dim_array EXCEPT SELECT * FROM test_copy_on_segment_2dim_array_1;
+
+CREATE TABLE test_copy_on_segment (a int, b text, c text) DISTRIBUTED BY (b);
+INSERT INTO test_copy_on_segment VALUES (1, 's', 'd');
+INSERT INTO test_copy_on_segment VALUES (2, 'f', 'g');
+INSERT INTO test_copy_on_segment VALUES (3, 'h', 'j');
+INSERT INTO test_copy_on_segment VALUES (4, 'i', 'l');
+INSERT INTO test_copy_on_segment VALUES (5, 'q', 'w');
+
+COPY test_copy_on_segment TO '/tmp/invalid_filename.txt' ON SEGMENT;
+COPY test_copy_on_segment TO '/tmp/valid_filename<SEGID>.txt' ON SEGMENT;
+COPY test_copy_on_segment TO '/tmp/valid_filename<SEGID>.bin' ON SEGMENT BINARY;
+COPY test_copy_on_segment TO '/tmp/valid_filename<SEGID>.csv' WITH ON SEGMENT CSV QUOTE '"' FORCE QUOTE a,b,c ESCAPE E'\\' NULL '\N' DELIMITER ',' HEADER IGNORE EXTERNAL PARTITIONS;
+
+CREATE TABLE test_copy_from_on_segment_txt (LIKE test_copy_on_segment) DISTRIBUTED BY (b);
+COPY test_copy_from_on_segment_txt FROM '/tmp/invalid_filename.txt' ON SEGMENT;
+COPY test_copy_from_on_segment_txt FROM '/tmp/valid_filename<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_from_on_segment_txt ORDER BY a;
+
+CREATE TABLE test_copy_from_on_segment_binary (LIKE test_copy_on_segment) DISTRIBUTED BY (b);
+COPY test_copy_from_on_segment_binary FROM '/tmp/valid_filename<SEGID>.bin' ON SEGMENT BINARY;
+SELECT * FROM test_copy_from_on_segment_binary ORDER BY a;
+
+CREATE TABLE test_copy_from_on_segment_csv (LIKE test_copy_on_segment) DISTRIBUTED BY (b);
+COPY test_copy_from_on_segment_csv FROM '/tmp/valid_filename<SEGID>.csv' WITH ON SEGMENT CSV QUOTE '"' ESCAPE E'\\' NULL '\N' DELIMITER ',' HEADER IGNORE EXTERNAL PARTITIONS;
+SELECT * FROM test_copy_from_on_segment_csv ORDER BY a;
+
+COPY (select * from test_copy_on_segment) TO '/tmp/invalid_filename_select.txt' ON SEGMENT;
+COPY (select * from test_copy_on_segment) TO '/tmp/valid_filename_select<SEGID>.txt' ON SEGMENT;
+COPY (select * from test_copy_on_segment) TO '/tmp/valid_filename_select<SEGID>.bin' ON SEGMENT BINARY;
+COPY test_copy_on_segment TO '/tmp/valid_filename_select<SEGID>.csv' WITH ON SEGMENT CSV QUOTE '"' FORCE QUOTE a,b,c ESCAPE E'\\' NULL '\N' DELIMITER ',' HEADER;
+
+delete from test_copy_from_on_segment_txt;
+COPY test_copy_from_on_segment_txt FROM '/tmp/invalid_filename_select.txt' ON SEGMENT;
+COPY test_copy_from_on_segment_txt FROM '/tmp/valid_filename_select<SEGID>.txt' ON SEGMENT;
+SELECT * FROM test_copy_from_on_segment_txt ORDER BY a;
+
+delete from test_copy_from_on_segment_binary;
+COPY test_copy_from_on_segment_binary FROM '/tmp/valid_filename_select<SEGID>.bin' ON SEGMENT BINARY;
+SELECT * FROM test_copy_from_on_segment_binary ORDER BY a;
+
+delete from test_copy_from_on_segment_csv;
+COPY test_copy_from_on_segment_csv FROM '/tmp/valid_filename_select<SEGID>.csv' WITH ON SEGMENT CSV QUOTE '"' ESCAPE E'\\' NULL '\N' DELIMITER ',' HEADER;
+SELECT * FROM test_copy_from_on_segment_csv ORDER BY a;
+
+CREATE TABLE onek_copy_onsegment (
+    unique1     int4,
+    unique2     int4,
+    two         int4,
+    four        int4,
+    ten         int4,
+    twenty      int4,
+    hundred     int4,
+    thousand    int4,
+    twothousand int4,
+    fivethous   int4,
+    tenthous    int4,
+    odd         int4,
+    even        int4,
+    stringu1    name,
+    stringu2    name,
+    string4     name
+) DISTRIBUTED BY (two,four,odd);
+\COPY onek_copy_onsegment FROM 'data/onek.data';
+SELECT count(*) FROM onek_copy_onsegment;
+COPY onek_copy_onsegment TO '/tmp/valid_filename_onek_copy_onsegment<SEGID>.txt' ON SEGMENT;
+
+CREATE TABLE onek_copy_from_onsegment (LIKE onek_copy_onsegment);
+COPY onek_copy_from_onsegment FROM '/tmp/valid_filename_onek_copy_onsegment<SEGID>.txt' ON SEGMENT;
+SELECT * FROM onek_copy_onsegment EXCEPT SELECT * FROM onek_copy_from_onsegment;
+SELECT count(*) FROM onek_copy_from_onsegment;
+
+COPY (select * from onek_copy_onsegment) TO '/tmp/valid_filename_onek_copy_onsegment_select<SEGID>.txt' ON SEGMENT;
+
+delete from onek_copy_from_onsegment;
+COPY onek_copy_from_onsegment FROM '/tmp/valid_filename_onek_copy_onsegment_select<SEGID>.txt' ON SEGMENT;
+SELECT * FROM onek_copy_onsegment EXCEPT SELECT * FROM onek_copy_from_onsegment;
+SELECT count(*) FROM onek_copy_from_onsegment;
+
+CREATE EXTERNAL WEB TABLE rm_copy_onsegment_files (a int)
+EXECUTE E'(rm -rf /tmp/*valid_filename*.*)'
+ON SEGMENT 0
+FORMAT 'text';
+SELECT * FROM rm_copy_onsegment_files;
+
+DROP TABLE IF EXISTS test_copy_on_segment;
+DROP TABLE IF EXISTS test_copy_on_segment_nocol;
+DROP TABLE IF EXISTS test_copy_on_segment_array;
+DROP TABLE IF EXISTS test_copy_on_segment_array_1;
+DROP TABLE IF EXISTS test_copy_on_segment_2dim_array;
+DROP TABLE IF EXISTS test_copy_on_segment_2dim_array_1;
+DROP TABLE IF EXISTS test_copy_from_on_segment_txt;
+DROP TABLE IF EXISTS test_copy_from_on_segment_binary;
+DROP TABLE IF EXISTS test_copy_from_on_segment_csv;
+DROP TABLE IF EXISTS onek_copy_from_onsegment;
+DROP EXTERNAL TABLE IF EXISTS rm_copy_onsegment_files;
+
+-- Test for COPY FROM/TO with mulitple blocks data file
+-- start_ignore
+DROP TABLE IF EXISTS LINEITEM;
+DROP TABLE IF EXISTS LINEITEM_1;
+DROP TABLE IF EXISTS LINEITEM_2;
+DROP TABLE IF EXISTS LINEITEM_3;
+DROP TABLE IF EXISTS LINEITEM_4;
+DROP TABLE IF EXISTS LINEITEM_5;
+DROP TABLE IF EXISTS LINEITEM_6;
+DROP TABLE IF EXISTS LINEITEM_7;
+DROP TABLE IF EXISTS LINEITEM_8;
+-- end_ignore
+CREATE TABLE LINEITEM ( L_ORDERKEY INTEGER NOT NULL,
+L_PARTKEY INTEGER NOT NULL,
+L_SUPPKEY INTEGER NOT NULL,
+L_LINENUMBER INTEGER NOT NULL,
+L_QUANTITY DECIMAL(15,2) NOT NULL,
+L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,
+L_DISCOUNT DECIMAL(15,2) NOT NULL,
+L_TAX DECIMAL(15,2) NOT NULL,
+L_RETURNFLAG CHAR(1) NOT NULL,
+L_LINESTATUS CHAR(1) NOT NULL,
+L_SHIPDATE DATE NOT NULL,
+L_COMMITDATE DATE NOT NULL,
+L_RECEIPTDATE DATE NOT NULL,
+L_SHIPINSTRUCT CHAR(25) NOT NULL,
+L_SHIPMODE CHAR(10) NOT NULL,
+L_COMMENT VARCHAR(44) NOT NULL);
+
+-- relation doesn't exist
+COPY LINEITEM_1 FROM PROGRAM 'yes' CSV;
+COPY LINEITEM_1 TO PROGRAM 'yes' CSV;
+
+CREATE TABLE LINEITEM_1 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_2 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_3 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_4 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_5 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_6 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_7 (LIKE LINEITEM);
+CREATE TABLE LINEITEM_8 (LIKE LINEITEM);
+
+COPY LINEITEM FROM '@abs_srcdir@/data/lineitem.csv' WITH DELIMITER '|' CSV;
+ANALYZE LINEITEM;
+SELECT COUNT(*) FROM LINEITEM;
+COPY LINEITEM TO '/tmp/lineitem.csv' CSV;
+COPY LINEITEM TO '/tmp/lineitem_s<SEGID>.csv' ON SEGMENT CSV;
+COPY (select * from LINEITEM) TO '/tmp/lineitem_qs<SEGID>.csv' ON SEGMENT CSV;
+
+COPY LINEITEM_1 FROM '/tmp/lineitem.csv' CSV;
+SELECT COUNT(*) FROM LINEITEM_1;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_1;
+
+COPY LINEITEM_2 FROM '/tmp/lineitem_s<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM LINEITEM_2;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_2;
+
+COPY LINEITEM_3 FROM '/tmp/lineitem_qs<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM LINEITEM_3;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_3;
+
+COPY LINEITEM TO PROGRAM 'cat > /tmp/lineitem_program.csv' CSV;
+COPY LINEITEM_4 FROM PROGRAM 'cat /tmp/lineitem_program.csv' CSV;
+SELECT COUNT(*) FROM LINEITEM_4;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_4;
+
+COPY (select * from LINEITEM) TO PROGRAM 'cat > /tmp/lineitem_program.csv' CSV;
+COPY LINEITEM_5 FROM PROGRAM 'cat /tmp/lineitem_program.csv' CSV;
+SELECT COUNT(*) FROM LINEITEM_5;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_5;
+
+COPY LINEITEM TO PROGRAM 'cat > /tmp/lineitem_program<SEGID>.csv' ON SEGMENT CSV;
+COPY LINEITEM_6 FROM PROGRAM 'cat /tmp/lineitem_program<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM LINEITEM_6;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_6;
+
+COPY (select * from LINEITEM) TO PROGRAM 'cat > /tmp/lineitem_program<SEGID>.csv' ON SEGMENT CSV;
+COPY LINEITEM_7 FROM PROGRAM 'cat /tmp/lineitem_program<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM LINEITEM_7;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_7;
+
+\COPY LINEITEM TO PROGRAM 'cat > /tmp/lineitem_program_client.csv' CSV;
+\COPY LINEITEM_8 FROM PROGRAM 'cat /tmp/lineitem_program_client.csv' CSV;
+SELECT COUNT(*) FROM LINEITEM_8;
+SELECT * FROM LINEITEM EXCEPT SELECT * FROM LINEITEM_8;
+
+--Test for `COPY FROM ON SEGMENT` checking the distribution key restriction 
+-- start_matchsubs
+-- m/^CONTEXT:  COPY .*, line \d*: .*$/
+-- s/^CONTEXT:  COPY .*, line \d*: .*$/CONTEXT:  COPY xxxxx line x: xxx/
+-- end_matchsubs
+-- start_ignore
+DROP TABLE IF EXISTS COPY_ON_SEGMENT_CHECK_DISTKEY;
+DROP TABLE IF EXISTS COPY_ON_SEGMENT_CHECK_TOW_DSITKEY;
+DROP TABLE IF EXISTS COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
+DROP TABLE IF EXISTS COPY_FROM_PARTITION_TABLE;
+DROP TABLE IF EXISTS COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION;
+DROP TABLE IF EXISTS COPY_ON_SEGMENT_DIST_RANDOMLY;
+DROP TABLE IF EXISTS COPY_ON_SEGMENT_PARTION_DIST_RANDOMLY;
+-- end_ignore
+CREATE TABLE COPY_ON_SEGMENT_CHECK_DISTKEY(a int)DISTRIBUTED BY(a);
+INSERT INTO COPY_ON_SEGMENT_CHECK_DISTKEY SELECT generate_series(0,10);
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY<SEGID>.csv' ON SEGMENT CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY0.csv' CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY<SEGID>.csv' ON SEGMENT CSV;
+SET gp_enable_segment_copy_checking=off;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY<SEGID>.csv' ON SEGMENT CSV;
+ALTER TABLE COPY_ON_SEGMENT_CHECK_DISTKEY SET DISTRIBUTED RANDOMLY;
+SET gp_enable_segment_copy_checking=on;
+
+CREATE TABLE COPY_ON_SEGMENT_CHECK_TOW_DSITKEY(a int,b int)DISTRIBUTED BY(a,b);
+INSERT INTO COPY_ON_SEGMENT_CHECK_TOW_DSITKEY SELECT generate_series(0,10),generate_series(0,10);
+COPY COPY_ON_SEGMENT_CHECK_TOW_DSITKEY to '/tmp/COPY_ON_SEGMENT_CHECK_TOW_DSITKEY<SEGID>.csv' ON SEGMENT CSV;
+COPY COPY_ON_SEGMENT_CHECK_TOW_DSITKEY to '/tmp/COPY_ON_SEGMENT_CHECK_TOW_DSITKEY0.csv' CSV;
+COPY COPY_ON_SEGMENT_CHECK_TOW_DSITKEY FROM '/tmp/COPY_ON_SEGMENT_CHECK_TOW_DSITKEY<SEGID>.csv' ON SEGMENT CSV;
+
+-- COPY FRON ON SEGMENT DISTRIBUTED RANDOMLY
+CREATE TABLE COPY_ON_SEGMENT_DIST_RANDOMLY(a int) DISTRIBUTED RANDOMLY;
+COPY COPY_ON_SEGMENT_DIST_RANDOMLY FROM PROGRAM 'echo <SEGID>' ON SEGMENT;
+
+-- COPY FROM ON SEGMENT partitoned table
+CREATE TABLE COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED(a int) DISTRIBUTED BY (a) PARTITION BY range(a) ( START (0) END (10) EVERY (5));
+INSERT INTO COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED SELECT generate_series(0,9);
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED<SEGID>.csv' ON SEGMENT CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
+
+-- This adds data to the segment 0's file, that doesn't belong to that
+-- segment. COPYing that back to the table should throw an error.
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED_1_prt_1 to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED0.csv' CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
+
+-- But if we turn off the checks for data distribution, the system will
+-- merrily load it in anyway.
+set gp_vmem_idle_resource_timeout=1;
+SET gp_enable_segment_copy_checking=off;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED<SEGID>.csv' ON SEGMENT CSV;
+SET gp_enable_segment_copy_checking=on;
+set gp_vmem_idle_resource_timeout=18000;
+
+-- But make sure we still perform the checks for the other partition that is
+-- hash distributed.
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED_1_prt_2 to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED0.csv' CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED<SEGID>.csv' ON SEGMENT CSV;
+
+-- COPY FROM ON SEGMENT partitoned table distributed randomly
+CREATE TABLE COPY_ON_SEGMENT_PARTION_DIST_RANDOMLY (a int) DISTRIBUTED RANDOMLY PARTITION BY range(a) ( START (0) END (10) EVERY (5));
+COPY COPY_ON_SEGMENT_PARTION_DIST_RANDOMLY FROM PROGRAM 'echo <SEGID>' ON SEGMENT;
+
+-- COPY FROM partitoned table
+TRUNCATE COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
+INSERT INTO COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED SELECT generate_series(0,9);
+SELECT COUNT(*) FROM COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED.csv' CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED.csv' CSV;
+SELECT COUNT(*) FROM COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
+
+--COPY FROM partition table mulitple attributes
+CREATE TABLE COPY_FROM_PARTITION_TABLE (a text ,b int) PARTITION BY range(b) (START (0) END (10) EVERY(5));
+INSERT INTO COPY_FROM_PARTITION_TABLE values('aa',1);
+INSERT INTO COPY_FROM_PARTITION_TABLE values('bb',2);
+INSERT INTO COPY_FROM_PARTITION_TABLE values('cc',8);
+SELECT COUNT(*) FROM COPY_FROM_PARTITION_TABLE;
+COPY COPY_FROM_PARTITION_TABLE TO '/tmp/COPY_FROM_PARTITION_TABLE.txt';
+COPY COPY_FROM_PARTITION_TABLE FROM '/tmp/COPY_FROM_PARTITION_TABLE.txt';
+SELECT COUNT(*) FROM COPY_FROM_PARTITION_TABLE;
+
+--COPY FROM ON SEGMENT SUBPARTITION table
+CREATE TABLE COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION(a int,b int) DISTRIBUTED BY (a) PARTITION BY range(a) 
+ SUBPARTITION BY RANGE (b)
+    SUBPARTITION TEMPLATE (
+       START (0) END (10) EVERY (3)
+    )
+( START (0) END (10) EVERY (5));
+INSERT INTO COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION SELECT generate_series(0,9),generate_series(0,9);
+COPY (SELECT * FROM COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION ORDER BY a, b) to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION<SEGID>.csv' ON SEGMENT CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION<SEGID>.csv' ON SEGMENT CSV;
+SELECT COUNT(*) FROM COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION;
+
+COPY (VALUES
+  (2, 2),
+  (0, 0)
+) to '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION0.csv'  CSV;
+COPY COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION<SEGID>.csv' ON SEGMENT CSV;
+
+-- start_ignore
+DROP TABLE IF EXISTS LINEITEM_1;
+DROP TABLE IF EXISTS LINEITEM_2;
+DROP TABLE IF EXISTS LINEITEM_3;
+DROP TABLE IF EXISTS LINEITEM_4;
+DROP TABLE IF EXISTS LINEITEM_5;
+-- end_ignore
+
+-- Test for COPY PROGRAM PRINT STDERR
+-- start_ignore
+DROP TABLE IF EXISTS COPY_TO_PROGRAM_ERROR;
+DROP TABLE IF EXISTS COPY_FROM_PROGRAM_ERROR;
+-- end_ignore
+CREATE TABLE COPY_TO_PROGRAM_ERROR(dir text);
+
+COPY COPY_TO_PROGRAM_ERROR TO PROGRAM 'echo && echo "error" >&2 && exit 255';
+COPY COPY_TO_PROGRAM_ERROR TO PROGRAM 'echo <SEGID>&& echo "error" >&2 && exit 255' on segment;
+COPY (SELECT * FROM COPY_TO_PROGRAM_ERROR) TO PROGRAM 'echo <SEGID>&& echo "error" >&2 && exit 255' on segment;
+
+CREATE TABLE COPY_FROM_PROGRAM_ERROR(a int);
+
+COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'echo 1; echo "error" >&2 && exit 255';
+SELECT COUNT(*) FROM COPY_FROM_PROGRAM_ERROR;
+INSERT INTO COPY_FROM_PROGRAM_ERROR VALUES(0);
+COPY COPY_FROM_PROGRAM_ERROR TO '/tmp/program_error_<SEGID>.csv' ON SEGMENT;
+COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'cat /tmp/program_error_<SEGID>.csv && echo "error" >&2 && exit 255' ON SEGMENT;
+SELECT COUNT(*) FROM COPY_FROM_PROGRAM_ERROR;
+
+-- Test for COPY PROGRAM ENVIROMENT VAR
+COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'echo $GP_SEGMENT_ID';
+SELECT COUNT(*) FROM COPY_FROM_PROGRAM_ERROR;
+\COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'echo $GP_SEGMENT_ID';
+SELECT COUNT(*) FROM COPY_FROM_PROGRAM_ERROR;
+COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'echo $GP_SEGMENT_I';
+SELECT COUNT(*) FROM COPY_FROM_PROGRAM_ERROR;
+SET gp_enable_segment_copy_checking=off;
+COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'printf "$GP_SEGMENT_ID\n<SEGID>"' on segment;
+COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'printf "$GP_SEGMENT_I\n<SEGID>"' on segment;
+ALTER TABLE COPY_FROM_PROGRAM_ERROR SET DISTRIBUTED RANDOMLY;
+SET gp_enable_segment_copy_checking=on;
+
+-- Test that xlog records are generated for COPY in the same transaction as
+-- created table. The actual validation for this test will be performed once the
+-- gp_replica_check tool is enabled.
+BEGIN;
+CREATE TABLE copy_from_same_txn(a int, b int);
+COPY copy_from_same_txn FROM stdin;
+1	1
+2	2
+3	3
+\.
+COMMIT;
+
+-- Test that COPY can be aborted by cancel request after the COPY is dispatched.
+
+SELECT gp_inject_fault('cdb_copy_start_after_dispatch', 'reset', 1);
+SELECT gp_inject_fault('cdb_copy_start_after_dispatch', 'interrupt', 1);
+
+COPY lineitem TO '/tmp/aborted.data';
+
+SELECT gp_inject_fault('cdb_copy_start_after_dispatch', 'reset', 1);
+
+
+-- Test external partition
+CREATE TABLE sales (
+    id integer,
+    date date,
+    amt numeric(10,2)
+) DISTRIBUTED BY (id) PARTITION BY RANGE(date)
+          (
+          PARTITION jan17 START ('2017-01-01'::date) END ('2017-02-01'::date) WITH (tablename='sales_1_prt_jan17', appendonly=false ),
+          PARTITION feb17 START ('2017-02-01'::date) END ('2017-03-01'::date) WITH (tablename='sales_1_prt_feb17', appendonly=false ),
+          PARTITION mar17 START ('2017-03-01'::date) END ('2017-04-01'::date) WITH (tablename='sales_1_prt_mar17', appendonly=false ),
+          PARTITION apr17 START ('2017-04-01'::date) END ('2017-05-01'::date) WITH (tablename='sales_1_prt_apr17', appendonly=false ),
+          PARTITION may17 START ('2017-05-01'::date) END ('2017-06-01'::date) WITH (tablename='sales_1_prt_may17', appendonly=false ),
+          PARTITION jun17 START ('2017-06-01'::date) END ('2017-07-01'::date) WITH (tablename='sales_1_prt_jun17', appendonly=false ),
+          PARTITION jul17 START ('2017-07-01'::date) END ('2017-08-01'::date) WITH (tablename='sales_1_prt_jul17', appendonly=false ),
+          PARTITION aug17 START ('2017-08-01'::date) END ('2017-09-01'::date) WITH (tablename='sales_1_prt_aug17', appendonly=false ),
+          PARTITION sep17 START ('2017-09-01'::date) END ('2017-10-01'::date) WITH (tablename='sales_1_prt_sep17', appendonly=false ),
+          PARTITION oct17 START ('2017-10-01'::date) END ('2017-11-01'::date) WITH (tablename='sales_1_prt_oct17', appendonly=false ),
+          PARTITION nov17 START ('2017-11-01'::date) END ('2017-12-01'::date) WITH (tablename='sales_1_prt_nov17', appendonly=false ),
+          PARTITION dec17 START ('2017-12-01'::date) END ('2018-01-01'::date) WITH (tablename='sales_1_prt_dec17', appendonly=false )
+          );
+COPY sales (id, date, amt) FROM stdin;
+1	2017-01-01	20.00
+3	2017-03-01	20.00
+25	2017-05-01	20.00
+1	2017-01-01	20.00
+3	2017-03-01	20.00
+25	2017-05-01	20.00
+2	2017-02-01	20.00
+4	2017-04-01	20.00
+8	2017-08-01	20.00
+2	2017-02-01	20.00
+4	2017-04-01	20.00
+8	2017-08-01	20.00
+15	2017-05-01	20.00
+5	2017-05-01	20.00
+9	2017-09-01	20.00
+15	2017-05-01	20.00
+5	2017-05-01	20.00
+9	2017-09-01	20.00
+7	2017-07-01	20.00
+11	2017-11-01	20.00
+7	2017-07-01	20.00
+11	2017-11-01	20.00
+18	2017-08-01	20.00
+12	2017-12-01	20.00
+18	2017-08-01	20.00
+12	2017-12-01	20.00
+\.
+-- Set QUIET off, to also test the row counts that COPY returns
+\set QUIET 'off'
+
+COPY sales TO '/tmp/test_sales_<SEGID>' ON SEGMENT;
+TRUNCATE sales;
+COPY sales FROM '/tmp/test_sales_<SEGID>' ON SEGMENT;
+
+CREATE EXTERNAL WEB TABLE ext_dec17(LIKE sales_1_prt_dec17) EXECUTE 'printf "12\t2017-12-01\t21.00\n"' ON COORDINATOR FORMAT 'text';
+ALTER TABLE sales EXCHANGE PARTITION dec17 WITH TABLE ext_dec17;
+DROP TABLE ext_dec17;
+COPY sales TO PROGRAM 'cat > /tmp/test_sales_all' IGNORE EXTERNAL PARTITIONS;
+COPY sales TO PROGRAM 'cat > /tmp/test_sales_with_external';
+COPY sales TO PROGRAM 'cat > /tmp/test_sales_<SEGID>' ON SEGMENT IGNORE EXTERNAL PARTITIONS;
+
+-- Verify that the files don't contain the row from the external partition.
+\set QUIET 'on'
+
+CREATE EXTERNAL WEB TABLE pg_temp.read_result(line text) EXECUTE 'cat /tmp/test_sales_all' ON COORDINATOR FORMAT 'text' (DELIMITER 'off');
+SELECT * FROM pg_temp.read_result;
+DROP EXTERNAL TABLE pg_temp.read_result;
+
+CREATE EXTERNAL WEB TABLE pg_temp.read_result(line text) EXECUTE 'cat /tmp/test_sales_with_external' ON COORDINATOR FORMAT 'text' (DELIMITER 'off');
+SELECT * FROM pg_temp.read_result;
+DROP EXTERNAL TABLE pg_temp.read_result;
+
+CREATE EXTERNAL WEB TABLE pg_temp.read_result(line text) EXECUTE 'cat /tmp/test_sales_$GP_SEGMENT_ID' FORMAT 'text' (DELIMITER 'off');
+SELECT * FROM pg_temp.read_result;
+DROP EXTERNAL TABLE pg_temp.read_result;
+
+DROP TABLE sales;
+
+CREATE TABLE ao_copy(c int) WITH (appendonly=true);
+COPY ao_copy TO '/tmp/ao<SEGID>.txt' ON SEGMENT;
+COPY ao_copy FROM '/tmp/ao<SEGID>.txt' ON SEGMENT;
+DROP TABLE ao_copy;
+
+--
+-- Test row counts
+--
+-- We have to disable QUIET mode for these, so that we get the command tags,
+-- like "COPY 10", in the output.
+\set QUIET off
+copy (select generate_series(1, 10)) to '/tmp/a';
+
+create temp table t (id int4);
+copy t from '/tmp/a';
+copy t to '/tmp/b';
+copy t to '/tmp/b<SEGID>' on segment;
+copy t from '/tmp/b<SEGID>' on segment;
+select count(*) from t;
+
+\set QUIET on
+
+
+--
+-- Test error handling during COPY TO
+--
+-- To trigger an error, we use an output function that throws an
+-- error on a particular value. The trigger value is 1234.
+--
+CREATE TYPE broken_int4;
+CREATE FUNCTION broken_int4in(cstring)
+   RETURNS broken_int4
+   AS 'int4in'
+   LANGUAGE internal IMMUTABLE STRICT;
+
+CREATE FUNCTION broken_int4out(broken_int4)
+   RETURNS cstring
+   AS '@abs_builddir@/regress@DLSUFFIX@', 'broken_int4out'
+   LANGUAGE C IMMUTABLE STRICT;
+
+CREATE TYPE broken_int4 (
+   internallength = 4,
+   input = broken_int4in,
+   output = broken_int4out,
+   alignment = int4,
+   passedbyvalue
+);
+
+-- avoid hitting the error when analyzing the table.
+set gp_autostats_mode = 'None';
+
+-- Create a table, using the funny datatype, and load it with integers
+-- 1-10000. The input function works normally, so this works, but if you
+-- try to select the row with value 1234 from it, the output function will
+-- throw an error.
+CREATE TABLE broken_type_test (b broken_int4);
+insert into broken_type_test select g::text::broken_int4 from generate_series(1, 10000) g;
+
+-- Should work, since we don't hit the trigger value 1234. (In principle,
+-- that's not guaranteed; there's no ORDER BY, so the system could return
+-- any 10 rows. In practice, this seems pretty safe.)
+copy (select * from broken_type_test limit 10) to '/tmp/g';
+
+-- Should fail, because we try to output everything, including 1234
+copy (select * from broken_type_test) to '/tmp/g';
+copy broken_type_test to '/tmp/g';
+
+-- Don't leave behind a table that you can't dump.
+drop table broken_type_test;
+drop type broken_int4 cascade; -- drops the I/O functions, too.
+
+-- Test COPY FROM and TO work for catalog tables in dispatch
+-- connection
+BEGIN;
+SET allow_system_table_mods=on;
+COPY gp_configuration_history from stdin with delimiter '|';
+1900-01-01 00:00:00.000000-07|12345|Just testing COPY
+\.
+
+COPY (select dbid from gp_configuration_history where dbid=12345) to stdin;
+RESET allow_system_table_mods;
+
+-- cannot copy to a catalog table with allow_system_table_mods=off;
+COPY gp_configuration_history from stdin with delimiter '|';
+ABORT;
+
+-- GPDB makes the database name, and many other things, available
+-- as environment variables to the program. Test those.
+--
+-- Perform these tests in a funnily named database, to test
+-- escaping
+set client_min_messages='warning';
+DROP DATABASE IF EXISTS "funny copy""db'with\\quotes";
+reset client_min_messages;
+CREATE DATABASE "funny copy""db'with\\quotes";
+
+\c "funny copy""db'with\\quotes"
+-- echo will behave differently on different platforms, force to use bash with -E option
+COPY (SELECT 'data1') TO PROGRAM 'cat > /tmp/gpcopyenvtest; /usr/bin/env bash -c ''echo -E database in COPY TO: $GP_DATABASE >> /tmp/gpcopyenvtest '' ' ESCAPE 'OFF';
+
+CREATE TABLE foo (t text);
+COPY foo FROM PROGRAM 'cat /tmp/gpcopyenvtest' ESCAPE 'OFF';
+COPY foo FROM PROGRAM '/usr/bin/env bash -c ''echo -E database in COPY FROM: $GP_DATABASE''' ESCAPE 'OFF';
+
+select * from foo;

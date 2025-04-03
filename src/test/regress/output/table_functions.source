@@ -2980,7 +2980,7 @@ SELECT extract(day from "time") FROM project( TABLE( SELECT * FROM history ), 2)
       22
 (18 rows)
 
-SELECT * FROM project( TABLE( SELECT * FROM pg_am ),
+SELECT * FROM project( TABLE( SELECT * FROM pg_am WHERE amname not in ('pax') ),
   CASE 1 WHEN 2 THEN 1 ELSE GREATEST(1, COALESCE(1+1)) END);
   amname   
 -----------
@@ -2997,7 +2997,7 @@ SELECT * FROM project( TABLE( SELECT * FROM pg_am ),
  heap2
 (11 rows)
 
-SELECT * FROM project( TABLE( SELECT * FROM pg_am ),
+SELECT * FROM project( TABLE( SELECT * FROM pg_am WHERE amname not in ('pax') ),
   CASE WHEN 3 IS NOT NULL AND 1 IN (1, 2) THEN floor(NULLIF(2, 3))::int END);
   amname   
 -----------

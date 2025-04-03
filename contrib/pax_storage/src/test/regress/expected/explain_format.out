@@ -1,0 +1,588 @@
+-- start_matchsubs
+-- m/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/
+-- s/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/(actual time=##.###..##.### rows=# loops=#)/
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes\./
+-- s/Executor memory: (\d+)\w bytes\./Executor memory: (#####)K bytes./
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes avg x \d+(x\(\d+\))* workers, \d+\w bytes max \(seg\d+\)\./
+-- s/Executor memory: (\d+)\w bytes avg x \d+(x\(\d+\))* workers, \d+\w bytes max \(seg\d+\)\./Executor memory: ####K bytes avg x #### workers, ####K bytes max (seg#)./
+-- m/Work_mem: \d+\w bytes max\./
+-- s/Work_mem: \d+\w bytes max\. */Work_mem: ###K bytes max./
+-- m/Execution Time: \d+\.\d+ ms/
+-- s/Execution Time: \d+\.\d+ ms/Execution Time: ##.### ms/
+-- m/Planning Time: \d+\.\d+ ms/
+-- s/Planning Time: \d+\.\d+ ms/Planning Time: ##.### ms/
+-- m/cost=\d+\.\d+\.\.\d+\.\d+ rows=\d+ width=\d+/
+-- s/\(cost=\d+\.\d+\.\.\d+\.\d+ rows=\d+ width=\d+\)/(cost=##.###..##.### rows=### width=###)/
+-- m/Memory used:  \d+\w?B/
+-- s/Memory used:  \d+\w?B/Memory used: ###B/
+-- m/Memory Usage: \d+\w?B/
+-- s/Memory Usage: \d+\w?B/Memory Usage: ###B/
+-- m/Peak Memory Usage: \d+/
+-- s/Peak Memory Usage: \d+/Peak Memory Usage: ###/
+-- m/Buckets: \d+/
+-- s/Buckets: \d+/Buckets: ###/
+-- m/Batches: \d+/
+-- s/Batches: \d+/Batches: ###/
+-- end_matchsubs
+--
+-- DEFAULT syntax
+CREATE TABLE apples(id int PRIMARY KEY, type text);
+INSERT INTO apples(id) SELECT generate_series(1, 100000);
+CREATE TABLE box_locations(id int PRIMARY KEY, address text);
+CREATE TABLE boxes(id int PRIMARY KEY, apple_id int REFERENCES apples(id), location_id int REFERENCES box_locations(id));
+--- Check Explain Text format output
+-- explain_processing_off
+EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=3577.00..11272.25 rows=77900 width=84)
+   ->  Hash Left Join  (cost=3577.00..9714.25 rows=25967 width=84)
+         Hash Cond: (boxes.location_id = box_locations.id)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=2361.00..7427.12 rows=25967 width=48)
+               Hash Key: boxes.location_id
+               ->  Hash Left Join  (cost=2361.00..5869.12 rows=25967 width=48)
+                     Hash Cond: (boxes.apple_id = apples.id)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..2437.00 rows=25967 width=12)
+                           Hash Key: boxes.apple_id
+                           ->  Seq Scan on boxes  (cost=0.00..879.00 rows=25967 width=12)
+                     ->  Hash  (cost=1111.00..1111.00 rows=33334 width=36)
+                           ->  Seq Scan on apples  (cost=0.00..1111.00 rows=33334 width=36)
+         ->  Hash  (cost=596.00..596.00 rows=16534 width=36)
+               ->  Seq Scan on box_locations  (cost=0.00..596.00 rows=16534 width=36)
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+-- explain_processing_on
+--- Check Explain Analyze Text output that include the slices information
+-- explain_processing_off
+EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=812.00..3838.66 rows=77900 width=84) (actual time=51.162..51.171 rows=0 loops=1)
+   ->  Hash Left Join  (cost=812.00..2799.99 rows=25967 width=84) (actual time=50.992..50.999 rows=0 loops=1)
+         Hash Cond: (boxes.location_id = box_locations.id)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=406.00..2066.16 rows=25967 width=48) (actual time=48.988..48.988 rows=0 loops=1)
+               Hash Key: boxes.location_id
+               ->  Hash Left Join  (cost=406.00..1546.83 rows=25967 width=48) (actual time=49.549..49.556 rows=0 loops=1)
+                     Hash Cond: (boxes.apple_id = apples.id)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..813.00 rows=25967 width=12) (actual time=0.010..0.010 rows=0 loops=1)
+                           Hash Key: boxes.apple_id
+                           ->  Seq Scan on boxes  (cost=0.00..293.67 rows=25967 width=12) (actual time=0.514..0.514 rows=0 loops=1)
+                     ->  Hash  (cost=199.33..199.33 rows=16533 width=36) (actual time=46.915..46.918 rows=33462 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 3225kB
+                           ->  Seq Scan on apples  (cost=0.00..199.33 rows=16533 width=36) (actual time=1.633..35.611 rows=33462 loops=1)
+         ->  Hash  (cost=199.33..199.33 rows=16533 width=36) (actual time=0.275..0.277 rows=0 loops=1)
+               Buckets: 262144  Batches: 1  Memory Usage: 2048kB
+               ->  Seq Scan on box_locations  (cost=0.00..199.33 rows=16533 width=36) (actual time=0.272..0.273 rows=0 loops=1)
+ Planning Time: 0.987 ms
+   (slice0)    Executor memory: 126K bytes.
+   (slice1)    Executor memory: 2179K bytes avg x 3x(0) workers, 2179K bytes max (seg0).  Work_mem: 2048K bytes max.
+   (slice2)    Executor memory: 3390K bytes avg x 3x(0) workers, 3390K bytes max (seg0).  Work_mem: 3225K bytes max.
+   (slice3)    Executor memory: 116K bytes avg x 3x(0) workers, 116K bytes max (seg0).
+ Memory used:  256000kB
+ Optimizer: Postgres query optimizer
+ Execution Time: 67.034 ms
+(24 rows)
+
+-- explain_processing_on
+-- Unaligned output format is better for the YAML / XML / JSON outputs.
+-- In aligned format, you have end-of-line markers at the end of each line,
+-- and its position depends on the longest line. If the width changes, all
+-- lines need to be adjusted for the moved end-of-line-marker.
+\a
+-- YAML Required replaces for costs and time changes
+-- start_matchsubs
+-- m/ Loops: \d+/
+-- s/ Loops: \d+/ Loops: #/
+-- m/ Cost: \d+\.\d+/
+-- s/ Cost: \d+\.\d+/ Cost: ###.##/
+-- m/ Rows: \d+/
+-- s/ Rows: \d+/ Rows: #####/
+-- m/ Plan Width: \d+/
+-- s/ Plan Width: \d+/ Plan Width: ##/
+-- m/ Time: \d+\.\d+/
+-- s/ Time: \d+\.\d+/ Time: ##.###/
+-- m/Execution Time: \d+\.\d+/
+-- s/Execution Time: \d+\.\d+/Execution Time: ##.###/
+-- m/Segments: \d+/
+-- s/Segments: \d+/Segments: #/
+-- m/Pivotal Optimizer \(GPORCA\) version \d+\.\d+\.\d+",?/
+-- s/Pivotal Optimizer \(GPORCA\) version \d+\.\d+\.\d+",?/Pivotal Optimizer \(GPORCA\)"/
+-- m/ Memory: \d+/
+-- s/ Memory: \d+/ Memory: ###/
+-- m/Maximum Memory Used: \d+/
+-- s/Maximum Memory Used: \d+/Maximum Memory Used: ###/
+-- m/Workers: \d+/
+-- s/Workers: \d+/Workers: ##/
+-- m/Subworkers: \d+/
+-- s/Subworkers: \d+/Subworkers: ##/
+-- m/Average: \d+/
+-- s/Average: \d+/Average: ##/
+-- m/Total memory used across slices: \d+/
+-- s/Total memory used across slices: \d+\s*/Total memory used across slices: ###/
+-- m/Memory used: \d+/
+-- s/Memory used: \d+/Memory used: ###/
+-- end_matchsubs
+-- Check Explain YAML output
+EXPLAIN (FORMAT YAML) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;
+QUERY PLAN
+- Plan: 
+    Node Type: "Gather Motion"
+    Senders: 3
+    Receivers: 1
+    Slice: 1
+    Segments: 3
+    Gang Type: "primary reader"
+    Parallel Aware: false
+    Async Capable: false
+    Startup Cost: 3577.00
+    Total Cost: 11272.25
+    Plan Rows: 77900
+    Plan Width: 84
+    Plans: 
+      - Node Type: "Hash Join"
+        Parent Relationship: "Outer"
+        Slice: 1
+        Segments: 3
+        Gang Type: "primary reader"
+        Parallel Aware: false
+        Async Capable: false
+        Join Type: "Left"
+        Startup Cost: 3577.00
+        Total Cost: 9714.25
+        Plan Rows: 77900
+        Plan Width: 84
+        Inner Unique: true
+        Hash Cond: "(boxes.location_id = box_locations.id)"
+        Plans: 
+          - Node Type: "Redistribute Motion"
+            Senders: 3
+            Receivers: 3
+            Parent Relationship: "Outer"
+            Slice: 2
+            Segments: 3
+            Gang Type: "primary reader"
+            Parallel Aware: false
+            Async Capable: false
+            Startup Cost: 2361.00
+            Total Cost: 7427.12
+            Plan Rows: 77900
+            Plan Width: 48
+            Hash Key: "boxes.location_id"
+            Plans: 
+              - Node Type: "Hash Join"
+                Parent Relationship: "Outer"
+                Slice: 2
+                Segments: 3
+                Gang Type: "primary reader"
+                Parallel Aware: false
+                Async Capable: false
+                Join Type: "Left"
+                Startup Cost: 2361.00
+                Total Cost: 5869.12
+                Plan Rows: 77900
+                Plan Width: 48
+                Inner Unique: true
+                Hash Cond: "(boxes.apple_id = apples.id)"
+                Plans: 
+                  - Node Type: "Redistribute Motion"
+                    Senders: 3
+                    Receivers: 3
+                    Parent Relationship: "Outer"
+                    Slice: 3
+                    Segments: 3
+                    Gang Type: "primary reader"
+                    Parallel Aware: false
+                    Async Capable: false
+                    Startup Cost: 0.00
+                    Total Cost: 2437.00
+                    Plan Rows: 77900
+                    Plan Width: 12
+                    Hash Key: "boxes.apple_id"
+                    Plans: 
+                      - Node Type: "Seq Scan"
+                        Parent Relationship: "Outer"
+                        Slice: 3
+                        Segments: 3
+                        Gang Type: "primary reader"
+                        Parallel Aware: false
+                        Async Capable: false
+                        Relation Name: "boxes"
+                        Alias: "boxes"
+                        Startup Cost: 0.00
+                        Total Cost: 879.00
+                        Plan Rows: 77900
+                        Plan Width: 12
+                  - Node Type: "Hash"
+                    Parent Relationship: "Inner"
+                    Slice: 2
+                    Segments: 3
+                    Gang Type: "primary reader"
+                    Parallel Aware: false
+                    Async Capable: false
+                    Startup Cost: 1111.00
+                    Total Cost: 1111.00
+                    Plan Rows: 100000
+                    Plan Width: 36
+                    Plans: 
+                      - Node Type: "Seq Scan"
+                        Parent Relationship: "Outer"
+                        Slice: 2
+                        Segments: 3
+                        Gang Type: "primary reader"
+                        Parallel Aware: false
+                        Async Capable: false
+                        Relation Name: "apples"
+                        Alias: "apples"
+                        Startup Cost: 0.00
+                        Total Cost: 1111.00
+                        Plan Rows: 100000
+                        Plan Width: 36
+          - Node Type: "Hash"
+            Parent Relationship: "Inner"
+            Slice: 1
+            Segments: 3
+            Gang Type: "primary reader"
+            Parallel Aware: false
+            Async Capable: false
+            Startup Cost: 596.00
+            Total Cost: 596.00
+            Plan Rows: 49600
+            Plan Width: 36
+            Plans: 
+              - Node Type: "Seq Scan"
+                Parent Relationship: "Outer"
+                Slice: 1
+                Segments: 3
+                Gang Type: "primary reader"
+                Parallel Aware: false
+                Async Capable: false
+                Relation Name: "box_locations"
+                Alias: "box_locations"
+                Startup Cost: 0.00
+                Total Cost: 596.00
+                Plan Rows: 49600
+                Plan Width: 36
+  Settings: 
+    Optimizer: "Postgres query optimizer"
+(1 row)
+--- Check Explain Analyze YAML output that include the slices information
+-- explain_processing_off
+EXPLAIN (ANALYZE, FORMAT YAML) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;
+QUERY PLAN
+- Plan: 
+    Node Type: "Gather Motion"
+    Senders: 3
+    Receivers: 1
+    Slice: 1
+    Segments: 3
+    Gang Type: "primary reader"
+    Parallel Aware: false
+    Async Capable: false
+    Startup Cost: 3577.00
+    Total Cost: 11272.25
+    Plan Rows: 77900
+    Plan Width: 84
+    Actual Startup Time: 70.104
+    Actual Total Time: 70.104
+    Actual Rows: 0
+    Actual Loops: 1
+    Plans: 
+      - Node Type: "Hash Join"
+        Parent Relationship: "Outer"
+        Slice: 1
+        Segments: 3
+        Gang Type: "primary reader"
+        Parallel Aware: false
+        Async Capable: false
+        Join Type: "Left"
+        Startup Cost: 3577.00
+        Total Cost: 9714.25
+        Plan Rows: 77900
+        Plan Width: 84
+        Actual Startup Time: 0.000
+        Actual Total Time: 0.000
+        Actual Rows: 0
+        Actual Loops: 0
+        Inner Unique: true
+        Hash Cond: "(boxes.location_id = box_locations.id)"
+        Plans: 
+          - Node Type: "Redistribute Motion"
+            Senders: 3
+            Receivers: 3
+            Parent Relationship: "Outer"
+            Slice: 2
+            Segments: 3
+            Gang Type: "primary reader"
+            Parallel Aware: false
+            Async Capable: false
+            Startup Cost: 2361.00
+            Total Cost: 7427.12
+            Plan Rows: 77900
+            Plan Width: 48
+            Actual Startup Time: 0.000
+            Actual Total Time: 0.000
+            Actual Rows: 0
+            Actual Loops: 0
+            Hash Key: "boxes.location_id"
+            Plans: 
+              - Node Type: "Hash Join"
+                Parent Relationship: "Outer"
+                Slice: 2
+                Segments: 3
+                Gang Type: "primary reader"
+                Parallel Aware: false
+                Async Capable: false
+                Join Type: "Left"
+                Startup Cost: 2361.00
+                Total Cost: 5869.12
+                Plan Rows: 77900
+                Plan Width: 48
+                Actual Startup Time: 0.000
+                Actual Total Time: 0.000
+                Actual Rows: 0
+                Actual Loops: 0
+                Inner Unique: true
+                Hash Cond: "(boxes.apple_id = apples.id)"
+                Plans: 
+                  - Node Type: "Redistribute Motion"
+                    Senders: 3
+                    Receivers: 3
+                    Parent Relationship: "Outer"
+                    Slice: 3
+                    Segments: 3
+                    Gang Type: "primary reader"
+                    Parallel Aware: false
+                    Async Capable: false
+                    Startup Cost: 0.00
+                    Total Cost: 2437.00
+                    Plan Rows: 77900
+                    Plan Width: 12
+                    Actual Startup Time: 0.000
+                    Actual Total Time: 0.000
+                    Actual Rows: 0
+                    Actual Loops: 0
+                    Hash Key: "boxes.apple_id"
+                    Plans: 
+                      - Node Type: "Seq Scan"
+                        Parent Relationship: "Outer"
+                        Slice: 3
+                        Segments: 3
+                        Gang Type: "primary reader"
+                        Parallel Aware: false
+                        Async Capable: false
+                        Relation Name: "boxes"
+                        Alias: "boxes"
+                        Startup Cost: 0.00
+                        Total Cost: 879.00
+                        Plan Rows: 77900
+                        Plan Width: 12
+                        Actual Startup Time: 0.000
+                        Actual Total Time: 0.000
+                        Actual Rows: 0
+                        Actual Loops: 0
+                  - Node Type: "Hash"
+                    Parent Relationship: "Inner"
+                    Slice: 2
+                    Segments: 3
+                    Gang Type: "primary reader"
+                    Parallel Aware: false
+                    Async Capable: false
+                    Startup Cost: 1111.00
+                    Total Cost: 1111.00
+                    Plan Rows: 100000
+                    Plan Width: 36
+                    Actual Startup Time: 58.354
+                    Actual Total Time: 58.354
+                    Actual Rows: 33462
+                    Actual Loops: 1
+                    Hash Buckets: 131072
+                    Original Hash Buckets: 131072
+                    Hash Batches: 1
+                    Original Hash Batches: 1
+                    Peak Memory Usage: 2332
+                    Plans: 
+                      - Node Type: "Seq Scan"
+                        Parent Relationship: "Outer"
+                        Slice: 2
+                        Segments: 3
+                        Gang Type: "primary reader"
+                        Parallel Aware: false
+                        Async Capable: false
+                        Relation Name: "apples"
+                        Alias: "apples"
+                        Startup Cost: 0.00
+                        Total Cost: 1111.00
+                        Plan Rows: 100000
+                        Plan Width: 36
+                        Actual Startup Time: 0.088
+                        Actual Total Time: 14.932
+                        Actual Rows: 33462
+                        Actual Loops: 1
+          - Node Type: "Hash"
+            Parent Relationship: "Inner"
+            Slice: 1
+            Segments: 3
+            Gang Type: "primary reader"
+            Parallel Aware: false
+            Async Capable: false
+            Startup Cost: 596.00
+            Total Cost: 596.00
+            Plan Rows: 49600
+            Plan Width: 36
+            Actual Startup Time: 0.000
+            Actual Total Time: 0.000
+            Actual Rows: 0
+            Actual Loops: 0
+            Hash Buckets: 131072
+            Original Hash Buckets: 131072
+            Hash Batches: 1
+            Original Hash Batches: 1
+            Peak Memory Usage: 1024
+            Plans: 
+              - Node Type: "Seq Scan"
+                Parent Relationship: "Outer"
+                Slice: 1
+                Segments: 3
+                Gang Type: "primary reader"
+                Parallel Aware: false
+                Async Capable: false
+                Relation Name: "box_locations"
+                Alias: "box_locations"
+                Startup Cost: 0.00
+                Total Cost: 596.00
+                Plan Rows: 49600
+                Plan Width: 36
+                Actual Startup Time: 0.000
+                Actual Total Time: 0.000
+                Actual Rows: 0
+                Actual Loops: 0
+  Settings: 
+    Optimizer: "Postgres query optimizer"
+  Planning Time: 1.121
+  Triggers: 
+  Slice statistics: 
+    - Slice: 0
+      Executor Memory: 130048
+    - Slice: 1
+      Executor Memory: 
+        Average: 1129528
+        Workers: 3
+        Subworkers: 0
+        Maximum Memory Used: 1129528
+      Work Maximum Memory: 1048576
+    - Slice: 2
+      Executor Memory: 
+        Average: 2213776
+        Workers: 3
+        Subworkers: 0
+        Maximum Memory Used: 2213776
+      Work Maximum Memory: 2119360
+    - Slice: 3
+      Executor Memory: 
+        Average: 60624
+        Workers: 3
+        Subworkers: 0
+        Maximum Memory Used: 60624
+  Statement statistics: 
+    Memory used: 128000
+  Execution Time: 16.551
+(1 row)
+-- explain_processing_on
+--
+-- Test a simple case with JSON and XML output, too.
+--
+-- This should be enough for those format. The only difference between JSON,
+-- XML, and YAML is in the formatting, after all.
+-- Check JSON format
+--
+-- start_matchsubs
+-- m/Pivotal Optimizer \(GPORCA\) version \d+\.\d+\.\d+/
+-- s/Pivotal Optimizer \(GPORCA\) version \d+\.\d+\.\d+/Pivotal Optimizer \(GPORCA\)/
+-- end_matchsubs
+-- explain_processing_off
+EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM generate_series(1, 10);
+QUERY PLAN
+[
+  {
+    "Plan": {
+      "Node Type": "Function Scan",
+      "Slice": 0,
+      "Segments": 0,
+      "Gang Type": "unallocated",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Function Name": "generate_series",
+      "Alias": "generate_series"
+    },
+    "Settings": {
+      "Optimizer": "Postgres query optimizer"
+    }
+  }
+]
+(1 row)
+EXPLAIN (FORMAT XML, COSTS OFF) SELECT * FROM generate_series(1, 10);
+QUERY PLAN
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Query>
+    <Plan>
+      <Node-Type>Function Scan</Node-Type>
+      <Slice>0</Slice>
+      <Segments>0</Segments>
+      <Gang-Type>unallocated</Gang-Type>
+      <Parallel-Aware>false</Parallel-Aware>
+      <Async-Capable>false</Async-Capable>
+      <Function-Name>generate_series</Function-Name>
+      <Alias>generate_series</Alias>
+    </Plan>
+    <Settings>
+      <Optimizer>Postgres query optimizer</Optimizer>
+    </Settings>
+  </Query>
+</explain>
+(1 row)
+-- Test for an old bug in printing Sequence nodes in JSON/XML format
+-- (https://github.com/greenplum-db/gpdb/issues/9410)
+CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EVERY(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;
+QUERY PLAN
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 1,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 1,
+      "Gang Type": "primary reader",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 1,
+          "Gang Type": "primary reader",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "jsonexplaintest_1_prt_2",
+          "Alias": "jsonexplaintest",
+          "Filter": "(i = 2)"
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Postgres query optimizer"
+    }
+  }
+]
+(1 row)
+-- explain_processing_on
+-- Cleanup
+DROP TABLE boxes;
+DROP TABLE apples;
+DROP TABLE box_locations;
+DROP TABLE jsonexplaintest;

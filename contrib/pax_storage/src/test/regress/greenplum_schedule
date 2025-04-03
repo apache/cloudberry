@@ -1,0 +1,335 @@
+# Cloudberry-specific tests
+#
+# The order of the tests is fairly random, but there are a couple of things
+# to consider when placing a new test:
+#
+# * Keep long-running tests in the same group with other tests with a similar
+#   runtime. That way, on a multi-processor system, the tests will finish
+#   roughly at the same time, which maximizes parallelism.
+# * Keep tests together with other tests for similar functionality.
+# * There are some dependencies between tests, and some tests cannot run
+#   in parallel with other tests.
+# * The maximum size of a group is about 20, like in the Postgres
+#   parallel_schedule. However, some queries can dispatch a lot of workers
+#   to the segments, and therefore has to run in smaller groups to avoid
+#   hitting max_connections limit on segments.
+#
+
+# test for builtin namespace pg_ext_aux
+test: pg_ext_aux
+
+test: gp_dispatch_keepalives
+
+# copy command
+# copy form a file with different EOL
+test: copy_eol
+
+# gp_toolkit performs a vacuum and checks that it truncated the relation. That
+# might not happen if other backends are holding transactions open, preventing
+# vacuum from removing dead tuples. And run gp_toolkit early to make some log
+# file related tests (like gp_log_system, etc) faster.
+test: disable_autovacuum
+test: gp_toolkit
+test: python_processed64bit
+test: enable_autovacuum
+
+test: log_guc
+# enable query metrics cluster GUC
+test: instr_in_shmem_setup
+# run separately - because slot counter may influenced by other parallel queries
+test: instr_in_shmem
+
+test: createdb
+test: gp_aggregates gp_aggregates_costs variadic_parameters default_parameters function_extensions spi gp_xml shared_scan update_gp triggers_gp returning_gp resource_queue_with_rule gp_types gp_index cluster_gp combocid_gp gp_sort
+test: spi_processed64bit
+test: gp_tablespace_with_faults
+# below test(s) inject faults so each of them need to be in a separate group
+test: gp_tablespace
+
+test: temp_tablespaces
+test: default_tablespace
+
+test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp limit_gp percentile union_gp join_gp notin gpcopy_encoding gp_create_table gp_create_view window_views replication_slots create_table_like_gp gp_constraints matview_ao gpcopy_dispatch
+# below test(s) inject faults so each of them need to be in a separate group
+test: gpcopy
+
+test: orca_groupingsets_fallbacks orca_static_pruning
+test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix sublink table_functions olap_setup complex opclass_ddl explain_format information_schema guc_env_var gp_explain distributed_transactions olap_plans misc_jiras gp_copy_dtx
+# below test(s) inject faults so each of them need to be in a separate group
+test: guc_gp
+# ignore_reason: pax toast is different from heap, the test case is already included in pax_schudule
+# test: toast
+
+# namespace_gp test will show diff if concurrent tests use temporary tables.
+# So run it separately.
+test: namespace_gp
+
+# test gpdb internal and segment connections
+test: gp_connections
+
+#  triggers recovery, run it seperately
+test: bitmap_index 
+test: gp_dump_query_oids analyze gp_owner_permission incremental_analyze truncate_gp
+test: as_alias regex_gp gpparams with_clause transient_types gp_rules motion_gp indexjoin dispatch_encoding
+
+# interconnect tests
+test: icudp/gp_interconnect_queue_depth icudp/gp_interconnect_queue_depth_longtime icudp/gp_interconnect_snd_queue_depth icudp/gp_interconnect_snd_queue_depth_longtime icudp/gp_interconnect_min_retries_before_timeout icudp/gp_interconnect_transmit_timeout icudp/gp_interconnect_cache_future_packets icudp/gp_interconnect_default_rtt icudp/gp_interconnect_fc_method icudp/gp_interconnect_min_rto icudp/gp_interconnect_timer_checking_period icudp/gp_interconnect_timer_period icudp/queue_depth_combination_loss icudp/queue_depth_combination_capacity
+
+# event triggers cannot run concurrently with any test that runs DDL
+test: event_trigger_gp
+
+# deadlock tests run separately - because we don't know which one gets stuck.
+test: deadlock deadlock2
+
+# test workfiles
+test: workfile/hashagg_spill workfile/hashjoin_spill workfile/materialize_spill workfile/sisc_mat_sort workfile/sisc_sort_spill workfile/sort_spill workfile/spilltodisk
+# test workfiles compressed using zlib
+# 'zlib' utilizes fault injectors so it needs to be in a group by itself
+test: zlib
+
+test: workfile_limits
+# It will also use faultinjector - so it needs to be in a group by itself.
+test: segspace
+
+test: cursor
+
+# 'query_finish_pending' sets QueryFinishPending flag to true during query execution using fault injectors
+# so it needs to be in a group by itself
+test: query_finish_pending
+
+test: gpdiffcheck gptokencheck gp_hashagg sequence_gp tidscan_gp dml_in_udf gpdtm_plpgsql agg_pushdown co_nestloop_idxscan gp_array_agg
+
+# The test must be run by itself as it injects a fault on QE to fail
+# at the 2nd phase of 2PC.
+test: dtm_retry
+
+# The appendonly test cannot be run concurrently with tests that have
+# serializable transactions (may conflict with AO vacuum operations).
+test: rangefuncs_cdb gp_dqa subselect_gp2 gp_transactions olap_group sirv_functions appendonly create_table_distpol alter_distpol_dropped query_finish partial_table subselect_gp olap_window_seq subselect_gp_indexes
+
+# 'partition' runs for a long time, so try to keep it together with other
+# long-running tests.
+test: partition partition1 partition_indexing partition_storage partition_ddl partition_with_user_defined_function partition_unlogged partition_subquery partition_with_user_defined_function_that_truncates
+
+test: index_constraint_naming index_constraint_naming_partition index_constraint_naming_upgrade
+
+test: brin_ao brin_aocs
+
+test: sreh
+
+test: rle rle_delta dsp not_out_of_shmem_exit_slots create_am_gp
+
+# Cloudberry-specific tests
+test: cbdb_optimizer_test
+test: gp_runtime_filter
+
+# Disabled tests. XXX: Why are these disabled?
+#test: olap_window
+#test: tpch500GB
+#ignore_reason: db_size_functions is not associated with pax storage, add new test case for pax storage in pax_schedule
+#test: db_size_functions
+
+# FIXME: These tests no longer work, because they try to set
+# gp_interconnect_type, which doesn't work:
+# ERROR:  parameter "gp_interconnect_type" cannot be set after connection start
+
+ignore: gp_portal_error
+test: external_table external_table_create_privs external_table_persistent_error_log column_compression alter_table_aocs alter_table_aocs2 aoco_privileges external_table_union_all eagerfree alter_distribution_policy
+test: alter_table_set alter_table_gp alter_table_ao subtransaction_visibility oid_consistency udf_exception_blocks
+# below test(s) inject faults so each of them need to be in a separate group
+test: aocs
+test: ic
+
+test: resource_queue
+test: resource_queue_function
+test: disable_autovacuum
+# Check for shmem leak for instrumentation slots before gpdb restart
+test: instr_in_shmem_verify
+# 'partition_locking' gets confused if other backends run concurrently and
+# hold locks.
+test: partition_locking
+test: vacuum_gp
+test: resource_queue_stat
+# background analyze may affect pgstat
+test: pg_stat
+# test: qp_misc_rio [not support TupleFetchRowVersion] 
+test: bfv_partition
+test: pgstat_qd_tabstat
+# dispatch should always run seperately from other cases.
+test: dispatch
+test: enable_autovacuum
+# these have been covered by cbdb icw_test, so ignore them
+#test: resource_group
+#test: resource_group_cpuset
+#test: resource_group_gucs
+test: wrkloadadmin
+
+# expand_table tests may affect the result of 'gp_explain', keep them below that
+# portals_updatable
+test: partition_pruning gp_toolkit_ao_funcs trig auth_constraint role plpgsql_cache timeseries pg_stat_last_operation pg_stat_last_shoperation gp_numeric_agg partindex_test runtime_stats expand_table expand_table_ao expand_table_aoco expand_table_regression
+
+# direct dispatch tests
+test: bfv_dd bfv_dd_multicolumn bfv_dd_types direct_dispatch
+
+test: bfv_catalog bfv_olap bfv_aggregate bfv_partition_plans bfv_statistic nested_case_null sort bb_mpph aggregate_with_groupingsets gporca bfv_index DML_over_joins
+# Run minirepro separately to avoid concurrent deletes erroring out the internal pg_dump call
+
+# gpsd and minirepro depends on the pg_dump, pg_dump not support pax storage, so ignore them
+# test: gpsd
+# test: minirepro
+
+# NOTE: gporca_faults uses gp_fault_injector - so do not add to a parallel group
+test: gporca_faults
+
+test: bb_memory_quota
+
+# Tests for replicated table
+# test: rpt_returning [unsupport TupleFetchRowVersion]
+test: rpt_joins rpt_tpch rpt
+
+# NOTE: The bfv_temp test assumes that there are no temporary tables in
+# other sessions. Therefore the other tests in this group mustn't create
+# temp tables
+# test: bfv_dml  [unsupport TupleFetchRowVersion/DELETE Trigger]
+test: bfv_cte bfv_joins bfv_legacy bfv_temp bfv_planner bfv_subquery
+
+test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins
+
+# test: qp_misc_jiras [not support TupleTidValid/DELETE Trigger]
+test: qp_with_clause qp_executor qp_olap_windowerr qp_olap_window qp_derived_table qp_bitmapscan qp_dropped_cols
+test: qp_with_functional_inlining qp_with_functional_noinlining
+test: qp_functions_in_contexts_setup
+# test: qp_misc_rio_join_small qp_misc_rio qp_correlated_query qp_targeted_dispatch qp_gist_indexes2 qp_gist_indexes3 qp_gist_indexes4 qp_query_execution qp_functions_in_from qp_functions_in_select qp_functions_in_subquery qp_functions_in_subquery_column qp_functions_in_subquery_constant qp_functions_in_with
+# test: qp_misc_rio [unsupport TupleFetchRowVersion]
+# test: qp_gist_indexes2 qp_gist_indexes3 qp_gist_indexes4 [unsupport gist index]
+test: qp_misc_rio_join_small qp_correlated_query qp_functions_in_from qp_functions_in_select qp_functions_in_subquery qp_functions_in_subquery_column qp_functions_in_with qp_query_execution qp_targeted_dispatch
+
+test: dpe qp_dpe qp_left_anti_semi_join qp_functions qp_functions_idf qp_regexp qp_resource_queue qp_union_intersect qp_subquery qp_orca_fallback
+
+test: olap_setup
+test: qp_olap_group qp_olap_group2
+
+test: hooktest tuple_serialization
+
+# Test query_info_collect_hook are called in expected sequence on normal query, query error/abort
+test: query_info_hook_test
+
+ignore: tpch500GB_orca
+
+# Tests for "compaction", i.e. VACUUM, of updatable append-only tables
+test: uao_compaction/full uao_compaction/outdated_partialindex uao_compaction/drop_column_update uao_compaction/eof_truncate uao_compaction/basic uao_compaction/outdatedindex uao_compaction/update_toast uao_compaction/outdatedindex_abort uao_compaction/delete_toast uao_compaction/alter_table_analyze uao_compaction/full_eof_truncate uao_compaction/full_threshold
+# TODO find why these tests fail in parallel, for now keeping them sequential
+test: uao_compaction/full_stats
+test: uao_compaction/stats
+test: uao_compaction/index_stats
+test: uao_compaction/index
+test: uao_compaction/drop_column
+test: uao_compaction/index2
+
+
+# Tests for "compaction", i.e. VACUUM, of updatable append-only column oriented tables
+test: uaocs_compaction/alter_table_analyze uaocs_compaction/basic uaocs_compaction/drop_column_update uaocs_compaction/eof_truncate uaocs_compaction/full uaocs_compaction/full_eof_truncate uaocs_compaction/full_threshold uaocs_compaction/outdated_partialindex uaocs_compaction/outdatedindex uaocs_compaction/outdatedindex_abort
+# TODO find why these tests fail in parallel, for now keeping them sequential
+test: uaocs_compaction/full_stats
+test: uaocs_compaction/stats
+test: uaocs_compaction/index_stats
+test: uaocs_compaction/index
+test: uaocs_compaction/drop_column
+
+test: uao_ddl/cursor_row uao_ddl/cursor_column uao_ddl/alter_ao_table_statistics_row uao_ddl/alter_ao_table_statistics_column uao_ddl/alter_ao_table_setdefault_row uao_ddl/alter_ao_table_index_row uao_ddl/alter_ao_table_owner_column uao_ddl/spgist_over_ao_table_row
+test: uao_ddl/alter_ao_table_owner_row uao_ddl/alter_ao_table_setstorage_row uao_ddl/alter_ao_table_constraint_row uao_ddl/alter_ao_table_constraint_column uao_ddl/alter_ao_table_index_column uao_ddl/blocksize_row uao_ddl/compresstype_column uao_ddl/alter_ao_table_setdefault_column uao_ddl/blocksize_column uao_ddl/temp_on_commit_delete_rows_row uao_ddl/temp_on_commit_delete_rows_column uao_ddl/spgist_over_ao_table_column
+test: uao_ddl/alter_ao_table_setstorage_column uao_ddl/alter_ao_table_col_ddl_row uao_ddl/compresstype_row uao_ddl/alter_ao_table_col_ddl_column uao_ddl/alter_ao_part_tables_splitpartition_row uao_ddl/alter_ao_part_tables_splitpartition_column uao_ddl/create_ao_tables_row uao_ddl/create_ao_table_500cols_row uao_ddl/create_ao_tables_column uao_ddl/alter_ao_part_exch_row
+test: uao_ddl/alter_ao_part_exch_column uao_ddl/alter_ao_part_tables_row uao_ddl/create_ao_table_500cols_column uao_ddl/alter_ao_part_tables_column
+
+test: uao_ddl/alter_drop_allcol_row uao_ddl/alter_drop_allcol_column uao_ddl/alter_rollback_row uao_ddl/alter_rollback_column uao_ddl/uao_allalter_row uao_ddl/uao_allalter_column
+
+# These tests use gp_select_invisible and VACUUM, and will get confused if there are
+# concurrent transactions holding back the global xmin.
+
+test: uao_dml/uao_dml_cursor_row uao_dml/uao_dml_select_row uao_dml/uao_dml_cursor_column uao_dml/uao_dml_select_column uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
+
+
+# disable autovacuum for the test
+test: disable_autovacuum
+# Run uao[cs]_catalog_tables separately. They run VACUUM FULL on
+# append-optimized tables and assume that no AWAITING_DROP segfiles exist at
+# the end of VACUUM FULL.
+
+# uao_catalog_tables/uaocs_catalog_tables/uao_compaction/threshold/uaocs_compaction/threshold
+# should always be below disable_autovacuum, don't change the order.
+test: uao_catalog_tables
+test: uaocs_catalog_tables
+test: uao_compaction/threshold
+test: uaocs_compaction/threshold
+test: uao_ddl/analyze_ao_table_every_dml_row uao_ddl/analyze_ao_table_every_dml_column
+test: uao_dml/uao_dml_row
+test: uao_dml/uao_dml_column
+test: ao_locks
+test: freeze_aux_tables
+
+# cbdb parallel test
+# testcase has been in pax test
+# test: cbdb_parallel
+
+# These cannot run in parallel, because they check that VACUUM FULL shrinks table size.
+# A concurrent session could hold back the xid horizon and prevent old tuples from being
+# removed.
+test: vacuum_full_ao
+
+# test: vacuum_full_freeze_heap [Orca Unstable]
+# test: vacuum_full_freeze_heap
+# test: vacuum_full_heap [Orca Unstable]
+# test: vacuum_full_heap
+# test: vacuum_full_heap_bitmapindex [Orca Unstable]
+# test: vacuum_full_heap_bitmapindex
+# Check for shmem leak for instrumentation slots
+test: instr_in_shmem_verify
+# check autostats
+test: autostats
+test: enable_autovacuum
+
+test: AOCO_Compression AORO_Compression table_statistics
+test: session_reset
+# below test(s) inject faults so each of them need to be in a separate group
+test: fts_error
+
+test: psql_gp_commands pg_resetwal dropdb_check_shared_buffer_cache gp_upgrade_cornercases
+
+test: temp_relation
+test: alter_db_set_tablespace
+
+# This cannot run in parallel because other tests could increment the Oid
+# counters and make the Oid counter observations hardcoded in the answer file
+# incorrect.
+test: oid_wraparound
+
+# fts_recovery_in_progresss uses fault injectors to simulate FTS fault states,
+# hence it should be run in isolation.
+test: fts_recovery_in_progress
+
+# append only case, and it must generate a core file.
+ignore: mirror_replay
+#test: autovacuum [not support]
+#test: autovacuum-segment [not support]
+#test: autovacuum-template0-segment [not support]
+
+# gpexpand introduce the partial tables, check them if they can run correctly
+test: gangsize gang_reuse
+
+# some utilities do not work while doing gpexpand, check them can print correct message
+test: run_utility_gpexpand_phase1
+
+# check correct error message when create extension error on segment
+test: create_extension_fail
+
+# check profile feature
+# ignore_reason: not associated with pax storage
+# test: profile
+
+# Tests of Answer Query Using Materialized Views.
+test: aqumv
+
+# test access method with encoding options
+test: am_encoding
+
+# end of tests

@@ -1,0 +1,28 @@
+-- @Description Tests that a update operation in progress will block all other updates
+-- until the transaction is committed.
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1,10) AS i;
+INSERT 10
+
+-- The actual test begins
+1: BEGIN;
+BEGIN
+2: BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN
+1: UPDATE pax_tbl SET b = 42 WHERE b = 1;
+UPDATE 1
+2&: UPDATE pax_tbl SET b = -1 WHERE b = 1;  <waiting ...>
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+UPDATE 0
+2: COMMIT;
+COMMIT
+SELECT * FROM pax_tbl WHERE b < 2;
+ a | b 
+---+---
+(0 rows)

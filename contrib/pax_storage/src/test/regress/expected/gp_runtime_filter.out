@@ -1,0 +1,255 @@
+-- Disable ORCA
+SET optimizer TO off;
+-- Test Suit 1: runtime filter main case
+DROP TABLE IF EXISTS fact_rf, dim_rf;
+NOTICE:  table "fact_rf" does not exist, skipping
+NOTICE:  table "dim_rf" does not exist, skipping
+CREATE TABLE fact_rf (fid int, did int, val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fid' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE dim_rf (did int, proj_id int, filter_val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- Generating data, fact_rd.did and dim_rf.did is 80% matched
+INSERT INTO fact_rf SELECT i, i % 8000 + 1, i FROM generate_series(1, 100000) s(i);
+INSERT INTO dim_rf SELECT i, i % 10, i FROM generate_series(1, 10000) s(i);
+ANALYZE fact_rf, dim_rf;
+SET gp_enable_runtime_filter TO off;
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 2;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dim_rf
+                                       Filter: (proj_id < 2)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+SET gp_enable_runtime_filter TO on;
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 2;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     ->  RuntimeFilter
+                           ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dim_rf
+                                       Filter: (proj_id < 2)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+-- Test bad filter rate
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 7;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dim_rf
+                                       Filter: (proj_id < 7)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- Test outer join
+-- LeftJoin (eliminated and applicatable)
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     ->  RuntimeFilter
+                           ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dim_rf
+                                       Filter: (proj_id < 2)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+-- LeftJoin
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id IS NULL OR proj_id < 2;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Left Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Filter: ((dim_rf.proj_id IS NULL) OR (dim_rf.proj_id < 2))
+                     ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dim_rf
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- RightJoin (applicatable)
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM
+    fact_rf RIGHT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Right Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     ->  RuntimeFilter
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: fact_rf.did
+                                 ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Seq Scan on dim_rf
+                                 Filter: (proj_id < 2)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+-- SemiJoin
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM fact_rf
+    WHERE fact_rf.did IN (SELECT did FROM dim_rf WHERE proj_id < 2);
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Semi Join
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     ->  RuntimeFilter
+                           ->  Seq Scan on fact_rf
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on dim_rf
+                                       Filter: (proj_id < 2)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+-- SemiJoin -> InnerJoin and deduplicate
+EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM dim_rf
+    WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  HashAggregate
+                     Group Key: (RowIdExpr)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: (RowIdExpr)
+                           ->  Hash Join
+                                 Hash Cond: (fact_rf.did = dim_rf.did)
+                                 ->  RuntimeFilter
+                                       ->  Seq Scan on fact_rf
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Seq Scan on dim_rf
+                                                   Filter: (proj_id < 2)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+-- Test correctness
+SELECT * FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND dim_rf.filter_val = 1
+    ORDER BY fid;
+  fid  | did |  val  | did | proj_id | filter_val 
+-------+-----+-------+-----+---------+------------
+  8000 |   1 |  8000 |   1 |       1 |          1
+ 16000 |   1 | 16000 |   1 |       1 |          1
+ 24000 |   1 | 24000 |   1 |       1 |          1
+ 32000 |   1 | 32000 |   1 |       1 |          1
+ 40000 |   1 | 40000 |   1 |       1 |          1
+ 48000 |   1 | 48000 |   1 |       1 |          1
+ 56000 |   1 | 56000 |   1 |       1 |          1
+ 64000 |   1 | 64000 |   1 |       1 |          1
+ 72000 |   1 | 72000 |   1 |       1 |          1
+ 80000 |   1 | 80000 |   1 |       1 |          1
+ 88000 |   1 | 88000 |   1 |       1 |          1
+ 96000 |   1 | 96000 |   1 |       1 |          1
+(12 rows)
+
+SELECT * FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE dim_rf.filter_val = 1
+    ORDER BY fid;
+  fid  | did |  val  | did | proj_id | filter_val 
+-------+-----+-------+-----+---------+------------
+  8000 |   1 |  8000 |   1 |       1 |          1
+ 16000 |   1 | 16000 |   1 |       1 |          1
+ 24000 |   1 | 24000 |   1 |       1 |          1
+ 32000 |   1 | 32000 |   1 |       1 |          1
+ 40000 |   1 | 40000 |   1 |       1 |          1
+ 48000 |   1 | 48000 |   1 |       1 |          1
+ 56000 |   1 | 56000 |   1 |       1 |          1
+ 64000 |   1 | 64000 |   1 |       1 |          1
+ 72000 |   1 | 72000 |   1 |       1 |          1
+ 80000 |   1 | 80000 |   1 |       1 |          1
+ 88000 |   1 | 88000 |   1 |       1 |          1
+ 96000 |   1 | 96000 |   1 |       1 |          1
+(12 rows)
+
+SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2;
+ count 
+-------
+ 20000
+(1 row)
+
+SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id IS NULL OR proj_id < 2;
+ count 
+-------
+ 20000
+(1 row)
+
+SELECT COUNT(*) FROM
+    fact_rf RIGHT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2;
+ count 
+-------
+ 20400
+(1 row)
+
+SELECT COUNT(*) FROM fact_rf
+    WHERE fact_rf.did IN (SELECT did FROM dim_rf WHERE proj_id < 2);
+ count 
+-------
+ 20000
+(1 row)
+
+SELECT COUNT(*) FROM dim_rf
+    WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2;
+ count 
+-------
+  1600
+(1 row)
+
+-- Clean up: reset guc
+SET gp_enable_runtime_filter TO off;
+SET optimizer TO default;

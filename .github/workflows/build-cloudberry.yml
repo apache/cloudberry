@@ -230,6 +230,42 @@ jobs:
                "make_configs":["src/test/regress:installcheck-good"],
                "pg_settings":{"optimizer":"on"}
               },
+              {"test":"pax-ic-good-opt-off",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"off",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"pax-ic-good-opt-on",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"on",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"pax-ic-isolation2-opt-off",
+               "make_configs":["contrib/pax_storage/:isolation2_test"],
+               "pg_settings":{
+                 "optimizer":"off",
+                 "default_table_access_method":"pax"
+                },
+                "enable_core_check":false
+              },
+              {"test":"pax-ic-isolation2-opt-on",
+               "make_configs":["contrib/pax_storage/:isolation2_test"],
+               "pg_settings":{
+                 "optimizer":"on",
+                 "default_table_access_method":"pax"
+                },
+                "enable_core_check":false
+              },
               {"test":"ic-expandshrink",
                "make_configs":["src/test/isolation2:installcheck-expandshrink"]
               },
@@ -481,6 +517,11 @@ jobs:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
+
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && git submodule update --init"; then
+            echo "::error::Fail to pull submodule."
+            exit 1
+          fi
 
           chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
           if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
@@ -1265,6 +1306,10 @@ jobs:
           PG_OPTS=""
           if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
             PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          fi
+
+          if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
           fi
 
           # Read configs into array

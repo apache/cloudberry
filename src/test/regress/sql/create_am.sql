@@ -97,7 +97,7 @@ CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler;
 CREATE ACCESS METHOD bogus TYPE TABLE HANDLER int4in;
 CREATE ACCESS METHOD bogus TYPE TABLE HANDLER bthandler;
 
-SELECT amname, amhandler, amtype FROM pg_am where amtype = 't' ORDER BY 1, 2;
+SELECT amname, amhandler, amtype FROM pg_am where amtype = 't' and amname not in ('pax') ORDER BY 1, 2;
 
 
 -- First create tables employing the new AM using USING

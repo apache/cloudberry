@@ -1,0 +1,51 @@
+select count(*) = 2 as in_sync from gp_segment_configuration
+where content = 0 and mode = 's';
+ in_sync 
+---------
+ t
+(1 row)
+
+-- fts_update_config have been removed
+-- Verify that FTS didn't leak any locks
+select locktype, mode, relation, pid, granted from pg_locks where
+relation = 'gp_segment_configuration'::regclass or
+relation = 'gp_configuration_history'::regclass;
+ locktype | mode | relation | pid | granted 
+----------+------+----------+-----+---------
+(0 rows)
+
+select count(*) = 2 as in_sync from gp_segment_configuration
+where content = 0 and mode = 's';
+ in_sync 
+---------
+ t
+(1 row)
+
+set optimizer = off;
+-- start_ignore
+\! gpconfig -c client_min_messages -v DEBUG1
+\! gpstop -u
+
+select gp_request_fts_probe_scan();
+DEBUG:  Message type Q received by from libpq, len = 36
+LOG:  statement: select gp_request_fts_probe_scan();
+LOG:  etcdlib_init_config successfully initialized with fts_dump_file_key: /cbdb/fts/default/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000000/fts_dump_file_key, fts_standby_promote_ready_key:/cbdb/fts/default/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000000/fts_standby_promote_ready_key
+DEBUG:  Segment configs cache have been force flushed, total dbs=8
+ gp_request_fts_probe_scan 
+---------------------------
+ t
+(1 row)
+-- end_ignore
+select count(*) from gp_segment_configuration where status = 'd';
+DEBUG:  Message type Q received by from libpq, len = 66
+LOG:  statement: select count(*) from gp_segment_configuration where status = 'd';
+ count 
+-------
+     0
+(1 row)
+
+-- start_ignore
+\! gpconfig -r client_min_messages
+\! gpstop -u
+-- end_ignore
+reset optimizer;

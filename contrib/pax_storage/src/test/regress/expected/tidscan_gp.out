@@ -1,0 +1,38 @@
+drop table if exists test;
+NOTICE:  table "test" does not exist, skipping
+create table test (a integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into test select a from generate_series(1,100) a;
+\echo -- start_ignore
+-- start_ignore
+select * from test where ctid='(0,10)' and gp_segment_id=1;
+ a  
+----
+ 22
+(1 row)
+
+\echo -- end_ignore
+-- end_ignore
+drop table if exists test;
+create table test (a integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into test select a from generate_series(1,100) a;
+\echo -- start_ignore
+-- start_ignore
+select * from test where ctid in ('(0,10)', '(0,20)');
+NOTICE:  SELECT uses system-defined column "test.ctid" without the necessary companion column "test.gp_segment_id"
+HINT:  To uniquely identify a row within a distributed table, use the "gp_segment_id" column together with the "ctid" column.
+ a  
+----
+ 30
+ 51
+ 22
+ 57
+ 27
+ 61
+(6 rows)
+
+\echo -- end_ignore
+-- end_ignore

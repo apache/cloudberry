@@ -1,0 +1,684 @@
+--
+-- Test for PROFILE
+--
+-- Display pg_stas_activity to check the login monitor process
+SELECT COUNT(*) FROM pg_stat_activity;
+ count 
+-------
+     8
+(1 row)
+
+-- Display pg_authid, pg_roles, pg_profile and pg_password_history catalog
+\d+ pg_authid;
+                                             Table "pg_catalog.pg_authid"
+      Column       |           Type           | Collation | Nullable | Default | Storage  | Stats target | Description 
+-------------------+--------------------------+-----------+----------+---------+----------+--------------+-------------
+ oid               | oid                      |           | not null |         | plain    |              | 
+ rolname           | name                     |           | not null |         | plain    |              | 
+ rolsuper          | boolean                  |           | not null |         | plain    |              | 
+ rolinherit        | boolean                  |           | not null |         | plain    |              | 
+ rolcreaterole     | boolean                  |           | not null |         | plain    |              | 
+ rolcreatedb       | boolean                  |           | not null |         | plain    |              | 
+ rolcanlogin       | boolean                  |           | not null |         | plain    |              | 
+ rolreplication    | boolean                  |           | not null |         | plain    |              | 
+ rolbypassrls      | boolean                  |           | not null |         | plain    |              | 
+ rolconnlimit      | integer                  |           | not null |         | plain    |              | 
+ rolenableprofile  | boolean                  |           | not null |         | plain    |              | 
+ rolpassword       | text                     | C         |          |         | extended |              | 
+ rolvaliduntil     | timestamp with time zone |           |          |         | plain    |              | 
+ rolprofile        | oid                      |           | not null |         | plain    |              | 
+ rolaccountstatus  | smallint                 |           | not null |         | plain    |              | 
+ rolfailedlogins   | integer                  |           | not null |         | plain    |              | 
+ rolpasswordsetat  | timestamp with time zone |           |          |         | plain    |              | 
+ rollockdate       | timestamp with time zone |           |          |         | plain    |              | 
+ rolpasswordexpire | timestamp with time zone |           |          |         | plain    |              | 
+ rolresqueue       | oid                      |           |          |         | plain    |              | 
+ rolcreaterextgpfd | boolean                  |           |          |         | plain    |              | 
+ rolcreaterexthttp | boolean                  |           |          |         | plain    |              | 
+ rolcreatewextgpfd | boolean                  |           |          |         | plain    |              | 
+ rolresgroup       | oid                      |           |          |         | plain    |              | 
+Indexes:
+    "pg_authid_oid_index" PRIMARY KEY, btree (oid), tablespace "pg_global"
+    "pg_authid_rolname_index" UNIQUE CONSTRAINT, btree (rolname), tablespace "pg_global"
+    "pg_authid_rolprofile_index" btree (rolprofile), tablespace "pg_global"
+    "pg_authid_rolresgroup_index" btree (rolresgroup), tablespace "pg_global"
+    "pg_authid_rolresqueue_index" btree (rolresqueue), tablespace "pg_global"
+Tablespace: "pg_global"
+
+\d+ pg_roles;
+                                       View "pg_catalog.pg_roles"
+      Column       |           Type           | Collation | Nullable | Default | Storage  | Description 
+-------------------+--------------------------+-----------+----------+---------+----------+-------------
+ rolname           | name                     |           |          |         | plain    | 
+ rolsuper          | boolean                  |           |          |         | plain    | 
+ rolinherit        | boolean                  |           |          |         | plain    | 
+ rolcreaterole     | boolean                  |           |          |         | plain    | 
+ rolcreatedb       | boolean                  |           |          |         | plain    | 
+ rolcanlogin       | boolean                  |           |          |         | plain    | 
+ rolreplication    | boolean                  |           |          |         | plain    | 
+ rolconnlimit      | integer                  |           |          |         | plain    | 
+ rolenableprofile  | boolean                  |           |          |         | plain    | 
+ rolprofile        | name                     |           |          |         | plain    | 
+ rolaccountstatus  | smallint                 |           |          |         | plain    | 
+ rolfailedlogins   | integer                  |           |          |         | plain    | 
+ rolpassword       | text                     |           |          |         | extended | 
+ rolvaliduntil     | timestamp with time zone |           |          |         | plain    | 
+ rollockdate       | timestamp with time zone |           |          |         | plain    | 
+ rolpasswordexpire | timestamp with time zone |           |          |         | plain    | 
+ rolbypassrls      | boolean                  |           |          |         | plain    | 
+ rolconfig         | text[]                   | C         |          |         | extended | 
+ rolresqueue       | oid                      |           |          |         | plain    | 
+ oid               | oid                      |           |          |         | plain    | 
+ rolcreaterextgpfd | boolean                  |           |          |         | plain    | 
+ rolcreaterexthttp | boolean                  |           |          |         | plain    | 
+ rolcreatewextgpfd | boolean                  |           |          |         | plain    | 
+ rolresgroup       | oid                      |           |          |         | plain    | 
+View definition:
+ SELECT pg_authid.rolname,
+    pg_authid.rolsuper,
+    pg_authid.rolinherit,
+    pg_authid.rolcreaterole,
+    pg_authid.rolcreatedb,
+    pg_authid.rolcanlogin,
+    pg_authid.rolreplication,
+    pg_authid.rolconnlimit,
+    pg_authid.rolenableprofile,
+    pg_profile.prfname AS rolprofile,
+    pg_authid.rolaccountstatus,
+    pg_authid.rolfailedlogins,
+    '********'::text AS rolpassword,
+    pg_authid.rolvaliduntil,
+    pg_authid.rollockdate,
+    pg_authid.rolpasswordexpire,
+    pg_authid.rolbypassrls,
+    s.setconfig AS rolconfig,
+    pg_authid.rolresqueue,
+    pg_authid.oid,
+    pg_authid.rolcreaterextgpfd,
+    pg_authid.rolcreaterexthttp,
+    pg_authid.rolcreatewextgpfd,
+    pg_authid.rolresgroup
+   FROM pg_profile,
+    pg_authid
+     LEFT JOIN pg_db_role_setting s ON pg_authid.oid = s.setrole AND s.setdatabase = 0::oid
+  WHERE pg_profile.oid = pg_authid.rolprofile;
+
+\d+ pg_profile;
+                                       Table "pg_catalog.pg_profile"
+         Column          |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+-------------------------+---------+-----------+----------+---------+---------+--------------+-------------
+ oid                     | oid     |           | not null |         | plain   |              | 
+ prfname                 | name    |           | not null |         | plain   |              | 
+ prffailedloginattempts  | integer |           | not null |         | plain   |              | 
+ prfpasswordlocktime     | integer |           | not null |         | plain   |              | 
+ prfpasswordlifetime     | integer |           | not null |         | plain   |              | 
+ prfpasswordgracetime    | integer |           | not null |         | plain   |              | 
+ prfpasswordreusetime    | integer |           | not null |         | plain   |              | 
+ prfpasswordreusemax     | integer |           | not null |         | plain   |              | 
+ prfpasswordallowhashed  | integer |           | not null |         | plain   |              | 
+ prfpasswordverifyfuncdb | oid     |           |          |         | plain   |              | 
+ prfpasswordverifyfunc   | oid     |           |          |         | plain   |              | 
+Indexes:
+    "profile_name_index" UNIQUE CONSTRAINT, btree (prfname), tablespace "pg_global"
+    "profile_oid_index" UNIQUE CONSTRAINT, btree (oid), tablespace "pg_global"
+    "profile_password_verify_function_index" btree (prfpasswordverifyfuncdb, prfpasswordverifyfunc), tablespace "pg_global"
+Tablespace: "pg_global"
+
+\d+ pg_password_history;
+                                          Table "pg_catalog.pg_password_history"
+        Column         |           Type           | Collation | Nullable | Default | Storage  | Stats target | Description 
+-----------------------+--------------------------+-----------+----------+---------+----------+--------------+-------------
+ passhistroleid        | oid                      |           | not null |         | plain    |              | 
+ passhistpasswordsetat | timestamp with time zone |           | not null |         | plain    |              | 
+ passhistpassword      | text                     | C         | not null |         | extended |              | 
+Indexes:
+    "pg_password_history_role_password_index" UNIQUE CONSTRAINT, btree (passhistroleid, passhistpassword), tablespace "pg_global"
+    "pg_password_history_role_passwordsetat_index" btree (passhistroleid, passhistpasswordsetat), tablespace "pg_global"
+Tablespace: "pg_global"
+
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+ rolname | prfname | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------+---------+------------------+-----------------+------------------
+(0 rows)
+
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ pg_default |                     -2 |                  -2 |                   0
+(1 row)
+
+-- Test CREATE PROFILE
+CREATE PROFILE myprofile1;
+CREATE PROFILE myprofile2 LIMIT FAILED_LOGIN_ATTEMPTS -1 PASSWORD_LOCK_TIME -2;
+CREATE PROFILE myprofile3 LIMIT FAILED_LOGIN_ATTEMPTS 4 PASSWORD_LOCK_TIME 1;
+CREATE PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 5 PASSWORD_LOCK_TIME 9999 PASSWORD_REUSE_MAX 3;
+CREATE PROFILE myprofile4;  -- Failed for myprofile4 already exists
+ERROR:  profile "myprofile4" already exists
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ pg_default |                     -2 |                  -2 |                   0
+ myprofile1 |                     -1 |                  -1 |                  -1
+ myprofile2 |                     -1 |                  -2 |                  -1
+ myprofile3 |                      4 |                   1 |                  -1
+ myprofile4 |                      5 |                9999 |                   3
+(5 rows)
+
+-- Failed for invalid parameters
+CREATE PROFILE myprofile5 LIMIT FAILED_LOGIN_ATTEMPTS -3;
+ERROR:  invalid failed login attempts: -3
+CREATE PROFILE myprofile6 LIMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME -5;
+ERROR:  invalid password lock time: -5
+CREATE PROFILE myprofile7 LIMIT FAILED_LOGIN_ATTEMPTS -2 PASSWORD_LOCK_TIME -1 PASSWORD_REUSE_MAX -9999;
+ERROR:  invalid password reuse max: -9999
+CREATE PROFILE myprofile8 LIMIT FAILED_LOGIN_ATTEMPTS 10000;
+ERROR:  invalid failed login attempts: 10000
+CREATE PROFILE myprofile9 LIMIT FAILED_LOGIN_ATTEMPTS 9999 PASSWORD_LOCK_TIME 10000;
+ERROR:  invalid password lock time: 10000
+CREATE PROFILE myprofile10 LIMIT FAILED_LOGIN_ATTEMPTS 9999 PASSWORD_LOCK_TIME -1 PASSWORD_REUSE_MAX 99999;
+ERROR:  invalid password reuse max: 99999
+CREATE PROFILE myprofile11 LIMIT FAILED_LOGIN_ATTEMPTS 9999 FAILED_LOGIN_ATTEMPTS 2;
+ERROR:  conflicting or redundant options
+LINE 1: ...FILE myprofile11 LIMIT FAILED_LOGIN_ATTEMPTS 9999 FAILED_LOG...
+                                                             ^
+CREATE PROFILE myprofile12 LIMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME 4 PASSWORD_LOCK_TIME 3;
+ERROR:  conflicting or redundant options
+LINE 1: ...IMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME 4 PASSWORD_L...
+                                                             ^
+CREATE PROFILE myprofile13 LIMIT FAILED_LOGIN_ATTEMPTS 4 PASSWORD_LOCK_TIME 3 PASSWORD_REUSE_MAX 2 PASSWORD_REUSE_MAX 2;
+ERROR:  conflicting or redundant options
+LINE 1: ...EMPTS 4 PASSWORD_LOCK_TIME 3 PASSWORD_REUSE_MAX 2 PASSWORD_R...
+                                                             ^
+-- Failed for syntax error
+CREATE PROFILE myprofile14 FAILED_LOGIN_ATTEMPTS 1;
+ERROR:  syntax error at or near "FAILED_LOGIN_ATTEMPTS"
+LINE 1: CREATE PROFILE myprofile14 FAILED_LOGIN_ATTEMPTS 1;
+                                   ^
+CREATE PROFILE myprofile15 PASSWORD_LOCK_TIME -2;
+ERROR:  syntax error at or near "PASSWORD_LOCK_TIME"
+LINE 1: CREATE PROFILE myprofile15 PASSWORD_LOCK_TIME -2;
+                                   ^
+CREATE PROFILE myprofile16 PASSWORD_RESUE_MAX -1;
+ERROR:  syntax error at or near "PASSWORD_RESUE_MAX"
+LINE 1: CREATE PROFILE myprofile16 PASSWORD_RESUE_MAX -1;
+                                   ^
+CREATE PROFILE myprofile17 FAILED_LOGIN_ATTEMPTS 0;
+ERROR:  syntax error at or near "FAILED_LOGIN_ATTEMPTS"
+LINE 1: CREATE PROFILE myprofile17 FAILED_LOGIN_ATTEMPTS 0;
+                                   ^
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ pg_default |                     -2 |                  -2 |                   0
+ myprofile1 |                     -1 |                  -1 |                  -1
+ myprofile2 |                     -1 |                  -2 |                  -1
+ myprofile3 |                      4 |                   1 |                  -1
+ myprofile4 |                      5 |                9999 |                   3
+(5 rows)
+
+-- Test CREATE USER ... PROFILE
+CREATE USER profile_user1 PROFILE test; -- failed
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+ERROR:  profile "test" does not exist
+CREATE USER profile_user1 PROFILE pg_default;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER profile_user2 PASSWORD 'a_nice_long_password_123';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER profile_user3 PASSWORD 'a_nice_long_password_456' PROFILE myprofile3;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER profile_user4 ACCOUNT LOCK PROFILE myprofile4;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user1 | pg_default |                0 |               0 | f
+ profile_user2 | pg_default |                0 |               0 | f
+ profile_user3 | myprofile3 |                0 |               0 | f
+ profile_user4 | myprofile4 |                2 |               0 | f
+(4 rows)
+
+-- Test CREATE USER ... ENABLE/DISABLE PROFILE
+CREATE USER profile_user5 ENABLE PROFILE PROFILE pg_default;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER profile_user6 ENABLE PROFILE PROFILE; -- failed
+ERROR:  syntax error at or near ";"
+LINE 1: CREATE USER profile_user6 ENABLE PROFILE PROFILE;
+                                                        ^
+CREATE USER profile_user7 DISABLE PROFILE PROFILE pg_default;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE USER profile_user8 DISABLE PROFILE PROFILE; -- failed
+ERROR:  syntax error at or near ";"
+LINE 1: CREATE USER profile_user8 DISABLE PROFILE PROFILE;
+                                                         ^
+CREATE USER profile_user9 SUPERUSER;
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user1 | pg_default |                0 |               0 | f
+ profile_user2 | pg_default |                0 |               0 | f
+ profile_user3 | myprofile3 |                0 |               0 | f
+ profile_user4 | myprofile4 |                2 |               0 | f
+ profile_user5 | pg_default |                0 |               0 | t
+ profile_user7 | pg_default |                0 |               0 | f
+ profile_user9 | pg_default |                0 |               0 | f
+(7 rows)
+
+-- Test ALTER PROFILE
+ALTER USER profile_user1 PROFILE myprofile1;
+ALTER USER profile_user2 PROFILE myprofile2;
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user3 | myprofile3 |                0 |               0 | f
+ profile_user4 | myprofile4 |                2 |               0 | f
+ profile_user5 | pg_default |                0 |               0 | t
+ profile_user7 | pg_default |                0 |               0 | f
+ profile_user9 | pg_default |                0 |               0 | f
+ profile_user1 | myprofile1 |                0 |               0 | f
+ profile_user2 | myprofile2 |                0 |               0 | f
+(7 rows)
+
+ALTER USER profile_user10 PROFILE myprofile2;  -- failed
+ERROR:  role "profile_user10" does not exist
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname = 'profile_user9';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user9 | pg_default |                0 |               0 | f
+(1 row)
+
+ALTER USER profile_user9 PROFILE pg_default;
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname = 'profile_user9';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user9 | pg_default |                0 |               0 | f
+(1 row)
+
+ALTER PROFILE myprofile1 LIMIT; --  OK
+ALTER PROFILE myprofile1 LIMIT PASSWORD_LOCK_TIME 1;
+ALTER PROFILE myprofile2 PASSWORD_LOCK_TIME 3;  --  syntax error
+ERROR:  syntax error at or near "PASSWORD_LOCK_TIME"
+LINE 1: ALTER PROFILE myprofile2 PASSWORD_LOCK_TIME 3;
+                                 ^
+ALTER PROFILE myprofile2 LIMIT PASSWORD_LOCK_TIME 3;    --  OK
+ALTER PROFILE myprofile3 LIMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_REUSE_MAX 2;
+ALTER PROFILE myprofile3 LIMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_REUSE_MAX 2; -- ALTER PROFILE the same values
+ALTER PROFILE myprofile4 LIMIT PASSWORD_LOCK_TIME 10 PASSWORD_REUSE_MAX -1;
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 9999 PASSWORD_LOCK_TIME 9999 PASSWORD_REUSE_MAX 9999;
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 4 PASSWORD_LOCK_TIME 0 PASSWORD_REUSE_MAX 0;
+ALTER PROFILE myprofile5 LIMIT FAILED_LOGIN_ATTEMPTS 3;
+ERROR:  profile "myprofile5" does not exist
+ALTER PROFILE pg_default LIMIT FAILED_LOGIN_ATTEMPTS 2 PASSWORD_LOCK_TIME 1 PASSWORD_REUSE_MAX 3;
+ALTER PROFILE myprofile1 LIMIT FAILED_LOGIN_ATTEMPTS 1 FAILED_LOGIN_ATTEMPTS 2;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile2 LIMIT PASSWORD_LOCK_TIME 2 PASSWORD_LOCK_TIME 3;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile3 LIMIT PASSWORD_REUSE_MAX -1 PASSWORD_REUSE_MAX -2;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile1 LIMIT FAILED_LOGIN_ATTEMPTS 1 FAILED_LOGIN_ATTEMPTS 2;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile2 LIMIT FAILED_LOGIN_ATTEMPTS -2 PASSWORD_LOCK_TIME 2 PASSWORD_LOCK_TIME -2;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile3 LIMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME -1 PASSWORD_REUSE_MAX 2 PASSWORD_REUSE_MAX 2;
+ERROR:  conflicting or redundant options
+-- Failed for pg_default value can not be -1
+ALTER PROFILE pg_default LIMIT FAILED_LOGIN_ATTEMPTS -1;
+ERROR:  can't set failed login attempts to -1(DEFAULT) of pg_default
+ALTER PROFILE pg_default LIMIT PASSWORD_LOCK_TIME -1;
+ERROR:  can't set password lock time to -1(DEFAULT) of pg_default
+ALTER PROFILE pg_default LIMIT PASSWORD_REUSE_MAX -1;
+ERROR:  can't set password reuse max to -1(DEFAULT) of pg_default
+ALTER PROFILE pg_default LIMIT FAILED_LOGIN_ATTEMPTS 2 PASSWORD_LOCK_TIME 2 PASSWORD_REUSE_MAX -1;
+ERROR:  can't set password reuse max to -1(DEFAULT) of pg_default
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ myprofile1 |                     -1 |                   1 |                  -1
+ myprofile2 |                     -1 |                   3 |                  -1
+ myprofile3 |                      3 |                   1 |                   2
+ myprofile4 |                      4 |                   0 |                   0
+ pg_default |                      2 |                   1 |                   3
+(5 rows)
+
+-- Test ALTER PROFILE ... RENAME TO
+ALTER PROFILE pg_default RENAME TO anyname;     -- failed for pg_default profile can't be renamed
+ERROR:  can't RENAME "pg_default" profile
+ALTER PROFILE myprofile1 RENAME TO myprofile2;  -- failed for myprofile2 already exists
+ERROR:  profile "myprofile2" already exists
+ALTER PROFILE myprofile1 RENAME TO pg_default;  -- failed for pg_default already exists
+ERROR:  profile "pg_default" already exists
+ALTER PROFILE myprofile1 RENAME TO tempname;    -- OK
+ALTER PROFILE myprofile2 RENAME TO myprofile1;  -- OK
+ALTER PROFILE myprofile5 RENAME TO tempname2;   -- failed for myprofile5 doesn't exists
+ERROR:  profile "myprofile5" does not exist
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ myprofile3 |                      3 |                   1 |                   2
+ myprofile4 |                      4 |                   0 |                   0
+ pg_default |                      2 |                   1 |                   3
+ tempname   |                     -1 |                   1 |                  -1
+ myprofile1 |                     -1 |                   3 |                  -1
+(5 rows)
+
+ALTER PROFILE tempname RENAME TO myprofile2;    -- OK
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ myprofile3 |                      3 |                   1 |                   2
+ myprofile4 |                      4 |                   0 |                   0
+ pg_default |                      2 |                   1 |                   3
+ myprofile1 |                     -1 |                   3 |                  -1
+ myprofile2 |                     -1 |                   1 |                  -1
+(5 rows)
+
+-- Failed for invalid parameters
+ALTER PROFILE myprofile1 LIMIT FAILED_LOGIN_ATTEMPTS 10000;
+ERROR:  invalid failed login attempts: 10000
+ALTER PROFILE myprofile2 LIMIT FAILED_LOGIN_ATTEMPTS 9999 PASSWORD_LOCK_TIME 10000;
+ERROR:  invalid password lock time: 10000
+ALTER PROFILE myprofile3 LIMIT FAILED_LOGIN_ATTEMPTS 9999 PASSWORD_LOCK_TIME 9999 PASSWORD_REUSE_MAX 10000;
+ERROR:  invalid password reuse max: 10000
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 0;
+ERROR:  invalid failed login attempts: 0
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 0 PASSWORD_LOCK_TIME 0 PASSWORD_REUSE_MAX 3;
+ERROR:  invalid failed login attempts: 0
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 9999 FAILED_LOGIN_ATTEMPTS 3;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 9999 PASSWORD_LOCK_TIME 1 PASSWORD_LOCK_TIME 2;
+ERROR:  conflicting or redundant options
+ALTER PROFILE myprofile4 LIMIT FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME 3 PASSWORD_REUSE_MAX 4 PASSWORD_REUSE_MAX 3;
+ERROR:  conflicting or redundant options
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ myprofile3 |                      3 |                   1 |                   2
+ myprofile4 |                      4 |                   0 |                   0
+ pg_default |                      2 |                   1 |                   3
+ myprofile1 |                     -1 |                   3 |                  -1
+ myprofile2 |                     -1 |                   1 |                  -1
+(5 rows)
+
+-- Failed for syntax error
+ALTER PROFILE myprofile1 FAILED_LOGIN_ATTEMPTS 5;
+ERROR:  syntax error at or near "FAILED_LOGIN_ATTEMPTS"
+LINE 1: ALTER PROFILE myprofile1 FAILED_LOGIN_ATTEMPTS 5;
+                                 ^
+ALTER PROFILE myprofile2 PASSWORD_LOCK_TIME -2;
+ERROR:  syntax error at or near "PASSWORD_LOCK_TIME"
+LINE 1: ALTER PROFILE myprofile2 PASSWORD_LOCK_TIME -2;
+                                 ^
+ALTER PROFILE myprofile3 PASSWORD_RESUE_MAX -1;
+ERROR:  syntax error at or near "PASSWORD_RESUE_MAX"
+LINE 1: ALTER PROFILE myprofile3 PASSWORD_RESUE_MAX -1;
+                                 ^
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ myprofile3 |                      3 |                   1 |                   2
+ myprofile4 |                      4 |                   0 |                   0
+ pg_default |                      2 |                   1 |                   3
+ myprofile1 |                     -1 |                   3 |                  -1
+ myprofile2 |                     -1 |                   1 |                  -1
+(5 rows)
+
+DELETE FROM pg_profile;    -- failed for catalog can't be deleted
+ERROR:  permission denied: "pg_profile" is a system catalog
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ myprofile3 |                      3 |                   1 |                   2
+ myprofile4 |                      4 |                   0 |                   0
+ pg_default |                      2 |                   1 |                   3
+ myprofile1 |                     -1 |                   3 |                  -1
+ myprofile2 |                     -1 |                   1 |                  -1
+(5 rows)
+
+-- Test ALTER USER ... PROFILE
+ALTER USER profile_user2 PROFILE myprofile3;
+ALTER USER profile_user3 PROFILE myprofile2;
+ALTER USER profile_user1 PROFILE myprofile1;
+ALTER USER profile_user4 PROFILE myprofile4;
+ALTER USER profile_user9 PROFILE myprofile3;
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user5 | pg_default |                0 |               0 | t
+ profile_user7 | pg_default |                0 |               0 | f
+ profile_user2 | myprofile3 |                0 |               0 | f
+ profile_user3 | myprofile2 |                0 |               0 | f
+ profile_user1 | myprofile1 |                0 |               0 | f
+ profile_user4 | myprofile4 |                2 |               0 | f
+ profile_user9 | myprofile3 |                0 |               0 | f
+(7 rows)
+
+-- Test ALTER USER ... ENABLE/DISABLE PROFILE
+ALTER USER profile_user5 DISABLE PROFILE PROFILE myprofile3;
+ALTER USER profile_user5 ENABLE PROFILE PROFILE;
+ERROR:  syntax error at or near ";"
+LINE 1: ALTER USER profile_user5 ENABLE PROFILE PROFILE;
+                                                       ^
+ALTER USER profile_user7 ENABLE PROFILE PROFILE myprofile4;
+ALTER USER profile_user7 DISABLE PROFILE PROFILE;
+ERROR:  syntax error at or near ";"
+LINE 1: ALTER USER profile_user7 DISABLE PROFILE PROFILE;
+                                                        ^
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user2 | myprofile3 |                0 |               0 | f
+ profile_user3 | myprofile2 |                0 |               0 | f
+ profile_user1 | myprofile1 |                0 |               0 | f
+ profile_user4 | myprofile4 |                2 |               0 | f
+ profile_user9 | myprofile3 |                0 |               0 | f
+ profile_user5 | myprofile3 |                0 |               0 | f
+ profile_user7 | myprofile4 |                0 |               0 | t
+(7 rows)
+
+-- Test ALTER USER ... PASSWORD
+ALTER USER profile_user1 PASSWORD 'test';
+ALTER USER profile_user1 PASSWORD 'a_nice_long_password_123';
+ALTER USER profile_user1 PASSWORD 'a_new_password';
+ALTER USER profile_user1 PASSWORD 'test';
+ALTER USER profile_user1 PASSWORD 'a_nice_long_password_123';
+ALTER USER profile_user1 PASSWORD 'a_new_password';
+ALTER USER profile_user1 PASSWORD 'ABCD';
+ALTER USER profile_user1 PASSWORD 'test';
+ALTER PROFILE pg_default LIMIT PASSWORD_REUSE_MAX 4;
+ALTER USER profile_user1 PASSWORD 'a_nice_long_password_123';
+ALTER USER profile_user2 PASSWORD 'test2';
+ALTER USER profile_user2 PASSWORD 'a_bad_password';
+ALTER USER profile_user2 PASSWORD 'test2' ENABLE PROFILE;
+ALTER USER profile_user2 PASSWORD 'a_bad_password';
+ERROR:  The new password should not be the same with latest 2 history password
+ALTER USER profile_user2 PASSWORD 'a_nice_password';
+ALTER USER profile_user2 PASSWORD 'a_bad_password';
+ALTER USER profile_user2 PASSWORD 'test2';
+ALTER PROFILE myprofile3 LIMIT PASSWORD_REUSE_MAX 1;
+ALTER USER profile_user2 PASSWORD 'a_bad_password'; -- OK
+ALTER USER profile_user2 PASSWORD 'test2';  -- OK
+ALTER USER profile_user4 PASSWORD 'test3'; -- OK
+DELETE FROM pg_password_history;    -- failed for catalog can't be deleted
+ERROR:  permission denied: "pg_password_history" is a system catalog
+-- Test ALTER USER ... ACCOUNT LOCK/UNLOCK
+ALTER USER profile_user1 ACCOUNT LOCK;
+ALTER USER profile_user2 ACCOUNT UNLOCK;
+ALTER USER profile_user3 ACCOUNT LOCK;
+ALTER USER profile_user4 ACCOUNT UNLOCK;
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user9 | myprofile3 |                0 |               0 | f
+ profile_user5 | myprofile3 |                0 |               0 | f
+ profile_user7 | myprofile4 |                0 |               0 | t
+ profile_user1 | myprofile1 |                2 |               0 | f
+ profile_user2 | myprofile3 |                0 |               0 | t
+ profile_user3 | myprofile2 |                2 |               0 | f
+ profile_user4 | myprofile4 |                0 |               0 | f
+(7 rows)
+
+-- Test for get_role_status()
+SELECT get_role_status('profile_user1');
+ get_role_status 
+-----------------
+ LOCKED
+(1 row)
+
+SELECT get_role_status('profile_user2');
+ get_role_status 
+-----------------
+ OPEN
+(1 row)
+
+SELECT get_role_status('profile_user3');
+ get_role_status 
+-----------------
+ LOCKED
+(1 row)
+
+SELECT get_role_status('profile_user4');
+ get_role_status 
+-----------------
+ OPEN
+(1 row)
+
+SELECT get_role_status('profile_user5'); -- failed for user does not exist
+ get_role_status 
+-----------------
+ OPEN
+(1 row)
+
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user9 | myprofile3 |                0 |               0 | f
+ profile_user5 | myprofile3 |                0 |               0 | f
+ profile_user7 | myprofile4 |                0 |               0 | t
+ profile_user1 | myprofile1 |                2 |               0 | f
+ profile_user2 | myprofile3 |                0 |               0 | t
+ profile_user3 | myprofile2 |                2 |               0 | f
+ profile_user4 | myprofile4 |                0 |               0 | f
+(7 rows)
+
+-- Test update pg_password_history
+UPDATE pg_password_history SET passhistpassword = 'random'; -- permission denied
+ERROR:  permission denied: "pg_password_history" is a system catalog
+-- Test DROP PROFILE
+-- Failed for profile is using by user
+DROP PROFILE myprofile1;
+ERROR:  profile "myprofile1" cannot be dropped because some objects depend on it
+DETAIL:  profile of role profile_user1
+DROP PROFILE myprofile2;
+ERROR:  profile "myprofile2" cannot be dropped because some objects depend on it
+DETAIL:  profile of role profile_user3
+DROP PROFILE myprofile3;
+ERROR:  profile "myprofile3" cannot be dropped because some objects depend on it
+DETAIL:  profile of role profile_user2
+profile of role profile_user5
+profile of role profile_user9
+DROP PROFILE myprofile4;
+ERROR:  profile "myprofile4" cannot be dropped because some objects depend on it
+DETAIL:  profile of role profile_user4
+profile of role profile_user7
+DROP PROFILE pg_default;    --  failed, can't drop pg_default profile
+ERROR:  Disallow to drop default profile
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user9 | myprofile3 |                0 |               0 | f
+ profile_user5 | myprofile3 |                0 |               0 | f
+ profile_user7 | myprofile4 |                0 |               0 | t
+ profile_user1 | myprofile1 |                2 |               0 | f
+ profile_user2 | myprofile3 |                0 |               0 | t
+ profile_user3 | myprofile2 |                2 |               0 | f
+ profile_user4 | myprofile4 |                0 |               0 | f
+(7 rows)
+
+-- cleanup
+DROP USER profile_user1;
+DROP USER profile_user2;
+DROP USER profile_user3;
+DROP USER profile_user4;
+DROP USER profile_user5;
+DROP USER profile_user7;
+SELECT rolname, prfname, rolaccountstatus, rolfailedlogins, rolenableprofile
+FROM pg_authid, pg_profile
+WHERE pg_authid.rolprofile = pg_profile.oid
+AND rolname like '%profile_user%';
+    rolname    |  prfname   | rolaccountstatus | rolfailedlogins | rolenableprofile 
+---------------+------------+------------------+-----------------+------------------
+ profile_user9 | myprofile3 |                0 |               0 | f
+(1 row)
+
+-- Successful
+DROP PROFILE myprofile1, myprofile2;
+DROP PROFILE myprofile1; -- failed
+ERROR:  profile "myprofile1" does not exist
+DROP PROFILE IF EXISTS myprofile2;  -- OK
+NOTICE:  profile "myprofile2" does not exist
+DROP PROFILE myprofile3; -- failed
+ERROR:  profile "myprofile3" cannot be dropped because some objects depend on it
+DETAIL:  profile of role profile_user9
+DROP PROFILE myprofile4, pg_default; -- failed
+ERROR:  Disallow to drop default profile
+DROP PROFILE IF EXISTS myprofile4;  -- OK
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ pg_default |                      2 |                   1 |                   4
+ myprofile3 |                      3 |                   1 |                   1
+(2 rows)
+
+DROP USER profile_user9;
+DROP PROFILE myprofile3; -- OK
+SELECT prfname, prffailedloginattempts, prfpasswordlocktime, prfpasswordreusemax
+FROM pg_profile;
+  prfname   | prffailedloginattempts | prfpasswordlocktime | prfpasswordreusemax 
+------------+------------------------+---------------------+---------------------
+ pg_default |                      2 |                   1 |                   4
+(1 row)
+
+-- Reset pg_default
+ALTER PROFILE pg_default LIMIT FAILED_LOGIN_ATTEMPTS -2 PASSWORD_LOCK_TIME -2 PASSWORD_REUSE_MAX 0;

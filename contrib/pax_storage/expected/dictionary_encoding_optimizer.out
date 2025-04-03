@@ -1,0 +1,66 @@
+create table t_dict1(a int, b text) using pax with(storage_format=porc,compresstype=dict);
+insert into t_dict1 select 1, repeat('1b', 12345678) from generate_series(1,20)i;
+explain select count(*) from t_dict1;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..431.00 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=1)
+         ->  Seq Scan on t_dict1  (cost=0.00..431.00 rows=1 width=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(4 rows)
+
+select count(*) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+explain select count(b) from t_dict1;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..431.00 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on t_dict1  (cost=0.00..431.00 rows=1 width=8)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(4 rows)
+
+select count(b) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+drop table t_dict1;
+create table t_dict1(a int, b text) using pax with(storage_format=porc_vec,compresstype=dict);
+insert into t_dict1 select 1, repeat('1b', 12345678) from generate_series(1,20)i;
+explain select count(*) from t_dict1;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..431.00 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=1)
+         ->  Seq Scan on t_dict1  (cost=0.00..431.00 rows=1 width=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(4 rows)
+
+select count(*) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+explain select count(b) from t_dict1;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..431.00 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+         ->  Seq Scan on t_dict1  (cost=0.00..431.00 rows=1 width=8)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(4 rows)
+
+select count(b) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+drop table t_dict1;

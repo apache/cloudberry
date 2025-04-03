@@ -1,0 +1,28 @@
+# Compiled Object files
+**/*.so
+**/*.o
+**/*.lai
+**/*.la
+**/*.a
+**/*.lib
+# vs-code
+**/.vscode
+# OSX
+**/.DS_Store 
+Thumbs.db
+
+# Temp files dir
+.tmp/**
+build*/**
+results/**
+clang-tidy.result
+src/test/regress/hooktest/**
+src/test/regress/query_info_hook_test/**
+# pb
+**/*.pb.h
+**/*.pb.cc
+tools/**/*.data
+tools/**/*.txt
+# Executables
+/*.out
+!src/data/expected/*.out

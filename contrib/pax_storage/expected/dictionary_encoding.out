@@ -1,0 +1,70 @@
+create table t_dict1(a int, b text) using pax with(storage_format=porc,compresstype=dict);
+insert into t_dict1 select 1, repeat('1b', 12345678) from generate_series(1,20)i;
+explain select count(*) from t_dict1;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=240.72..240.73 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=240.67..240.72 rows=3 width=8)
+         ->  Partial Aggregate  (cost=240.67..240.68 rows=1 width=8)
+               ->  Seq Scan on t_dict1  (cost=0.00..199.33 rows=16533 width=0)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(*) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+explain select count(b) from t_dict1;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=240.72..240.73 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=240.67..240.72 rows=3 width=8)
+         ->  Partial Aggregate  (cost=240.67..240.68 rows=1 width=8)
+               ->  Seq Scan on t_dict1  (cost=0.00..199.33 rows=16533 width=32)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(b) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+drop table t_dict1;
+create table t_dict1(a int, b text) using pax with(storage_format=porc_vec,compresstype=dict);
+insert into t_dict1 select 1, repeat('1b', 12345678) from generate_series(1,20)i;
+explain select count(*) from t_dict1;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=240.72..240.73 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=240.67..240.72 rows=3 width=8)
+         ->  Partial Aggregate  (cost=240.67..240.68 rows=1 width=8)
+               ->  Seq Scan on t_dict1  (cost=0.00..199.33 rows=16533 width=0)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(*) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+explain select count(b) from t_dict1;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=240.72..240.73 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=240.67..240.72 rows=3 width=8)
+         ->  Partial Aggregate  (cost=240.67..240.68 rows=1 width=8)
+               ->  Seq Scan on t_dict1  (cost=0.00..199.33 rows=16533 width=32)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select count(b) from t_dict1;
+ count 
+-------
+    20
+(1 row)
+
+drop table t_dict1;

@@ -207,10 +207,6 @@ SMgrImpl smgr_get_impl(const Relation rel)
 	{
 		smgr_impl = SMGR_AO;
 	}
-	else if (RelationIsPax(rel))
-	{
-		smgr_impl = SMGR_PAX;
-	}
 	else
 	{
 		if (smgr_get_impl_hook)

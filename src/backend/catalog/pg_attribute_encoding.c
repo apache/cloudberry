@@ -261,7 +261,13 @@ AddRelationAttributeEncodings(Relation rel, List *attr_encodings)
 	Oid relid = RelationGetRelid(rel);
 	ListCell *lc;
 	ListCell *lc_filenum;
-	List *filenums = GetNextNAvailableFilenums(relid, attr_encodings->length);
+	List *filenums = NIL;
+
+	if (!attr_encodings) {
+		return;
+	}
+
+	filenums = GetNextNAvailableFilenums(relid, attr_encodings->length);
 
 	if (filenums->length != attr_encodings->length)
 		ereport(ERROR,

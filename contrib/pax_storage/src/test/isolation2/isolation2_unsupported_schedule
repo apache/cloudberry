@@ -1,0 +1,7 @@
+# FIXME: MANIFEST: can't write the same table at the same time.
+# held a big write lock to avoid multiple write concurrently.
+
+test: crash_recovery
+test: resource_queue_deadlock
+test: segwalrep/commit_blocking
+test: segwalrep/fts_unblock_primary

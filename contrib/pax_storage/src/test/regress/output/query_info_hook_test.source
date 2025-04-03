@@ -1,0 +1,151 @@
+LOAD '@abs_builddir@/query_info_hook_test/query_info_hook_test@DLSUFFIX@';
+SET client_min_messages='warning';
+SET optimizer=off;
+-- Test Normal case
+SELECT * FROM generate_series(1, 3);
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node executing node_type: FUNCTIONSCAN
+WARNING:  Plan node finished
+WARNING:  Query done
+ generate_series 
+-----------------
+               1
+               2
+               3
+(3 rows)
+
+-- Test Error case: Error out in executor.
+CREATE FUNCTION error_in_execution() RETURNS setof int VOLATILE LANGUAGE plpgsql AS $$
+BEGIN
+RAISE EXCEPTION 'error in function execution';
+END;
+$$;
+SELECT * FROM error_in_execution();
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node executing node_type: FUNCTIONSCAN
+WARNING:  Query Error
+ERROR:  error in function execution
+CONTEXT:  PL/pgSQL function error_in_execution() line 3 at RAISE
+-- Test Error case: Error out in planner.
+SELECT * FROM generate_series(1, 3/0);
+ERROR:  division by zero
+-- Test query abort
+select pg_cancel_backend(pg_backend_pid());
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node executing node_type: RESULT
+WARNING:  Query Canceling
+WARNING:  Query Canceled
+ERROR:  canceling statement due to user request
+-- Test alter table set distributed by
+CREATE TABLE queryInfoHookTable1 (id int, name text) DISTRIBUTED BY(id);
+ALTER TABLE queryInfoHookTable1 SET DISTRIBUTED BY (name);
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Query done
+-- Test Hash node
+CREATE TABLE tb_a(a int);
+SELECT a FROM tb_a WHERE a IN (SELECT max(a) FROM tb_a);
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node executing node_type: MOTION
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Query done
+ a 
+---
+(0 rows)
+
+DROP TABLE tb_a;
+-- Test SPI
+CREATE OR REPLACE FUNCTION spi_func() RETURNS setof record
+LANGUAGE plpgsql AS $$
+DECLARE
+    obj1 record;
+BEGIN
+    FOR obj1 IN SELECT * FROM tb_b
+    LOOP
+        RETURN next obj1;
+    END LOOP;
+    RETURN;
+END
+$$;
+SELECT * FROM spi_func() AS (a int) order by 1; 
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node executing node_type: SORT
+WARNING:  Plan node executing node_type: FUNCTIONSCAN
+WARNING:  SPI inner query submit
+WARNING:  SPI inner query start
+WARNING:  Plan node of SPI inner query initializing
+WARNING:  Plan node of SPI inner query executing node_type: MOTION
+WARNING:  Plan node of SPI inner query finished
+WARNING:  Plan node of SPI inner query finished
+WARNING:  Inner query done
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Query done
+ a  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+-- Test function
+SELECT CASE WHEN information_schema._pg_truetypmod(a.*, b.*) > 0 THEN 0 ELSE 0 END
+FROM
+  (SELECT * FROM pg_catalog.pg_attribute LIMIT 1) a,
+  (SELECT * FROM pg_catalog.pg_type LIMIT 1) b
+;
+WARNING:  Query submit
+WARNING:  Query start
+WARNING:  Plan node initializing
+WARNING:  Plan node executing node_type: NESTLOOP
+WARNING:  Plan node executing node_type: LIMIT
+WARNING:  Plan node executing node_type: SEQSCAN
+WARNING:  Plan node executing node_type: MATERIAL
+WARNING:  Plan node executing node_type: LIMIT
+WARNING:  Plan node executing node_type: SEQSCAN
+WARNING:  function inner query submit
+WARNING:  function inner query start
+WARNING:  Plan node of function inner query initializing
+WARNING:  Plan node of function inner query executing node_type: RESULT
+WARNING:  Plan node of function inner query finished
+WARNING:  Inner query done
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Plan node finished
+WARNING:  Query done
+ case 
+------
+    0
+(1 row)
+

@@ -1,0 +1,34 @@
+2: CREATE OR REPLACE PROCEDURE test(bdate text, edate text) LANGUAGE PLPGSQL AS $$/*in func*/ BEGIN /*in func*/ EXECUTE format('ALTER TABLE dummy2 ADD PARTITION START (date ''%s'') INCLUSIVE END (date ''%s'') EXCLUSIVE', bdate, edate);/*in func*/ EXCEPTION/*in func*/ WHEN NO_DATA_FOUND THEN/*in func*/ RAISE EXCEPTION 'exception';/*in func*/ END;/*in func*/ $$;
+CREATE
+
+vacuum full pg_class;
+VACUUM
+
+2: CREATE TABLE dummy2 (id int, date date, amt decimal(10,2)) DISTRIBUTED BY (id) PARTITION BY RANGE (date) (START (date '2017-01-31') INCLUSIVE END (date '2017-02-01') EXCLUSIVE EVERY (INTERVAL '1 day') );
+CREATE
+
+2: begin;
+BEGIN
+2: savepoint a;
+SAVEPOINT
+2: call test('2020-01-01', '2020-01-02');
+CALL
+
+1: create table dummy1 as select sum(a.relnatts) from pg_class as a full join pg_class as b on a.relnatts = b.relnatts;
+CREATE 1
+1: drop table dummy1;
+DROP
+1: create table dummy1 as select sum(a.relnatts) from pg_class as a full join pg_class as b on a.relnatts = b.relnatts;
+CREATE 1
+
+2: commit;
+COMMIT
+2: call test('2020-01-02', '2020-01-03');
+CALL
+2: select count(1) from pg_inherits where inhparent = 'dummy2'::regclass;
+ count 
+-------
+ 3     
+(1 row)
+2: drop table dummy2, dummy1;
+DROP

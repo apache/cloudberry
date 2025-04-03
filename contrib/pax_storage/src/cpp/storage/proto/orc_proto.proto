@@ -1,0 +1,181 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto2";
+package pax.porc.proto;
+
+import "pax.proto";
+import "micro_partition_stats.proto";
+
+message ColumnStatistics {
+  // is all of rows are null
+  optional bool allNull = 1 [default=true];
+  // has null row
+  optional bool hasNull = 2 [default=false];
+  // the data statistics
+  optional pax.stats.ColumnDataStats colDataStats = 3;
+  // has toast datum
+  optional bool hasToast = 4 [default=false];
+  // the not null rows in current column 
+  // although it is same to the column field in message stream
+  // it is more convenient to use in ColumnStatistics
+  optional uint32 nonNullRows = 5 [default=0];
+  // The bloom filter basic info 
+  optional pax.stats.BloomFilterBasicInfo bloomFilterInfo = 6; 
+  // bloom filter stored by single column.
+  optional bytes columnBFStats = 7;         
+}
+
+// `Stream` desc a part of buffer, a column consists of 1 or more streams
+// the mapping of stream to column is not strictly divided.
+// the kind of each column and its last stream must be `DATA`
+message Stream {
+  // if you add new index stream kinds, you need to make sure to update
+  // StreamName to ensure it is added to the stripe in the right area
+  enum Kind {
+    // null stream
+    PRESENT = 0;
+    // raw buffer stream
+    DATA = 1;
+    // offset buffer stream
+    OFFSET = 2;
+    // toast indexes stream
+    TOAST = 3;
+  }
+  // the kind of stream
+  optional Kind kind = 1;
+  // the number of entry in stream
+  optional uint32 column = 2;
+  // the bytes of stream
+  optional uint64 length = 101;
+  // the bytes of padding.
+  // The offset stream is placed before the data stream. When the data stream
+  // of column specifies align size, the offset stream may add padding bytes 
+  // to ensure that the data stream is aligned according to the align size.
+  optional uint32 padding = 102;
+}
+
+message StripeFooter {
+  repeated Stream streams = 1;
+  repeated pax.ColumnEncoding pax_col_encodings = 2;
+}
+
+message StringPair {
+  optional string key = 1;
+  optional string value = 2;
+}
+
+message Type {
+  enum Kind {
+    BOOLEAN = 0;
+    BYTE = 1;
+    SHORT = 2;
+    INT = 3;
+    LONG = 4;
+    FLOAT = 5;
+    DOUBLE = 6;
+    DECIMAL = 7;
+    STRING = 8;
+    VARCHAR = 9;
+    CHAR = 10;
+    STRUCT = 11;
+    BPCHAR = 12;
+    VECDECIMAL = 13;
+    VECBPCHAR = 14;
+    BITPACKED = 15;
+    VECBITPACKED = 16;
+    VECNOHEADER = 17;
+  }
+  // the kind of type
+  optional Kind kind = 1;
+  // the kind of subtypes
+  repeated uint32 subtypes = 2 [packed=true];
+  // the external infomation for the column type
+  repeated StringPair attributes = 3;
+}
+
+message StripeInformation {
+  // the global file offset of the start of the stripe
+  optional uint64 offset = 1;
+  // the number of bytes of data
+  optional uint64 dataLength = 2;
+  // the number of bytes in the stripe footer
+  optional uint64 footerLength = 3;
+  // the number of rows in this stripe
+  optional uint64 numberOfRows = 4;
+  // the statistics of current stripe
+  repeated ColumnStatistics colStats = 5;
+  // the global toast file(not this one) offset
+  // of the start of the stripe
+  optional uint64 toastOffset = 6;
+  //the number of bytes of toast data
+  optional uint64 toastLength = 7;
+  //the number of toast
+  optional uint64 numberOfToast = 8;
+  //the external toast length of column
+  repeated uint64 extToastLength = 9;
+}
+
+message Footer {
+  // the length(byte) of content
+  optional uint64 contentLength = 1;
+
+  // the information of stripes
+  repeated StripeInformation stripes = 2;
+
+  // the schema descibe
+  repeated Type types = 3;
+  optional uint64 numberOfRows = 4;
+
+  // all group info
+  repeated pax.stats.ColumnBasicInfo colInfo = 5;
+
+  // the data format id in stream
+  // 1: origin format
+  // 2: vec format
+  required uint32 storageFormat = 6;
+}
+
+// the file tail looks like:
+//   group1: 
+//      streams: Stream
+//      stripefooter: StripeFooter
+//    ...
+//   footer: Footer
+//   postscript: PostScript
+//   psLen: byte
+// serialized length better less that 32k 
+// then a single io(32k) can read the footer + meta + postscript
+// If the min/max statistics in the footer have a large attribute value, 
+// then the 32k tail_buffer is not enough and needs to be read multiple times.
+message PostScript {
+  // current ORC version 
+  required uint32 majorVersion = 1;
+  required uint32 minorVersion = 2;
+
+  // each implementation that writes ORC files should register for a code
+  //  1 = ORC C++
+  optional uint32 writer = 3;
+
+  // the length(bytes) of footer
+  optional uint64 footerLength = 4;
+
+  // leave this last in the record
+  optional string magic = 8000;
+}
+

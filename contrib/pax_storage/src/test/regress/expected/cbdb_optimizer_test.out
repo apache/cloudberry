@@ -1,0 +1,267 @@
+SET optimizer TO OFF;
+-- Test Suit: IndexScan on AO tables
+SHOW gp_enable_ao_indexscan;
+ gp_enable_ao_indexscan 
+------------------------
+ off
+(1 row)
+
+CREATE TABLE ao_tbl(a int, b int, c int) WITH (appendonly='true',  orientation='row');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE aocs_tbl(a int, b int, c int) WITH (appendonly='true',  orientation='column');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- Generate small data set
+INSERT INTO ao_tbl 
+    SELECT i, (((i%10007)*(i%997))+11451)%100000, 1
+    FROM generate_series(1, 100000) s(i);
+INSERT INTO aocs_tbl SELECT * FROM ao_tbl;
+CREATE INDEX ON ao_tbl(b);
+CREATE INDEX ON aocs_tbl(b);
+ANALYZE ao_tbl, aocs_tbl;
+-- Test with optimization off
+SET gp_enable_ao_indexscan TO OFF;
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 1;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on ao_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 1000;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on ao_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 1;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on aocs_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 1000;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on aocs_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+-- Test with optimization on
+SET gp_enable_ao_indexscan TO ON;
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 1;
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Index Scan using ao_tbl_b_idx on ao_tbl
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 10;
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Index Scan using ao_tbl_b_idx on ao_tbl
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 100;
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Index Scan using ao_tbl_b_idx on ao_tbl
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 1000;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on ao_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 1;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Index Scan using aocs_tbl_b_idx on aocs_tbl
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 10;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Index Scan using aocs_tbl_b_idx on aocs_tbl
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 100;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Index Scan using aocs_tbl_b_idx on aocs_tbl
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 1000;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on aocs_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+-- Test with subquery
+EXPLAIN (COSTS OFF)
+SELECT t1.a, t1.c FROM ao_tbl t1, 
+    (SELECT * FROM ao_tbl ORDER BY b LIMIT 10) t2
+    WHERE t1.a = t2.a;
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on ao_tbl t1
+         ->  Hash
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Hash Key: t2.a
+                     ->  Subquery Scan on t2
+                           ->  Limit
+                                 ->  Gather Motion 3:1  (slice3; segments: 3)
+                                       Merge Key: ao_tbl.b
+                                       ->  Limit
+                                             ->  Index Scan using ao_tbl_b_idx on ao_tbl
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT t1.a, t1.c FROM aocs_tbl t1, 
+    (SELECT * FROM aocs_tbl ORDER BY b LIMIT 10) t2
+    WHERE t1.a = t2.a;
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on aocs_tbl t1
+         ->  Hash
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Hash Key: t2.a
+                     ->  Subquery Scan on t2
+                           ->  Limit
+                                 ->  Gather Motion 3:1  (slice3; segments: 3)
+                                       Merge Key: aocs_tbl.b
+                                       ->  Limit
+                                             ->  Index Scan using aocs_tbl_b_idx on aocs_tbl
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+-- Ensure that IndexOnlyScan is disabled
+SET enable_seqscan TO OFF;
+SET enable_indexscan TO OFF;
+SET enable_bitmapscan TO OFF;
+EXPLAIN (COSTS OFF)
+SELECT * FROM ao_tbl ORDER BY b LIMIT 1;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on ao_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM aocs_tbl ORDER BY b LIMIT 1;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: b
+         ->  Limit
+               ->  Sort
+                     Sort Key: b
+                     ->  Seq Scan on aocs_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+-- Cleanup
+DROP TABLE ao_tbl, aocs_tbl;
+SET gp_enable_ao_indexscan TO OFF;
+SET enable_seqscan TO ON;
+SET enable_indexscan TO ON;
+SET enable_bitmapscan TO ON;
+-- Final step
+SET optimizer TO default;

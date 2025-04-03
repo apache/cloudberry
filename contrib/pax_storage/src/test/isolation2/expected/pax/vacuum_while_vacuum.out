@@ -1,0 +1,38 @@
+-- @Description Ensures that an vacuum while a vacuum operation is ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+INSERT 10000
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+INSERT 10000
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+INSERT 10000
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+INSERT 10000
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+INSERT 10000
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+INSERT 10000
+
+DELETE FROM pax_tbl WHERE a < 1200;
+DELETE 7194
+1: SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 52806 
+(1 row)
+1>: VACUUM pax_tbl;  <waiting ...>
+2: VACUUM pax_tbl;
+VACUUM
+1<:  <... completed>
+VACUUM
+1: SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 52806 
+(1 row)
+3: INSERT INTO pax_tbl VALUES (0);
+INSERT 1

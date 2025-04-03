@@ -1,0 +1,183 @@
+-- Test instrument in shmem does not break EXPLAIN
+-- and EXPLAIN ANALYZE. Also instrumentation slots
+-- are correctly recycled.
+-- This test can not run in parallel with other tests.
+-- default value
+SHOW GP_ENABLE_QUERY_METRICS;
+ gp_enable_query_metrics 
+-------------------------
+ on
+(1 row)
+
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+SHOW GP_INSTRUMENT_SHMEM_SIZE;
+ gp_instrument_shmem_size 
+--------------------------
+ 5MB
+(1 row)
+
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+-- start_ignore
+DROP SCHEMA IF EXISTS QUERY_METRICS CASCADE; 
+NOTICE:  schema "query_metrics" does not exist, skipping
+-- end_ignore
+CREATE SCHEMA QUERY_METRICS;
+SET SEARCH_PATH=QUERY_METRICS;
+CREATE EXTERNAL WEB TABLE __gp_localid
+(
+    localid    int
+)
+EXECUTE E'echo $GP_SEGMENT_ID' FORMAT 'TEXT';
+GRANT SELECT ON TABLE __gp_localid TO public;
+CREATE EXTERNAL WEB TABLE __gp_masterid
+(
+    masterid    int
+)
+EXECUTE E'echo $GP_SEGMENT_ID' ON COORDINATOR FORMAT 'TEXT';
+GRANT SELECT ON TABLE __gp_masterid TO public;
+CREATE FUNCTION gp_instrument_shmem_summary_f()
+RETURNS SETOF RECORD
+AS '$libdir/gp_instrument_shmem', 'gp_instrument_shmem_summary'
+LANGUAGE C IMMUTABLE;
+GRANT EXECUTE ON FUNCTION gp_instrument_shmem_summary_f() TO public;
+CREATE VIEW gp_instrument_shmem_summary AS
+WITH all_entries AS (
+  SELECT C.*
+    FROM __gp_localid, gp_instrument_shmem_summary_f() as C (
+      segid int, num_free bigint, num_used bigint
+    )
+  UNION ALL
+  SELECT C.*
+    FROM __gp_masterid, gp_instrument_shmem_summary_f() as C (
+      segid int, num_free bigint, num_used bigint
+    ))
+SELECT segid, num_free, num_used
+FROM all_entries
+ORDER BY segid;
+GRANT SELECT ON gp_instrument_shmem_summary TO public;
+CREATE FUNCTION gp_instrument_shmem_detail_f()
+RETURNS SETOF RECORD
+AS '$libdir/gp_instrument_shmem', 'gp_instrument_shmem_detail'
+LANGUAGE C IMMUTABLE;
+GRANT EXECUTE ON FUNCTION gp_instrument_shmem_detail_f() TO public;
+CREATE VIEW gp_instrument_shmem_detail AS
+WITH all_entries AS (
+  SELECT C.*
+    FROM __gp_localid, gp_instrument_shmem_detail_f() as C (
+      tmid int4,ssid int4,ccnt int2,segid int2,pid int4
+      ,nid int2,tuplecount int8,nloops int8,ntuples int8
+    )
+  UNION ALL
+  SELECT C.*
+    FROM __gp_masterid, gp_instrument_shmem_detail_f() as C (
+      tmid int4,ssid int4,ccnt int2,segid int2,pid int4
+      ,nid int2,tuplecount int8,nloops int8,ntuples int8
+    ))
+SELECT tmid, ssid, ccnt,segid, pid, nid, tuplecount, nloops, ntuples
+FROM all_entries
+ORDER BY segid;
+GRANT SELECT ON gp_instrument_shmem_detail TO public;
+CREATE TABLE a (id int) DISTRIBUTED BY (id);
+INSERT INTO a SELECT * FROM generate_series(1, 50);
+SET OPTIMIZER=OFF;
+ANALYZE a;
+-- Expected result is 1 row, means only current query in instrument slots,
+-- If more than one row returned, means previous test has leaked slots.
+SELECT count(*) FROM (SELECT 1 FROM gp_instrument_shmem_detail GROUP BY ssid, ccnt) t;
+ count 
+-------
+     1
+(1 row)
+
+-- regression to EXPLAN ANALZE
+EXPLAIN ANALYZE SELECT 1/0;
+ERROR:  division by zero
+EXPLAIN ANALYZE SELECT count(*) FROM a where id < (1/(select count(*) where 1=0));
+ERROR:  division by zero  (seg0 slice1 10.152.10.43:20000 pid=25058)
+EXPLAIN ANALYZE SELECT count(*) FROM a a1, a a2, a a3;
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=20000004472.03..20000004472.04 rows=1 width=8) (actual time=96.610..96.611 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=20000004472.00..20000004472.03 rows=1 width=8) (actual time=69.510..96.579 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=20000004472.00..20000004472.01 rows=1 width=8) (actual time=67.862..67.862 rows=1 loops=1)
+               ->  Nested Loop  (cost=20000000000.00..20000004159.50 rows=41667 width=0) (actual time=2.382..47.763 rows=45000 loops=1)
+                     ->  Nested Loop  (cost=10000000000.00..10000000090.88 rows=834 width=0) (actual time=0.119..1.151 rows=900 loops=1)
+                           ->  Seq Scan on a a1  (cost=0.00..3.50 rows=17 width=0) (actual time=0.053..0.073 rows=18 loops=1)
+                           ->  Materialize  (cost=0.00..6.25 rows=50 width=0) (actual time=0.003..0.029 rows=50 loops=18)
+                                 ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..5.50 rows=50 width=0) (actual time=0.038..0.109 rows=50 loops=1)
+                                       ->  Seq Scan on a a2  (cost=0.00..3.50 rows=17 width=0) (actual time=0.064..0.083 rows=18 loops=1)
+                     ->  Materialize  (cost=0.00..6.25 rows=50 width=0) (actual time=0.003..0.024 rows=50 loops=901)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..5.50 rows=50 width=0) (actual time=2.114..2.215 rows=50 loops=1)
+                                 ->  Seq Scan on a a3  (cost=0.00..3.50 rows=17 width=0) (actual time=0.060..0.079 rows=18 loops=1)
+ Planning time: 2.304 ms
+   (slice0)    Executor memory: 127K bytes.
+   (slice1)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
+   (slice2)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
+   (slice3)    Executor memory: 128K bytes avg x 3 workers, 128K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 122.910 ms
+(20 rows)
+
+EXPLAIN SELECT 1/0;
+ERROR:  division by zero
+EXPLAIN SELECT count(*) FROM a where id < (1/(select count(*) where 1=0));
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=3.85..3.86 rows=1 width=8)
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Aggregate  (cost=0.01..0.02 rows=1 width=8)
+           ->  Result  (cost=0.00..0.01 rows=1 width=0)
+                 One-Time Filter: false
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3.79..3.82 rows=1 width=8)
+         ->  Partial Aggregate  (cost=3.79..3.80 rows=1 width=8)
+               ->  Seq Scan on a  (cost=0.00..3.75 rows=6 width=0)
+                     Filter: (id < (1 / $0))
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+EXPLAIN SELECT count(*) FROM a a1, a a2, a a3;
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=20000004472.03..20000004472.04 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=20000004472.00..20000004472.03 rows=1 width=8)
+         ->  Partial Aggregate  (cost=20000004472.00..20000004472.01 rows=1 width=8)
+               ->  Nested Loop  (cost=20000000000.00..20000004159.50 rows=41667 width=0)
+                     ->  Nested Loop  (cost=10000000000.00..10000000090.88 rows=834 width=0)
+                           ->  Seq Scan on a a1  (cost=0.00..3.50 rows=17 width=0)
+                           ->  Materialize  (cost=0.00..6.25 rows=50 width=0)
+                                 ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..5.50 rows=50 width=0)
+                                       ->  Seq Scan on a a2  (cost=0.00..3.50 rows=17 width=0)
+                     ->  Materialize  (cost=0.00..6.25 rows=50 width=0)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..5.50 rows=50 width=0)
+                                 ->  Seq Scan on a a3  (cost=0.00..3.50 rows=17 width=0)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+-- Expected result is 1 row, means only current query in instrument slots,
+-- If more than one row returned, means previous test has leaked slots.
+SELECT count(*) FROM (SELECT 1 FROM gp_instrument_shmem_detail GROUP BY ssid, ccnt) t;
+ count 
+-------
+     1
+(1 row)
+
+DROP SCHEMA QUERY_METRICS CASCADE;
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to foreign table __gp_localid
+drop cascades to foreign table __gp_masterid
+drop cascades to function gp_instrument_shmem_summary_f()
+drop cascades to view gp_instrument_shmem_summary
+drop cascades to function gp_instrument_shmem_detail_f()
+drop cascades to view gp_instrument_shmem_detail
+drop cascades to table a

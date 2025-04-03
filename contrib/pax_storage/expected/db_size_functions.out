@@ -1,0 +1,127 @@
+--
+-- Tests on the table and index size variants.
+--
+CREATE TABLE paxsizetest (a int) with (compresstype=none);
+-- First test with an empty table and no indexes. Should be all zeros.
+select pg_relation_size('paxsizetest');
+ pg_relation_size 
+------------------
+                0
+(1 row)
+
+select pg_table_size('paxsizetest');
+ pg_table_size 
+---------------
+             0
+(1 row)
+
+select pg_indexes_size('paxsizetest');
+ pg_indexes_size 
+-----------------
+               0
+(1 row)
+
+select pg_total_relation_size('paxsizetest');
+ pg_total_relation_size 
+------------------------
+                      0
+(1 row)
+
+-- Now test with a non-empty table (still no indexes, though).
+insert into paxsizetest select generate_series(1, 100000);
+vacuum paxsizetest;
+-- Check that the values are in an expected size. 
+-- if pax proto buffer changed, the size will be changed.
+select pg_relation_size('paxsizetest');
+ pg_relation_size 
+------------------
+           400351
+(1 row)
+
+select pg_table_size('paxsizetest');
+ pg_table_size 
+---------------
+        400351
+(1 row)
+
+select pg_indexes_size('paxsizetest');
+ pg_indexes_size 
+-----------------
+               0
+(1 row)
+
+select pg_total_relation_size('paxsizetest');
+ pg_total_relation_size 
+------------------------
+                 400351
+(1 row)
+
+-- Check that the values are in an expected ranges.
+select pg_relation_size('paxsizetest') between 400000 and 450000; -- 400351
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_table_size('paxsizetest') between 400000 and 450000; -- 400351
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_table_size('paxsizetest') >= pg_relation_size('paxsizetest');
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_indexes_size('paxsizetest'); -- 0
+ pg_indexes_size 
+-----------------
+               0
+(1 row)
+
+select pg_total_relation_size('paxsizetest') between 400000 and 450000; -- 400351
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_total_relation_size('paxsizetest') = pg_table_size('paxsizetest'); -- true
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Now also indexes
+create index on paxsizetest(a);
+select pg_relation_size('paxsizetest') between 400000 and 450000; -- 400351
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_table_size('paxsizetest') between 400000 and 450000; -- 400351
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_indexes_size('paxsizetest') between 2000000 and 3000000; -- 2490368
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_total_relation_size('paxsizetest') between 2000000 and 3000000; -- 2890719
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_total_relation_size('paxsizetest') = pg_table_size('paxsizetest') + pg_indexes_size('paxsizetest');
+ ?column? 
+----------
+ t
+(1 row)
+

@@ -1,4 +1,3 @@
-
 # Copyright (c) 2021, PostgreSQL Global Development Group
 
 use strict;
@@ -2189,15 +2188,15 @@ my %tests = (
 	'CREATE DYNAMIC TABLE dynamic_table' => {
 		create_order => 28,
 		create_sql   => 'CREATE DYNAMIC TABLE dump_test.dynamic_table (col1) AS
-					   SELECT col1 FROM dump_test.test_table;',
-		regexp => qr/^
-			\QCREATE DYNAMIC TABLE dump_test.dynamic_table AS\E
+					SELECT col1 FROM dump_test.test_table;',
+		regexp => qr{^
+			\QCREATE DYNAMIC TABLE dump_test.dynamic_table SCHEDULE '\E\*/5\ \*\ \*\ \*\ \*\Q' AS\E
 			\n\s+\QSELECT test_table.col1\E
 			\n\s+\QFROM dump_test.test_table\E
 			\n\s+\QWITH NO DATA;\E
-			/xm,
+			}xm,
 		like =>
-		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		{ %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
 		unlike => { exclude_dump_test_schema => 1, },
 	},
 
@@ -3958,6 +3957,7 @@ foreach my $run (sort keys %pgdump_runs)
 			if (!ok($output_file =~ $tests{$test}->{regexp},
 					"$run: should dump $test"))
 			{
+				diag("gongxun regexp: $tests{$test}->{regexp}");
 				diag("Review $run results in $tempdir");
 			}
 		}

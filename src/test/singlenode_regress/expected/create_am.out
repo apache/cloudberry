@@ -128,7 +128,7 @@ CREATE ACCESS METHOD bogus TYPE TABLE HANDLER int4in;
 ERROR:  function int4in(internal) does not exist
 CREATE ACCESS METHOD bogus TYPE TABLE HANDLER bthandler;
 ERROR:  function bthandler must return type table_am_handler
-SELECT amname, amhandler, amtype FROM pg_am where amtype = 't' ORDER BY 1, 2;
+SELECT amname, amhandler, amtype FROM pg_am where amtype = 't' and amname not in ('pax') ORDER BY 1, 2;
   amname   |         amhandler         | amtype 
 -----------+---------------------------+--------
  ao_column | ao_column_tableam_handler | t

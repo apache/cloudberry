@@ -32,6 +32,9 @@ all:
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo all
 endif
+ifeq ($(enable_pax), yes)
+	$(MAKE) -C contrib/pax_storage all
+endif
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
 	+@echo "All of Apache Cloudberry successfully made. Ready to install."
@@ -73,6 +76,9 @@ install:
 	$(MAKE) -C contrib/tablefunc $@
 	$(MAKE) -C contrib/passwordcheck $@
 	$(MAKE) -C contrib/pg_buffercache $@
+ifeq ($(enable_pax), yes)
+	$(MAKE) -C contrib/pax_storage $@
+endif
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo $@
 endif
@@ -180,6 +186,9 @@ ICW_TARGETS += contrib/extprotocol contrib/dblink contrib/pg_trgm
 ICW_TARGETS += contrib/indexscan contrib/hstore contrib/pgcrypto
 ICW_TARGETS += contrib/tablefunc contrib/passwordcheck
 ICW_TARGETS += contrib/pg_buffercache
+ifeq ($(enable_pax), yes)
+ICW_TARGETS += contrib/pax_storage
+endif
 # sslinfo depends on openssl
 ifeq ($(with_openssl), yes)
 ICW_TARGETS += contrib/sslinfo

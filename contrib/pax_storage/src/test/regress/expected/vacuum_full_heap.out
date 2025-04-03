@@ -1,0 +1,159 @@
+drop table if exists vfheap;
+create table vfheap (a, b, c) as
+select 1, i, repeat('x', 1000) from generate_series(1, 100)i distributed by (a);
+analyze vfheap;
+create index ivfheap on vfheap(b, c);
+-- delete half of table
+delete from vfheap where b between 0 and (select count(*) / 2 from vfheap);
+select pg_relation_size('vfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+           131072
+(1 row)
+
+select pg_relation_size('ivfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+           196608
+(1 row)
+
+-- show pages are truncated
+-- GPDB-specific: VACUUM FULL on heap gives proper relpages and reltuples
+select relname, relpages, reltuples, gp_segment_id from gp_dist_random('pg_class') where oid = 'vfheap'::regclass;
+ relname | relpages | reltuples | gp_segment_id 
+---------+----------+-----------+---------------
+ vfheap  |        0 |         0 |             0
+ vfheap  |        4 |       100 |             1
+ vfheap  |        0 |         0 |             2
+(3 rows)
+
+vacuum full vfheap;
+select relname, relpages, reltuples, gp_segment_id from gp_dist_random('pg_class') where oid = 'vfheap'::regclass;
+ relname | relpages | reltuples | gp_segment_id 
+---------+----------+-----------+---------------
+ vfheap  |        2 |        50 |             1
+ vfheap  |        0 |         0 |             2
+ vfheap  |        0 |         0 |             0
+(3 rows)
+
+select pg_relation_size('vfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+            65536
+(1 row)
+
+select pg_relation_size('ivfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+           131072
+(1 row)
+
+select max(b), min(length(c)) from vfheap;
+ max | min  
+-----+------
+ 100 | 1000
+(1 row)
+
+-- check relpages and reltuples
+select relname, relpages, reltuples from gp_dist_random('pg_class') where (oid = 'vfheap'::regclass or oid = 'ivfheap'::regclass) and gp_segment_id = 1;
+ relname | relpages | reltuples 
+---------+----------+-----------
+ vfheap  |        2 |        50
+ ivfheap |        4 |        50
+(2 rows)
+
+-- just for the sake of code coverage, one more shot of vacuum full
+vacuum full vfheap;
+-- delete completely, size becomes 0, reducing index too
+delete from vfheap;
+vacuum full vfheap;
+select pg_relation_size('vfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+                0
+(1 row)
+
+select pg_relation_size('ivfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+            32768
+(1 row)
+
+-- check relpages and reltuples (VACUUM FULL clears them)
+select relname, relpages, reltuples from gp_dist_random('pg_class') where (oid = 'vfheap'::regclass or oid = 'ivfheap'::regclass) and gp_segment_id = 1;
+ relname | relpages | reltuples 
+---------+----------+-----------
+ vfheap  |        0 |         0
+ ivfheap |        0 |        -1
+(2 rows)
+
+-- again, but delete second half
+insert into vfheap select 1, i, repeat('x', 1000) from generate_series(1, 100)i;
+delete from vfheap where b between (select count(*) / 2 from vfheap) and (select count(*) from vfheap);
+select pg_relation_size('vfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+           131072
+(1 row)
+
+select pg_relation_size('ivfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+           196608
+(1 row)
+
+-- show pages are truncated
+vacuum full vfheap;
+select pg_relation_size('vfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+            65536
+(1 row)
+
+select pg_relation_size('ivfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+           131072
+(1 row)
+
+select max(b), min(length(c)) from vfheap;
+ max | min  
+-----+------
+  49 | 1000
+(1 row)
+
+-- also make sure toast is truncated
+drop table if exists vfheaptoast;
+create table vfheaptoast (a, b, c) as
+select 1, i, array(select generate_series(1, 10000)) from generate_series(1, 100)i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze vfheaptoast;
+select pg_relation_size((select reltoastrelid from pg_class where oid = 'vfheaptoast'::regclass)) from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+          4096000
+(1 row)
+
+delete from vfheaptoast where b between 0 and (select count(*) / 2 from vfheaptoast);
+vacuum full vfheaptoast;
+select pg_relation_size((select reltoastrelid from pg_class where oid = 'vfheaptoast'::regclass)) from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+          2064384
+(1 row)
+
+select max(b), min(length(array_to_string(c, ','))) from vfheaptoast;
+ max |  min  
+-----+-------
+ 100 | 48893
+(1 row)
+
+delete from vfheaptoast;
+vacuum full vfheaptoast;
+select pg_relation_size((select reltoastrelid from pg_class where oid = 'vfheaptoast'::regclass)) from gp_dist_random('gp_id') where gp_segment_id = 1;
+ pg_relation_size 
+------------------
+                0
+(1 row)
+

@@ -1,0 +1,1232 @@
+DROP DATABASE IF EXISTS testanalyze;
+CREATE DATABASE testanalyze;
+\c testanalyze
+set client_min_messages='WARNING';
+-- Case 1: Analyzing root table with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set off should only populate stats for leaf tables
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |         0 |        1
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |         0 |        1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |         0 |        1
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |         0 |        1
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 2: Analyzing a midlevel partition directly should give a WARNING message and should not update any stats for the table.
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze p3_sales_1_prt_2;
+WARNING:  skipping "p3_sales_1_prt_2" --- cannot analyze a mid-level partition. Please run ANALYZE on the root partition table.
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+(0 rows)
+
+-- Case 3: Analyzing leaf table directly should update the stats only for itself
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze p3_sales_1_prt_2_2_prt_2_3_prt_usa;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 4: Analyzing the database with the GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to OFF should only update stats for leaf partition tables
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |         0 |        1
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |         0 |        1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |         0 |        1
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |         0 |        1
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 5: Vacuum analyzing the database should vacuum all the tables for p3_sales and should only update the stats for all leaf partitions of p3_sales
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+vacuum analyze;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |         0 |        1
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |         0 |        1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |         0 |        1
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |         0 |        1
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+select count(*) from pg_stat_last_operation pgl, pg_class pgc where pgl.objid=pgc.oid and pgc.relname like 'p3_sales%';
+ count 
+-------
+    45
+(1 row)
+
+-- Case 6: Analyzing root table with ROOTPARTITION keyword should only update the stats of the root table when the GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition are set off
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 7: Analyzing a midlevel partition should give a warning if using ROOTPARTITION keyword and should not update any stats.
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales_1_prt_2;
+WARNING:  skipping "p3_sales_1_prt_2" --- cannot analyze a non-root partition using ANALYZE ROOTPARTITION
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+(0 rows)
+
+-- Case 8: Analyzing a leaf partition should give a warning if using ROOTPARTITION keyword and should not update any stats.
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales_1_prt_2_2_prt_2_3_prt_usa;
+WARNING:  skipping "p3_sales_1_prt_2_2_prt_2_3_prt_usa" --- cannot analyze a non-root partition using ANALYZE ROOTPARTITION
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+(0 rows)
+
+-- Case 9: Analyzing root table with GUC optimizer_analyze_root_partition set to ON and GUC optimizer_analyze_midlevel_partition set to off should update the leaf table and the root table stats.
+set optimizer_analyze_root_partition=on;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |         0 |        1
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |         0 |        1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |         0 |        1
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |         0 |        1
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales                           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |             |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(10 rows)
+
+-- Case 10: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition set to ON and GUC optimizer_analyze_midlevel_partition set to off should update the root table stats only.
+set optimizer_analyze_root_partition=on;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 11: Analyzing root table with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to ON should update the stats for root, midlevel and leaf partitions.
+set optimizer_analyze_root_partition=on;
+set optimizer_analyze_midlevel_partition=on;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |         2 |       -1
+ p3_sales_1_prt_2_2_prt_2                                        |         2 |       -1
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |         0 |        1
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |         0 |       -1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |         0 |        1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |         0 |        1
+ p3_sales_1_prt_outlying_years                                   |         0 |       -1
+ p3_sales_1_prt_outlying_years_2_prt_2                           |         0 |       -1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |         0 |       -1
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |         0 |        1
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales                           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |             |                   |                        | 
+ public     | p3_sales                           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |             |                   |                        | 
+ public     | p3_sales_1_prt_2                   | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(20 rows)
+
+-- Case 12: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to ON should only update the stats for root partition.
+set optimizer_analyze_root_partition=on;
+set optimizer_analyze_midlevel_partition=on;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 13: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to OFF should update the stats for root partition only.
+set optimizer_analyze_root_partition=on;
+set optimizer_analyze_midlevel_partition=off;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- Case 14: Analyzing root table with GUC optimizer_analyze_root_partition set to OFF and optimizer_analyze_midlevel_partition set to On should update the stats for midlevel and leaf partition only.
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=on;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |        -1 |        0
+ p3_sales_1_prt_2                                                |         2 |       -1
+ p3_sales_1_prt_2_2_prt_2                                        |         2 |       -1
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |         0 |        1
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |         2 |        1
+ p3_sales_1_prt_2_2_prt_other_months                             |         0 |       -1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |         0 |        1
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |         0 |        1
+ p3_sales_1_prt_outlying_years                                   |         0 |       -1
+ p3_sales_1_prt_outlying_years_2_prt_2                           |         0 |       -1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |         0 |        1
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |         0 |       -1
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |         0 |        1
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales_1_prt_2                   | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2                   | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(15 rows)
+
+-- Case 15: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition set to OFF and optimizer_analyze_midlevel_partition set to ON should only update the stats for root only.
+set optimizer_analyze_root_partition=off;
+set optimizer_analyze_midlevel_partition=on;
+DROP TABLE if exists p3_sales;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY RANGE (month)
+       SUBPARTITION TEMPLATE (
+        START (1) END (2) EVERY (1),
+        DEFAULT SUBPARTITION other_months )
+           SUBPARTITION BY LIST (region)
+             SUBPARTITION TEMPLATE (
+               SUBPARTITION usa VALUES ('usa'),
+               DEFAULT SUBPARTITION other_regions )
+( START (2002) END (2003) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+insert into p3_sales values (1, 2002, 1, 20, 'usa');
+analyze rootpartition p3_sales;
+select relname, reltuples, relpages from pg_class where relname like 'p3_sales%' order by relname;
+                             relname                             | reltuples | relpages 
+-----------------------------------------------------------------+-----------+----------
+ p3_sales                                                        |         2 |       -1
+ p3_sales_1_prt_2                                                |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2                                        |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_other_regions                    |        -1 |        0
+ p3_sales_1_prt_2_2_prt_2_3_prt_usa                              |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months                             |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_other_regions         |        -1 |        0
+ p3_sales_1_prt_2_2_prt_other_months_3_prt_usa                   |        -1 |        0
+ p3_sales_1_prt_outlying_years                                   |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2                           |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_other_regions       |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_2_3_prt_usa                 |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_m_3_prt_other_regions |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months                |        -1 |        0
+ p3_sales_1_prt_outlying_years_2_prt_other_months_3_prt_usa      |        -1 |        0
+(15 rows)
+
+select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+(5 rows)
+
+-- start_ignore
+DROP TABLE IF EXISTS p3_sales;
+-- end_ignore
+--
+-- Test statistics collection on very large datums. In the current implementation,
+-- they are left out of the sample, to avoid running out of memory for the main relation
+-- statistics. In case of indexes on the relation, large datums are masked as NULLs in the sample
+-- and are evaluated as NULL in index stats collection.
+-- Expression / partial indexes are not commonly used, and its rare to have them on wide columns, so the
+-- effect of considering them as NULL is minimal.
+--
+CREATE TABLE foo_stats (a text, b bytea, c varchar, d int) DISTRIBUTED RANDOMLY;
+CREATE INDEX expression_idx_foo_stats ON foo_stats (upper(a));
+INSERT INTO foo_stats values ('aaa', 'bbbbb', 'cccc', 2);
+INSERT INTO foo_stats values ('aaa', 'bbbbb', 'cccc', 2);
+-- Insert large datum values
+INSERT INTO foo_stats values (repeat('a', 3000), 'bbbbb2', 'cccc2', 3);
+INSERT INTO foo_stats values (repeat('a', 3000), 'bbbbb2', 'cccc2', 3);
+ANALYZE foo_stats;
+SELECT schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='foo_stats' ORDER BY attname;
+ schemaname | tablename | attname | null_frac | avg_width | n_distinct |          most_common_vals           | most_common_freqs | histogram_bounds 
+------------+-----------+---------+-----------+-----------+------------+-------------------------------------+-------------------+------------------
+ public     | foo_stats | a       |         0 |      1504 |      -0.25 |                                     |                   | 
+ public     | foo_stats | b       |         0 |         6 |       -0.5 | {"\\x6262626262","\\x626262626232"} | {0.5,0.5}         | 
+ public     | foo_stats | c       |         0 |         5 |       -0.5 | {cccc,cccc2}                        | {0.5,0.5}         | 
+ public     | foo_stats | d       |         0 |         4 |       -0.5 | {2,3}                               | {0.5,0.5}         | 
+(4 rows)
+
+SELECT schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='expression_idx_foo_stats' ORDER BY attname;
+ schemaname |        tablename         | attname | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
+------------+--------------------------+---------+-----------+-----------+------------+------------------+-------------------+------------------
+ public     | expression_idx_foo_stats | upper   |       0.5 |         7 |      -0.25 | {AAA}            | {0.5}             | 
+(1 row)
+
+DROP TABLE IF EXISTS foo_stats;
+-- Test the case that every value in a column is "very large".
+CREATE TABLE foo_stats (a text, b bytea, c varchar, d int) DISTRIBUTED RANDOMLY;
+alter table foo  alter column t set storage external;
+ERROR:  relation "foo" does not exist
+INSERT INTO foo_stats values (repeat('a', 100000), 'bbbbb2', 'cccc2', 3);
+INSERT INTO foo_stats values (repeat('b', 100000), 'bbbbb2', 'cccc2', 3);
+ANALYZE foo_stats;
+SELECT schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='foo_stats' ORDER BY attname;
+ schemaname | tablename | attname | null_frac | avg_width | n_distinct |  most_common_vals   | most_common_freqs | histogram_bounds 
+------------+-----------+---------+-----------+-----------+------------+---------------------+-------------------+------------------
+ public     | foo_stats | a       |         0 |    100004 |          0 |                     |                   | 
+ public     | foo_stats | b       |         0 |         7 |       -0.5 | {"\\x626262626232"} | {1}               | 
+ public     | foo_stats | c       |         0 |         6 |       -0.5 | {cccc2}             | {1}               | 
+ public     | foo_stats | d       |         0 |         4 |       -0.5 | {3}                 | {1}               | 
+(4 rows)
+
+DROP TABLE IF EXISTS foo_stats;
+--
+-- Test statistics collection with a "partially distributed" table. That is, with a table
+-- that has a smaller 'numsegments' in the distribution policy than the segment count
+-- of the cluster.
+--
+set allow_system_table_mods=true;
+create table twoseg_table(a int, b int, c int) distributed by (a);
+update gp_distribution_policy set numsegments=2 where localoid='twoseg_table'::regclass;
+insert into twoseg_table select i, i % 10, 0 from generate_series(1, 50) I;
+analyze twoseg_table;
+select relname, reltuples, relpages from pg_class where relname ='twoseg_table' order by relname;
+   relname    | reltuples | relpages 
+--------------+-----------+----------
+ twoseg_table |        50 |        1
+(1 row)
+
+select attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='twoseg_table' ORDER BY attname;
+ attname | null_frac | avg_width | n_distinct |   most_common_vals    |             most_common_freqs             |                                                                histogram_bounds                                                                
+---------+-----------+-----------+------------+-----------------------+-------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------
+ a       |         0 |         4 |         -1 |                       |                                           | {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50}
+ b       |         0 |         4 |       -0.2 | {0,1,2,3,4,5,6,7,8,9} | {0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1} | 
+ c       |         0 |         4 |          1 | {0}                   | {1}                                       | 
+(3 rows)
+
+drop table twoseg_table;
+--
+-- Test statistics collection on a replicated table.
+--
+create table rep_table(a int, b int, c int) distributed replicated;
+insert into rep_table select i, i % 10, 0 from generate_series(1, 50) I;
+analyze rep_table;
+select relname, reltuples, relpages from pg_class where relname ='rep_table' order by relname;
+  relname  | reltuples | relpages 
+-----------+-----------+----------
+ rep_table |        50 |        1
+(1 row)
+
+select attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='rep_table' ORDER BY attname;
+ attname | null_frac | avg_width | n_distinct |   most_common_vals    |             most_common_freqs             |                                                                histogram_bounds                                                                
+---------+-----------+-----------+------------+-----------------------+-------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------
+ a       |         0 |         4 |         -1 |                       |                                           | {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50}
+ b       |         0 |         4 |       -0.2 | {0,1,2,3,4,5,6,7,8,9} | {0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1} | 
+ c       |         0 |         4 |          1 | {0}                   | {1}                                       | 
+(3 rows)
+
+drop table rep_table;
+--
+-- Test relpages collection for AO tables.
+--
+-- use a lower target, so that the whole table doesn't fit in the sample.
+set default_statistics_target=10;
+create table ao_analyze_test (i int4) with (appendonly=true);
+insert into ao_analyze_test select g from generate_series(1, 100000) g;
+create index ao_analyze_test_idx on ao_analyze_test (i);
+analyze ao_analyze_test;
+select relname, reltuples from pg_class where relname like 'ao_analyze_test%' order by relname;
+       relname       | reltuples 
+---------------------+-----------
+ ao_analyze_test     |    100000
+ ao_analyze_test_idx |    100000
+(2 rows)
+
+-- and same for AOCS
+create table aocs_analyze_test (i int4) with (appendonly=true, orientation=column);
+insert into aocs_analyze_test select g from generate_series(1, 100000) g;
+create index aocs_analyze_test_idx on aocs_analyze_test (i);
+analyze aocs_analyze_test;
+select relname, reltuples from pg_class where relname like 'aocs_analyze_test%' order by relname;
+        relname        | reltuples 
+-----------------------+-----------
+ aocs_analyze_test     |    100000
+ aocs_analyze_test_idx |    100000
+(2 rows)
+
+reset default_statistics_target;
+-- Test column name called totalrows
+create table test_tr (totalrows int4);
+analyze test_tr;
+drop table test_tr;
+--
+-- Test with both a dropped column and an oversized column
+-- (github issue https://github.com/greenplum-db/gpdb/issues/9503)
+--
+create table analyze_dropped_col (a text, b text, c text, d text);
+insert into analyze_dropped_col values('a','bbb', repeat('x', 5000), 'dddd');
+alter table analyze_dropped_col drop column b;
+analyze analyze_dropped_col;
+select attname, null_frac, avg_width, n_distinct from pg_stats where tablename ='analyze_dropped_col';
+ attname | null_frac | avg_width | n_distinct 
+---------+-----------+-----------+------------
+ a       |         0 |         2 |         -1
+ c       |         0 |      5004 |          0
+ d       |         0 |         5 |         -1
+(3 rows)
+
+-- Test analyze without USAGE privilege on schema
+create schema test_ns;
+revoke all on schema test_ns from public;
+create role nsuser1;
+grant create on schema test_ns to nsuser1;
+set search_path to 'test_ns';
+create extension citext;
+create table testid (id int , test citext);
+alter table testid owner to nsuser1;
+analyze testid;
+drop table testid;
+drop extension citext;
+drop schema test_ns;
+drop role nsuser1;
+set search_path to default;
+--
+-- Test analyze on inherited table.
+-- We used to have a bug for acquiring sample rows on QE. It always return
+-- rows for all inherited tables even the QD only wants samples for parent table's.
+--
+CREATE TABLE ana_parent (aa int);
+CREATE TABLE ana_c1 (bb text) INHERITS (ana_parent);
+CREATE TABLE ana_c2 (cc text) INHERITS (ana_c1);
+INSERT INTO ana_c1 SELECT i, 'bb' FROM generate_series(1, 10) AS i;
+INSERT INTO ana_c2 SELECT i, 'bb', 'cc' FROM generate_series(10, 20) AS i;
+ANALYZE ana_parent;
+ANALYZE ana_c1;
+ANALYZE ana_c2;
+-- Check pg_class entry
+SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_parent';
+ relpages | reltuples 
+----------+-----------
+        1 |         0
+(1 row)
+
+SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c1';
+ relpages | reltuples 
+----------+-----------
+        1 |        10
+(1 row)
+
+SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c2';
+ relpages | reltuples 
+----------+-----------
+        1 |        11
+(1 row)
+
+-- Check pg_stats entries
+SELECT * FROM pg_stats WHERE tablename = 'ana_parent';
+ schemaname | tablename  | attname | inherited | null_frac | avg_width | n_distinct  | most_common_vals | most_common_freqs |                 histogram_bounds                  | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+------------+---------+-----------+-----------+-----------+-------------+------------------+-------------------+---------------------------------------------------+-------------+-------------------+------------------------+----------------------
+ public     | ana_parent | aa      | t         |         0 |         4 | -0.95238096 | {10}             | {0.0952381}       | {1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20} |           1 |                   |                        | 
+(1 row)
+
+SELECT * FROM pg_stats WHERE tablename = 'ana_c1';
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct  | most_common_vals | most_common_freqs |                 histogram_bounds                  | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+-------------+------------------+-------------------+---------------------------------------------------+-------------+-------------------+------------------------+----------------------
+ public     | ana_c1    | aa      | f         |         0 |         4 |          -1 |                  |                   | {1,2,3,4,5,6,7,8,9,10}                            |           1 |                   |                        | 
+ public     | ana_c1    | bb      | f         |         0 |         3 |           1 | {bb}             | {1}               |                                                   |           1 |                   |                        | 
+ public     | ana_c1    | aa      | t         |         0 |         4 | -0.95238096 | {10}             | {0.0952381}       | {1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20} |           1 |                   |                        | 
+ public     | ana_c1    | bb      | t         |         0 |         3 |           1 | {bb}             | {1}               |                                                   |           1 |                   |                        | 
+(4 rows)
+
+SELECT * FROM pg_stats WHERE tablename = 'ana_c2';
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs |          histogram_bounds          | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------------------------+-------------+-------------------+------------------------+----------------------
+ public     | ana_c2    | aa      | f         |         0 |         4 |         -1 |                  |                   | {10,11,12,13,14,15,16,17,18,19,20} |           1 |                   |                        | 
+ public     | ana_c2    | bb      | f         |         0 |         3 |          1 | {bb}             | {1}               |                                    |           1 |                   |                        | 
+ public     | ana_c2    | cc      | f         |         0 |         3 |          1 | {cc}             | {1}               |                                    |           1 |                   |                        | 
+(3 rows)
+
+-- test correlation of the table
+-- test1: there is no data
+drop table analyze_test;
+ERROR:  table "analyze_test" does not exist
+create table analyze_test(tc1 int,tc2 int);
+analyze analyze_test;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_test';
+ correlation 
+-------------
+(0 rows)
+
+-- test2: there is only 1 tuple in the table
+drop table analyze_table;
+ERROR:  table "analyze_table" does not exist
+create table analyze_table(tc1 int,tc2 int);
+insert into analyze_table values(1,1);
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+            
+            
+(2 rows)
+
+-- test3: there are 2 tuples in the table but on different segemnts
+drop table analyze_table;
+create table analyze_table(tc1 int,tc2 int);
+insert into analyze_table values(1,1);
+insert into analyze_table values(2,0);
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+            
+            
+(2 rows)
+
+-- test4: some columns have no value
+drop table analyze_table;
+create table analyze_table(tc1 int,tc2 int);
+insert into analyze_table(tc2) values(1);
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+            
+            
+(2 rows)
+
+drop table analyze_table;
+create table analyze_table(tc1 int,tc2 int);
+insert into analyze_table(tc2) values(1);
+insert into analyze_table values(2,0);
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+            
+          -1
+(2 rows)
+
+-- test5: some columns are dropped for a table
+drop table analyze_table;
+create table analyze_table(tc1 int,tc2 int,tc3 int);
+insert into analyze_table values(1,1,1);
+alter table analyze_table drop column tc2;
+insert into analyze_table(tc1) values(1);
+insert into analyze_table values(2,0);
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+           1
+            
+(2 rows)
+
+-- test6: randomly table
+-- we use weighted mean algorithm to calculate correlations.
+-- the formula for calculating the weighted mean is:
+-- sum(correlationOnSeg[i] * (totalRowsOnSeg[i] / totalRows))
+-- i is from 0 to N. N is the number of segments.
+-- however, for randomly table the data in each segment may diff each time.
+-- it will affect the value of correlation.
+-- So ignore the results
+drop table analyze_table;
+create table analyze_table(tc1 int,tc2 int) distributed randomly;
+insert into analyze_table select i,i from generate_series(1,100) i;
+analyze analyze_table;
+-- start_ignore
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+           1
+           1
+(2 rows)
+
+-- end_ignore
+alter table analyze_table drop column tc1;
+analyze analyze_table;
+-- start_ignore
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+           1
+(1 row)
+
+-- end_ignore
+-- test7: replicated table
+drop table analyze_table;
+create table analyze_table(tc1 int,tc2 int) distributed replicated;
+insert into analyze_table select i,i from generate_series(1,100) i;
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+           1
+           1
+(2 rows)
+
+analyze analyze_table;
+SELECT correlation FROM pg_stats WHERE tablename ='analyze_table';
+ correlation 
+-------------
+           1
+           1
+(2 rows)
+
+-- test8: inherit table
+drop table analyze_parent cascade;
+ERROR:  table "analyze_parent" does not exist
+create table analyze_parent (tc1 int,tc2 int);
+create table analyze_child(tc3 int,tc4 int)inherits (analyze_parent);
+insert into analyze_parent values(5,5);
+insert into analyze_child values (4,4,4,4);
+insert into analyze_parent select * from analyze_parent;
+analyze analyze_parent;
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='analyze_parent';
+ correlation | attname | inherited 
+-------------+---------+-----------
+           1 | tc1     | f
+           1 | tc2     | f
+           1 | tc1     | t
+           1 | tc2     | t
+(4 rows)
+
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='analyze_child';
+ correlation | attname | inherited 
+-------------+---------+-----------
+(0 rows)
+
+-- test9: partition table test
+CREATE TABLE partition_table (
+    tc1 int,
+    tc2 int
+)
+PARTITION BY RANGE (tc2)
+(
+    start (1) end (100) every(20)
+);
+insert into partition_table select i,i from generate_series(1,99) i;
+analyze partition_table;
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='partition_table';
+ correlation | attname | inherited 
+-------------+---------+-----------
+(0 rows)
+
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='partition_table_1_prt_1';
+ correlation | attname | inherited 
+-------------+---------+-----------
+           1 | tc1     | f
+           1 | tc2     | f
+(2 rows)
+
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='partition_table_1_prt_2';
+ correlation | attname | inherited 
+-------------+---------+-----------
+           1 | tc1     | f
+           1 | tc2     | f
+(2 rows)
+
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='partition_table_1_prt_3';
+ correlation | attname | inherited 
+-------------+---------+-----------
+  0.99999994 | tc1     | f
+  0.99999994 | tc2     | f
+(2 rows)
+
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='partition_table_1_prt_4';
+ correlation | attname | inherited 
+-------------+---------+-----------
+           1 | tc1     | f
+           1 | tc2     | f
+(2 rows)
+
+SELECT correlation,attname,inherited FROM pg_stats WHERE tablename ='partition_table_1_prt_5';
+ correlation | attname | inherited 
+-------------+---------+-----------
+           1 | tc1     | f
+           1 | tc2     | f
+(2 rows)
+
+--
+-- Test analyze for table with maximum float8 value 1.7976931348623157e+308
+-- There should be no "ERROR:  value out of range: overflow"
+--
+set extra_float_digits to 0;
+create table test_max_float8(a double precision);
+insert into test_max_float8 values(1.7976931348623157e+308);
+analyze test_max_float8;
+drop table test_max_float8;
+reset extra_float_digits;
+-- test analyze when table has large column
+create table ttt_large_column(tc1 int,tc2 char(1500),tc3 char(1500));
+insert into ttt_large_column select i,repeat('wwweereeer',150),repeat('ssddbbbbbb',150) from generate_series(1,5) i;
+analyze ttt_large_column;
+drop table ttt_large_column;
+--test analyze replicated table
+create table analyze_replicated(tc1 int,tc2 int) distributed replicated;
+insert into analyze_replicated select i, i from generate_series(1,1000) i;
+analyze analyze_replicated;
+drop table analyze_replicated;

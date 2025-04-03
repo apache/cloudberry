@@ -1,0 +1,2988 @@
+-- TODO: incremental sort is turned off by default, because it may have
+-- wrong result for some core case. Turn it on to run the existing tests
+-- and minimize the difference from upstream.
+set enable_incremental_sort=on;
+--
+-- Tests on partition pruning (with ORCA) or constraint exclusion (with the
+-- Postgres planner). These tests check that you get an "expected" plan, that
+-- only scans the partitions that are needed.
+--
+-- The "correct" plan for a given query depends a lot on the capabilities of
+-- the planner and the rest of the system, so the expected output can need
+-- updating, as the system improves.
+--
+-- GPDB_12_MERGE_FIXME: Many of these queries are no longer able to constraint
+-- exclusion, like we used to on GPDB 6. Not sure what we should do about it.
+-- See https://github.com/greenplum-db/gpdb/issues/10287.
+-- Use index scans when possible. That exercises more code, and allows us to
+-- spot the cases where the planner cannot use even when it exists.
+set enable_seqscan=off;
+set enable_bitmapscan=on;
+set enable_indexscan=on;
+create schema partition_pruning;
+set search_path to partition_pruning;
+-- Set up common test tables.
+CREATE TABLE pt_lt_tab
+(
+  col1 int,
+  col2 decimal,
+  col3 text,
+  col4 bool
+)
+distributed by (col1)
+partition by list(col2)
+(
+  partition part1 values(1,2,3,4,5,6,7,8,9,10),
+  partition part2 values(11,12,13,14,15,16,17,18,19,20),
+  partition part3 values(21,22,23,24,25,26,27,28,29,30),
+  partition part4 values(31,32,33,34,35,36,37,38,39,40),
+  partition part5 values(41,42,43,44,45,46,47,48,49,50)
+);
+INSERT INTO pt_lt_tab SELECT i, i,'a',True FROM generate_series(1,3)i;
+INSERT INTO pt_lt_tab SELECT i, i,'b',True FROM generate_series(4,6)i;
+INSERT INTO pt_lt_tab SELECT i, i,'c',True FROM generate_series(7,10)i;
+INSERT INTO pt_lt_tab SELECT i, i,'e',True FROM generate_series(11,13)i;
+INSERT INTO pt_lt_tab SELECT i, i,'f',True FROM generate_series(14,16)i;
+INSERT INTO pt_lt_tab SELECT i, i,'g',True FROM generate_series(17,20)i;
+INSERT INTO pt_lt_tab SELECT i, i,'i',False FROM generate_series(21,23)i;
+INSERT INTO pt_lt_tab SELECT i, i,'k',False FROM generate_series(24,26)i;
+INSERT INTO pt_lt_tab SELECT i, i,'h',False FROM generate_series(27,30)i;
+INSERT INTO pt_lt_tab SELECT i, i,'m',False FROM generate_series(31,33)i;
+INSERT INTO pt_lt_tab SELECT i, i,'o',False FROM generate_series(34,36)i;
+INSERT INTO pt_lt_tab SELECT i, i,'n',False FROM generate_series(37,40)i;
+INSERT INTO pt_lt_tab SELECT i, i,'p',False FROM generate_series(41,43)i;
+INSERT INTO pt_lt_tab SELECT i, i,'s',False FROM generate_series(44,46)i;
+INSERT INTO pt_lt_tab SELECT i, i,'q',False FROM generate_series(47,50)i;
+ANALYZE pt_lt_tab;
+-- pt_lt_tab_df is the same as pt_lt_tab, but with a default partition (and some
+-- values in the default partition, including NULLs).
+CREATE TABLE pt_lt_tab_df
+(
+  col1 int,
+  col2 decimal,
+  col3 text,
+  col4 bool
+)
+distributed by (col1)
+partition by list(col2)
+(
+  partition part1 VALUES(1,2,3,4,5,6,7,8,9,10),
+  partition part2 VALUES(11,12,13,14,15,16,17,18,19,20),
+  partition part3 VALUES(21,22,23,24,25,26,27,28,29,30),
+  partition part4 VALUES(31,32,33,34,35,36,37,38,39,40),
+  partition part5 VALUES(41,42,43,44,45,46,47,48,49,50),
+  default partition def
+);
+INSERT INTO pt_lt_tab_df SELECT i, i,'a',True FROM generate_series(1,3)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'b',True FROM generate_series(4,6)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'c',True FROM generate_series(7,10)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'e',True FROM generate_series(11,13)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'f',True FROM generate_series(14,16)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'g',True FROM generate_series(17,20)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'i',False FROM generate_series(21,23)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'k',False FROM generate_series(24,26)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'h',False FROM generate_series(27,30)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'m',False FROM generate_series(31,33)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'o',False FROM generate_series(34,36)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'n',False FROM generate_series(37,40)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'p',False FROM generate_series(41,43)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'s',False FROM generate_series(44,46)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'q',False FROM generate_series(47,50)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'u',True FROM generate_series(51,53)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'x',True FROM generate_series(54,56)i;
+INSERT INTO pt_lt_tab_df SELECT i, i,'w',True FROM generate_series(57,60)i;
+INSERT INTO pt_lt_tab_df VALUES(NULL,NULL,NULL,NULL);
+INSERT INTO pt_lt_tab_df VALUES(NULL,NULL,NULL,NULL);
+INSERT INTO pt_lt_tab_df VALUES(NULL,NULL,NULL,NULL);
+ANALYZE pt_lt_tab_df;
+--
+-- Test that stable functions are evaluated when constructing the plan. This
+-- differs from PostgreSQL. In PostgreSQL, PREPARE/EXECUTE creates a reusable
+-- plan, while in GPDB, we re-plan the query on every execution, so that the
+-- stable function is executed during planning, and we can therefore do
+-- partition pruning based on its result.
+--
+create or replace function stabletestfunc() returns integer as $$
+begin
+  return 10;
+end;
+$$ language plpgsql stable;
+PREPARE prep_prune AS select * from pt_lt_tab WHERE col2 = stabletestfunc();
+-- The plan should only scan one partition, where col2 = 10.
+EXPLAIN EXECUTE prep_prune;
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000003.15 rows=1 width=12)
+   ->  Seq Scan on pt_lt_tab_1_prt_part1 pt_lt_tab  (cost=10000000000.00..10000000001.04 rows=1 width=12)
+         Filter: (col2 = '10'::numeric)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- Also test that Params are const-evaluated.
+PREPARE prep_prune_param AS select * from pt_lt_tab WHERE col2 = $1;
+EXPLAIN EXECUTE prep_prune_param(10);
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000003.15 rows=1 width=12)
+   ->  Seq Scan on pt_lt_tab_1_prt_part1 pt_lt_tab  (cost=10000000000.00..10000000001.04 rows=1 width=12)
+         Filter: (col2 = '10'::numeric)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- @description B-tree single index key = non-partitioning key
+CREATE INDEX idx1 on pt_lt_tab(col1);
+SELECT * FROM pt_lt_tab WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=540.98..541.05 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=540.98..541.19 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=540.98..540.99 rows=5 width=12)
+               ->  Sort  (cost=540.98..540.99 rows=7 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..540.88 rows=7 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..364.23 rows=3 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+(0 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=220.85..220.92 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=220.85..221.02 rows=12 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=220.85..220.86 rows=4 width=12)
+               ->  Sort  (cost=220.85..220.86 rows=5 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..220.79 rows=5 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 = 25 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   25 |   25 | k    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 = 25 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=220.85..220.92 rows=5 width=12)
+   ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=220.85..221.02 rows=12 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=220.85..220.86 rows=4 width=12)
+               ->  Sort  (cost=220.85..220.86 rows=5 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..220.79 rows=5 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 = 25)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 = 25)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 = 25)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 = 25)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 = 25)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 <> 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 <> 10 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=50000000005.54..50000000005.61 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=50000000005.54..50000000005.75 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=50000000005.54..50000000005.55 rows=5 width=12)
+               ->  Sort  (cost=50000000005.53..50000000005.57 rows=15 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=10000000000.00..50000000005.28 rows=15 width=12)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col1 <> 10)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col1 <> 10)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col1 <> 10)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col1 <> 10)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col1 <> 10)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 > 10 AND col1 < 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 > 10 AND col1 < 50 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1621.52..1621.59 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1621.52..1621.73 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=1621.52..1621.53 rows=5 width=12)
+               ->  Sort  (cost=1621.52..1621.55 rows=14 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..1621.28 rows=14 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 > 10) AND (col1 < 50))
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col1 > 10) AND (col1 < 50))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col1 > 10) AND (col1 < 50))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col1 > 10) AND (col1 < 50))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..364.25 rows=3 width=12)
+                                 Index Cond: ((col1 > 10) AND (col1 < 50))
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 > 10 OR col1 = 25 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 > 10 OR col1 = 25 ORDER BY col2,col3 LIMIT 5;
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1862.23..1862.30 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1862.23..1862.44 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=1862.23..1862.24 rows=5 width=12)
+               ->  Sort  (cost=1862.23..1862.26 rows=14 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=80.29..1861.99 rows=14 width=12)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=80.29..84.30 rows=1 width=12)
+                                 Recheck Cond: ((col1 > 10) OR (col1 = 25))
+                                 ->  BitmapOr  (cost=80.29..80.29 rows=1 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part1_col1_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 > 10)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part1_col1_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 25)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col1 > 10) OR (col1 = 25))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part2_col1_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col1 > 10)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part2_col1_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 25)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col1 > 10) OR (col1 = 25))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part3_col1_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col1 > 10)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part3_col1_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 25)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col1 > 10) OR (col1 = 25))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part4_col1_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col1 > 10)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part4_col1_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 25)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col1 > 10) OR (col1 = 25))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part5_col1_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col1 > 10)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part5_col1_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 25)
+ Optimizer: Postgres query optimizer
+(43 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 between 10 AND 25 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   10 |   10 | c    | t
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 between 10 AND 25 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=701.08..701.15 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=701.08..701.29 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=701.08..701.09 rows=5 width=12)
+               ->  Sort  (cost=701.08..701.10 rows=8 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..700.96 rows=8 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 >= 10) AND (col1 <= 25))
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col1 >= 10) AND (col1 <= 25))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..164.19 rows=1 width=12)
+                                 Index Cond: ((col1 >= 10) AND (col1 <= 25))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 >= 10) AND (col1 <= 25))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 >= 10) AND (col1 <= 25))
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+DROP INDEX idx1;
+-- @description B-tree single index key = partitioning key
+CREATE INDEX idx1 on pt_lt_tab(col2);
+SELECT * FROM pt_lt_tab WHERE col2 < 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 < 10 ORDER BY col2,col3 LIMIT 5;
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=202.46..337.45 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=202.46..364.45 rows=6 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=202.46..364.37 rows=2 width=12)
+               ->  Incremental Sort  (cost=121.51..364.37 rows=3 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Index Scan using pt_lt_tab_1_prt_part1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab  (cost=0.14..364.23 rows=3 width=12)
+                           Index Cond: (col2 < '10'::numeric)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+(0 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Limit  (cost=0.01..0.02 rows=1 width=69)
+   ->  Sort  (cost=0.01..0.02 rows=0 width=69)
+         Sort Key: col2, col3
+         ->  Result  (cost=0.00..0.00 rows=0 width=0)
+               One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   25 |   25 | k    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=44.17..44.21 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=44.17..44.21 rows=3 width=12)
+         Merge Key: pt_lt_tab.col3
+         ->  Limit  (cost=44.17..44.17 rows=1 width=12)
+               ->  Sort  (cost=44.16..44.17 rows=1 width=12)
+                     Sort Key: pt_lt_tab.col3
+                     ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab  (cost=0.14..44.15 rows=1 width=12)
+                           Index Cond: (col2 = '25'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=324.12..533.82 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=324.12..953.21 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=324.12..953.01 rows=5 width=12)
+               ->  Incremental Sort  (cost=135.46..2022.12 rows=15 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.73..2021.44 rows=15 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col2 < 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col2 < 50 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=267.69..454.77 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=267.69..828.92 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=267.69..828.72 rows=5 width=12)
+               ->  Incremental Sort  (cost=122.12..1577.88 rows=13 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.58..1577.29 rows=13 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_1  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col2 < '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col2 < '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col2 < '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_4  (cost=0.14..364.25 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col2 < '50'::numeric))
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 10 OR col2 = 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 OR col2 = 50 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=271.54..458.77 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=271.54..833.23 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=271.54..833.03 rows=5 width=12)
+               ->  Incremental Sort  (cost=121.96..1617.78 rows=13 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.58..1617.18 rows=13 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_1  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > '10'::numeric) OR (col2 = '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_2  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > '10'::numeric) OR (col2 = '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_3  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > '10'::numeric) OR (col2 = '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_4  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > '10'::numeric) OR (col2 = '50'::numeric))
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   10 |   10 | c    | t
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=271.38..451.51 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=271.38..811.76 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=271.38..811.56 rows=5 width=12)
+               ->  Incremental Sort  (cost=116.85..1662.17 rows=14 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.73..1661.52 rows=14 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+DROP INDEX idx1;
+-- @description multiple column b-tree index
+CREATE INDEX idx1 on pt_lt_tab(col1,col2);
+SELECT * FROM pt_lt_tab WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=540.98..541.05 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=540.98..541.19 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=540.98..540.99 rows=5 width=12)
+               ->  Sort  (cost=540.98..540.99 rows=7 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..540.88 rows=7 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..364.23 rows=3 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+(0 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5500.82..5500.93 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=5500.82..5500.93 rows=5 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=5500.82..5500.83 rows=2 width=12)
+               ->  Sort  (cost=5500.82..5500.83 rows=2 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..5500.76 rows=2 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..1100.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..1100.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..1100.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..1100.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..1100.15 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   25 |   25 | k    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=404.23..404.28 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=404.23..404.28 rows=3 width=12)
+         Merge Key: pt_lt_tab.col3
+         ->  Limit  (cost=404.23..404.24 rows=1 width=12)
+               ->  Sort  (cost=404.23..404.23 rows=1 width=12)
+                     Sort Key: pt_lt_tab.col3
+                     ->  Index Scan using pt_lt_tab_1_prt_part3_col1_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab  (cost=0.14..404.22 rows=1 width=12)
+                           Index Cond: (col2 = '25'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=50000000005.54..50000000005.61 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=50000000005.54..50000000005.75 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=50000000005.54..50000000005.55 rows=5 width=12)
+               ->  Sort  (cost=50000000005.53..50000000005.57 rows=15 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=10000000000.00..50000000005.28 rows=15 width=12)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Seq Scan on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+(0 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3 LIMIT 5;
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=77.69..132.88 rows=5 width=12)
+   ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=77.69..177.02 rows=9 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=77.69..176.90 rows=3 width=12)
+               ->  Incremental Sort  (cost=44.62..176.90 rows=4 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.58..176.72 rows=4 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 = 10) AND (col2 > '10'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_2  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 = 10) AND (col2 > '10'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_3  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 = 10) AND (col2 > '10'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_4  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col1 = 10) AND (col2 > '10'::numeric))
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 10.00 OR col1 = 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10.00 OR col1 = 50 ORDER BY col2,col3 LIMIT 5;
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2222.30..2222.37 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2222.30..2222.51 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=2222.30..2222.31 rows=5 width=12)
+               ->  Sort  (cost=2222.29..2222.33 rows=14 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=440.35..2222.06 rows=14 width=12)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=440.35..444.37 rows=1 width=12)
+                                 Recheck Cond: ((col2 > 10.00) OR (col1 = 50))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=1 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part1_col1_col2_idx  (cost=0.00..400.21 rows=1 width=0)
+                                             Index Cond: (col2 > 10.00)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part1_col1_col2_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 50)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col2 > 10.00) OR (col1 = 50))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part2_col1_col2_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col2 > 10.00)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part2_col1_col2_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 50)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col2 > 10.00) OR (col1 = 50))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part3_col1_col2_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col2 > 10.00)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part3_col1_col2_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 50)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col2 > 10.00) OR (col1 = 50))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part4_col1_col2_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col2 > 10.00)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part4_col1_col2_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 50)
+                           ->  Bitmap Heap Scan on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=440.35..444.40 rows=3 width=12)
+                                 Recheck Cond: ((col2 > 10.00) OR (col1 = 50))
+                                 ->  BitmapOr  (cost=440.35..440.35 rows=3 width=0)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part5_col1_col2_idx  (cost=0.00..400.21 rows=3 width=0)
+                                             Index Cond: (col2 > 10.00)
+                                       ->  Bitmap Index Scan on pt_lt_tab_1_prt_part5_col1_col2_idx  (cost=0.00..40.14 rows=1 width=0)
+                                             Index Cond: (col1 = 50)
+ Optimizer: Postgres query optimizer
+(43 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   10 |   10 | c    | t
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2021.63..2021.70 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2021.63..2021.84 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=2021.63..2021.64 rows=5 width=12)
+               ->  Sort  (cost=2021.63..2021.66 rows=14 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..2021.39 rows=14 width=12)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..404.25 rows=1 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col1_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col1_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col1_col2_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col1_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+DROP INDEX idx1;
+-- @description multi-column unique constraint (= b-tree index). Essentially the
+-- same as the previous case, but the columns are the other way 'round, and we
+-- do this on the table with default partition.
+ALTER TABLE pt_lt_tab_df ADD CONSTRAINT col2_col1_unique unique(col2,col1);
+SELECT * FROM pt_lt_tab_df WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=569.23..1011.37 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=569.23..1895.65 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=569.23..1895.45 rows=5 width=12)
+               ->  Incremental Sort  (cost=303.98..2425.94 rows=8 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2425.58 rows=8 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part1_col2_col1_key on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.24 rows=3 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part2_col2_col1_key on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part4_col2_col1_key on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part5_col2_col1_key on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_def_col2_col1_key on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..404.24 rows=1 width=12)
+                                 Index Cond: (col1 < 10)
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   51 |   51 | u    | t
+   52 |   52 | u    | t
+   53 |   53 | u    | t
+   54 |   54 | x    | t
+   55 |   55 | x    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=548.18..975.23 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=548.18..1829.34 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=548.18..1829.14 rows=5 width=12)
+               ->  Incremental Sort  (cost=291.99..2425.97 rows=8 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2425.59 rows=8 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part1_col2_col1_key on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part2_col2_col1_key on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part4_col2_col1_key on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part5_col2_col1_key on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 > 50)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_def_col2_col1_key on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: (col1 > 50)
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   25 |   25 | k    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=44.17..44.21 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=44.17..44.21 rows=3 width=12)
+         Merge Key: pt_lt_tab_df.col3
+         ->  Limit  (cost=44.17..44.17 rows=1 width=12)
+               ->  Sort  (cost=44.16..44.17 rows=1 width=12)
+                     Sort Key: pt_lt_tab_df.col3
+                     ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df  (cost=0.14..44.15 rows=1 width=12)
+                           Index Cond: (col2 = '25'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=364.71..576.91 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=364.71..1001.30 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=364.71..1001.10 rows=5 width=12)
+               ->  Incremental Sort  (cost=135.61..2426.60 rows=18 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2425.79 rows=18 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part1_col2_col1_key on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part2_col2_col1_key on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part4_col2_col1_key on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part5_col2_col1_key on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using pt_lt_tab_df_1_prt_def_col2_col1_key on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..404.25 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+(0 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3 LIMIT 5;
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=695.09..1209.53 rows=5 width=12)
+   ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=695.09..1929.75 rows=12 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=695.09..1929.59 rows=4 width=12)
+               ->  Incremental Sort  (cost=386.47..1929.59 rows=5 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.73..1929.37 rows=5 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part2_col2_col1_key on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_1  (cost=0.14..404.25 rows=1 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 = 10))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_2  (cost=0.14..404.25 rows=1 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 = 10))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part4_col2_col1_key on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_3  (cost=0.14..404.25 rows=1 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 = 10))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part5_col2_col1_key on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_4  (cost=0.14..404.25 rows=1 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 = 10))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_def_col2_col1_key on pt_lt_tab_df_1_prt_def pt_lt_tab_df_5  (cost=0.14..312.25 rows=1 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 = 10))
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 > 10.00 OR col1 = 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 10.00 OR col1 = 50 ORDER BY col2,col3 LIMIT 5;
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=366.59..581.86 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=366.59..1012.40 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=366.59..1012.20 rows=5 width=12)
+               ->  Incremental Sort  (cost=137.69..2426.63 rows=18 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2425.84 rows=18 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part1_col2_col1_key on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.24 rows=1 width=12)
+                                 Filter: ((col2 > 10.00) OR (col1 = 50))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part2_col2_col1_key on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > 10.00) OR (col1 = 50))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > 10.00) OR (col1 = 50))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part4_col2_col1_key on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > 10.00) OR (col1 = 50))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part5_col2_col1_key on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.24 rows=3 width=12)
+                                 Filter: ((col2 > 10.00) OR (col1 = 50))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_def_col2_col1_key on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..404.26 rows=3 width=12)
+                                 Filter: ((col2 > 10.00) OR (col1 = 50))
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   10 |   10 | c    | t
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
+                                                                              QUERY PLAN                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=270.44..443.30 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=270.44..789.03 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=270.44..788.83 rows=5 width=12)
+               ->  Incremental Sort  (cost=111.78..1698.42 rows=15 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..1697.73 rows=15 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part1_col2_col1_key on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..44.15 rows=1 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part2_col2_col1_key on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part3_col2_col1_key on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part4_col2_col1_key on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_part5_col2_col1_key on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using pt_lt_tab_df_1_prt_def_col2_col1_key on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..36.15 rows=1 width=12)
+                                 Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+ALTER TABLE pt_lt_tab_df DROP CONSTRAINT col2_col1_unique;
+-- @description Heterogeneous index, index on partition key, b-tree index on all partitions
+CREATE INDEX idx1 on pt_lt_tab_1_prt_part1(col2);
+CREATE INDEX idx2 on pt_lt_tab_1_prt_part2(col2);
+CREATE INDEX idx3 on pt_lt_tab_1_prt_part3(col2);
+CREATE INDEX idx4 on pt_lt_tab_1_prt_part4(col2);
+CREATE INDEX idx5 on pt_lt_tab_1_prt_part5(col2);
+SELECT * FROM pt_lt_tab WHERE col2 between 1 AND 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 between 1 AND 50 ORDER BY col2,col3 LIMIT 5;
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=312.29..502.79 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=312.29..883.80 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=312.29..883.60 rows=5 width=12)
+               ->  Incremental Sort  (cost=122.27..2022.42 rows=17 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.73..2021.68 rows=17 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using idx2 on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using idx3 on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using idx4 on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
+                           ->  Index Scan using idx5 on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 5 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    6 |    6 | b    | t
+    7 |    7 | c    | t
+    8 |    8 | c    | t
+    9 |    9 | c    | t
+   10 |   10 | c    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 5 ORDER BY col2,col3 LIMIT 5;
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=297.28..488.37 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=297.28..870.56 rows=15 width=12)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=297.28..870.36 rows=5 width=12)
+               ->  Incremental Sort  (cost=123.40..1862.16 rows=15 width=12)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     Presorted Key: pt_lt_tab.col2
+                     ->  Merge Append  (cost=0.73..1861.48 rows=15 width=12)
+                           Sort Key: pt_lt_tab.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..244.20 rows=2 width=12)
+                                 Index Cond: (col2 > '5'::numeric)
+                           ->  Index Scan using idx2 on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.24 rows=3 width=12)
+                                 Index Cond: (col2 > '5'::numeric)
+                           ->  Index Scan using idx3 on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.24 rows=3 width=12)
+                                 Index Cond: (col2 > '5'::numeric)
+                           ->  Index Scan using idx4 on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.24 rows=3 width=12)
+                                 Index Cond: (col2 > '5'::numeric)
+                           ->  Index Scan using idx5 on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.24 rows=3 width=12)
+                                 Index Cond: (col2 > '5'::numeric)
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 = 5 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    5 |    5 | b    | t
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 = 5 ORDER BY col2,col3 LIMIT 5;
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=44.17..44.21 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=44.17..44.21 rows=3 width=12)
+         Merge Key: pt_lt_tab.col3
+         ->  Limit  (cost=44.17..44.17 rows=1 width=12)
+               ->  Sort  (cost=44.16..44.17 rows=1 width=12)
+                     Sort Key: pt_lt_tab.col3
+                     ->  Index Scan using idx1 on pt_lt_tab_1_prt_part1 pt_lt_tab  (cost=0.14..44.15 rows=1 width=12)
+                           Index Cond: (col2 = '5'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx2;
+DROP INDEX idx3;
+DROP INDEX idx4;
+DROP INDEX idx5;
+-- @description Heterogeneous index,b-tree index on all parts,index, index on non-partition col
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col1);
+CREATE INDEX idx2 on pt_lt_tab_df_1_prt_part2(col1);
+CREATE INDEX idx3 on pt_lt_tab_df_1_prt_part3(col1);
+CREATE INDEX idx4 on pt_lt_tab_df_1_prt_part4(col1);
+CREATE INDEX idx5 on pt_lt_tab_df_1_prt_part5(col1);
+CREATE INDEX idx6 on pt_lt_tab_df_1_prt_def(col1);
+SELECT * FROM pt_lt_tab_df WHERE col1 between 1 AND 100 ORDER BY col1 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 between 1 AND 100 ORDER BY col1 LIMIT 5;
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.89..4936.95 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.89..4936.95 rows=5 width=12)
+         Merge Key: pt_lt_tab_df_1_prt_part1.col1
+         ->  Limit  (cost=0.89..4936.85 rows=2 width=12)
+               ->  Merge Append  (cost=0.89..59220.63 rows=20 width=12)
+                     Sort Key: pt_lt_tab_df.col1
+                     ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..10193.85 rows=4 width=12)
+                           Index Cond: col1 >= 1 AND col1 <= 100
+                     ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..10285.61 rows=4 width=12)
+                           Index Cond: col1 >= 1 AND col1 <= 100
+                     ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..10252.62 rows=4 width=12)
+                           Index Cond: col1 >= 1 AND col1 <= 100
+                     ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..10217.07 rows=4 width=12)
+                           Index Cond: col1 >= 1 AND col1 <= 100
+                     ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..10271.47 rows=4 width=12)
+                           Index Cond: col1 >= 1 AND col1 <= 100
+                     ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..7998.23 rows=4 width=12)
+                           Index Cond: col1 >= 1 AND col1 <= 100
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col1 > 50 ORDER BY col1 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   51 |   51 | u    | t
+   52 |   52 | u    | t
+   53 |   53 | u    | t
+   54 |   54 | x    | t
+   55 |   55 | x    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 > 50 ORDER BY col1 LIMIT 5;
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.89..4500.82 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.89..4500.82 rows=5 width=12)
+         Merge Key: pt_lt_tab_df_1_prt_part1.col1
+         ->  Limit  (cost=0.89..4500.72 rows=2 width=12)
+               ->  Merge Append  (cost=0.89..13499.47 rows=5 width=12)
+                     Sort Key: pt_lt_tab_df.col1
+                     ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..1100.15 rows=1 width=12)
+                           Index Cond: col1 > 50
+                     ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..1100.15 rows=1 width=12)
+                           Index Cond: col1 > 50
+                     ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..1100.15 rows=1 width=12)
+                           Index Cond: col1 > 50
+                     ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..1100.15 rows=1 width=12)
+                           Index Cond: col1 > 50
+                     ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..1100.15 rows=1 width=12)
+                           Index Cond: col1 > 50
+                     ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..7998.21 rows=4 width=12)
+                           Index Cond: col1 > 50
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col1 < 50 ORDER BY col1 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 < 50 ORDER BY col1 LIMIT 5;
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.89..5111.42 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.89..5111.42 rows=5 width=12)
+         Merge Key: pt_lt_tab_df.col1
+         ->  Limit  (cost=0.89..5111.32 rows=2 width=12)
+               ->  Merge Append  (cost=0.89..52122.17 rows=17 width=12)
+                     Sort Key: pt_lt_tab_df.col1
+                     ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1 (cost=0.14..10193.83 rows=4 width=12)
+                           Index Cond: col1 < 50
+                     ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..10285.58 rows=4 width=12)
+                           Index Cond: col1 < 50
+                     ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..10252.59 rows=4 width=12)
+                           Index Cond: col1 < 50
+                     ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..10217.04 rows=4 width=12)
+                           Index Cond: col1 < 50
+                     ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..10271.44 rows=4 width=12)
+                           Index Cond: col1 < 50
+                     ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..900.15 rows=1 width=12)
+                           Index Cond: col1 < 50
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx2;
+DROP INDEX idx3;
+DROP INDEX idx4;
+DROP INDEX idx5;
+DROP INDEX idx6;
+-- @description Heterogeneous index,b-tree index on all parts including default, index on partition col
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col2);
+CREATE INDEX idx2 on pt_lt_tab_df_1_prt_part2(col2);
+CREATE INDEX idx3 on pt_lt_tab_df_1_prt_part3(col2);
+CREATE INDEX idx4 on pt_lt_tab_df_1_prt_part4(col2);
+CREATE INDEX idx5 on pt_lt_tab_df_1_prt_part5(col2);
+CREATE INDEX idx6 on pt_lt_tab_df_1_prt_def(col2);
+SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=339.53..524.77 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=339.53..895.24 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=339.53..895.04 rows=5 width=12)
+               ->  Incremental Sort  (cost=117.82..2334.94 rows=20 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2334.04 rows=20 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..312.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   51 |   51 | u    | t
+   52 |   52 | u    | t
+   53 |   53 | u    | t
+   54 |   54 | x    | t
+   55 |   55 | x    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=159.51..268.95 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=159.51..312.49 rows=7 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=159.51..312.39 rows=2 width=12)
+               ->  Incremental Sort  (cost=93.88..312.39 rows=3 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df  (cost=0.14..312.24 rows=3 width=12)
+                           Index Cond: (col2 > '50'::numeric)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   50 |   50 | q    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=44.17..44.21 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=44.17..44.21 rows=3 width=12)
+         Merge Key: pt_lt_tab_df.col3
+         ->  Limit  (cost=44.17..44.17 rows=1 width=12)
+               ->  Sort  (cost=44.16..44.17 rows=1 width=12)
+                     Sort Key: pt_lt_tab_df.col3
+                     ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df  (cost=0.14..44.15 rows=1 width=12)
+                           Index Cond: (col2 = '50'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=364.71..576.91 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=364.71..1001.30 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=364.71..1001.10 rows=5 width=12)
+               ->  Incremental Sort  (cost=135.61..2426.60 rows=18 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2425.79 rows=18 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.23 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..404.25 rows=3 width=12)
+                                 Filter: (col2 <> '10'::numeric)
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+    1 |    1 | a    | t
+    2 |    2 | a    | t
+    3 |    3 | a    | t
+    4 |    4 | b    | t
+    5 |    5 | b    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=339.53..524.77 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=339.53..895.24 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=339.53..895.04 rows=5 width=12)
+               ->  Incremental Sort  (cost=117.82..2334.94 rows=20 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2334.04 rows=20 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..312.27 rows=3 width=12)
+                                 Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 < 50 AND col1 > 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 < 50 AND col1 > 10 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=323.81..533.34 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=323.81..952.41 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=323.81..952.21 rows=5 width=12)
+               ->  Incremental Sort  (cost=135.52..2018.42 rows=15 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2017.75 rows=15 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.25 rows=1 width=12)
+                                 Index Cond: (col2 < '50'::numeric)
+                                 Filter: (col1 > 10)
+                           ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.25 rows=3 width=12)
+                                 Index Cond: (col2 < '50'::numeric)
+                                 Filter: (col1 > 10)
+                           ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.25 rows=3 width=12)
+                                 Index Cond: (col2 < '50'::numeric)
+                                 Filter: (col1 > 10)
+                           ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.25 rows=3 width=12)
+                                 Index Cond: (col2 < '50'::numeric)
+                                 Filter: (col1 > 10)
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..364.24 rows=3 width=12)
+                                 Index Cond: (col2 < '50'::numeric)
+                                 Filter: (col1 > 10)
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..36.16 rows=1 width=12)
+                                 Index Cond: (col2 < '50'::numeric)
+                                 Filter: (col1 > 10)
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx2;
+DROP INDEX idx3;
+DROP INDEX idx4;
+DROP INDEX idx5;
+DROP INDEX idx6;
+-- @description Negative tests Combination tests, no index on default partition
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col2);
+CREATE INDEX idx2 on pt_lt_tab_df_1_prt_part2(col2);
+CREATE INDEX idx3 on pt_lt_tab_df_1_prt_part3(col2);
+CREATE INDEX idx4 on pt_lt_tab_df_1_prt_part4(col2);
+CREATE INDEX idx5 on pt_lt_tab_df_1_prt_part5(col2);
+SELECT * FROM pt_lt_tab_df WHERE col2 > 51 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   52 |   52 | u    | t
+   53 |   53 | u    | t
+   54 |   54 | x    | t
+   55 |   55 | x    | t
+   56 |   56 | x    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 51 ORDER BY col2,col3 LIMIT 5;
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=10000000001.08..10000000001.15 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.08..10000000001.17 rows=6 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=10000000001.08..10000000001.09 rows=2 width=12)
+               ->  Sort  (cost=10000000001.08..10000000001.09 rows=3 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     ->  Seq Scan on pt_lt_tab_df_1_prt_def pt_lt_tab_df  (cost=10000000000.00..10000000001.05 rows=3 width=12)
+                           Filter: (col2 > '51'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   50 |   50 | q    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=44.17..44.21 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=44.17..44.21 rows=3 width=12)
+         Merge Key: pt_lt_tab_df.col3
+         ->  Limit  (cost=44.17..44.17 rows=1 width=12)
+               ->  Sort  (cost=44.16..44.17 rows=1 width=12)
+                     Sort Key: pt_lt_tab_df.col3
+                     ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df  (cost=0.14..44.15 rows=1 width=12)
+                           Index Cond: (col2 = '50'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx2;
+DROP INDEX idx3;
+DROP INDEX idx4;
+DROP INDEX idx5;
+-- @description Negative tests Combination tests ,index exists on some regular partitions and not on the default partition
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col2);
+CREATE INDEX idx5 on pt_lt_tab_df_1_prt_part5(col2);
+SELECT * FROM pt_lt_tab_df WHERE col2 is NULL ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+      |      |      | 
+      |      |      | 
+      |      |      | 
+(3 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx5;
+-- @description Heterogeneous index,b-tree index on all parts,index , multiple index 
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col2,col1);
+CREATE INDEX idx2 on pt_lt_tab_df_1_prt_part2(col2,col1);
+CREATE INDEX idx3 on pt_lt_tab_df_1_prt_part3(col2,col1);
+CREATE INDEX idx4 on pt_lt_tab_df_1_prt_part4(col2,col1);
+CREATE INDEX idx5 on pt_lt_tab_df_1_prt_part5(col2,col1);
+CREATE INDEX idx6 on pt_lt_tab_df_1_prt_def(col2,col1);
+SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   50 |   50 | q    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=44.17..44.21 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=44.17..44.21 rows=3 width=12)
+         Merge Key: pt_lt_tab_df.col3
+         ->  Limit  (cost=44.17..44.17 rows=1 width=12)
+               ->  Sort  (cost=44.16..44.17 rows=1 width=12)
+                     Sort Key: pt_lt_tab_df.col3
+                     ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df  (cost=0.14..44.15 rows=1 width=12)
+                           Index Cond: (col2 = '50'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   11 |   11 | e    | t
+   12 |   12 | e    | t
+   13 |   13 | e    | t
+   14 |   14 | f    | t
+   15 |   15 | f    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=300.81..487.04 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=300.81..859.49 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=300.81..859.29 rows=5 width=12)
+               ->  Incremental Sort  (cost=119.73..1930.52 rows=16 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.73..1929.79 rows=16 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_1  (cost=0.14..404.29 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 >= 1) AND (col1 <= 100))
+                           ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_2  (cost=0.14..404.29 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 >= 1) AND (col1 <= 100))
+                           ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_3  (cost=0.14..404.29 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 >= 1) AND (col1 <= 100))
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_4  (cost=0.14..404.29 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 >= 1) AND (col1 <= 100))
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_5  (cost=0.14..312.29 rows=3 width=12)
+                                 Index Cond: ((col2 > '10'::numeric) AND (col1 >= 1) AND (col1 <= 100))
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT * FROM pt_lt_tab_df WHERE col1 = 10 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   10 |   10 | c    | t
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 = 10 ORDER BY col2,col3 LIMIT 5;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=741.80..1303.20 rows=5 width=12)
+   ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=741.80..2426.00 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=741.80..2425.80 rows=5 width=12)
+               ->  Incremental Sort  (cost=405.00..2425.80 rows=6 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=0.89..2425.53 rows=6 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Index Scan using idx1 on pt_lt_tab_df_1_prt_part1 pt_lt_tab_df_1  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 = 10)
+                           ->  Index Scan using idx2 on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_2  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 = 10)
+                           ->  Index Scan using idx3 on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_3  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 = 10)
+                           ->  Index Scan using idx4 on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_4  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 = 10)
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_5  (cost=0.14..404.22 rows=1 width=12)
+                                 Index Cond: (col1 = 10)
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_6  (cost=0.14..404.24 rows=1 width=12)
+                                 Index Cond: (col1 = 10)
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx2;
+DROP INDEX idx3;
+DROP INDEX idx4;
+DROP INDEX idx5;
+DROP INDEX idx6;
+-- @description Index exists on some continuous set of partitions, e.g. p1,p2,p3
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col2);
+CREATE INDEX idx2 on pt_lt_tab_df_1_prt_part2(col2);
+CREATE INDEX idx3 on pt_lt_tab_df_1_prt_part3(col2);
+SELECT * FROM pt_lt_tab_df WHERE col2 = 35 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   35 |   35 | o    | f
+(1 row)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 35 ORDER BY col2,col3 LIMIT 5;
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=10000000001.06..10000000001.10 rows=3 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.06..10000000001.10 rows=3 width=12)
+         Merge Key: pt_lt_tab_df.col3
+         ->  Limit  (cost=10000000001.06..10000000001.06 rows=1 width=12)
+               ->  Sort  (cost=10000000001.05..10000000001.06 rows=1 width=12)
+                     Sort Key: pt_lt_tab_df.col3
+                     ->  Seq Scan on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df  (cost=10000000000.00..10000000001.04 rows=1 width=12)
+                           Filter: (col2 = '35'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx2;
+DROP INDEX idx3;
+-- @description Index exists on some regular partitions and on the default partition [INDEX exists on non-consecutive partitions, e.g. p1,p3,p5]
+CREATE INDEX idx1 on pt_lt_tab_df_1_prt_part1(col2);
+CREATE INDEX idx5 on pt_lt_tab_df_1_prt_part5(col2);
+CREATE INDEX idx6 on pt_lt_tab_df_1_prt_def(col2);
+SELECT * FROM pt_lt_tab_df WHERE col2 > 15 ORDER BY col2,col3 LIMIT 5;
+ col1 | col2 | col3 | col4 
+------+------+------+------
+   16 |   16 | f    | t
+   17 |   17 | g    | t
+   18 |   18 | g    | t
+   19 |   19 | g    | t
+   20 |   20 | g    | t
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 15 ORDER BY col2,col3 LIMIT 5;
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=30000000117.75..30000000191.42 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=30000000117.75..30000000338.76 rows=15 width=12)
+         Merge Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+         ->  Limit  (cost=30000000117.75..30000000338.56 rows=5 width=12)
+               ->  Incremental Sort  (cost=30000000050.76..30000000720.69 rows=15 width=12)
+                     Sort Key: pt_lt_tab_df.col2, pt_lt_tab_df.col3
+                     Presorted Key: pt_lt_tab_df.col2
+                     ->  Merge Append  (cost=30000000003.52..30000000720.01 rows=15 width=12)
+                           Sort Key: pt_lt_tab_df.col2
+                           ->  Sort  (cost=10000000001.05..10000000001.06 rows=2 width=12)
+                                 Sort Key: pt_lt_tab_df_1.col2
+                                 ->  Seq Scan on pt_lt_tab_df_1_prt_part2 pt_lt_tab_df_1  (cost=10000000000.00..10000000001.04 rows=2 width=12)
+                                       Filter: (col2 > '15'::numeric)
+                           ->  Sort  (cost=10000000001.07..10000000001.08 rows=3 width=12)
+                                 Sort Key: pt_lt_tab_df_2.col2
+                                 ->  Seq Scan on pt_lt_tab_df_1_prt_part3 pt_lt_tab_df_2  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                       Filter: (col2 > '15'::numeric)
+                           ->  Sort  (cost=10000000001.07..10000000001.08 rows=3 width=12)
+                                 Sort Key: pt_lt_tab_df_3.col2
+                                 ->  Seq Scan on pt_lt_tab_df_1_prt_part4 pt_lt_tab_df_3  (cost=10000000000.00..10000000001.04 rows=3 width=12)
+                                       Filter: (col2 > '15'::numeric)
+                           ->  Index Scan using idx5 on pt_lt_tab_df_1_prt_part5 pt_lt_tab_df_4  (cost=0.14..404.24 rows=3 width=12)
+                                 Index Cond: (col2 > '15'::numeric)
+                           ->  Index Scan using idx6 on pt_lt_tab_df_1_prt_def pt_lt_tab_df_5  (cost=0.14..312.24 rows=3 width=12)
+                                 Index Cond: (col2 > '15'::numeric)
+ Optimizer: Postgres query optimizer
+(26 rows)
+
+DROP INDEX idx1;
+DROP INDEX idx5;
+DROP INDEX idx6;
+--
+-- Finally, after running all the other tests on pg_lt_tab, test that
+-- partition pruning still works after dropping a column
+--
+CREATE INDEX idx1 on pt_lt_tab(col4);
+ALTER TABLE pt_lt_tab DROP column col1;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+SELECT * FROM pt_lt_tab WHERE col4 is False ORDER BY col2,col3 LIMIT 5;
+ col2 | col3 | col4 
+------+------+------
+   21 | i    | f
+   22 | i    | f
+   23 | i    | f
+   24 | k    | f
+   25 | k    | f
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col4 is False ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1293.46..1293.53 rows=5 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1293.46..1293.67 rows=15 width=8)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=1293.46..1293.47 rows=5 width=8)
+               ->  Sort  (cost=1293.45..1293.48 rows=12 width=8)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..1293.25 rows=12 width=8)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col4_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..40.23 rows=1 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col4_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..40.23 rows=1 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col4_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.24 rows=3 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col4_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.24 rows=3 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col4_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.24 rows=3 width=8)
+                                 Index Cond: (col4 = false)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col4 = False ORDER BY col2,col3 LIMIT 5;
+ col2 | col3 | col4 
+------+------+------
+   21 | i    | f
+   22 | i    | f
+   23 | i    | f
+   24 | k    | f
+   25 | k    | f
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col4 = False ORDER BY col2,col3 LIMIT 5;
+                                                                       QUERY PLAN                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1293.46..1293.53 rows=5 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1293.46..1293.67 rows=15 width=8)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=1293.46..1293.47 rows=5 width=8)
+               ->  Sort  (cost=1293.45..1293.48 rows=12 width=8)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Append  (cost=0.14..1293.25 rows=12 width=8)
+                           ->  Index Scan using pt_lt_tab_1_prt_part1_col4_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..40.23 rows=1 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part2_col4_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..40.23 rows=1 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part3_col4_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_3  (cost=0.14..404.24 rows=3 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part4_col4_idx on pt_lt_tab_1_prt_part4 pt_lt_tab_4  (cost=0.14..404.24 rows=3 width=8)
+                                 Index Cond: (col4 = false)
+                           ->  Index Scan using pt_lt_tab_1_prt_part5_col4_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.24 rows=3 width=8)
+                                 Index Cond: (col4 = false)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+SELECT * FROM pt_lt_tab WHERE col2 > 41 ORDER BY col2,col3 LIMIT 5;
+ col2 | col3 | col4 
+------+------+------
+   42 | p    | f
+   43 | p    | f
+   44 | s    | f
+   45 | s    | f
+   46 | s    | f
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 41 ORDER BY col2,col3 LIMIT 5;
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=10000000001.07..10000000001.14 rows=5 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.07..10000000001.15 rows=6 width=8)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=10000000001.07..10000000001.07 rows=2 width=8)
+               ->  Sort  (cost=10000000001.07..10000000001.07 rows=3 width=8)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Seq Scan on pt_lt_tab_1_prt_part5 pt_lt_tab  (cost=10000000000.00..10000000001.04 rows=3 width=8)
+                           Filter: (col2 > '41'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+ALTER TABLE pt_lt_tab DROP column col4;
+SELECT * FROM pt_lt_tab WHERE col2 > 41 ORDER BY col2,col3 LIMIT 5;
+ col2 | col3 
+------+------
+   42 | p
+   43 | p
+   44 | s
+   45 | s
+   46 | s
+(5 rows)
+
+EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 41 ORDER BY col2,col3 LIMIT 5;
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=10000000001.07..10000000001.14 rows=5 width=7)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.07..10000000001.15 rows=6 width=7)
+         Merge Key: pt_lt_tab.col2, pt_lt_tab.col3
+         ->  Limit  (cost=10000000001.07..10000000001.07 rows=2 width=7)
+               ->  Sort  (cost=10000000001.07..10000000001.07 rows=3 width=7)
+                     Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
+                     ->  Seq Scan on pt_lt_tab_1_prt_part5 pt_lt_tab  (cost=10000000000.00..10000000001.04 rows=3 width=7)
+                           Filter: (col2 > '41'::numeric)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+--
+-- Test a more complicated partitioning scheme, with subpartitions.
+--
+CREATE TABLE pt_complex (i int, j int, k int, l int, m int) DISTRIBUTED BY (i)
+PARTITION BY list(k)
+  SUBPARTITION BY list(j) SUBPARTITION TEMPLATE (subpartition p11 values (1), subpartition p12 values(2))
+  SUBPARTITION BY list(l) SUBPARTITION TEMPLATE (subpartition p11 values (1), subpartition p12 values(2))
+( partition p1 values(1), partition p2 values(2));
+INSERT INTO pt_complex VALUES (1, 1, 1, 1, 1), (2, 2, 2, 2, 2);
+CREATE INDEX i_pt_complex ON pt_complex (i);
+SELECT * FROM pt_complex WHERE i = 1 AND j = 1;
+ i | j | k | l | m 
+---+---+---+---+---
+ 1 | 1 | 1 | 1 | 1
+(1 row)
+
+EXPLAIN SELECT * FROM pt_complex WHERE i = 1 AND j = 1;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=4.65..147.85 rows=12 width=20)
+   ->  Append  (cost=4.65..147.69 rows=4 width=20)
+         ->  Bitmap Heap Scan on pt_complex_1_prt_p1_2_prt_p11_3_prt_p11 pt_complex_1  (cost=4.65..36.92 rows=1 width=20)
+               Recheck Cond: (i = 1)
+               Filter: (j = 1)
+               ->  Bitmap Index Scan on pt_complex_1_prt_p1_2_prt_p11_3_prt_p11_i_idx  (cost=0.00..4.65 rows=22 width=0)
+                     Index Cond: (i = 1)
+         ->  Bitmap Heap Scan on pt_complex_1_prt_p1_2_prt_p11_3_prt_p12 pt_complex_2  (cost=4.65..36.92 rows=1 width=20)
+               Recheck Cond: (i = 1)
+               Filter: (j = 1)
+               ->  Bitmap Index Scan on pt_complex_1_prt_p1_2_prt_p11_3_prt_p12_i_idx  (cost=0.00..4.65 rows=22 width=0)
+                     Index Cond: (i = 1)
+         ->  Bitmap Heap Scan on pt_complex_1_prt_p2_2_prt_p11_3_prt_p11 pt_complex_3  (cost=4.65..36.92 rows=1 width=20)
+               Recheck Cond: (i = 1)
+               Filter: (j = 1)
+               ->  Bitmap Index Scan on pt_complex_1_prt_p2_2_prt_p11_3_prt_p11_i_idx  (cost=0.00..4.65 rows=22 width=0)
+                     Index Cond: (i = 1)
+         ->  Bitmap Heap Scan on pt_complex_1_prt_p2_2_prt_p11_3_prt_p12 pt_complex_4  (cost=4.65..36.92 rows=1 width=20)
+               Recheck Cond: (i = 1)
+               Filter: (j = 1)
+               ->  Bitmap Index Scan on pt_complex_1_prt_p2_2_prt_p11_3_prt_p12_i_idx  (cost=0.00..4.65 rows=22 width=0)
+                     Index Cond: (i = 1)
+ Optimizer: Postgres query optimizer
+(23 rows)
+
+--
+-- See MPP-6861
+--
+CREATE TABLE ds_4
+(
+  month_id character varying(6),
+  cust_group_acc numeric(10),
+  mobile_no character varying(10),
+  source character varying(12),
+  vas_group numeric(10),
+  vas_type numeric(10),
+  count_vas integer,
+  amt_vas numeric(10,2),
+  network_type character varying(3),
+  execution_id integer
+)
+WITH (
+  OIDS=FALSE
+)
+DISTRIBUTED BY (cust_group_acc, mobile_no)
+PARTITION BY LIST(month_id)
+          (
+          PARTITION p200800 VALUES('200800'),
+          PARTITION p200801 VALUES('200801'),
+          PARTITION p200802 VALUES('200802'),
+          PARTITION p200803 VALUES('200803')
+);
+-- this is the case that worked before MPP-6861
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where month_id = '200800';
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000094.19 rows=14 width=196)
+   ->  Seq Scan on ds_4_1_prt_p200800 ds_4  (cost=10000000000.00..10000000094.00 rows=5 width=196)
+         Filter: ((month_id)::text = '200800'::text)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- now we can evaluate this function at planning/prune time
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where month_id::int = 200800;
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000472.86 rows=58 width=196)
+   ->  Append  (cost=10000000000.00..40000000472.10 rows=19 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: ((month_id)::integer = 200800)
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: ((month_id)::integer = 200800)
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: ((month_id)::integer = 200800)
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: ((month_id)::integer = 200800)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- this will be satisfied by 200800
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where month_id::int - 801 < 200000;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000808.00 rows=19200 width=196)
+   ->  Append  (cost=10000000000.00..40000000552.00 rows=6400 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000130.00 rows=1600 width=196)
+               Filter: (((month_id)::integer - 801) < 200000)
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000130.00 rows=1600 width=196)
+               Filter: (((month_id)::integer - 801) < 200000)
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000130.00 rows=1600 width=196)
+               Filter: (((month_id)::integer - 801) < 200000)
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000130.00 rows=1600 width=196)
+               Filter: (((month_id)::integer - 801) < 200000)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- test OR case -- should NOT get pruning
+explain select * from ds_4 where month_id::int - 801 < 200000 OR count_vas > 10;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000001048.00 rows=32000 width=196)
+   ->  Append  (cost=10000000000.00..40000000621.33 rows=10667 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000142.00 rows=2667 width=196)
+               Filter: ((((month_id)::integer - 801) < 200000) OR (count_vas > 10))
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000142.00 rows=2667 width=196)
+               Filter: ((((month_id)::integer - 801) < 200000) OR (count_vas > 10))
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000142.00 rows=2667 width=196)
+               Filter: ((((month_id)::integer - 801) < 200000) OR (count_vas > 10))
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000142.00 rows=2667 width=196)
+               Filter: ((((month_id)::integer - 801) < 200000) OR (count_vas > 10))
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- test AND case -- should still get pruning
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where month_id::int - 801 < 200000 AND count_vas > 10;
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000734.28 rows=11085 width=196)
+   ->  Append  (cost=10000000000.00..40000000586.48 rows=3695 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000142.00 rows=924 width=196)
+               Filter: ((count_vas > 10) AND (((month_id)::integer - 801) < 200000))
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000142.00 rows=924 width=196)
+               Filter: ((count_vas > 10) AND (((month_id)::integer - 801) < 200000))
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000142.00 rows=924 width=196)
+               Filter: ((count_vas > 10) AND (((month_id)::integer - 801) < 200000))
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000142.00 rows=924 width=196)
+               Filter: ((count_vas > 10) AND (((month_id)::integer - 801) < 200000))
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- test expression case : should get pruning
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where case when month_id = '200800' then 100 else 2 end = 100;
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000424.86 rows=58 width=196)
+   ->  Append  (cost=10000000000.00..40000000424.10 rows=19 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000106.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN 100 ELSE 2 END = 100)
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000106.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN 100 ELSE 2 END = 100)
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000106.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN 100 ELSE 2 END = 100)
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000106.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN 100 ELSE 2 END = 100)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- test expression case : should get pruning
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where case when month_id = '200800' then NULL else 2 end IS NULL;
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000376.86 rows=58 width=196)
+   ->  Append  (cost=10000000000.00..40000000376.10 rows=19 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000094.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN NULL::integer ELSE 2 END IS NULL)
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000094.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN NULL::integer ELSE 2 END IS NULL)
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000094.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN NULL::integer ELSE 2 END IS NULL)
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000094.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN NULL::integer ELSE 2 END IS NULL)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- should still get pruning here -- count_vas is only used in the path for month id = 200800
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where case when month_id::int = 200800 then count_vas else 2 end IS NULL;
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000472.86 rows=58 width=196)
+   ->  Append  (cost=10000000000.00..40000000472.10 rows=19 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::integer = 200800) THEN count_vas ELSE 2 END IS NULL)
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::integer = 200800) THEN count_vas ELSE 2 END IS NULL)
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::integer = 200800) THEN count_vas ELSE 2 END IS NULL)
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000118.00 rows=5 width=196)
+               Filter: (CASE WHEN ((month_id)::integer = 200800) THEN count_vas ELSE 2 END IS NULL)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- do one that matches a couple partitions
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain select * from ds_4 where month_id::int in (200801, 1,55,6,6,6,6,66,565,65,65,200803);
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..40000000722.37 rows=691 width=196)
+   ->  Append  (cost=10000000000.00..40000000713.15 rows=230 width=196)
+         ->  Seq Scan on ds_4_1_prt_p200800 ds_4_1  (cost=10000000000.00..10000000178.00 rows=58 width=196)
+               Filter: ((month_id)::integer = ANY ('{200801,1,55,6,6,6,6,66,565,65,65,200803}'::integer[]))
+         ->  Seq Scan on ds_4_1_prt_p200801 ds_4_2  (cost=10000000000.00..10000000178.00 rows=58 width=196)
+               Filter: ((month_id)::integer = ANY ('{200801,1,55,6,6,6,6,66,565,65,65,200803}'::integer[]))
+         ->  Seq Scan on ds_4_1_prt_p200802 ds_4_3  (cost=10000000000.00..10000000178.00 rows=58 width=196)
+               Filter: ((month_id)::integer = ANY ('{200801,1,55,6,6,6,6,66,565,65,65,200803}'::integer[]))
+         ->  Seq Scan on ds_4_1_prt_p200803 ds_4_4  (cost=10000000000.00..10000000178.00 rows=58 width=196)
+               Filter: ((month_id)::integer = ANY ('{200801,1,55,6,6,6,6,66,565,65,65,200803}'::integer[]))
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- cleanup
+drop table ds_4;
+--
+-- See MPP-18979
+--
+CREATE TABLE ds_2
+(
+  month_id character varying(6),
+  cust_group_acc numeric(10),
+  mobile_no character varying(10),
+  source character varying(12),
+  vas_group numeric(10),
+  vas_type numeric(10),
+  count_vas integer,
+  amt_vas numeric(10,2),
+  network_type character varying(3),
+  execution_id integer
+)
+WITH (
+  OIDS=FALSE
+)
+DISTRIBUTED BY (cust_group_acc, mobile_no)
+PARTITION BY LIST(month_id)
+          (
+          PARTITION p200800 VALUES('200800'),
+          PARTITION p200801 VALUES('200801'),
+          PARTITION p200802 VALUES('200802'),
+          PARTITION p200803 VALUES('200803'),
+          PARTITION p200804 VALUES('200804'),
+          PARTITION p200805 VALUES('200805'),
+          PARTITION p200806 VALUES('200806'),
+          PARTITION p200807 VALUES('200807'),
+          PARTITION p200808 VALUES('200808'),
+          PARTITION p200809 VALUES('200809')
+);
+insert into ds_2(month_id) values('200800');
+insert into ds_2(month_id) values('200801');
+insert into ds_2(month_id) values('200802');
+insert into ds_2(month_id) values('200803');
+insert into ds_2(month_id) values('200804');
+insert into ds_2(month_id) values('200805');
+insert into ds_2(month_id) values('200806');
+insert into ds_2(month_id) values('200807');
+insert into ds_2(month_id) values('200808');
+insert into ds_2(month_id) values('200809');
+-- queries without bitmap scan
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+set optimizer_segments=2;
+explain select * from ds_2 where month_id::int in (200808, 1315) order by month_id;
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=100000001183.64..100000001187.72 rows=288 width=196)
+   Merge Key: ds_2.month_id
+   ->  Sort  (cost=100000001183.64..100000001183.88 rows=96 width=196)
+         Sort Key: ds_2.month_id
+         ->  Append  (cost=10000000000.00..100000001180.48 rows=96 width=196)
+               ->  Seq Scan on ds_2_1_prt_p200800 ds_2_1  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200801 ds_2_2  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200802 ds_2_3  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200803 ds_2_4  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200804 ds_2_5  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200805 ds_2_6  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200806 ds_2_7  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200807 ds_2_8  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200808 ds_2_9  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200809 ds_2_10  (cost=10000000000.00..10000000118.00 rows=10 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
+ Optimizer: Postgres query optimizer
+(26 rows)
+
+-- start_ignore
+-- Known_opt_diff: MPP-21316
+-- end_ignore
+explain  select * from ds_2 where month_id::int in (200808, 200801, 2008010) order by month_id;
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=100000001245.88..100000001252.00 rows=432 width=196)
+   Merge Key: ds_2.month_id
+   ->  Sort  (cost=100000001245.88..100000001246.24 rows=144 width=196)
+         Sort Key: ds_2.month_id
+         ->  Append  (cost=10000000000.00..100000001240.72 rows=144 width=196)
+               ->  Seq Scan on ds_2_1_prt_p200800 ds_2_1  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200801 ds_2_2  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200802 ds_2_3  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200803 ds_2_4  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200804 ds_2_5  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200805 ds_2_6  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200806 ds_2_7  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200807 ds_2_8  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200808 ds_2_9  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+               ->  Seq Scan on ds_2_1_prt_p200809 ds_2_10  (cost=10000000000.00..10000000124.00 rows=14 width=196)
+                     Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
+ Optimizer: Postgres query optimizer
+(26 rows)
+
+reset optimizer_segments;
+select * from ds_2 where month_id::int in (200907, 1315) order by month_id;
+ month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
+----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
+(0 rows)
+
+select * from ds_2 where month_id::int in (200808, 1315) order by month_id;
+ month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
+----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
+ 200808   |                |           |        |           |          |           |         |              |             
+(1 row)
+
+select * from ds_2 where month_id::int in (200808, 200801) order by month_id;
+ month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
+----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
+ 200801   |                |           |        |           |          |           |         |              |             
+ 200808   |                |           |        |           |          |           |         |              |             
+(2 rows)
+
+select * from ds_2 where month_id::int in (200808, 200801, 2008010) order by month_id;
+ month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
+----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
+ 200801   |                |           |        |           |          |           |         |              |             
+ 200808   |                |           |        |           |          |           |         |              |             
+(2 rows)
+
+-- cleanup
+drop table ds_2;
+drop table if exists dnsdata cascade;
+NOTICE:  table "dnsdata" does not exist, skipping
+CREATE TABLE dnsdata(dnsname text) DISTRIBUTED RANDOMLY;
+CREATE INDEX dnsdata_d1_idx ON dnsdata USING bitmap (split_part(reverse(dnsname),'.'::text,1));
+CREATE INDEX dnsdata_d2_idx ON dnsdata USING bitmap (split_part(reverse(dnsname),'.'::text,2));
+insert into dnsdata values('www.google.com');
+insert into dnsdata values('www.google1.com');
+insert into dnsdata values('1.google.com');
+insert into dnsdata values('2.google.com');
+insert into dnsdata select 'www.b.com' from generate_series(1, 100000) as x(a);
+analyze dnsdata;
+-- queries with bitmap scan enabled
+set enable_bitmapscan=on;
+set enable_indexscan=on;
+set enable_seqscan=off;
+Select dnsname from dnsdata
+where (split_part(reverse('cache.google.com'),'.',1))=(split_part(reverse(dnsname),'.',1))
+and (split_part(reverse('cache.google.com'),'.',2))=(split_part(reverse(dnsname),'.',2)) 
+order by dnsname;
+    dnsname     
+----------------
+ 1.google.com
+ 2.google.com
+ www.google.com
+(3 rows)
+
+Select dnsname from dnsdata
+where (split_part(reverse('cache.google.com'),'.',1))=(split_part(reverse(dnsname),'.',1))
+and (split_part(reverse('cache.google.com'),'.',2))=(split_part(reverse(dnsname),'.',2))
+and dnsname = 'cache.google.com'
+order by dnsname;
+ dnsname 
+---------
+(0 rows)
+
+-- cleanup
+drop table dnsdata cascade;
+Create or replace function ZeroFunc(int) Returns int as $BODY$
+BEGIN
+  RETURN 0;
+END;
+$BODY$ LANGUAGE plpgsql IMMUTABLE;
+drop table if exists mytable cascade;
+NOTICE:  table "mytable" does not exist, skipping
+create table mytable(i int, j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into mytable select x, x+1 from generate_series(1, 100000) as x;
+analyze mytable;
+CREATE INDEX mytable_idx1 ON mytable USING bitmap(ZeroFunc(i));
+select * from mytable where ZeroFunc(i)=0 and i=100 order by i;
+  i  |  j  
+-----+-----
+ 100 | 101
+(1 row)
+
+select * from mytable where ZeroFunc(i)=0 and i=-1 order by i;
+ i | j 
+---+---
+(0 rows)
+
+-- cleanup
+drop function ZeroFunc(int) cascade;
+NOTICE:  drop cascades to index mytable_idx1
+drop table mytable cascade;
+-- start_ignore
+create language plpython3u;
+-- end_ignore
+-- @description Tests for static partition selection (MPP-24709, GPSQL-2879)
+-- GPDB_12_MERGE_FIXME: this function extract the number such as [5,10] out of
+-- the string "Partition selected: 5 out of 10". We have temporarily broken
+-- that when we reimplemented dynamic seq scan. Currently only the number of
+-- selected partitions is avalable, get the total number of partitions back
+-- post merge.
+create or replace function get_selected_parts(explain_query text) returns text as
+$$
+import re
+rv = plpy.execute(explain_query)
+search_text = 'Dynamic Seq Scan on '
+result = []
+result.append(0)
+result.append(0)
+selected = 0
+out_of = 0
+pattern = re.compile(r"\s+Number of partitions to scan: (?P<selected>\d+)")
+for i in range(len(rv)):
+    cur_line = rv[i]['QUERY PLAN']
+    if search_text.lower() in cur_line.lower():
+        j = i+1
+        temp_line = rv[j]['QUERY PLAN']
+        while (not pattern.match(temp_line)):
+            j += 1
+            if j == len(rv) - 1:
+                break
+            temp_line = rv[j]['QUERY PLAN']
+
+        else:
+            selected += int(pattern.match(temp_line).group('selected'))
+result[0] = selected
+result[1] = out_of
+return result
+$$
+language plpython3u;
+drop table if exists partprune_foo;
+NOTICE:  table "partprune_foo" does not exist, skipping
+create table partprune_foo(a int, b int, c int) partition by range (b) (start (1) end (101) every (10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into partprune_foo select g % 5 + 1, g + 1, g % 10 + 1 from generate_series(0, 99) g;
+analyze partprune_foo;
+select get_selected_parts('explain select * from partprune_foo;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo;
+ a |  b  | c  
+---+-----+----
+ 1 |   1 |  1
+ 3 |   3 |  3
+ 5 |   5 |  5
+ 1 |   6 |  6
+ 3 |   8 |  8
+ 5 |  10 | 10
+ 1 |  11 |  1
+ 3 |  13 |  3
+ 5 |  15 |  5
+ 1 |  16 |  6
+ 3 |  18 |  8
+ 5 |  20 | 10
+ 1 |  21 |  1
+ 3 |  23 |  3
+ 5 |  25 |  5
+ 1 |  26 |  6
+ 3 |  28 |  8
+ 5 |  30 | 10
+ 1 |  31 |  1
+ 3 |  33 |  3
+ 5 |  35 |  5
+ 1 |  36 |  6
+ 3 |  38 |  8
+ 5 |  40 | 10
+ 1 |  41 |  1
+ 3 |  43 |  3
+ 5 |  45 |  5
+ 1 |  46 |  6
+ 3 |  48 |  8
+ 5 |  50 | 10
+ 1 |  51 |  1
+ 3 |  53 |  3
+ 5 |  55 |  5
+ 1 |  56 |  6
+ 3 |  58 |  8
+ 5 |  60 | 10
+ 1 |  61 |  1
+ 3 |  63 |  3
+ 5 |  65 |  5
+ 1 |  66 |  6
+ 3 |  68 |  8
+ 5 |  70 | 10
+ 1 |  71 |  1
+ 3 |  73 |  3
+ 5 |  75 |  5
+ 1 |  76 |  6
+ 3 |  78 |  8
+ 5 |  80 | 10
+ 1 |  81 |  1
+ 3 |  83 |  3
+ 5 |  85 |  5
+ 1 |  86 |  6
+ 3 |  88 |  8
+ 5 |  90 | 10
+ 1 |  91 |  1
+ 3 |  93 |  3
+ 5 |  95 |  5
+ 1 |  96 |  6
+ 3 |  98 |  8
+ 5 | 100 | 10
+ 2 |   2 |  2
+ 4 |   4 |  4
+ 2 |   7 |  7
+ 4 |   9 |  9
+ 2 |  12 |  2
+ 4 |  14 |  4
+ 2 |  17 |  7
+ 4 |  19 |  9
+ 2 |  22 |  2
+ 4 |  24 |  4
+ 2 |  27 |  7
+ 4 |  29 |  9
+ 2 |  32 |  2
+ 4 |  34 |  4
+ 2 |  37 |  7
+ 4 |  39 |  9
+ 2 |  42 |  2
+ 4 |  44 |  4
+ 2 |  47 |  7
+ 4 |  49 |  9
+ 2 |  52 |  2
+ 4 |  54 |  4
+ 2 |  57 |  7
+ 4 |  59 |  9
+ 2 |  62 |  2
+ 4 |  64 |  4
+ 2 |  67 |  7
+ 4 |  69 |  9
+ 2 |  72 |  2
+ 4 |  74 |  4
+ 2 |  77 |  7
+ 4 |  79 |  9
+ 2 |  82 |  2
+ 4 |  84 |  4
+ 2 |  87 |  7
+ 4 |  89 |  9
+ 2 |  92 |  2
+ 4 |  94 |  4
+ 2 |  97 |  7
+ 4 |  99 |  9
+(100 rows)
+
+select get_selected_parts('explain select * from partprune_foo where b = 35;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b = 35;
+ a | b  | c 
+---+----+---
+ 5 | 35 | 5
+(1 row)
+
+select get_selected_parts('explain select * from partprune_foo where b < 35;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b < 35;
+ a | b  | c  
+---+----+----
+ 2 |  2 |  2
+ 4 |  4 |  4
+ 2 |  7 |  7
+ 4 |  9 |  9
+ 2 | 12 |  2
+ 4 | 14 |  4
+ 2 | 17 |  7
+ 4 | 19 |  9
+ 2 | 22 |  2
+ 4 | 24 |  4
+ 2 | 27 |  7
+ 4 | 29 |  9
+ 2 | 32 |  2
+ 4 | 34 |  4
+ 1 |  1 |  1
+ 3 |  3 |  3
+ 5 |  5 |  5
+ 1 |  6 |  6
+ 3 |  8 |  8
+ 5 | 10 | 10
+ 1 | 11 |  1
+ 3 | 13 |  3
+ 5 | 15 |  5
+ 1 | 16 |  6
+ 3 | 18 |  8
+ 5 | 20 | 10
+ 1 | 21 |  1
+ 3 | 23 |  3
+ 5 | 25 |  5
+ 1 | 26 |  6
+ 3 | 28 |  8
+ 5 | 30 | 10
+ 1 | 31 |  1
+ 3 | 33 |  3
+(34 rows)
+
+select get_selected_parts('explain select * from partprune_foo where b in (5, 6, 14, 23);');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b in (5, 6, 14, 23);
+ a | b  | c 
+---+----+---
+ 4 | 14 | 4
+ 5 |  5 | 5
+ 1 |  6 | 6
+ 3 | 23 | 3
+(4 rows)
+
+select get_selected_parts('explain select * from partprune_foo where b < 15 or b > 60;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b < 15 or b > 60;
+ a |  b  | c  
+---+-----+----
+ 1 |   1 |  1
+ 3 |   3 |  3
+ 5 |   5 |  5
+ 1 |   6 |  6
+ 3 |   8 |  8
+ 5 |  10 | 10
+ 1 |  11 |  1
+ 3 |  13 |  3
+ 1 |  61 |  1
+ 3 |  63 |  3
+ 5 |  65 |  5
+ 1 |  66 |  6
+ 3 |  68 |  8
+ 5 |  70 | 10
+ 1 |  71 |  1
+ 3 |  73 |  3
+ 5 |  75 |  5
+ 1 |  76 |  6
+ 3 |  78 |  8
+ 5 |  80 | 10
+ 1 |  81 |  1
+ 3 |  83 |  3
+ 5 |  85 |  5
+ 1 |  86 |  6
+ 3 |  88 |  8
+ 5 |  90 | 10
+ 1 |  91 |  1
+ 3 |  93 |  3
+ 5 |  95 |  5
+ 1 |  96 |  6
+ 3 |  98 |  8
+ 5 | 100 | 10
+ 2 |   2 |  2
+ 4 |   4 |  4
+ 2 |   7 |  7
+ 4 |   9 |  9
+ 2 |  12 |  2
+ 4 |  14 |  4
+ 2 |  62 |  2
+ 4 |  64 |  4
+ 2 |  67 |  7
+ 4 |  69 |  9
+ 2 |  72 |  2
+ 4 |  74 |  4
+ 2 |  77 |  7
+ 4 |  79 |  9
+ 2 |  82 |  2
+ 4 |  84 |  4
+ 2 |  87 |  7
+ 4 |  89 |  9
+ 2 |  92 |  2
+ 4 |  94 |  4
+ 2 |  97 |  7
+ 4 |  99 |  9
+(54 rows)
+
+select get_selected_parts('explain select * from partprune_foo where b = 150;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b = 150;
+ a | b | c 
+---+---+---
+(0 rows)
+
+select get_selected_parts('explain select * from partprune_foo where b = a*5;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b = a*5;
+ a | b  | c 
+---+----+---
+ 5 | 25 | 5
+(1 row)
+
+-- Test with IN() lists
+-- Number of elements > threshold, partition elimination is not performed
+set optimizer_array_expansion_threshold = 3;
+select get_selected_parts('explain select * from partprune_foo where b in (5, 6, 14, 23);');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b in (5, 6, 14, 23);
+ a | b  | c 
+---+----+---
+ 1 |  6 | 6
+ 5 |  5 | 5
+ 4 | 14 | 4
+ 3 | 23 | 3
+(4 rows)
+
+reset optimizer_array_expansion_threshold;
+-- Test "ANY (<array>)" syntax.
+select get_selected_parts($$ explain select * from partprune_foo where b = ANY ('{5, 6, 14}') $$);
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b = ANY ('{5, 6, 14}');
+ a | b  | c 
+---+----+---
+ 1 |  6 | 6
+ 5 |  5 | 5
+ 4 | 14 | 4
+(3 rows)
+
+select get_selected_parts($$ explain select * from partprune_foo where b < ANY ('{12, 14, 11}') $$);
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from partprune_foo where b < ANY ('{12, 14, 11}');
+ a | b  | c  
+---+----+----
+ 1 |  1 |  1
+ 2 |  2 |  2
+ 1 |  6 |  6
+ 2 |  7 |  7
+ 1 | 11 |  1
+ 2 | 12 |  2
+ 3 |  3 |  3
+ 4 |  4 |  4
+ 5 |  5 |  5
+ 3 |  8 |  8
+ 4 |  9 |  9
+ 5 | 10 | 10
+ 3 | 13 |  3
+(13 rows)
+
+-- Check for all the different number of partition selections
+DROP TABLE IF EXISTS DATE_PARTS;
+NOTICE:  table "date_parts" does not exist, skipping
+CREATE TABLE DATE_PARTS (id int, year int, month int, day int, region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+    SUBPARTITION BY LIST (month)
+       SUBPARTITION TEMPLATE (
+        SUBPARTITION Q1 VALUES (1, 2, 3), 
+        SUBPARTITION Q2 VALUES (4 ,5 ,6),
+        SUBPARTITION Q3 VALUES (7, 8, 9),
+        SUBPARTITION Q4 VALUES (10, 11, 12),
+        DEFAULT SUBPARTITION other_months )
+        	SUBPARTITION BY RANGE(day)
+        		SUBPARTITION TEMPLATE (
+        		START (1) END (31) EVERY (10), 
+		        DEFAULT SUBPARTITION other_days)
+( START (2002) END (2012) EVERY (4), 
+  DEFAULT PARTITION outlying_years );
+insert into DATE_PARTS select i, extract(year from dt), extract(month from dt), extract(day from dt), NULL from (select i, '2002-01-01'::date + i * interval '1 day' day as dt from generate_series(1, 3650) as i) as t;
+-- Expected total parts => 4 * 1 * 4 => 16: 
+-- TODO #141973839: we selected extra parts because of disjunction: 32 parts: 4 * 2 * 4
+select get_selected_parts('explain analyze select * from DATE_PARTS where month between 1 and 3;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- Expected total parts => 4 * 2 * 4 => 32: 
+-- TODO #141973839: we selected extra parts because of disjunction: 48 parts: 4 * 3 * 4
+select get_selected_parts('explain analyze select * from DATE_PARTS where month between 1 and 4;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- Expected total parts => 1 * 2 * 4 => 8: 
+-- TODO #141973839: we selected extra parts because of disjunction: 24 parts: 2 * 3 * 4
+select get_selected_parts('explain analyze select * from DATE_PARTS where year = 2003 and month between 1 and 4;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- 1 :: 5 :: 4 => 20 // Only default for year
+select get_selected_parts('explain analyze select * from DATE_PARTS where year = 1999;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- 4 :: 1 :: 4 => 16 // Only default for month
+select get_selected_parts('explain analyze select * from DATE_PARTS where month = 13;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- 1 :: 1 :: 4 => 4 // Default for both year and month
+select get_selected_parts('explain analyze select * from DATE_PARTS where year = 1999 and month = 13;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- 4 :: 5 :: 1 => 20 // Only default part for day
+select get_selected_parts('explain analyze select * from DATE_PARTS where day = 40;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- General predicate
+-- TODO #141973839. We expected 112 parts: (month = 1) =>   4 * 1 * 4 => 16, month > 3 => 4 * 4 * 4 => 64, month in (0, 1, 2) => 4 * 1 * 4 => 16, month is NULL => 4 * 1 * 4 => 16.
+-- However, we selected 128 parts: (month = 1) =>   4 * 1 * 4 => 16, month > 3 => 4 * 4 * 4 => 64, month in (0, 1, 2) => 4 * 2 * 4 => 32, month is NULL => 4 * 1 * 4 => 16.
+select get_selected_parts('explain analyze select * from DATE_PARTS where month = 1 union all select * from DATE_PARTS where month > 3 union all select * from DATE_PARTS where month in (0,1,2) union all select * from DATE_PARTS where month is null;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- Equality predicate
+-- 16 partitions => 4 from year x 1 from month x 4 from days.
+select get_selected_parts('explain analyze select * from DATE_PARTS where month = 3;');  -- Not working (it only produces general)
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- More Equality and General Predicates ---
+create table foo(a int, b int)
+partition by list (b)
+(partition p1 values(1,3), partition p2 values(4,2), default partition other);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- General predicate
+-- Total 6 parts. b = 1: 1 part, b > 3: 2 parts, b in (0, 1): 2 parts. b is null: 1 part
+select get_selected_parts('explain analyze select * from foo where b = 1 union all select * from foo where b > 3 union all select * from foo where b in (0,1) union all select * from foo where b is null;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+drop table if exists pt;
+NOTICE:  table "pt" does not exist, skipping
+CREATE TABLE pt (id int, gender varchar(2)) 
+DISTRIBUTED BY (id)
+PARTITION BY LIST (gender)
+( PARTITION girls VALUES ('F', NULL), 
+  PARTITION boys VALUES ('M'), 
+  DEFAULT PARTITION other );
+-- General filter
+-- TODO #141916623. Expecting 6 parts, but optimizer plan selects 7 parts. The 6 parts breakdown is: gender = 'F': 1 part, gender < 'M': 2 parts (including default), gender in ('F', F'M'): 2 parts, gender is null => 1 part
+select get_selected_parts('explain analyze select * from pt where gender = ''F'' union all select * from pt where gender < ''M'' union all select * from pt where gender in (''F'', ''FM'') union all select * from pt where gender is null;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- DML
+-- Non-default part
+insert into DATE_PARTS values (-1, 2004, 11, 30, NULL);
+select * from date_parts_1_prt_2_2_prt_q4_3_prt_4 where id < 0;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+ -1 | 2004 |    11 |  30 | 
+(1 row)
+
+-- Default year
+insert into DATE_PARTS values (-2, 1999, 11, 30, NULL);
+select * from date_parts_1_prt_outlying_years_2_prt_q4_3_prt_4 where id < 0;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+ -2 | 1999 |    11 |  30 | 
+(1 row)
+
+-- Default month
+insert into DATE_PARTS values (-3, 2004, 20, 30, NULL);
+select * from date_parts_1_prt_2_2_prt_other_months where id < 0;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+ -3 | 2004 |    20 |  30 | 
+(1 row)
+
+-- Default day
+insert into DATE_PARTS values (-4, 2004, 10, 50, NULL);
+select * from date_parts_1_prt_2_2_prt_q4_3_prt_other_days where id < 0;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+ -4 | 2004 |    10 |  50 | 
+(1 row)
+
+-- Default everything
+insert into DATE_PARTS values (-5, 1999, 20, 50, NULL);
+select * from date_parts_1_prt_outlying_years_2_prt_other_mo_3_prt_other_days where id < 0;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+ -5 | 1999 |    20 |  50 | 
+(1 row)
+
+-- Default month + day but not year
+insert into DATE_PARTS values (-6, 2002, 20, 50, NULL);
+select * from date_parts_1_prt_2_2_prt_other_months_3_prt_other_days where id < 0;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+ -6 | 2002 |    20 |  50 | 
+(1 row)
+
+-- Dropped columns with exchange
+drop table if exists sales;
+NOTICE:  table "sales" does not exist, skipping
+CREATE TABLE sales (trans_id int, to_be_dropped1 int, date date, amount 
+decimal(9,2), to_be_dropped2 int, region text) 
+DISTRIBUTED BY (trans_id)
+PARTITION BY RANGE (date)
+SUBPARTITION BY LIST (region)
+SUBPARTITION TEMPLATE
+( SUBPARTITION usa VALUES ('usa'), 
+  SUBPARTITION asia VALUES ('asia'), 
+  SUBPARTITION europe VALUES ('europe'), 
+  DEFAULT SUBPARTITION other_regions)
+  (START (date '2011-01-01') INCLUSIVE
+   END (date '2012-01-01') EXCLUSIVE
+   EVERY (INTERVAL '3 month'), 
+   DEFAULT PARTITION outlying_dates );
+-- This will introduce different column numbers in subsequent part tables
+alter table sales drop column to_be_dropped1;
+alter table sales drop column to_be_dropped2;
+-- Create the exchange candidate without dropped columns
+drop table if exists sales_exchange_part;
+NOTICE:  table "sales_exchange_part" does not exist, skipping
+create table sales_exchange_part (trans_id int, date date, amount 
+decimal(9,2), region text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'trans_id' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- Insert some data
+insert into sales_exchange_part values(1, '2011-01-01', 10.1, 'usa');
+-- Exchange
+ALTER TABLE sales 
+ALTER PARTITION FOR (date '2011-01-01')
+EXCHANGE PARTITION FOR ('usa') WITH TABLE sales_exchange_part ;
+ANALYZE sales;
+-- TODO: #141973839. Expected 10 parts, currently selecting 15 parts. First level: 4 parts + 1 default. Second level 2 parts. Total 10 parts.
+select get_selected_parts('explain analyze select * from sales where region = ''usa'' or region = ''asia'';');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+select * from sales where region = 'usa' or region = 'asia';
+ trans_id |    date    | amount | region 
+----------+------------+--------+--------
+        1 | 01-01-2011 |  10.10 | usa
+(1 row)
+
+-- Test DynamicIndexScan with extra filter
+create index idx_sales_date on sales(date);
+explain select * from sales where date = '2011-01-01' and region = 'usa';
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.12..8.16 rows=1 width=19)
+   ->  Index Scan using sales_1_prt_2_2_prt_usa_date_idx on sales_1_prt_2_2_prt_usa sales  (cost=0.12..8.14 rows=1 width=19)
+         Index Cond: (date = '01-01-2011'::date)
+         Filter: (region = 'usa'::text)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+select * from sales where date = '2011-01-01' and region = 'usa';
+ trans_id |    date    | amount | region 
+----------+------------+--------+--------
+        1 | 01-01-2011 |  10.10 | usa
+(1 row)
+
+-- Updating partition key
+select * from sales_1_prt_2_2_prt_usa;
+ trans_id |    date    | amount | region 
+----------+------------+--------+--------
+        1 | 01-01-2011 |  10.10 | usa
+(1 row)
+
+select * from sales_1_prt_2_2_prt_europe;
+ trans_id | date | amount | region 
+----------+------+--------+--------
+(0 rows)
+
+update sales set region = 'europe' where trans_id = 1;
+select * from sales_1_prt_2_2_prt_europe;
+ trans_id |    date    | amount | region 
+----------+------------+--------+--------
+        1 | 01-01-2011 |  10.10 | europe
+(1 row)
+
+select * from sales_1_prt_2_2_prt_usa;
+ trans_id | date | amount | region 
+----------+------+--------+--------
+(0 rows)
+
+select * from sales;
+ trans_id |    date    | amount | region 
+----------+------------+--------+--------
+        1 | 01-01-2011 |  10.10 | europe
+(1 row)
+
+-- Distinct From
+drop table if exists bar;
+NOTICE:  table "bar" does not exist, skipping
+CREATE TABLE bar (i INTEGER, j decimal)
+partition by list (j)
+subpartition by range (i) subpartition template (start(1) end(4) every(2))
+(partition p1 values(0.2,2.8, NULL), partition p2 values(1.7,3.1),
+partition p3 values(5.6), default partition other);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bar values(1, 0.2); --p1
+insert into bar values(1, 1.7); --p2
+insert into bar values(1, 2.1); --default
+insert into bar values(1, 5.6); --default
+insert into bar values(1, NULL); --p1
+-- In-equality
+-- 8 parts: All 4 parts on first level and each will have 2 range parts 
+select get_selected_parts('explain analyze select * from bar where j>0.02;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- 6 parts: Excluding 1 list parts at first level. So, 3 at first level and each has 2 at second level.
+select get_selected_parts('explain analyze select * from bar where j>2.8;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- Distinct From
+-- 6 parts: Everything except 1 part that contains 5.6.
+select get_selected_parts('explain analyze select * from bar where j is distinct from 5.6;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+-- 8 parts: NULL is shared with others on p1. So, all 8 parts.
+select get_selected_parts('explain analyze select * from bar where j is distinct from NULL;');
+ get_selected_parts 
+--------------------
+ [0, 0]
+(1 row)
+
+RESET ALL;

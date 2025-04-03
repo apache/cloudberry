@@ -1,0 +1,55 @@
+-- @Description Ensures that a select during a delete operation is ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT);
+CREATE
+insert into pax_tbl select generate_series(1,100);
+INSERT 100
+
+2: BEGIN;
+BEGIN
+2: SELECT * FROM pax_tbl WHERE a < 5 ORDER BY a;
+ a 
+---
+ 1 
+ 2 
+ 3 
+ 4 
+(4 rows)
+2: DELETE FROM pax_tbl WHERE a < 5;
+DELETE 4
+1: SELECT * FROM pax_tbl WHERE a >= 5 AND a < 10 ORDER BY a;
+ a 
+---
+ 5 
+ 6 
+ 7 
+ 8 
+ 9 
+(5 rows)
+3: SELECT * FROM pax_tbl WHERE a < 5 ORDER BY a;
+ a 
+---
+ 1 
+ 2 
+ 3 
+ 4 
+(4 rows)
+2: COMMIT;
+COMMIT
+2: SELECT * FROM pax_tbl WHERE a < 5 ORDER BY a;
+ a 
+---
+(0 rows)
+4: SELECT * FROM pax_tbl WHERE a < 10 ORDER BY a;
+ a 
+---
+ 5 
+ 6 
+ 7 
+ 8 
+ 9 
+(5 rows)
+4: INSERT INTO pax_tbl VALUES (0);
+INSERT 1

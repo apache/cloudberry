@@ -98,6 +98,12 @@ else
 ALWAYS_SUBDIRS += hstore_plpython jsonb_plpython ltree_plpython
 endif
 
+ifeq ($(enable_pax),yes)
+SUBDIRS += pax_storage
+else
+ALWAYS_SUBDIRS += pax_storage
+endif
+
 # Missing:
 #		start-scripts	\ (does not have a makefile)
 

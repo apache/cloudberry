@@ -1,0 +1,266 @@
+# test dispatch
+test: gpdispatch
+
+# test if gxid is valid or not on the cluster before running the tests
+test: check_gxid
+
+test: checkpoint_dtx_info
+test: autovacuum-analyze
+# pax not support TupleInsertSpeculative
+# test: lockmodes
+# test: pg_rewind_fail_missing_xlog
+test: prepared_xact_deadlock_pg_rewind
+test: ao_partition_lock
+
+test: select_dropped_table
+test: update_hash_col_utilitymode execute_on_utilitymode
+
+# Tests for crash recovery
+test: uao_crash_compaction_column
+test: uao_crash_compaction_row
+# FIXME: MANIFEST: can't write the same table at the same time. see isolation2_unsupported_schedule
+#test: crash_recovery
+test: crash_recovery_redundant_dtx
+test: crash_recovery_dtm
+test: unlogged_heap_tables
+test: unlogged_appendonly_tables
+test: udf_exception_blocks_panic_scenarios
+test: ao_same_trans_truncate_crash
+test: frozen_insert_crash
+
+# TODO(gongxun:) These gdd testcases are not designed to work with ao and pax tables
+# Tests on global deadlock detector
+#test: gdd/prepare
+#test: gdd/concurrent_update
+#test: gdd/dist-deadlock-01 gdd/dist-deadlock-04 gdd/dist-deadlock-05 gdd/dist-deadlock-06 gdd/dist-deadlock-07 gdd/dist-deadlock-102 gdd/dist-deadlock-103 gdd/dist-deadlock-104 gdd/dist-deadlock-106 gdd/non-lock-105
+#test: gdd/dist-deadlock-upsert
+# until we can improve below flaky case please keep it disabled
+#ignore: gdd/non-lock-107
+# keep this in a separate group
+#test: gdd/extended_protocol_test
+#test: gdd/avoid-qd-deadlock
+#test: gdd/delete-deadlock-root-leaf-concurrent-op gdd/update-deadlock-root-leaf-concurrent-op
+
+# this resets the gp_global_deadlock_detector_period guc hence should
+# be last in the group.
+
+# test: gdd/local-deadlock-03
+# gdd end
+#test: gdd/end
+
+test: modify_table_data_corrupt
+
+# The following test injects a fault at a generic location
+# (StartTransaction).  The fault can be easily triggered by a
+# concurrent test, so run the test by itself.
+test: deadlock_under_entry_db_singleton
+
+#  this case creates table & index in utility mode, which may cause oid
+#  conflict when running in parallel with other cases.
+test: misc
+
+test: starve_case pg_views_concurrent_drop alter_blocks_for_update_and_viceversa drop_rename reader_waits_for_lock resource_queue bitmap_index_ao_sparse
+
+# Test deadlock situation when waiting on a resource queue lock
+# FIXME: MANIFEST: can't write the same table at the same time. see isolation2_unsupported_schedule
+#test: resource_queue_deadlock
+
+# Test simple cancellation for resource queues and cancellation/deadlocks for
+# sessions with multiple portals.
+test: resource_queue_cancel resource_queue_multi_portal
+
+# below test(s) inject faults so each of them need to be in a separate group
+test: pg_terminate_backend
+test: gp_terminate_mpp_backends
+
+# below case will cause failures on catalog changes,
+# please keep it in a separate test group
+test: gpexpand_catalog_lock
+
+test: reindex
+test: reindex_gpfastsequence
+test: commit_transaction_block_checkpoint
+test: instr_in_shmem_setup
+test: instr_in_shmem_terminate
+test: vacuum_recently_dead_tuple_due_to_distributed_snapshot
+test: vacuum_full_interrupt
+test: distributedlog-bug
+# pax storage not support pg toast index
+#test: invalidated_toast_index
+test: distributed_snapshot
+test: gp_collation
+#test: ao_upgrade
+test: ao_blkdir
+test: bitmap_index_concurrent
+test: bitmap_index_crash
+test: bitmap_update_words_backup_block
+test: bitmap_union
+test: bitmap_index_inspect
+
+# below test utilizes fault injectors so it needs to be in a group by itself
+# external table not support pax storage
+# test: external_table
+
+test: fsync_ao
+
+# Disable auto-vacuum for below tests
+test: disable_autovacuum
+
+# Tests on PAX tables (row-oriented).
+# FIXME: PAX won't update the reltuples in pg_class after vacuum/vacuum full
+test: concurrent_index_creation_should_not_deadlock
+test: pax/alter_while_vacuum2
+test: pax/alter_while_vacuum
+test: pax/bitmapindex_rescan
+test: pax/compaction_full_stats
+test: pax/compaction_utility_insert
+test: pax/compaction_utility
+test: pax/cursor_before_delete
+test: pax/cursor_before_deletevacuum
+test: pax/cursor_before_update
+test: pax/cursor_withhold2
+test: pax/cursor_withhold
+test: pax/delete_while_vacuum
+test: pax/index_build_reltuples
+test: pax/insert_policy
+test: pax/insert_while_vacuum
+test: pax/max_concurrency2
+test: pax/max_concurrency
+test: pax/parallel_delete
+test: pax/parallel_update_readcommitted
+test: pax/parallel_update
+test: pax/phantom_reads_delete_serializable
+test: pax/phantom_reads_delete
+test: pax/phantom_reads_serializable
+test: pax/phantom_reads
+test: pax/phantom_reads_update_serializable
+test: pax/phantom_reads_update
+test: pax/select_after_vacuum_serializable
+test: pax/select_after_vacuum
+test: pax/select_before_vacuum
+test: pax/selectinsertupdate_while_vacuum
+test: pax/selectinsert_while_vacuum
+test: pax/selectupdate_while_vacuum
+test: pax/select_while_delete
+test: pax/select_while_full_vacuum
+test: pax/select_while_vacuum_serializable2
+test: pax/select_while_vacuum_serializable
+test: pax/select_while_vacuum
+test: pax/snapshot_index_corruption
+test: pax/update_while_vacuum
+test: pax/vacuum_index_stats
+test: pax/vacuum_self_function
+test: pax/vacuum_self_serializable2
+test: pax/vacuum_self_serializable3
+test: pax/vacuum_self_serializable
+test: pax/vacuum_while_insert
+test: pax/vacuum_while_vacuum
+
+# Refer to the case comment for why it is commented out.
+# test: uao/bad_buffer_on_temp_ao_row
+
+test: reorganize_after_ao_vacuum_skip_drop truncate_after_ao_vacuum_skip_drop mark_all_aoseg_await_drop
+# below test(s) inject faults so each of them need to be in a separate group
+test: segwalrep/master_wal_switch
+
+# Refer to the case comment for why it is commented out.
+# test: uao/bad_buffer_on_temp_ao_column
+
+# this case contains fault injection, must be put in a separate test group
+test: terminate_in_gang_creation
+test: prepare_limit
+test: add_column_after_vacuum_skip_drop_column
+test: vacuum_after_vacuum_skip_drop_column
+# test workfile_mgr
+test: workfile_mgr_test
+test: pg_basebackup
+#TODO: Symlink targets with length greater than 100 characters
+# test: pg_basebackup_with_tablespaces
+test: enable_autovacuum
+
+test: segwalrep/die_commit_pending_replication
+
+# Tests for FTS
+test: fts_errors
+test: segwalrep/replication_keeps_crash
+# FIXME: MANIFEST: can't write the same table at the same time. see isolation2_unsupported_schedule
+# test: segwalrep/commit_blocking
+# test: segwalrep/fts_unblock_primary
+test: segwalrep/recoverseg_from_file
+test: segwalrep/mirror_promotion
+test: segwalrep/cancel_commit_pending_replication
+test: segwalrep/twophase_tolerance_with_mirror_promotion
+# unstable FTS test in different arch
+# test: segwalrep/failover_with_many_records
+test: segwalrep/commit_blocking_on_standby
+test: segwalrep/dtx_recovery_wait_lsn
+test: fts_manual_probe
+test: fts_session_reset
+# unstable FTS test in different arch
+# test: fts_segment_reset
+
+# Reindex tests
+test: reindex/abort_reindex
+test: reindex/createidx_while_reindex_idx_pax_bitmap
+test: reindex/createidx_while_reindex_idx_pax_btree
+test: reindex/reindextable_while_addpart_pax_part_btree
+test: reindex/reindextable_while_altertable_pax_part_btree
+test: reindex/reindextable_while_dropindex_pax_part_btree
+test: reindex/reindextable_while_reindex_idx_pax_bitmap
+test: reindex/reindextable_while_reindex_idx_pax_part_btree
+test: reindex/repeatable_read_reindex_with_insert_pax
+test: reindex/serializable_reindex_with_drop_column_pax
+test: reindex/serializable_reindex_with_drop_index_pax
+test: reindex/vacuum_analyze_while_reindex_pax_btree
+test: reindex/vacuum_while_reindex_pax_bitmap
+test: reindex/vacuum_while_reindex_pax_btree
+test: reindex/vacuum_while_reindex_pax_btree_toast
+
+# Cancel test
+test: cancel_plpython
+test: cancel_query
+
+# Tests for getting numsegments in utility mode
+test: upgrade_numsegments
+# Memory accounting tests
+
+# OOM tests start
+test: create_memory_accounting_tables 
+ignore: setup_memory_accounting
+ignore: oom_mixed_1 oom_mixed_2 oom_simple
+ignore: restore_memory_accounting_default
+# Sleep and OOM tests end
+
+# Startup OOM tests start
+test: setup_startup_memory_accounting
+test: oom_startup_memory
+test: restore_memory_accounting_default
+test: runaway_query
+
+test: distributed_transactions
+
+# Test for tablespace
+test: concurrent_drop_truncate_tablespace
+
+# Test for distributed commit array overflow during replay on standby 
+# Skip standby_replay_dtx_info, it will cause standby down
+# test: standby_replay_dtx_info
+
+# test the orphan temp table is dropped on the coordinator when panic happens on segment
+test: orphan_temp_table 
+
+# test if gxid is valid or not on the cluster after running the tests
+test: check_gxid
+
+# test if GUC is synchronized from the QD to QEs.
+test: sync_guc
+
+
+# Tests for unique indexes on AO/CO tables (uses fault injector)
+#test: ao_unique_index
+#test: aocs_unique_index
+
+# directory table not support pax storage
+#test: local_directory_table_mixed
+test: stat_activity_extended
+test: sharedsnapshot

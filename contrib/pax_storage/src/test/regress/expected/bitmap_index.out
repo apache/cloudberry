@@ -1,0 +1,938 @@
+SET enable_seqscan = OFF;
+SET enable_indexscan = ON;
+SET enable_bitmapscan = ON;
+create table bm_test (i int, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bm_test select i % 10, (i % 10)::text  from generate_series(1, 100) i;
+create index bm_test_idx on bm_test using bitmap (i);
+select count(*) from bm_test where i=1;
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from bm_test where i in(1, 3);
+ count 
+-------
+    20
+(1 row)
+
+ -- this sql should confirm that the tuple with i=1
+ -- and the tuple with i=5 are on different segments
+select count(distinct gp_segment_id) from bm_test where i in (1, 5);
+ count 
+-------
+     2
+(1 row)
+
+select count(*) from bm_test where i in(1, 5);
+ count 
+-------
+    20
+(1 row)
+
+select * from bm_test where i > 10;
+ i | t 
+---+---
+(0 rows)
+
+reindex index bm_test_idx;
+select count(*) from bm_test where i in(1, 3);
+ count 
+-------
+    20
+(1 row)
+
+drop index bm_test_idx;
+create index bm_test_coll_idx on bm_test using bitmap(i, t COLLATE "C");
+select * from bm_test where i=5 and t='5';
+ i | t 
+---+---
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+(10 rows)
+
+select * from bm_test where i=5 or t='6';
+ i | t 
+---+---
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+ 6 | 6
+(20 rows)
+
+ -- this sql should confirm that the tuple with i=5
+ -- and the tuple with t='1' are on different segments
+ select count(distinct gp_segment_id) from bm_test where i=5 or t='1';
+ count 
+-------
+     2
+(1 row)
+
+select * from bm_test where i=5 or t='1';
+ i | t 
+---+---
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+(20 rows)
+
+select * from bm_test where i between 1 and 10 and i::text = t;
+ i | t 
+---+---
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 2 | 2
+ 4 | 4
+ 6 | 6
+ 8 | 8
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+ 1 | 1
+ 3 | 3
+ 5 | 5
+ 7 | 7
+ 9 | 9
+(90 rows)
+
+drop table bm_test;
+-- test a bunch of different data types
+create table bm_test (i2 int2, i4 int4, i8 int8, f4 float4, f8 float8,
+	n numeric(10, 3), t1 varchar(3), t2 char(3), t3 text, a int[2],
+	ip inet, b bytea, t timestamp, d date, g bool);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i2' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bm_test values(1, 1, 1, 1.0, 1.0, 1000.333, '1', '1', '1',
+    array[1, 3], '127.0.0.1', E'\001', '2007-01-01 01:01:01',
+    '2007-01-01', 't');
+insert into bm_test values(2, 2, 2, 2.0, 2.0, 2000.333, '2', '2', 'foo',
+    array[2, 6], '127.0.0.2', E'\002', '2007-01-02 01:01:01',
+    '2007-01-02', 'f');
+insert into bm_test default values; -- test nulls
+create index bm_i2_idx on bm_test using bitmap(i2);
+create index bm_i4_idx on bm_test using bitmap(i4);
+create index bm_i8_idx on bm_test using bitmap(i8);
+create index bm_f4_idx on bm_test using bitmap(f4);
+create index bm_f8_idx on bm_test using bitmap(f8);
+create index bm_n_idx on bm_test using bitmap(n);
+create index bm_t1_idx on bm_test using bitmap(t1);
+create index bm_t2_idx on bm_test using bitmap(t2);
+create index bm_t3_idx on bm_test using bitmap(t3);
+create index bm_a_idx on bm_test using bitmap(a);
+create index bm_ip_idx on bm_test using bitmap(ip);
+create index bm_b_idx on bm_test using bitmap(b);
+create index bm_t_idx on bm_test using bitmap(t);
+create index bm_d_idx on bm_test using bitmap(d);
+create index bm_g_idx on bm_test using bitmap(g);
+create index bm_t3_upper_idx on bm_test using bitmap(upper(t3));
+create index bm_n_null_idx on bm_test using bitmap(n) WHERE n ISNULL;
+-- Try some cross type stuff
+select a.t from bm_test a, bm_test b where a.i2 = b.i2;
+            t             
+--------------------------
+ Tue Jan 02 01:01:01 2007
+ Mon Jan 01 01:01:01 2007
+(2 rows)
+
+select a.t from bm_test a, bm_test b where a.i2 = b.i4;
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+ Tue Jan 02 01:01:01 2007
+(2 rows)
+
+select a.t from bm_test a, bm_test b where a.i2 = b.i8;
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+ Tue Jan 02 01:01:01 2007
+(2 rows)
+
+select a.t from bm_test a, bm_test b where b.f4 = a.f8 and a.f8 = '2.0';
+            t             
+--------------------------
+ Tue Jan 02 01:01:01 2007
+(1 row)
+
+-- some range queries
+select a.t from bm_test a, bm_test b where a.n < b.n;
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+(1 row)
+
+select a.t from bm_test a, bm_test b where a.ip < b.ip;
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+(1 row)
+
+-- or queries
+select a.t from bm_test a, bm_test b where a.ip=b.ip OR a.b = b.b;
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+ Tue Jan 02 01:01:01 2007
+(2 rows)
+
+-- and
+select a.t from bm_test a, bm_test b where a.ip=b.ip and a.b = b.b and a.i2=1;
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+(1 row)
+
+-- subquery
+select a.t from bm_test a where d in(select d from bm_test b where a.g=b.g);
+            t             
+--------------------------
+ Mon Jan 01 01:01:01 2007
+ Tue Jan 02 01:01:01 2007
+(2 rows)
+
+-- functional and predicate indexes
+select t from bm_test where upper(t3) = 'FOO';
+            t             
+--------------------------
+ Tue Jan 02 01:01:01 2007
+(1 row)
+
+select t from bm_test where n ISNULL;
+ t 
+---
+ 
+(1 row)
+
+-- test updates
+update bm_test set i4 = 3;
+-- should return nothing
+select * from bm_test where i4 = 1;
+ i2 | i4 | i8 | f4 | f8 | n | t1 | t2 | t3 | a | ip | b | t | d | g 
+----+----+----+----+----+---+----+----+----+---+----+---+---+---+---
+(0 rows)
+
+-- should return all
+select * from bm_test where i4=3;
+ i2 | i4 | i8 | f4 | f8 |    n     | t1 | t2  | t3  |   a   |    ip     |  b   |            t             |     d      | g 
+----+----+----+----+----+----------+----+-----+-----+-------+-----------+------+--------------------------+------------+---
+  1 |  3 |  1 |  1 |  1 | 1000.333 | 1  | 1   | 1   | {1,3} | 127.0.0.1 | \x01 | Mon Jan 01 01:01:01 2007 | 01-01-2007 | t
+    |  3 |    |    |    |          |    |     |     |       |           |      |                          |            | 
+  2 |  3 |  2 |  2 |  2 | 2000.333 | 2  | 2   | foo | {2,6} | 127.0.0.2 | \x02 | Tue Jan 02 01:01:01 2007 | 01-02-2007 | f
+(3 rows)
+
+-- should return one row
+select * from bm_test where i2=1;
+ i2 | i4 | i8 | f4 | f8 |    n     | t1 | t2  | t3 |   a   |    ip     |  b   |            t             |     d      | g 
+----+----+----+----+----+----------+----+-----+----+-------+-----------+------+--------------------------+------------+---
+  1 |  3 |  1 |  1 |  1 | 1000.333 | 1  | 1   | 1  | {1,3} | 127.0.0.1 | \x01 | Mon Jan 01 01:01:01 2007 | 01-01-2007 | t
+(1 row)
+
+-- test splitting of words
+-- We distribute by k and only insert a single distinct value in that 
+-- field so that we can be guaranteed of behaviour. We're not testing
+-- the parallel mechanism here so it's fine to harass a single backend
+create table bm_test2 (i int, j int, k int) distributed by (k);
+create index bm_test2_i_idx on bm_test2 using bitmap(i);
+insert into bm_test2 select 1,
+case when (i % (16 * 16 + 8)) = 0 then 2  else 1 end, 1
+from generate_series(1, 16 * 16 * 16) i;
+select count(*) from bm_test2 where i = 1;
+ count 
+-------
+  4096
+(1 row)
+
+select count(*) from bm_test2 where j = 2;
+ count 
+-------
+    15
+(1 row)
+
+-- break some compressed words
+update bm_test2 set i = 2 where j = 2;
+select count(*) from bm_test2 where i = 1;
+ count 
+-------
+  4081
+(1 row)
+
+select count(*) from bm_test2 where i = 2;
+ count 
+-------
+    15
+(1 row)
+
+update bm_test2 set i = 3 where i = 1;
+select count(*) from bm_test2 where i = 1;
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from bm_test2 where i = 2;
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from bm_test2 where i = 3;
+ count 
+-------
+  4081
+(1 row)
+
+-- now try and break a whole page
+-- bitmap words are 16 bits so, with no compression we get about 
+-- 16500 words per 32K page. So, what we want to do is, insert
+-- 8250 uncompressed words, then a compressed word, then more uncompressed
+-- words until the page is full. After this, we can break the compressed word
+-- and there by test the word spliting system
+create table bm_test3 (i int, j int, k int) distributed by (k);
+create index bm_test3_i_idx on bm_test3 using bitmap(i);
+insert into bm_test3 select i, 1, 1 from
+generate_series(1, 8250 * 8) g, generate_series(1, 2) i;
+insert into bm_test3 
+select 17, 1, 1 from generate_series(1, 16 * 16) i;
+insert into bm_test3 values(17, 2, 1);
+insert into bm_test3
+select 17, 1, 1 from generate_series(1, 16 * 16) i;
+insert into bm_test3 select i, 1, 1 from
+generate_series(1, 8250 * 8) g, generate_series(1, 2) i;
+select count(*) from bm_test3 where i = 1;
+ count  
+--------
+ 132000
+(1 row)
+
+select count(*) from bm_test3 where i = 17;
+ count 
+-------
+   513
+(1 row)
+
+select count(*) from bm_test3 where i = 17 and j = 2;
+ count 
+-------
+     1
+(1 row)
+
+update bm_test3 set i = 18 where i = 17 and j = 2;
+select count(*) from bm_test3 where i = 1;
+ count  
+--------
+ 132000
+(1 row)
+
+select count(*) from bm_test3 where i = 2;
+ count  
+--------
+ 132000
+(1 row)
+
+select count(*) from bm_test3 where i = 17;
+ count 
+-------
+   512
+(1 row)
+
+select count(*) from bm_test3 where i = 18;
+ count 
+-------
+     1
+(1 row)
+
+drop table bm_test;
+drop table bm_test2;
+drop table bm_test3;
+create table bm_test (i int, j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bm_test values (0, 0), (0, 0), (0, 1), (1,0), (1,0), (1,1);
+analyze bm_test;
+create index bm_test_j on bm_test using bitmap(j);
+delete from bm_test where j =1;
+vacuum bm_test;
+insert into bm_test values (0, 0), (1,0);
+set enable_seqscan=off;
+set enable_bitmapscan=off;
+set optimizer_enable_bitmapscan=off;
+-- start_ignore
+-- Known_opt_diff: MPP-19808
+-- end_ignore
+explain select * from bm_test where j = 1;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..400.28 rows=1 width=8)
+   ->  Index Scan using bm_test_j on bm_test  (cost=0.00..400.28 rows=1 width=8)
+         Index Cond: j = 1
+ Settings:  enable_bitmapscan=off; enable_indexscan=on; enable_seqscan=off
+(4 rows)
+
+select * from bm_test where j = 1;
+ i | j 
+---+---
+(0 rows)
+
+drop table bm_test;
+-- MPP-3232
+create table bm_test (i int,j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bm_test values (1, 1), (1, 2);
+create index bm_test_j on bm_test using bitmap(j);
+update bm_test set j=20 where j=1;
+vacuum bm_test;
+drop table bm_test;
+-- unique index with null value tests
+drop table if exists ijk;
+NOTICE:  table "ijk" does not exist, skipping
+create table ijk(i int, j int, k int) distributed by (i);
+insert into ijk values (1, 1, 3);
+insert into ijk values (1, 2, 4);
+insert into ijk values (1, 3, NULL);
+insert into ijk values (1, 3, NULL);
+insert into ijk values (1, NULL, NULL);
+insert into ijk values (1, NULL, NULL);
+-- should fail.
+create unique index ijk_i on ijk(i);
+ERROR:  could not create unique index "ijk_i"
+DETAIL:  Key (i)=(1) is duplicated.
+create unique index ijk_ij on ijk(i,j);
+ERROR:  could not create unique index "ijk_ij"
+DETAIL:  Key (i, j)=(1, 3) is duplicated.
+-- should OK.
+create unique index ijk_ijk on ijk(i,j,k);
+drop table if exists ijk;
+create table ijk(i int, j int, k int) distributed by (i);
+insert into ijk values (1, 1, 3);
+insert into ijk values (1, 2, 4);
+insert into ijk values (1, 3, NULL);
+insert into ijk values (1, 3, NULL);
+insert into ijk values (1, NULL, NULL);
+insert into ijk values (1, NULL, NULL);
+-- should fail.
+create unique index ijk_i on ijk(i);
+ERROR:  could not create unique index "ijk_i"
+DETAIL:  Key (i)=(1) is duplicated.
+create unique index ijk_ij on ijk(i,j);
+ERROR:  could not create unique index "ijk_ij"
+DETAIL:  Key (i, j)=(1, 3) is duplicated.
+-- should OK.
+create unique index ijk_ijk on ijk(i,j,k);
+drop table ijk;
+--
+-- test bitmaps with NULL and non-NULL values (MPP-8461)
+--
+create table bmap_test (x int, y int, z int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bmap_test values (1,NULL,NULL);
+insert into bmap_test values (NULL,1,NULL);
+insert into bmap_test values (NULL,NULL,1);
+insert into bmap_test values (1,NULL,NULL);
+insert into bmap_test values (NULL,1,NULL);
+insert into bmap_test values (NULL,NULL,1);
+insert into bmap_test values (1,NULL,5);
+insert into bmap_test values (NULL,1,NULL);
+insert into bmap_test values (NULL,NULL,1);
+insert into bmap_test select a from generate_series(1,10*1000) as s(a);
+create index bmap_test_idx_1 on bmap_test using bitmap (x,y,z);
+analyze bmap_test;
+select * from bmap_test where x = 1 order by x,y,z;
+ x | y | z 
+---+---+---
+ 1 |   | 5
+ 1 |   |  
+ 1 |   |  
+ 1 |   |  
+(4 rows)
+
+drop table bmap_test;
+--
+-- Test over-sized values
+--
+create table oversize_test (c1 text);
+CREATE INDEX oversize_test_idx ON oversize_test USING BITMAP (c1);
+insert into oversize_test values ('a');
+select * from oversize_test;
+ c1 
+----
+ a
+(1 row)
+
+-- this fails, because the value is too large
+insert into oversize_test values (array_to_string(array(select generate_series(1, 10000)), '123456789'));
+ERROR:  row is too big: size 33256, maximum size 32736  (seg2 127.0.0.1:40002 pid=5270)
+set enable_seqscan=off;
+select * from oversize_test where c1 < 'z';
+ c1 
+----
+ a
+(1 row)
+
+-- Drop the index, insert the row, and then try creating the index again. This is essentially
+-- the same test, but now the failure happens during CREATE INDEX rather than INSERT.
+drop index oversize_test_idx;
+insert into oversize_test values (array_to_string(array(select generate_series(1, 10000)), '123456789'));
+CREATE INDEX oversize_test_idx ON oversize_test USING BITMAP (c1);
+ERROR:  row is too big: size 33256, maximum size 32736  (seg2 172.17.0.2:25434 pid=390371)
+--
+-- Test Index Only Scans.
+--
+-- Bitmap indexes don't really support index only scans at the moment. But the
+-- planner can still choose an Index Only Scan, if the query doesn't need any
+-- of the attributes from the index.
+create table bm_indexonly_test (i int, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bm_indexonly_test select g, 'foo' || g from generate_series(1, 5) g;
+create index on bm_indexonly_test using bitmap (i, t);
+set enable_seqscan=off;
+set enable_bitmapscan=off;
+set enable_indexscan=on;
+set enable_indexonlyscan=on;
+-- if bitmap indexes supported Index Only Scans, properly, this could use one.
+explain (costs off) select i, t from bm_indexonly_test where i = 1;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Scan using bm_indexonly_test_i_t_idx on bm_indexonly_test
+         Index Cond: (i = 1)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select i, t from bm_indexonly_test where i = 1;
+ i |  t   
+---+------
+ 1 | foo1
+(1 row)
+
+-- even without proper support, the planner chooses an Index Only Scan for this.
+explain (costs off) select 'foobar' from bm_indexonly_test;
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using bm_indexonly_test_i_t_idx on bm_indexonly_test
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select 'foobar' from bm_indexonly_test;
+ ?column? 
+----------
+ foobar
+ foobar
+ foobar
+ foobar
+ foobar
+(5 rows)
+
+--
+-- Test unlogged table
+--
+set enable_seqscan=off;
+set enable_indexscan=on;
+set optimizer_enable_bitmapscan=on;
+create unlogged table unlogged_test(c1 int); 
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into unlogged_test select * from generate_series(1,1000);
+CREATE INDEX unlogged_test_idx ON unlogged_test USING BITMAP (c1);
+analyze unlogged_test;
+explain select * from unlogged_test where c1 = 100;
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..200.45 rows=1 width=4)
+   ->  Index Scan using unlogged_test_idx on unlogged_test  (cost=0.00..200.45 rows=1 width=4)
+         Index Cond: c1 = 100
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select * from unlogged_test where c1 = 100;
+ c1  
+-----
+ 100
+(1 row)
+
+drop table unlogged_test;
+--
+-- Test crash recovery
+--
+--
+-- disable fault-tolerance service (FTS) probing to ensure
+-- the mirror does not accidentally get promoted
+--
+SELECT gp_inject_fault_infinite('fts_probe', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+CREATE TABLE bm_test_insert(a int) DISTRIBUTED BY (a);
+CREATE INDEX bm_a_idx ON bm_test_insert USING bitmap(a);
+CREATE TABLE bm_test_update(a int, b int) DISTRIBUTED BY (a);
+CREATE INDEX bm_b_idx ON bm_test_update USING bitmap(b);
+INSERT INTO bm_test_update SELECT i,i FROM generate_series (1, 10000) i;
+-- flush the data to disk
+CHECKPOINT;
+-- skip all further checkpoint
+SELECT gp_inject_fault_infinite('checkpoint', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+INSERT INTO bm_test_insert SELECT generate_series (1, 10000);
+UPDATE bm_test_update SET b=b+1;
+-- trigger recovery on primaries 
+SELECT gp_inject_fault_infinite('finish_prepared_after_record_commit_prepared', 'panic', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
+WARNING:  consider disabling FTS probes while injecting a panic.
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+SET client_min_messages='ERROR';
+CREATE TABLE trigger_recovery_on_primaries(c int);
+RESET client_min_messages;
+-- reconnect to the database after restart
+\c
+SELECT gp_inject_fault('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+SELECT gp_inject_fault('finish_prepared_after_record_commit_prepared', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+SET enable_seqscan=off;
+SET enable_indexscan=off;
+SELECT * FROM bm_test_insert WHERE a=1;
+ a 
+---
+ 1
+(1 row)
+
+SELECT * FROM bm_test_update WHERE b=1;
+ a | b 
+---+---
+(0 rows)
+
+DROP TABLE trigger_recovery_on_primaries;
+DROP TABLE bm_test_insert;
+DROP TABLE bm_test_update;
+--
+-- re-enable fault-tolerance service (FTS) probing after recovery completed.
+--
+SELECT gp_inject_fault('fts_probe', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- If the table is AO table, it need generate some fake tuple pointer,
+-- this pointer is a little different from the heap tables pointer,
+-- If the Offset in pointer is 0(If the row number is 32768, the Offset
+-- should be 0), we set the 16th bit of the Offsert to be 1, so we
+-- do not forget to remove the flag when we use it, otherwise we will
+-- get an wrong value.
+CREATE TABLE bm_test_reindex(c1 int, c2 int) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE INDEX bm_test_reindex_idx ON bm_test_reindex USING bitmap(c2);
+INSERT INTO bm_test_reindex SELECT 1,i FROM generate_series(1, 65537)i;
+REINDEX INDEX bm_test_reindex_idx;
+SET enable_bitmapscan to on;
+SET enable_seqscan to off;
+SELECT * from bm_test_reindex where c2 = 32767;
+ c1 |  c2   
+----+-------
+  1 | 32767
+(1 row)
+
+SELECT * from bm_test_reindex where c2 = 32768;
+ c1 |  c2   
+----+-------
+  1 | 32768
+(1 row)
+
+SELECT * from bm_test_reindex where c2 = 32769;
+ c1 |  c2   
+----+-------
+  1 | 32769
+(1 row)
+
+SELECT * from bm_test_reindex where c2 = 65536;
+ c1 |  c2   
+----+-------
+  1 | 65536
+(1 row)
+
+SET enable_seqscan = ON;
+SET enable_indexscan = ON;
+--
+-- correct cost estimate to avoid bm index scan for wrong result
+--
+CREATE TABLE test_bmselec(id int, type int, msg text) distributed by (id);
+INSERT INTO test_bmselec (id, type, msg) SELECT g, g % 10000, md5(g::text) FROM generate_series(1,100000) as g;
+CREATE INDEX ON test_bmselec USING bitmap(type);
+ANALYZE test_bmselec;
+-- it used to choose bitmap index over seq scan, which not right.
+explain (analyze, verbose) select * from test_bmselec where type < 500;
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..562.63 rows=5097 width=41) (actual time=0.325..5.944 rows=5000 loops=1)
+   Output: id, type, msg
+   ->  Seq Scan on public.test_bmselec  (cost=0.00..494.67 rows=1699 width=41) (actual time=0.029..5.094 rows=1693 loops=1)
+         Output: id, type, msg
+         Filter: (test_bmselec.type < 500)
+         Rows Removed by Filter: 31769
+ Planning Time: 0.620 ms
+   (slice0)    Executor memory: 36K bytes.
+   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=on, enable_indexscan=on, enable_seqscan=on
+ Execution Time: 6.606 ms
+(13 rows)
+
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+-- we can see the bitmap index scan is much more slower
+explain (analyze, verbose) select * from test_bmselec where type < 500;
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..5931.19 rows=5097 width=41) (actual time=25.173..84.703 rows=5000 loops=1)
+   Output: id, type, msg
+   ->  Index Scan using test_bmselec_type_idx on public.test_bmselec  (cost=0.00..5863.22 rows=1699 width=41) (actual time=24.676..49.892 rows=1693 loops=1)
+         Output: id, type, msg
+         Index Cond: (test_bmselec.type < 500)
+ Planning Time: 0.358 ms
+   (slice0)    Executor memory: 39K bytes.
+   (slice1)    Executor memory: 15732K bytes avg x 3 workers, 15785K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=off, enable_indexscan=on, enable_seqscan=off
+ Execution Time: 87.205 ms
+(12 rows)
+
+DROP TABLE test_bmselec;
+SET enable_seqscan = ON;
+SET enable_bitmapscan = ON;
+-- for sparse bitmap index
+create table test_bmsparse(id int, type int, msg text) distributed by (id);
+INSERT INTO test_bmsparse (id, type, msg) SELECT g, g % 10000, md5(g::text) FROM generate_series(1,10000) as g;
+INSERT INTO test_bmsparse (id, type, msg) SELECT g, g % 200, md5(g::text) FROM generate_series(1,80000) as g;
+INSERT INTO test_bmsparse (id, type, msg) SELECT g, g % 10000, md5(g::text) FROM generate_series(1,10000) as g;
+CREATE INDEX ON test_bmsparse USING bitmap(type);
+ANALYZE test_bmsparse;
+-- select lots of rows but on small part of distinct values, should use seq scan
+explain (analyze, verbose) select * from test_bmsparse where type < 200;
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1559.93 rows=79895 width=41) (actual time=0.846..27.219 rows=80400 loops=1)
+   Output: id, type, msg
+   ->  Seq Scan on public.test_bmsparse  (cost=0.00..494.67 rows=26632 width=41) (actual time=0.029..7.373 rows=26975 loops=1)
+         Output: id, type, msg
+         Filter: (test_bmsparse.type < 200)
+         Rows Removed by Filter: 6596
+ Planning Time: 0.549 ms
+   (slice0)    Executor memory: 36K bytes.
+   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=on, enable_indexscan=on, enable_seqscan=on
+ Execution Time: 31.714 ms
+(13 rows)
+
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+explain (analyze, verbose) select * from test_bmsparse where type < 200;
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..35546.79 rows=79895 width=41) (actual time=21.727..232.170 rows=80400 loops=1)
+   Output: id, type, msg
+   ->  Index Scan using test_bmsparse_type_idx on public.test_bmsparse  (cost=0.00..34481.53 rows=26632 width=41) (actual time=11.498..206.903 rows=26975 loops=1)
+         Output: id, type, msg
+         Index Cond: (test_bmsparse.type < 200)
+ Planning Time: 0.271 ms
+   (slice0)    Executor memory: 39K bytes.
+   (slice1)    Executor memory: 6499K bytes avg x 3 workers, 6499K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=off, enable_indexscan=on, enable_seqscan=off
+ Execution Time: 237.311 ms
+(12 rows)
+
+SET enable_seqscan = ON;
+SET enable_bitmapscan = ON;
+-- select small part of table but on lots of distinct values, should use seq scan
+explain (analyze, verbose) select * from test_bmsparse where type > 500;
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..748.40 rows=19030 width=41) (actual time=0.327..9.309 rows=18998 loops=1)
+   Output: id, type, msg
+   ->  Seq Scan on public.test_bmsparse  (cost=0.00..494.67 rows=6343 width=41) (actual time=0.042..5.347 rows=6448 loops=1)
+         Output: id, type, msg
+         Filter: (test_bmsparse.type > 500)
+         Rows Removed by Filter: 26979
+ Planning Time: 0.330 ms
+   (slice0)    Executor memory: 36K bytes.
+   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=on, enable_indexscan=on, enable_seqscan=on
+ Execution Time: 10.469 ms
+(13 rows)
+
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+explain (analyze, verbose) select * from test_bmsparse where type > 500;
+                                                                           QUERY PLAN                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..8707.89 rows=19030 width=41) (actual time=446.186..930.016 rows=18998 loops=1)
+   Output: id, type, msg
+   ->  Index Scan using test_bmsparse_type_idx on public.test_bmsparse  (cost=0.00..8454.16 rows=6343 width=41) (actual time=445.685..927.002 rows=6448 loops=1)
+         Output: id, type, msg
+         Index Cond: (test_bmsparse.type > 500)
+ Planning Time: 0.240 ms
+   (slice0)    Executor memory: 39K bytes.
+   (slice1)    Executor memory: 100254K bytes avg x 3 workers, 102077K bytes max (seg1).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=off, enable_indexscan=on, enable_seqscan=off
+ Execution Time: 950.231 ms
+(12 rows)
+
+DROP TABLE test_bmsparse;

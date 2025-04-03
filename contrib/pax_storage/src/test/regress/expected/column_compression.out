@@ -1,0 +1,2029 @@
+-----------------------------------------------------------------------
+-- Basic syntax
+-- Expect: success
+-----------------------------------------------------------------------
+-- These tests ALTER the default encoding options of some built-in types.
+-- Run them in a separate database to avoid messing with other tests.
+create database column_compression;
+\c column_compression
+prepare ccddlcheck as
+select attrelid::regclass as relname,
+attnum, attoptions from pg_class c, pg_attribute_encoding e
+where c.relname like 'ccddl%' and c.oid=e.attrelid
+order by relname, attnum;
+-- default encoding clause
+create table ccddl (
+	i int,
+	j int,
+	default column encoding (compresstype=zlib)
+) with (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+-- This is enough to force compression, specially since we'll hash
+-- all to a single segment and the values are all the same.
+insert into ccddl select 1, 2 from generate_series(1, 100);
+select * from ccddl;
+ i | j 
+---+---
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+(100 rows)
+
+drop table ccddl;
+-- MPP-17012 default encoding clause with extra options in with clause
+create table ccddl (
+	i int,
+	j int,
+	default column encoding (compresstype=zlib, compresslevel=5)
+) with (appendonly=true, orientation=column, oids=false);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=5,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=5,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+create table ccddl (
+	i int,
+	j int,
+	default column encoding (compresstype=zlib)
+) with (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+-- This is enough to force compression, specially since we'll hash
+-- all to a single segment and the values are all the same.
+insert into ccddl select 1, 2 from generate_series(1, 100);
+select * from ccddl;
+ i | j 
+---+---
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+(100 rows)
+
+drop table ccddl;
+-- Make sure we cleaned up after ourselves: should return zero rows.
+-- We exclude the other tables leftover from other tests.
+select * from pg_attribute_encoding where
+	attrelid not in (select oid from pg_class where relname <> 'ccddl');
+ attrelid | attnum | filenum | attoptions 
+----------+--------+---------+------------
+(0 rows)
+
+-- mix inline and default
+create table ccddl (
+	i int,
+	j int encoding (compresstype=RLE_TYPE),
+	default column encoding (compresstype=zlib)
+) with (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                       attoptions                        
+---------+--------+---------------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+-- mix column reference and default
+create table ccddl (
+	i int,
+	j int,
+	default column encoding (compresstype=zlib),
+	column j encoding (compresstype=RLE_TYPE)
+) with (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                       attoptions                        
+---------+--------+---------------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+-- encoding clause for only some columns, others should
+-- have no encoding
+create table ccddl (
+	i int,
+	j text encoding (compresstype=zlib, blocksize=65536, compresslevel=1)
+)  with (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,blocksize=65536,compresslevel=1}
+(2 rows)
+
+-- Should see the encoding information for the new column
+alter table ccddl add column k timestamp default now()
+	encoding (compresstype=zlib);
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,blocksize=65536,compresslevel=1}
+ ccddl   |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(3 rows)
+
+-- no encoding information for this one though
+alter table ccddl add column l numeric
+	default 3.141;
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,blocksize=65536,compresslevel=1}
+ ccddl   |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+(4 rows)
+
+drop table ccddl;
+-- Decipher encoding clause references
+create table ccddl (i int, j int encoding(compresstype=zlib), column i encoding
+(compresstype=zlib), default column encoding (compresstype=RLE_TYPE)) with
+(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+-- WITH (..., compresstype=<type>) should act as a default clause
+create table ccddl (i int, j int) with(appendonly = true, orientation = column,
+compresstype=zlib);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+-- Mix case for compresstype since it should be case insensitive
+create table ccddl (i int, j int encoding (COMPRESSTYPE="ZlIb"))
+	with(appendonly = true, orientation = column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl   |      2 | {compresstype=ZlIb,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+-- CREATE TABLE (LIKE) WITH (...) must honour the directives in the WITH clause.
+create table ccddl (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table ccddl_co(LIKE ccddl)
+  with (appendonly = true, orientation=column);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+execute ccddlcheck;
+ relname  | attnum |                     attoptions                      
+----------+--------+-----------------------------------------------------
+ ccddl_co |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+(1 row)
+
+drop table ccddl_co;
+create table ccddl_co(LIKE ccddl)
+  with (appendonly = true, orientation=column, compresstype=zlib);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+execute ccddlcheck;
+ relname  | attnum |                     attoptions                      
+----------+--------+-----------------------------------------------------
+ ccddl_co |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(1 row)
+
+drop table ccddl_co, ccddl;
+-----------------------------------------------------------------------
+-- Basic syntax
+-- Expect: failure
+-----------------------------------------------------------------------
+-- only support CO tables
+create table ccddl (i int encoding (compresstype=RLE_TYPE));
+ERROR:  unsupported compress type: 'rle_type' (paxc_rel_options.cc:94)
+create table ccddl (i int encoding (compresstype=zlib));
+drop table ccddl;
+create table ccddl (i int encoding (compresstype=zlib))
+	with (appendonly = true);
+ERROR:  ENCODING clause only supported with column oriented tables
+-- can't add encoding to a non-CO table
+create table ccddl (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table ccddl add column j int encoding (compresstype=zlib);
+drop table ccddl;
+create table ccddl (i int) with (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table ccddl add column j int encoding (compresstype=zlib);
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table ccddl;
+-- check that we validate the encoding clause for add column
+create table ccddl (i int) with (appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table ccddl add column j int encoding(compresstype=yawn);
+ERROR:  unknown compresstype "yawn"
+alter table ccddl add column j int encoding(compresstype=zlib,
+compresslevel=100000);
+ERROR:  value 100000 out of bounds for option "compresslevel"
+DETAIL:  Valid values are between "0" and "19".
+alter table ccddl add column j int encoding(a=b);
+ERROR:  unrecognized parameter "a"
+drop table ccddl;
+-- encoding clause has higher precedence than WITH clause
+create table ccddl (i int encoding(compresstype=RLE_TYPE)) with(compresstype=zlib,
+appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                       attoptions                        
+---------+--------+---------------------------------------------------------
+ ccddl   |      1 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(1 row)
+
+drop table ccddl;
+-- conflicting WITH and DEFAULT COLUMN ENCODING clause
+create table t1 (i int, j int, default column encoding (compresstype=RLE_TYPE))
+with (compresstype=zlib, appendonly=true, orientation=column);
+ERROR:  DEFAULT COLUMN ENCODING clause cannot override values set in WITH clause
+-- Invalid encoding clauses
+create table t1 (i int encoding (compresstype=zlib, compresslevel=19))
+with (appendonly=true, orientation=column);
+ERROR:  compresslevel=19 is out of range for zlib (should be in the range 1 to 9)
+create table t1 (i int encoding (compresstype=zlib, ahhhh=boooooo))
+with (appendonly=true, orientation=column);
+ERROR:  unrecognized parameter "ahhhh"
+-- Invalid column references in COLUMN ENCODING clause
+create table t1 (i text,
+                 column non_existent encoding (compresstype=zlib))
+with (appendonly=true, orientation=column);
+ERROR:  column "non_existent" does not exist
+-- Conflicting column references for the same column
+create table t1 (dupe text,
+                 column dupe encoding (compresstype=zlib),
+		 column dupe encoding (compresstype=zlib))
+with (appendonly=true, orientation=column);
+ERROR:  column "dupe" referenced in more than one COLUMN ENCODING clause
+-- Inheritance. The ENCODING options are not inherited from the parent.
+create table ccddlparent (parentcol int encoding (compresstype=zlib))
+with (appendonly = true, orientation = column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table ccddlchild (childcol int encoding (compresstype=zlib))
+inherits(ccddlparent) with (appendonly = true, orientation = column);
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- but you can specify it explicitly
+create table ccddlchild2 (childcol int,
+			  parentcol int encoding (compresstype=zlib))
+inherits(ccddlparent) with (appendonly = true, orientation = column);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  moving and merging column "parentcol" with inherited definition
+DETAIL:  User-specified column moved to the position of the inherited column.
+execute ccddlcheck;
+   relname   | attnum |                     attoptions                      
+-------------+--------+-----------------------------------------------------
+ ccddlparent |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddlchild  |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddlchild  |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddlchild2 |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddlchild2 |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+(5 rows)
+
+drop table ccddlparent cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table ccddlchild
+drop cascades to table ccddlchild2
+-- Multiple inheritance. Not particularly interesting because the
+-- encoding options are not copied from any parent, but let's test
+-- it anyway.
+create table ccddlparent1 (parentcol1 int encoding (compresstype=zlib),
+                           parentcol2 int)
+with (appendonly = true, orientation = column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table ccddlparent2 (parentcol1 int,
+                           parentcol2 int encoding (compresstype=zlib))
+with (appendonly = true, orientation = column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'parentcol1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table ccddlchild (childcol int)
+inherits(ccddlparent1, ccddlparent2) with (appendonly = true, orientation = column);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "parentcol1"
+NOTICE:  merging multiple inherited definitions of column "parentcol2"
+execute ccddlcheck;
+   relname    | attnum |                     attoptions                      
+--------------+--------+-----------------------------------------------------
+ ccddlparent1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddlparent1 |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddlparent2 |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddlparent2 |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddlchild   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddlchild   |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddlchild   |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+(7 rows)
+
+drop table ccddlparent1 cascade;
+NOTICE:  drop cascades to table ccddlchild
+drop table ccddlparent2 cascade;
+-- Conflict between default and with, in the LIKE case
+create table ccddl (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table ccddl_co (like ccddl, 
+					   default column encoding(compresstype=RLE_TYPE)) 
+with (appendonly=true, orientation=column, compresstype=zlib);
+ERROR:  DEFAULT COLUMN ENCODING clause cannot override values set in WITH clause
+drop table ccddl;
+-- Make sure we preserve WITH() in the presence of CTAS 
+create table ccddl (a, b)
+with (appendonly=true, orientation=column, compresstype=zlib) as
+select 1, 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+-- encoding clause has higher precedence than WITH clause even in the LIKE case.
+-- (this change the behavior of MPP-15120) 
+create table ccddl (i int, j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table ccddl_co (like ccddl, column i encoding(compresstype=RLE_TYPE))
+with (appendonly=true, orientation=column, compresstype=zlib);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+execute ccddlcheck;
+ relname  | attnum |                       attoptions                        
+----------+--------+---------------------------------------------------------
+ ccddl_co |      1 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_co |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+drop table ccddl_co;
+-----------------------------------------------------------------------
+-- Partitioning support
+-- Expect: success
+-----------------------------------------------------------------------
+-- trivial partitioning case
+create table ccddl (i int, j int)
+with (appendonly = true, orientation=column)
+partition by range(j)
+(partition p1 start(1) end(10),
+ partition p2 start(10) end(20),
+ column i encoding(compresstype=zlib),
+ column j encoding(compresstype=RLE_TYPE)
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+    relname     | attnum |                       attoptions                        
+----------------+--------+---------------------------------------------------------
+ ccddl          |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl          |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(6 rows)
+
+insert into ccddl select 1,2 from generate_series(1, 100);
+select * from ccddl;
+ i | j 
+---+---
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+ 1 | 2
+(100 rows)
+
+drop table ccddl;
+-- subpartition template
+create table ccddl (i int, j int, k int, l int)
+with (appendonly = true, orientation=column)
+partition by range(j)
+	subpartition by list (k)
+	subpartition template(
+		subpartition sp1 values(1, 2, 3, 4, 5),
+ 		column i encoding(compresstype=zlib),
+		column j encoding(compresstype=RLE_TYPE),
+		column k encoding(compresstype=zlib),
+		column l encoding(compresstype=zlib)
+	)
+(partition p1 start(1) end(10),
+ partition p2 start(10) end(20)
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+         relname          | attnum |                       attoptions                        
+--------------------------+--------+---------------------------------------------------------
+ ccddl                    |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(20 rows)
+
+insert into ccddl select 1, (i % 19) + 1, ((i+3) % 5) + 1, i+3 from generate_series(1, 100) i;
+select * from ccddl;
+ i | j  | k |  l  
+---+----+---+-----
+ 1 |  2 | 5 |   4
+ 1 |  3 | 1 |   5
+ 1 |  4 | 2 |   6
+ 1 |  5 | 3 |   7
+ 1 |  6 | 4 |   8
+ 1 |  7 | 5 |   9
+ 1 |  8 | 1 |  10
+ 1 |  9 | 2 |  11
+ 1 |  1 | 3 |  22
+ 1 |  2 | 4 |  23
+ 1 |  3 | 5 |  24
+ 1 |  4 | 1 |  25
+ 1 |  5 | 2 |  26
+ 1 |  6 | 3 |  27
+ 1 |  7 | 4 |  28
+ 1 |  8 | 5 |  29
+ 1 |  9 | 1 |  30
+ 1 |  1 | 2 |  41
+ 1 |  2 | 3 |  42
+ 1 |  3 | 4 |  43
+ 1 |  4 | 5 |  44
+ 1 |  5 | 1 |  45
+ 1 |  6 | 2 |  46
+ 1 |  7 | 3 |  47
+ 1 |  8 | 4 |  48
+ 1 |  9 | 5 |  49
+ 1 |  1 | 1 |  60
+ 1 |  2 | 2 |  61
+ 1 |  3 | 3 |  62
+ 1 |  4 | 4 |  63
+ 1 |  5 | 5 |  64
+ 1 |  6 | 1 |  65
+ 1 |  7 | 2 |  66
+ 1 |  8 | 3 |  67
+ 1 |  9 | 4 |  68
+ 1 |  1 | 5 |  79
+ 1 |  2 | 1 |  80
+ 1 |  3 | 2 |  81
+ 1 |  4 | 3 |  82
+ 1 |  5 | 4 |  83
+ 1 |  6 | 5 |  84
+ 1 |  7 | 1 |  85
+ 1 |  8 | 2 |  86
+ 1 |  9 | 3 |  87
+ 1 |  1 | 4 |  98
+ 1 |  2 | 5 |  99
+ 1 |  3 | 1 | 100
+ 1 |  4 | 2 | 101
+ 1 |  5 | 3 | 102
+ 1 |  6 | 4 | 103
+ 1 | 10 | 3 |  12
+ 1 | 11 | 4 |  13
+ 1 | 12 | 5 |  14
+ 1 | 13 | 1 |  15
+ 1 | 14 | 2 |  16
+ 1 | 15 | 3 |  17
+ 1 | 16 | 4 |  18
+ 1 | 17 | 5 |  19
+ 1 | 18 | 1 |  20
+ 1 | 19 | 2 |  21
+ 1 | 10 | 2 |  31
+ 1 | 11 | 3 |  32
+ 1 | 12 | 4 |  33
+ 1 | 13 | 5 |  34
+ 1 | 14 | 1 |  35
+ 1 | 15 | 2 |  36
+ 1 | 16 | 3 |  37
+ 1 | 17 | 4 |  38
+ 1 | 18 | 5 |  39
+ 1 | 19 | 1 |  40
+ 1 | 10 | 1 |  50
+ 1 | 11 | 2 |  51
+ 1 | 12 | 3 |  52
+ 1 | 13 | 4 |  53
+ 1 | 14 | 5 |  54
+ 1 | 15 | 1 |  55
+ 1 | 16 | 2 |  56
+ 1 | 17 | 3 |  57
+ 1 | 18 | 4 |  58
+ 1 | 19 | 5 |  59
+ 1 | 10 | 5 |  69
+ 1 | 11 | 1 |  70
+ 1 | 12 | 2 |  71
+ 1 | 13 | 3 |  72
+ 1 | 14 | 4 |  73
+ 1 | 15 | 5 |  74
+ 1 | 16 | 1 |  75
+ 1 | 17 | 2 |  76
+ 1 | 18 | 3 |  77
+ 1 | 19 | 4 |  78
+ 1 | 10 | 4 |  88
+ 1 | 11 | 5 |  89
+ 1 | 12 | 1 |  90
+ 1 | 13 | 2 |  91
+ 1 | 14 | 3 |  92
+ 1 | 15 | 4 |  93
+ 1 | 16 | 5 |  94
+ 1 | 17 | 1 |  95
+ 1 | 18 | 2 |  96
+ 1 | 19 | 3 |  97
+(100 rows)
+
+-- Verify dependency handling
+alter table ccddl drop column l;
+insert into ccddl select 1, (i % 19) + 1, ((i+3) % 5) + 1 from generate_series(1, 100) i;
+select * from ccddl;
+ i | j  | k 
+---+----+---
+ 1 |  2 | 5
+ 1 |  3 | 1
+ 1 |  4 | 2
+ 1 |  5 | 3
+ 1 |  6 | 4
+ 1 |  7 | 5
+ 1 |  8 | 1
+ 1 |  9 | 2
+ 1 |  1 | 3
+ 1 |  2 | 4
+ 1 |  3 | 5
+ 1 |  4 | 1
+ 1 |  5 | 2
+ 1 |  6 | 3
+ 1 |  7 | 4
+ 1 |  8 | 5
+ 1 |  9 | 1
+ 1 |  1 | 2
+ 1 |  2 | 3
+ 1 |  3 | 4
+ 1 |  4 | 5
+ 1 |  5 | 1
+ 1 |  6 | 2
+ 1 |  7 | 3
+ 1 |  8 | 4
+ 1 |  9 | 5
+ 1 |  1 | 1
+ 1 |  2 | 2
+ 1 |  3 | 3
+ 1 |  4 | 4
+ 1 |  5 | 5
+ 1 |  6 | 1
+ 1 |  7 | 2
+ 1 |  8 | 3
+ 1 |  9 | 4
+ 1 |  1 | 5
+ 1 |  2 | 1
+ 1 |  3 | 2
+ 1 |  4 | 3
+ 1 |  5 | 4
+ 1 |  6 | 5
+ 1 |  7 | 1
+ 1 |  8 | 2
+ 1 |  9 | 3
+ 1 |  1 | 4
+ 1 |  2 | 5
+ 1 |  3 | 1
+ 1 |  4 | 2
+ 1 |  5 | 3
+ 1 |  6 | 4
+ 1 |  2 | 5
+ 1 |  3 | 1
+ 1 |  4 | 2
+ 1 |  5 | 3
+ 1 |  6 | 4
+ 1 |  7 | 5
+ 1 |  8 | 1
+ 1 |  9 | 2
+ 1 |  1 | 3
+ 1 |  2 | 4
+ 1 |  3 | 5
+ 1 |  4 | 1
+ 1 |  5 | 2
+ 1 |  6 | 3
+ 1 |  7 | 4
+ 1 |  8 | 5
+ 1 |  9 | 1
+ 1 |  1 | 2
+ 1 |  2 | 3
+ 1 |  3 | 4
+ 1 |  4 | 5
+ 1 |  5 | 1
+ 1 |  6 | 2
+ 1 |  7 | 3
+ 1 |  8 | 4
+ 1 |  9 | 5
+ 1 |  1 | 1
+ 1 |  2 | 2
+ 1 |  3 | 3
+ 1 |  4 | 4
+ 1 |  5 | 5
+ 1 |  6 | 1
+ 1 |  7 | 2
+ 1 |  8 | 3
+ 1 |  9 | 4
+ 1 |  1 | 5
+ 1 |  2 | 1
+ 1 |  3 | 2
+ 1 |  4 | 3
+ 1 |  5 | 4
+ 1 |  6 | 5
+ 1 |  7 | 1
+ 1 |  8 | 2
+ 1 |  9 | 3
+ 1 |  1 | 4
+ 1 |  2 | 5
+ 1 |  3 | 1
+ 1 |  4 | 2
+ 1 |  5 | 3
+ 1 |  6 | 4
+ 1 | 10 | 3
+ 1 | 11 | 4
+ 1 | 12 | 5
+ 1 | 13 | 1
+ 1 | 14 | 2
+ 1 | 15 | 3
+ 1 | 16 | 4
+ 1 | 17 | 5
+ 1 | 18 | 1
+ 1 | 19 | 2
+ 1 | 10 | 2
+ 1 | 11 | 3
+ 1 | 12 | 4
+ 1 | 13 | 5
+ 1 | 14 | 1
+ 1 | 15 | 2
+ 1 | 16 | 3
+ 1 | 17 | 4
+ 1 | 18 | 5
+ 1 | 19 | 1
+ 1 | 10 | 1
+ 1 | 11 | 2
+ 1 | 12 | 3
+ 1 | 13 | 4
+ 1 | 14 | 5
+ 1 | 15 | 1
+ 1 | 16 | 2
+ 1 | 17 | 3
+ 1 | 18 | 4
+ 1 | 19 | 5
+ 1 | 10 | 5
+ 1 | 11 | 1
+ 1 | 12 | 2
+ 1 | 13 | 3
+ 1 | 14 | 4
+ 1 | 15 | 5
+ 1 | 16 | 1
+ 1 | 17 | 2
+ 1 | 18 | 3
+ 1 | 19 | 4
+ 1 | 10 | 4
+ 1 | 11 | 5
+ 1 | 12 | 1
+ 1 | 13 | 2
+ 1 | 14 | 3
+ 1 | 15 | 4
+ 1 | 16 | 5
+ 1 | 17 | 1
+ 1 | 18 | 2
+ 1 | 19 | 3
+ 1 | 10 | 3
+ 1 | 11 | 4
+ 1 | 12 | 5
+ 1 | 13 | 1
+ 1 | 14 | 2
+ 1 | 15 | 3
+ 1 | 16 | 4
+ 1 | 17 | 5
+ 1 | 18 | 1
+ 1 | 19 | 2
+ 1 | 10 | 2
+ 1 | 11 | 3
+ 1 | 12 | 4
+ 1 | 13 | 5
+ 1 | 14 | 1
+ 1 | 15 | 2
+ 1 | 16 | 3
+ 1 | 17 | 4
+ 1 | 18 | 5
+ 1 | 19 | 1
+ 1 | 10 | 1
+ 1 | 11 | 2
+ 1 | 12 | 3
+ 1 | 13 | 4
+ 1 | 14 | 5
+ 1 | 15 | 1
+ 1 | 16 | 2
+ 1 | 17 | 3
+ 1 | 18 | 4
+ 1 | 19 | 5
+ 1 | 10 | 5
+ 1 | 11 | 1
+ 1 | 12 | 2
+ 1 | 13 | 3
+ 1 | 14 | 4
+ 1 | 15 | 5
+ 1 | 16 | 1
+ 1 | 17 | 2
+ 1 | 18 | 3
+ 1 | 19 | 4
+ 1 | 10 | 4
+ 1 | 11 | 5
+ 1 | 12 | 1
+ 1 | 13 | 2
+ 1 | 14 | 3
+ 1 | 15 | 4
+ 1 | 16 | 5
+ 1 | 17 | 1
+ 1 | 18 | 2
+ 1 | 19 | 3
+(200 rows)
+
+drop table ccddl;
+-- Add partition should 'inherit' the subpartition template storage encodings
+create table ccddl (i int, j int, k int, l int)
+with
+(appendonly = true, orientation=column)
+partition by range(j)
+subpartition by list (k)
+subpartition template(
+subpartition sp1 values(1, 2, 3, 4, 5),
+column i encoding(compresstype=zlib),
+column j encoding(compresstype=RLE_TYPE),
+column k encoding(compresstype=zlib),
+column l encoding(compresstype=zlib))
+(partition p1 start(1) end(10),
+partition p2 start(10) end(20)
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+         relname          | attnum |                       attoptions                        
+--------------------------+--------+---------------------------------------------------------
+ ccddl                    |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(20 rows)
+
+alter table ccddl add partition p3 start(20) end(30);
+execute ccddlcheck;
+         relname          | attnum |                       attoptions                        
+--------------------------+--------+---------------------------------------------------------
+ ccddl                    |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p3           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p3           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p3           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p3_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3_2_prt_sp1 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(28 rows)
+
+drop table ccddl;
+-- Make sure the AO/CO case didn't screw up the non CO case
+create table ccddl (i int, j int, k int, l int)
+with
+(appendonly = true)
+partition by range(j)
+subpartition by list (k)
+subpartition template(
+subpartition sp1 values(1, 2, 3, 4, 5))
+(partition p1 start(1) end(10),
+partition p2 start(10) end(20)
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+alter table ccddl add partition p3 start(20) end(30);
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+-- Split support. We must preserve the column encodings of the split partition
+create table ccddl (i int encoding (compresstype=zlib))
+with (appendonly = true, orientation=column)
+partition by range(i)
+(partition p1 start(1) end(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+    relname     | attnum |                     attoptions                      
+----------------+--------+-----------------------------------------------------
+ ccddl          |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+alter table ccddl split partition p1 at (5) into (partition p2, partition p3);
+execute ccddlcheck;
+    relname     | attnum |                     attoptions                      
+----------------+--------+-----------------------------------------------------
+ ccddl          |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table ccddl;
+-- With subpartitioning
+create table ccddl (i int, j int)
+with (appendonly=true, orientation=column)
+partition by range(i) subpartition by range(j)
+subpartition template (subpartition sp1 start(1) end(20),
+	column i encoding (compresstype=zlib),
+	column j encoding (compresstype=RLE_TYPE))
+(partition p1 start(1) end(20));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+         relname          | attnum |                       attoptions                        
+--------------------------+--------+---------------------------------------------------------
+ ccddl                    |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(6 rows)
+
+alter table ccddl alter partition p1 split partition sp1 at (10) into (partition sp2, partition sp3);
+execute ccddlcheck;
+         relname          | attnum |                       attoptions                        
+--------------------------+--------+---------------------------------------------------------
+ ccddl                    |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp2 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp2 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp3 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp3 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(8 rows)
+
+alter table ccddl alter partition p1 split partition sp2 at (5) into (partition sp2, partition sp2_5);
+execute ccddlcheck;
+          relname           | attnum |                       attoptions                        
+----------------------------+--------+---------------------------------------------------------
+ ccddl                      |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                      |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1             |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1             |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp3   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp3   |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp2   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp2   |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp2_5 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp2_5 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(10 rows)
+
+drop table ccddl;
+-- MPP-14407
+-- Multi level partitioning: the expansion of the multi-level partitioning
+-- configuration duplicates the encoding for `month'. Make sure we 
+-- handle this and produce sane results
+CREATE TABLE ccddl (id int, year int, month int, day int, region text) 
+	with (appendonly=true, orientation=column)
+	DISTRIBUTED BY (id)
+	PARTITION BY RANGE (year)
+		SUBPARTITION BY RANGE (month)
+			SUBPARTITION TEMPLATE
+			(
+				START (1) END (13),
+				COLUMN month ENCODING (compresstype=RLE_TYPE)
+			)
+		SUBPARTITION BY LIST (region)
+		SUBPARTITION TEMPLATE
+		(
+			SUBPARTITION usa VALUES ('usa'),
+			COLUMN region ENCODING (compresstype=RLE_TYPE)
+		)
+	( START (2008) END (2010) );
+execute ccddlcheck;
+             relname             | attnum |                       attoptions                        
+---------------------------------+--------+---------------------------------------------------------
+ ccddl                           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                           |      5 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1                   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1                   |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1                   |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1                   |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1                   |      5 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1           |      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1           |      5 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1_3_prt_usa |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1_3_prt_usa |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1_3_prt_usa |      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1_3_prt_usa |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_1_3_prt_usa |      5 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(20 rows)
+
+-- Ensure we can read and write
+insert into ccddl select 1, 2008, 1, 2, 'usa' from generate_series(1, 100);
+select * from ccddl;
+ id | year | month | day | region 
+----+------+-------+-----+--------
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+  1 | 2008 |     1 |   2 | usa
+(100 rows)
+
+drop table ccddl;
+-- Partition specific column encoding
+create table ccddl (
+	i int,
+	j int,
+	k int,
+	l int
+	)
+	with (appendonly=true, orientation=column)
+	partition by range(i)
+	(
+		partition p1 start(1) end(2) column i encoding(compresstype=zlib),
+	 	partition p2 start(2) end(3) column j encoding(compresstype=RLE_TYPE)
+									 column k encoding(blocksize=8192),
+	 	partition p3 start(3) end(4) column i encoding(compresstype=RLE_TYPE)
+									 column j encoding(blocksize=8192)
+									 default column encoding
+									 	(compresstype=zlib),
+		column i encoding (blocksize=65536),
+		default column encoding (compresstype=RLE_TYPE)
+	);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+    relname     | attnum |                       attoptions                        
+----------------+--------+---------------------------------------------------------
+ ccddl          |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl          |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl          |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl          |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1 |      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1 |      4 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2 |      1 | {blocksize=65536,compresstype=none,compresslevel=0}
+ ccddl_1_prt_p2 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2 |      3 | {blocksize=8192,compresstype=none,compresslevel=0}
+ ccddl_1_prt_p2 |      4 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3 |      1 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3 |      2 | {blocksize=8192,compresstype=none,compresslevel=0}
+ ccddl_1_prt_p3 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p3 |      4 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(16 rows)
+
+drop table ccddl;
+create table ccddl (i int, j int, k int, l int )
+with (appendonly=true, orientation=column)
+partition by range(i) subpartition by range(j)
+ (
+ partition p1 start(1) end(2)
+		(subpartition sp1 start(1) end(2) column i encoding(compresstype=zlib),
+		 column i encoding (blocksize=65536),
+		 default column encoding (compresstype=RLE_TYPE)
+		),
+ partition p2 start(2) end(3)
+ 		(subpartition sp1 start(1) end(2)
+			column j encoding(compresstype=zlib)
+			column k encoding(blocksize=8192),
+		 column i encoding (blocksize=65536),
+		 default column encoding (compresstype=RLE_TYPE)
+		)
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+         relname          | attnum |                       attoptions                        
+--------------------------+--------+---------------------------------------------------------
+ ccddl                    |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                    |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p2           |      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p1_2_prt_sp1 |      4 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      1 | {blocksize=65536,compresstype=none,compresslevel=0}
+ ccddl_1_prt_p2_2_prt_sp1 |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_p2_2_prt_sp1 |      3 | {blocksize=8192,compresstype=none,compresslevel=0}
+ ccddl_1_prt_p2_2_prt_sp1 |      4 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(20 rows)
+
+drop table ccddl;
+-- Precedence test: c3 in the partition child must be zlib, not RLE_TYPE
+CREATE TABLE ccddl ( c1 int ENCODING (compresstype=zlib),
+                     c2 char ENCODING (compresstype=RLE_TYPE, blocksize=65536),
+				     c3 date,
+					 COLUMN c3 ENCODING (compresstype=RLE_TYPE))
+WITH (appendonly=true, orientation=column)
+	PARTITION BY RANGE (c3) (
+		START ('1900-01-01'::DATE)   END ('2100-12-31'::DATE),
+		        COLUMN c3 ENCODING (compresstype=zlib),
+				COLUMN c2 ENCODING (compresstype=RLE_TYPE)
+	);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+execute ccddlcheck;
+    relname    | attnum |                       attoptions                        
+---------------+--------+---------------------------------------------------------
+ ccddl         |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl         |      2 | {compresstype=rle_type,blocksize=65536,compresslevel=1}
+ ccddl         |      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1 |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(6 rows)
+
+drop table ccddl;
+-- Should be able to turn have a partition ignore a column encoding clause
+-- if it's explicitly marked appendonly=false. This is to support
+-- what dump has been doing all along
+create table ccddl
+	(i int, j int encoding (compresstype=RLE_TYPE))
+	with (appendonly=true, orientation=column)
+	partition by range(i)
+	(
+		partition p1 start(1) end(2) with(appendonly=false),
+		partition p2 start(2) end(3),
+		default column encoding (compresstype=zlib)
+	);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+ERROR:  table "ccddl" does not exist
+-- MPP-16875: ensure that WITH () is honoured
+CREATE TABLE ccddl (a int, b text)
+with (appendonly=true, orientation=column,
+	  compresstype=zlib, compresslevel=1)
+partition by list(b)
+(partition s_abc values ('abc')
+	with (appendonly=true, orientation=column, compresstype=zlib,
+		  compresslevel=1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table ccddl add partition "s_xyz" values ('xyz')
+	WITH (appendonly=true, orientation=column,
+		  compresstype=zlib, compresslevel=1);
+execute ccddlcheck;
+      relname      | attnum |                     attoptions                      
+-------------------+--------+-----------------------------------------------------
+ ccddl             |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl             |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(6 rows)
+
+drop table ccddl;
+-- Ensure that WITH () and subpartition template column encoding rules
+-- play well together
+create table ccddl (i int, d date, j int)
+  WITH (APPENDONLY=TRUE, ORIENTATION=COLUMN)
+  partition by range(d) subpartition by list(j)
+  	subpartition template (subpartition sp1 values(1),
+						   default column encoding (compresstype=zlib))
+  (start('2010-01-01') end('2010-01-05') every('1 day'::interval));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table ccddl add partition newp 
+	start('2010-01-06') end('2010-01-07')
+	with (appendonly=true, orientation=column);
+execute ccddlcheck;
+          relname           | attnum |                     attoptions                      
+----------------------------+--------+-----------------------------------------------------
+ ccddl                      |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                      |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl                      |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1              |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1              |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1              |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_2              |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_2              |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_2              |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_3              |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_3              |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_3              |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_4              |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_4              |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_4              |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_1_2_prt_sp1    |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1_2_prt_sp1    |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_1_2_prt_sp1    |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_2_2_prt_sp1    |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_2_2_prt_sp1    |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_2_2_prt_sp1    |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_3_2_prt_sp1    |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_3_2_prt_sp1    |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_3_2_prt_sp1    |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_4_2_prt_sp1    |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_4_2_prt_sp1    |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_4_2_prt_sp1    |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_newp           |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_newp           |      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_newp           |      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl_1_prt_newp_2_prt_sp1 |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_newp_2_prt_sp1 |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ ccddl_1_prt_newp_2_prt_sp1 |      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(33 rows)
+
+drop table ccddl;
+-----------------------------------------------------------------------
+-- Partitioning support
+-- Expect: failure
+-----------------------------------------------------------------------
+-- Make sure we validate the storage directives
+create table gg (i int, k int) with (appendonly=true, orientation=column)
+partition by range(k) (partition p1 start(1) end(2), column i encoding(a=b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  unrecognized parameter "a"
+create table gg (i int, k int) with (appendonly=true, orientation=column)
+partition by range(k) (partition p1 start(1) end(2), column i
+encoding(compresstype=sdf2sdf));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  unknown compresstype "sdf2sdf"
+-- We don't support partition element specific encoding clauses in subpartition
+-- templates as we have no place to store them.
+create table a (i int, j int) with (appendonly=true, orientation=column)
+      partition by range(i) subpartition by range(j)
+      subpartition template(start(1) end(10) default column encoding (compresstype=zlib),
+                            start(10) end(20))
+(partition p1 start(1) end(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  partition specific ENCODING clause not supported in SUBPARTITION TEMPLATE
+LINE 3:       subpartition template(start(1) end(10) default column ...
+                                    ^
+-- Partition level mention of column encoding but the table is not column
+-- oriented. This used to throw an error, but we're more lenient now. The
+-- ENCODING clause is simply ignored.
+CREATE TABLE ccddl
+(a1 int,a2 char(5),a3 text,a4 timestamp ,a5 date) 
+partition by range(a1) 
+	(   
+		start(1) end(1000) every(500),
+		COLUMN a1 ENCODING (compresstype=zlib,compresslevel=4,blocksize=32768)
+	);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  blocksize not allow setting in ENCODING CLAUSES.
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+ERROR:  table "ccddl" does not exist
+-----------------------------------------------------------------------
+-- Type support
+-- Expect: success
+-----------------------------------------------------------------------
+-- The basics
+drop type if exists int42 cascade;
+NOTICE:  type "int42" does not exist, skipping
+create type int42;
+CREATE FUNCTION int42_in(cstring)
+RETURNS int42
+AS 'int4in'
+LANGUAGE internal IMMUTABLE STRICT;
+NOTICE:  return type int42 is only a shell
+CREATE FUNCTION int42_out(int42)
+RETURNS cstring
+AS 'int4out'
+LANGUAGE internal IMMUTABLE STRICT;
+NOTICE:  argument type int42 is only a shell
+CREATE TYPE int42 (
+internallength = 4,
+input = int42_in,
+output = int42_out,
+alignment = int4,
+default = 42,
+passedbyvalue,
+compresstype="zlib",
+blocksize=65536,
+compresslevel=1
+);
+select typoptions from pg_type_encoding where typid='public.int42'::regtype;
+                     typoptions                      
+-----------------------------------------------------
+ {compresstype=zlib,blocksize=65536,compresslevel=1}
+(1 row)
+
+create table ccddl (i int42) with(appendonly = true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,blocksize=65536,compresslevel=1}
+(1 row)
+
+alter type int42 set default encoding (compresstype=zlib);
+alter table ccddl add column j int42 default '1'::int42;
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,blocksize=65536,compresslevel=1}
+ ccddl   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+create table ccddl (i int42) with(appendonly = true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+execute ccddlcheck;
+ relname | attnum |                     attoptions                      
+---------+--------+-----------------------------------------------------
+ ccddl   |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(1 row)
+
+drop table ccddl;
+-- Shouldn't apply type default encoding in these cases
+create table ccddl (i int42);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+create table ccddl (i int42) with (appendonly = true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+create table ccddl (i int42) with (appendonly = true, orientation=column,
+compresstype=none);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+alter type int42 set default encoding (compresstype=RLE_TYPE);
+alter table ccddl add column j int42 default '1'::int42;
+execute ccddlcheck;
+ relname | attnum |                       attoptions                        
+---------+--------+---------------------------------------------------------
+ ccddl   |      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+ ccddl   |      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(2 rows)
+
+drop table ccddl;
+create table ccddl (i int42) with(appendonly = true, orientation=row);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+alter type int42 set default encoding (compresstype=RLE_TYPE);
+alter table ccddl add column j int42 default '1'::int42;
+-- No results are returned from the attribute encoding check, as compression with rle is not supported for row tables
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+create table ccddl (i int42) with(appendonly = true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+alter type int42 set default encoding (compresstype=RLE_TYPE);
+alter table ccddl add column j int42 default '1'::int42;
+-- No results are returned from the attribute encoding check, as compression with rle is not supported for heap tables
+execute ccddlcheck;
+ relname | attnum | attoptions 
+---------+--------+------------
+(0 rows)
+
+drop table ccddl;
+-- We used to accept SQL standard aliases for the built-in types,
+-- like "character varying", "integer", before GPDB 6, but not anymore.
+alter type character varying set default encoding (compresstype=zlib);
+ERROR:  syntax error at or near "varying"
+LINE 1: alter type character varying set default encoding (compresst...
+                             ^
+alter type varchar set default encoding (compresstype=zlib);
+select typoptions from pg_type t, pg_type_encoding e where
+  t.typname = 'varchar' and t.oid = e.typid;
+                     typoptions                      
+-----------------------------------------------------
+ {compresstype=zlib,compresslevel=1,blocksize=32768}
+(1 row)
+
+alter type character set default encoding (compresstype=zlib);
+ERROR:  type "character" does not exist
+alter type bpchar set default encoding (compresstype=zlib);
+select typoptions from pg_type t, pg_type_encoding e where
+  t.typname = 'bpchar' and t.oid = e.typid;
+                     typoptions                      
+-----------------------------------------------------
+ {compresstype=zlib,compresslevel=1,blocksize=32768}
+(1 row)
+
+alter type timestamp with time zone set default encoding(compresstype=zlib);
+ERROR:  syntax error at or near "with"
+LINE 1: alter type timestamp with time zone set default encoding(com...
+                             ^
+alter type timestamptz set default encoding (compresstype=zlib);
+select typoptions from pg_type t, pg_type_encoding e where
+  t.typname = 'timestamptz' and t.oid = e.typid;
+                     typoptions                      
+-----------------------------------------------------
+ {compresstype=zlib,compresslevel=1,blocksize=32768}
+(1 row)
+
+-- schema qualification
+alter type pg_catalog.text set default encoding (compresstype=zlib);
+select typoptions from pg_type t, pg_type_encoding e where
+  t.typname = 'text' and t.oid = e.typid;
+                     typoptions                      
+-----------------------------------------------------
+ {compresstype=zlib,compresslevel=1,blocksize=32768}
+(1 row)
+
+-----------------------------------------------------------------------
+-- Type support
+-- Expect: failure
+-----------------------------------------------------------------------
+-- We should reject any extraneous type information during alter type
+alter type numeric(10, 2) set default encoding(compresstype=zlib);
+ERROR:  syntax error at or near "("
+LINE 1: alter type numeric(10, 2) set default encoding(compresstype=...
+                          ^
+alter type int[2][3] set default encoding(compresstype=RLE_TYPE);
+ERROR:  syntax error at or near "["
+LINE 1: alter type int[2][3] set default encoding(compresstype=RLE_T...
+                      ^
+-- permissions checks
+create role typcheck;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+set session authorization typcheck;
+alter type int42 set default encoding (compresstype=zlib, compresslevel=1);
+ERROR:  must be owner of type int42
+reset session authorization;
+drop role typcheck;
+-- Verify that we validate the storage clause
+alter type text set default encoding (a=b);
+ERROR:  type attribute "a" not recognized
+alter type text set default encoding (compresstype=10);
+ERROR:  unknown compresstype "10"
+alter type text set default encoding (compresstype=zlib, compresslevel=100);
+ERROR:  value 100 out of bounds for option "compresslevel"
+DETAIL:  Valid values are between "0" and "19".
+-- dependency check on drop type
+drop type int42 cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function int42_in(cstring)
+drop cascades to function int42_out(int42)
+select * from pg_type_encoding;
+ typid |                     typoptions                      
+-------+-----------------------------------------------------
+  1043 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+  1042 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+  1184 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+    25 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(4 rows)
+
+-- cleanup
+deallocate ccddlcheck;
+-----------------------------------------------------------------------
+-- RLE sanity checks
+-- Expect: failure
+-----------------------------------------------------------------------
+-- RLE_TYPE is not supported 
+create table ccddl (i int) with(appendonly = true, compresstype = rle_type);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  rle_type cannot be used with Append Only relations row orientation
+-----------------------------------------------------------------------
+-- MPP-14381 cdbfast regression: Dropping and adding a column to AO partitioned tables fails with SIGSEGV
+-- Expect: success
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS ccddl;
+NOTICE:  table "ccddl" does not exist, skipping
+CREATE TABLE ccddl (
+                    P_PARTKEY INTEGER,
+                    P_SIZE integer,
+                    P_CONTAINER CHAR(10),
+                    P_RETAILPRICE decimal,
+                    P_COMMENT VARCHAR(23)
+                    )
+  partition by range (p_size)
+  (
+    partition p1 start('1')  WITH (appendonly=true, checksum=true, blocksize=819200, compresslevel=8)
+  , partition p2 start('21') end('28')
+  , partition p3 start('28') WITH (appendonly=true, checksum=true, blocksize=819200, compresslevel=8)
+  , partition p4 start('32') end('33')
+  , partition p5 start('33') WITH (appendonly=true, checksum=true, blocksize=819200, compresslevel=8)
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO ccddl values ( generate_series(1,25000), 3, 'JUMBO CASE', 1001.00, 'ronic dependencies d' );
+INSERT INTO ccddl values ( generate_series(1,25000), 23, 'JUMBO CASE', 1001.00, 'ronic dependencies d' );
+INSERT INTO ccddl values ( generate_series(1,25000), 29, 'JUMBO CASE', 1001.00, 'ronic dependencies d' );
+INSERT INTO ccddl values ( generate_series(1,25000), 37, 'JUMBO CASE', 1001.00, 'ronic dependencies d' );
+ALTER TABLE ccddl DROP COLUMN P_PARTKEY;
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+ALTER TABLE ccddl ADD COLUMN   P_PARTKEY  INTEGER  DEFAULT 100;
+-----------------------------------------------------------------------
+-- MPP-14477 cdbfast regression: Bitmap Index scan on AO tables with compression fails with SIGSEGV
+-- Expect: success
+-----------------------------------------------------------------------
+DROP TABLE IF EXISTS ccddl cascade;
+CREATE TABLE ccddl ( 
+   id INTEGER
+ , owner VARCHAR
+ , property BOX
+  ) 
+WITH (APPENDONLY=True, COMPRESSTYPE=ZLIB, COMPRESSLEVEL=1)  
+DISTRIBUTED BY (id);
+insert into ccddl values (59,'Hypatia','( (6050, 20), (7052, 250) )');
+CREATE INDEX ccddl_propertyBoxIndex ON ccddl USING Gist (property);
+SET enable_seqscan = FALSE;
+-- to the same internal representation.
+SELECT owner, property FROM ccddl
+ WHERE property ~= '((7052,250),(6050,20))';
+  owner  |       property       
+---------+----------------------
+ Hypatia | (7052,250),(6050,20)
+(1 row)
+
+drop table ccddl;
+\c regression
+drop database column_compression;
+------------------------------------------------------------------------------
+-- Test to validate block offset is correctly recorded in block directory for
+-- column oriented table which has large content blocks.
+------------------------------------------------------------------------------
+CREATE TABLE col_large_content_block (id BIGINT, arr DOUBLE PRECISION[])
+WITH (appendonly=true, orientation=column, blocksize=8192) DISTRIBUTED BY (id);
+CREATE INDEX col_large_content_block_idx ON col_large_content_block USING btree (id);
+-- insert data to create large content header for CO table
+INSERT INTO col_large_content_block
+SELECT 1,
+       array_fill(1234567890.12, ARRAY[1100])
+       FROM generate_series(0, 2);
+-- select via index to confirm AO blockdirectory has correct offsets and read
+-- succeeds.
+SET enable_seqscan TO OFF;
+INSERT INTO col_large_content_block
+SELECT *
+FROM col_large_content_block
+WHERE id=1;
+SELECT count(*) from col_large_content_block;
+ count 
+-------
+     6
+(1 row)
+
+SET enable_seqscan TO ON;
+------------------------------------------------------------------------------
+-- Test to validate block offset is correctly recorded in block directory for
+-- column oriented table which has large content blocks, for ADD COLUMN case.
+------------------------------------------------------------------------------
+CREATE TABLE col_large_content_block_add_col (id BIGINT, id1 INT)
+WITH (appendonly=true, orientation=column, blocksize=8192) DISTRIBUTED BY (id);
+CREATE INDEX col_large_content_block_add_col_idx ON col_large_content_block_add_col USING btree (id);
+INSERT INTO col_large_content_block_add_col VALUES (1,1), (1,2);
+-- add column with default value which produces large content block
+ALTER TABLE col_large_content_block_add_col ADD COLUMN large_content DOUBLE PRECISION[] DEFAULT '{1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12,1234567890.12}' ENCODING (compresstype=none,blocksize=8192,compresslevel=0);
+-- select via index to confirm AO blockdirectory has correct offsets and read
+-- succeeds.
+SET enable_seqscan TO OFF;
+INSERT INTO col_large_content_block_add_col
+SELECT *
+FROM col_large_content_block_add_col
+WHERE id=1;
+-- Lets validate above insert worked.
+SELECT count(*) from col_large_content_block;
+ count 
+-------
+     6
+(1 row)
+
+SET enable_seqscan TO ON;
+------------------------------------------------------------------------------
+-- Test to validate insert into column oriented table works when in *single
+-- insert statement* first large content block is inserted followed by bulk
+-- dense content block.
+------------------------------------------------------------------------------
+-- dummy table to help create the scenario
+CREATE TABLE ao_from_table(a INT, arr DOUBLE PRECISION[]) WITH (appendonly=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- insert data to create large content header for CO table
+INSERT INTO ao_from_table
+SELECT 1,
+       array_fill(1234567890.12, ARRAY[1100])
+       FROM generate_series(1, 1);
+-- Bulk dense content header with RLE compression, need 16k rows for the same
+INSERT INTO ao_from_table SELECT 1,'{0.1}' FROM generate_series(1, 17000)i;
+CREATE TABLE co_large_and_bulk_content(a INT,
+                     arr DOUBLE PRECISION[] ENCODING (compresstype=RLE_TYPE,compresslevel=3,blocksize=8192))
+                     WITH (appendonly=true, orientation=column, compresstype=RLE_TYPE);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO co_large_and_bulk_content SELECT * FROM ao_from_table;
+-- can't do count(*) as CO optimizes to read only first column
+SELECT * FROM co_large_and_bulk_content where a > 1;
+ a | arr 
+---+-----
+(0 rows)
+

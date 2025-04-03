@@ -1,0 +1,24 @@
+test: setup
+
+test: pax_inject_fault
+test: cbdb_parallel
+test: alter_distributed 
+test: toast toast_failed detoast ddl numeric types filter
+test: update
+test: statistics_bloom_filter
+
+test: filter_tree filter_tree_arithmetic
+test: filter_tree_root_quals
+test: statistics/statistics 
+test: statistics/min_max_time_types statistics/min_max_text_types statistics/min_max_other_types statistics/min_max_net_types statistics/min_max_int_types statistics/min_max_geo_types statistics/min_max_float_types statistics/min_max_bit_byte_types
+
+
+test: visimap_vec_compact
+test: visimap_vec_storage
+test: default_value
+test: dictionary_encoding
+
+test: cluster
+test: db_size_functions
+
+test: teardown

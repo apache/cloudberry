@@ -1,0 +1,1 @@
+drop FUNCTION get_pax_aux_table;

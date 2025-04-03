@@ -1,0 +1,3215 @@
+-- start_matchignore
+-- m/LOG:  statement:/
+-- m/no filter/
+-- m/scan key build success/
+-- m/Feature not supported/
+-- end_matchignore
+set default_table_access_method to pax;
+set pax_enable_debug to on;
+set pax_enable_sparse_filter to on;
+set pax_max_tuples_per_group to 5;
+-- 
+-- Test the text min/max types support 
+-- 
+create table t_text(i int, v text) with(minmax_columns='v');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_text(i, v) values (1, 'pfa'),(1, 'pfb'),(1, 'pfc'),(1, 'pfd'),(1, 'pfe'), 
+(1, 'pff'),(1, 'pfg'),(1, 'pfh'),(1, 'pfi'),(1, 'pfj');
+insert into t_text(i, v) values (1, 'pfk'),(1, 'pfl'),(1, 'pfm'),(1, 'pfn'),(1, 'pfo'), 
+(1, 'pfp'),(1, 'pfq'),(1, 'pfr'),(1, 'pfs'),(1, 'pft');
+set client_min_messages to log;
+select count(*) from t_text where v > 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v > 'pfe'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v > 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v > 'pfo'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v > 'pft'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pff'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v < 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v < 'pfp'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v < 'pfz'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v = 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v = 'pfe'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pft'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfz'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v >= 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pfa'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pff'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v >= 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v >= 'pfp'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v >= 'pfz'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pfe'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v <= 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v <= 'pfo'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v <= 'pft'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(text, varchar)
+select count(*) from t_text where v > 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v > 'pfe'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v > 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v > 'pfo'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v > 'pft'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pff'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v < 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v < 'pfp'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v < 'pfz'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v = 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v = 'pfe'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pft'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfz'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v >= 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pfa'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pff'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v >= 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v >= 'pfp'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v >= 'pfz'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pfe'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v <= 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v <= 'pfo'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v <= 'pft'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(text, name)
+select count(*) from t_text where v > 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v > 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v > 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v > 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v > 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v < 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v < 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v < 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v = 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v = 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v >= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pfa'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v >= 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v >= 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v >= 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v <= 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v <= 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v <= 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(text, name)
+select count(*) from t_text where v > 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v > 'pfe'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v > 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v > 'pfo'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v > 'pft'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v < 'pff'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v < 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v < 'pfp'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v < 'pfz'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v = 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v = 'pfe'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pft'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_text where v = 'pfz'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v >= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pfa'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_text where v >= 'pff'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v >= 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v >= 'pfp'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v >= 'pfz'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_text where v <= 'pfe'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_text where v <= 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_text where v <= 'pfo'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_text where v <= 'pft'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+reset client_min_messages;
+LOG:  statement: reset client_min_messages;
+drop table t_text;
+-- 
+-- Test the varchar min/max types support 
+-- 
+create table t_varchar(i int, v varchar) with(minmax_columns='v');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_varchar(i, v) values (1, 'pfa'),(1, 'pfb'),(1, 'pfc'),(1, 'pfd'),(1, 'pfe'),
+(1, 'pff'),(1, 'pfg'),(1, 'pfh'),(1, 'pfi'),(1, 'pfj');
+insert into t_varchar(i, v) values (1, 'pfk'),(1, 'pfl'),(1, 'pfm'),(1, 'pfn'),(1, 'pfo'),
+(1, 'pfp'),(1, 'pfq'),(1, 'pfr'),(1, 'pfs'),(1, 'pft');
+set client_min_messages to log;
+select count(*) from t_varchar where v > 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v > 'pfe'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v > 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v > 'pfo'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v > 'pft'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pff'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v < 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v < 'pfp'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v < 'pfz'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v = 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v = 'pfe'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pft'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfz'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v >= 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfa'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pff'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfp'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfz'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfe'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfo'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v <= 'pft'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(varchar, text)
+select count(*) from t_varchar where v > 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v > 'pfe'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v > 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v > 'pfo'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v > 'pft'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pff'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v < 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v < 'pfp'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v < 'pfz'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v = 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v = 'pfe'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pft'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfz'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v >= 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfa'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pff'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfp'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfz'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfe'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfo'::text;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v <= 'pft'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(varchar, name)
+select count(*) from t_varchar where v > 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v > 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v > 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v > 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v > 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v < 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v < 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v < 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v = 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v = 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v >= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfa'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v <= 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(varchar, bpchar)
+select count(*) from t_varchar where v > 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v > 'pfe'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v > 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v > 'pfo'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v > 'pft'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v < 'pff'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v < 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v < 'pfp'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v < 'pfz'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v = 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v = 'pfe'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pft'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_varchar where v = 'pfz'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v >= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfa'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_varchar where v >= 'pff'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfp'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v >= 'pfz'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfe'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_varchar where v <= 'pfo'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_varchar where v <= 'pft'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+reset client_min_messages;
+LOG:  statement: reset client_min_messages;
+drop table t_varchar;
+-- 
+-- Test the bpchar min/max types support 
+-- 
+create table t_bpchar(i int, v bpchar) with(minmax_columns='v');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_bpchar(i, v) values (1, 'pfa'),(1, 'pfb'),(1, 'pfc'),(1, 'pfd'),(1, 'pfe'),
+(1, 'pff'),(1, 'pfg'),(1, 'pfh'),(1, 'pfi'),(1, 'pfj');
+insert into t_bpchar(i, v) values (1, 'pfk'),(1, 'pfl'),(1, 'pfm'),(1, 'pfn'),(1, 'pfo'),
+(1, 'pfp'),(1, 'pfq'),(1, 'pfr'),(1, 'pfs'),(1, 'pft');
+set client_min_messages to log;
+select count(*) from t_bpchar where v > 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfe'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfo'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v > 'pft'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pff'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfp'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfz'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v = 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfe'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pft'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfz'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfa'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pff'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfk'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfp'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfz'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfe'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfj'::bpchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfo'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pft'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(bpchar, text)
+select count(*) from t_bpchar where v > 'pf9'::text;
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfe'::text;
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfo'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v > 'pft'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pff'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfp'::text;
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfz'::text;
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v = 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfe'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pft'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfz'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pf9'::text;
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfa'::text;
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pff'::text;
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfk'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfp'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfz'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pf9'::text;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfe'::text;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfj'::text;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfo'::text;
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pft'::text;
+ count 
+-------
+    20
+(1 row)
+
+-- oper(bpchar, name)
+select count(*) from t_bpchar where v > 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v > 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v = 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfa'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfk'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfj'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(bpchar, varchar)
+select count(*) from t_bpchar where v > 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfe'::varchar;
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v > 'pfo'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v > 'pft'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v < 'pff'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfp'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v < 'pfz'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v = 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfe'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pft'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_bpchar where v = 'pfz'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfa'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pff'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfk'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfp'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v >= 'pfz'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pf9'::varchar;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfe'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfj'::varchar;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pfo'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_bpchar where v <= 'pft'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+reset client_min_messages;
+LOG:  statement: reset client_min_messages;
+drop table t_bpchar;
+-- 
+-- Test the name min/max types support 
+-- 
+create table t_name(i int, v name) with(minmax_columns='v');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_name(i, v) values (1, 'pfa'),(1, 'pfb'),(1, 'pfc'),(1, 'pfd'),(1, 'pfe'),
+(1, 'pff'),(1, 'pfg'),(1, 'pfh'),(1, 'pfi'),(1, 'pfj');
+insert into t_name(i, v) values (1, 'pfk'),(1, 'pfl'),(1, 'pfm'),(1, 'pfn'),(1, 'pfo'),
+(1, 'pfp'),(1, 'pfq'),(1, 'pfr'),(1, 'pfs'),(1, 'pft');
+set client_min_messages to log;
+select count(*) from t_name where v > 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v > 'pfe'::name;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v > 'pfj'::name;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v > 'pfo'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v > 'pft'::name;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pf9'::name;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pff'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v < 'pfk'::name;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v < 'pfp'::name;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v < 'pfz'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v = 'pf9'::name;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v = 'pfe'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfj'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfk'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pft'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfz'::name;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v >= 'pf9'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pfa'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pff'::name;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v >= 'pfk'::name;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v >= 'pfp'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v >= 'pfz'::name;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pf9'::name;
+LOG:  kind file, filter rate: 2 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pfe'::name;
+LOG:  kind file, filter rate: 1 / 2
+kind group, filter rate: 1 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v <= 'pfj'::name;
+LOG:  kind file, filter rate: 1 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v <= 'pfo'::name;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 1 / 4
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v <= 'pft'::name;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(name, text)
+select count(*) from t_name where v > 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v > 'pfe'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v > 'pfj'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v > 'pfo'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v > 'pft'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pff'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v < 'pfk'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v < 'pfp'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v < 'pfz'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v = 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v = 'pfe'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfj'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfk'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pft'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfz'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v >= 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pfa'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pff'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v >= 'pfk'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v >= 'pfp'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v >= 'pfz'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pf9'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pfe'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v <= 'pfj'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v <= 'pfo'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v <= 'pft'::text;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(name, bpchar)
+select count(*) from t_name where v > 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v > 'pfe'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v > 'pfj'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v > 'pfo'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v > 'pft'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pff'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v < 'pfk'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v < 'pfp'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v < 'pfz'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v = 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v = 'pfe'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfj'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfk'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pft'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfz'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v >= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pfa'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pff'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v >= 'pfk'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v >= 'pfp'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v >= 'pfz'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pf9'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pfe'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v <= 'pfj'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v <= 'pfo'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v <= 'pft'::bpchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+-- oper(name, varchar)
+select count(*) from t_name where v > 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v > 'pfe'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v > 'pfj'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v > 'pfo'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v > 'pft'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v < 'pff'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v < 'pfk'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v < 'pfp'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v < 'pfz'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v = 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v = 'pfe'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfj'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfk'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pft'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     1
+(1 row)
+
+select count(*) from t_name where v = 'pfz'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v >= 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pfa'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+select count(*) from t_name where v >= 'pff'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v >= 'pfk'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v >= 'pfp'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v >= 'pfz'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pf9'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     0
+(1 row)
+
+select count(*) from t_name where v <= 'pfe'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+     5
+(1 row)
+
+select count(*) from t_name where v <= 'pfj'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    10
+(1 row)
+
+select count(*) from t_name where v <= 'pfo'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    15
+(1 row)
+
+select count(*) from t_name where v <= 'pft'::varchar;
+LOG:  kind file, filter rate: 0 / 2
+ count 
+-------
+    20
+(1 row)
+
+reset client_min_messages;
+LOG:  statement: reset client_min_messages;
+drop table t_name;
+reset pax_enable_debug;
+reset pax_enable_sparse_filter;
+reset pax_max_tuples_per_group;

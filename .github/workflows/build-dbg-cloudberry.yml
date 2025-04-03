@@ -427,6 +427,11 @@ jobs:
         run: |
           set -eo pipefail
 
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && git submodule update --init"; then
+            echo "::error::Fail to pull submodule."
+            exit 1
+          fi
+
           chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
           if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
             echo "::error::Build script failed"

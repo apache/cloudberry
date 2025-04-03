@@ -1,0 +1,463 @@
+-- start_matchignore
+-- m/LOG:  statement:/
+-- m/no filter/
+-- m/scan key build success/
+-- m/Build a readable bloom filter/
+-- m/^LOG:  Missing statistics for column: .*/
+-- end_matchignore
+set default_table_access_method = pax;
+-- 
+-- Test with small group
+-- 
+set pax_max_tuples_per_group = 10;
+set pax_bloom_filter_work_memory_bytes = 102400; -- 100kb
+-- create pax table with bloom filter reloptions 
+create table t1(v1 int, v2 text, v3 varchar, v4 varchar(100), v5 bit, v6 float, v7 numeric, v8 numeric(20,10)) 
+    with (bloomfilter_columns='v1,v2,v3,v4,v5,v6,v7,v8');
+create table t2(v1 int, v2 text, v3 varchar, v4 varchar(100), v5 bit, v6 float, v7 numeric, v8 numeric(20,10)) 
+    with (minmax_columns='v1,v2,v3,v4,v5,v6,v7,v8', bloomfilter_columns='v1,v2,v3,v4,v5,v6,v7,v8');
+drop table t1;
+drop table t2;
+-- test bloom filter(only work on IN case)
+set pax_enable_sparse_filter to on;
+-- the fixed length and type by value type
+create table t1(single_seg int, v1 int, v2 int) with (bloomfilter_columns='v1,v2');
+insert into t1 values(1, generate_series(1, 100), generate_series(101, 200));
+insert into t1 values(1, generate_series(1, 100), generate_series(101, 200));
+set client_min_messages to log;
+select * from t1 where v1 in (1, 2, 3);
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  3 | 103
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  3 | 103
+(6 rows)
+
+select * from t1 where v1 in (1, 2, 3) and v2 > 100;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  3 | 103
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  3 | 103
+(6 rows)
+
+select * from t1 where v1 in (1, 2, 301);
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  1 | 101
+          1 |  2 | 102
+(4 rows)
+
+select * from t1 where v1 in (1, 2, 301) and v2 > 100;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  1 | 101
+          1 |  2 | 102
+(4 rows)
+
+select * from t1 where v1 in (1, 2, 301) and v2 < 100;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (1, 2, 3) and v2 in (4, 5, 6);
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (1, 2, 3) and v2 in (104, 105, 106);
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (1, 2, 3) and v2 in (101, 102, 103);
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  3 | 103
+          1 |  1 | 101
+          1 |  2 | 102
+          1 |  3 | 103
+(6 rows)
+
+select * from t1 where v1 in (104, 105, 106) and v2 > 100;
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (104, 105, 106, NULL) and v2 > 100;
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (1, 2, NULL) and v2 in (4, 5, 6); -- filter all by (4, 5, 6)
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (1, 2, 3) and v2 in (4, 5, NULL); -- support filter NULL
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t1 where v1 in (1, 2, NULL) and v2 in (4, 5, NULL); -- support filter NULL
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+set client_min_messages to log;
+select * from t1 where v1 in (12, 55, 77); -- different group
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 14 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+(6 rows)
+
+select * from t1 where v1 in (12, 55, 77) and v2 > 100;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 14 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+(6 rows)
+
+reset client_min_messages;
+drop table t1;
+-- the non-fixed type
+create table t2(single_seg int, v1 varchar(100), v2 varchar(100)) with (bloomfilter_columns='v1,v2');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'single_seg' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t2 values(1, generate_series(1, 100), generate_series(101, 200));
+insert into t2 values(1, generate_series(1, 100), generate_series(101, 200));
+set client_min_messages to log;
+select * from t2 where v1 in ('1', '2', '3');
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 1  | 101
+          1 | 2  | 102
+          1 | 3  | 103
+          1 | 1  | 101
+          1 | 2  | 102
+          1 | 3  | 103
+(6 rows)
+
+select * from t2 where v1 in ('1', '2', '3') and v2 > '100';
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 1  | 101
+          1 | 2  | 102
+          1 | 3  | 103
+          1 | 1  | 101
+          1 | 2  | 102
+          1 | 3  | 103
+(6 rows)
+
+select * from t2 where v1 in ('1', '2', '3') and v2 in ('4', '5', '6');
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t2 where v1 in ('1', '2', '3') and v2 in ('104', '105', '106');
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t2 where v1 in ('1', '2', '3') and v2 in ('101', '102', '103');
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 18 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 1  | 101
+          1 | 2  | 102
+          1 | 3  | 103
+          1 | 1  | 101
+          1 | 2  | 102
+          1 | 3  | 103
+(6 rows)
+
+select * from t2 where v1 in ('1', '2', NULL) and v2 in ('4', '5', '6'); -- filter all by ('4', '5', '6')
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t2 where v1 in ('1', '2', '3') and v2 in ('4', '5', NULL); -- support filter NULL
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t2 where v1 in ('1', '2', NULL) and v2 in ('4', '5', NULL); -- support filter NULL
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t2 where v1 in ('104', '105', '106') and v2 > '100';
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+set client_min_messages to log;
+select * from t2 where v1 in ('12', '55', '77'); -- different group
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 14 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+(6 rows)
+
+select * from t2 where v1 in ('12', '55', '77') and v2 > '100';
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 14 / 20
+ single_seg | v1 | v2  
+------------+----+-----
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+          1 | 12 | 112
+          1 | 55 | 155
+          1 | 77 | 177
+(6 rows)
+
+reset client_min_messages;
+drop table t2;
+-- the fixed length but not type by value type
+create table t3(single_seg int, v1 uuid, v2 int) with (bloomfilter_columns='v1,v2');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'single_seg' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t3 values 
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 31),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 32),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13', 33),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14', 34),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15', 35),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16', 36),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17', 37),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', 38),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', 39),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20', 40),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 41),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 42),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 43),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 44),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a25', 45),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a26', 46),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a27', 47),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a28', 48),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a29', 49),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a30', 50);
+insert into t3 values 
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 31),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 32),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13', 33),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14', 34),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15', 35),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16', 36),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a17', 37),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a18', 38),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a19', 39),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20', 40),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a21', 41),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', 42),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 43),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24', 44),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a25', 45),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a26', 46),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a27', 47),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a28', 48),
+(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a29', 49),(1, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a30', 50);
+set client_min_messages to log;
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13');
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 2 / 4
+ single_seg |                  v1                  | v2 
+------------+--------------------------------------+----
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12 | 32
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13 | 33
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12 | 32
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13 | 33
+(6 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13') and v2 > 30;
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 2 / 4
+ single_seg |                  v1                  | v2 
+------------+--------------------------------------+----
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12 | 32
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13 | 33
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12 | 32
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13 | 33
+(6 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13') and v2 in (4, 5, 6);
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13') and v2 in (34, 35, 36);
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 2 / 4
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13') and v2 in (31, 32, 33);
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 2 / 4
+ single_seg |                  v1                  | v2 
+------------+--------------------------------------+----
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12 | 32
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13 | 33
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12 | 32
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13 | 33
+(6 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aaa', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aab', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aac') and v2 > 30;
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aaa', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aab', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aac') and v2 > 300;
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t3 where v2 > 300 and v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aaa', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380aab');
+LOG:  kind file, filter rate: 2 / 2
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+set client_min_messages to log;
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a29'); -- different group
+LOG:  kind file, filter rate: 0 / 2
+ single_seg |                  v1                  | v2 
+------------+--------------------------------------+----
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a29 | 49
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a29 | 49
+(4 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14');
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 2 / 4
+ single_seg |                  v1                  | v2 
+------------+--------------------------------------+----
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14 | 34
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 | 31
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14 | 34
+(4 rows)
+
+select * from t3 where v1 in ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a28');
+LOG:  kind file, filter rate: 0 / 2
+kind group, filter rate: 2 / 4
+ single_seg |                  v1                  | v2 
+------------+--------------------------------------+----
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23 | 43
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a28 | 48
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23 | 43
+          1 | a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a28 | 48
+(4 rows)
+
+reset client_min_messages;
+drop table t3;
+-- test the big bloom filter
+set pax_max_tuples_per_group to 16384;
+set pax_max_tuples_per_file to 131072;
+create table t4(single_seg int, v1 varchar, v2 varchar) with (bloomfilter_columns='v1,v2');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'single_seg' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t4 values(1, generate_series(1, 1000000), generate_series(1000001, 2000000));
+set client_min_messages to log;
+select * from t4 where v1 in ('1000008', '1000009') and v2 > '1';
+LOG:  kind file, filter rate: 5 / 8
+kind group, filter rate: 24 / 24
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t4 where v1 in ('100008', '1000009') and v2 > '1';
+LOG:  kind file, filter rate: 5 / 8
+kind group, filter rate: 23 / 24
+ single_seg |   v1   |   v2    
+------------+--------+---------
+          1 | 100008 | 1100008
+(1 row)
+
+select * from t4 where v1 in ('666', '1000009') and v2 > '1';
+LOG:  kind file, filter rate: 5 / 8
+kind group, filter rate: 23 / 24
+ single_seg | v1  |   v2    
+------------+-----+---------
+          1 | 666 | 1000666
+(1 row)
+
+select * from t4 where v1 > '1' and v2 in ('8', '9');
+LOG:  kind file, filter rate: 4 / 8
+kind group, filter rate: 32 / 32
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+select * from t4 where v1 > '1' and v2 in ('8', '1000009');
+LOG:  kind file, filter rate: 5 / 8
+kind group, filter rate: 23 / 24
+ single_seg | v1 |   v2    
+------------+----+---------
+          1 | 9  | 1000009
+(1 row)
+
+select * from t4 where v1 in ('8', '1000009') and v2 in ('8', '1000009');
+LOG:  kind file, filter rate: 7 / 8
+kind group, filter rate: 7 / 8
+ single_seg | v1 | v2 
+------------+----+----
+(0 rows)
+
+reset client_min_messages;
+reset pax_bloom_filter_work_memory_bytes;
+reset pax_max_tuples_per_group;
+reset pax_max_tuples_per_file;
+reset pax_enable_sparse_filter;

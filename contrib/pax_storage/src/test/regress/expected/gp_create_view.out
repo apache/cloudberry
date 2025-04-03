@@ -1,0 +1,129 @@
+-- start_ignore
+drop table if exists sourcetable cascade;
+NOTICE:  table "sourcetable" does not exist, skipping
+drop view if exists v_sourcetable cascade;
+NOTICE:  view "v_sourcetable" does not exist, skipping
+drop view if exists v_sourcetable1 cascade;
+NOTICE:  view "v_sourcetable1" does not exist, skipping
+-- Tests here check that the order of output rows satisfy the ORDER BY clause
+-- in the view definition.  This is a PostgreSQL/GPDB extension that is not
+-- part of SQL standard. Since ORCA does not honor ORDER BYs in
+-- views/sub-selects, disable ORCA for this test.
+set optimizer=off;
+-- end_ignore
+create table sourcetable 
+(
+        cn int not null,
+        vn int not null,
+        pn int not null,
+        dt date not null,
+        qty int not null,
+        prc float not null,
+        primary key (cn, vn, pn)
+) distributed by (cn,vn,pn);
+insert into sourcetable values
+  ( 2, 41, 100, '1401-1-1', 1100, 2400),
+  ( 1, 10, 200, '1401-3-1', 10, 0),
+  ( 3, 42, 200, '1401-4-1', 20, 0),
+  ( 1, 20, 100, '1401-5-1', 30, 0),
+  ( 1, 33, 300, '1401-5-2', 40, 0),
+  ( 1, 51, 400, '1401-6-1', 2, 0),
+  ( 2, 50, 400, '1401-6-1', 1, 0),
+  ( 1, 31, 500, '1401-6-1', 15, 5),
+  ( 3, 32, 500, '1401-6-1', 25, 5),
+  ( 3, 30, 600, '1401-6-1', 16, 5),
+  ( 4, 43, 700, '1401-6-1', 3, 1),
+  ( 4, 40, 800, '1401-6-1', 4, 1);
+-- Check that the rows come out in order, if there's an ORDER BY in
+-- the view definition.
+create view  v_sourcetable as select * from sourcetable order by vn;
+select row_number() over(), * from v_sourcetable;
+ row_number | cn | vn | pn  |     dt     | qty  | prc  
+------------+----+----+-----+------------+------+------
+          1 |  1 | 10 | 200 | 03-01-1401 |   10 |    0
+          2 |  1 | 20 | 100 | 05-01-1401 |   30 |    0
+          3 |  3 | 30 | 600 | 06-01-1401 |   16 |    5
+          4 |  1 | 31 | 500 | 06-01-1401 |   15 |    5
+          5 |  3 | 32 | 500 | 06-01-1401 |   25 |    5
+          6 |  1 | 33 | 300 | 05-02-1401 |   40 |    0
+          7 |  4 | 40 | 800 | 06-01-1401 |    4 |    1
+          8 |  2 | 41 | 100 | 01-01-1401 | 1100 | 2400
+          9 |  3 | 42 | 200 | 04-01-1401 |   20 |    0
+         10 |  4 | 43 | 700 | 06-01-1401 |    3 |    1
+         11 |  2 | 50 | 400 | 06-01-1401 |    1 |    0
+         12 |  1 | 51 | 400 | 06-01-1401 |    2 |    0
+(12 rows)
+
+create view v_sourcetable1 as SELECT sourcetable.qty, vn, pn FROM sourcetable union select sourcetable.qty, sourcetable.vn, sourcetable.pn from sourcetable order by qty;
+select row_number() over(), * from v_sourcetable1;
+ row_number | qty  | vn | pn  
+------------+------+----+-----
+          1 |    1 | 50 | 400
+          2 |    2 | 51 | 400
+          3 |    3 | 43 | 700
+          4 |    4 | 40 | 800
+          5 |   10 | 10 | 200
+          6 |   15 | 31 | 500
+          7 |   16 | 30 | 600
+          8 |   20 | 42 | 200
+          9 |   25 | 32 | 500
+         10 |   30 | 20 | 100
+         11 |   40 | 33 | 300
+         12 | 1100 | 41 | 100
+(12 rows)
+
+-- Check that the row-comparison operator is serialized and deserialized
+-- correctly, when it's used in a view. This isn't particularly interesting,
+-- compared to all the other expression types, but we happened to have a
+-- silly bug that broke this particular case.
+create view v_sourcetable2 as
+  select a.cn as cn, a.vn as a_vn, b.vn as b_vn, a.pn as a_pn, b.pn as b_pn
+  from sourcetable a, sourcetable b
+  where row(a.*) < row(b.*)
+  and a.cn = 1 and b.cn = 1;
+select * from v_sourcetable2;
+ cn | a_vn | b_vn | a_pn | b_pn 
+----+------+------+------+------
+  1 |   10 |   31 |  200 |  500
+  1 |   10 |   20 |  200 |  100
+  1 |   10 |   33 |  200 |  300
+  1 |   10 |   51 |  200 |  400
+  1 |   20 |   31 |  100 |  500
+  1 |   20 |   33 |  100 |  300
+  1 |   20 |   51 |  100 |  400
+  1 |   33 |   51 |  300 |  400
+  1 |   31 |   33 |  500 |  300
+  1 |   31 |   51 |  500 |  400
+(10 rows)
+
+drop view v_sourcetable2;
+-- Cloudberry divides the query if it mixes window functions with aggregate
+-- functions or grouping, test it here because creating view has a check
+-- related to the collation assigning process which is affected by the
+-- dividing.
+CREATE TEMP TABLE gp_create_view_t1 (f1 smallint, f2 text) DISTRIBUTED RANDOMLY;
+CREATE TEMP VIEW window_and_agg_v1 AS SELECT count(*) OVER (PARTITION BY f1), max(f2) FROM gp_create_view_t1 GROUP BY f1;
+reset optimizer;
+-- Check that views with gp_dist_random in them will be reconstructed back properly.
+CREATE TEMP VIEW view_with_gp_dist_random AS SELECT 1 FROM gp_dist_random('pg_class');
+SELECT pg_get_viewdef('view_with_gp_dist_random');
+           pg_get_viewdef            
+-------------------------------------
+  SELECT 1 AS "?column?"            +
+    FROM gp_dist_random('pg_class');
+(1 row)
+
+CREATE SCHEMA "schema_view\'.gp_dist_random";
+CREATE TABLE "schema_view\'.gp_dist_random"."foo\'.bar" (a int);
+CREATE TEMP VIEW view_with_gp_dist_random_special_chars AS SELECT * FROM gp_dist_random(E'"schema_view\\''.gp_dist_random"."foo\\''.bar"');
+SELECT pg_get_viewdef('view_with_gp_dist_random_special_chars');
+                               pg_get_viewdef                               
+----------------------------------------------------------------------------
+  SELECT "foo\'.bar".a                                                     +
+    FROM gp_dist_random(E'"schema_view\\''.gp_dist_random"."foo\\''.bar"');
+(1 row)
+
+DROP SCHEMA "schema_view\'.gp_dist_random" CASCADE;
+DETAIL:  drop cascades to table "schema_view\'.gp_dist_random"."foo\'.bar"
+NOTICE:  drop cascades to 2 other objects
+drop cascades to view view_with_gp_dist_random_special_chars

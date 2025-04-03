@@ -1,0 +1,34 @@
+-- @Description Tests that a update operation in progress will block all other updates
+-- until the transaction is committed.
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1,10) AS i;
+INSERT 10
+
+-- The actual test begins
+1: BEGIN;
+BEGIN
+2: BEGIN;
+BEGIN
+2: UPDATE pax_tbl SET b = 42 WHERE a = 2;
+UPDATE 1
+-- The case here should update a tuple at the same seg with(2).
+-- Under jump hash, (2) and (3) are on the same seg(seg0).
+1&: UPDATE pax_tbl SET b = 42 WHERE a = 3;  <waiting ...>
+2: COMMIT;
+COMMIT
+1<:  <... completed>
+UPDATE 1
+1: COMMIT;
+COMMIT
+3: SELECT * FROM pax_tbl WHERE a < 5 ORDER BY a;
+ a | b  
+---+----
+ 1 | 1  
+ 2 | 42 
+ 3 | 42 
+ 4 | 4  
+(4 rows)

@@ -1,0 +1,28 @@
+/**
+ * it's a common proto for pax column
+ */
+syntax = "proto2";
+
+package pax;
+
+message ColumnEncoding {
+  enum Kind {
+    DEF_ENCODED = -1;         // only used in memory, should not store in disk
+    NO_ENCODED = 0;           // no encoded
+    RLE_V2 = 1;               // used rle v2
+    DIRECT_DELTA = 2;         // used direct delta
+
+    COMPRESS_ZSTD = 3;        // use ZTSD to compress 
+    COMPRESS_ZLIB = 4;        // use ZLIB to compress 
+
+    DICTIONARY = 5;           // use dict-endoing 
+  }
+
+  optional Kind kind = 1;
+  optional uint64 length = 2; // data origin size
+  optional uint64 compress_lvl = 3;  // work for compress 
+
+  optional Kind offset_stream_kind = 4;
+  optional uint64 offset_stream_length = 5;
+  optional uint64 offset_stream_compress_lvl = 6;
+}

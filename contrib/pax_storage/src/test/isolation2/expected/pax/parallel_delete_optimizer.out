@@ -1,0 +1,36 @@
+-- @Description Tests that a delete operation in progress will block all other deletes
+-- until the transaction is committed.
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT) DISTRIBUTED BY (a);
+CREATE
+insert into pax_tbl select generate_series(1,100);
+INSERT 100
+
+-- The actual test begins
+1: BEGIN;
+BEGIN
+2: BEGIN;
+BEGIN
+2: DELETE FROM pax_tbl WHERE a = 2;
+DELETE 1
+-- The case here should delete a tuple at the same seg with(2).
+-- Under jump hash, (2) and (3) are on the same seg(seg0).
+1&: DELETE FROM pax_tbl WHERE a = 3;  <waiting ...>
+2: COMMIT;
+COMMIT
+1<:  <... completed>
+DELETE 1
+1: COMMIT;
+COMMIT
+3: BEGIN;
+BEGIN
+3: SELECT * FROM pax_tbl WHERE a < 5 ORDER BY a;
+ a 
+---
+ 1 
+ 4 
+(2 rows)
+3: COMMIT;
+COMMIT

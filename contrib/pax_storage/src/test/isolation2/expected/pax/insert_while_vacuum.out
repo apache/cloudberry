@@ -1,0 +1,65 @@
+-- @Description Ensures that an insert during a vacuum operation is ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT);
+CREATE
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+insert into pax_tbl select generate_series(1,1000);
+INSERT 1000
+
+DELETE FROM pax_tbl WHERE a < 128;
+DELETE 2667
+2>: VACUUM pax_tbl;  <waiting ...>
+4: BEGIN;
+BEGIN
+4: insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);insert into pax_tbl select generate_series(1001,2000);COMMIT;
+INSERT
+2<:  <... completed>
+VACUUM
+3: SELECT COUNT(*) FROM pax_tbl WHERE a = 1500;
+ count 
+-------
+ 20    
+(1 row)
+4: INSERT INTO pax_tbl VALUES (0);
+INSERT 1

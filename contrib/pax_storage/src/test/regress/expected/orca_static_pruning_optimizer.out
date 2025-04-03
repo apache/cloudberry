@@ -1,0 +1,300 @@
+CREATE SCHEMA orca_static_pruning;
+SET search_path TO orca_static_pruning;
+CREATE TABLE rp (a int, b int, c int) DISTRIBUTED BY (a) PARTITION BY RANGE (b);
+CREATE TABLE rp0 PARTITION OF rp FOR VALUES FROM (MINVALUE) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE rp1 PARTITION OF rp FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE rp2 PARTITION OF rp FOR VALUES FROM (4200) TO (4203);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO rp VALUES (0, 0, 0), (11, 11, 0), (4201, 4201, 0);
+SELECT $query$
+SELECT *
+FROM rp
+WHERE b > 4200
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF, VERBOSE)
+:qry ;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b, c
+   ->  Dynamic Seq Scan on orca_static_pruning.rp
+         Output: a, b, c
+         Number of partitions to scan: 1 (out of 3)
+         Filter: (rp.b > 4200)
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(8 rows)
+
+:qry ;
+  a   |  b   | c 
+------+------+---
+ 4201 | 4201 | 0
+(1 row)
+
+SELECT $query$
+SELECT *
+FROM rp
+WHERE b = 4201
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF, VERBOSE)
+:qry ;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b, c
+   ->  Dynamic Seq Scan on orca_static_pruning.rp
+         Output: a, b, c
+         Number of partitions to scan: 1 (out of 3)
+         Filter: (rp.b = 4201)
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(8 rows)
+
+:qry ;
+  a   |  b   | c 
+------+------+---
+ 4201 | 4201 | 0
+(1 row)
+
+SELECT $query$
+SELECT *
+FROM rp
+WHERE b IN (4201, 4200)
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF, VERBOSE)
+:qry ;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b, c
+   ->  Dynamic Seq Scan on orca_static_pruning.rp
+         Output: a, b, c
+         Number of partitions to scan: 1 (out of 3)
+         Filter: (rp.b = ANY ('{4201,4200}'::integer[]))
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(8 rows)
+
+:qry ;
+  a   |  b   | c 
+------+------+---
+ 4201 | 4201 | 0
+(1 row)
+
+CREATE TABLE lp (a int, b int) DISTRIBUTED BY (a) PARTITION BY LIST (b);
+CREATE TABLE lp0 PARTITION OF lp FOR VALUES IN (0, 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE lp1 PARTITION OF lp FOR VALUES IN (10, 11);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE lp2 PARTITION OF lp FOR VALUES IN (42, 43);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO lp VALUES (0, 0), (10, 10), (42, 42);
+SELECT $query$
+SELECT *
+FROM lp
+WHERE b > 42
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF, VERBOSE)
+:qry ;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b
+   ->  Dynamic Seq Scan on orca_static_pruning.lp
+         Output: a, b
+         Number of partitions to scan: 1 (out of 3)
+         Filter: (lp.b > 42)
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(8 rows)
+
+:qry ;
+ a | b 
+---+---
+(0 rows)
+
+SELECT $query$
+SELECT *
+FROM lp
+WHERE b = 42
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF, VERBOSE)
+:qry ;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b
+   ->  Dynamic Seq Scan on orca_static_pruning.lp
+         Output: a, b
+         Number of partitions to scan: 1 (out of 3)
+         Filter: (lp.b = 42)
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(8 rows)
+
+:qry ;
+ a  | b  
+----+----
+ 42 | 42
+(1 row)
+
+CREATE TABLE hp (a int, b int) PARTITION BY HASH (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE hp0 PARTITION OF hp FOR VALUES WITH (MODULUS 2, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE hp1 PARTITION OF hp FOR VALUES WITH (MODULUS 2, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO hp VALUES (0, 1), (0, 3), (0, 4), (0, 42);
+SELECT $query$
+SELECT *
+FROM hp
+WHERE b = 42
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF, VERBOSE)
+:qry ;
+                  QUERY PLAN                  
+----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: hp.a, hp.b
+   ->  Seq Scan on orca_static_pruning.hp0 hp
+         Output: hp.a, hp.b
+         Filter: (hp.b = 42)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+:qry ;
+ a | b  
+---+----
+ 0 | 42
+(1 row)
+
+CREATE TABLE rp_multi_inds (a int, b int, c int) DISTRIBUTED BY (a) PARTITION BY RANGE (b);
+CREATE TABLE rp_multi_inds_part1 PARTITION OF rp_multi_inds FOR VALUES FROM (MINVALUE) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE rp_multi_inds_part2 PARTITION OF rp_multi_inds FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE rp_multi_inds_part3 PARTITION OF rp_multi_inds FOR VALUES FROM (4201) TO (4203);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO rp_multi_inds VALUES (0, 0, 0), (11, 11, 11), (4201, 4201, 4201);
+-- Create an index only on the selected partition
+CREATE INDEX other_idx ON rp_multi_inds_part2 USING btree(b);
+-- Create indexes on root table
+CREATE INDEX rp_btree_idx ON rp_multi_inds USING btree(c);
+CREATE INDEX rp_bitmap_idx ON rp_multi_inds USING bitmap(b);
+-- Expect a plan that only uses the two indexes inherited from root
+SET optimizer_enable_dynamictablescan TO off;
+EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 11 OR c = 4201);
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b, c
+   ->  Dynamic Bitmap Heap Scan on orca_static_pruning.rp_multi_inds
+         Output: a, b, c
+         Number of partitions to scan: 1 (out of 3)
+         Recheck Cond: (rp_multi_inds.b = 11)
+         Filter: ((rp_multi_inds.b = 11) AND ((rp_multi_inds.c = 11) OR (rp_multi_inds.c = 4201)))
+         ->  Dynamic Bitmap Index Scan on rp_bitmap_idx
+               Index Cond: (rp_multi_inds.b = 11)
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(11 rows)
+
+SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 11 OR c = 4201);
+ a  | b  | c  
+----+----+----
+ 11 | 11 | 11
+(1 row)
+
+RESET optimizer_enable_dynamictablescan;
+CREATE TABLE foo (a int, b int) DISTRIBUTED BY (a) PARTITION BY RANGE (b);
+CREATE TABLE foo_part1 PARTITION OF foo FOR VALUES FROM (MINVALUE) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE foo_part2 PARTITION OF foo FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE foo_part3 PARTITION OF foo FOR VALUES FROM (4201) TO (4203);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE INDEX foo_idx on foo(a);
+CREATE TABLE bar (a int) DISTRIBUTED BY (a);
+INSERT INTO foo VALUES (0, 0), (11, 11), (4201, 4201);
+INSERT INTO bar VALUES (0), (11), (42);
+-- Test ORCA index nested loop join has correct outer ref
+-- Set below GUCs for planner just to keep parity
+SET enable_hashjoin TO off;
+SET enable_mergejoin TO off;
+SET enable_nestloop TO on;
+EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM foo JOIN bar on foo.a = bar.a AND foo.b = 11;
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: foo.a, foo.b, bar.a
+   ->  Hash Join
+         Output: foo.a, foo.b, bar.a
+         Hash Cond: (foo.a = bar.a)
+         ->  Dynamic Seq Scan on orca_static_pruning.foo
+               Output: foo.a, foo.b
+               Number of partitions to scan: 1 (out of 3)
+               Filter: (foo.b = 11)
+         ->  Hash
+               Output: bar.a
+               ->  Seq Scan on orca_static_pruning.bar
+                     Output: bar.a
+ Settings: enable_hashjoin = 'off', enable_mergejoin = 'off', enable_nestloop = 'on', optimizer = 'on'
+ Optimizer: GPORCA
+(15 rows)
+
+SELECT * FROM foo JOIN bar on foo.a = bar.a AND foo.b = 11;
+ a  | b  | a  
+----+----+----
+ 11 | 11 | 11
+(1 row)
+
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+RESET enable_nestloop;
+CREATE TABLE rp_insert (a int, b int) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE rp_insert_part_1 PARTITION OF rp_insert FOR VALUES FROM (0) TO (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE rp_insert_part_2 PARTITION OF rp_insert FOR VALUES FROM (3) TO (6);
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- The INSERT plans should no longer contain Partition Selector DMLs.
+EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert VALUES (1, 1), (3, 3);
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Insert on orca_static_pruning.rp_insert
+   ->  Result
+         Output: "Values".column1, "Values".column2
+         ->  Result
+               Output: "Values".column1, "Values".column2
+               ->  Values Scan on "Values"
+                     Output: "Values".column1, "Values".column2
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: optimizer=on
+(9 rows)
+
+INSERT INTO rp_insert VALUES (1, 1), (3, 3);
+EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert SELECT * FROM rp_insert;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Insert on orca_static_pruning.rp_insert
+   ->  Dynamic Seq Scan on orca_static_pruning.rp_insert rp_insert_1
+         Output: rp_insert_1.a, rp_insert_1.b
+         Number of partitions to scan: 2 (out of 2)
+ Settings: optimizer = 'on'
+ Optimizer: GPORCA
+(6 rows)
+
+INSERT INTO rp_insert SELECT * FROM rp_insert;
+SELECT * FROM rp_insert;
+ a | b 
+---+---
+ 3 | 3
+ 3 | 3
+ 1 | 1
+ 1 | 1
+(4 rows)
+

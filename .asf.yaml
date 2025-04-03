@@ -88,6 +88,10 @@ github:
         - RPM Install Test Apache Cloudberry
         - ic-good-opt-off
         - ic-good-opt-on
+        - pax-ic-good-opt-off
+        - pax-ic-good-opt-on
+        - pax-ic-isolation2-opt-off
+        - pax-ic-isolation2-opt-on
         - ic-expandshrink
         - ic-singlenode
         - ic-resgroup-v2

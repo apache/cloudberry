@@ -1,0 +1,273 @@
+-- test single row error handling, both in COPY and external tables.
+
+--
+-- # different errors depending on dispatch timings (missing data vs
+-- # invalid input syntax)
+--
+-- start_matchsubs
+--
+-- m/CONTEXT\:\s+COPY sreh_copy\,\s+line/
+-- s/line \d+(.*)/line SOME_LINE/
+--
+-- m/DETAIL:  Failing row contains \(.*\)/
+-- s/DETAIL:  Failing row contains \(.*\)/DETAIL:  Failing row contains (#####)/
+--
+-- end_matchsubs
+
+-- ###########################################################
+-- COPY 
+-- ###########################################################
+
+CREATE TABLE sreh_copy(a int, b int, c int) distributed by(a);
+
+-- 
+-- ROW reject limit only
+--
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data1.data' DELIMITER '|' SEGMENT REJECT LIMIT 1000;
+SELECT * FROM sreh_copy ORDER BY a,b,c;
+
+-- 
+-- ROW reject limit only - low value that gets reached
+--
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data1.data' DELIMITER '|' SEGMENT REJECT LIMIT 2;
+SELECT * FROM sreh_copy ORDER BY a,b,c;
+
+-- 
+-- error logs
+--
+DROP TABLE IF EXISTS sreh_copy; CREATE TABLE sreh_copy(a int, b int, c int) distributed by(a);
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data1.data' DELIMITER '|' LOG ERRORS INTO WHATEVER SEGMENT REJECT LIMIT 1000;
+
+SET gp_ignore_error_table=true;
+
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data1.data' DELIMITER '|' LOG ERRORS INTO WHATEVER SEGMENT REJECT LIMIT 1000;
+SELECT * FROM sreh_copy ORDER BY a,b,c;
+WITH error_log AS (SELECT gp_read_error_log('sreh_copy')) select count(*) from error_log;
+
+--
+-- error logs - do the same thing again. this time error logs exist and should get data appended
+--
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data1.data' DELIMITER '|' LOG ERRORS SEGMENT REJECT LIMIT 1000;
+SELECT * FROM sreh_copy ORDER BY a,b,c;
+SELECT linenum, rawdata FROM gp_read_error_log('sreh_copy') ORDER BY linenum;
+
+--
+-- error logs - do the same thing again. this time use data from STDIN (should show in error logs)
+--
+DROP TABLE IF EXISTS sreh_copy; CREATE TABLE sreh_copy(a int, b int, c int) distributed by(a);
+COPY sreh_copy FROM STDIN DELIMITER '|' LOG ERRORS SEGMENT REJECT LIMIT 1000;
+100|100|100
+200 bad data from stdin
+300|300|300
+500|500| more bad data from stdin
+\.
+SELECT * FROM sreh_copy ORDER BY a,b,c;
+WITH error_log AS (SELECT gp_read_error_log('sreh_copy')) select count(*) from error_log;
+
+--
+-- constraint errors - data is rolled back (CHECK)
+--
+CREATE TABLE sreh_constr(a int check (a > 10));
+COPY sreh_constr FROM STDIN DELIMITER '|' LOG ERRORS SEGMENT REJECT LIMIT 1000;
+12
+bad format (not int) data should get inserted into error logs but later rolledback
+11
+10
+9
+\.
+WITH error_log AS (SELECT gp_read_error_log('sreh_constr')) select count(*) from error_log;
+SELECT * FROM sreh_constr; -- should exist and be empty
+DROP TABLE sreh_constr;
+
+--
+-- constraint errors - data is rolled back from target table (UNIQUE)
+--
+CREATE TABLE sreh_constr(a int unique);
+COPY sreh_constr FROM STDIN DELIMITER '|' LOG ERRORS SEGMENT REJECT LIMIT 1000;
+12
+bad format (not int) data should get inserted into error logs but later rolledback
+11
+9
+9
+\.
+WITH error_log AS (SELECT gp_read_error_log('sreh_constr')) select count(*) from error_log;
+SELECT * FROM sreh_constr; -- should exist and be empty
+
+--
+-- test PERCENT reject limit logic with threshold 100.
+-- (we don't test the default threshold (300) yet. we could if needed).
+-- bad records in bad_data3.data (300 rows): 5,15,55,56,107,136,160,213,214,286
+-- this data file is made with errors that will occur only on the QD (with COPY)
+-- so the percent calculation should always be the same regardless of number of
+-- QE's in the system.
+--
+set gp_reject_percent_threshold = 100;
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data3.data' DELIMITER '|' SEGMENT REJECT LIMIT 10 PERCENT; --pass
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data3.data' DELIMITER '|' SEGMENT REJECT LIMIT 2 PERCENT; --fail
+
+--
+-- test PERCENT reject limit logic with custom threshold 10 (only practical for test purposes)
+--
+set gp_reject_percent_threshold = 10;
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data3.data' DELIMITER '|' SEGMENT REJECT LIMIT 10 PERCENT; --fail
+COPY sreh_copy FROM '@abs_srcdir@/data/bad_data3.data' DELIMITER '|' SEGMENT REJECT LIMIT 20 PERCENT; --pass
+
+-- MPP-2933 (multiple dist-key attr conversion errors)
+create table t2933 (col1 varchar(3) NULL , col2 char(1) NULL, col3 varchar(4) NULL, col4 char(1) NULL, col5 varchar(20) NULL) 
+Distributed By (col1, col2, col3, col4);
+COPY t2933 FROM STDIN DELIMITER '|' SEGMENT REJECT LIMIT 10;
+MANDT|SPRAS|BSART|BSTYP|BATXT
+\.
+
+-- cleanup
+DROP TABLE sreh_copy;
+DROP TABLE sreh_constr;
+
+-- ###########################################################
+-- External Tables 
+-- ###########################################################
+
+CREATE EXTERNAL WEB TABLE gpfdist_sreh_start (x text)
+execute E'((@bindir@/gpfdist -p 8080 -d @abs_srcdir@/data  </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:8080 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
+on MASTER
+FORMAT 'text' (delimiter '|');
+
+CREATE EXTERNAL WEB TABLE gpfdist_sreh_stop (x text)
+execute E'(pkill gpfdist || killall gpfdist) > /dev/null 2>&1; echo "stopping..."'
+on MASTER
+FORMAT 'text' (delimiter '|');
+
+select * from gpfdist_sreh_stop;
+select * from gpfdist_sreh_start;
+
+-- create a target table to load into
+CREATE TABLE sreh_target(a int, b int, c int) distributed by(a);
+
+-- 
+-- reject limit only
+--
+CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+FORMAT 'text' (delimiter '|')
+SEGMENT REJECT LIMIT 10000;
+
+SELECT * FROM sreh_ext;
+INSERT INTO sreh_target SELECT * FROM sreh_ext;
+SELECT count(*) FROM sreh_target;
+TRUNCATE sreh_target;
+DROP EXTERNAL TABLE sreh_ext;
+
+-- 
+-- reject limit only - low value that gets reached
+--
+CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+FORMAT 'text' (delimiter '|')
+SEGMENT REJECT LIMIT 2;
+
+SELECT * FROM sreh_ext ORDER BY a;
+INSERT INTO sreh_target SELECT * FROM sreh_ext;
+SELECT count(*) FROM sreh_target;
+TRUNCATE sreh_target;
+DROP EXTERNAL TABLE sreh_ext;
+
+-- 
+-- error logs
+--
+CREATE EXTERNAL TABLE sreh_ext_err_tbl(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+FORMAT 'text' (delimiter '|')
+LOG ERRORS INTO WHATEVER
+SEGMENT REJECT LIMIT 1000;
+
+SELECT * FROM sreh_ext_err_tbl ORDER BY a;
+-- Verify the fields that we easily can.
+WITH error_log AS (SELECT * FROM gp_read_error_log('sreh_ext_err_tbl'))
+  SELECT relname, filename LIKE 'gpfdist://@hostname@:8080/bad_data1.data [%]' as filename_ok, linenum, errmsg from error_log;
+
+CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+FORMAT 'text' (delimiter '|')
+LOG ERRORS
+SEGMENT REJECT LIMIT 1000;
+
+SELECT * FROM sreh_ext ORDER BY a;
+WITH error_log AS (SELECT gp_read_error_log('sreh_ext')) select count(*) from error_log;
+
+INSERT INTO sreh_target SELECT * FROM sreh_ext;
+SELECT count(*) FROM sreh_target;
+TRUNCATE sreh_target;
+
+--
+-- error logs - do the same thing again. this time error logs exist and should get data appended
+--
+SELECT * FROM sreh_ext ORDER BY a;
+SELECT linenum, rawdata FROM gp_read_error_log('sreh_ext') ORDER BY linenum;
+
+INSERT INTO sreh_target SELECT * FROM sreh_ext;
+SELECT count(*) FROM sreh_target;
+TRUNCATE sreh_target;
+DROP EXTERNAL TABLE sreh_ext;
+DROP EXTERNAL TABLE sreh_ext_err_tbl;
+
+--
+-- constraint errors - data is rolled back from both target and error tables (CHECK)
+--
+CREATE TABLE sreh_constr(a int, b int, c int check (c < 10));
+CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+FORMAT 'text' (delimiter '|')
+LOG ERRORS
+SEGMENT REJECT LIMIT 1000;
+
+INSERT INTO sreh_constr SELECT * FROM sreh_ext;
+SELECT linenum, rawdata FROM gp_read_error_log('sreh_constr') ORDER BY linenum;
+SELECT COUNT(*) FROM sreh_constr; -- should be empty
+
+--
+-- test PERCENT reject limit logic with threshold 100.
+-- (we don't test the default threshold (300) yet. we could if needed).
+-- bad records in bad_data3.data (300 rows): 5,15,55,56,107,136,160,213,214,286
+-- in here we assume that gpfdist will distribute all the data to one QE (since
+-- it is much smaller than the data buffer it uses) so the percent calculation 
+-- should always be the same regardless of number of QE's in the system.
+--
+set gp_reject_percent_threshold = 100;
+CREATE EXTERNAL TABLE sreh_ext_10percent(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data3.data' )
+FORMAT 'text' (delimiter '|')
+SEGMENT REJECT LIMIT 10 PERCENT;
+
+SELECT count(*) FROM sreh_ext_10percent; -- pass
+
+CREATE EXTERNAL TABLE sreh_ext_2percent(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data3.data' )
+FORMAT 'text' (delimiter '|')
+SEGMENT REJECT LIMIT 2 PERCENT;
+
+SELECT count(*) FROM sreh_ext_2percent; -- fail
+
+--
+-- test PERCENT reject limit logic with custom threshold 10 (only practical for test purposes)
+--
+set gp_reject_percent_threshold = 10;
+SELECT count(*) FROM sreh_ext_10percent; -- fail
+
+CREATE EXTERNAL TABLE sreh_ext_20percent(a int, b int, c int)
+LOCATION ('gpfdist://@hostname@:8080/bad_data3.data' )
+FORMAT 'text' (delimiter '|')
+SEGMENT REJECT LIMIT 20 PERCENT;
+
+SELECT count(*) FROM sreh_ext_20percent; -- pass
+set gp_reject_percent_threshold = 300; -- reset
+
+-- cleanup
+select * from gpfdist_sreh_stop;
+DROP EXTERNAL WEB TABLE gpfdist_sreh_stop;
+DROP EXTERNAL WEB TABLE gpfdist_sreh_start;
+DROP EXTERNAL TABLE sreh_ext;
+DROP EXTERNAL TABLE sreh_ext_2percent;
+DROP EXTERNAL TABLE sreh_ext_10percent;
+DROP EXTERNAL TABLE sreh_ext_20percent;
+DROP TABLE sreh_target;
+DROP TABLE sreh_constr;

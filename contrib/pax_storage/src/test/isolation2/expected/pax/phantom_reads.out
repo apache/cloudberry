@@ -1,0 +1,48 @@
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1, 100) AS i;
+INSERT 100
+
+1: BEGIN;
+BEGIN
+1: SELECT * FROM pax_tbl WHERE b BETWEEN 20 AND 30 ORDER BY a;
+ a  | b  
+----+----
+ 20 | 20 
+ 21 | 21 
+ 22 | 22 
+ 23 | 23 
+ 24 | 24 
+ 25 | 25 
+ 26 | 26 
+ 27 | 27 
+ 28 | 28 
+ 29 | 29 
+ 30 | 30 
+(11 rows)
+2: BEGIN;
+BEGIN
+2: INSERT INTO pax_tbl VALUES (101, 25);
+INSERT 1
+2: COMMIT;
+COMMIT
+1: SELECT * FROM pax_tbl WHERE b BETWEEN 20 AND 30 ORDER BY a;
+ a   | b  
+-----+----
+ 20  | 20 
+ 21  | 21 
+ 22  | 22 
+ 23  | 23 
+ 24  | 24 
+ 25  | 25 
+ 26  | 26 
+ 27  | 27 
+ 28  | 28 
+ 29  | 29 
+ 30  | 30 
+ 101 | 25 
+(12 rows)
+1: COMMIT;
+COMMIT

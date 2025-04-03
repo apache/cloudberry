@@ -1,0 +1,122 @@
+BEGIN;
+CREATE TABLE c_test (a int) distributed randomly;
+INSERT into c_test values (1), (2);
+SAVEPOINT s;
+SELECT c_test.a/0 from c_test;
+ERROR:  division by zero  (seg1 slice1 localhost:60002 pid=30908)
+ROLLBACK TO SAVEPOINT s;
+SELECT c_test.a/0 from c_test where c_test.a > 2;
+ ?column? 
+----------
+(0 rows)
+
+ROLLBACK TO SAVEPOINT s;
+DECLARE c CURSOR for SELECT c_test.a/0 from c_test;
+FETCH 1 from c;
+ERROR:  division by zero  (seg0 slice1 localhost:60001 pid=30912)
+ROLLBACK TO SAVEPOINT s;
+DECLARE c CURSOR for SELECT c_test.a/0 from c_test where c_test.a > 2;
+FETCH 1 from c;
+ ?column? 
+----------
+(0 rows)
+
+ABORT;
+BEGIN;
+CREATE TABLE c_test (a int, b int) distributed randomly;
+INSERT into c_test values (1, 2), (2, 3), (3, 4);
+SAVEPOINT s;
+SELECT * from c_test;
+ a | b 
+---+---
+ 1 | 2
+ 2 | 3
+ 3 | 4
+(3 rows)
+
+SELECT a/b from c_test;
+ ?column? 
+----------
+        0
+        0
+        0
+(3 rows)
+
+UPDATE c_test set b = 0 where b = 4;
+SAVEPOINT s;
+SELECT a/b from c_test where c_test.a < 3;
+ ?column? 
+----------
+        0
+        0
+(2 rows)
+
+SELECT a/b from c_test;
+ERROR:  division by zero  (seg3 slice1 localhost:60004 pid=30910)
+ROLLBACK TO SAVEPOINT s;
+DECLARE c CURSOR for SELECT a/b from c_test;
+FETCH 1 from c;
+ ?column? 
+----------
+        0
+(1 row)
+
+FETCH 1 from c;
+ ?column? 
+----------
+        0
+(1 row)
+
+FETCH 1 from c;
+ERROR:  division by zero  (seg3 slice1 localhost:60004 pid=30915)
+ROLLBACK TO SAVEPOINT s;
+DECLARE c CURSOR for SELECT c_test.a/0 from c_test where c_test.a > 1;
+FETCH 1 from c;
+ERROR:  division by zero  (seg3 slice1 localhost:60004 pid=30915)
+ABORT;
+BEGIN;
+CREATE TABLE c_test (a int, b int) distributed randomly;
+INSERT into c_test select 1, generate_series(1, 2000);
+UPDATE c_test set a = b where b = 1995;
+SAVEPOINT s;
+SELECT * from c_test order by b limit 5;
+ a | b 
+---+---
+ 1 | 1
+ 1 | 2
+ 1 | 3
+ 1 | 4
+ 1 | 5
+(5 rows)
+
+SELECT a/b from c_test order by b desc limit 10;
+ ?column? 
+----------
+        0
+        0
+        0
+        0
+        0
+        1
+        0
+        0
+        0
+        0
+(10 rows)
+
+SAVEPOINT s;
+SELECT b/(b - a) from c_test;
+ERROR:  division by zero  (seg0 slice1 localhost:60001 pid=30907)
+ROLLBACK TO SAVEPOINT s;
+DECLARE c CURSOR for SELECT b/(b - a) from c_test order by b desc limit 10;
+FETCH 1 from c;
+ERROR:  division by zero  (seg0 slice1 localhost:60001 pid=30912)
+FETCH 1 from c;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+FETCH 1 from c;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK TO SAVEPOINT s;
+DECLARE c CURSOR for SELECT c_test.a/0 from c_test where c_test.a > 1;
+FETCH 1 from c;
+ERROR:  division by zero  (seg3 slice1 localhost:60004 pid=30915)
+ABORT;

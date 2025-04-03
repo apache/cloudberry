@@ -1,0 +1,585 @@
+-- test am encoding 
+drop table if exists t1_encoding_heap;
+CREATE TABLE t1_encoding_heap (c1 int ENCODING (compresstype=zstd),
+                  c2 char ENCODING (compresstype=zlib),
+                  c3 char) using heap;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t1_encoding_aoco;
+CREATE TABLE t1_encoding_aoco (c1 int ENCODING (compresstype=zstd),
+                  c2 char ENCODING (compresstype=zlib),
+                  c3 char) using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t1_encoding_aoco
+                                                          Table "public.t1_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zstd             | 1                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | zlib             | 1                 | 32768      | 
+ c3     | character(1) |           |          |         | extended |              | none             | 0                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t1_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+(3 rows)
+
+drop table if exists t2_encoding_heap;
+CREATE TABLE t2_encoding_heap (c1 int ENCODING (compresstype=zlib),
+                  c2 char ENCODING (compresstype=zstd),
+                  c3 char,
+                  COLUMN c3 ENCODING (compresstype=RLE_TYPE)
+                  ) using heap;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t2_encoding_aoco;
+CREATE TABLE t2_encoding_aoco (c1 int ENCODING (compresstype=zlib),
+                  c2 char ENCODING (compresstype=zstd),
+                  c3 char,
+                  COLUMN c3 ENCODING (compresstype=RLE_TYPE)
+                  ) using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t2_encoding_aoco
+                                                          Table "public.t2_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | zstd             | 1                 | 32768      | 
+ c3     | character(1) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t2_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                       attoptions                        
+--------+---------------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table if exists t3_encoding_heap;
+CREATE TABLE t3_encoding_heap (c1 int ENCODING (compresstype=zlib),
+                  c2 char,
+                  c3 text,
+                  c4 smallint ENCODING (compresstype=none),
+                  DEFAULT COLUMN ENCODING (compresstype=zstd),
+                  COLUMN c3 ENCODING (compresstype=RLE_TYPE)
+                  ) using heap;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t3_encoding_aoco;
+CREATE TABLE t3_encoding_aoco (c1 int ENCODING (compresstype=zlib),
+                  c2 char,
+                  c3 text,
+                  c4 smallint ENCODING (compresstype=none),
+                  DEFAULT COLUMN ENCODING (compresstype=zstd),
+                  COLUMN c3 ENCODING (compresstype=RLE_TYPE)
+                  ) using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t3_encoding_aoco
+                                                          Table "public.t3_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | zstd             | 1                 | 32768      | 
+ c3     | text         |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
+ c4     | smallint     |           |          |         | plain    |              | none             | 0                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t3_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                       attoptions                        
+--------+---------------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+(4 rows)
+
+drop table if exists t4_encoding_heap;
+CREATE TABLE t4_encoding_heap (c1 int,
+                  c2 char ENCODING (compresstype=RLE_TYPE),
+                  c3 char ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
+                  using heap
+                  with(COMPRESSTYPE=zstd, compresslevel=5);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  unrecognized parameter "compresstype"
+drop table if exists t4_encoding_aoco;
+CREATE TABLE t4_encoding_aoco (c1 int,
+                  c2 char ENCODING (compresstype=RLE_TYPE),
+                  c3 char ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
+                  using ao_column
+                  with(COMPRESSTYPE=zstd, compresslevel=5);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t4_encoding_aoco
+                                                          Table "public.t4_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zstd             | 5                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
+ c3     | character(1) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+Options: compresstype=zstd, compresslevel=5
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t4_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                       attoptions                        
+--------+---------------------------------------------------------
+      1 | {compresstype=zstd,compresslevel=5,blocksize=32768}
+      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table if exists t5_encoding_heap;
+CREATE TABLE t5_encoding_heap (c1 int,
+                  c2 char ENCODING (compresstype=RLE_TYPE),
+                  c3 char, COLUMN c3 ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
+                  using heap
+                  with(COMPRESSTYPE=zstd, compresslevel=5);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  unrecognized parameter "compresstype"
+drop table if exists t5_encoding_aoco;
+CREATE TABLE t5_encoding_aoco (c1 int,
+                  c2 char ENCODING (compresstype=RLE_TYPE),
+                  c3 char, COLUMN c3 ENCODING (compresstype=RLE_TYPE, compresslevel=1)) 
+                  using ao_column
+                  with(COMPRESSTYPE=zstd, compresslevel=5);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t5_encoding_aoco
+                                                          Table "public.t5_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zstd             | 5                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
+ c3     | character(1) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+Options: compresstype=zstd, compresslevel=5
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t5_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                       attoptions                        
+--------+---------------------------------------------------------
+      1 | {compresstype=zstd,compresslevel=5,blocksize=32768}
+      2 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+      3 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table if exists t6_encoding_aoco;
+CREATE TABLE t6_encoding_aoco (c1 int,
+                  c2 char,
+                  c3 char) 
+                  using ao_column
+                  with(COMPRESSTYPE=zstd, compresslevel=5);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t6_encoding_aoco
+                                                          Table "public.t6_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zstd             | 5                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | zstd             | 5                 | 32768      | 
+ c3     | character(1) |           |          |         | extended |              | zstd             | 5                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+Options: compresstype=zstd, compresslevel=5
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t6_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zstd,compresslevel=5,blocksize=32768}
+      2 | {compresstype=zstd,compresslevel=5,blocksize=32768}
+      3 | {compresstype=zstd,compresslevel=5,blocksize=32768}
+(3 rows)
+
+drop table if exists t7_encoding_aoco;
+CREATE TABLE t7_encoding_aoco (c1 int,
+                  c2 char,
+                  c3 char) 
+                  using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t7_encoding_aoco
+                                                          Table "public.t7_encoding_aoco"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | none             | 0                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | none             | 0                 | 32768      | 
+ c3     | character(1) |           |          |         | extended |              | none             | 0                 | 32768      | 
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t7_encoding_aoco'::regclass::oid order by attnum ;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+(3 rows)
+
+drop table t1_encoding_aoco;
+drop table t2_encoding_aoco;
+drop table t3_encoding_aoco;
+drop table t4_encoding_aoco;
+drop table t5_encoding_aoco;
+drop table t6_encoding_aoco;
+drop table t7_encoding_aoco;
+-- test am encoding with gp partition
+drop table if exists t1_part_encoding_heap;
+CREATE TABLE t1_part_encoding_heap (c1 int ENCODING (compresstype=zlib),
+                  c2 char ENCODING (compresstype=zstd, blocksize=65536),
+                  c3 text, COLUMN c3 ENCODING (compresstype=RLE_TYPE) )
+    using heap
+    PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
+                             END ('2100-12-31'::DATE),
+                             COLUMN c3 ENCODING (compresstype=zlib));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t1_part_encoding_aoco;
+CREATE TABLE t1_part_encoding_aoco (c1 int ENCODING (compresstype=zlib),
+                  c2 char ENCODING (compresstype=zstd, blocksize=65536),
+                  c3 text, COLUMN c3 ENCODING (compresstype=RLE_TYPE) )
+    using ao_column
+    PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
+                             END ('2100-12-31'::DATE),
+                             COLUMN c3 ENCODING (compresstype=zlib));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t1_part_encoding_aoco_1_prt_1
+                                                    Table "public.t1_part_encoding_aoco_1_prt_1"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | zstd             | 1                 | 65536      | 
+ c3     | text         |           |          |         | extended |              | zlib             | 1                 | 32768      | 
+Partition of: t1_part_encoding_aoco FOR VALUES FROM ('01-01-1900') TO ('12-31-2100')
+Partition constraint: ((c3 IS NOT NULL) AND (c3 >= '01-01-1900'::text) AND (c3 < '12-31-2100'::text))
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t1_part_encoding_aoco_1_prt_1'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=zstd,blocksize=65536,compresslevel=1}
+      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table if exists t2_part_encoding_heap;
+CREATE TABLE t2_part_encoding_heap (c1 int ENCODING (compresstype=zlib),
+                  c2 char ENCODING (compresstype=zstd, blocksize=65536),
+                  c3 text, COLUMN c3 ENCODING (compresstype=RLE_TYPE) )
+    using heap
+    PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
+                             END ('2100-12-31'::DATE));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t2_part_encoding_aoco;
+CREATE TABLE t2_part_encoding_aoco (c1 int ENCODING (compresstype=zlib),
+                  c2 char ENCODING (compresstype=zstd, blocksize=65536),
+                  c3 text, COLUMN c3 ENCODING (compresstype=zstd) )
+    using ao_column
+    PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)          
+                             END ('2100-12-31'::DATE));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t2_part_encoding_aoco_1_prt_1
+                                                    Table "public.t2_part_encoding_aoco_1_prt_1"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | zstd             | 1                 | 65536      | 
+ c3     | text         |           |          |         | extended |              | zstd             | 1                 | 32768      | 
+Partition of: t2_part_encoding_aoco FOR VALUES FROM ('01-01-1900') TO ('12-31-2100')
+Partition constraint: ((c3 IS NOT NULL) AND (c3 >= '01-01-1900'::text) AND (c3 < '12-31-2100'::text))
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t2_part_encoding_aoco_1_prt_1'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=zstd,blocksize=65536,compresslevel=1}
+      3 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table if exists t3_part_encoding_heap;
+CREATE TABLE t3_part_encoding_heap (c1 int,
+                  c2 char,
+                  c3 text)
+    using heap
+    PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)
+                             END ('2100-12-31'::DATE),
+                             COLUMN c3 ENCODING (compresstype=zlib));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t3_part_encoding_aoco;
+CREATE TABLE t3_part_encoding_aoco (c1 int,
+                  c2 char,
+                  c3 text)
+    using ao_column
+    PARTITION BY RANGE (c3) (START ('1900-01-01'::DATE)
+                             END ('2100-12-31'::DATE),
+                             COLUMN c3 ENCODING (compresstype=zlib));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t3_part_encoding_aoco_1_prt_1
+                                                    Table "public.t3_part_encoding_aoco_1_prt_1"
+ Column |     Type     | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+--------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ c1     | integer      |           |          |         | plain    |              | none             | 0                 | 32768      | 
+ c2     | character(1) |           |          |         | extended |              | none             | 0                 | 32768      | 
+ c3     | text         |           |          |         | extended |              | zlib             | 1                 | 32768      | 
+Partition of: t3_part_encoding_aoco FOR VALUES FROM ('01-01-1900') TO ('12-31-2100')
+Partition constraint: ((c3 IS NOT NULL) AND (c3 >= '01-01-1900'::text) AND (c3 < '12-31-2100'::text))
+Checksum: t
+Distributed by: (c1)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t3_part_encoding_aoco_1_prt_1'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=none,compresslevel=0,blocksize=32768}
+      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+      3 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+(3 rows)
+
+drop table if exists t4_part_encoding_heap;
+CREATE TABLE t4_part_encoding_heap (i int, j int, k int, l int) 
+    using heap
+    PARTITION BY range(i) SUBPARTITION BY range(j)
+    (
+       partition p1 start(1) end(2)
+       ( subpartition sp1 start(1) end(2) 
+         column i encoding(compresstype=zlib)
+       ), 
+       partition p2 start(2) end(3)
+       ( subpartition sp1 start(1) end(2)
+           column i encoding(compresstype=rle)
+           column k encoding(compresstype=zstd)
+       )
+    );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t4_part_encoding_aoco;
+CREATE TABLE t4_part_encoding_aoco (i int, j int, k int, l int) 
+    using ao_column
+    PARTITION BY range(i) SUBPARTITION BY range(j)
+    (
+       partition p1 start(1) end(2)
+       ( subpartition sp1 start(1) end(2) 
+         column i encoding(compresstype=zlib)
+       ), 
+       partition p2 start(2) end(3)
+       ( subpartition sp1 start(1) end(2)
+           column i encoding(compresstype=zlib)
+           column k encoding(compresstype=zstd)
+       )
+    );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t4_part_encoding_aoco_1_prt_p1_2_prt_sp1
+                                           Table "public.t4_part_encoding_aoco_1_prt_p1_2_prt_sp1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           |          |         | plain   |              | zlib             | 1                 | 32768      | 
+ j      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+ k      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+ l      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+Partition of: t4_part_encoding_aoco_1_prt_p1 FOR VALUES FROM (1) TO (2)
+Partition constraint: ((i IS NOT NULL) AND (i >= 1) AND (i < 2) AND (j IS NOT NULL) AND (j >= 1) AND (j < 2))
+Checksum: t
+Distributed by: (i)
+
+\d+ t4_part_encoding_aoco_1_prt_p2_2_prt_sp1
+                                           Table "public.t4_part_encoding_aoco_1_prt_p2_2_prt_sp1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           |          |         | plain   |              | zlib             | 1                 | 32768      | 
+ j      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+ k      | integer |           |          |         | plain   |              | zstd             | 1                 | 32768      | 
+ l      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+Partition of: t4_part_encoding_aoco_1_prt_p2 FOR VALUES FROM (1) TO (2)
+Partition constraint: ((i IS NOT NULL) AND (i >= 2) AND (i < 3) AND (j IS NOT NULL) AND (j >= 1) AND (j < 2))
+Checksum: t
+Distributed by: (i)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t4_part_encoding_aoco_1_prt_p1_2_prt_sp1'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+(4 rows)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t4_part_encoding_aoco_1_prt_p2_2_prt_sp1'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+      3 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+      4 | {compresstype=none,compresslevel=0,blocksize=32768}
+(4 rows)
+
+drop table if exists t5_part_encoding_heap;
+CREATE TABLE t5_part_encoding_heap (i int ENCODING (compresstype=zlib), j int, k int, l int, column l encoding(compresstype=zstd)) 
+    using heap
+    PARTITION BY range(i) SUBPARTITION BY range(j)
+    (
+       partition p1 start(1) end(2)
+       ( subpartition sp1 start(1) end(2) 
+         column i encoding(compresstype=zlib)
+       ), 
+       partition p2 start(2) end(3)
+       ( subpartition sp1 start(1) end(2)
+           column i encoding(compresstype=zlib)
+           column k encoding(compresstype=zstd)
+       )
+    );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  ENCODING clause only supported with column oriented tables
+drop table if exists t5_part_encoding_aoco;
+CREATE TABLE t5_part_encoding_aoco (i int ENCODING (compresstype=RLE_TYPE), j int, k int, l int, column l encoding(compresstype=zstd)) 
+    using ao_column
+    PARTITION BY range(i) SUBPARTITION BY range(j)
+    (
+       partition p1 start(1) end(2)
+       ( subpartition sp1 start(1) end(2) 
+         column i encoding(compresstype=zlib)
+       ), 
+       partition p2 start(2) end(3)
+       ( subpartition sp1 start(1) end(2)
+           column j encoding(compresstype=zlib)
+           column k encoding(compresstype=zstd)
+       )
+    );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Cloudberry Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+\d+ t5_part_encoding_aoco_1_prt_p1_2_prt_sp1
+                                           Table "public.t5_part_encoding_aoco_1_prt_p1_2_prt_sp1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           |          |         | plain   |              | zlib             | 1                 | 32768      | 
+ j      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+ k      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
+ l      | integer |           |          |         | plain   |              | zstd             | 1                 | 32768      | 
+Partition of: t5_part_encoding_aoco_1_prt_p1 FOR VALUES FROM (1) TO (2)
+Partition constraint: ((i IS NOT NULL) AND (i >= 1) AND (i < 2) AND (j IS NOT NULL) AND (j >= 1) AND (j < 2))
+Checksum: t
+Distributed by: (i)
+
+\d+ t5_part_encoding_aoco_1_prt_p2_2_prt_sp1
+                                           Table "public.t5_part_encoding_aoco_1_prt_p2_2_prt_sp1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+ j      | integer |           |          |         | plain   |              | zlib             | 1                 | 32768      | 
+ k      | integer |           |          |         | plain   |              | zstd             | 1                 | 32768      | 
+ l      | integer |           |          |         | plain   |              | zstd             | 1                 | 32768      | 
+Partition of: t5_part_encoding_aoco_1_prt_p2 FOR VALUES FROM (1) TO (2)
+Partition constraint: ((i IS NOT NULL) AND (i >= 2) AND (i < 3) AND (j IS NOT NULL) AND (j >= 1) AND (j < 2))
+Checksum: t
+Distributed by: (i)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t5_part_encoding_aoco_1_prt_p1_2_prt_sp1'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      2 | {compresstype=none,compresslevel=0,blocksize=32768}
+      3 | {compresstype=none,compresslevel=0,blocksize=32768}
+      4 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+(4 rows)
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t5_part_encoding_aoco_1_prt_p2_2_prt_sp1'::regclass::oid order by attnum;
+ attnum |                       attoptions                        
+--------+---------------------------------------------------------
+      1 | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+      3 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+      4 | {compresstype=zstd,compresslevel=1,blocksize=32768}
+(4 rows)
+
+drop table t1_part_encoding_aoco;
+drop table t2_part_encoding_aoco;
+drop table t3_part_encoding_aoco;
+drop table t4_part_encoding_aoco;
+drop table t5_part_encoding_aoco;
+-- test create type with encoding clause
+CREATE FUNCTION int33_in(cstring) RETURNS int33
+  STRICT IMMUTABLE LANGUAGE internal AS 'int4in';
+NOTICE:  type "int33" is not yet defined
+DETAIL:  Creating a shell type definition.
+CREATE FUNCTION int33_out(int33) RETURNS cstring
+  STRICT IMMUTABLE LANGUAGE internal AS 'int4out';
+NOTICE:  argument type int33 is only a shell
+CREATE TYPE int33 (
+   internallength = 4,
+   input = int33_in,
+   output = int33_out,
+   alignment = int4,
+   default = 123,
+   passedbyvalue,
+   compresstype="zlib",
+   blocksize=65536,
+   compresslevel=1
+);
+drop table if exists t1_type_int33_heap;
+create table t1_type_int33_heap (c1 int33) using heap;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+\d+ t1_type_int33_heap
+                           Table "public.t1_type_int33_heap"
+ Column | Type  | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+-------+-----------+----------+---------+---------+--------------+-------------
+ c1     | int33 |           |          |         | plain   |              | 
+Distributed randomly
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t1_type_int33_heap'::regclass::oid order by attnum;
+ attnum | attoptions 
+--------+------------
+(0 rows)
+
+drop table if exists t1_type_int33_aoco;
+create table t1_type_int33_aoco (c1 int33) using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+\d+ t1_type_int33_aoco
+                                                     Table "public.t1_type_int33_aoco"
+ Column | Type  | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ c1     | int33 |           |          |         | plain   |              | zlib             | 1                 | 65536      | 
+Checksum: t
+Distributed randomly
+
+select attnum, attoptions from pg_attribute_encoding where attrelid='t1_type_int33_aoco'::regclass::oid order by attnum;
+ attnum |                     attoptions                      
+--------+-----------------------------------------------------
+      1 | {compresstype=zlib,blocksize=65536,compresslevel=1}
+(1 row)
+
+drop table t1_type_int33_heap;
+drop table t1_type_int33_aoco;
+-- test no implement am encoding callback table still can use relation WITH option
+-- start_ignore
+# ignore_reason: pax not support relation WITH theses options
+CREATE TABLE t1_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
+CREATE TABLE t2_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
+drop table t1_heap;
+drop table t2_heap;
+-- end_ignore

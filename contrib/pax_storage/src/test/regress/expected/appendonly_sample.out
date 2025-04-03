@@ -1,0 +1,386 @@
+CREATE TABLE test_tablesample_append (dist int, id int, name text) WITH (appendonly=true)  DISTRIBUTED BY (dist);
+-- use fillfactor so we don't have to load too much data to get multiple pages
+-- Changed the column length in order to match the expected results based on relation's blocksz
+INSERT INTO test_tablesample_append SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
+INSERT INTO test_tablesample_append SELECT 3, i, repeat(i::text, 875) FROM generate_series(10, 19) s(i) ORDER BY i;
+INSERT INTO test_tablesample_append SELECT 5, i, repeat(i::text, 875) FROM generate_series(20, 29) s(i) ORDER BY i;
+-- Verify that each segment has the same amount of rows;
+SELECT gp_segment_id, count(dist) FROM test_tablesample_append GROUP BY 1 ORDER BY 1;
+ gp_segment_id | count 
+---------------+-------
+             0 |    10
+             1 |    10
+             2 |    10
+(3 rows)
+
+SELECT t.id FROM test_tablesample_append AS t TABLESAMPLE SYSTEM (50) REPEATABLE (0);
+ id 
+----
+ 21
+ 22
+ 24
+ 28
+ 29
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+(15 rows)
+
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (100.0/11) REPEATABLE (0);
+ id 
+----
+(0 rows)
+
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (50) REPEATABLE (0);
+ id 
+----
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+ 21
+ 22
+ 24
+ 28
+ 29
+(15 rows)
+
+SELECT id FROM test_tablesample_append TABLESAMPLE BERNOULLI (50) REPEATABLE (0);
+ id 
+----
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+ 21
+ 22
+ 24
+ 28
+ 29
+(15 rows)
+
+SELECT id FROM test_tablesample_append TABLESAMPLE BERNOULLI (5.5) REPEATABLE (0);
+ id 
+----
+(0 rows)
+
+-- 100% should give repeatable count results (ie, all rows) in any case
+SELECT count(*) FROM test_tablesample_append TABLESAMPLE SYSTEM (100);
+ count 
+-------
+    30
+(1 row)
+
+SELECT count(*) FROM test_tablesample_append TABLESAMPLE SYSTEM (100) REPEATABLE (1+2);
+ count 
+-------
+    30
+(1 row)
+
+SELECT count(*) FROM test_tablesample_append TABLESAMPLE SYSTEM (100) REPEATABLE (0.4);
+ count 
+-------
+    30
+(1 row)
+
+CREATE VIEW test_tablesample_append_v1 AS
+  SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (10*2) REPEATABLE (2);
+CREATE VIEW test_tablesample_append_v2 AS
+  SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (99);
+\d+ test_tablesample_append_v1
+                 View "public.test_tablesample_append_v1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Description 
+--------+---------+-----------+----------+---------+---------+-------------
+ id     | integer |           |          |         | plain   | 
+View definition:
+ SELECT test_tablesample_append.id
+   FROM test_tablesample_append TABLESAMPLE system ((10 * 2)) REPEATABLE (2);
+
+\d+ test_tablesample_append_v2
+                 View "public.test_tablesample_append_v2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Description 
+--------+---------+-----------+----------+---------+---------+-------------
+ id     | integer |           |          |         | plain   | 
+View definition:
+ SELECT test_tablesample_append.id
+   FROM test_tablesample_append TABLESAMPLE system (99);
+
+-- check a sampled query doesn't affect cursor in progress
+BEGIN;
+DECLARE tablesample_cur CURSOR FOR
+  SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (50) REPEATABLE (0) ORDER BY id;
+FETCH FIRST FROM tablesample_cur;
+ id 
+----
+  1
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  2
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  4
+(1 row)
+
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (50) REPEATABLE (0);
+ id 
+----
+ 21
+ 22
+ 24
+ 28
+ 29
+ 11
+ 12
+ 14
+ 18
+ 19
+  1
+  2
+  4
+  8
+  9
+(15 rows)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  8
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  9
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+ 11
+(1 row)
+
+-- Cloudberry: Going backwards on cursors is not supported. By closing the
+-- cursor and starting again we pass the tests and keep the file closer to
+-- upstream. We do test the rescan methods of tablesample afterwards.
+CLOSE tablesample_cur;
+DECLARE tablesample_cur CURSOR FOR SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (50) REPEATABLE (0) ORDER BY id;
+FETCH FIRST FROM tablesample_cur;
+ id 
+----
+  1
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  2
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  4
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  8
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  9
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+ 11
+(1 row)
+
+CLOSE tablesample_cur;
+END;
+EXPLAIN (COSTS OFF)
+  SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (50) REPEATABLE (2);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sample Scan on test_tablesample_append
+         Sampling: system ('50'::real) REPEATABLE ('2'::double precision)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+  SELECT * FROM test_tablesample_append_v1;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sample Scan on test_tablesample_append
+         Sampling: system ('20'::real) REPEATABLE ('2'::double precision)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- Cloudberry: Test rescan paths by forcing a nested loop
+CREATE TABLE ttr1_append (a int, b int)  with(appendonly=true)   DISTRIBUTED BY (a);
+CREATE TABLE ttr2_append (a int, b int)  with(appendonly=true)  DISTRIBUTED BY (a);
+INSERT INTO ttr1_append VALUES (1, 1), (12, 1), (31, 1), (NULL, NULL);
+INSERT INTO ttr2_append VALUES (1, 2), (12, 2), (31, 2), (NULL, 6);
+ANALYZE ttr1_append;
+ANALYZE ttr2_append;
+SET enable_hashjoin TO OFF;
+SET enable_mergejoin TO OFF;
+SET enable_nestloop TO ON;
+EXPLAIN (COSTS OFF) SELECT * FROM ttr1_append TABLESAMPLE BERNOULLI (50) REPEATABLE (1), ttr2_append TABLESAMPLE BERNOULLI (50) REPEATABLE (1) WHERE ttr1_append.a = ttr2_append.a;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (ttr1_append.a = ttr2_append.a)
+         ->  Sample Scan on ttr1_append
+               Sampling: bernoulli ('50'::real) REPEATABLE ('1'::double precision)
+         ->  Sample Scan on ttr2_append
+               Sampling: bernoulli ('50'::real) REPEATABLE ('1'::double precision)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+SELECT * FROM ttr1_append TABLESAMPLE BERNOULLI (50) REPEATABLE (1), ttr2_append TABLESAMPLE BERNOULLI (50) REPEATABLE (1) WHERE ttr1_append.a = ttr2_append.a;
+ a | b | a | b 
+---+---+---+---
+ 1 | 1 | 1 | 2
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT * FROM ttr1_append TABLESAMPLE SYSTEM (50) REPEATABLE (1), ttr2_append TABLESAMPLE SYSTEM (50) REPEATABLE (1) WHERE ttr1_append.a = ttr2_append.a;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: (ttr1_append.a = ttr2_append.a)
+         ->  Sample Scan on ttr1_append
+               Sampling: system ('50'::real) REPEATABLE ('1'::double precision)
+         ->  Sample Scan on ttr2_append
+               Sampling: system ('50'::real) REPEATABLE ('1'::double precision)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+SELECT * FROM ttr1_append TABLESAMPLE SYSTEM (50) REPEATABLE (1), ttr2_append TABLESAMPLE SYSTEM (50) REPEATABLE (1) WHERE ttr1_append.a = ttr2_append.a;
+ a | b | a | b 
+---+---+---+---
+ 1 | 1 | 1 | 2
+(1 row)
+
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+RESET enable_nestloop;
+-- check behavior during rescans, as well as correct handling of min/max pct
+-- Cloudberry: does not support laterals completely, rescan specific tests above
+-- start_ignore
+select * from
+  (values (0),(100)) v(pct),
+  lateral (select count(*) from tenk1 tablesample bernoulli (pct)) ss;
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
+HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
+select * from
+  (values (0),(100)) v(pct),
+  lateral (select count(*) from tenk1 tablesample system (pct)) ss;
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
+HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
+explain (costs off)
+select pct, count(unique1) from
+  (values (0),(100)) v(pct),
+  lateral (select * from tenk1 tablesample bernoulli (pct)) ss
+  group by pct;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Finalize GroupAggregate
+   Group Key: "*VALUES*".column1
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: "*VALUES*".column1
+         ->  Partial GroupAggregate
+               Group Key: "*VALUES*".column1
+               ->  Sort
+                     Sort Key: "*VALUES*".column1
+                     ->  Nested Loop
+                           ->  Values Scan on "*VALUES*"
+                           ->  Sample Scan on tenk1
+                                 Sampling: bernoulli ("*VALUES*".column1)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select pct, count(unique1) from
+  (values (0),(100)) v(pct),
+  lateral (select * from tenk1 tablesample bernoulli (pct)) ss
+  group by pct;
+ pct | count 
+-----+-------
+(0 rows)
+
+select pct, count(unique1) from
+  (values (0),(100)) v(pct),
+  lateral (select * from tenk1 tablesample system (pct)) ss
+  group by pct;
+ pct | count 
+-----+-------
+(0 rows)
+
+-- end_ignore
+-- errors
+SELECT id FROM test_tablesample_append TABLESAMPLE FOOBAR (1);
+ERROR:  tablesample method foobar does not exist
+LINE 1: ...ELECT id FROM test_tablesample_append TABLESAMPLE FOOBAR (1)...
+                                                             ^
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (NULL);
+ERROR:  TABLESAMPLE parameter cannot be null  (seg0 slice1 127.0.0.1:7002 pid=765363)
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (50) REPEATABLE (NULL);
+ERROR:  TABLESAMPLE REPEATABLE parameter cannot be null  (seg0 slice1 127.0.0.1:7002 pid=765363)
+SELECT id FROM test_tablesample_append TABLESAMPLE BERNOULLI (-1);
+ERROR:  sample percentage must be between 0 and 100  (seg0 slice1 127.0.0.1:7002 pid=765363)
+SELECT id FROM test_tablesample_append TABLESAMPLE BERNOULLI (200);
+ERROR:  sample percentage must be between 0 and 100  (seg0 slice1 127.0.0.1:7002 pid=765363)
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (-1);
+ERROR:  sample percentage must be between 0 and 100  (seg0 slice1 127.0.0.1:7002 pid=765363)
+SELECT id FROM test_tablesample_append TABLESAMPLE SYSTEM (200);
+ERROR:  sample percentage must be between 0 and 100  (seg0 slice1 127.0.0.1:7002 pid=765363)
+SELECT id FROM test_tablesample_append_v1 TABLESAMPLE BERNOULLI (1);
+ERROR:  TABLESAMPLE clause can only be applied to tables and materialized views
+LINE 1: SELECT id FROM test_tablesample_append_v1 TABLESAMPLE BERNOU...
+                       ^
+INSERT INTO test_tablesample_append_v1 VALUES(1);
+ERROR:  cannot insert into view "test_tablesample_append_v1"
+DETAIL:  Views containing TABLESAMPLE are not automatically updatable.
+HINT:  To enable inserting into the view, provide an INSTEAD OF INSERT trigger or an unconditional ON INSERT DO INSTEAD rule.
+WITH query_select AS (SELECT * FROM test_tablesample_append)
+SELECT * FROM query_select TABLESAMPLE BERNOULLI (5.5) REPEATABLE (1);
+ERROR:  TABLESAMPLE clause can only be applied to tables and materialized views
+LINE 2: SELECT * FROM query_select TABLESAMPLE BERNOULLI (5.5) REPEA...
+                      ^
+SELECT q.* FROM (SELECT * FROM test_tablesample_append) as q TABLESAMPLE BERNOULLI (5);
+ERROR:  syntax error at or near "TABLESAMPLE"
+LINE 1: ...FROM (SELECT * FROM test_tablesample_append) as q TABLESAMPL...
+                                                             ^

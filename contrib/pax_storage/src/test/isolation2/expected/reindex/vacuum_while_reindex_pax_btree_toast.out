@@ -1,0 +1,44 @@
+DROP TABLE IF EXISTS reindex_toast_pax;
+DROP
+
+CREATE TABLE reindex_toast_pax (a text, b int);
+CREATE
+alter table reindex_toast_pax alter column a set storage external;
+ALTER
+insert into reindex_toast_pax select repeat('123456789',10000), i from generate_series(1,100) i;
+INSERT 100
+create index idx_btree_reindex_toast_pax on reindex_toast_pax(b);
+CREATE
+-- @Description Ensures that a vacuum during reindex operations is ok
+--
+
+DELETE FROM reindex_toast_pax WHERE b % 4 = 0 ;
+DELETE 25
+1: BEGIN;
+BEGIN
+-- Remember index relfilenodes from master and segments before
+-- reindex.
+1: create temp table old_relfilenodes as (select gp_segment_id as dbid, relfilenode, oid, relname from gp_dist_random('pg_class') where relname = 'idx_btree_reindex_toast_pax' union all select gp_segment_id as dbid, relfilenode, oid, relname from pg_class where relname = 'idx_btree_reindex_toast_pax');
+CREATE 4
+1: REINDEX index idx_btree_reindex_toast_pax;
+REINDEX
+2&: VACUUM reindex_toast_pax;  <waiting ...>
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+VACUUM
+-- Validate that reindex changed all index relfilenodes on master as well as
+-- segments.  The following query should return 0 tuples.
+1: select oldrels.* from old_relfilenodes oldrels join (select gp_segment_id as dbid, relfilenode, relname from gp_dist_random('pg_class') where relname = 'idx_btree_reindex_toast_pax' union all select gp_segment_id as dbid, relfilenode, relname from pg_class where relname = 'idx_btree_reindex_toast_pax') newrels on oldrels.relfilenode = newrels.relfilenode and oldrels.dbid = newrels.dbid and oldrels.relname = newrels.relname;
+ dbid | relfilenode | oid | relname 
+------+-------------+-----+---------
+(0 rows)
+2: COMMIT;
+COMMIT
+3: SELECT COUNT(*) FROM reindex_toast_pax WHERE a = '1500';
+ count 
+-------
+ 0     
+(1 row)
+3: INSERT INTO reindex_toast_pax VALUES (0);
+INSERT 1

@@ -1,0 +1,32 @@
+-- @Description Ensures that an update during a vacuum operation is ok
+--
+DROP TABLE IF EXISTS pax_tbl;
+DROP
+CREATE TABLE pax_tbl (a INT, b INT);
+CREATE
+INSERT INTO pax_tbl SELECT i as a, i as b FROM generate_series(1,10) AS i;
+INSERT 10
+
+DELETE FROM pax_tbl WHERE a < 2;
+DELETE 1
+4: BEGIN;
+BEGIN
+4: SELECT COUNT(*) FROM pax_tbl;
+ count 
+-------
+ 9     
+(1 row)
+4: INSERT INTO pax_tbl VALUES (1, 1);
+INSERT 1
+4>: UPDATE pax_tbl SET b=1 WHERE a > 5;UPDATE pax_tbl SET b=1 WHERE a > 6;COMMIT;  <waiting ...>
+2: VACUUM pax_tbl;
+VACUUM
+4<:  <... completed>
+UPDATE
+3: SELECT COUNT(*) FROM pax_tbl WHERE b = 1;
+ count 
+-------
+ 6     
+(1 row)
+3: INSERT INTO pax_tbl VALUES (0);
+INSERT 1

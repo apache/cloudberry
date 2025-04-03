@@ -1,0 +1,384 @@
+-- create a resource group when gp_resource_manager is queue
+DROP ROLE IF EXISTS role_concurrency_test;
+DROP
+-- start_ignore
+DROP RESOURCE GROUP rg_concurrency_test;
+ERROR:  resource group "rg_concurrency_test" does not exist
+-- end_ignore
+CREATE RESOURCE GROUP rg_concurrency_test WITH(concurrency=1, cpu_max_percent=20);
+CREATE
+CREATE ROLE role_concurrency_test RESOURCE GROUP rg_concurrency_test;
+CREATE
+
+-- After a 'q' command the client connection is disconnected but the
+-- QD may still be alive, if we then query pg_stat_activity quick enough
+-- we might still see this session with query '<IDLE>'.
+-- A filter is put to filter out this kind of quitted sessions.
+CREATE OR REPLACE VIEW rg_activity_status AS SELECT rsgname, wait_event_type, state, query FROM pg_stat_activity WHERE rsgname='rg_concurrency_test' AND query <> '<IDLE>';
+CREATE
+
+--
+-- 1. increase concurrency after pending queries
+--
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+
+11:SET ROLE role_concurrency_test;
+SET
+11:BEGIN;
+BEGIN
+
+21:SET ROLE role_concurrency_test;
+SET
+22:SET ROLE role_concurrency_test;
+SET
+21&:BEGIN;  <waiting ...>
+22&:BEGIN;  <waiting ...>
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 2;
+ALTER
+
+11:END;
+END
+11q: ... <quitting>
+21<:  <... completed>
+BEGIN
+22<:  <... completed>
+BEGIN
+
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+(2 rows)
+
+21:END;
+END
+22:END;
+END
+21q: ... <quitting>
+22q: ... <quitting>
+
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+--
+-- 2. increase concurrency before pending queries
+--
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+
+11:SET ROLE role_concurrency_test;
+SET
+11:BEGIN;
+BEGIN
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 2;
+ALTER
+
+21:SET ROLE role_concurrency_test;
+SET
+22:SET ROLE role_concurrency_test;
+SET
+21:BEGIN;
+BEGIN
+22&:BEGIN;  <waiting ...>
+
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+ rg_concurrency_test | ResourceGroup   | active              | BEGIN; 
+(3 rows)
+
+11:END;
+END
+11q: ... <quitting>
+22<:  <... completed>
+BEGIN
+
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+(2 rows)
+
+21:END;
+END
+22:END;
+END
+21q: ... <quitting>
+22q: ... <quitting>
+
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+--
+-- 3. decrease concurrency
+--
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 10;
+ALTER
+11:SET ROLE role_concurrency_test;
+SET
+11:BEGIN;
+BEGIN
+
+12:SET ROLE role_concurrency_test;
+SET
+12:BEGIN;
+BEGIN
+
+13:SET ROLE role_concurrency_test;
+SET
+13:BEGIN;
+BEGIN
+
+14:SET ROLE role_concurrency_test;
+SET
+14:BEGIN;
+BEGIN
+
+15:SET ROLE role_concurrency_test;
+SET
+15:BEGIN;
+BEGIN
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+
+11q: ... <quitting>
+12q: ... <quitting>
+13q: ... <quitting>
+14q: ... <quitting>
+15q: ... <quitting>
+-- start_ignore
+-- The 'q' command returns before the underlying segments all actually quit,
+-- so a following DROP command might fail.  Add a delay here as a workaround.
+SELECT pg_sleep(1);
+ pg_sleep 
+----------
+          
+(1 row)
+-- end_ignore
+
+--
+-- 4. increase concurrency from 0
+--
+DROP ROLE role_concurrency_test;
+DROP
+DROP RESOURCE GROUP rg_concurrency_test;
+DROP
+CREATE RESOURCE GROUP rg_concurrency_test WITH(concurrency=0, cpu_max_percent=20);
+CREATE
+CREATE ROLE role_concurrency_test RESOURCE GROUP rg_concurrency_test;
+CREATE
+
+11:SET ROLE role_concurrency_test;
+SET
+11&:BEGIN;  <waiting ...>
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state  | query  
+---------------------+-----------------+--------+--------
+ rg_concurrency_test | ResourceGroup   | active | BEGIN; 
+(1 row)
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+
+11<:  <... completed>
+BEGIN
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+(1 row)
+
+11:END;
+END
+11q: ... <quitting>
+
+--
+-- 5.1 decrease concurrency to 0,
+-- without running queries,
+-- without pending queries.
+--
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 0;
+ALTER
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+--
+-- 5.2 decrease concurrency to 0,
+-- with running queries,
+-- without pending queries.
+--
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+11:SET ROLE role_concurrency_test;
+SET
+11:BEGIN;
+BEGIN
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+(1 row)
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 0;
+ALTER
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+(1 row)
+
+11:END;
+END
+11q: ... <quitting>
+
+--
+-- 5.3 decrease concurrency to 0,
+-- with running queries,
+-- with pending queries.
+--
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 1;
+ALTER
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+11:SET ROLE role_concurrency_test;
+SET
+11:BEGIN;
+BEGIN
+12:SET ROLE role_concurrency_test;
+SET
+12&:BEGIN;  <waiting ...>
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+ rg_concurrency_test | ResourceGroup   | active              | BEGIN; 
+(2 rows)
+
+ALTER RESOURCE GROUP rg_concurrency_test SET CONCURRENCY 0;
+ALTER
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state               | query  
+---------------------+-----------------+---------------------+--------
+ rg_concurrency_test | Client          | idle in transaction | BEGIN; 
+ rg_concurrency_test | ResourceGroup   | active              | BEGIN; 
+(2 rows)
+
+11:END;
+END
+11q: ... <quitting>
+SELECT * FROM rg_activity_status;
+ rsgname             | wait_event_type | state  | query  
+---------------------+-----------------+--------+--------
+ rg_concurrency_test | ResourceGroup   | active | BEGIN; 
+(1 row)
+
+SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE wait_event_type='ResourceGroup' AND rsgname='rg_concurrency_test';
+ pg_cancel_backend 
+-------------------
+ t                 
+(1 row)
+12<:  <... completed>
+ERROR:  canceling statement due to user request
+12q: ... <quitting>
+SELECT * FROM rg_activity_status;
+ rsgname | wait_event_type | state | query 
+---------+-----------------+-------+-------
+(0 rows)
+
+-- 6: drop a resgroup with concurrency=0 and pending queries
+DROP ROLE IF EXISTS role_concurrency_test;
+DROP
+-- start_ignore
+DROP RESOURCE GROUP rg_concurrency_test;
+DROP
+-- end_ignore
+
+CREATE RESOURCE GROUP rg_concurrency_test WITH (concurrency=0, cpu_max_percent=20);
+CREATE
+CREATE ROLE role_concurrency_test RESOURCE GROUP rg_concurrency_test;
+CREATE
+61:SET ROLE role_concurrency_test;
+SET
+61&:BEGIN;  <waiting ...>
+
+ALTER ROLE role_concurrency_test RESOURCE GROUP none;
+ALTER
+DROP RESOURCE GROUP rg_concurrency_test;
+DROP
+
+61<:  <... completed>
+BEGIN
+61:END;
+END
+61q: ... <quitting>
+
+-- 7: drop a role with concurrency=0 and pending queries
+DROP ROLE IF EXISTS role_concurrency_test;
+DROP
+-- start_ignore
+DROP RESOURCE GROUP rg_concurrency_test;
+ERROR:  resource group "rg_concurrency_test" does not exist
+-- end_ignore
+
+CREATE RESOURCE GROUP rg_concurrency_test WITH (concurrency=0, cpu_max_percent=20);
+CREATE
+CREATE ROLE role_concurrency_test RESOURCE GROUP rg_concurrency_test;
+CREATE
+61:SET ROLE role_concurrency_test;
+SET
+61&:BEGIN;  <waiting ...>
+
+DROP ROLE role_concurrency_test;
+DROP
+DROP RESOURCE GROUP rg_concurrency_test;
+DROP
+
+61<:  <... completed>
+ERROR:  role with Oid 213301 was dropped
+DETAIL:  Cannot execute commands anymore, please terminate this session.
+61q: ... <quitting>
+
+-- cleanup
+-- start_ignore
+DROP VIEW rg_activity_status;
+DROP
+DROP ROLE role_concurrency_test;
+DROP
+DROP RESOURCE GROUP rg_concurrency_test;
+ERROR:  resource group "rg_concurrency_test" does not exist
+-- end_ignore
+

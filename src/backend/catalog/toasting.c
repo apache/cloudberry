@@ -170,6 +170,8 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	 */
 	if (isTempOrTempToastNamespace(rel->rd_rel->relnamespace))
 		namespaceid = GetTempToastNamespace();
+	else if (IsExtAuxNamespace(rel->rd_rel->relnamespace))
+		namespaceid = PG_EXTAUX_NAMESPACE;
 	else
 		namespaceid = PG_TOAST_NAMESPACE;
 

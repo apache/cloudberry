@@ -1,0 +1,6 @@
+MANIFEST
+build/*
+dist/*
+
+*.egg-info/*
+*_d.h
