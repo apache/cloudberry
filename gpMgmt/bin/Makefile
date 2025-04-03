@@ -62,19 +62,12 @@ SERVER_SBIN=$(SERVER_SRC)/../sbin
 # INSTALL DIRECTORY
 #
 LIB_DIR=$(SRC)/lib
+PYLIB_DIR=$(SRC)/ext
 
 core:
 	python3 gpconfig_modules/parse_guc_metadata.py $(DESTDIR)$(prefix)
 
-install_python_deps:
-	pip3 install --target=$(DESTDIR)$(bindir)/lib PyGreSQL==5.2.0
-	pip3 install --target=$(DESTDIR)$(bindir)/lib psutil==5.7.0
-	pip3 install --target=$(DESTDIR)$(bindir)/lib PyYAML==5.3.1
-	pip3 install --target=$(DESTDIR)$(bindir)/lib mock==1.0.1
-	pip3 install --target=$(DESTDIR)$(bindir)/lib parse==1.8.2
-	pip3 install --target=$(DESTDIR)$(bindir)/lib pylint==0.21.0
-
-install: installdirs installprograms install_python_deps core
+install: installdirs installprograms core
 
 clean distclean:
 	rm -rf *.pyc
