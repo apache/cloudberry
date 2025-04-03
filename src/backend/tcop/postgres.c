@@ -2165,8 +2165,14 @@ exec_parse_message(const char *query_string,	/* string to execute */
 			 * reader gang (cursors in Cloudberry must be executed by a reader gang).
 			 * For details please refer the mailing list:
 			 * https://groups.google.com/a/greenplum.org/forum/#!msg/gpdb-dev/ugsZca1qLXU/CtUmzEa7CAAJ
+			 *
+			 * For single node, we should not disable the locking optimization because single node
+			 * works like PostgreSQL.
 			 */
-			((SelectStmt *)raw_parse_tree->stmt)->disableLockingOptimization = true;
+			if (IS_SINGLENODE())
+				((SelectStmt *)raw_parse_tree->stmt)->disableLockingOptimization = false;
+			else
+				((SelectStmt *)raw_parse_tree->stmt)->disableLockingOptimization = true;
 		}
 
 		/*
