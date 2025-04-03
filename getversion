@@ -28,8 +28,6 @@ if type git >/dev/null 2>&1 && [ -d '.git' ] ; then
 		if ! git describe --exact-match >/dev/null 2>&1; then
 			VERSION+=\+$(echo "$GIT_VERSION" | cut -d'+' -f2-)
 		fi
-	else
-	    VERSION==
 	fi
 # If not a git repository and VERSION file exists, use version string from file.
 elif [[ -s ./VERSION ]]; then
