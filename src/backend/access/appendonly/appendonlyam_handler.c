@@ -1010,7 +1010,7 @@ appendonly_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					{
 						int64 firstSequence;
 						Oid segrelid;
-						GetAppendOnlyEntryAuxOids(insertDesc->aoi_rel, &segrelid, NULL, NULL, NULL, NULL);
+						GetAppendOnlyEntryAuxOids(insertDesc->aoi_rel, &segrelid, NULL, NULL);
 						firstSequence = GetFastSequences(segrelid, insertDesc->cur_segno, insertDesc->lastSequence + 1, NUM_FAST_SEQUENCES);
 						Assert(firstSequence == insertDesc->lastSequence + 1);
 						insertDesc->numSequences = NUM_FAST_SEQUENCES;
@@ -1232,8 +1232,8 @@ appendonly_relation_nontransactional_truncate(Relation rel)
 	/* Also truncate the aux tables */
 	GetAppendOnlyEntryAuxOids(rel,
 							  &aoseg_relid,
-							  &aoblkdir_relid, NULL,
-							  &aovisimap_relid, NULL);
+							  &aoblkdir_relid,
+							  &aovisimap_relid);
 
 	heap_truncate_one_relid(aoseg_relid);
 	heap_truncate_one_relid(aoblkdir_relid);
@@ -1632,10 +1632,9 @@ appendonly_index_build_range_scan(Relation heapRelation,
 	 * If block directory is empty, it must also be built along with the index.
 	 */
 	Oid blkdirrelid;
-	Oid blkidxrelid;
 
 	GetAppendOnlyEntryAuxOids(aoscan->aos_rd, NULL,
-							  &blkdirrelid, &blkidxrelid, NULL, NULL);
+							  &blkdirrelid, NULL);
 	/*
 	 * Note that block directory is created during creation of the first
 	 * index.  If it is found empty, it means the block directory was created
@@ -1850,7 +1849,7 @@ appendonly_relation_size(Relation rel, ForkNumber forkNumber)
 	result = 0;
 
 	GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL,
-			NULL, NULL, NULL);
+							NULL);
 
 	if (segrelid == InvalidOid)
 		elog(ERROR, "could not find pg_aoseg aux table for AO table \"%s\"",
@@ -1934,7 +1933,7 @@ appendonly_relation_get_block_sequence(Relation rel,
 {
 	Oid segrelid;
 
-	GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(rel, &segrelid, NULL, NULL);
 	AOSegment_PopulateBlockSequence(sequence, segrelid, AOSegmentGet_segno(blkNum));
 }
 
