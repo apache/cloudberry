@@ -24,13 +24,12 @@ if type git >/dev/null 2>&1 && [ -d '.git' ] ; then
 	# HEAD commit info
 	if git describe >/dev/null 2>&1 ; then
 		GIT_VERSION=$(generate_dev_version)
-	# Compare versions and use the newer one
-		if [ "$(printf '%s\n' "$VERSION" "$GIT_VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
-			VERSION=$GIT_VERSION
+	# Append commit distance and SHA if not on a tag
+		if ! git describe --exact-match >/dev/null 2>&1; then
+			VERSION+=\+$(echo "$GIT_VERSION" | cut -d'+' -f2-)
 		fi
 	else
-		VERSION+=+
-		VERSION+=$(git rev-parse --short HEAD)
+	    VERSION==
 	fi
 # If not a git repository and VERSION file exists, use version string from file.
 elif [[ -s ./VERSION ]]; then
