@@ -15828,18 +15828,18 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 	if (fout->remoteVersion >= 110000)
 		appendPQExpBufferStr(query,
 							 "aggfinalmodify,\n"
-							 "aggmfinalmodify\n");
+							 "aggmfinalmodify,\n");
 	else
 		appendPQExpBufferStr(query,
 							 "'0' AS aggfinalmodify,\n"
-							 "'0' AS aggmfinalmodify\n");
+							 "'0' AS aggmfinalmodify,\n");
 
 	if (fout->remoteVersion >= 140000)
 		appendPQExpBufferStr(query,
-								"aggrepsafeexec,\n");
+								"aggrepsafeexec\n");
 	else
 		appendPQExpBufferStr(query,
-								 "false AS aggrepsafeexec,\n");
+								 "false AS aggrepsafeexec\n");
 
 	appendPQExpBuffer(query,
 					  "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
