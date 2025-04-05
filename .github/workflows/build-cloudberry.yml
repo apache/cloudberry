@@ -483,6 +483,7 @@ jobs:
           set -eo pipefail
 
           chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
+          pip3 install -r requirements.txt
           if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
             echo "::error::Build script failed"
             exit 1
