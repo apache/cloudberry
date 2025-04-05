@@ -54,8 +54,8 @@ github:
 
   # GitHub repository feature toggles
   features:
-    # Disable GitHub wiki as documentation is maintained elsewhere
-    wiki: false
+    # Enable GitHub wiki as documentation is maintained elsewhere
+    wiki: true
     # Enable GitHub Issues for bug tracking and feature requests
     issues: true
     # Enable GitHub Projects for project management and planning
