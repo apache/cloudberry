@@ -32,6 +32,9 @@ class CDistributionSpec;
 class CPhysicalSequenceProject : public CPhysical
 {
 private:
+	// window type
+	ESPType m_sptype;
+
 	// partition by keys
 	CDistributionSpec *m_pds;
 
@@ -57,8 +60,8 @@ public:
 	CPhysicalSequenceProject(const CPhysicalSequenceProject &) = delete;
 
 	// ctor
-	CPhysicalSequenceProject(CMemoryPool *mp, CDistributionSpec *pds,
-							 COrderSpecArray *pdrgpos,
+	CPhysicalSequenceProject(CMemoryPool *mp, ESPType m_sptype,
+							 CDistributionSpec *pds, COrderSpecArray *pdrgpos,
 							 CWindowFrameArray *pdrgpwf);
 
 	// dtor
@@ -76,6 +79,13 @@ public:
 	SzId() const override
 	{
 		return "CPhysicalSequenceProject";
+	}
+
+	// window type
+	COperator::ESPType
+	Pspt() const
+	{
+		return m_sptype;
 	}
 
 	// partition by keys
