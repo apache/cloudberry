@@ -570,6 +570,7 @@ ac_hostname=`(hostname || uname -n) 2>/dev/null | sed 1q`
 #
 # Initializations.
 #
+ac_default_prefix=/usr/local
 ac_clean_files=
 ac_config_libobj_dir=.
 LIBOBJS=
@@ -742,7 +743,6 @@ with_ldap
 with_krb_srvnam
 krb_srvtab
 with_gssapi
-with_pythonsrc_ext
 with_python
 with_perl
 with_tcl
@@ -758,8 +758,8 @@ HAVE_CXX14
 enable_gpcloud
 enable_shared_postgres_backend
 enable_mapreduce
-enable_catalog_ext
 enable_serverless
+enable_catalog_ext
 enable_orca
 autodepend
 PKG_CONFIG_LIBDIR
@@ -907,7 +907,6 @@ with_tcl
 with_tclconfig
 with_perl
 with_python
-with_pythonsrc_ext
 with_gssapi
 with_krb_srvnam
 with_pam
@@ -1606,7 +1605,7 @@ Optional Features:
   --enable-cassert        enable assertion checks (for debugging)
   --disable-orca          disable ORCA optimizer
   --enable-catalog-ext    enable Cloudberry catalog extension
-  --enable-serverless     enable Cloudberry serverless mode
+  --enable-serverless     use serverless mode of Cloudberry
   --enable-mapreduce      enable Cloudberry Mapreduce support
   --disable-shared-postgres-backend
                           enable Cloudberry shared postgres backend support
@@ -1644,7 +1643,6 @@ Optional Packages:
   --with-tclconfig=DIR    tclConfig.sh is in DIR
   --with-perl             build Perl modules (PL/Perl)
   --without-python        build Python modules (PL/Python)
-  --with-pythonsrc-ext    build Python modules for gpMgmt
   --with-gssapi           build with GSSAPI support
   --with-krb-srvnam=NAME  default service principal name in Kerberos (GSSAPI)
                           [postgres]
@@ -8377,7 +8375,7 @@ $as_echo "checking whether to build with catalog extension... $enable_catalog_ex
 
 
 #
-# Enable serverless mode
+# --enable-serverless uses serverless mode of Cloudberry
 #
 
 
@@ -8404,8 +8402,8 @@ else
 fi
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to use serverless architecture of Cloudberry ... $enable_serverless" >&5
-$as_echo "checking whether to use serverless architecture of Cloudberry ... $enable_serverless" >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to use serverless mode of Cloudberry... $enable_serverless" >&5
+$as_echo "checking whether to use serverless mode of Cloudberry... $enable_serverless" >&6; }
 
 
 #
@@ -9421,40 +9419,6 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_python" >&5
 $as_echo "$with_python" >&6; }
-
-
-#
-# Optionally build Python modules for gpMgmt
-#
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build Python modules for gpMgmt" >&5
-$as_echo_n "checking whether to build Python modules for gpMgmt... " >&6; }
-
-
-
-# Check whether --with-pythonsrc-ext was given.
-if test "${with_pythonsrc_ext+set}" = set; then :
-  withval=$with_pythonsrc_ext;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-pythonsrc-ext option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_pythonsrc_ext=no
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_pythonsrc_ext" >&5
-$as_echo "$with_pythonsrc_ext" >&6; }
-
 
 
 #
