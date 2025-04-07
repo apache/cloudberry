@@ -88,7 +88,24 @@ ExplainState get_explain_state(QueryDesc *query_desc, bool costs) {
   es.verbose = true;
   es.format = EXPLAIN_FORMAT_TEXT;
   ExplainBeginOutput(&es);
-  ExplainPrintPlan(&es, query_desc);
+  PG_TRY();
+  { ExplainPrintPlan(&es, query_desc); }
+  PG_CATCH();
+  {
+    // PG and GP both have known and yet unknown bugs in EXPLAIN VERBOSE
+    // implementation. We don't want any queries to fail due to those bugs, so
+    // we report the bug here for future investigatin and continue collecting
+    // metrics w/o reporting any plans
+    resetStringInfo(es.str);
+    appendStringInfo(
+        es.str,
+        "Unable to restore query plan due to PostgreSQL internal error. "
+        "See logs for more information");
+    ereport(INFO,
+            (errmsg("YAGPCC failed to reconstruct explain text for query: %s",
+                    query_desc->sourceText)));
+  }
+  PG_END_TRY();
   ExplainEndOutput(&es);
   return es;
 }
