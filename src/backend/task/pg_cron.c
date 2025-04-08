@@ -910,8 +910,8 @@ PollForTasks(List *taskList)
 		}
 
 		pollFileDescriptor->revents = 0;
-
-		activeTaskCount++;
+		if (pollFileDescriptor->fd >= 0)
+			activeTaskCount++;
 	}
 
 	/*
