@@ -60,6 +60,8 @@ github:
     issues: true
     # Enable GitHub Projects for project management and planning
     projects: true
+    # Enable GitHub Discussions for community discussions
+    discussions: true
 
   # Configure available merge strategies for pull requests
   enabled_merge_buttons:
