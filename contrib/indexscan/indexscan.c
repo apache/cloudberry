@@ -62,7 +62,7 @@ hstatus_text(HeapTupleHeader tuple, bool visible)
 	if (!visible)
 		appendStringInfoString(&buf, "NOT_VISIBLE ");
 	if (tuple->t_infomask & HEAP_XMIN_COMMITTED)
-		appendStringInfoString(&buf, "XMIN_COMITTTED ");
+		appendStringInfoString(&buf, "XMIN_COMMITTED ");
 	if (tuple->t_infomask & HEAP_XMIN_INVALID)
 		appendStringInfoString(&buf, "XMIN_INVALID ");
 	if (tuple->t_infomask & HEAP_XMAX_COMMITTED)
