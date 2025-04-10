@@ -1,46 +1,119 @@
 #!/usr/bin/env bash
+# ======================================================================
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# -----------------------------------------------------------------------------
+# getversion — determine the project version for packaging and diagnostics
+# -----------------------------------------------------------------------------
+#
+# This script computes a version string using the following logic:
+#
+#   1. Extract the base PACKAGE_VERSION from the `configure` script.
+#
+#   2. If running inside a Git repository and `git describe` is usable:
+#
+#      a. If the current commit matches an annotated tag exactly:
+#           VERSION = <tag>
+#         e.g.,     VERSION = 2.0.0+RC1
+#
+#      b. If the current commit is ahead of a tag:
+#           VERSION = <PACKAGE_VERSION>+dev.<N>.g<commit>
+#         e.g.,     VERSION = 2.0.1-devel+dev.3.gabcd123
+#
+#   3. If *not* in a Git repo but a `VERSION` file exists:
+#         VERSION and BUILDNUMBER are read from that file (format: "<version> build <build_number>")
+#
+#   4. If neither a Git repo nor a VERSION file is present:
+#         VERSION = <PACKAGE_VERSION> from configure
+#         BUILDNUMBER = dev
+#
+#   5. If a BUILD_NUMBER file is present and BUILDNUMBER is "dev", it will override the default:
+#         BUILDNUMBER = $(cat BUILD_NUMBER)
+#
+# Output:
+#   - Default: <version> build <build_number>
+#   - With --short: just <version>
+#
+# Examples:
+#   ./getversion
+#       → 2.0.1-devel+dev.3.gabcd123 build dev
+#
+#   ./getversion --short
+#       → 2.0.1-devel+dev.3.gabcd123
+#
+#   (On exact tag)
+#       → 2.0.0+RC1 build dev
+#
+# Supported Features:
+#   - Handles annotated tags with special characters like `+` or `-`
+#   - Produces semver-compatible version strings for CI/CD
+#   - Works with or without Git
+#
+# Intended for use in:
+#   - Release packaging
+#   - Diagnostic reporting
+#   - Embedding traceable version info into builds
+#
+# ======================================================================
 
-# Make sure we're running from the root git repository, not whatever submodule
-# we could have been called from.
-pushd $(dirname "$0") > /dev/null
+# Make sure we're running from the root git repository
+pushd "$(dirname "$0")" > /dev/null
 
-VERSION=$(perl -e 'while(<>){print $1 if (/^PACKAGE_VERSION='\''(.+)'\''$/)}' < configure)
+# Extract PACKAGE_VERSION from the configure script
+VERSION=$(perl -ne 'print $1 if /^PACKAGE_VERSION='\''(.+)'\''$/' < configure)
 BUILDNUMBER=dev
 
-# Call git describe, and convert it to a semi-semantic version, like
-# 5.0.0-alpha.0+dev.52.g123abc
+# Function to generate a dev suffix like "dev.1.gabcd123"
 generate_dev_version() {
-    git describe | perl -pe 's/(.*)-([0-9]*)-(g[0-9a-f]*)/\1+dev.\2.\3/'
+    local latest_tag
+    latest_tag=$(git describe --tags --abbrev=0)
+    local full_desc
+    full_desc=$(git describe --tags --long)
+    local suffix="${full_desc#$latest_tag-}"
+    echo "dev.${suffix//-/.}"
 }
 
-# If we are in a Git repository and have git installed, build the version
-# string using the latest tag in case it's reachable
-if type git >/dev/null 2>&1 && [ -d '.git' ] ; then
-
-	# Check for tag reachability, in case of shallow clones we might not
-	# be able to use git describe since the commit which was tagged is
-	# unreachable even if we have pulled the tags. If we can reach it,
-	# overwrite the VERSION from autoconf with the output, else append
-	# HEAD commit info
-	if git describe >/dev/null 2>&1 ; then
-		VERSION=$(generate_dev_version)
-	else
-		VERSION+=+
-		VERSION+=$(git rev-parse --short HEAD)
-	fi
-# If not a git repository and VERSION file exists, use version string from file.
+# Check if we're in a Git repo and git is available
+if type git >/dev/null 2>&1 && [ -d '.git' ]; then
+    # Ensure git describe doesn't fail due to shallow clone
+    if git describe --tags --long >/dev/null 2>&1; then
+        if git describe --exact-match >/dev/null 2>&1; then
+            # We're exactly on a tag
+            VERSION=$(git describe --exact-match)
+        else
+            # Not on a tag: add dev version suffix
+            VERSION+="+$(generate_dev_version)"
+        fi
+    fi
+# Not a git repo but VERSION file exists
 elif [[ -s ./VERSION ]]; then
-	VERSION=$(awk -F' build ' '{print $1}' ./VERSION)
-	BUILDNUMBER=$(awk -F' build ' '{print $2}' ./VERSION)
+    VERSION=$(awk -F' build ' '{print $1}' ./VERSION)
+    BUILDNUMBER=$(awk -F' build ' '{print $2}' ./VERSION)
 fi
 
+# Handle optional flag
 FLAG="${1:-noflag}"
-if [ "$FLAG" = '--short' ] ; then
+if [ "$FLAG" = "--short" ]; then
     echo "${VERSION}"
 else
-    if [[ ${BUILDNUMBER} = 'dev' && -f BUILD_NUMBER ]] ; then
-        BUILDNUMBER=`cat BUILD_NUMBER`
+    if [[ ${BUILDNUMBER} = "dev" && -f BUILD_NUMBER ]]; then
+        BUILDNUMBER=$(<BUILD_NUMBER)
     fi
     echo "${VERSION} build ${BUILDNUMBER}"
 fi
+
 popd > /dev/null
