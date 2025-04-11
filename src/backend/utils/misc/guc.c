@@ -67,6 +67,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
+#include "parser/analyze.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_type.h"
 #include "parser/parser.h"
@@ -2205,6 +2206,13 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"allow_dml_directory_table", PGC_SUSET, DEVELOPER_OPTIONS},
 		&allow_dml_directory_table,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"enable_lock_optimization", PGC_SIGHUP, CUSTOM_OPTIONS},
+		&enableLockOptimization,
 		false,
 		NULL, NULL, NULL
 	},

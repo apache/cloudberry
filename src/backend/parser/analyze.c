@@ -70,6 +70,14 @@
 #include "parser/parse_func.h"
 #include "utils/lsyscache.h"
 
+/*
+ * GUC parameter
+ *
+ * Enable locking optimization for extended query protocol to avoid
+ * ExclusiveLock in case of select-for-update and similar queries.
+ */
+bool enableLockOptimization = false;
+
 /* Working state for transformSetOperationTree_internal */
 typedef struct
 {
@@ -132,7 +140,6 @@ static bool test_raw_expression_coverage(Node *node, void *context);
 static int get_distkey_by_name(char *key, IntoClause *into, Query *qry, bool *found);
 static void setQryDistributionPolicy(ParseState *pstate, IntoClause *into, Query *qry);
 
-static bool checkCanOptSelectLockingClause(SelectStmt *stmt);
 static bool queryNodeSearch(Node *node, void *context);
 static void sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_set);
 static void sanity_check_on_conflict_update(Oid relid, List *on_conflict_set, Node *on_conflict_where);
@@ -4080,7 +4087,7 @@ setQryDistributionPolicy(ParseState *pstate, IntoClause *into, Query *qry)
  * can behave like Postgres. We have to know it before
  * we acquire any locks on the tables.
  */
-static bool
+bool
 checkCanOptSelectLockingClause(SelectStmt *stmt)
 {
 	QueryNodeSearchContext ctx = {false};

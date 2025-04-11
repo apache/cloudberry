@@ -117,6 +117,7 @@
 		"enable_incremental_sort",
 		"enable_indexonlyscan",
 		"enable_indexscan",
+		"enable_lock_optimization",
 		"enable_material",
 		"enable_memoize",
 		"enable_mergejoin",

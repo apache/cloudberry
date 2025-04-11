@@ -2171,6 +2171,22 @@ exec_parse_message(const char *query_string,	/* string to execute */
 			 */
 			if (IS_SINGLENODE())
 				((SelectStmt *)raw_parse_tree->stmt)->disableLockingOptimization = false;
+			else if (enableLockOptimization)
+			{
+				SelectStmt *stmt = (SelectStmt *)raw_parse_tree->stmt;
+
+				/*
+				 * If GUC 'enableLockOptimization' is on, we try to optimize the lock for
+				 * select-for-update and similar queries.
+				 *
+				 * If the lock cannot be optimized, use the default way.
+				 */
+				stmt->disableLockingOptimization = false;
+				if (!checkCanOptSelectLockingClause(stmt))
+				{
+					((SelectStmt *)raw_parse_tree->stmt)->disableLockingOptimization = true;
+				}
+			}
 			else
 				((SelectStmt *)raw_parse_tree->stmt)->disableLockingOptimization = true;
 		}
@@ -2471,6 +2487,26 @@ exec_bind_message(StringInfo input_message)
 		portal = CreatePortal(portal_name, false, false);
 
 	portal->is_extended_query = true;
+
+	/*
+	 * If GUC 'enableLockOptimization' is on, we try to optimize the lock for
+	 * select-for-update and similar queries.
+	 *
+	 * If the lock for query can be optimized, we use tuple lock instead of
+	 * relation lock to improve Concurrency Performance. LockRows is executed
+	 * on segment, but reader gangs cannot execute LockRows, so we need to
+	 * dispatch query plan to writer gangs, that's why we reset is_extended_query
+	 * to false here.
+	 */
+	if (enableLockOptimization && IsA(psrc->raw_parse_tree->stmt, SelectStmt))
+	{
+		SelectStmt *stmt = (SelectStmt *)psrc->raw_parse_tree->stmt;
+
+		if (checkCanOptSelectLockingClause(stmt))
+		{
+			portal->is_extended_query = false;
+		}
+	}
 
 	/*
 	 * Prepare to copy stuff into the portal's memory context.  We do all this
@@ -2972,6 +3008,45 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 
 	if (max_rows <= 0)
 		max_rows = FETCH_ALL;
+
+	/*
+	 * If the lock for select-for-update and similar queries is optimized, we should
+	 * fetch all rows here.
+	 *
+	 * Since we optimize the lock for query, the query plan is dispatched to writer
+	 * gangs to execute. If we do not fetch all rows here, the writer gangs are occupied
+	 * and can not execute other query plans.
+	 */
+	if (enableLockOptimization)
+	{
+		CachedPlanSource *psrc;
+
+		if (portal->prepStmtName)
+		{
+			PreparedStatement *pstmt;
+
+			pstmt = FetchPreparedStatement(portal->prepStmtName, true);
+			psrc = pstmt->plansource;
+		}
+		else
+		{
+			/* special-case the unnamed statement */
+			psrc = unnamed_stmt_psrc;
+			if (!psrc)
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_PSTATEMENT),
+						errmsg("unnamed prepared statement does not exist")));
+		}
+
+		if (IsA(psrc->raw_parse_tree->stmt, SelectStmt) &&
+			checkCanOptSelectLockingClause((SelectStmt *)psrc->raw_parse_tree->stmt) &&
+			max_rows != FETCH_ALL)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					errmsg("Should fetch all rows for query if lock optimization is enabled")));
+		}
+	}
 
 	completed = PortalRun(portal,
 						  max_rows,

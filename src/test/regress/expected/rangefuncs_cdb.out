@@ -19,6 +19,7 @@ name not in ('enable_parallel',
  enable_incremental_sort        | off
  enable_indexonlyscan           | on
  enable_indexscan               | on
+ enable_lock_optimization       | off
  enable_material                | on
  enable_memoize                 | on
  enable_mergejoin               | off
@@ -32,7 +33,7 @@ name not in ('enable_parallel',
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(22 rows)
+(23 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;

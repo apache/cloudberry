@@ -17,6 +17,9 @@
 #include "parser/parse_node.h"
 #include "utils/queryjumble.h"
 
+/* GUC parameter */
+extern PGDLLIMPORT bool enableLockOptimization;
+
 /* Hook for plugins to get control at end of parse analysis */
 typedef void (*post_parse_analyze_hook_type) (ParseState *pstate,
 											  Query *query,
@@ -44,7 +47,7 @@ extern void CheckSelectLocking(Query *qry, LockClauseStrength strength);
 extern void applyLockingClause(Query *qry, Index rtindex,
 							   LockClauseStrength strength,
 							   LockWaitPolicy waitPolicy, bool pushedDown);
-
+extern bool checkCanOptSelectLockingClause(SelectStmt *stmt);
 extern List *BuildOnConflictExcludedTargetlist(Relation targetrel,
 											   Index exclRelIndex);
 
