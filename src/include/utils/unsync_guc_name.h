@@ -565,3 +565,4 @@
 		"xmlbinary",
 		"xmloption",
 		"zero_damaged_pages",
+		"gp_track_pending_delete",

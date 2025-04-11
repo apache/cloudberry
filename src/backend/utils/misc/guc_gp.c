@@ -480,6 +480,8 @@ bool		gp_log_endpoints = false;
 /* optional reject to  parse ambigous 5-digits date in YYYMMDD format */
 bool		gp_allow_date_field_width_5digits = false;
 
+bool		gp_track_pending_delete = true;
+
 /* GUC to set interval for streaming archival status */
 int wal_sender_archiving_status_interval;
 
@@ -3415,6 +3417,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 		 GUC_NOT_IN_SAMPLE
 		},
 		&gp_keep_partition_children_locks,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_track_pending_delete", PGC_POSTMASTER, CUSTOM_OPTIONS,
+			gettext_noop("Enable extended pending deletion tracking to avoid "
+						 "accumulation of orphaned files."),
+			gettext_noop("Disabling this turns off storing relation nodes in "
+						 "shmem, dumping them to WAL and removing of files "
+						 "during recovery.")
+		},
+		&gp_track_pending_delete,
 		true,
 		NULL, NULL, NULL
 	},

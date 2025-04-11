@@ -19,11 +19,13 @@
 
 #include "postgres.h"
 
+#include "access/transam.h"
 #include "access/visibilitymap.h"
 #include "access/xact.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "catalog/storage_xlog.h"
 #include "common/relpath.h"
 #include "commands/dbcommands.h"
@@ -57,10 +59,20 @@ typedef struct PendingRelDelete
 	RelFileNodePendingDelete relnode;		/* relation that may need to be deleted */
 	bool		atCommit;		/* T=delete at commit; F=delete at abort */
 	int			nestLevel;		/* xact nesting level of request */
+	dsa_pointer shmemPtr;		/* ptr to shared pending delete list node */
 	struct PendingRelDelete *next;		/* linked-list link */
 } PendingRelDelete;
 
 static PendingRelDelete *pendingDeletes = NULL; /* head of linked list */
+
+static void
+PendingRelDeleteFree(PendingRelDelete *pending)
+{
+	Assert(pending != NULL);
+	if (DsaPointerIsValid(pending->shmemPtr))
+		PdlShmemRemove(pending->shmemPtr);
+	pfree(pending);
+}
 
 /*
  * RelationCreateStorage
@@ -80,6 +92,7 @@ RelationCreateStorage(RelFileNode rnode, char relpersistence, char relstorage)
 	SMgrRelation srel;
 	BackendId	backend;
 	bool		needs_wal;
+	TransactionId xid = InvalidTransactionId;
 
 	switch (relpersistence)
 	{
@@ -104,7 +117,14 @@ RelationCreateStorage(RelFileNode rnode, char relpersistence, char relstorage)
 	smgrcreate(srel, MAIN_FORKNUM, false);
 
 	if (needs_wal)
-		log_smgrcreate(&srel->smgr_rnode.node, MAIN_FORKNUM);
+	{
+		/* 
+		 * Call GetCurrentTransactionId before log_smgrcreate, because
+		 * XLOG_SMGR_CREATE_PDL WAL record should be always linked to XID
+		 */
+		xid = GetCurrentTransactionId();
+		log_smgrcreate(&srel->smgr_rnode.node, MAIN_FORKNUM, relstorage);
+	}
 
 	/* Add the relation to the list of stuff to delete at abort */
 	pending = (PendingRelDelete *)
@@ -115,30 +135,34 @@ RelationCreateStorage(RelFileNode rnode, char relpersistence, char relstorage)
 	pending->atCommit = false;	/* delete if abort */
 	pending->nestLevel = GetCurrentTransactionNestLevel();
 	pending->next = pendingDeletes;
+	pending->shmemPtr = PdlShmemAdd(&pending->relnode, xid);
 	pendingDeletes = pending;
 }
 
 /*
- * Perform XLogInsert of a XLOG_SMGR_CREATE record to WAL.
+ * Perform XLogInsert of a XLOG_SMGR_CREATE_PDL record to WAL.
  */
 void
-log_smgrcreate(RelFileNode *rnode, ForkNumber forkNum)
+log_smgrcreate(RelFileNode *rnode, ForkNumber forkNum, char relstorage)
 {
-	xl_smgr_create xlrec;
+	xl_smgr_create_pdl xlrec;
 	XLogRecData rdata;
 
 	/*
 	 * Make an XLOG entry reporting the file creation.
 	 */
-	xlrec.rnode = *rnode;
-	xlrec.forkNum = forkNum;
+	xlrec.createrec.rnode = *rnode;
+	xlrec.createrec.forkNum = forkNum;
+	xlrec.relstorage = relstorage;
 
 	rdata.data = (char *) &xlrec;
 	rdata.len = sizeof(xlrec);
 	rdata.buffer = InvalidBuffer;
 	rdata.next = NULL;
 
-	XLogInsert(RM_SMGR_ID, XLOG_SMGR_CREATE, &rdata);
+	XLogRecPtr recptr = XLogInsert(RM_SMGR_ID, XLOG_SMGR_CREATE_PDL, &rdata);
+
+	XLogFlush(recptr);
 }
 
 /*
@@ -159,6 +183,7 @@ RelationDropStorage(Relation rel)
 	pending->atCommit = true;	/* delete if commit */
 	pending->nestLevel = GetCurrentTransactionNestLevel();
 	pending->next = pendingDeletes;
+	pending->shmemPtr = InvalidDsaPointer;
 	pendingDeletes = pending;
 
 	/*
@@ -210,7 +235,7 @@ RelationPreserveStorage(RelFileNode rnode, bool atCommit)
 				prev->next = next;
 			else
 				pendingDeletes = next;
-			pfree(pending);
+			PendingRelDeleteFree(pending);
 			/* prev does not change */
 		}
 		else
@@ -366,7 +391,7 @@ smgrDoPendingDeletes(bool isCommit)
 				srels[nrels++] = srel;
 			}
 			/* must explicitly free the list entry */
-			pfree(pending);
+			PendingRelDeleteFree(pending);
 			/* prev does not change */
 		}
 	}
@@ -467,7 +492,7 @@ PostPrepare_smgr(void)
 		next = pending->next;
 		pendingDeletes = next;
 		/* must explicitly free the list entry */
-		pfree(pending);
+		PendingRelDeleteFree(pending);
 	}
 }
 
@@ -517,6 +542,30 @@ smgr_redo(XLogRecPtr beginLoc, XLogRecPtr lsn, XLogRecord *record)
 
 		reln = smgropen(xlrec->rnode, InvalidBackendId);
 		smgrcreate(reln, xlrec->forkNum, true);
+	}
+	else if (info == XLOG_SMGR_CREATE_PDL)
+	{
+		xl_smgr_create_pdl *xlrec =
+			(xl_smgr_create_pdl *) XLogRecGetData(record);
+		PendingRelXactDelete pd =
+		{
+			.relnode =
+			{
+				.node = xlrec->createrec.rnode,
+				/*
+				 * Temp relations are not logged in WAL, so it is always false
+				 * here.
+				 */
+				.isTempRelation = false,
+				.relstorage = xlrec->relstorage
+			},
+			.xid = record->xl_xid
+		};
+
+		SMgrRelation reln = smgropen(xlrec->createrec.rnode, InvalidBackendId);
+		smgrcreate(reln, xlrec->createrec.forkNum, true);
+
+		PdlRedoAdd(&pd);
 	}
 	else if (info == XLOG_SMGR_TRUNCATE)
 	{

@@ -279,6 +279,9 @@ NumLWLocks(void)
 	lock_addin_request_allowed = false;
 	numLocks += Max(lock_addin_request, NUM_USER_DEFINED_LWLOCKS);
 
+	/* storage_pending_deletes.c needs one for each backend */
+	numLocks += MaxBackends;
+
 	return numLocks;
 }
 

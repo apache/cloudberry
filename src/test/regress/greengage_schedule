@@ -313,4 +313,6 @@ test: gp_check_files
 
 test: gp_query_id
 
+test: gp_orphaned_files
+
 # end of tests

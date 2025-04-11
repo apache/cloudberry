@@ -36,6 +36,7 @@
 #include "catalog/catversion.h"
 #include "catalog/pg_control.h"
 #include "catalog/pg_database.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/bgwriter.h"
@@ -7409,6 +7410,40 @@ StartupXLOG(void)
 					TimeLineID	newTLI = ThisTimeLineID;
 					TimeLineID	prevTLI = ThisTimeLineID;
 
+					if ((info == XLOG_CHECKPOINT_SHUTDOWN) ||
+						(info == XLOG_END_OF_RECOVERY))
+					{
+						/*
+						 * At this point we may encounter a situation, when some
+						 * prepared transaction is yet not committed/aborted,
+						 * but the respective WAL segment file is already
+						 * recycled. It may happen is some corner cases, like:
+						 * 1. Primary successfully performs Prepare for a
+						 * transaction;
+						 * 2. Primary stops responding and Mirror is promoted;
+						 * 3. New Primary (ex Mirror) commits the transaction;
+						 * 4. New Primary (ex Mirror) recycles WAL segment with
+						 * the Prepare record (because both Primary and Mirror
+						 * has done the Prepare);
+						 * 5. Ex Primary is recovered as new Mirror, it has the
+						 * the transaction in the list of prepared transactions,
+						 * but doesn't have the WAL segment. And the new Mirror
+						 * should soon see the commit REDO record from the new
+						 * Primary (and remove the transaction from the list of
+						 * prepared transactions).
+						 *
+						 * In such a case
+						 * RemovePendingDeletesForPreparedTransactions() will
+						 * return FALSE. And we postpone the removal of orphaned
+						 * files until all such prepared transactions without
+						 * WAL segment files are wiped out from the list of
+						 * prepared transactions.
+						 */
+						if (RemovePendingDeletesForPreparedTransactions())
+							/* Clean up orphaned files */
+							PdlRedoDropFiles();
+					}
+
 					if (info == XLOG_CHECKPOINT_SHUTDOWN)
 					{
 						CheckPoint	checkPoint;
@@ -7924,6 +7959,21 @@ StartupXLOG(void)
 			CreateCheckPoint(CHECKPOINT_END_OF_RECOVERY | CHECKPOINT_IMMEDIATE);
 
 		UtilityModeCloseDtmRedoFile();
+
+		/*
+		 * By this moment, there shouldn't be any prepared transaction with
+		 * missing respective WAL segment file, meaning
+		 * RemovePendingDeletesForPreparedTransactions() should return TRUE.
+		 * If not, most likely the respective WAL segment file is recycled
+		 * illegally, and we do not perform orphaned files removal (as we might
+		 * remove smth that is already committed). Instead, we emit a warning.
+		 */
+		if (RemovePendingDeletesForPreparedTransactions())
+			/* Clean up orphaned files */
+			PdlRedoDropFiles();
+		else
+			ereport(WARNING, (errmsg(
+					"Couldn't drop orphaned files")));
 
 		/*
 		 * And finally, execute the recovery_end_command, if any.
@@ -9265,6 +9315,9 @@ CreateCheckPoint(int flags)
 	 * checkpoint record.
 	 */
 	getDtxCheckPointInfo(&dtxCheckPointInfo, &dtxCheckPointInfoSize);
+
+	if (!shutdown)
+		PdlXLogInsert();
 
 	CheckPointGuts(checkPoint.redo, flags);
 
@@ -10708,6 +10761,10 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 
 		/* Keep track of full_page_writes */
 		lastFullPageWrites = fpw;
+	}
+	else if (info == XLOG_PENDING_DELETE)
+	{
+		PdlRedoXLogRecord(record);
 	}
 }
 

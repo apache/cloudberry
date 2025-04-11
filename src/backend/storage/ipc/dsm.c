@@ -468,8 +468,8 @@ dsm_create(Size size)
 	uint32		i;
 	uint32		nitems;
 
-	/* Unsafe in postmaster (and pointless in a stand-alone backend). */
-	Assert(IsUnderPostmaster);
+	/* Unsafe in postmaster. */
+	Assert(!IsPostmasterEnvironment || IsUnderPostmaster);
 
 	if (!dsm_init_done)
 		dsm_backend_startup();

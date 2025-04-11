@@ -56,6 +56,7 @@
 #include "access/xlogutils.h"
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "catalog/storage_tablespace.h"
 #include "catalog/storage_database.h"
 #include "funcapi.h"
@@ -2459,3 +2460,85 @@ getTwoPhaseOldestPreparedTransactionXLogRecPtr(prepared_transaction_agg_state *p
 	return oldest;
 
 }  /* end getTwoPhaseOldestPreparedTransactionXLogRecPtr */
+
+bool
+RemovePendingDeletesForPreparedTransactions()
+{
+	HASH_SEQ_STATUS scan_status;
+	prpt_map   *entry;
+	XLogReaderState *xlogreader;
+	volatile bool result = true;
+	XLogRecord *xlogrec = NULL;
+	MemoryContext oldcontext = CurrentMemoryContext;
+
+	if (NULL == crashRecoverPostCheckpointPreparedTransactions_map_ht)
+		return result;
+
+	xlogreader = XLogReaderAllocate(&read_local_xlog_page, NULL);
+	if (!xlogreader)
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("out of memory"),
+		   errdetail("Failed while allocating an XLog reading processor.")));
+
+	hash_seq_init(&scan_status,
+				  crashRecoverPostCheckpointPreparedTransactions_map_ht);
+	while ((entry = (prpt_map *) hash_seq_search(&scan_status)) != NULL)
+	{
+		char	   *errormsg = NULL;
+		TwoPhaseFileHeader *hdr;
+
+		if (entry->xlogrecptr == InvalidXLogRecPtr)
+			continue;
+
+		int savedInterruptHoldoffCount = InterruptHoldoffCount;
+		PG_TRY();
+		{
+			xlogrec = XLogReadRecord(xlogreader, entry->xlogrecptr, &errormsg);
+		}
+		PG_CATCH();
+		{
+			MemoryContextSwitchTo(oldcontext);
+			InterruptHoldoffCount = savedInterruptHoldoffCount;
+			FlushErrorState();
+			result = false;
+		}
+		PG_END_TRY();
+
+		if (!result)
+		{
+			elog(LOG, "Failed to read WAL record %X/%X for XID %u in %s",
+				 (uint32) (entry->xlogrecptr >> 32),
+				 (uint32) entry->xlogrecptr,
+				 entry->xid,
+				 __func__);
+			break;
+		}
+
+		if (NULL == xlogrec)
+		{
+			if (errormsg)
+				ereport(ERROR,
+						(errcode(ERRCODE_DATA_CORRUPTED),
+						 errmsg("xlog record is invalid"),
+						 errdetail("%s", errormsg)));
+			else
+				ereport(ERROR,
+						(errcode(ERRCODE_DATA_CORRUPTED),
+						 errmsg("xlog record is invalid")));
+		}
+
+		hdr = (TwoPhaseFileHeader *) XLogRecGetData(xlogrec);
+
+		TransactionId *subxids = (hdr->nsubxacts > 0) ?
+			(TransactionId *)
+				((char *) hdr + MAXALIGN(sizeof(TwoPhaseFileHeader))) :
+			NULL;
+
+		PdlRedoRemoveTree(hdr->xid, subxids, hdr->nsubxacts);
+	}
+
+	XLogReaderFree(xlogreader);
+
+	return result;
+}  /* end RemovePendingDeletesForPreparedTransactions */
