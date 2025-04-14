@@ -30,6 +30,7 @@
 #else
 #include "storage/wal/paxc_desc.h"
 #endif
+#include "common/relpath.h"
 
 void pax_rmgr_desc(StringInfo buf, XLogReaderState *record) {
   char *rec = XLogRecGetData(record);
@@ -38,14 +39,22 @@ void pax_rmgr_desc(StringInfo buf, XLogReaderState *record) {
   switch (info) {
     case XLOG_PAX_INSERT: {
       char filename[MAX_PATH_FILE_NAME_LEN];
+      char *relpathPart;
+      size_t relpathPartSz;
 
       char *rec = XLogRecGetData(record);
       xl_pax_insert *xlrec = (xl_pax_insert *)rec;
 
       Assert(xlrec->target.file_name_len < MAX_PATH_FILE_NAME_LEN);
 
-      memcpy(filename, rec + SizeOfPAXInsert, xlrec->target.file_name_len);
-      filename[xlrec->target.file_name_len] = '\0';
+      relpathPart = relpathbackend(xlrec->target.node, InvalidBackendId, MAIN_FORKNUM);
+      relpathPartSz = strlen(relpathPart);
+
+      memcpy(filename, relpathPart, relpathPartSz);
+
+      memcpy(filename + relpathPartSz, ".", 1);
+      memcpy(filename + relpathPartSz + 1, rec + SizeOfPAXInsert, xlrec->target.file_name_len);
+      filename[relpathPartSz + xlrec->target.file_name_len + 1] = '\0';
 
       int32 bufferLen = XLogRecGetDataLen(record) - SizeOfPAXInsert -
                         xlrec->target.file_name_len;
