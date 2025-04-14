@@ -1,15 +1,19 @@
 # For Developers
 
-To install the libraries necessary for running scripts or testing, a system python of 2.7 must be available, the version of gcc and g++ used to compile python must be available.
-On most distributions, python will compiled with the same gcc and g++ verion available from the base packages "gcc" and "gcc-c++".
+To install the libraries necessary for running scripts or testing, a system python of 3.x must be available.
 
-The command `python -VV` will show the compiler used to compile the version of python being used.
-A `make` in from gpMgmt will install the proper libraries provided a gcc and gcc-c++ are present.
+## Installing Python Dependencies
+
+Install required Python packages using pip:
+
+```bash
+pip3 install -r python-dependencies.txt
+```
 
 To run any of these python scripts, necessary libraries must be installed, and PYTHONPATH must be modified to use the libraries in this path.
 
-```
-PYTHONPATH="\$GPHOME/lib/python:${PYTHONPATH}"
+```bash
+PYTHONPATH="$GPHOME/lib/python:${PYTHONPATH}"
 ```
 
 This will be set automatically with a `source $GPHOME/greenplum_path.sh`
