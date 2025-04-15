@@ -90,12 +90,14 @@ jobs:
         su - gpadmin -c "cd $WORKSPACE"
         export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
         export PATH=$WORKSPACE/coverity_tool/bin:$PATH
+        git submodule update --init
         ./configure --prefix=/usr/local/cloudberry-db \
             --disable-external-fts \
             --enable-gpcloud \
             --enable-ic-proxy \
             --enable-orafce \
             --enable-orca \
+            --enable-pax \
             --enable-pxf \
             --enable-tap-tests \
             --with-gssapi \
