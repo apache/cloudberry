@@ -23,10 +23,11 @@ if type git >/dev/null 2>&1 && [ -d '.git' ] ; then
 	# overwrite the VERSION from autoconf with the output, else append
 	# HEAD commit info
 	if git describe >/dev/null 2>&1 ; then
-		VERSION=$(generate_dev_version)
-	else
-		VERSION+=+
-		VERSION+=$(git rev-parse --short HEAD)
+		GIT_VERSION=$(generate_dev_version)
+	# Append commit distance and SHA if not on a tag
+		if ! git describe --exact-match >/dev/null 2>&1; then
+			VERSION+=\+$(echo "$GIT_VERSION" | cut -d'+' -f2-)
+		fi
 	fi
 # If not a git repository and VERSION file exists, use version string from file.
 elif [[ -s ./VERSION ]]; then
