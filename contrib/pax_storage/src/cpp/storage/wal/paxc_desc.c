@@ -52,9 +52,11 @@ void pax_rmgr_desc(StringInfo buf, XLogReaderState *record) {
 
       memcpy(filename, relpathPart, relpathPartSz);
 
-      memcpy(filename + relpathPartSz, ".", 1);
-      memcpy(filename + relpathPartSz + 1, rec + SizeOfPAXInsert, xlrec->target.file_name_len);
-      filename[relpathPartSz + xlrec->target.file_name_len + 1] = '\0';
+#define PAX_DIR_SUFFIX "_pax/"
+
+      memcpy(filename + relpathPartSz, PAX_DIR_SUFFIX, strlen(PAX_DIR_SUFFIX));
+      memcpy(filename + relpathPartSz + strlen(PAX_DIR_SUFFIX), rec + SizeOfPAXInsert, xlrec->target.file_name_len);
+      filename[relpathPartSz + xlrec->target.file_name_len + strlen(PAX_DIR_SUFFIX)] = '\0';
 
       int32 bufferLen = XLogRecGetDataLen(record) - SizeOfPAXInsert -
                         xlrec->target.file_name_len;
