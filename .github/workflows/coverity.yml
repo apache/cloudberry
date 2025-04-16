@@ -62,7 +62,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 1
-       
+        submodules: true
+
     - name: Environment Initialization
       run: |
         if ! su - gpadmin -c "/tmp/init_system.sh"; then
@@ -90,7 +91,6 @@ jobs:
         su - gpadmin -c "cd $WORKSPACE"
         export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
         export PATH=$WORKSPACE/coverity_tool/bin:$PATH
-        git submodule update --init
         ./configure --prefix=/usr/local/cloudberry-db \
             --disable-external-fts \
             --enable-gpcloud \

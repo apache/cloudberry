@@ -50,7 +50,7 @@ jobs:
   sonarqube-analysis:
     runs-on: ubuntu-22.04
     if: ${{ github.repository_owner == 'apache' }}
-    
+
     container:
       image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
       options: >-
@@ -64,6 +64,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+        submodules: true
 
     - name: Environment Initialization
       run: |
@@ -85,7 +86,6 @@ jobs:
              /usr/local/cloudberry-db/lib
         sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db
         export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
-        git submodule update --init
         ./configure --prefix=/usr/local/cloudberry-db \
             --disable-external-fts \
             --enable-gpcloud \
