@@ -4169,7 +4169,6 @@ PushdownRuntimeFilter(HashState *node)
 			 !IsA(attr_filter->target, DynamicSeqScanState)))
 			continue;
 
-		SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
 		/* bloom filter */
 		sk = (ScanKey)palloc0(sizeof(ScanKeyData));
 		sk->sk_flags    = SK_BLOOM_FILTER;
@@ -4181,6 +4180,7 @@ PushdownRuntimeFilter(HashState *node)
 
 		if (attr_filter->n_distinct > 0)
 		{
+			SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
 			int64 range = attr_filter->max - attr_filter->min + 1;
 			if ((range / attr_filter->n_distinct) > gp_runtime_filter_selectivity_threshold)
 			{

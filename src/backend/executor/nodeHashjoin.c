@@ -2197,8 +2197,8 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	AttrFilter	*attr_filter;
 	ListCell	*lc;
 	List		*targets;
-	Oid			var_type;
-	Oid			collation;
+	Oid			var_type = InvalidOid;
+	Oid			collation = InvalidOid;
 
 	/*
 	 * A build-side Bloom filter tells us if a row is definitely not in the build

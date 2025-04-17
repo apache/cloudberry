@@ -347,10 +347,13 @@ ExecRFExplainEnd(HashState *hashState, struct StringInfoData *buf)
 		if (attr_filter->empty || attr_filter->hasnulls)
 			continue;
 
-		sss = castNode(SeqScanState, attr_filter->target);
-		appendStringInfo(buf, "RF: %s attrno: %d, range[%ld, %ld], n_distinct: %.2f\n",
+		if (IsA(attr_filter->target, SeqScanState))
+		{
+			sss = castNode(SeqScanState, attr_filter->target);
+			appendStringInfo(buf, "RF: %s attrno: %d, range[%ld, %ld], n_distinct: %.2f\n",
 						 RelationGetRelationName(sss->ss.ss_currentRelation),
 						 attr_filter->lattno, (int64_t) attr_filter->min,
 						 (int64_t) attr_filter->max, attr_filter->n_distinct);
+		}
 	}
 }
