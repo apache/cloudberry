@@ -260,6 +260,9 @@ The PostgreSQL software includes:
       gpMgmt/bin/pythonSrc/ext/parse-1.8.2.tar.gz
       see licenses/LICENSE-parse.txt
 
+      gpMgmt/bin/pythonSrc/ext/ruff-0.11.5.tar.gz
+      see licenses/LICENSE-ruff.txt
+
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
       

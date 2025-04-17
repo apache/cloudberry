@@ -119,12 +119,12 @@ pyyaml:
 	cp -r $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
 #
-# PYLINT
+# RUFF
 #
 
-PYLINT_VERSION=0.21.0
-PYLINT_DIR=pylint-$(PYLINT_VERSION)
-PYLINT_PYTHONPATH=$(PYLIB_DIR):$(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/
+RUFF_VERSION=0.11.5
+RUFF_DIR=ruff-$(RUFF_VERSION)
+RUFF_PYTHONPATH=$(PYLIB_DIR):$(PYLIB_SRC_EXT)/$(RUFF_DIR)/build/lib/
 MOCK_VERSION=1.0.1
 MOCK_DIR=mock-$(MOCK_VERSION)
 SETUP_TOOLS_VERSION=36.6.0
@@ -139,11 +139,11 @@ PYTHONSRC_INSTALL_PYTHON_PATH=$(PYTHONPATH):$(PYTHONSRC_INSTALL_SITE)
 MOCK_BIN=$(PYTHONSRC_INSTALL)/lib/python$(PYTHON_VERSION)/site-packages/mock-1.0.1-py2.6.egg
 UBUNTU_PLATFORM=$(shell if lsb_release -a 2>/dev/null | grep -q 'Ubuntu' ; then echo "Ubuntu"; fi)
 
-pylint:
-	@echo "--- pylint"
-	@cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYLINT_DIR).tar.gz
-	@cd $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/ && python3 setup.py build 1> /dev/null
-	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/__init__.py
+ruff:
+	@echo "--- ruff"
+	@cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(RUFF_DIR).tar.gz
+	@cd $(PYLIB_SRC_EXT)/$(RUFF_DIR)/ && python3 setup.py build 1> /dev/null
+	@touch $(PYLIB_SRC_EXT)/$(RUFF_DIR)/build/lib/__init__.py
 
 $(MOCK_BIN):
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
@@ -161,11 +161,11 @@ PYTHON_FILES=`grep -l --exclude=Makefile --exclude=gplogfilter "/bin/env python3
 			 `find ./gppylib -name "*.py"`\
 			 `find $(SRC)/../sbin -name "*.py"`
 
-checkcode: pylint
-	@echo "Running pylint on management scripts..."
-	@PYTHONPATH=$(PYTHONPATH):$(PYLINT_PYTHONPATH) $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/bin/pylint -i y $(PYTHON_FILES) --rcfile=.rcfile > $(SRC)/../pylint.txt || true
-	@echo -n "pylint_score=" > $(SRC)/../pylint_score.properties
-	@grep "Your code has been rated at" $(SRC)/../pylint.txt | sed -e "s|Your .* \(.*\)/.*|\1|" >> $(SRC)/../pylint_score.properties
+checkcode: ruff
+	@echo "Running ruff on management scripts..."
+	@PYTHONPATH=$(PYTHONPATH):$(RUFF_PYTHONPATH) $(PYLIB_SRC_EXT)/$(RUFF_DIR)/bin/ruff check $(PYTHON_FILES) --config .rcfile > $(SRC)/../ruff.txt || true
+	@echo -n "ruff_check_status=" > $(SRC)/../ruff_status.properties
+	@grep "Your code has been checked at" $(SRC)/../ruff.txt | sed -e "s|Your .* \(.*\)/.*|\1|" >> $(SRC)/../ruff_status.properties
 
 check: $(MOCK_BIN)
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
@@ -189,7 +189,7 @@ installcheck: installcheck-bash
 	$(MAKE) -C gpload_test $@
 
 clean distclean:
-	rm -rf $(PYLIB_SRC_EXT)/$(PYLINT_DIR)
+	rm -rf $(PYLIB_SRC_EXT)/$(RUFF_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
 	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
 	rm -rf *.pyc
