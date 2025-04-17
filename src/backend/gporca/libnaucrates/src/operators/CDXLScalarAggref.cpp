@@ -35,14 +35,16 @@ CDXLScalarAggref::CDXLScalarAggref(CMemoryPool *mp, IMDId *agg_func_mdid,
 								   IMDId *resolved_rettype_mdid,
 								   BOOL is_distinct, EdxlAggrefStage agg_stage,
 								   EdxlAggrefKind aggkind,
-								   ULongPtrArray *argtypes)
+								   ULongPtrArray *argtypes,
+								   BOOL isAggStar)
 	: CDXLScalar(mp),
 	  m_agg_func_mdid(agg_func_mdid),
 	  m_resolved_rettype_mdid(resolved_rettype_mdid),
 	  m_is_distinct(is_distinct),
 	  m_agg_stage(agg_stage),
 	  m_aggkind(aggkind),
-	  m_argtypes(argtypes)
+	  m_argtypes(argtypes),
+	  m_is_aggstar(isAggStar)
 {
 	GPOS_ASSERT(nullptr != agg_func_mdid);
 	GPOS_ASSERT_IMP(nullptr != resolved_rettype_mdid,
@@ -180,21 +182,6 @@ CDXLScalarAggref::GetDXLResolvedRetTypeMDid() const
 	return m_resolved_rettype_mdid;
 }
 
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CDXLScalarAggref::IsDistinct
-//
-//	@doc:
-//		TRUE if it's agg(DISTINCT ...)
-//
-//---------------------------------------------------------------------------
-BOOL
-CDXLScalarAggref::IsDistinct() const
-{
-	return m_is_distinct;
-}
-
 //---------------------------------------------------------------------------
 //     @function:
 //             CDXLScalarAggref::SerializeValuesListChildToDXL
@@ -235,6 +222,9 @@ CDXLScalarAggref::SerializeToDXL(CXMLSerializer *xml_serializer,
 							   CDXLTokens::GetDXLTokenStr(EdxltokenAggrefOid));
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefDistinct), m_is_distinct);
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefIsAggStar), m_is_aggstar);
+	
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenAggrefStage), GetDXLStrAggStage());
 	if (nullptr != m_resolved_rettype_mdid)

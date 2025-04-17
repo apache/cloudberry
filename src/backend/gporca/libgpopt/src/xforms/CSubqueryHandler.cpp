@@ -947,12 +947,13 @@ CSubqueryHandler::CreateGroupByNode(CMemoryPool *mp, CExpression *pexprChild,
 	}
 	else
 	{
-		// quantified subqueries -- generate count(*) and sum(null indicator) expressions
+		// quantified subqueries -- generate count(true) and sum(null indicator) expressions
 		CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
 		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 
 		CExpression *pexprCount =
-			CUtils::PexprCount(mp, colref, false /* is_distinct */);
+			CUtils::PexprCount(mp, colref, false /* is_distinct */,
+			false /*is_agg_star*/);
 		CScalarAggFunc *popCount =
 			CScalarAggFunc::PopConvert(pexprCount->Pop());
 		const IMDType *pmdtypeCount =

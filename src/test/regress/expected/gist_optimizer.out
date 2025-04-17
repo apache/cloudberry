@@ -427,11 +427,11 @@ select count(*) from gist_tbl;
                                                  QUERY PLAN
 ------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
-   Output: count()
+   Output: count(*)
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL count())
+         Output: (PARTIAL count(*))
          ->  Partial Aggregate
-               Output: PARTIAL count()
+               Output: PARTIAL count(*)
                ->  Seq Scan on public.gist_tbl
  Settings: enable_bitmapscan = 'off', enable_indexonlyscan = 'on', enable_seqscan = 'off', optimizer = 'on'
  Optimizer: Pivotal Optimizer (GPORCA)

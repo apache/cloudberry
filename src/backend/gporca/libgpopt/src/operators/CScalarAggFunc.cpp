@@ -37,7 +37,8 @@ CScalarAggFunc::CScalarAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
 							   const CWStringConst *pstrAggFunc,
 							   BOOL is_distinct, EAggfuncStage eaggfuncstage,
 							   BOOL fSplit, EAggfuncKind aggkind,
-							   ULongPtrArray *argtypes, BOOL fRepSafe)
+							   ULongPtrArray *argtypes, BOOL fRepSafe,
+							   BOOL isAggStar)
 	: CScalar(mp),
 	  m_pmdidAggFunc(pmdidAggFunc),
 	  m_pmdidResolvedRetType(resolved_rettype),
@@ -48,7 +49,8 @@ CScalarAggFunc::CScalarAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
 	  m_argtypes(argtypes),
 	  m_eaggfuncstage(eaggfuncstage),
 	  m_fSplit(fSplit),
-	  m_fRepSafe(fRepSafe)
+	  m_fRepSafe(fRepSafe),
+	  m_is_agg_star(isAggStar)
 {
 	GPOS_ASSERT(nullptr != pmdidAggFunc);
 	GPOS_ASSERT(nullptr != pstrAggFunc);
@@ -150,7 +152,8 @@ CScalarAggFunc::HashValue() const
 		CombineHashes(COperator::HashValue(), m_pmdidAggFunc->HashValue()),
 		CombineHashes(gpos::HashValue<ULONG>(&ulAggfuncstage),
 					  CombineHashes(gpos::HashValue<BOOL>(&m_is_distinct),
-									gpos::HashValue<BOOL>(&m_fSplit))));
+					  				CombineHashes(gpos::HashValue<BOOL>(&m_fSplit), 
+									  			  gpos::HashValue<BOOL>(&m_is_agg_star)))));
 }
 
 
@@ -172,6 +175,7 @@ CScalarAggFunc::Matches(COperator *pop) const
 		// match if func ids are identical
 		return ((popScAggFunc->IsDistinct() == m_is_distinct) &&
 				(popScAggFunc->Eaggfuncstage() == Eaggfuncstage()) &&
+				(popScAggFunc->IsAggStar() == IsAggStar()) &&
 				(popScAggFunc->FSplit() == m_fSplit) &&
 				m_pmdidAggFunc->Equals(popScAggFunc->MDId()));
 	}
@@ -227,6 +231,8 @@ CScalarAggFunc::OsPrint(IOstream &os) const
 	os << PstrAggFunc()->GetBuffer();
 	os << " , Distinct: ";
 	os << (m_is_distinct ? "true" : "false");
+	os << " , AggStar: ";
+	os << (m_is_agg_star ? "true" : "false");
 	os << " , Aggregate Stage: ";
 
 	switch (m_eaggfuncstage)

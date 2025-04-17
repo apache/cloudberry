@@ -133,7 +133,7 @@ SELECT count(*) FROM
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Aggregate
-   Output: count()
+   Output: count(*)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  GroupAggregate
                Group Key: tenk1.two, tenk1.four, tenk1.two

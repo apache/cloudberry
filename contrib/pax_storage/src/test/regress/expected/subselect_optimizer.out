@@ -887,7 +887,7 @@ where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0);
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Result
-                     Filter: ((COALESCE((count()), '0'::bigint) > '0'::bigint) OR (t.ten < 0))
+                     Filter: ((COALESCE((count(*)), '0'::bigint) > '0'::bigint) OR (t.ten < 0))
                      ->  Hash Left Join
                            Hash Cond: (t.unique2 = k.unique1)
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)
@@ -955,7 +955,7 @@ select * from exists_tbl t1
 ----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: ((COALESCE((count()), '0'::bigint) > '0'::bigint) OR (t1.c3 < 0))
+         Filter: ((COALESCE((count(*)), '0'::bigint) > '0'::bigint) OR (t1.c3 < 0))
          ->  Hash Left Join
                Hash Cond: (t1.c1 = t2.c2)
                ->  Dynamic Seq Scan on exists_tbl t1

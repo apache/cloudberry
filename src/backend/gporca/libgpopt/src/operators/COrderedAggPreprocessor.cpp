@@ -204,8 +204,10 @@ COrderedAggPreprocessor::SplitPrjList(
 			// STEP 1: CREATE Aggregate for peer_count
 			CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
 			CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+			// percentile_cont can't be distinct or aggstar
 			CExpression *pexprAgg = CUtils::PexprAgg(
-				mp, md_accessor, IMDType::EaggCount, colref, false);
+				mp, md_accessor, IMDType::EaggCount, colref,
+				false /*is_distinct*/, false /*is_agg_star*/);
 			CColRef *peer_count_colref = col_factory->PcrCreate(
 				md_accessor->RetrieveType(
 					CScalarAggFunc::PopConvert(pexprAgg->Pop())->MdidType()),
@@ -228,7 +230,8 @@ COrderedAggPreprocessor::SplitPrjList(
 
 			// STEP 2: Create Aggregate for calculating total_count SUM(peer_count)
 			CExpression *pexprSumAgg = CUtils::PexprAgg(
-				mp, md_accessor, IMDType::EaggSum, peer_count_colref, false);
+				mp, md_accessor, IMDType::EaggSum, peer_count_colref,
+				false /*is_distinct*/, false /*is_agg_star*/);
 			CColRef *total_count_colref = col_factory->PcrCreate(
 				md_accessor->RetrieveType(
 					CScalarAggFunc::PopConvert(pexprSumAgg->Pop())->MdidType()),
@@ -569,7 +572,8 @@ COrderedAggPreprocessor::PexprFinalAgg(CMemoryPool *mp,
 	CScalarAggFunc *popNewAggFunc = CUtils::PopAggFunc(
 		mp, mdid, arg_col_ref->Name().Pstr(), false /*is_distinct*/,
 		EaggfuncstageGlobal /*eaggfuncstage*/, false /*fSplit*/, ret_type,
-		EaggfunckindNormal, argtypes, popScAggFunc->FRepSafe());
+		EaggfunckindNormal, argtypes, popScAggFunc->FRepSafe(),
+		popScAggFunc->IsAggStar());
 
 	return GPOS_NEW(mp) CExpression(mp, popNewAggFunc, pdrgpexpr);
 }

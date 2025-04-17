@@ -1395,7 +1395,7 @@ where i < (select count(*) from smallt where smallt.i = smallt2.i);
 ---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.02 rows=50 width=15)
    ->  Result  (cost=0.00..862.01 rows=17 width=15)
-         Filter: (smallt2.i < COALESCE((count()), '0'::bigint))
+         Filter: (smallt2.i < COALESCE((count(*)), '0'::bigint))
          ->  Hash Left Join  (cost=0.00..862.01 rows=17 width=23)
                Hash Cond: (smallt2.i = smallt.i)
                ->  Seq Scan on smallt2  (cost=0.00..431.00 rows=17 width=15)

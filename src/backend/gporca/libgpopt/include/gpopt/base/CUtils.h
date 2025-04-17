@@ -244,15 +244,16 @@ public:
 	static CScalarAggFunc *PopAggFunc(
 		CMemoryPool *mp, IMDId *pmdidAggFunc, const CWStringConst *pstrAggFunc,
 		BOOL is_distinct, EAggfuncStage eaggfuncstage, BOOL fSplit,
-		IMDId *
-			pmdidResolvedReturnType,  // return type to be used if original return type is ambiguous
-		EAggfuncKind aggkind, ULongPtrArray *argtypes, BOOL fRepSafe);
+		IMDId * pmdidResolvedReturnType,  // return type to be used if original return type is ambiguous
+		EAggfuncKind aggkind, ULongPtrArray *argtypes, BOOL fRepSafe,
+		BOOL is_agg_star);
 
 	// generate an aggregate function
 	static CExpression *PexprAggFunc(CMemoryPool *mp, IMDId *pmdidAggFunc,
 									 const CWStringConst *pstrAggFunc,
 									 const CColRef *colref, BOOL is_distinct,
-									 EAggfuncStage eaggfuncstage, BOOL fSplit);
+									 EAggfuncStage eaggfuncstage, BOOL fSplit,
+									 BOOL is_agg_star);
 
 	// generate a count(*) expression
 	static CExpression *PexprCountStar(CMemoryPool *mp);
@@ -288,7 +289,7 @@ public:
 
 	// generate a count(col) expression
 	static CExpression *PexprCount(CMemoryPool *mp, const CColRef *colref,
-								   BOOL is_distinct);
+								   BOOL is_distinct, BOOL is_agg_star);
 
 	// generate a min(col) expression
 	static CExpression *PexprMin(CMemoryPool *mp, CMDAccessor *md_accessor,
@@ -297,7 +298,8 @@ public:
 	// generate an aggregate expression
 	static CExpression *PexprAgg(CMemoryPool *mp, CMDAccessor *md_accessor,
 								 IMDType::EAggType agg_type,
-								 const CColRef *colref, BOOL is_distinct);
+								 const CColRef *colref, BOOL is_distinct,
+								 BOOL is_agg_star);
 
 	// generate a select expression
 	static CExpression *PexprLogicalSelect(CMemoryPool *mp, CExpression *pexpr,

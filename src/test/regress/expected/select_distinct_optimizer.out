@@ -133,7 +133,7 @@ SELECT count(*) FROM
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Aggregate
-   Output: count()
+   Output: count(*)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  GroupAggregate
                Group Key: tenk1.two, tenk1.four, tenk1.two
@@ -686,11 +686,11 @@ select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), gene
                                        ->  ProjectSet
                                              Output: generate_series(0, 2)
                                              ->  Finalize Aggregate
-                                                   Output: count()
+                                                   Output: count(*)
                                                    ->  Gather Motion 3:1  (slice3; segments: 3)
-                                                         Output: (PARTIAL count())
+                                                         Output: (PARTIAL count(*))
                                                          ->  Partial Aggregate
-                                                               Output: PARTIAL count()
+                                                               Output: PARTIAL count(*)
                                                                ->  Seq Scan on public.t_distinct_sort
  Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -728,7 +728,7 @@ select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2
                                                QUERY PLAN                                               
 --------------------------------------------------------------------------------------------------------
  Aggregate
-   Output: count()
+   Output: count(*)
    ->  Nested Loop
          Join Filter: true
          ->  Function Scan on pg_catalog.generate_series generate_series_1

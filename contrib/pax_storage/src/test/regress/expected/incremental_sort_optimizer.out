@@ -1563,7 +1563,7 @@ order by count(*);
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Sort
-   Sort Key: (count())
+   Sort Key: (count(*))
    ->  Finalize Aggregate
          ->  Gather Motion 3:1  (slice1; segments: 3)
                ->  Partial Aggregate

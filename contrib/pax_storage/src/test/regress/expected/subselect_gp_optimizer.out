@@ -613,7 +613,7 @@ explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1
 ---------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=17)
    ->  Result  (cost=0.00..862.00 rows=1 width=17)
-         Filter: (1 = COALESCE((count()), '0'::bigint))
+         Filter: (1 = COALESCE((count(*)), '0'::bigint))
          ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=25)
                Hash Cond: (t0.t = t1.t)
                ->  Seq Scan on csq_pullup t0  (cost=0.00..431.00 rows=1 width=17)
@@ -642,7 +642,7 @@ explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1
 ------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=17)
    ->  Result  (cost=0.00..862.00 rows=1 width=17)
-         Filter: (1 = COALESCE((count()), '0'::bigint))
+         Filter: (1 = COALESCE((count(*)), '0'::bigint))
          ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=25)
                Hash Cond: (t0.t = (t1.v)::text)
                ->  Seq Scan on csq_pullup t0  (cost=0.00..431.00 rows=1 width=17)
@@ -672,7 +672,7 @@ explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1
                                                        QUERY PLAN                                                       
 ------------------------------------------------------------------------------------------------------------------------
  Result  (cost=0.00..862.00 rows=1 width=17)
-   Filter: (1 = COALESCE((count()), '0'::bigint))
+   Filter: (1 = COALESCE((count(*)), '0'::bigint))
    ->  Hash Left Join  (cost=0.00..862.00 rows=2 width=25)
          Hash Cond: (t0.n = t1.n)
          ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=17)
@@ -789,13 +789,13 @@ explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1
 ---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=17)
    ->  Result  (cost=0.00..862.00 rows=1 width=17)
-         Filter: (1 = COALESCE((count()), '0'::bigint))
+         Filter: (1 = COALESCE((count(*)), '0'::bigint))
          ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=25)
                Hash Cond: (t0.t = t1.t)
                ->  Seq Scan on csq_pullup t0  (cost=0.00..431.00 rows=1 width=17)
                ->  Hash  (cost=431.00..431.00 rows=1 width=12)
                      ->  Result  (cost=0.00..431.00 rows=1 width=12)
-                           Filter: ((count()) < 10)
+                           Filter: ((count(*)) < 10)
                            ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=20)
                                  Group Key: t1.t
                                  ->  Sort  (cost=0.00..431.00 rows=1 width=4)

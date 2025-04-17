@@ -76,13 +76,16 @@ private:
 
 	ULongPtrArray *m_argtypes;
 
+	// is agg(*)
+	BOOL m_is_aggstar;
+
 public:
 	CDXLScalarAggref(const CDXLScalarAggref &) = delete;
 
 	// ctor/dtor
 	CDXLScalarAggref(CMemoryPool *mp, IMDId *agg_mdid, IMDId *resolved_rettype,
 					 BOOL is_distinct, EdxlAggrefStage agg_stage,
-					 EdxlAggrefKind aggkind, ULongPtrArray *argtypes);
+					 EdxlAggrefKind aggkind, ULongPtrArray *argtypes, BOOL isAggStar);
 
 	~CDXLScalarAggref() override;
 
@@ -101,7 +104,14 @@ public:
 
 	const CWStringConst *GetDXLStrAggKind() const;
 
-	BOOL IsDistinct() const;
+	BOOL IsDistinct() const {
+		return m_is_distinct;
+	}
+
+	BOOL IsAggStar() const
+	{
+		return m_is_aggstar;
+	}
 
 	EdxlAggrefKind
 	GetAggKind() const

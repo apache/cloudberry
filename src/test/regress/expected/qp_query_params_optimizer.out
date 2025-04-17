@@ -237,9 +237,9 @@ explain (verbose, costs off) execute q1(4,1);
                     QUERY PLAN                    
 --------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: (((count() + $1) + $2))
+   Output: (((count(*) + $1) + $2))
    ->  GroupAggregate
-         Output: ((count() + $1) + $2)
+         Output: ((count(*) + $1) + $2)
          Group Key: t1.a
          ->  Sort
                Output: a
@@ -265,9 +265,9 @@ explain (verbose, costs off) execute q1(3,2);
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: (((count() + $1) + $2))
+   Output: (((count(*) + $1) + $2))
    ->  GroupAggregate
-         Output: ((count() + $1) + $2)
+         Output: ((count(*) + $1) + $2)
          Group Key: ((t1.a + $2))
          ->  Sort
                Output: ((a + $2))
@@ -299,9 +299,9 @@ explain (verbose, costs off) execute q1(4,0);
    Output: (((sum(b)) + $1))
    ->  Result
          Output: ((sum(b)) + $1)
-         Filter: ((count()) > $2)
+         Filter: ((count(*)) > $2)
          ->  GroupAggregate
-               Output: sum(b), count(), b
+               Output: sum(b), count(*), b
                Group Key: t1.b
                ->  Sort
                      Output: b

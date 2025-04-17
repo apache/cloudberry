@@ -88,11 +88,11 @@ LOG:  statement: SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2
 LOG:  duration: 180.126 ms  plan:
 Query Text: SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2;
 Finalize Aggregate  (cost=0.00..1326086.34 rows=1 width=8) (actual rows=1 loops=1)
-  Output: count()
+  Output: count(*)
   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1326086.34 rows=1 width=8) (actual rows=3 loops=1)
-        Output: (PARTIAL count())
+        Output: (PARTIAL count(*))
         ->  Partial Aggregate  (cost=0.00..1326086.34 rows=1 width=8) (actual rows=1 loops=1)
-              Output: PARTIAL count()
+              Output: PARTIAL count(*)
               ->  Nested Loop  (cost=0.00..1326086.34 rows=334001 width=1) (actual rows=340340 loops=1)
                     Join Filter: true
                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=1001 width=1) (actual rows=1001 loops=1)

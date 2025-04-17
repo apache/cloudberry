@@ -1425,7 +1425,8 @@ CTranslatorScalarToDXL::TranslateAggrefToDXL(
 {
 	GPOS_ASSERT(IsA(expr, Aggref));
 	const Aggref *aggref = (Aggref *) expr;
-	BOOL is_distinct = false;
+	BOOL is_distinct;
+	BOOL is_agg_star;
 
 	if (aggref->aggorder != NIL && GPOS_FTRACE(EopttraceDisableOrderedAgg))
 	{
@@ -1435,10 +1436,8 @@ CTranslatorScalarToDXL::TranslateAggrefToDXL(
 				"Ordered aggregates disabled. Enable by setting optimizer_enable_orderedagg=on"));
 	}
 
-	if (aggref->aggdistinct)
-	{
-		is_distinct = true;
-	}
+	is_distinct = aggref->aggdistinct;
+	is_agg_star = aggref->aggstar;
 
 	/*
 	 * We shouldn't see any partial aggregates in the parse tree, they're produced
@@ -1486,7 +1485,7 @@ CTranslatorScalarToDXL::TranslateAggrefToDXL(
 
 	CDXLScalarAggref *aggref_scalar = GPOS_NEW(m_mp) CDXLScalarAggref(
 		m_mp, agg_mdid, resolved_ret_type, is_distinct, agg_stage,
-		CTranslatorUtils::GetAggKind(aggref->aggkind), aggargtypes_values);
+		CTranslatorUtils::GetAggKind(aggref->aggkind), aggargtypes_values, is_agg_star);
 
 	// create the DXL node holding the scalar aggref
 	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, aggref_scalar);

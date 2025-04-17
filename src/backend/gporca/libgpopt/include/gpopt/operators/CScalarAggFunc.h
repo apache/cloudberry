@@ -89,6 +89,9 @@ private:
 	// is aggregate replicate slice execution safe
 	BOOL m_fRepSafe;
 
+	// is agg(*)
+	BOOL m_is_agg_star;
+
 public:
 	CScalarAggFunc(const CScalarAggFunc &) = delete;
 
@@ -97,7 +100,7 @@ public:
 				   IMDId *resolved_rettype, const CWStringConst *pstrAggFunc,
 				   BOOL is_distinct, EAggfuncStage eaggfuncstage, BOOL fSplit,
 				   EAggfuncKind aggkind, ULongPtrArray *argtypes,
-				   BOOL fRepSafe);
+				   BOOL fRepSafe, BOOL m_is_agg_star);
 
 	// dtor
 	~CScalarAggFunc() override
@@ -170,6 +173,12 @@ public:
 	IsDistinct() const
 	{
 		return m_is_distinct;
+	}
+
+	BOOL
+	IsAggStar() const
+	{
+		return m_is_agg_star;
 	}
 
 	void
