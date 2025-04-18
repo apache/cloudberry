@@ -35,8 +35,8 @@
 
 namespace pax {
 
-OrcFormatReader::OrcFormatReader(std::shared_ptr<File> file,
-                                 std::shared_ptr<File> toast_file)
+OrcFormatReader::OrcFormatReader(std::unique_ptr<File> file,
+                                 std::unique_ptr<File> toast_file)
     : file_(std::move(file)),
       toast_file_(std::move(toast_file)),
       reused_buffer_(nullptr),
