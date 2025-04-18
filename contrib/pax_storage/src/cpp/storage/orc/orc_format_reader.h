@@ -38,7 +38,7 @@ class OrcDumpReader;
 }
 class OrcFormatReader final {
  public:
-  explicit OrcFormatReader(std::shared_ptr<File> file, std::shared_ptr<File> toast_file = nullptr);
+  explicit OrcFormatReader(std::unique_ptr<File> file, std::unique_ptr<File> toast_file = nullptr);
 
   ~OrcFormatReader();
 
@@ -78,8 +78,8 @@ class OrcFormatReader final {
   friend class OrcGroupStatsProvider;
   std::vector<pax::porc::proto::Type_Kind> column_types_;
   std::vector<std::map<std::string, std::string>> column_attrs_;
-  std::shared_ptr<File> file_;
-  std::shared_ptr<File> toast_file_;
+  std::unique_ptr<File> file_;
+  std::unique_ptr<File> toast_file_;
   std::shared_ptr<DataBuffer<char>> reused_buffer_;
   size_t num_of_stripes_;
   bool is_vec_;

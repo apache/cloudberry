@@ -72,8 +72,8 @@ TEST_F(MicroPartitionFileFactoryTest, CreateMicroPartitionWriter) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<std::tuple<ColumnEncoding_Kind, int>> types_encoding;
   types_encoding.emplace_back(
@@ -88,7 +88,7 @@ TEST_F(MicroPartitionFileFactoryTest, CreateMicroPartitionWriter) {
   writer_options.encoding_opts = types_encoding;
 
   auto writer = MicroPartitionFileFactory::CreateMicroPartitionWriter(
-      writer_options, file_ptr);
+      writer_options, std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->Close();
@@ -101,8 +101,8 @@ TEST_F(MicroPartitionFileFactoryTest, CreateMicroPartitionReader) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<std::tuple<ColumnEncoding_Kind, int>> types_encoding;
   types_encoding.emplace_back(
@@ -117,7 +117,7 @@ TEST_F(MicroPartitionFileFactoryTest, CreateMicroPartitionReader) {
   writer_options.encoding_opts = types_encoding;
 
   auto writer = MicroPartitionFileFactory::CreateMicroPartitionWriter(
-      writer_options, file_ptr);
+      writer_options, std::move(file_ptr));
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
 
   writer->WriteTuple(tuple_slot);
@@ -130,7 +130,7 @@ TEST_F(MicroPartitionFileFactoryTest, CreateMicroPartitionReader) {
   int32 flags = FLAGS_EMPTY;
 
   auto reader = MicroPartitionFileFactory::CreateMicroPartitionReader(
-      reader_options, flags, file_ptr);
+      reader_options, flags, std::move(file_ptr));
   reader->ReadTuple(tuple_slot_empty);
   EXPECT_TRUE(VerifyTestTupleTableSlot(tuple_slot_empty));
 
@@ -145,8 +145,8 @@ TEST_F(MicroPartitionFileFactoryTest, OrcReadWithVisibilitymap) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<std::tuple<ColumnEncoding_Kind, int>> types_encoding;
   types_encoding.emplace_back(
@@ -161,7 +161,7 @@ TEST_F(MicroPartitionFileFactoryTest, OrcReadWithVisibilitymap) {
   writer_options.encoding_opts = types_encoding;
 
   auto writer = MicroPartitionFileFactory::CreateMicroPartitionWriter(
-      writer_options, file_ptr);
+      writer_options, std::move(file_ptr));
 
   int tuple_count = 1000;
   for (int i = 0; i < tuple_count; i++) {
@@ -186,7 +186,7 @@ TEST_F(MicroPartitionFileFactoryTest, OrcReadWithVisibilitymap) {
 
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot();
   auto reader = MicroPartitionFileFactory::CreateMicroPartitionReader(
-      reader_options, flags, file_ptr);
+      reader_options, flags, std::move(file_ptr));
 
   int read_tuple_count = 0;
   while (reader->ReadTuple(tuple_slot_empty)) {
@@ -210,8 +210,8 @@ TEST_F(MicroPartitionFileFactoryTest, VecReadWithVisibilitymap) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<std::tuple<ColumnEncoding_Kind, int>> types_encoding;
   types_encoding.emplace_back(
@@ -226,7 +226,7 @@ TEST_F(MicroPartitionFileFactoryTest, VecReadWithVisibilitymap) {
   writer_options.encoding_opts = types_encoding;
 
   auto writer = MicroPartitionFileFactory::CreateMicroPartitionWriter(
-      writer_options, file_ptr);
+      writer_options, std::move(file_ptr));
 
   int tuple_count = 1000;
   for (int i = 0; i < tuple_count; i++) {
@@ -264,7 +264,7 @@ TEST_F(MicroPartitionFileFactoryTest, VecReadWithVisibilitymap) {
       CreateVecEmptyTupleSlot(tuple_slot->tts_tupleDescriptor);
 
   auto reader = MicroPartitionFileFactory::CreateMicroPartitionReader(
-      reader_options, flags, file_ptr);
+      reader_options, flags, std::move(file_ptr));
 
   auto ret = reader->ReadTuple(read_tuple_slot);
   ASSERT_TRUE(ret);

@@ -52,13 +52,13 @@ class MicroPartitionFileFactory final {
  public:
   static std::unique_ptr<MicroPartitionWriter> CreateMicroPartitionWriter(
       const MicroPartitionWriter::WriterOptions &options,
-      std::shared_ptr<File> file,
-      std::shared_ptr<File> toast_file = nullptr);
+      std::unique_ptr<File> file,
+      std::unique_ptr<File> toast_file = nullptr);
 
   static std::unique_ptr<MicroPartitionReader> CreateMicroPartitionReader(
       const MicroPartitionReader::ReaderOptions &options, int32 flags,
-      std::shared_ptr<File> file,
-      std::shared_ptr<File> toast_file = nullptr);
+      std::unique_ptr<File> file,
+      std::unique_ptr<File> toast_file = nullptr);
 };
 
 }  // namespace pax

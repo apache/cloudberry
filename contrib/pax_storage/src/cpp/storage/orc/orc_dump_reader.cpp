@@ -91,8 +91,8 @@ OrcDumpReader::OrcDumpReader(DumpConfig *config)
 bool OrcDumpReader::Open() {
   FileSystem *fs = nullptr;
   std::shared_ptr<FileSystemOptions> fs_opt;
-  std::shared_ptr<File> open_file;
-  std::shared_ptr<File> open_toast_file;
+  std::unique_ptr<File> open_file;
+  std::unique_ptr<File> open_toast_file;
 
   assert(config_);
   assert(config_->file_name);
@@ -111,7 +111,7 @@ bool OrcDumpReader::Open() {
     }
   }
 
-  format_reader_ = new OrcFormatReader(open_file, open_toast_file);
+  format_reader_ = new OrcFormatReader(std::move(open_file), std::move(open_toast_file));
   format_reader_->Open();
 
   return true;
