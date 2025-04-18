@@ -1,6 +1,7 @@
 #include "Config.h"
 #include "UDSConnector.h"
 
+#define typeid __typeid
 extern "C" {
 #include "postgres.h"
 
@@ -11,7 +12,9 @@ extern "C" {
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
+#include "cdb/ml_ipc.h"
 }
+#undef typeid
 
 #include "EventSender.h"
 #include "PgUtils.h"
@@ -35,7 +38,7 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
     // no-op: executor_after_start is enough
     break;
   case METRICS_QUERY_CANCELING:
-    // it appears we're unly interested in the actual CANCELED event.
+    // it appears we're only interested in the actual CANCELED event.
     // for now we will ignore CANCELING state unless otherwise requested from
     // end users
     break;
@@ -150,6 +153,12 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     // take initial metrics snapshot so that we can safely take diff afterwards
     // in END or DONE events.
     set_gp_metrics(query_msg->mutable_query_metrics(), query_desc, 0, 0);
+#ifdef IC_TEARDOWN_HOOK
+    // same for interconnect statistics
+    ic_metrics_collect();
+    set_ic_stats(query_msg->mutable_query_metrics()->mutable_instrumentation(),
+                 &ic_statistics);
+#endif
   }
 }
 
@@ -203,6 +212,12 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
           set_gp_metrics(query_msg->mutable_query_metrics(), query_desc,
                          nested_calls, nested_timing);
         }
+#ifdef IC_TEARDOWN_HOOK
+        ic_metrics_collect();
+        set_ic_stats(
+            query_msg->mutable_query_metrics()->mutable_instrumentation(),
+            &ic_statistics);
+#endif
         connector->report_query(*query_msg, msg);
       }
       update_nested_counters(query_desc);
@@ -213,6 +228,39 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
   }
 }
 
+void EventSender::ic_metrics_collect() {
+#ifdef IC_TEARDOWN_HOOK
+  if (Gp_interconnect_type != INTERCONNECT_TYPE_UDPIFC) {
+    return;
+  }
+  if (!connector || gp_command_count == 0 || !Config::enable_collector() ||
+      Config::filter_user(get_user_name())) {
+    return;
+  }
+  // we also would like to know nesting level here and filter queries BUT we
+  // don't have this kind of information from this callback. Will have to
+  // collect stats anyways and throw it away later, if necessary
+  auto metrics = UDPIFCGetICStats();
+  ic_statistics.totalRecvQueueSize += metrics.totalRecvQueueSize;
+  ic_statistics.recvQueueSizeCountingTime += metrics.recvQueueSizeCountingTime;
+  ic_statistics.totalCapacity += metrics.totalCapacity;
+  ic_statistics.capacityCountingTime += metrics.capacityCountingTime;
+  ic_statistics.totalBuffers += metrics.totalBuffers;
+  ic_statistics.bufferCountingTime += metrics.bufferCountingTime;
+  ic_statistics.activeConnectionsNum += metrics.activeConnectionsNum;
+  ic_statistics.retransmits += metrics.retransmits;
+  ic_statistics.startupCachedPktNum += metrics.startupCachedPktNum;
+  ic_statistics.mismatchNum += metrics.mismatchNum;
+  ic_statistics.crcErrors += metrics.crcErrors;
+  ic_statistics.sndPktNum += metrics.sndPktNum;
+  ic_statistics.recvPktNum += metrics.recvPktNum;
+  ic_statistics.disorderedPktNum += metrics.disorderedPktNum;
+  ic_statistics.duplicatedPktNum += metrics.duplicatedPktNum;
+  ic_statistics.recvAckNum += metrics.recvAckNum;
+  ic_statistics.statusQueryMsgNum += metrics.statusQueryMsgNum;
+#endif
+}
+
 EventSender::EventSender() {
   if (Config::enable_collector() && !Config::filter_user(get_user_name())) {
     try {
@@ -221,6 +269,9 @@ EventSender::EventSender() {
       ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
     }
   }
+#ifdef IC_TEARDOWN_HOOK
+  memset(&ic_statistics, 0, sizeof(ICStatistics));
+#endif
 }
 
 EventSender::~EventSender() {

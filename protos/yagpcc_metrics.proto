@@ -42,6 +42,11 @@ message AdditionalQueryInfo {
     int64 slice_id                        = 3;
 }
 
+message AdditionalQueryStat {
+    string error_message                  = 1;
+    repeated int64 slices                 = 2;
+}
+
 enum PlanGenerator
 {
     PLAN_GENERATOR_UNSPECIFIED = 0;
@@ -96,6 +101,56 @@ message NetworkStat {
     uint32 chunks = 3;
 }
 
+message InterconnectStat {
+    // Receive queue size sum when main thread is trying to get a packet
+    uint64 total_recv_queue_size = 1;
+    // Counting times when computing total_recv_queue_size
+    uint64 recv_queue_size_counting_time = 2;
+
+    // The capacity sum when packets are tried to be sent
+    uint64 total_capacity = 3;
+    // Counting times used to compute total_capacity
+    uint64 capacity_counting_time = 4;
+
+    // Total buffers available when sending packets
+    uint64 total_buffers = 5;
+    // Counting times when compute total_buffers
+    uint64 buffer_counting_time = 6;
+
+    // The number of active connections
+    uint64 active_connections_num = 7;
+
+    // The number of packet retransmits
+    int64 retransmits = 8;
+
+    // The number of cached future packets
+    int64 startup_cached_pkt_num = 9;
+
+    // The number of mismatched packets received
+    int64 mismatch_num = 10;
+
+    // The number of crc errors
+    int64 crc_errors = 11;
+
+    // The number of packets sent by sender
+    int64 snd_pkt_num = 12;
+
+    // The number of packets received by receiver
+    int64 recv_pkt_num = 13;
+
+    // Disordered packet number
+    int64 disordered_pkt_num = 14;
+
+    // Duplicate packet number
+    int64 duplicated_pkt_num = 15;
+
+    // The number of Acks received
+    int64 recv_ack_num = 16;
+
+    // The number of status query messages sent
+    int64 status_query_msg_num = 17;
+}
+
 message MetricInstrumentation {
     uint64  ntuples     = 1;    /* Total tuples produced */
     uint64  nloops      = 2;    /* # of run cycles for this node */
@@ -120,6 +175,7 @@ message MetricInstrumentation {
     double  startup_time       = 21; /* real query startup time (planning + queue time) */
     uint64  inherited_calls    = 22; /* the number of executed sub-queries */
     double  inherited_time     = 23; /* total time spend on inherited execution */
+    InterconnectStat interconnect = 24;
 }
 
 message SpillInfo {
