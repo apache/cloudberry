@@ -2059,7 +2059,8 @@ CXformUtils::PexprWindowWithRowNumber(CMemoryPool *mp,
 		CExpression(mp, GPOS_NEW(mp) CScalarProjectList(mp), pexprProjElem);
 
 	CLogicalSequenceProject *popLgSequence =
-		GPOS_NEW(mp) CLogicalSequenceProject(mp, pds, pdrgpos, pdrgpwf);
+		GPOS_NEW(mp) CLogicalSequenceProject(
+			mp, COperator::ESPType::EsptypeGlobalOneStep, pds, pdrgpos, pdrgpwf);
 
 	pexprWindowChild->AddRef();
 	CExpression *pexprLgSequence = GPOS_NEW(mp)

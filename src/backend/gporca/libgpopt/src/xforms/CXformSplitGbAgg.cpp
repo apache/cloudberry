@@ -136,11 +136,11 @@ CXformSplitGbAgg::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 	CColRefArray *colref_array = popAgg->Pdrgpcr();
 
-	colref_array->AddRef();
 	CColRefArray *pdrgpcrLocal = colref_array;
-
 	colref_array->AddRef();
+
 	CColRefArray *pdrgpcrGlobal = colref_array;
+	colref_array->AddRef();
 
 	CColRefArray *pdrgpcrMinimal = popAgg->PdrgpcrMinimal();
 	if (nullptr != pdrgpcrMinimal)

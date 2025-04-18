@@ -442,6 +442,7 @@
 		"optimizer_extract_dxl_stats",
 		"optimizer_extract_dxl_stats_all_nodes",
 		"optimizer_force_agg_skew_avoidance",
+		"optimizer_force_split_window_function",
 		"optimizer_force_comprehensive_join_implementation",
 		"optimizer_force_expanded_distinct_aggs",
 		"optimizer_force_multistage_agg",

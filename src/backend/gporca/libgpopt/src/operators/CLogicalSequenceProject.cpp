@@ -32,10 +32,12 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CLogicalSequenceProject::CLogicalSequenceProject(CMemoryPool *mp,
+												 COperator::ESPType sptype,
 												 CDistributionSpec *pds,
 												 COrderSpecArray *pdrgpos,
 												 CWindowFrameArray *pdrgpwf)
 	: CLogicalUnary(mp),
+	  m_sptype(sptype),
 	  m_pds(pds),
 	  m_pdrgpos(pdrgpos),
 	  m_pdrgpwf(pdrgpwf),
@@ -86,6 +88,7 @@ CLogicalSequenceProject::CLogicalSequenceProject(CMemoryPool *mp,
 //---------------------------------------------------------------------------
 CLogicalSequenceProject::CLogicalSequenceProject(CMemoryPool *mp)
 	: CLogicalUnary(mp),
+	  m_sptype(COperator::ESPType::EsptypeSentinel),
 	  m_pds(nullptr),
 	  m_pdrgpos(nullptr),
 	  m_pdrgpwf(nullptr),
@@ -146,7 +149,8 @@ CLogicalSequenceProject::PopCopyWithRemappedColumns(
 		pdrgpwf->Append(pwf);
 	}
 
-	return GPOS_NEW(mp) CLogicalSequenceProject(mp, pds, pdrgpos, pdrgpwf);
+	return GPOS_NEW(mp)
+		CLogicalSequenceProject(mp, m_sptype, pds, pdrgpos, pdrgpwf);
 }
 
 
@@ -317,7 +321,8 @@ CLogicalSequenceProject::Matches(COperator *pop) const
 	{
 		CLogicalSequenceProject *popLogicalSequenceProject =
 			CLogicalSequenceProject::PopConvert(pop);
-		return m_pds->Matches(popLogicalSequenceProject->Pds()) &&
+		return m_sptype == popLogicalSequenceProject->Pspt() &&
+			   m_pds->Matches(popLogicalSequenceProject->Pds()) &&
 			   CWindowFrame::Equals(m_pdrgpwf,
 									popLogicalSequenceProject->Pdrgpwf()) &&
 			   COrderSpec::Equals(m_pdrgpos,
@@ -388,6 +393,39 @@ CLogicalSequenceProject::PstatsDerive(CMemoryPool *mp,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CLogicalSequenceProject::OsPrintWindoType
+//
+//	@doc:
+//		Helper function to print window type
+//
+//---------------------------------------------------------------------------
+IOstream &
+CLogicalSequenceProject::OsPrintWindowType(IOstream &os,
+										   COperator::ESPType wintype)
+{
+	switch (wintype)
+	{
+		case COperator::EsptypeGlobalTwoStep:
+			os << "Global(two-step)";
+			break;
+		
+		case COperator::EsptypeGlobalOneStep:
+			os << "Global(one-step)";
+			break;
+
+		case COperator::EsptypeLocal:
+			os << "Local";
+			break;
+
+		default:
+			GPOS_ASSERT(!"Unsupported window type");
+	}
+	return os;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CLogicalSequenceProject::OsPrint
 //
 //	@doc:
@@ -398,6 +436,8 @@ IOstream &
 CLogicalSequenceProject::OsPrint(IOstream &os) const
 {
 	os << SzId() << " (";
+	OsPrintWindowType(os, m_sptype);
+	os << ") (";
 	os << "Partition By Keys:";
 	(void) m_pds->OsPrint(os);
 	os << ", ";
@@ -452,7 +492,8 @@ CLogicalSequenceProject::PopRemoveLocalOuterRefs(CMemoryPool *mp,
 	// we re-use the frame edges without changing here
 	m_pdrgpwf->AddRef();
 
-	return GPOS_NEW(mp) CLogicalSequenceProject(mp, pds, pdrgpos, m_pdrgpwf);
+	return GPOS_NEW(mp)
+		CLogicalSequenceProject(mp, m_sptype, pds, pdrgpos, m_pdrgpwf);
 }
 
 // EOF

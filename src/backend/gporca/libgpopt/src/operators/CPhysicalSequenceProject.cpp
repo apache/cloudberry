@@ -22,6 +22,7 @@
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/cost/ICostModel.h"
 #include "gpopt/operators/CExpressionHandle.h"
+#include "gpopt/operators/CLogicalSequenceProject.h"
 #include "gpopt/operators/CScalarIdent.h"
 
 using namespace gpopt;
@@ -35,10 +36,12 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CPhysicalSequenceProject::CPhysicalSequenceProject(CMemoryPool *mp,
+												   ESPType sptype,
 												   CDistributionSpec *pds,
 												   COrderSpecArray *pdrgpos,
 												   CWindowFrameArray *pdrgpwf)
 	: CPhysical(mp),
+	  m_sptype(sptype),
 	  m_pds(pds),
 	  m_pdrgpos(pdrgpos),
 	  m_pdrgpwf(pdrgpwf),
@@ -209,7 +212,8 @@ CPhysicalSequenceProject::Matches(COperator *pop) const
 	{
 		CPhysicalSequenceProject *popPhysicalSequenceProject =
 			CPhysicalSequenceProject::PopConvert(pop);
-		return m_pds->Matches(popPhysicalSequenceProject->Pds()) &&
+		return m_sptype == popPhysicalSequenceProject->Pspt() &&
+			   m_pds->Matches(popPhysicalSequenceProject->Pds()) &&
 			   CWindowFrame::Equals(m_pdrgpwf,
 									popPhysicalSequenceProject->Pdrgpwf()) &&
 			   COrderSpec::Equals(m_pdrgpos,
@@ -326,6 +330,11 @@ CPhysicalSequenceProject::PdsRequired(CMemoryPool *mp,
 	if (exprhdl.NeedsSingletonExecution())
 	{
 		return PdsRequireSingleton(mp, exprhdl, pdsRequired, child_index);
+	}
+
+	if (m_sptype == COperator::EsptypeLocal)
+	{
+		return GPOS_NEW(mp) CDistributionSpecAny(this->Eopid());
 	}
 
 	// if there are outer references, then we need a broadcast (or a gather)
@@ -553,6 +562,8 @@ IOstream &
 CPhysicalSequenceProject::OsPrint(IOstream &os) const
 {
 	os << SzId() << " (";
+	CLogicalSequenceProject::OsPrintWindowType(os, m_sptype);
+	os << ") (";
 	(void) m_pds->OsPrint(os);
 	os << ", ";
 	(void) COrderSpec::OsPrint(os, m_pdrgpos);
