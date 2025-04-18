@@ -97,7 +97,7 @@ TEST_F(OrcVecTest, WriteReadGroup) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
   EXPECT_NE(nullptr, file_ptr);
 
   std::vector<pax::porc::proto::Type_Kind> types;
@@ -240,7 +240,7 @@ TEST_F(OrcVecTest, WriteReadGroupWithEncoding) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
   EXPECT_NE(nullptr, file_ptr);
 
   std::vector<pax::porc::proto::Type_Kind> types;
