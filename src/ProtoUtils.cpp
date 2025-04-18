@@ -10,6 +10,10 @@ extern "C" {
 #include "access/hash.h"
 #include "cdb/cdbinterconnect.h"
 #include "cdb/cdbvars.h"
+#include "cdb/ml_ipc.h"
+#ifdef IC_TEARDOWN_HOOK
+#include "cdb/ic_udpifc.h"
+#endif
 #include "gpmon/gpmon.h"
 #include "utils/workfile_mgr.h"
 
@@ -169,6 +173,37 @@ void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
       WorkfileTotalFilesCreated() - metrics->mutable_spill()->filecount());
   metrics->mutable_spill()->set_totalbytes(
       WorkfileTotalBytesWritten() - metrics->mutable_spill()->totalbytes());
+}
+
+#define UPDATE_IC_STATS(proto_name, stat_name)                                 \
+  metrics->mutable_interconnect()->set_##proto_name(                           \
+      ic_statistics->stat_name -                                               \
+      metrics->mutable_interconnect()->proto_name());                          \
+  Assert(metrics->mutable_interconnect()->proto_name() >= 0 &&                 \
+         metrics->mutable_interconnect()->proto_name() <=                      \
+             ic_statistics->stat_name)
+
+void set_ic_stats(yagpcc::MetricInstrumentation *metrics,
+                  const ICStatistics *ic_statistics) {
+#ifdef IC_TEARDOWN_HOOK
+  UPDATE_IC_STATS(total_recv_queue_size, totalRecvQueueSize);
+  UPDATE_IC_STATS(recv_queue_size_counting_time, recvQueueSizeCountingTime);
+  UPDATE_IC_STATS(total_capacity, totalCapacity);
+  UPDATE_IC_STATS(capacity_counting_time, capacityCountingTime);
+  UPDATE_IC_STATS(total_buffers, totalBuffers);
+  UPDATE_IC_STATS(buffer_counting_time, bufferCountingTime);
+  UPDATE_IC_STATS(active_connections_num, activeConnectionsNum);
+  UPDATE_IC_STATS(retransmits, retransmits);
+  UPDATE_IC_STATS(startup_cached_pkt_num, startupCachedPktNum);
+  UPDATE_IC_STATS(mismatch_num, mismatchNum);
+  UPDATE_IC_STATS(crc_errors, crcErrors);
+  UPDATE_IC_STATS(snd_pkt_num, sndPktNum);
+  UPDATE_IC_STATS(recv_pkt_num, recvPktNum);
+  UPDATE_IC_STATS(disordered_pkt_num, disorderedPktNum);
+  UPDATE_IC_STATS(duplicated_pkt_num, duplicatedPktNum);
+  UPDATE_IC_STATS(recv_ack_num, recvAckNum);
+  UPDATE_IC_STATS(status_query_msg_num, statusQueryMsgNum);
+#endif
 }
 
 yagpcc::SetQueryReq create_query_req(yagpcc::QueryStatus status) {
