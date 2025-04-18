@@ -102,12 +102,12 @@ class OrcGroupStatsProvider final : public ColumnStatsProvider {
   size_t group_index_;
 };
 
-OrcReader::OrcReader(std::shared_ptr<File> file,
-                     std::shared_ptr<File> toast_file)
+OrcReader::OrcReader(std::unique_ptr<File> file,
+                     std::unique_ptr<File> toast_file)
     : working_group_(nullptr),
       cached_group_(nullptr),
       current_group_index_(0),
-      format_reader_(file, toast_file),
+      format_reader_(std::move(file), std::move(toast_file)),
       is_closed_(true) {}
 
 std::unique_ptr<ColumnStatsProvider> OrcReader::GetGroupStatsInfo(
