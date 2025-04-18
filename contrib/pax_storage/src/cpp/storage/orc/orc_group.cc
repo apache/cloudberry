@@ -64,7 +64,7 @@ inline static std::pair<Datum, bool> GetColumnDatum(PaxColumn *column,
   return {rc, false};
 }
 
-OrcGroup::OrcGroup(std::unique_ptr<PaxColumns> &&pax_column, size_t row_offset,
+OrcGroup::OrcGroup(std::unique_ptr<PaxColumns> pax_column, size_t row_offset,
                    const std::vector<int> *proj_col_index,
                    std::shared_ptr<Bitmap8> micro_partition_visibility_bitmap)
     : pax_columns_(std::move(pax_column)),
@@ -88,7 +88,7 @@ size_t OrcGroup::GetRows() const { return pax_columns_->GetRows(); }
 
 size_t OrcGroup::GetRowOffset() const { return row_offset_; }
 
-const std::shared_ptr<PaxColumns> &OrcGroup::GetAllColumns() const {
+const std::unique_ptr<PaxColumns> &OrcGroup::GetAllColumns() const {
   return pax_columns_;
 }
 
