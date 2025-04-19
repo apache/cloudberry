@@ -278,6 +278,7 @@ int			gp_hashjoin_tuples_per_bucket = 5;
 int			gp_motion_slice_noop = 0;
 
 /* Apache Cloudberry Experimental Feature GUCs */
+bool		gp_enable_explain_rows_out = false;
 bool		gp_enable_explain_allstat = false;
 bool		gp_enable_motion_deadlock_sanity = false;	/* planning time sanity
 														 * check */
