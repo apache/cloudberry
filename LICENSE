@@ -213,6 +213,12 @@ The PostgreSQL software includes:
       src/bin/pg_controldata/pg_controldata.c
       copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
 
+      gpMgmt/bin/pythonSrc/ext/behave-1.2.6.tar.gz
+      see licenses/LICENSE-bsd2-behave.txt
+
+      gpMgmt/bin/pythonSrc/ext/mock-1.0.1.tar.gz
+      see licenses/LICENSE-bsd2-mock.txt
+
 ----------------------------
    BSD-4-Clause (University of California-Specific)
       
@@ -238,6 +244,21 @@ The PostgreSQL software includes:
       
       src/backend/libpq/sha2.h
       see licenses/LICENSE-bsd3-sha2.txt
+
+      gpMgmt/bin/pythonSrc/ext/psutil-5.7.0.tar.gz
+      see licenses/LICENSE-bsd3-psutil.txt
+
+----------------------------
+    MIT LICENSE
+
+      gpMgmt/bin/pythonSrc/ext/PyYAML-5.3.1.tar.gz
+      see licenses/LICENSE-pyyaml.txt
+
+      gpMgmt/bin/pythonSrc/ext/setuptools-36.6.0.tar.gz
+      see licenses/LICENSE-setuptools.txt
+
+      gpMgmt/bin/pythonSrc/ext/parse-1.8.2.tar.gz
+      see licenses/LICENSE-parse.txt
 
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
