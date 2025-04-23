@@ -2927,7 +2927,8 @@ ExecInitWholeRowVar(ExprEvalStep *scratch, Var *variable, ExprState *state)
 				scratch->d.wholerow.junkFilter =
 					ExecInitJunkFilter(subplan->plan->targetlist,
 									   ExecInitExtraTupleSlot(parent->state, NULL,
-															  &TTSOpsVirtual));
+															  &TTSOpsVirtual),
+									   ExecFilterJunk);
 			}
 		}
 	}

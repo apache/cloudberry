@@ -4205,7 +4205,10 @@ ExecEvalWholeRowVar(ExprState *state, ExprEvalStep *op, ExprContext *econtext)
 
 	/* Apply the junkfilter if any */
 	if (op->d.wholerow.junkFilter != NULL)
-		slot = ExecFilterJunk(op->d.wholerow.junkFilter, slot);
+	{
+		JunkFilter *junkfilter = op->d.wholerow.junkFilter;
+		slot = junkfilter->jf_execFilterJunkFunc(junkfilter, slot);
+	}
 
 	/*
 	 * If first time through, obtain tuple descriptor and check compatibility.

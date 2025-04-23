@@ -175,10 +175,12 @@ extern void ResetTupleHashTable(TupleHashTable hashtable);
  * prototypes from functions in execJunk.c
  */
 extern JunkFilter *ExecInitJunkFilter(List *targetList,
-									  TupleTableSlot *slot);
+									  TupleTableSlot *slot,
+									  ExecFilterJunkFunc execFilterJunkFunc);
 extern JunkFilter *ExecInitJunkFilterConversion(List *targetList,
 												TupleDesc cleanTupType,
-												TupleTableSlot *slot);
+												TupleTableSlot *slot,
+												ExecFilterJunkFunc execFilterJunkFunc);
 extern AttrNumber ExecFindJunkAttribute(JunkFilter *junkfilter,
 										const char *attrName);
 extern AttrNumber ExecFindJunkAttributeInTlist(List *targetlist,

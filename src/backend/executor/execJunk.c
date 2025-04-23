@@ -55,9 +55,11 @@
  * The source targetlist is passed in.  The output tuple descriptor is
  * built from the non-junk tlist entries.
  * An optional resultSlot can be passed as well; otherwise, we create one.
+ * An optional execFilterJunkFunc can be passed as well; otherwise, we use ExecFilterJunk.
  */
 JunkFilter *
-ExecInitJunkFilter(List *targetList, TupleTableSlot *slot)
+ExecInitJunkFilter(List *targetList, TupleTableSlot *slot,
+				   ExecFilterJunkFunc execFilterJunkFunc)
 {
 	JunkFilter *junkfilter;
 	TupleDesc	cleanTupType;
@@ -119,6 +121,8 @@ ExecInitJunkFilter(List *targetList, TupleTableSlot *slot)
 	junkfilter->jf_cleanTupType = cleanTupType;
 	junkfilter->jf_cleanMap = cleanMap;
 	junkfilter->jf_resultSlot = slot;
+	junkfilter->jf_execFilterJunkFunc =
+		execFilterJunkFunc ? execFilterJunkFunc : ExecFilterJunk;
 
 	return junkfilter;
 }
@@ -136,7 +140,8 @@ ExecInitJunkFilter(List *targetList, TupleTableSlot *slot)
 JunkFilter *
 ExecInitJunkFilterConversion(List *targetList,
 							 TupleDesc cleanTupType,
-							 TupleTableSlot *slot)
+							 TupleTableSlot *slot,
+							 ExecFilterJunkFunc execFilterJunkFunc)
 {
 	JunkFilter *junkfilter;
 	int			cleanLength;
@@ -196,6 +201,8 @@ ExecInitJunkFilterConversion(List *targetList,
 	junkfilter->jf_cleanTupType = cleanTupType;
 	junkfilter->jf_cleanMap = cleanMap;
 	junkfilter->jf_resultSlot = slot;
+	junkfilter->jf_execFilterJunkFunc =
+		execFilterJunkFunc ? execFilterJunkFunc : ExecFilterJunk;
 
 	return junkfilter;
 }

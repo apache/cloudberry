@@ -374,8 +374,13 @@ typedef struct ProjectionInfo
  *						attribute numbers of the "original" tuple and the
  *						attribute numbers of the "clean" tuple.
  *	  resultSlot:		tuple slot used to hold cleaned tuple.
+ *	  execFilterJunk:	function pointer to the function that will be used
+ *						to filter the junk attributes from the input tuple.
  * ----------------
  */
+typedef struct JunkFilter JunkFilter;
+typedef TupleTableSlot* (*ExecFilterJunkFunc)(JunkFilter *junkfilter,
+											  TupleTableSlot *slot);
 typedef struct JunkFilter
 {
 	NodeTag		type;
@@ -383,6 +388,7 @@ typedef struct JunkFilter
 	TupleDesc	jf_cleanTupType;
 	AttrNumber *jf_cleanMap;
 	TupleTableSlot *jf_resultSlot;
+	ExecFilterJunkFunc jf_execFilterJunkFunc;
 } JunkFilter;
 
 /*
