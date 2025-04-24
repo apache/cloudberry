@@ -1,6 +1,10 @@
 -- TODO: incremental sort is turned off by default, because it may have
 -- wrong result for some core case. Turn it on to run the existing tests
 -- and minimize the difference from upstream.
+-- start_matchignore
+-- m/INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner/
+-- m/DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation/
+-- end_matchignore
 set enable_incremental_sort=on;
 
 --
