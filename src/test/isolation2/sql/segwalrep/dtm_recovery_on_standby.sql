@@ -39,6 +39,10 @@ select pg_ctl(datadir, 'promote') from gp_segment_configuration
 where content = -1 and role = 'm';
 
 !\retcode gpfts -A -D;
+
+-- wait some seconds until the promotion is done.
+!\retcode sleep 2;
+
 -- "-1S" means connect to standby's port assuming it's accepting
 -- connections.  This select should succeed because the create table
 -- transaction's commit prepared broadcast must have been sent by
