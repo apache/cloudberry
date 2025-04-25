@@ -113,7 +113,7 @@ a498 inet, a499 time, a500 text)
 SELECT count(i.indexrelid) = 1 AS VisimapPresent  FROM pg_appendonly a, pg_index i WHERE a.visimaprelid = i.indrelid AND
  a.relid='sto_uao_500cols'::regclass;
  visimappresent 
-------------
+----------------
  t
 (1 row)
 
