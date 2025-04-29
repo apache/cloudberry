@@ -51,7 +51,7 @@
 -1U: select pg_ctl((SELECT datadir from gp_segment_configuration c
   where c.role='p' and c.content=0), 'stop', 'immediate');
 1: select gp_request_fts_probe_scan();
-1: select role, preferred_role from gp_segment_configuration where content = 0;
+1: select role, preferred_role from gp_segment_configuration where content = 0 order by role;
 
 -- double confirm that promote succeeds.
 -- also double confirm that
@@ -77,7 +77,7 @@
 1: select wait_until_segment_synchronized(0);
 
 -- verify the first segment is recovered to the original state.
-1: select role, preferred_role from gp_segment_configuration where content = 0;
+1: select role, preferred_role from gp_segment_configuration where content = 0 order by role;
 
 -- cleanup
 1: drop table t_rename1;
