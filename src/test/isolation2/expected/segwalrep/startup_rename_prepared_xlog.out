@@ -85,7 +85,7 @@ GP_IGNORE:-- end_ignore
 ---------------------------
  t                         
 (1 row)
-1: select role, preferred_role from gp_segment_configuration where content = 0;
+1: select role, preferred_role from gp_segment_configuration where content = 0 order by role;
  role | preferred_role 
 ------+----------------
  m    | p              
@@ -149,7 +149,7 @@ INSERT 2
 (1 row)
 
 -- verify the first segment is recovered to the original state.
-1: select role, preferred_role from gp_segment_configuration where content = 0;
+1: select role, preferred_role from gp_segment_configuration where content = 0 order by role;
  role | preferred_role 
 ------+----------------
  m    | m              
