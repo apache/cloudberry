@@ -251,7 +251,7 @@ The PostgreSQL software includes:
 ----------------------------
     MIT LICENSE
 
-      gpMgmt/bin/pythonSrc/ext/PyYAML-5.3.1.tar.gz
+      gpMgmt/bin/pythonSrc/ext/PyYAML-5.4.1.tar.gz
       see licenses/LICENSE-pyyaml.txt
 
       gpMgmt/bin/pythonSrc/ext/setuptools-36.6.0.tar.gz
