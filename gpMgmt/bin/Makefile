@@ -119,12 +119,8 @@ pyyaml:
 	cp -r $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
 #
-# PYLINT
+# MOCK SETUP
 #
-
-PYLINT_VERSION=0.21.0
-PYLINT_DIR=pylint-$(PYLINT_VERSION)
-PYLINT_PYTHONPATH=$(PYLIB_DIR):$(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/
 MOCK_VERSION=1.0.1
 MOCK_DIR=mock-$(MOCK_VERSION)
 SETUP_TOOLS_VERSION=36.6.0
@@ -139,12 +135,6 @@ PYTHONSRC_INSTALL_PYTHON_PATH=$(PYTHONPATH):$(PYTHONSRC_INSTALL_SITE)
 MOCK_BIN=$(PYTHONSRC_INSTALL)/lib/python$(PYTHON_VERSION)/site-packages/mock-1.0.1-py2.6.egg
 UBUNTU_PLATFORM=$(shell if lsb_release -a 2>/dev/null | grep -q 'Ubuntu' ; then echo "Ubuntu"; fi)
 
-pylint:
-	@echo "--- pylint"
-	@cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYLINT_DIR).tar.gz
-	@cd $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/ && python3 setup.py build 1> /dev/null
-	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/__init__.py
-
 $(MOCK_BIN):
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
 	@if [ "$(UBUNTU_PLATFORM)" = "Ubuntu" ]; then\
@@ -156,16 +146,43 @@ $(MOCK_BIN):
 	   PYTHONPATH=$(PYTHONSRC_INSTALL_PYTHON_PATH) python3 setup.py install --prefix $(PYTHONSRC_INSTALL) ; \
 	 fi;
 
-PYTHON_FILES=`grep -l --exclude=Makefile --exclude=gplogfilter "/bin/env python3" *`\
-			 `grep -l "/bin/env python3" $(SRC)/../sbin/*`\
-			 `find ./gppylib -name "*.py"`\
-			 `find $(SRC)/../sbin -name "*.py"`
+# -----------------------------------------------------------------------------
+#
+# Ruff installation
+#
+# We dynamically retrieve the latest Ruff binary using the official install script.
+# No tarballs or source files for Ruff are stored in this repository.
+# This simplifies maintenance and ensures the linter is up-to-date.
+#
+# Note: Internet access is required for the initial installation.
+# -----------------------------------------------------------------------------
+RUFF_INSTALL_DIR ?= $(HOME)/.local/bin
+RUFF_BIN=$(RUFF_INSTALL_DIR)/ruff
 
-checkcode: pylint
-	@echo "Running pylint on management scripts..."
-	@PYTHONPATH=$(PYTHONPATH):$(PYLINT_PYTHONPATH) $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/bin/pylint -i y $(PYTHON_FILES) --rcfile=.rcfile > $(SRC)/../pylint.txt || true
-	@echo -n "pylint_score=" > $(SRC)/../pylint_score.properties
-	@grep "Your code has been rated at" $(SRC)/../pylint.txt | sed -e "s|Your .* \(.*\)/.*|\1|" >> $(SRC)/../pylint_score.properties
+ruff:
+	@if [ ! -x "$(RUFF_BIN)" ]; then \
+		echo "--- Installing ruff linter"; \
+		mkdir -p $(RUFF_INSTALL_DIR); \
+		curl -LsSf https://astral.sh/ruff/install.sh | BIN_DIR=$(RUFF_INSTALL_DIR) sh; \
+		echo "--- ruff installed at $(RUFF_BIN)"; \
+	else \
+		echo "--- ruff already installed at $(RUFF_BIN)"; \
+	fi
+	@$(RUFF_BIN) --version
+
+PYTHON_FILES=`grep -l --exclude=Makefile \
+		      --exclude=ruff.txt \
+		      --exclude=gplogfilter \
+		      "/bin/env python3" *`\
+	      `grep -l "/bin/env python3" \
+		       $(SRC)/../sbin/*`\
+	      `find ./gppylib -name "*.py"`\
+	      `find $(SRC)/../sbin -name "*.py"`
+
+checkcode: ruff
+	@echo "Running ruff on management scripts..."
+	@RUST_LOG=error $(RUFF_BIN) check -v $(PYTHON_FILES) > $(SRC)/ruff.txt || true
+	@echo "Ruff lint completed. Results saved to $(SRC)/ruff.txt"
 
 check: $(MOCK_BIN)
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
@@ -189,7 +206,7 @@ installcheck: installcheck-bash
 	$(MAKE) -C gpload_test $@
 
 clean distclean:
-	rm -rf $(PYLIB_SRC_EXT)/$(PYLINT_DIR)
+	rm -rf $(RUFF_BIN) $(SRC)/ruff.txt $(SRC)/.ruff_cache
 	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
 	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
 	rm -rf *.pyc
