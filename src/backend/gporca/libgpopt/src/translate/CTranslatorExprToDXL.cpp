@@ -3625,16 +3625,17 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 	COperator::EOperatorId op_id = pexpr->Pop()->Eopid();
 	CDXLNode *pdxlnCond = NULL;
 
-	// Create a subplan with a Boolean from the inner child if we have a Const True as a join condition.
-	// One scenario for this is when IN sublinks contain a projection from the outer table only such as:
-	// select * from foo where foo.a in (select foo.b from bar);
-	// If bar is a very small table, ORCA generates a CorrelatedInLeftSemiNLJoin with a Const true join filter
-	// and condition foo.a = foo.b is added as a filter on the table scan of foo. If bar is a large table,
-	// ORCA generates a plan with CorrelatedInnerNLJoin with a Const true join filter and a LIMIT over the
-	// scan of bar. The same foo.a = foo.b condition is also added as a filter on the table scan of foo.
+	// Create a subplan with a Boolean from the inner child if we have a Const
+	// True as a join condition. One scenario for this is when sublink contain a
+	// projection from the outer table such as:
+	// select * from foo where 10 > (select bar.b from bar where foo.b = bar.b);
+	// If bar is a very small table, ORCA generates a CorrelatedInnerNLJoin with
+	// a Const true join filter and condition 10 > bar.b is added as a filter
+	// to the scan of bar.
+	// For the other cases function BuildSubplans generates another sublink type
+	// for correct type of join condition.
 	if (CUtils::FScalarConstTrue(pexprScalar) &&
-		(COperator::EopPhysicalCorrelatedInnerNLJoin == op_id ||
-		 COperator::EopPhysicalCorrelatedInLeftSemiNLJoin == op_id))
+		COperator::EopPhysicalCorrelatedInnerNLJoin == op_id)
 	{
 		// translate relational inner child expression
 		CDXLNode *pdxlnInnerChild =
