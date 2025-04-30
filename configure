@@ -570,6 +570,7 @@ ac_hostname=`(hostname || uname -n) 2>/dev/null | sed 1q`
 #
 # Initializations.
 #
+ac_default_prefix=/usr/local
 ac_clean_files=
 ac_config_libobj_dir=.
 LIBOBJS=
@@ -759,8 +760,8 @@ HAVE_CXX14
 enable_gpcloud
 enable_shared_postgres_backend
 enable_mapreduce
-enable_catalog_ext
 enable_serverless
+enable_catalog_ext
 enable_orca
 autodepend
 PKG_CONFIG_LIBDIR
@@ -1608,7 +1609,7 @@ Optional Features:
   --enable-cassert        enable assertion checks (for debugging)
   --disable-orca          disable ORCA optimizer
   --enable-catalog-ext    enable Cloudberry catalog extension
-  --enable-serverless     enable Cloudberry serverless mode
+  --enable-serverless     use serverless mode of Cloudberry
   --enable-mapreduce      enable Cloudberry Mapreduce support
   --disable-shared-postgres-backend
                           enable Cloudberry shared postgres backend support
@@ -1618,7 +1619,7 @@ Optional Features:
                           library)
   --disable-preload-ic-module
                           disable preload interconnect module
-  --enable-pax            enable pax support
+  --enable-pax            enable PAX support
   --disable-thread-safety disable thread-safety in client libraries
   --enable-openssl-redirect
                           enable redirect openssl interface to internal
@@ -8380,7 +8381,7 @@ $as_echo "checking whether to build with catalog extension... $enable_catalog_ex
 
 
 #
-# Enable serverless mode
+# --enable-serverless uses serverless mode of Cloudberry
 #
 
 
@@ -8407,8 +8408,8 @@ else
 fi
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to use serverless architecture of Cloudberry ... $enable_serverless" >&5
-$as_echo "checking whether to use serverless architecture of Cloudberry ... $enable_serverless" >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to use serverless mode of Cloudberry... $enable_serverless" >&5
+$as_echo "checking whether to use serverless mode of Cloudberry... $enable_serverless" >&6; }
 
 
 #
@@ -9101,6 +9102,7 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with preload ic module ... $enable_preload_ic_module" >&5
 $as_echo "checking whether to build with preload ic module ... $enable_preload_ic_module" >&6; }
 
+
 #
 # pax support
 #
@@ -9124,13 +9126,14 @@ $as_echo "#define USE_PAX_STORAGE 1" >>confdefs.h
   esac
 
 else
-  enable_pax=yes
-  
-  $as_echo "#define USE_PAX_STORAGE 1" >>confdefs.h
+  enable_pax=no
+
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with pax support ... $enable_pax" >&5
-$as_echo "checking whether to build with pax support ... $enable_pax" >&6; }
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with PAX support ... $enable_pax" >&5
+$as_echo "checking whether to build with PAX support ... $enable_pax" >&6; }
+
 
 #
 # Include directories
