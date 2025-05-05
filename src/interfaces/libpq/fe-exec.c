@@ -4060,7 +4060,8 @@ PQescapeStringInternal(PGconn *conn,
 		}
 
 		/* Slow path for possible multibyte characters */
-		charlen = pg_encoding_mblen(encoding, source);
+		charlen = pg_encoding_mblen_or_incomplete(encoding,
+												  source, remaining);
 
 		if (remaining < charlen ||
 			pg_encoding_verifymbchar(encoding, source, charlen) == -1)
