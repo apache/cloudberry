@@ -4000,7 +4000,8 @@ PQescapeStringInternal(PGconn *conn,
 		}
 
 		/* Slow path for possible multibyte characters */
-		charlen = pg_encoding_mblen(encoding, source);
+		charlen = pg_encoding_mblen_or_incomplete(encoding,
+												  source, remaining);
 
 		if (remaining < charlen)
 		{
@@ -4152,7 +4153,8 @@ PQescapeInternal(PGconn *conn, const char *str, size_t len, bool as_ident)
 			int			charlen;
 
 			/* Slow path for possible multibyte characters */
-			charlen = pg_encoding_mblen(conn->client_encoding, s);
+			charlen = pg_encoding_mblen_or_incomplete(conn->client_encoding,
+													  s, remaining);
 
 			if (charlen > remaining)
 			{
