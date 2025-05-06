@@ -1,6 +1,7 @@
 #include "Config.h"
 #include "UDSConnector.h"
 
+#define typeid __typeid
 extern "C" {
 #include "postgres.h"
 
@@ -11,7 +12,9 @@ extern "C" {
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
+#include "cdb/ml_ipc.h"
 }
+#undef typeid
 
 #include "EventSender.h"
 #include "PgUtils.h"
@@ -150,10 +153,12 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
     // take initial metrics snapshot so that we can safely take diff afterwards
     // in END or DONE events.
     set_gp_metrics(query_msg->mutable_query_metrics(), query_desc, 0, 0);
+#ifdef IC_TEARDOWN_HOOK
     // same for interconnect statistics
     ic_metrics_collect();
     set_ic_stats(query_msg->mutable_query_metrics()->mutable_instrumentation(),
                  &ic_statistics);
+#endif
   }
 }
 
@@ -207,10 +212,12 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
           set_gp_metrics(query_msg->mutable_query_metrics(), query_desc,
                          nested_calls, nested_timing);
         }
+#ifdef IC_TEARDOWN_HOOK
         ic_metrics_collect();
         set_ic_stats(
             query_msg->mutable_query_metrics()->mutable_instrumentation(),
             &ic_statistics);
+#endif
         connector->report_query(*query_msg, msg);
       }
       update_nested_counters(query_desc);
@@ -222,6 +229,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
 }
 
 void EventSender::ic_metrics_collect() {
+#ifdef IC_TEARDOWN_HOOK
   if (Gp_interconnect_type != INTERCONNECT_TYPE_UDPIFC) {
     return;
   }
@@ -250,6 +258,7 @@ void EventSender::ic_metrics_collect() {
   ic_statistics.duplicatedPktNum += metrics.duplicatedPktNum;
   ic_statistics.recvAckNum += metrics.recvAckNum;
   ic_statistics.statusQueryMsgNum += metrics.statusQueryMsgNum;
+#endif
 }
 
 EventSender::EventSender() {
@@ -260,7 +269,9 @@ EventSender::EventSender() {
       ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
     }
   }
+#ifdef IC_TEARDOWN_HOOK
   memset(&ic_statistics, 0, sizeof(ICStatistics));
+#endif
 }
 
 EventSender::~EventSender() {

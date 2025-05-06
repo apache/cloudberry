@@ -24,7 +24,9 @@ static ExecutorRun_hook_type previous_ExecutorRun_hook = nullptr;
 static ExecutorFinish_hook_type previous_ExecutorFinish_hook = nullptr;
 static ExecutorEnd_hook_type previous_ExecutorEnd_hook = nullptr;
 static query_info_collect_hook_type previous_query_info_collect_hook = nullptr;
+#ifdef IC_TEARDOWN_HOOK
 static ic_teardown_hook_type previous_ic_teardown_hook = nullptr;
+#endif
 
 static void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags);
 static void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
@@ -66,8 +68,10 @@ void hooks_init() {
   ExecutorEnd_hook = ya_ExecutorEnd_hook;
   previous_query_info_collect_hook = query_info_collect_hook;
   query_info_collect_hook = ya_query_info_collect_hook;
+#ifdef IC_TEARDOWN_HOOK
   previous_ic_teardown_hook = ic_teardown_hook;
   ic_teardown_hook = ya_ic_teardown_hook;
+#endif
   stat_statements_parser_init();
 }
 
@@ -77,7 +81,9 @@ void hooks_deinit() {
   ExecutorRun_hook = previous_ExecutorRun_hook;
   ExecutorFinish_hook = previous_ExecutorFinish_hook;
   query_info_collect_hook = previous_query_info_collect_hook;
+#ifdef IC_TEARDOWN_HOOK
   ic_teardown_hook = previous_ic_teardown_hook;
+#endif
   stat_statements_parser_deinit();
   if (sender) {
     delete sender;
@@ -152,9 +158,11 @@ void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {
 
 void ya_ic_teardown_hook(ChunkTransportState *transportStates, bool hasErrors) {
   cpp_call(get_sender(), &EventSender::ic_metrics_collect);
+#ifdef IC_TEARDOWN_HOOK
   if (previous_ic_teardown_hook) {
     (*previous_ic_teardown_hook)(transportStates, hasErrors);
   }
+#endif
 }
 
 static void check_stats_loaded() {

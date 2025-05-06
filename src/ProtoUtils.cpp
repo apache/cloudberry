@@ -10,7 +10,10 @@ extern "C" {
 #include "access/hash.h"
 #include "cdb/cdbinterconnect.h"
 #include "cdb/cdbvars.h"
+#include "cdb/ml_ipc.h"
+#ifdef IC_TEARDOWN_HOOK
 #include "cdb/ic_udpifc.h"
+#endif
 #include "gpmon/gpmon.h"
 #include "utils/workfile_mgr.h"
 
@@ -182,6 +185,7 @@ void set_gp_metrics(yagpcc::GPMetrics *metrics, QueryDesc *query_desc,
 
 void set_ic_stats(yagpcc::MetricInstrumentation *metrics,
                   const ICStatistics *ic_statistics) {
+#ifdef IC_TEARDOWN_HOOK
   UPDATE_IC_STATS(total_recv_queue_size, totalRecvQueueSize);
   UPDATE_IC_STATS(recv_queue_size_counting_time, recvQueueSizeCountingTime);
   UPDATE_IC_STATS(total_capacity, totalCapacity);
@@ -199,6 +203,7 @@ void set_ic_stats(yagpcc::MetricInstrumentation *metrics,
   UPDATE_IC_STATS(duplicated_pkt_num, duplicatedPktNum);
   UPDATE_IC_STATS(recv_ack_num, recvAckNum);
   UPDATE_IC_STATS(status_query_msg_num, statusQueryMsgNum);
+#endif
 }
 
 yagpcc::SetQueryReq create_query_req(yagpcc::QueryStatus status) {
