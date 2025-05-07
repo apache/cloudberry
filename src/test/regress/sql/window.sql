@@ -84,6 +84,48 @@ SELECT lead(ten * 2, 1, -1.4) OVER (PARTITION BY four ORDER BY ten), ten, four F
 
 SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
 
+-- test split window func
+
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
+set optimizer_force_split_window_function to on;
+-- worked
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+
+-- no worked
+explain SELECT * FROM (SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 1;
+explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+
+-- verify the split window function result
+set optimizer_force_split_window_function to off;
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+set optimizer_force_split_window_function to on;
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+reset optimizer_force_split_window_function;
+
 -- last_value returns the last row of the frame, which is CURRENT ROW in ORDER BY window.
 -- the column `ten` is ordered, so we should call last_value on this
 -- column. Using other cols the result is flaky because there are

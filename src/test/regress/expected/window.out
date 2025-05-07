@@ -399,6 +399,446 @@ SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM te
            0 |   0 |    2
 (10 rows)
 
+-- test split window func
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < '0.5'::double precision)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+set optimizer_force_split_window_function to on;
+-- worked
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 <= 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 <= 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 <= 3)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+-- no worked
+explain SELECT * FROM (SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 1;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 <= '1'::double precision)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 < '0.5'::double precision)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 > 1)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 > 1)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.76 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.71 rows=1 width=16)
+         Filter: (t.rank_1 > 1)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+-- verify the split window function result
+set optimizer_force_split_window_function to off;
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    0
+      1 |   0 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+(7 rows)
+
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      2 |   0 |    0
+      1 |   1 |    1
+      2 |   1 |    1
+(7 rows)
+
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      1 |   0 |    0
+      2 |   4 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      2 |   7 |    1
+(9 rows)
+
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      1 |   0 |    0
+      3 |   4 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      3 |   7 |    1
+(9 rows)
+
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      2 |   0 |    0
+      3 |   4 |    0
+      1 |   1 |    1
+      2 |   1 |    1
+      3 |   7 |    1
+(9 rows)
+
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      1 |   0 |    0
+      2 |   4 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      2 |   7 |    1
+      3 |   9 |    1
+(10 rows)
+
+set optimizer_force_split_window_function to on;
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      1 |   0 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+(7 rows)
+
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      2 |   0 |    0
+      1 |   1 |    1
+      2 |   1 |    1
+(7 rows)
+
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    0
+      1 |   0 |    0
+      2 |   4 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      2 |   7 |    1
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+(9 rows)
+
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      1 |   0 |    0
+      3 |   4 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      3 |   7 |    1
+(9 rows)
+
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      2 |   0 |    0
+      3 |   4 |    0
+      1 |   1 |    1
+      2 |   1 |    1
+      3 |   7 |    1
+(9 rows)
+
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+ rank_1 | ten | four 
+--------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
+      1 |   0 |    0
+      1 |   0 |    0
+      2 |   4 |    0
+      1 |   1 |    1
+      1 |   1 |    1
+      2 |   7 |    1
+      3 |   9 |    1
+(10 rows)
+
+reset optimizer_force_split_window_function;
 -- last_value returns the last row of the frame, which is CURRENT ROW in ORDER BY window.
 -- the column `ten` is ordered, so we should call last_value on this
 -- column. Using other cols the result is flaky because there are

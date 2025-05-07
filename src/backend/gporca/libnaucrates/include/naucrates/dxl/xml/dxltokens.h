@@ -76,6 +76,7 @@ enum Edxltoken
 	EdxltokenWindowOids,
 	EdxltokenOidRowNumber,
 	EdxltokenOidRank,
+	EdxltokenOidDenseRank,
 
 	EdxltokenPlanSamples,
 

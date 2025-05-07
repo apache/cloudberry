@@ -160,6 +160,7 @@
 #include "gpopt/xforms/CXformSplitGbAgg.h"
 #include "gpopt/xforms/CXformSplitGbAggDedup.h"
 #include "gpopt/xforms/CXformSplitLimit.h"
+#include "gpopt/xforms/CXformSplitWindowFunc.h"
 #include "gpopt/xforms/CXformSubqJoin2Apply.h"
 #include "gpopt/xforms/CXformSubqNAryJoin2Apply.h"
 #include "gpopt/xforms/CXformUnion2UnionAll.h"

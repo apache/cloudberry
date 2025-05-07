@@ -1871,8 +1871,10 @@ CTranslatorDXLToExpr::PexprLogicalSeqPr(const CDXLNode *dxlnode)
 			pdrgpos->Append(GPOS_NEW(m_mp) COrderSpec(m_mp));
 		}
 
+		// todo(jiaqizho): double check
 		CLogicalSequenceProject *popLgSequence =
-			GPOS_NEW(m_mp) CLogicalSequenceProject(m_mp, pds, pdrgpos, pdrgpwf);
+			GPOS_NEW(m_mp) CLogicalSequenceProject(
+				m_mp, COperator::ESPType::EsptypeGlobalOneStep, pds, pdrgpos, pdrgpwf);
 		pexprLgSequence = GPOS_NEW(m_mp)
 			CExpression(m_mp, popLgSequence, pexprWindowChild, pexprProjList);
 		pexprWindowChild = pexprLgSequence;
@@ -2164,9 +2166,8 @@ CTranslatorDXLToExpr::Ptabdesc(CDXLTableDescr *table_descr)
 	mdid->AddRef();
 	CTableDescriptor *ptabdesc = GPOS_NEW(m_mp) CTableDescriptor(
 		m_mp, mdid, CName(m_mp, &strName), pmdrel->ConvertHashToRandom(),
-		rel_distr_policy, rel_storage_type,
-		table_descr->GetExecuteAsUserId(), table_descr->LockMode(),
-		table_descr->GetAclMode(),
+		rel_distr_policy, rel_storage_type, table_descr->GetExecuteAsUserId(),
+		table_descr->LockMode(), table_descr->GetAclMode(),
 		table_descr->GetAssignedQueryIdForTargetRel());
 
 	const ULONG ulColumns = table_descr->Arity();
@@ -2362,7 +2363,7 @@ CTranslatorDXLToExpr::PtabdescFromCTAS(CDXLLogicalCTAS *pdxlopCTAS)
 	mdid->AddRef();
 	CTableDescriptor *ptabdesc = GPOS_NEW(m_mp) CTableDescriptor(
 		m_mp, mdid, CName(m_mp, &strName), pmdrel->ConvertHashToRandom(),
-		rel_distr_policy, rel_storage_type, 
+		rel_distr_policy, rel_storage_type,
 		0,	// ulExecuteAsUser, use permissions of current user
 		3,	// CTAS always uses a RowExclusiveLock on the table. See createas.c
 		2,	// CTAS always requires SELECT and SELECT only privilege
@@ -3020,8 +3021,8 @@ CTranslatorDXLToExpr::PexprScalarFunc(const CDXLNode *pdxlnFunc)
 		pop = GPOS_NEW(m_mp) CScalarFunc(
 			m_mp, mdid_func, mdid_return_type, pdxlopFuncExpr->TypeModifier(),
 			GPOS_NEW(m_mp) CWStringConst(
-				m_mp, (pmdfunc->Mdname().GetMDName())->GetBuffer()), 
-				pdxlopFuncExpr->FuncFormat(), pdxlopFuncExpr->IsFuncVariadic());
+				m_mp, (pmdfunc->Mdname().GetMDName())->GetBuffer()),
+			pdxlopFuncExpr->FuncFormat(), pdxlopFuncExpr->IsFuncVariadic());
 	}
 
 	CExpression *pexprFunc = nullptr;

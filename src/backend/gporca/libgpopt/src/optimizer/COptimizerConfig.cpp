@@ -179,6 +179,8 @@ COptimizerConfig::Serialize(CMemoryPool *mp, CXMLSerializer *xml_serializer,
 		m_window_oids->OidRowNumber());
 	xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenOidRank),
 								 m_window_oids->OidRank());
+	xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenOidDenseRank),
+								 m_window_oids->OidDenseRank());
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
 		CDXLTokens::GetDXLTokenStr(EdxltokenWindowOids));

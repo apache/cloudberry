@@ -580,6 +580,7 @@ extern bool optimizer_force_multistage_agg;
 extern bool optimizer_force_three_stage_scalar_dqa;
 extern bool optimizer_force_expanded_distinct_aggs;
 extern bool optimizer_force_agg_skew_avoidance;
+extern bool optimizer_force_split_window_function;
 extern bool optimizer_penalize_skew;
 extern bool optimizer_prune_computed_columns;
 extern bool optimizer_push_requirements_from_consumer_to_producer;
