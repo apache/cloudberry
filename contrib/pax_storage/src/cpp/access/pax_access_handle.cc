@@ -443,6 +443,7 @@ const TupleTableSlotOps *PaxAccessMethod::SlotCallbacks(
 
 uint32 PaxAccessMethod::ScanFlags(Relation relation) {
   uint32 flags = 0;
+  std::vector<int> minmax_columns;
 #ifdef VEC_BUILD
   flags |= SCAN_SUPPORT_VECTORIZATION | SCAN_SUPPORT_COLUMN_ORIENTED_SCAN;
 #else
@@ -452,6 +453,10 @@ uint32 PaxAccessMethod::ScanFlags(Relation relation) {
 #if defined(USE_MANIFEST_API) && !defined(USE_PAX_CATALOG)
   flags |= SCAN_FORCE_BIG_WRITE_LOCK;
 #endif
+  minmax_columns = cbdb::GetMinMaxColumnIndexes(relation);
+  if (!minmax_columns.empty()) {
+    flags |= SCAN_SUPPORT_RUNTIME_FILTER;
+  }
 
   return flags;
 }
