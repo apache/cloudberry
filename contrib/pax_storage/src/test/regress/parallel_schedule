@@ -113,7 +113,9 @@ test: transactions
 # ----------
 # Another group of parallel tests
 # ----------
+test: disable_autovacuum
 test: privileges init_privs security_label collate lock replica_identity rowsecurity object_address tablesample groupingsets drop_operator password identity appendonly_sample aocs_sample
+test: enable_autovacuum
 
 test: matview
 # ignore reason: 
