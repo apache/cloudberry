@@ -1,0 +1,3 @@
+PyYAML
+psycopg2
+progressbar2

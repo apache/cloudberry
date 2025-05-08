@@ -40,6 +40,8 @@ test_hook(QueryMetricsStatus status, void* args)
 
 	switch (status)
 	{
+		case METRICS_PLAN_NODE_UNKNOWN:
+			break;
 		case METRICS_PLAN_NODE_INITIALIZE:
 			switch (((QueryDesc *)args)->plannedstmt->metricsQueryType)
 			{

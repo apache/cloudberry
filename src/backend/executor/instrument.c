@@ -116,6 +116,10 @@ InstrStopNodeSync(Instrumentation *instr, uint64 nTuples)
 
 	/* count the returned tuples */
 	instr->tuplecount += nTuples;
+	if (nTuples == 0)
+	{
+		instr->nodeStatus = METRICS_PLAN_NODE_FINISHED;
+	}
 
 	/* let's update the time only if the timer was requested */
 	if (instr->need_timer)
@@ -145,6 +149,7 @@ InstrStopNodeSync(Instrumentation *instr, uint64 nTuples)
 		instr->firsttuple = INSTR_TIME_GET_DOUBLE(instr->counter);
 		/* CDB: save this start time as the first start */
 		instr->firststart = starttime;
+		instr->nodeStatus = METRICS_PLAN_NODE_EXECUTING;
 	}
 }
 
@@ -414,6 +419,7 @@ GpInstrAlloc(const Plan *node, int instrument_options, bool async_mode)
 	if (instr == NULL)
 		instr = InstrAlloc(1, instrument_options, async_mode);
 
+	instr->nodeStatus = METRICS_PLAN_NODE_INITIALIZE;
 	return instr;
 }
 
