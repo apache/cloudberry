@@ -311,6 +311,7 @@ bool		optimizer_print_group_properties;
 bool		optimizer_print_optimization_context;
 bool		optimizer_print_optimization_stats;
 bool		optimizer_print_xform_results;
+bool		optimizer_debug_cte;
 
 /* array of xforms disable flags */
 bool		optimizer_xforms[OPTIMIZER_XFORMS_COUNT] = {[0 ... OPTIMIZER_XFORMS_COUNT - 1] = false};
@@ -2007,6 +2008,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_print_xform_results,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_debug_cte", PGC_USERSET, LOGGING_WHAT,
+			gettext_noop("Print the debug info of CTE in ORCA."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_debug_cte,
 		false,
 		NULL, NULL, NULL
 	},

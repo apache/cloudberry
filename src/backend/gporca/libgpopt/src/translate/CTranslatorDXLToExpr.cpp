@@ -173,8 +173,6 @@ CTranslatorDXLToExpr::CTranslatorDXLToExpr(CMemoryPool *mp,
 {
 	// initialize hash tables
 	m_phmulcr = GPOS_NEW(m_mp) UlongToColRefMap(m_mp);
-
-	// initialize hash tables
 	m_phmululCTE = GPOS_NEW(m_mp) UlongToUlongMap(m_mp);
 
 	if (fInitColumnFactory)
@@ -278,7 +276,7 @@ CTranslatorDXLToExpr::Pexpr(const CDXLNode *dxlnode,
 		const ULONG colid = dxl_colref->Id();
 
 		// get its column reference from the hash map
-		const CColRef *colref = LookupColRef(m_phmulcr, colid);
+		const CColRef *colref = LookupColRef(colid);
 
 		if (fGenerateRequiredColumns)
 		{
@@ -721,8 +719,7 @@ CTranslatorDXLToExpr::PexprLogicalSetOp(const CDXLNode *dxlnode)
 		PdrgpexprPreprocessSetOpInputs(dxlnode, pdrgdrgpcrInput, pdrgpulOutput);
 
 	// create an array of output column references
-	CColRefArray *pdrgpcrOutput = CTranslatorDXLToExprUtils::Pdrgpcr(
-		m_mp, m_phmulcr, pdrgpulOutput /*array of colids of the first child*/);
+	CColRefArray *pdrgpcrOutput = Pdrgpcr(pdrgpulOutput /*array of colids of the first child*/);
 
 	pdrgpulOutput->Release();
 
@@ -879,7 +876,7 @@ CTranslatorDXLToExpr::BuildSetOpChild(
 	{
 		// column identifier of the input column
 		ULONG colid = *(*pdrgpulInput)[ulColPos];
-		const CColRef *colref = LookupColRef(m_phmulcr, colid);
+		const CColRef *colref = LookupColRef(colid);
 
 		// corresponding output column descriptor
 		const CDXLColDescr *pdxlcdOutput = dxl_op->GetColumnDescrAt(ulColPos);
@@ -1033,6 +1030,71 @@ CTranslatorDXLToExpr::FCastingUnknownType(IMDId *pmdidSource, IMDId *mdid_dest)
 			 mdid_dest->Equals(&CMDIdGPDB::m_mdid_unknown)));
 }
 
+void 
+CTranslatorDXLToExpr::MarkCTEConsumerColAsUsed(UlongToColRefMap *mcidcrCTE, UlongToColRefArrayMap *mpidcrsCTE, ULONG colid) {
+	CColRef *producer_colref = nullptr;
+	producer_colref = mcidcrCTE->Find(&colid);
+	if (producer_colref) {
+
+#ifdef GPOS_DEBUG
+		if (GPOS_FTRACE(EopttraceDebugCTE)) {
+			CAutoTrace at(m_mp);
+			auto & io_stream = at.Os();
+			io_stream << "MarkProducerUsed, customer id: " << colid << ", producer id:" << producer_colref->Id() << std::endl;
+		}
+#endif
+		if (producer_colref->GetUsage(true, true) != CColRef::EUsed) {
+			producer_colref->MarkAsUsed();
+			MarkCTEProducerColAsUsed(mcidcrCTE, mpidcrsCTE, producer_colref->Id());
+		}
+	}
+}
+
+void 
+CTranslatorDXLToExpr::MarkCTEProducerColAsUsed(UlongToColRefMap *mcidcrCTE, UlongToColRefArrayMap *mpidcrsCTE, ULONG colid) {
+	CColRefArray *consumer_crarray = nullptr;
+
+#ifdef GPOS_DEBUG
+	CAutoTrace at(m_mp);
+	auto & io_stream = at.Os();
+	if (GPOS_FTRACE(EopttraceDebugCTE))
+		io_stream << "MarkCTEProducerColAsUsed, producer id: " << colid;
+#endif
+
+	consumer_crarray = mpidcrsCTE->Find(&colid);
+	if (consumer_crarray) {
+
+#ifdef GPOS_DEBUG
+		if (GPOS_FTRACE(EopttraceDebugCTE))
+			io_stream << ", consumer ids: [";
+#endif
+
+		ULONG crarray_size = consumer_crarray->Size();
+		for (ULONG crindex = 0; crindex < crarray_size; crindex++){
+			auto consumer_colref = (*consumer_crarray)[crindex];
+			
+#ifdef GPOS_DEBUG
+			if (GPOS_FTRACE(EopttraceDebugCTE))
+				io_stream << (*consumer_crarray)[crindex]->Id() << ",";
+#endif
+
+			if (consumer_colref->GetUsage(true, true) != CColRef::EUsed) {
+				consumer_colref->MarkAsUsed();
+				MarkCTEConsumerColAsUsed(mcidcrCTE, mpidcrsCTE, consumer_colref->Id());
+			}
+		}
+
+#ifdef GPOS_DEBUG
+		if (GPOS_FTRACE(EopttraceDebugCTE))
+			io_stream << "]";
+#endif
+	}
+#ifdef GPOS_DEBUG
+	else if (GPOS_FTRACE(EopttraceDebugCTE)) {
+		io_stream << ",not found consumer.";
+	}
+#endif
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -1043,23 +1105,28 @@ CTranslatorDXLToExpr::FCastingUnknownType(IMDId *pmdidSource, IMDId *mdid_dest)
 //		the column is not found
 //---------------------------------------------------------------------------
 CColRef *
-CTranslatorDXLToExpr::LookupColRef(UlongToColRefMap *colref_mapping,
-								   ULONG colid)
+CTranslatorDXLToExpr::LookupColRef(ULONG colid, BOOL mark_used)
 {
-	GPOS_ASSERT(nullptr != colref_mapping);
+	CColRef *colref = nullptr;
 	GPOS_ASSERT(gpos::ulong_max != colid);
 
-	// get its column reference from the hash map
-	CColRef *colref = colref_mapping->Find(&colid);
+	colref = m_phmulcr->Find(&colid);
 	if (nullptr == colref)
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2ExprAttributeNotFound, colid);
 	}
 
-	colref->MarkAsUsed();
+	auto cteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
+
+	if (cteinfo->ExistCTE()) {
+		MarkCTEConsumerColAsUsed(cteinfo->GetCTEConsumerMapping(), cteinfo->GetCTEProducerMapping(), colref->Id());
+		MarkCTEProducerColAsUsed(cteinfo->GetCTEConsumerMapping(), cteinfo->GetCTEProducerMapping(), colref->Id());
+	}
+
+	if (mark_used)
+		colref->MarkAsUsed();
 	return colref;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -1119,6 +1186,35 @@ CTranslatorDXLToExpr::Pdrgpcr(const CDXLColDescrArray *dxl_col_descr_array)
 
 	return pdrgpcrOutput;
 }
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToExpr::Pdrgpcr
+//
+//	@doc:
+// 		Construct a dynamic array of column references corresponding to the
+//		given col ids
+//
+//---------------------------------------------------------------------------
+CColRefArray *
+CTranslatorDXLToExpr::Pdrgpcr(const ULongPtrArray *colids)
+{
+	GPOS_ASSERT(nullptr != colids);
+
+	CColRefArray *colref_array = GPOS_NEW(m_mp) CColRefArray(m_mp);
+
+	for (ULONG ul = 0; ul < colids->Size(); ul++)
+	{
+		ULONG *pulColId = (*colids)[ul];
+		CColRef *colref = LookupColRef(*pulColId, true);
+		GPOS_ASSERT(nullptr != colref);
+
+		colref_array->Append(colref);
+	}
+
+	return colref_array;
+}
+
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -1303,12 +1399,28 @@ CTranslatorDXLToExpr::PexprLogicalCTEProducer(const CDXLNode *dxlnode)
 
 	ULongPtrArray *pdrgpulCols = pdxlopCTEProducer->GetOutputColIdsArray();
 	const ULONG length = pdrgpulCols->Size();
+
+#ifdef GPOS_DEBUG
+	CAutoTrace at(m_mp);
+	auto & io_stream = at.Os();
+	if (GPOS_FTRACE(EopttraceDebugCTE)) {
+		io_stream << "PexprLogicalCTEProducer, output col lengths: " << length << "" << std::endl;
+	}
+#endif
+
 	for (ULONG ul = 0; ul < length; ul++)
 	{
 		ULONG *pulColId = (*pdrgpulCols)[ul];
-		CColRef *colref = LookupColRef(m_phmulcr, *pulColId);
+		CColRef *colref = LookupColRef(*pulColId, !pdxlopCTEProducer->CouldBePruned() /* mark_used */);
 		GPOS_ASSERT(nullptr != colref);
 
+#ifdef GPOS_DEBUG
+		if (GPOS_FTRACE(EopttraceDebugCTE)) {
+			io_stream << "DXL id: " << *pulColId << ", col: ";
+			colref->OsPrint(io_stream);
+			io_stream << std::endl;
+		}
+#endif
 		if (pcrsProducer->FMember(colref))
 		{
 			// the column was previously used, so introduce a project node to relabel
@@ -1371,9 +1483,11 @@ CTranslatorDXLToExpr::PexprLogicalCTEConsumer(const CDXLNode *dxlnode)
 	CExpression *pexprProducer = pcteinfo->PexprCTEProducer(id);
 	GPOS_ASSERT(nullptr != pexprProducer);
 
+	CCTEInfo * cteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
 	CColRefArray *pdrgpcrProducer =
 		CLogicalCTEProducer::PopConvert(pexprProducer->Pop())->Pdrgpcr();
-	CColRefArray *pdrgpcrConsumer = CUtils::PdrgpcrCopy(m_mp, pdrgpcrProducer);
+	CColRefArray *pdrgpcrConsumer = CUtils::PdrgpcrCopy(m_mp, pdrgpcrProducer, 
+		false, nullptr, cteinfo->GetCTEConsumerMapping(), cteinfo->GetCTEProducerMapping(), true);
 
 	// add new colrefs to mapping
 	const ULONG num_cols = pdrgpcrConsumer->Size();
@@ -1385,6 +1499,26 @@ CTranslatorDXLToExpr::PexprLogicalCTEConsumer(const CDXLNode *dxlnode)
 
 		BOOL result GPOS_ASSERTS_ONLY = m_phmulcr->Insert(pulColId, colref);
 		GPOS_ASSERT(result);
+
+#ifdef GPOS_DEBUG
+		CAutoTrace at(m_mp);
+		auto & io_stream = at.Os();
+		if (GPOS_FTRACE(EopttraceDebugCTE)) {
+		
+			io_stream << "m_phmulcr->Insert: " << *pulColId << ",";
+			colref->OsPrint(io_stream);
+			io_stream << std::endl;
+			io_stream << "PexprLogicalCTEConsumer m_phmulcr: " << std::endl;
+			UlongToColRefMapIter iter(m_phmulcr);
+			while (iter.Advance())
+			{
+				CColRef *colref = m_phmulcr->Find(iter.Key());
+				io_stream << "key: " << *iter.Key() << ", value: ";
+				colref->OsPrint(io_stream);
+				io_stream << " .";
+			}
+		}
+#endif
 	}
 
 	pcteinfo->IncrementConsumers(id, m_ulCTEId);
@@ -1440,8 +1574,7 @@ CTranslatorDXLToExpr::PexprLogicalInsert(const CDXLNode *dxlnode)
 	CTableDescriptor *ptabdesc = Ptabdesc(pdxlopInsert->GetDXLTableDescr());
 
 	ULongPtrArray *pdrgpulSourceCols = pdxlopInsert->GetSrcColIdsArray();
-	CColRefArray *colref_array =
-		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulSourceCols);
+	CColRefArray *colref_array = Pdrgpcr(pdrgpulSourceCols);
 
 	return GPOS_NEW(m_mp) CExpression(
 		m_mp, GPOS_NEW(m_mp) CLogicalInsert(m_mp, ptabdesc, colref_array),
@@ -1478,12 +1611,11 @@ CTranslatorDXLToExpr::PexprLogicalDelete(const CDXLNode *dxlnode)
 	ULONG ctid_colid = pdxlopDelete->GetCtIdColId();
 	ULONG segid_colid = pdxlopDelete->GetSegmentIdColId();
 
-	CColRef *pcrCtid = LookupColRef(m_phmulcr, ctid_colid);
-	CColRef *pcrSegmentId = LookupColRef(m_phmulcr, segid_colid);
+	CColRef *pcrCtid = LookupColRef(ctid_colid);
+	CColRef *pcrSegmentId = LookupColRef(segid_colid);
 
 	ULongPtrArray *pdrgpulCols = pdxlopDelete->GetDeletionColIdArray();
-	CColRefArray *colref_array =
-		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulCols);
+	CColRefArray *colref_array = Pdrgpcr(pdrgpulCols);
 
 	return GPOS_NEW(m_mp) CExpression(
 		m_mp,
@@ -1542,16 +1674,16 @@ CTranslatorDXLToExpr::PexprLogicalUpdate(const CDXLNode *dxlnode)
 	ULONG ctid_colid = pdxlopUpdate->GetCtIdColId();
 	ULONG segid_colid = pdxlopUpdate->GetSegmentIdColId();
 
-	CColRef *pcrCtid = LookupColRef(m_phmulcr, ctid_colid);
-	CColRef *pcrSegmentId = LookupColRef(m_phmulcr, segid_colid);
+	CColRef *pcrCtid = LookupColRef(ctid_colid);
+	CColRef *pcrSegmentId = LookupColRef(segid_colid);
 
 	ULongPtrArray *pdrgpulInsertCols = pdxlopUpdate->GetInsertionColIdArray();
 	CColRefArray *pdrgpcrInsert =
-		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulInsertCols);
+		Pdrgpcr(pdrgpulInsertCols);
 
 	ULongPtrArray *pdrgpulDeleteCols = pdxlopUpdate->GetDeletionColIdArray();
 	CColRefArray *pdrgpcrDelete =
-		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulDeleteCols);
+		Pdrgpcr(pdrgpulDeleteCols);
 
 	return GPOS_NEW(m_mp)
 		CExpression(m_mp,
@@ -1583,8 +1715,7 @@ CTranslatorDXLToExpr::PexprLogicalCTAS(const CDXLNode *dxlnode)
 	CTableDescriptor *ptabdesc = PtabdescFromCTAS(pdxlopCTAS);
 
 	ULongPtrArray *pdrgpulSourceCols = pdxlopCTAS->GetSrcColidsArray();
-	CColRefArray *colref_array =
-		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulSourceCols);
+	CColRefArray *colref_array = Pdrgpcr(pdrgpulSourceCols);
 
 	return GPOS_NEW(m_mp) CExpression(
 		m_mp, GPOS_NEW(m_mp) CLogicalInsert(m_mp, ptabdesc, colref_array),
@@ -1616,8 +1747,7 @@ CTranslatorDXLToExpr::PexprLogicalGroupBy(const CDXLNode *dxlnode)
 	CExpression *pexprProjList = PexprScalarProjList(pdxlnPrL);
 
 	// translate grouping columns
-	CColRefArray *pdrgpcrGroupingCols = CTranslatorDXLToExprUtils::Pdrgpcr(
-		m_mp, m_phmulcr, pdxlopGrpby->GetGroupingColidArray());
+	CColRefArray *pdrgpcrGroupingCols = Pdrgpcr(pdxlopGrpby->GetGroupingColidArray());
 
 	if (0 != pexprProjList->Arity())
 	{
@@ -1908,7 +2038,7 @@ CTranslatorDXLToExpr::PdrgpcrPartitionByCol(
 		const ULONG *pulColId = (*partition_by_colid_array)[ul];
 
 		// get its column reference from the hash map
-		CColRef *colref = LookupColRef(m_phmulcr, *pulColId);
+		CColRef *colref = LookupColRef(*pulColId);
 		colref_array->Append(colref);
 	}
 
@@ -2533,7 +2663,7 @@ CTranslatorDXLToExpr::PexprScalarSubqueryQuantified(
 	CExpression *pexprScalarChild = Pexpr(pdxlnScalarChild);
 
 	// get colref for subquery colid
-	const CColRef *colref = LookupColRef(m_phmulcr, colid);
+	const CColRef *colref = LookupColRef(colid);
 
 	CScalar *popScalarSubquery = nullptr;
 	if (EdxlopScalarSubqueryAny == edxlopid)
@@ -3490,7 +3620,7 @@ CTranslatorDXLToExpr::PexprScalarIdent(const CDXLNode *pdxlnIdent)
 	const ULONG colid = dxl_colref->Id();
 
 	// get its column reference from the hash map
-	const CColRef *colref = LookupColRef(m_phmulcr, colid);
+	const CColRef *colref = LookupColRef(colid);
 	CExpression *pexpr = GPOS_NEW(m_mp)
 		CExpression(m_mp, GPOS_NEW(m_mp) CScalarIdent(m_mp, colref));
 
@@ -3955,7 +4085,7 @@ CTranslatorDXLToExpr::PexprScalarSubquery(const CDXLNode *pdxlnSubquery)
 
 	// get subquery colref for colid
 	ULONG colid = pdxlopSubquery->GetColId();
-	const CColRef *colref = LookupColRef(m_phmulcr, colid);
+	const CColRef *colref = LookupColRef(colid);
 
 	CScalarSubquery *popScalarSubquery = GPOS_NEW(m_mp)
 		CScalarSubquery(m_mp, colref, false /*fGeneratedByExist*/,
@@ -4080,7 +4210,7 @@ CTranslatorDXLToExpr::Pos(const CDXLNode *dxlnode)
 		const ULONG colid = dxl_op->GetColId();
 
 		// get its column reference from the hash map
-		CColRef *colref = LookupColRef(m_phmulcr, colid);
+		CColRef *colref = LookupColRef(colid);
 
 		IMDId *sort_op_id = dxl_op->GetMdIdSortOp();
 		sort_op_id->AddRef();

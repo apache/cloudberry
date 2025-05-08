@@ -851,7 +851,9 @@ public:
 	// if the passed map is not null, mappings from old to copied variables are added to it
 	static CColRefArray *PdrgpcrCopy(
 		CMemoryPool *mp, CColRefArray *colref_array, BOOL fAllComputed = false,
-		UlongToColRefMap *colref_mapping = nullptr);
+		UlongToColRefMap *colref_mapping = nullptr, UlongToColRefMap *consumer_mapping = nullptr, 
+		UlongToColRefArrayMap *producer_mapping = nullptr,
+		BOOL check_usage = false);
 
 	// equality check between two arrays of column refs. Inputs can be NULL
 	static BOOL Equals(CColRefArray *pdrgpcrFst, CColRefArray *pdrgpcrSnd);

@@ -164,11 +164,16 @@ CCTEInfo::CCTEInfo(CMemoryPool *mp)
 	: m_mp(mp),
 	  m_phmulcteinfoentry(nullptr),
 	  m_ulNextCTEId(0),
-	  m_fEnableInlining(true)
+	  m_fEnableInlining(true),
+	  m_phmulprodconsmap(nullptr),
+	  m_phmcidcrCTE(nullptr),
+	  m_phmpidcrsCTE(nullptr)
 {
 	GPOS_ASSERT(nullptr != mp);
 	m_phmulcteinfoentry = GPOS_NEW(m_mp) UlongToCTEInfoEntryMap(m_mp);
 	m_phmulprodconsmap = GPOS_NEW(m_mp) UlongToProducerConsumerMap(m_mp);
+	m_phmcidcrCTE = GPOS_NEW(m_mp) UlongToColRefMap(m_mp);
+	m_phmpidcrsCTE = GPOS_NEW(m_mp) UlongToColRefArrayMap(m_mp);
 }
 
 //---------------------------------------------------------------------------
@@ -183,6 +188,8 @@ CCTEInfo::~CCTEInfo()
 {
 	CRefCount::SafeRelease(m_phmulcteinfoentry);
 	CRefCount::SafeRelease(m_phmulprodconsmap);
+	CRefCount::SafeRelease(m_phmcidcrCTE);
+	CRefCount::SafeRelease(m_phmpidcrsCTE);
 }
 
 
@@ -714,8 +721,9 @@ CCTEInfo::MarkUnusedCTEs()
 UlongToColRefMap *
 CCTEInfo::PhmulcrConsumerToProducer(
 	CMemoryPool *mp, ULONG ulCTEId,
-	CColRefSet *pcrs,			   // set of columns to check
-	CColRefArray *pdrgpcrProducer  // producer columns
+	CColRefSet *pcrs,			    // set of columns to check
+	CColRefArray *pdrgpcrProducer,  // producer columns
+	ULongPtrArray *pdrgpcrUnusedProducer // producer unused columns
 )
 {
 	GPOS_ASSERT(nullptr != pcrs);
@@ -727,13 +735,20 @@ CCTEInfo::PhmulcrConsumerToProducer(
 	while (crsi.Advance())
 	{
 		CColRef *colref = crsi.Pcr();
+		// pruned colref no need do the mapping
+		if (colref->GetUsage() != CColRef::EUsed) {
+			continue;
+		}
 		ULONG ulPos = UlConsumerColPos(ulCTEId, colref);
 
 		if (gpos::ulong_max != ulPos)
 		{
-			GPOS_ASSERT(ulPos < pdrgpcrProducer->Size());
+			GPOS_ASSERT(ulPos < pdrgpcrUnusedProducer->Size());
+			ULONG remapUlPos = ulPos - *(*pdrgpcrUnusedProducer)[ulPos];
+			GPOS_ASSERT(remapUlPos < pdrgpcrProducer->Size());
 
-			CColRef *pcrProducer = (*pdrgpcrProducer)[ulPos];
+			CColRef *pcrProducer = (*pdrgpcrProducer)[remapUlPos];
+			pcrProducer->MarkAsUsed();
 			BOOL fSuccess GPOS_ASSERTS_ONLY = colref_mapping->Insert(
 				GPOS_NEW(mp) ULONG(colref->Id()), pcrProducer);
 			GPOS_ASSERT(fSuccess);

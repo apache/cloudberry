@@ -320,10 +320,55 @@ CLogicalCTEConsumer::PopCopyWithRemappedColumns(
 	CMemoryPool *mp, UlongToColRefMap *colref_mapping, BOOL must_exist)
 {
 	CColRefArray *colref_array = nullptr;
+	CCTEInfo * cteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
+
 	if (must_exist)
 	{
+		UlongToColRefMap *consumer_mapping;
+		UlongToColRefArrayMap *producer_mapping;
+		ULONG colid;
+		ULONG colref_size;
+
 		colref_array =
 			CUtils::PdrgpcrRemapAndCreate(mp, m_pdrgpcr, colref_mapping);
+		
+		colref_size = colref_array->Size();
+		GPOS_ASSERT(colref_size == colref_array->Size());
+		
+		consumer_mapping = cteinfo->GetCTEConsumerMapping();
+		producer_mapping = cteinfo->GetCTEProducerMapping();
+		for (ULONG ul = 0; ul < colref_size; ul++) {
+			CColRef *old_colref = (*m_pdrgpcr)[ul];
+			CColRef *new_colref = (*colref_array)[ul];
+
+			colid = old_colref->Id();
+			CColRef *p_colref = consumer_mapping->Find(&colid);
+			if (nullptr == p_colref) {
+				GPOS_RAISE(
+					CException::ExmaInvalid, CException::ExmiInvalid,
+					GPOS_WSZ_LIT(
+						"Not found CTE consumer colid regsiterd in consumer mapping"));
+			}
+
+			BOOL fInserted = consumer_mapping->Insert(
+				GPOS_NEW(mp) ULONG(new_colref->Id()), p_colref);
+
+			if (fInserted) {
+				colid = p_colref->Id();
+
+				const CColRefArray *crarray = producer_mapping->Find(&colid);
+				if (nullptr == crarray)
+				{
+					GPOS_RAISE(
+						CException::ExmaInvalid, CException::ExmiInvalid,
+						GPOS_WSZ_LIT(
+							"Not found CTE consumer colid regsiterd in consumer mapping"));
+				}
+				
+				(const_cast<CColRefArray *>(crarray))
+						->Append(new_colref);
+			}
+		}
 	}
 	else
 	{

@@ -34,11 +34,21 @@ CPhysicalCTEConsumer::CPhysicalCTEConsumer(CMemoryPool *mp, ULONG id,
 										   UlongToColRefMap *colref_mapping)
 	: CPhysical(mp),
 	  m_id(id),
-	  m_pdrgpcr(colref_array),
+	  m_pdrgpcr(nullptr),
 	  m_phmulcr(colref_mapping)
 {
 	GPOS_ASSERT(nullptr != colref_array);
 	GPOS_ASSERT(nullptr != colref_mapping);
+
+	ULONG colref_size = colref_array->Size();
+	m_pdrgpcr = GPOS_NEW(mp) CColRefArray(mp);
+
+	for (ULONG index = 0; index < colref_size; index++) {
+		CColRef *col_ref = (*colref_array)[index];
+		if (col_ref->GetUsage() == CColRef::EUsed) {
+			m_pdrgpcr->Append(col_ref);
+		}
+	}
 }
 
 //---------------------------------------------------------------------------

@@ -58,9 +58,15 @@ using UlongToDoubleMapIter =
 	CHashMapIter<ULONG, CDouble, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
 				 CleanupDelete<ULONG>, CleanupDelete<CDouble>>;
 
+// hash map from column ULONG to ULONG
 using UlongToUlongMap =
 	CHashMap<ULONG, ULONG, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
 			 CleanupDelete<ULONG>, CleanupDelete<ULONG>>;
+
+// iterator
+using UlongToUlongMapIter =
+	CHashMapIter<ULONG, ULONG, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
+				 CleanupDelete<ULONG>, CleanupDelete<ULONG>>;
 
 // hash maps mapping INT -> ULONG
 using IntToUlongMap =

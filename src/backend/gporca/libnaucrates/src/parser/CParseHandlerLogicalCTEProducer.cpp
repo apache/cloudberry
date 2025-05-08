@@ -72,7 +72,7 @@ CParseHandlerLogicalCTEProducer::StartElement(
 
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(
 		m_mp,
-		GPOS_NEW(m_mp) CDXLLogicalCTEProducer(m_mp, id, output_colids_array));
+		GPOS_NEW(m_mp) CDXLLogicalCTEProducer(m_mp, id, output_colids_array, true /*could_be_pruned*/));
 
 	// create and activate the parse handler for the child expression node
 	CParseHandlerBase *child_parse_handler =
