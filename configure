@@ -1618,7 +1618,7 @@ Optional Features:
                           library)
   --disable-preload-ic-module
                           disable preload interconnect module
-  --enable-pax            enable pax support
+  --disable-pax           disable pax support
   --disable-thread-safety disable thread-safety in client libraries
   --enable-openssl-redirect
                           enable redirect openssl interface to internal

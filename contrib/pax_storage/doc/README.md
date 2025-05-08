@@ -21,7 +21,7 @@ PAX has the following features:
 
 ### Build PAX
 
-PAX will be built with `--enable-pax` when users building the Cloudberry.
+PAX will be built by default when users are building the Cloudberry.
 
 ### Build debug version
 
