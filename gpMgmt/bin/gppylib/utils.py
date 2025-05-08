@@ -5,8 +5,7 @@ from subprocess import *
 from sys import *
 from xml.dom import minidom
 from xml.dom import Node
-
-import pgdb
+import psycopg2
 from gppylib.gplog import *
 
 logger = get_default_logger()
@@ -503,14 +502,20 @@ def escapeDoubleQuoteInSQLString(string, forceDoubleQuote=True):
         string = '"' + string + '"'
     return string
 
-
-def Escape(query_str):
-    return pgdb.escape_string(query_str)
-
+# Escape single quotes, backslashes appearing in the string according to the SQL string constants syntax.
+# E.g.,
+# >>> escape_string(r"O'Reilly")
+# "O''Reilly"
+def escape_string(string):
+    adapted = psycopg2.extensions.QuotedString(string)
+    # The getquoted() API returns 'latin-1' encoded binary string by default, we need to specify
+    # the encoding manually.
+    adapted.encoding = 'utf-8'
+    return adapted.getquoted().decode()[1:-1]
 
 def escapeArrayElement(query_str):
     # also escape backslashes and double quotes, in addition to the doubling of single quotes
-    return pgdb.escape_string(query_str.encode(errors='backslashreplace')).decode(errors='backslashreplace').replace('\\','\\\\').replace('"','\\"')
+    return escape_string(query_str.encode(errors='backslashreplace')).encode().decode(errors='backslashreplace').replace('\\','\\\\').replace('"','\\"')
 
 
 # Transform Python list to Postgres array literal (of the form: '{...}')
@@ -593,7 +598,7 @@ def formatInsertValuesList(row, starelid, inclHLL):
         # Format stavalues5 for an hll slot
         elif i == 30 and hll:
             if inclHLL:
-                val = '\'{"%s"}\'' % pgdb.escape_bytea(val[0])
+                val = '\'{\\%s}\'' % val[0]
                 rowVals.append('\t{0}::{1}'.format(val, 'bytea[]'))
             else:
                 rowVals.append('\t{0}'.format('NULL::int4[]'))

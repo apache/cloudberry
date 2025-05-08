@@ -3,11 +3,15 @@
 
 -- AO table
 CREATE TABLE ao_index_build_progress(i int, j bigint) USING ao_row WITH (compresstype=zstd, compresslevel=2);
-CREATE
+CREATE TABLE
 
 -- Insert all tuples to seg1.
 INSERT INTO ao_index_build_progress SELECT 0, i FROM generate_series(1, 100000) i;
-INSERT 100000
+INSERT 0 100000
+INSERT INTO ao_index_build_progress SELECT 2, i FROM generate_series(1, 100000) i;
+INSERT 0 100000
+INSERT INTO ao_index_build_progress SELECT 5, i FROM generate_series(1, 100000) i;
+INSERT 0 100000
 
 -- Suspend execution when some blocks have been read.
 SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'suspend', '', '', '', 10, 10, 0, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
@@ -40,15 +44,19 @@ SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', d
 (1 row)
 
 1<:  <... completed>
-CREATE
+CREATE INDEX
 
 -- AOCO table
 CREATE TABLE aoco_index_build_progress(i int, j int ENCODING (compresstype=zstd, compresslevel=2)) USING ao_column;
-CREATE
+CREATE TABLE
 
 -- Insert all tuples to seg1.
 INSERT INTO aoco_index_build_progress SELECT 0, i FROM generate_series(1, 100000) i;
-INSERT 100000
+INSERT 0 100000
+INSERT INTO aoco_index_build_progress SELECT 2, i FROM generate_series(1, 100000) i;
+INSERT 0 100000
+INSERT INTO aoco_index_build_progress SELECT 5, i FROM generate_series(1, 100000) i;
+INSERT 0 100000
 
 -- Suspend execution when some blocks have been read.
 SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'suspend', '', '', '', 5, 5, 0, dbid) FROM gp_segment_configuration WHERE content = 1 AND role = 'p';
@@ -83,7 +91,7 @@ SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', d
 (1 row)
 
 1<:  <... completed>
-CREATE
+CREATE INDEX
 
 -- Repeat the test for another index build
 
@@ -120,4 +128,4 @@ SELECT gp_inject_fault('AppendOnlyStorageRead_ReadNextBlock_success', 'reset', d
 (1 row)
 
 1<:  <... completed>
-CREATE
+CREATE INDEX
