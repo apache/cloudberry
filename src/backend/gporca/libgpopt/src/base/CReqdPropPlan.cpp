@@ -422,15 +422,13 @@ CReqdPropPlan::PrppEmpty(CMemoryPool *mp)
 IOstream &
 CReqdPropPlan::OsPrint(IOstream &os) const
 {
-	if (GPOS_FTRACE(EopttracePrintRequiredColumns))
+
+	os << "req cols: [";
+	if (nullptr != m_pcrs)
 	{
-		os << "req cols: [";
-		if (nullptr != m_pcrs)
-		{
-			os << (*m_pcrs);
-		}
-		os << "], ";
+		os << (*m_pcrs);
 	}
+	os << "], ";
 
 	os << "req CTEs: [";
 	if (nullptr != m_pcter)

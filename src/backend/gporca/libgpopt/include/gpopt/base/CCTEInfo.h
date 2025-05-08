@@ -219,6 +219,12 @@ private:
 	// consumers inside each cte/main query
 	UlongToProducerConsumerMap *m_phmulprodconsmap;
 
+	// mappings CTE consumer ColId(Not DXL id) -> CTE producer Colref
+	UlongToColRefMap *m_phmcidcrCTE;
+
+	// mappings CTE producer ColId(Not DXL id) -> CTE consumer Colref Array
+	UlongToColRefArrayMap *m_phmpidcrsCTE;
+
 	// initialize default statistics for a given CTE Producer
 	void InitDefaultStats(CExpression *pexprCTEProducer);
 
@@ -266,6 +272,24 @@ public:
 
 	// replace cte producer with given expression
 	void ReplaceCTEProducer(CExpression *pexprCTEProducer);
+
+	// get the consumer colid -> producer colref map 
+	UlongToColRefMap *
+	GetCTEConsumerMapping() const {
+		return m_phmcidcrCTE;
+	}
+
+	// get the producer colid -> consumer colref array map 
+	UlongToColRefArrayMap *
+	GetCTEProducerMapping() const {
+		return m_phmpidcrsCTE;
+	}
+
+	// exist the CTE in global CTEInfo
+	BOOL 
+	ExistCTE() const {
+		return m_ulNextCTEId > 0;
+	}
 
 	// next available CTE id
 	ULONG
@@ -316,7 +340,8 @@ public:
 	// return a map from Id's of consumer columns in the given column set to their corresponding producer columns
 	UlongToColRefMap *PhmulcrConsumerToProducer(CMemoryPool *mp, ULONG ulCTEId,
 												CColRefSet *pcrs,
-												CColRefArray *pdrgpcrProducer);
+												CColRefArray *pdrgpcrProducer,
+												ULongPtrArray *pdrgpcrUnusedProducer);
 
 };	// CCTEInfo
 }  // namespace gpopt
