@@ -58,7 +58,7 @@ namespace pax {
 #define PAX_MIN_BLOOM_FILTER_WORK_MEMORY_BYTES (1 * 1024)
 #define PAX_MAX_BLOOM_FILTER_WORK_MEMORY_BYTES (INT_MAX)
 
-bool pax_enable_debug = true;
+bool pax_enable_debug = false;
 bool pax_enable_sparse_filter = true;
 bool pax_enable_row_filter = false;
 int pax_scan_reuse_buffer_size = 0;
@@ -127,7 +127,7 @@ static bool CheckDefaultStorageFormat(char **newval, void **extra,
 
 void DefineGUCs() {
   DefineCustomBoolVariable("pax_enable_debug", "enable pax debug", NULL,
-                           &pax::pax_enable_debug, true, PGC_USERSET, 0, NULL,
+                           &pax::pax_enable_debug, false, PGC_USERSET, 0, NULL,
                            NULL, NULL);
 
   DefineCustomBoolVariable("pax_enable_sparse_filter",
