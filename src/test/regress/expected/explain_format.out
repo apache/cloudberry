@@ -17,6 +17,8 @@
 -- s/Memory used:  \d+\w?B/Memory used: ###B/
 -- m/Memory Usage: \d+\w?B/
 -- s/Memory Usage: \d+\w?B/Memory Usage: ###B/
+-- m/Memory wanted:  \d+\w?kB/
+-- s/Memory wanted:  \d+\w?kB/Memory wanted: ###kB/
 -- m/Peak Memory Usage: \d+/
 -- s/Peak Memory Usage: \d+/Peak Memory Usage: ###/
 -- m/Buckets: \d+/
@@ -583,9 +585,81 @@ QUERY PLAN
   }
 ]
 (1 row)
--- explain_processing_on
+-- start_matchsubs
+-- m/Extra Text: \(seg\d+\)   hash table\(s\): \d+; \d+ groups total in \d+ batches, \d+ spill partitions; disk usage: \d+KB; chain length \d+.\d+ avg, \d+ max; using \d+ of \d+ buckets; total \d+ expansions./
+-- s/Extra Text: \(seg\d+\)   hash table\(s\): \d+; \d+ groups total in \d+ batches, \d+ spill partitions; disk usage: \d+KB; chain length \d+.\d+ avg, \d+ max; using \d+ of \d+ buckets; total \d+ expansions./Extra Text: (seg0)   hash table(s): ###; ### groups total in ### batches, ### spill partitions; disk usage: ###KB; chain length ###.## avg, ### max; using ## of ### buckets; total ### expansions./
+-- m/Work_mem: \d+K bytes max, \d+K bytes wanted/
+-- s/Work_mem: \d+K bytes max, \d+K bytes wanted/Work_mem: ###K bytes max, ###K bytes wanted/
+-- end_matchsubs
+-- Greenplum hash table extra message
+CREATE TABLE test_src_tbl AS
+SELECT i % 10000 AS a, i % 10000 + 1 AS b FROM generate_series(1, 50000) i DISTRIBUTED BY (a);
+ANALYZE test_src_tbl;
+-- Enable optimizer_enable_hashagg, and set statement_mem to a small value to force spilling
+set optimizer_enable_hashagg = on;
+SET statement_mem = '1000kB';
+-- Hashagg with spilling
+CREATE TABLE test_hashagg_spill AS
+SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+EXPLAIN (analyze, costs off) SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;
+QUERY PLAN
+Gather Motion 3:1  (slice1; segments: 3) (actual time=8.948..21.656 rows=10000 loops=1)
+  ->  HashAggregate (actual time=13.950..15.183 rows=3386 loops=1)
+        Group Key: a
+        Extra Text: (seg0)   hash table(s): 1; 3368 groups total in 4 batches, 2576 spill partitions; disk usage: 1024KB; chain length 2.9 avg, 9 max; using 3368 of 20480 buckets; total 0 expansions.
+
+        ->  HashAggregate (actual time=12.113..12.658 rows=3386 loops=1)
+              Group Key: a, b
+              Extra Text: (seg0)   hash table(s): 1; chain length 2.3 avg, 5 max; using 3368 of 8192 buckets; total 1 expansions.
+
+              ->  Seq Scan on test_src_tbl (actual time=0.015..1.748 rows=16930 loops=1)
+Planning Time: 0.167 ms
+  (slice0)    Executor memory: 236K bytes.
+* (slice1)    Executor memory: 657K bytes avg x 3 workers, 722K bytes max (seg0).  Work_mem: 753K bytes max, 721K bytes wanted.
+Memory used:  1000kB
+Memory wanted:  1640kB
+Optimizer: Postgres query optimizer
+Execution Time: 22.346 ms
+(17 rows)
+-- Hashagg with grouping sets
+CREATE TABLE test_hashagg_groupingsets AS
+SELECT a, avg(b) AS b FROM test_src_tbl GROUP BY grouping sets ((a), (b));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- The planner generates multiple hash tables but ORCA uses Shared Scan.
+EXPLAIN (analyze, costs off) SELECT a, avg(b) AS b FROM test_src_tbl GROUP BY grouping sets ((a), (b));
+QUERY PLAN
+Gather Motion 3:1  (slice1; segments: 3) (actual time=57.360..82.135 rows=20000 loops=1)
+  ->  Finalize HashAggregate (actual time=57.788..78.873 rows=6769 loops=1)
+        Group Key: a, b, (GROUPINGSET_ID())
+        Extra Text: (seg0)   hash table(s): 1; 6570 groups total in 16 batches, 20604 spill partitions; disk usage: 1824KB; chain length 2.7 avg, 10 max; using 6570 of 34816 buckets; total 0 expansions.
+
+        ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual time=14.477..54.576 rows=6769 loops=1)
+              Hash Key: a, b, (GROUPINGSET_ID())
+              ->  Partial HashAggregate (actual time=21.224..38.700 rows=6772 loops=1)
+                    Hash Key: a
+                    Hash Key: b
+                    Extra Text: (seg1)   hash table(s): 2; 6772 groups total in 40 batches, 121260 spill partitions; disk usage: 2912KB; chain length 2.1 avg, 6 max; using 3386 of 83968 buckets; total 0 expansions.
+
+                    ->  Seq Scan on test_src_tbl (actual time=0.043..3.471 rows=16930 loops=1)
+Planning Time: 0.202 ms
+  (slice0)    Executor memory: 205K bytes.
+* (slice1)    Executor memory: 467K bytes avg x 3 workers, 467K bytes max (seg1).  Work_mem: 705K bytes max, 1921K bytes wanted.
+* (slice2)    Executor memory: 610K bytes avg x 3 workers, 631K bytes max (seg0).  Work_mem: 633K bytes max, 2377K bytes wanted.
+Memory used:  1000kB
+Memory wanted:  5052kB
+Optimizer: Postgres query optimizer
+Execution Time: 84.367 ms
+(21 rows)
+RESET optimizer_enable_hashagg;
+RESET statement_mem;
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
 DROP TABLE box_locations;
 DROP TABLE jsonexplaintest;
+DROP TABLE test_src_tbl;
+DROP TABLE test_hashagg_spill;
+DROP TABLE test_hashagg_groupingsets;

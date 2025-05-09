@@ -4266,7 +4266,7 @@ show_hashagg_info(AggState *aggstate, ExplainState *es)
 	}
 
 	/* Display stats for each parallel worker */
-	if (es->analyze && aggstate->shared_info != NULL)
+	if (aggstate->shared_info != NULL)
 	{
 		for (int n = 0; n < aggstate->shared_info->num_workers; n++)
 		{
