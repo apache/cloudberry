@@ -32,14 +32,18 @@
 
 -- Create tables (AO, AOCO)
 -1U: CREATE TABLE ao_foo (n int) WITH (appendonly=true);
+CREATE TABLE
 -1U: CREATE TABLE aoco_foo (n int, m int) WITH (appendonly=true, orientation=column);
+CREATE TABLE
 
 -- Switch WAL file
 -1U: SELECT true FROM pg_switch_wal();
 -- Insert data (AO)
 -1U: INSERT INTO ao_foo SELECT generate_series(1,10);
+INSERT 0 10
 -- Insert data (AOCO)
 -1U: INSERT INTO aoco_foo SELECT generate_series(1,10), generate_series(1,10);
+INSERT 0 10
 -- Delete data and run vacuum (AO)
 -1U: DELETE FROM ao_foo WHERE n > 5;
 -1U: VACUUM;
@@ -62,8 +66,10 @@
 -1U: SELECT true FROM pg_switch_wal();
 -- Insert data (AO)
 -1U: INSERT INTO ao_foo SELECT generate_series(1,10);
+INSERT 0 10
 -- Insert data (AOCO)
 -1U: INSERT INTO aoco_foo SELECT generate_series(1,10), generate_series(1,10);
+INSERT 0 10
 -- Delete data and run vacuum (AO)
 -1U: DELETE FROM ao_foo WHERE n > 5;
 -1U: VACUUM;
@@ -74,8 +80,10 @@
 -- Validate wal records
 ! last_wal_file=$(psql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn())" postgres) && pg_waldump ${last_wal_file} -p ${COORDINATOR_DATA_DIRECTORY}/pg_wal -r appendonly;
 
--1U: DROP TABLE ao_foo; 
+-1U: DROP TABLE ao_foo;
+DROP TABLE
 -1U: DROP TABLE aoco_foo;
+DROP TABLE
 
 -- Reset wal_level
 !\retcode gpconfig -r wal_level --masteronly;

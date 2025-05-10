@@ -1,5 +1,5 @@
 1:CREATE TABLE crash_test_redundant(c1 int);
-CREATE
+CREATE TABLE
 
 1:SELECT role, preferred_role, content, status FROM gp_segment_configuration;
  role | preferred_role | content | status 

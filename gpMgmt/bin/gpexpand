@@ -17,10 +17,10 @@ import signal
 import traceback
 from collections import defaultdict
 from time import strftime, sleep
-
+import psycopg2
+from psycopg2 import DatabaseError, OperationalError
+from psycopg2 import extras
 try:
-    import pg, pgdb
-
     from gppylib.commands.unix import *
     from gppylib.commands.gp import *
     from gppylib.gparray import GpArray, MODE_NOT_SYNC, STATUS_DOWN
@@ -32,9 +32,7 @@ try:
     from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
     from gppylib.system import configurationInterface, configurationImplGpdb
     from gppylib.system.environment import GpCoordinatorEnvironment
-    from pgdb import DatabaseError
-    from gppylib.gpcatalog import COORDINATOR_ONLY_TABLES_MAPPED
-    from gppylib.gpcatalog import COORDINATOR_ONLY_TABLES_NON_MAPPED
+    from gppylib.gpcatalog import COORDINATOR_ONLY_TABLES
     from gppylib.operations.package import SyncPackages
     from gppylib.operations.utils import ParallelOperation
     from gppylib.parseutils import line_reader, check_values, canonicalize_address
@@ -1864,7 +1862,7 @@ WHERE
                 expansionStopped)
             dbconn.execSQL(self.conn, sql)
             self.conn.close()
-        except pgdb.OperationalError:
+        except OperationalError:
             pass
         except Exception:
             # schema doesn't exist.  Cancel or error during setup
@@ -1916,7 +1914,7 @@ WHERE
     def connect_database(self, dbname):
         test_url = copy.deepcopy(self.dburl)
         test_url.pgdb = dbname
-        c = dbconn.connect(test_url, encoding='UTF8', allowSystemTableMods=True)
+        c = dbconn.connect(test_url, encoding='UTF8', allowSystemTableMods=True, cursorFactory=psycopg2.extras.NamedTupleCursor)
         return c
 
     def sync_packages(self):
@@ -2157,7 +2155,7 @@ class ExpandCommand(SQLCommand):
 
         try:
             status_conn = dbconn.connect(self.status_url, encoding='UTF8')
-            table_conn = dbconn.connect(self.table_url, encoding='UTF8')
+            table_conn = dbconn.connect(self.table_url, encoding='UTF8', cursorFactory=psycopg2.extras.NamedTupleCursor)
         except DatabaseError as ex:
             if self.options.verbose:
                 logger.exception(ex)

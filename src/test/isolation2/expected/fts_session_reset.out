@@ -6,15 +6,24 @@
 
 -- set these values purely to cut down test time, as default ts trigger is
 -- every min and 5 retries
+alter system set gp_fts_probe_interval to 10;
+ALTER SYSTEM
+alter system set gp_fts_probe_retries to 0;
+ALTER SYSTEM
+select pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)
 
 create table test_fts_session_reset(c1 int);
-CREATE
+CREATE TABLE
 
 1:BEGIN;
 BEGIN
 -- let the dispatcher create a gang
 1:insert into test_fts_session_reset select * from generate_series(1,20);
-INSERT 20
+INSERT 0 20
 -- this injected fault can make dispatcher think the primary is down
 2:select gp_inject_fault_infinite('fts_conn_startup_packet', 'error', dbid) from gp_segment_configuration where role='p' and content=0;
  gp_inject_fault_infinite 
@@ -44,12 +53,7 @@ ERROR:  gang was lost due to cluster reconfiguration (cdbgang_async.c:98)
 1:select count(*) from test_fts_session_reset;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 1:END;
-END
-1:select pg_sleep(30);
- pg_sleep 
-----------
-          
-(1 row)
+ROLLBACK
 1:select count(*) from test_fts_session_reset;
  count 
 -------
@@ -117,3 +121,14 @@ select count(*) from gp_segment_configuration where status = 'd';
 -------
  0     
 (1 row)
+
+alter system reset gp_fts_probe_interval;
+ALTER SYSTEM
+alter system reset gp_fts_probe_retries;
+ALTER SYSTEM
+select pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t              
+(1 row)
+
