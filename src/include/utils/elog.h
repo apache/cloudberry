@@ -20,6 +20,9 @@
 #include <sys/time.h>
 #include <setjmp.h>
 #include "miscadmin.h" /* dispatch_nest_level */
+#include "lib/stringinfo.h"
+
+#include "postmaster/syslogger.h"
 
 /* Error level codes */
 #define DEBUG5		10			/* Debugging messages, in categories of
@@ -578,6 +581,12 @@ extern void write_pipe_chunks(char *data, int len, int dest);
 /* Destination-specific functions */
 extern void write_csvlog(ErrorData *edata);
 extern void write_jsonlog(ErrorData *edata);
+
+extern void append_stacktrace(PipeProtoChunk *buffer,
+							  StringInfo append,
+							  void *const *stackarray,
+							  int stacksize,
+							  bool amsyslogger);
 
 #ifdef HAVE_SYSLOG
 extern void set_syslog_parameters(const char *ident, int facility);

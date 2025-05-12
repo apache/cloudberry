@@ -87,6 +87,7 @@
 #include "storage/proc.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
+#include "utils/json.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
 
@@ -234,10 +235,6 @@ ignore_returned_result(long long int result)
 {
 	(void) result;
 }
-
-static void setup_formatted_log_time(void);
-static void setup_formatted_start_time(void);
-
 
 /*
  * is_log_level_output -- is elevel logically >= log_min_level?
@@ -2862,7 +2859,7 @@ get_formatted_log_time(void)
 
 	/* 'paste' microseconds into place... */
 	sprintf(msbuf, ".%06d", (int) (saved_timeval.tv_usec));
-	memcpy(formatted_log_time + 19, msbuf, 4);
+	memcpy(formatted_log_time + 19, msbuf, 7);
 
 	return formatted_log_time;
 }
@@ -3205,7 +3202,7 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 				break;
 			case 's':
 				{
-					char	   *start_time = get_formatted_start_time();
+					char	 *start_time = get_formatted_start_time();
 
 					if (padding != 0)
 						appendStringInfo(buf, "%*s", padding, start_time);
@@ -3590,7 +3587,7 @@ append_string_to_pipe_chunk(PipeProtoChunk *buffer, const char* input)
  * If buffer is NULL, the stack is written to the syslogger file if amsyslogger is true.
  * Otherwise, write to stderr.
  */
-static void
+void
 append_stacktrace(PipeProtoChunk *buffer, StringInfo append, void *const *stackarray,
 				  int stacksize, bool amsyslogger)
 {
@@ -3826,7 +3823,6 @@ write_syslogger_file_string(const char *str, bool amsyslogger, bool append_comma
 	}
 }
 
-
 /*
  * Directly write the message in CSV format to the syslogger file or stderr.
  */
@@ -3997,7 +3993,7 @@ write_message_to_server_log(int elevel,
 	buffer.hdr.thid = mythread();
 	buffer.hdr.main_thid = mainthread();
 	buffer.hdr.chunk_no = 0;
-	buffer.hdr.is_last = 'f';
+	buffer.hdr.flags = 0;
 	buffer.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 	buffer.hdr.log_line_number = log_line_number++;
 	buffer.hdr.is_segv_msg = 'f';
@@ -4106,7 +4102,7 @@ write_message_to_server_log(int elevel,
 	}
 
 	/* Send the last chunk */
-	buffer.hdr.is_last = 't';
+	buffer.hdr.flags |= PIPE_PROTO_IS_LAST;
 	gp_write_pipe_chunk((char *) &buffer, buffer.hdr.len + PIPE_HEADER_SIZE);
 }
 
@@ -4117,15 +4113,29 @@ static void
 send_message_to_server_log(ErrorData *edata)
 {
 	StringInfoData buf;
-	bool		fallback_to_stderr = false;
+	bool		fallback_to_json = false;
 	StringInfoData prefix;
 	int			nc;
 
 	AssertImply(mainthread() != 0, mythread() == mainthread());
 
-	if (Log_destination & LOG_DESTINATION_STDERR)
+	/* Write to JSON log, if enabled */
+    if (Logging_collector && ((Log_destination & LOG_DESTINATION_JSONLOG) || gp_log_format == 2))
+    {
+		if (redirection_done || MyBackendType == B_LOGGER)
+    	{
+    		/* force a log timestamp reset */
+        	saved_timeval_set = false;
+        	formatted_log_time[0] = '\0';
+
+			write_jsonlog(edata);
+			fallback_to_json = true;
+		}
+    }
+
+	if (Logging_collector)
 	{
-		if (Logging_collector && gp_log_format == 1)
+		if ((Log_destination & LOG_DESTINATION_CSVLOG) || gp_log_format == 1)
 		{
 			if (redirection_done)
 			{
@@ -4155,11 +4165,16 @@ send_message_to_server_log(ErrorData *edata)
 			{
 				write_syslogger_in_csv(edata, false);
 			}
-
 			return;
 		}
 	}
 
+	if (fallback_to_json)
+	{
+		return;
+	}
+
+	/* Fall back to stderr */
 	/* Format message prefix. */
 	initStringInfo(&buf);
 
@@ -4366,43 +4381,8 @@ send_message_to_server_log(ErrorData *edata)
 	}
 #endif							/* WIN32 */
 
-	/* Write to csvlog, if enabled */
-	if (Log_destination & LOG_DESTINATION_CSVLOG)
-	{
-		/*
-		 * Send CSV data if it's safe to do so (syslogger doesn't need the
-		 * pipe).  If this is not possible, fallback to an entry written to
-		 * stderr.
-		 */
-		if (redirection_done || MyBackendType == B_LOGGER)
-			write_csvlog(edata);
-		else
-			fallback_to_stderr = true;
-	}
-
-	/* Write to JSON log, if enabled */
-	if (Log_destination & LOG_DESTINATION_JSONLOG)
-	{
-		/*
-		 * Send JSON data if it's safe to do so (syslogger doesn't need the
-		 * pipe).  If this is not possible, fallback to an entry written to
-		 * stderr.
-		 */
-		if (redirection_done || MyBackendType == B_LOGGER)
-		{
-			write_jsonlog(edata);
-		}
-		else
-			fallback_to_stderr = true;
-	}
-
-	/*
-	 * Write to stderr, if enabled or if required because of a previous
-	 * limitation.
-	 */
-	if ((Log_destination & LOG_DESTINATION_STDERR) ||
-		whereToSendOutput == DestDebug ||
-		fallback_to_stderr)
+	/* Write to stderr, if enabled */
+	if ((Log_destination & LOG_DESTINATION_STDERR) || whereToSendOutput == DestDebug)
 	{
 		/*
 		 * Use the chunking protocol if we know the syslogger should be
@@ -4436,8 +4416,8 @@ send_message_to_server_log(ErrorData *edata)
 	/* If in the syslogger process, try to write messages direct to file */
 	if (MyBackendType == B_LOGGER)
 		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_STDERR);
+	pfree(prefix.data);
 
-	/* No more need of the message formatted for stderr */
 	pfree(buf.data);
 }
 
@@ -5132,7 +5112,8 @@ StandardHandlerForSigillSigsegvSigbus_OnMainThread(char *processName, SIGNAL_ARG
 	buffer.hdr.thid = FIXED_THREAD_ID;
 	buffer.hdr.main_thid = mainthread();
 	buffer.hdr.chunk_no = 0;
-	buffer.hdr.is_last = 't';
+	buffer.hdr.flags = 0;
+	buffer.hdr.flags |= PIPE_PROTO_IS_LAST;
 	buffer.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 	buffer.hdr.is_segv_msg = 't';
 	buffer.hdr.log_line_number = 0;

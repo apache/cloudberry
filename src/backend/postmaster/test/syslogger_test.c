@@ -27,14 +27,16 @@ static void mock_chunk(PipeProtoChunk* p, int dest)
 	p->hdr.chunk_no = 0;
 	p->hdr.is_segv_msg = 'f';
 	p->hdr.next = -1;
-	p->hdr.is_last = 'f';
 	p->hdr.len = MOCK_PIPE_CHUNK_PAYLOAD_SIZE;
 	p->hdr.pid = 10000;
+	p->hdr.flags = 0;
 
 	if (dest == LOG_DESTINATION_STDERR)
 		p->hdr.flags |= PIPE_PROTO_DEST_STDERR;
 	else if (dest == LOG_DESTINATION_CSVLOG)
 		p->hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
+	else if (dest == LOG_DESTINATION_JSONLOG)
+		p->hdr.flags |= PIPE_PROTO_DEST_JSONLOG;
 }
 
 static int
@@ -62,7 +64,7 @@ interleave_chunks_to_buffer(char* logbuffer, int pids, int chunks, int dest)
 	}
 
 	/* interleaved write last chunks */
-	p.hdr.is_last = 't';
+	p.hdr.flags |= PIPE_PROTO_IS_LAST;
 	for (int i = 0; i < pids; i++)
 	{
 		p.hdr.pid = i + 10000;
@@ -90,7 +92,7 @@ thirdparty_chunks_to_buffer(char* logbuffer, int dest)
 	/* mock protocol chunk */
 	PipeProtoChunk p;
 	mock_chunk(&p, LOG_DESTINATION_CSVLOG);
-	p.hdr.is_last = 't';
+	p.hdr.flags |= PIPE_PROTO_IS_LAST;
 	memset(&mock_content, 'a', MOCK_PIPE_CHUNK_PAYLOAD_SIZE);
 	memcpy(p.data, mock_content, MOCK_PIPE_CHUNK_PAYLOAD_SIZE);
 	memcpy(logbuffer, &p, PIPE_HEADER_UNALIGNED_SIZE + MOCK_PIPE_CHUNK_PAYLOAD_SIZE);

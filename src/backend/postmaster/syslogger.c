@@ -139,6 +139,11 @@ ignore_returned_result(long long int result)
 
 static bool chunk_is_postgres_chunk(PipeProtoHeader *hdr)
 {
+	bits8		dest_flags;
+	dest_flags = hdr->flags & (PIPE_PROTO_DEST_STDERR |
+    						  PIPE_PROTO_DEST_CSVLOG |
+    						  PIPE_PROTO_DEST_JSONLOG);
+
     return hdr->zero == 0 && hdr->pid != 0 && hdr->thid != 0 &&
 		pg_popcount((char *) &dest_flags, 1) == 1;
 }
@@ -495,6 +500,18 @@ SysLoggerMain(int argc, char *argv[])
 		}
 
 		/*
+         * GPDB: only update our rotation timestamp if every log file above was
+         * able to rotate. In upstream, this would have been done as part of
+         * logfile_rotate() itself -- Postgres calls that function once, whereas
+         * we call it (up to) three times.
+         */
+        if (all_rotations_occurred)
+        {
+        	set_next_rotation_time();
+        	update_metainfo_datafile();
+        }
+
+		/*
 		 * Calculate time till next time-based rotation, so that we don't
 		 * sleep longer than that.  We assume the value of "now" obtained
 		 * above is still close enough.  Note we can't make this calculation
@@ -690,7 +707,7 @@ SysLogger_Start(void)
 	 * we open syslogFile even when only CSV output is nominally enabled,
 	 * since some code paths will write to syslogFile anyway.)
 	 */
-	if (Log_destination & LOG_DESTINATION_CSVLOG)
+	if (Log_destination & LOG_DESTINATION_CSVLOG || gp_log_format == 1)
 	{
 		filename = logfile_getname(first_syslogger_file_time, ".csv", Log_directory, Log_filename);
 
@@ -704,7 +721,7 @@ SysLogger_Start(void)
 	 * we open syslogFile even when only JSON output is nominally enabled,
 	 * since some code paths will write to syslogFile anyway.)
 	 */
-	if (Log_destination & LOG_DESTINATION_JSONLOG)
+	if (Log_destination & LOG_DESTINATION_JSONLOG || gp_log_format == 2)
 	{
 		filename = logfile_getname(first_syslogger_file_time, ".json", Log_directory, Log_filename);
 
@@ -963,7 +980,7 @@ syslogger_parseArgs(int argc, char *argv[])
 		fd = _open_osfhandle(fd, _O_APPEND | _O_TEXT);
 		if (fd > 0)
 		{
-			csvlogFile = fdopen(fd, "a");
+			jsonlogFile = fdopen(fd, "a");
 			setvbuf(jsonlogFile, NULL, PG_IOLBF, 0);
 		}
 	}
@@ -1117,8 +1134,7 @@ static void
 fillinErrorDataFromSegvChunk(GpErrorData *errorData, PipeProtoChunk *chunk)
 {
 	Assert(chunk != NULL &&
-		   chunk->hdr.is_segv_msg == 't' &&
-		   chunk->hdr.is_last == 't');
+		   chunk->hdr.is_segv_msg == 't');
 
 	GpSegvErrorData *segvData = (GpSegvErrorData *)chunk->data;
 
@@ -1336,7 +1352,7 @@ syslogger_write_errordata(PipeProtoHeader *chunkHeader, GpErrorData *errorData, 
 static void
 syslogger_log_segv_chunk(PipeProtoChunk *chunk)
 {
-	Assert(chunk->hdr.is_segv_msg == 't' && chunk->hdr.is_last == 't');
+	Assert(chunk->hdr.is_segv_msg == 't' && chunk->hdr.flags & PIPE_PROTO_IS_LAST);
 	Assert(chunk->hdr.thid == FIXED_THREAD_ID);
 
 	GpErrorData errorData;
@@ -1385,10 +1401,12 @@ get_str_from_chunk_data(char *str, int *cursor, int total)
 
 void syslogger_log_chunk_data(PipeProtoHeader* p, char *data, int len)
 {
-	if (p->log_format == 't')
+	if (p->flags & PIPE_PROTO_DEST_STDERR)
 	{
 		/* text format chunk data always ended with '\0' */
 		write_syslogger_file(data, len, LOG_DESTINATION_STDERR);
+	} else if (p->flags & PIPE_PROTO_DEST_JSONLOG) {
+		write_syslogger_file(data, len, LOG_DESTINATION_JSONLOG);
 	}
 	else
 	{
@@ -1540,7 +1558,6 @@ process_pipe_input(char *logbuffer, int *bytes_in_logbuffer)
 	{
 		PipeProtoHeader p;
 		int	chunklen;
-		bits8		dest_flags;
 
 		/* Do we have a valid header? */
 		memcpy(&p, cursor, PIPE_HEADER_SIZE);
@@ -2014,9 +2031,9 @@ logfile_rotate(bool time_based_rotation, bool size_based_rotation,
 	else
 		fntime = time(NULL);
 	filename = logfile_getname(fntime, suffix, log_directory, log_filename);
-	if (Log_destination & LOG_DESTINATION_CSVLOG)
+	if (Log_destination & LOG_DESTINATION_CSVLOG || gp_log_format == 1)
 		csvfilename = logfile_getname(fntime, ".csv", log_directory, log_filename);
-	if (Log_destination & LOG_DESTINATION_JSONLOG)
+	if (Log_destination & LOG_DESTINATION_JSONLOG || gp_log_format == 2)
 		jsonfilename = logfile_getname(fntime, ".json", log_directory, log_filename);
 
 	/*
@@ -2225,7 +2242,7 @@ logfile_getname(pg_time_t timestamp, const char *suffix,
 	char	   *tmp_suffix;
 #define LOG_SUFFIX ".log"
 #define CSV_SUFFIX ".csv"
-#define CSV_SUFFIX ".json"
+#define JSON_SUFFIX ".json"
 
 	filename = palloc(MAXPGPATH);
 
@@ -2260,19 +2277,20 @@ logfile_getname(pg_time_t timestamp, const char *suffix,
 	/*
 	 * Only change .csv to .log if gp_log_format is TEXT, otherwise leave it.
 	 */
-	if (gp_log_format == 0 && pg_strcasecmp(tmp_suffix, CSV_SUFFIX) == 0)
+	if (gp_log_format == 0
+		&& (Log_destination & LOG_DESTINATION_CSVLOG) == 0
+		&& (Log_destination & LOG_DESTINATION_JSONLOG) == 0
+		&& (pg_strcasecmp(tmp_suffix, CSV_SUFFIX) == 0))
 	{
 		snprintf(tmp_suffix, sizeof(LOG_SUFFIX), LOG_SUFFIX);
 	}
-
-	if (gp_log_format == 1 && pg_strcasecmp(tmp_suffix, CSV_SUFFIX) != 0)
+	else
 	{
-		snprintf(tmp_suffix, sizeof(CSV_SUFFIX), CSV_SUFFIX);
-	}
-
-	if (gp_log_format == 2 && pg_strcasecmp(tmp_suffix, JSON_SUFFIX) != 0)
-	{
-		snprintf(tmp_suffix, sizeof(JSON_SUFFIX), JSON_SUFFIX);
+		if (suffix != NULL)
+		{
+			len = strlen(filename);
+			strlcpy(tmp_suffix, suffix, MAXPGPATH - len + sizeof(CSV_SUFFIX));
+		}
 	}
 
 	return filename;

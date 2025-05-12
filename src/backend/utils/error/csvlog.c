@@ -198,7 +198,9 @@ write_csvlog(ErrorData *edata)
 	appendStringInfoChar(&buf, ',');
 
 	/* user query --- only reported if not disabled by the caller */
-	print_stmt = check_log_of_query(edata);
+	if (debug_query_string != NULL &&
+		!edata->hide_stmt)
+		print_stmt = true;
 	if (print_stmt)
 		appendCSVLiteral(&buf, debug_query_string);
 	appendStringInfoChar(&buf, ',');
@@ -232,7 +234,13 @@ write_csvlog(ErrorData *edata)
 	appendStringInfoChar(&buf, ',');
 
 	/* backend type */
-	appendCSVLiteral(&buf, get_backend_type_for_log());
+	if (MyProcPid == PostmasterPid)
+		appendCSVLiteral(&buf, "postmaster");
+	else if (MyBackendType == B_BG_WORKER)
+		appendCSVLiteral(&buf, MyBgworkerEntry->bgw_type);
+	else
+		appendCSVLiteral(&buf, GetBackendTypeDesc(MyBackendType));
+
 	appendStringInfoChar(&buf, ',');
 
 	/* leader PID */

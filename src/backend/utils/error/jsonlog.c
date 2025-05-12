@@ -30,6 +30,8 @@
 #include "utils/json.h"
 #include "utils/ps_status.h"
 
+#include "cdb/cdbvars.h"  /* GpIdentity.segindex */
+
 static void appendJSONKeyValueFmt(StringInfo buf, const char *key,
 								  bool escape_key,
 								  const char *fmt,...) pg_attribute_printf(4, 5);
@@ -112,7 +114,7 @@ write_jsonlog(ErrorData *edata)
 {
 	StringInfoData buf;
 	char	   *start_time;
-	char	   *log_time;
+    char	   *log_time;
 
 	/* static counter for line numbers */
 	static long log_line_number = 0;
@@ -161,6 +163,9 @@ write_jsonlog(ErrorData *edata)
 	if (MyProcPid != 0)
 		appendJSONKeyValueFmt(&buf, "pid", false, "%d", MyProcPid);
 
+	/* Thread id */
+	appendJSONKeyValueFmt(&buf, "thid", false, "%ld", mythread());
+
 	/* Remote host and port */
 	if (MyProcPort && MyProcPort->remote_host)
 	{
@@ -169,41 +174,33 @@ write_jsonlog(ErrorData *edata)
 			appendJSONKeyValue(&buf, "remote_port", MyProcPort->remote_port, false);
 	}
 
-	/* Session id */
-	appendJSONKeyValueFmt(&buf, "session_id", true, "%lx.%x",
-						  (long) MyStartTime, MyProcPid);
-
-	/* Line number */
-	appendJSONKeyValueFmt(&buf, "line_num", false, "%ld", log_line_number);
-
-	/* PS display */
-	if (MyProcPort)
-	{
-		StringInfoData msgbuf;
-		const char *psdisp;
-		int			displen;
-
-		initStringInfo(&msgbuf);
-		psdisp = get_ps_display(&displen);
-		appendBinaryStringInfo(&msgbuf, psdisp, displen);
-		appendJSONKeyValue(&buf, "ps", msgbuf.data, true);
-
-		pfree(msgbuf.data);
-	}
-
+	reset_formatted_start_time();
 	/* session start timestamp */
 	start_time = get_formatted_start_time();
 	appendJSONKeyValue(&buf, "session_start", start_time, true);
 
-	/* Virtual transaction id */
-	/* keep VXID format in sync with lockfuncs.c */
-	if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
-		appendJSONKeyValueFmt(&buf, "vxid", true, "%d/%u", MyProc->backendId,
-							  MyProc->lxid);
-
 	/* Transaction id */
 	appendJSONKeyValueFmt(&buf, "txid", false, "%u",
 						  GetTopTransactionIdIfAny());
+
+	/* GPDB specific options */
+	appendJSONKeyValueFmt(&buf, "con", false, "%d", gp_session_id);
+	appendJSONKeyValueFmt(&buf, "cmd", false, "%d", gp_command_count);
+	appendJSONKeyValueFmt(&buf, "seg", false, "%d", GpIdentity.segindex);
+	appendJSONKeyValueFmt(&buf, "slice", false, "%d", currentSliceId);
+	{
+		DistributedTransactionId dist_trans_id;
+		TransactionId local_trans_id;
+		TransactionId subtrans_id;
+
+		GetAllTransactionXids(&dist_trans_id,
+							  &local_trans_id,
+							  &subtrans_id);
+
+		appendJSONKeyValueFmt(&buf, "dist_trans_id", false, "%ld", dist_trans_id);
+		appendJSONKeyValueFmt(&buf, "local_trans_id", false, "%d", local_trans_id);
+		appendJSONKeyValueFmt(&buf, "subtrans_id", false, "%d", subtrans_id);
+	}
 
 	/* Error severity */
 	if (edata->elevel)
@@ -264,34 +261,25 @@ write_jsonlog(ErrorData *edata)
 		}
 	}
 
-	/* Application name */
-	if (application_name && application_name[0] != '\0')
-		appendJSONKeyValue(&buf, "application_name", application_name, true);
-
-	/* backend type */
-	appendJSONKeyValue(&buf, "backend_type", get_backend_type_for_log(), true);
-
-	/* leader PID */
-	if (MyProc)
+	/* stack trace */
+	if ((edata->printstack ||
+			(edata->elevel >= ERROR &&
+			(edata->elevel == PANIC || !edata->omit_location))) &&
+		edata->stacktracesize > 0)
 	{
-		PGPROC	   *leader = MyProc->lockGroupLeader;
+		StringInfo stack_str = makeStringInfo();
+		// amsyslogger will be ignored
+		append_stacktrace(NULL, stack_str, edata->stacktracearray,
+						  edata->stacktracesize, false);
 
-		/*
-		 * Show the leader only for active parallel workers.  This leaves out
-		 * the leader of a parallel group.
-		 */
-		if (leader && leader->pid != MyProcPid)
-			appendJSONKeyValueFmt(&buf, "leader_pid", false, "%d",
-								  leader->pid);
+		appendJSONKeyValue(&buf, "stack_trace", stack_str->data, true);
+
+		pfree(stack_str->data);
 	}
 
-	/* query id */
-	appendJSONKeyValueFmt(&buf, "query_id", false, "%lld",
-						  (long long) pgstat_get_my_query_id());
-
 	/* Finish string */
-	appendStringInfoChar(&buf, '}');
-	appendStringInfoChar(&buf, '\n');
+    appendStringInfoChar(&buf, '}');
+    appendStringInfoChar(&buf, '\n');
 
 	/* If in the syslogger process, try to write messages direct to file */
 	if (MyBackendType == B_LOGGER)
@@ -299,5 +287,5 @@ write_jsonlog(ErrorData *edata)
 	else
 		write_pipe_chunks(buf.data, buf.len, LOG_DESTINATION_JSONLOG);
 
-	pfree(buf.data);
+    pfree(buf.data);
 }

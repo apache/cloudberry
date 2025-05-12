@@ -77,7 +77,6 @@ typedef struct
 	int32       thid;			/* thread id */
 	int32		main_thid;		/* main thread id */
 	int32		chunk_no;		/* chunk number */
-	char		log_format;		/* 'c' for csv, 't' for text */
 	char		is_segv_msg;	/* indicate whether this is a message sent in SEGV/BUS/ILL handler */
 	int64		log_line_number;	/* indicate the order of the message */
 	int64		next;			/* next chained chunk.  also force an 8 bytes align */
