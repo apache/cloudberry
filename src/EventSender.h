@@ -4,9 +4,15 @@
 #include <unordered_map>
 #include <string>
 
+#define typeid __typeid
 extern "C" {
 #include "utils/metrics_utils.h"
+#include "cdb/ml_ipc.h"
+#ifdef IC_TEARDOWN_HOOK
+#include "cdb/ic_udpifc.h"
+#endif
 }
+#undef typeid
 
 class UDSConnector;
 struct QueryDesc;
@@ -20,6 +26,7 @@ public:
   void executor_after_start(QueryDesc *query_desc, int eflags);
   void executor_end(QueryDesc *query_desc);
   void query_metrics_collect(QueryMetricsStatus status, void *arg);
+  void ic_metrics_collect();
   void incr_depth() { nesting_level++; }
   void decr_depth() { nesting_level--; }
   EventSender();
@@ -55,5 +62,8 @@ private:
   int nesting_level = 0;
   int64_t nested_calls = 0;
   double nested_timing = 0;
+#ifdef IC_TEARDOWN_HOOK
+  ICStatistics ic_statistics;
+#endif
   std::unordered_map<std::pair<int, int>, QueryItem, pair_hash> query_msgs;
 };
