@@ -3038,7 +3038,7 @@ CTranslatorRelcacheToDXL::RetrieveIndexPartitions(CMemoryPool *mp, OID rel_oid)
 	{
 		OID oid = lfirst_oid(lc);
 		partition_oids->Append(GPOS_NEW(mp)
-								   CMDIdGPDB(IMDId::EmdidGeneral, oid));
+								   CMDIdGPDB(IMDId::EmdidInd, oid));
 	}
 
 	return partition_oids;
