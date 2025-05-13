@@ -120,7 +120,7 @@ CreateQueryDesc(PlannedStmt *plannedstmt,
 	qd->showstatctx = NULL;
 
 	qd->ddesc = NULL;
-
+	qd->showstatctx = NULL;
 	/* not yet executed */
 	qd->already_executed = false;
 

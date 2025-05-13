@@ -1,0 +1,39 @@
+-- start_ignore
+\! gpconfig -c perfmon.enable -v 'off'
+20240612:11:02:26:001401 gpconfig:xx:gpadmin-[INFO]:-completed successfully with parameters '-c perfmon.enable -v off'
+\! gpstop -ari
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Starting gpstop with args: -ari
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Gathering information and validating the environment...
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Obtaining CloudberryDB Coordinator catalog information
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-CloudberryDB Version: 'postgres (Cloudberry Database) 1.5.3+dev.67.g19a252cacb build dev'
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='immediate'
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/workspace/hashdata-lightning/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20240612:11:21:12:026195 gpstop:xx:gpadmin-[INFO]:-Stopping coordinator standby host xx mode=immediate
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Successfully shutdown standby process on xx
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-0.00% of jobs completed
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-100.00% of jobs completed
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-0.00% of jobs completed
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-100.00% of jobs completed
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-----------------------------------------------------
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-----------------------------------------------------
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20240612:11:21:13:026195 gpstop:xx:gpadmin-[INFO]:-Restarting System...
+-- end_ignore
+\! gpconfig -s perfmon.enable
+Values on all segments are consistent
+GUC              : perfmon.enable
+Coordinator value: off
+Segment     value: off
+-- start_ignore
+\c contrib_regression
+drop database if exists gpperfmon;
+-- end_ignore
