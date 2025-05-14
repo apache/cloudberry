@@ -1,5 +1,5 @@
-project(Pax)
 cmake_minimum_required (VERSION 3.11.0)
+project(Pax)
 set(CMAKE_CXX_STANDARD 17)
 
 set(TOP_DIR ${PROJECT_SOURCE_DIR}/../..)
