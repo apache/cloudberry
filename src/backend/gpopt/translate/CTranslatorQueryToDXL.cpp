@@ -4787,7 +4787,7 @@ CTranslatorQueryToDXL::ConstructCTEProducerList(List *cte_list,
 		CDXLLogicalCTEProducer *lg_cte_prod_dxlop =
 			GPOS_NEW(m_mp) CDXLLogicalCTEProducer(
 				m_mp, m_context->m_cte_id_counter->next_id(), colid_array,
-				true /*could_be_pruned*/);
+				!GPOS_FTRACE(EopttraceEnableCTEInlining) /*can_be_pruned*/);
 		CDXLNode *cte_producer_dxlnode =
 			GPOS_NEW(m_mp) CDXLNode(m_mp, lg_cte_prod_dxlop, cte_child_dxlnode);
 

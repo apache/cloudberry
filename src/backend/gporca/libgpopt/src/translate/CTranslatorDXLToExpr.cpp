@@ -18,6 +18,7 @@
 #include "gpopt/base/CAutoOptCtxt.h"
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CColRefSet.h"
+#include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/CColumnFactory.h"
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CEnfdDistribution.h"
@@ -292,7 +293,103 @@ CTranslatorDXLToExpr::Pexpr(const CDXLNode *dxlnode,
 		}
 	}
 
+	// Finally, prune the unused output in CTE producer and consumer
+	(void) PruneCTEs();
 	return pexpr;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToExpr::Pexpr
+//
+//	@doc:
+//		prune the CTEs producer and consumer after DXL tree translated
+//
+//---------------------------------------------------------------------------
+void CTranslatorDXLToExpr::PruneCTEs() 
+{
+	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
+	ULONG group_of_ctes = pcteinfo->CTESize();
+	if (group_of_ctes > 0) {
+		for (ULONG ulCTEId = 0; ulCTEId < group_of_ctes; ulCTEId++){
+			BOOL *umask;
+
+			CExpression *ppexpr = pcteinfo->PexprCTEProducer(ulCTEId);
+			CLogicalCTEProducer *poper = CLogicalCTEProducer::PopConvert(ppexpr->Pop());
+			ULONG pprgpcrsz = poper->Pdrgpcr()->Size();
+			
+			// the producer can't be prune
+			if (!poper->CanBePruned()) {
+				continue;
+			}
+
+			CExpressionArray *cexprs = pcteinfo->PexprCTEConsumer(ulCTEId);
+			ULONG cpexrssz = cexprs->Size();
+
+			// The current consumer is likely to be inlined
+			// So just not prune it.
+			if (pcteinfo->UlConsumers(poper->UlCTEId()) == 1) {
+				for (ULONG ulPos = 0; ulPos < cpexrssz; ulPos++) {
+					CExpression *cepxr = (*cexprs)[ulPos];
+					CLogicalCTEConsumer *coper = CLogicalCTEConsumer::PopConvert(cepxr->Pop());
+					CColRefArray *colrefs = coper->Pdrgpcr();
+					for (ULONG ulcrPos = 0; ulcrPos < colrefs->Size(); ulcrPos++) {
+						CColRef *colref = (*colrefs)[ulcrPos];
+						colref->MarkAsUsed();
+						MarkCTEConsumerColAsUsed(pcteinfo->GetCTEConsumerMapping(), colref->Id());
+					}
+				}
+				continue;
+			}
+			
+			// Calculate the columns of the current consumer requested
+			umask = GPOS_NEW_ARRAY(m_mp, BOOL, pprgpcrsz);
+			clib::Memset(umask, false, pprgpcrsz * sizeof(BOOL));
+
+			for (ULONG ulPos = 0; ulPos < cpexrssz; ulPos++) {
+				CExpression *cepxr = (*cexprs)[ulPos];
+				CLogicalCTEConsumer *coper = CLogicalCTEConsumer::PopConvert(cepxr->Pop());
+				CColRefArray *colrefs = coper->Pdrgpcr();
+
+				GPOS_ASSERT(pprgpcrsz == colrefs->Size());
+
+				for (ULONG ulcrPos = 0; ulcrPos < pprgpcrsz; ulcrPos++) {
+					if ((*colrefs)[ulcrPos]->GetUsage(true, true) == CColRef::EUsed) {
+						umask[ulcrPos] = true;	
+					}
+				}
+
+				coper->MarkAsPruned();
+			}
+
+			// Recalculate the producer's output columns
+			// no need relase umask 
+			poper->RecalOutputColumns(umask, pprgpcrsz);
+
+			// Align consumer and producer output columns.
+			// In fact, we can support the column projection in consumer(SharedInputScan).
+			// However, non-requested columns in consumer(which from producer) may be added to the consumer, 
+			// which will make the plan for consumer(support projection) very complicated. 
+			//
+			// In addition, the performance gain is not significant when the consumer supports projection.
+			CColRefSet *pcrs = poper->DeriveOutputColumns();
+			for (ULONG ulPos = 0; ulPos < cpexrssz; ulPos++) {
+				CExpression *cepxr = (*cexprs)[ulPos];
+				CLogicalCTEConsumer *coper = CLogicalCTEConsumer::PopConvert(cepxr->Pop());
+				UlongToColRefMap *colmaping = coper->Phmulcr();
+
+				CColRefSetIter crsi(*pcrs);
+				while (crsi.Advance())
+				{
+					ULONG colid = crsi.Pcr()->Id();
+					CColRef *consumer_colref = colmaping->Find(&colid);
+					GPOS_ASSERT(consumer_colref);
+					consumer_colref->MarkAsUsed();
+				}
+
+			}
+		}
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -1030,70 +1127,21 @@ CTranslatorDXLToExpr::FCastingUnknownType(IMDId *pmdidSource, IMDId *mdid_dest)
 			 mdid_dest->Equals(&CMDIdGPDB::m_mdid_unknown)));
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToExpr::MarkCTEConsumerColAsUsed
+//
+//	@doc:
+//		after the colref in CTE consumer marked used, the producer should marked 
+//		the relatived colref as used.
+//---------------------------------------------------------------------------
 void 
-CTranslatorDXLToExpr::MarkCTEConsumerColAsUsed(UlongToColRefMap *mcidcrCTE, UlongToColRefArrayMap *mpidcrsCTE, ULONG colid) {
+CTranslatorDXLToExpr::MarkCTEConsumerColAsUsed(UlongToColRefMap *mcidcrCTE, ULONG colid) {
 	CColRef *producer_colref = nullptr;
 	producer_colref = mcidcrCTE->Find(&colid);
 	if (producer_colref) {
-
-#ifdef GPOS_DEBUG
-		if (GPOS_FTRACE(EopttraceDebugCTE)) {
-			CAutoTrace at(m_mp);
-			auto & io_stream = at.Os();
-			io_stream << "MarkProducerUsed, customer id: " << colid << ", producer id:" << producer_colref->Id() << std::endl;
-		}
-#endif
-		if (producer_colref->GetUsage(true, true) != CColRef::EUsed) {
-			producer_colref->MarkAsUsed();
-			MarkCTEProducerColAsUsed(mcidcrCTE, mpidcrsCTE, producer_colref->Id());
-		}
+		producer_colref->MarkAsUsed();
 	}
-}
-
-void 
-CTranslatorDXLToExpr::MarkCTEProducerColAsUsed(UlongToColRefMap *mcidcrCTE, UlongToColRefArrayMap *mpidcrsCTE, ULONG colid) {
-	CColRefArray *consumer_crarray = nullptr;
-
-#ifdef GPOS_DEBUG
-	CAutoTrace at(m_mp);
-	auto & io_stream = at.Os();
-	if (GPOS_FTRACE(EopttraceDebugCTE))
-		io_stream << "MarkCTEProducerColAsUsed, producer id: " << colid;
-#endif
-
-	consumer_crarray = mpidcrsCTE->Find(&colid);
-	if (consumer_crarray) {
-
-#ifdef GPOS_DEBUG
-		if (GPOS_FTRACE(EopttraceDebugCTE))
-			io_stream << ", consumer ids: [";
-#endif
-
-		ULONG crarray_size = consumer_crarray->Size();
-		for (ULONG crindex = 0; crindex < crarray_size; crindex++){
-			auto consumer_colref = (*consumer_crarray)[crindex];
-			
-#ifdef GPOS_DEBUG
-			if (GPOS_FTRACE(EopttraceDebugCTE))
-				io_stream << (*consumer_crarray)[crindex]->Id() << ",";
-#endif
-
-			if (consumer_colref->GetUsage(true, true) != CColRef::EUsed) {
-				consumer_colref->MarkAsUsed();
-				MarkCTEConsumerColAsUsed(mcidcrCTE, mpidcrsCTE, consumer_colref->Id());
-			}
-		}
-
-#ifdef GPOS_DEBUG
-		if (GPOS_FTRACE(EopttraceDebugCTE))
-			io_stream << "]";
-#endif
-	}
-#ifdef GPOS_DEBUG
-	else if (GPOS_FTRACE(EopttraceDebugCTE)) {
-		io_stream << ",not found consumer.";
-	}
-#endif
 }
 
 //---------------------------------------------------------------------------
@@ -1116,11 +1164,10 @@ CTranslatorDXLToExpr::LookupColRef(ULONG colid, BOOL mark_used)
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2ExprAttributeNotFound, colid);
 	}
 
-	auto cteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
+	auto pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
 
-	if (cteinfo->ExistCTE()) {
-		MarkCTEConsumerColAsUsed(cteinfo->GetCTEConsumerMapping(), cteinfo->GetCTEProducerMapping(), colref->Id());
-		MarkCTEProducerColAsUsed(cteinfo->GetCTEConsumerMapping(), cteinfo->GetCTEProducerMapping(), colref->Id());
+	if (pcteinfo->ExistCTE()) {
+		MarkCTEConsumerColAsUsed(pcteinfo->GetCTEConsumerMapping(), colref->Id());
 	}
 
 	if (mark_used)
@@ -1384,6 +1431,7 @@ CTranslatorDXLToExpr::PexprLogicalCTEProducer(const CDXLNode *dxlnode)
 	CDXLLogicalCTEProducer *pdxlopCTEProducer =
 		CDXLLogicalCTEProducer::Cast(dxlnode->GetOperator());
 	ULONG id = UlMapCTEId(pdxlopCTEProducer->Id());
+	BOOL cbp = pdxlopCTEProducer->CouldBePruned();
 
 	// translate the child dxl node
 	CExpression *pexprChild = PexprLogical((*dxlnode)[0]);
@@ -1411,7 +1459,7 @@ CTranslatorDXLToExpr::PexprLogicalCTEProducer(const CDXLNode *dxlnode)
 	for (ULONG ul = 0; ul < length; ul++)
 	{
 		ULONG *pulColId = (*pdrgpulCols)[ul];
-		CColRef *colref = LookupColRef(*pulColId, !pdxlopCTEProducer->CouldBePruned() /* mark_used */);
+		CColRef *colref = LookupColRef(*pulColId, !cbp /* mark_used */);
 		GPOS_ASSERT(nullptr != colref);
 
 #ifdef GPOS_DEBUG
@@ -1455,7 +1503,7 @@ CTranslatorDXLToExpr::PexprLogicalCTEProducer(const CDXLNode *dxlnode)
 	pcrsProducer->Release();
 
 	return GPOS_NEW(m_mp) CExpression(
-		m_mp, GPOS_NEW(m_mp) CLogicalCTEProducer(m_mp, id, colref_array),
+		m_mp, GPOS_NEW(m_mp) CLogicalCTEProducer(m_mp, id, colref_array, cbp),
 		pexprChild);
 }
 
@@ -1482,12 +1530,12 @@ CTranslatorDXLToExpr::PexprLogicalCTEConsumer(const CDXLNode *dxlnode)
 	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
 	CExpression *pexprProducer = pcteinfo->PexprCTEProducer(id);
 	GPOS_ASSERT(nullptr != pexprProducer);
+	CLogicalCTEProducer *popProducer= CLogicalCTEProducer::PopConvert(pexprProducer->Pop());
 
-	CCTEInfo * cteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
-	CColRefArray *pdrgpcrProducer =
-		CLogicalCTEProducer::PopConvert(pexprProducer->Pop())->Pdrgpcr();
+	CColRefArray *pdrgpcrProducer = popProducer->Pdrgpcr();
+	BOOL can_pruned = popProducer->CanBePruned();
 	CColRefArray *pdrgpcrConsumer = CUtils::PdrgpcrCopy(m_mp, pdrgpcrProducer, 
-		false, nullptr, cteinfo->GetCTEConsumerMapping(), cteinfo->GetCTEProducerMapping(), true);
+		false, nullptr, pcteinfo->GetCTEConsumerMapping(), nullptr, can_pruned);
 
 	// add new colrefs to mapping
 	const ULONG num_cols = pdrgpcrConsumer->Size();
@@ -1496,6 +1544,10 @@ CTranslatorDXLToExpr::PexprLogicalCTEConsumer(const CDXLNode *dxlnode)
 	{
 		ULONG *pulColId = GPOS_NEW(m_mp) ULONG(*(*pdrgpulCols)[ul]);
 		CColRef *colref = (*pdrgpcrConsumer)[ul];
+
+		// reset consumer col array to unknown
+		if (can_pruned)
+			colref->MarkAsUnknown();
 
 		BOOL result GPOS_ASSERTS_ONLY = m_phmulcr->Insert(pulColId, colref);
 		GPOS_ASSERT(result);
@@ -1521,9 +1573,12 @@ CTranslatorDXLToExpr::PexprLogicalCTEConsumer(const CDXLNode *dxlnode)
 #endif
 	}
 
-	pcteinfo->IncrementConsumers(id, m_ulCTEId);
-	return GPOS_NEW(m_mp) CExpression(
+	CExpression *pexprcs =  GPOS_NEW(m_mp) CExpression(
 		m_mp, GPOS_NEW(m_mp) CLogicalCTEConsumer(m_mp, id, pdrgpcrConsumer));
+	pcteinfo->IncrementConsumers(id, m_ulCTEId);
+	pcteinfo->AddCTEConsumer(pexprcs);
+
+	return pexprcs;
 }
 
 //---------------------------------------------------------------------------

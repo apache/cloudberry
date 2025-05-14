@@ -107,11 +107,12 @@ WITH cte AS (SELECT * FROM t1 WHERE random() < 0.1 LIMIT 10) SELECT a, 1, 1 FROM
                      Hash Cond: (share0_ref2.a = t2.a)
                      ->  Redistribute Motion 1:3  (slice3)
                            Hash Key: share0_ref2.a
-                           ->  Shared Scan (share slice:id 3:0)
+                           ->  Result
+                                 ->  Shared Scan (share slice:id 3:0)
                      ->  Hash
                            ->  Seq Scan on t2
  Optimizer: GPORCA
-(16 rows)
+(17 rows)
 
 -- This functions returns one more column than expected.
 CREATE OR REPLACE FUNCTION col_mismatch_func1() RETURNS TABLE (field1 int, field2 int)

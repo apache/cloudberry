@@ -121,6 +121,9 @@ private:
 		// logical producer expression
 		CExpression *m_pexprCTEProducer;
 
+		// logical consumer expression array
+		CExpressionArray *m_pexprCTEConsumer;
+
 		// map columns of all created consumers of current CTE to their positions in consumer output
 		ColRefToUlongMap *m_phmcrulConsumers;
 
@@ -139,11 +142,18 @@ private:
 		// dtor
 		~CCTEInfoEntry() override;
 
-		// CTE expression
+		// CTE producer expression
 		CExpression *
-		Pexpr() const
+		PexprProducer() const
 		{
 			return m_pexprCTEProducer;
+		}
+
+		// CTE consumer expressions array
+		CExpressionArray *
+		PexprsConsumer() const
+		{
+			return m_pexprCTEConsumer;
 		}
 
 		// is this CTE used?
@@ -169,6 +179,9 @@ private:
 		{
 			m_fUsed = true;
 		}
+
+		// add consumer into the entry
+		void AddConsumer(CExpression * consumer);
 
 		// add given columns to consumers column map
 		void AddConsumerCols(CColRefArray *colref_array);
@@ -254,6 +267,9 @@ public:
 	// number of CTE consumers of given CTE
 	ULONG UlConsumers(ULONG ulCTEId) const;
 
+	// logical cte consumer with given id
+	CExpressionArray *PexprCTEConsumer(ULONG ulCTEId) const;
+
 	// check if given CTE is used
 	BOOL FUsed(ULONG ulCTEId) const;
 
@@ -269,6 +285,9 @@ public:
 
 	// add cte producer to hashmap
 	void AddCTEProducer(CExpression *pexprCTEProducer);
+	
+	// add cte consumer to hashmap
+	void AddCTEConsumer(CExpression *pexprCTEProducer);
 
 	// replace cte producer with given expression
 	void ReplaceCTEProducer(CExpression *pexprCTEProducer);
@@ -296,6 +315,11 @@ public:
 	next_id()
 	{
 		return m_ulNextCTEId++;
+	}
+
+	ULONG
+	CTESize() {
+		return m_ulNextCTEId;
 	}
 
 	// derive the statistics on the CTE producer
@@ -326,6 +350,7 @@ public:
 
 	// mark unused CTEs
 	void MarkUnusedCTEs();
+
 
 	// walk the producer expressions and add the mapping between computed column
 	// and their corresponding used column(s)

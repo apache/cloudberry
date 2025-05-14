@@ -4076,11 +4076,12 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 	ShareInputScan *shared_input_scan = MakeNode(ShareInputScan);
 	shared_input_scan->share_id = cte_id;
 	shared_input_scan->discard_output = true;
+
 	Plan *plan = &(shared_input_scan->scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 
-	// store share scan node for the translation of CTE Consumers
-	m_dxl_to_plstmt_context->AddCTEConsumerInfo(cte_id, shared_input_scan);
+	m_dxl_to_plstmt_context->RegisterCTEProducerInfo(cte_id, 
+		cte_prod_dxlop->GetOutputColIdxMap(), shared_input_scan);
 
 	// translate cost of the producer
 	TranslatePlanCosts(cte_producer_dxlnode, plan);
@@ -4130,7 +4131,16 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	CDXLPhysicalCTEConsumer *cte_consumer_dxlop =
 		CDXLPhysicalCTEConsumer::Cast(cte_consumer_dxlnode->GetOperator());
 	ULONG cte_id = cte_consumer_dxlop->Id();
+	ULongPtrArray *output_colidx_map = cte_consumer_dxlop->GetOutputColIdxMap();
 
+	// get the producer idx map
+	ULongPtrArray *producer_colidx_map;
+	ShareInputScan *share_input_scan_cte_producer;
+	
+	std::tie(producer_colidx_map, share_input_scan_cte_producer) 
+		= m_dxl_to_plstmt_context->GetCTEProducerInfo(cte_id);
+
+	// init the consumer plan
 	ShareInputScan *share_input_scan_cte_consumer = MakeNode(ShareInputScan);
 	share_input_scan_cte_consumer->share_id = cte_id;
 	share_input_scan_cte_consumer->discard_output = false;
@@ -4153,6 +4163,17 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
 	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
 	{
+		AttrNumber varattno = (AttrNumber)ul + 1;
+		if (output_colidx_map) {
+			ULONG remapping_idx;
+			remapping_idx = *(*output_colidx_map)[ul];
+			if (producer_colidx_map) {
+				remapping_idx = *(*producer_colidx_map)[remapping_idx];
+			}
+			GPOS_ASSERT(remapping_idx != gpos::ulong_max);
+			varattno = (AttrNumber)remapping_idx + 1;
+		}
+
 		CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
 		CDXLScalarProjElem *sc_proj_elem_dxlop =
 			CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
@@ -4165,7 +4186,7 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 		OID oid_type = CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid();
 
 		Var *var =
-			gpdb::MakeVar(OUTER_VAR, (AttrNumber)(ul + 1), oid_type,
+			gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
 						  sc_ident_dxlop->TypeModifier(), 0 /* varlevelsup */);
 
 		CHAR *resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
@@ -4181,9 +4202,17 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 
 	SetParamIds(plan);
 
-	// store share scan node for the translation of CTE Consumers
-	m_dxl_to_plstmt_context->AddCTEConsumerInfo(cte_id,
-												share_input_scan_cte_consumer);
+	// DON'T REMOVE, if current consumer need projection, then we can direct add it.
+	// we still keep the path of projection in consumer
+	
+	// 	Plan *producer_plan = &(share_input_scan_cte_producer->scan.plan);
+	// if (output_colidx_map != nullptr) {
+	// 	share_input_scan_cte_consumer->need_projection = true;
+	// 	share_input_scan_cte_consumer->producer_targetlist = gpdb::ListCopy(producer_plan->targetlist);
+	// 	if (!share_input_scan_cte_consumer->producer_targetlist) {
+	// 		share_input_scan_cte_consumer->need_projection = false;
+	// 	}
+	// }
 
 	return (Plan *) share_input_scan_cte_consumer;
 }
