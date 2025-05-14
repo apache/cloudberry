@@ -98,6 +98,8 @@
 #include "cdb/cdbdisp.h"
 #include "postmaster/autovacuum.h"
 
+#include "cdb/cdbdisp_query.h" /* Extend Protocol Data */
+
 /*
  *	User-tweakable parameters
  */
@@ -2821,6 +2823,8 @@ CommitTransaction(void)
 	CallXactCallbacks(is_parallel_worker ? XACT_EVENT_PARALLEL_PRE_COMMIT
 					  : XACT_EVENT_PRE_COMMIT);
 
+	AtEOXact_ExtendProtocolData();
+
 	/* If we might have parallel workers, clean them up now. */
 	if (IsInParallelMode())
 		AtEOXact_Parallel(true);
@@ -3576,6 +3580,7 @@ AbortTransaction(void)
 	AtEOXact_RelationMap(false, is_parallel_worker);
 	AtAbort_Twophase();
 	AtAbort_IVM();
+	AtAort_ExtendProtocolData();
 
 	/*
 	 * Advertise the fact that we aborted in pg_xact (assuming that we got as

@@ -129,16 +129,25 @@ typedef enum
 
 typedef struct ExtendProtocolDataStore
 {
-	List *subtagdata;	/* capacity of EP_TAG_MAX */
-	int	consumed_bitmap; /* bitmap to indentify subtag consumed status */
+	List	*subtagdata[EP_TAG_MAX];/* capacity of EP_TAG_MAX */
+	int		consumed_bitmap;		/* bitmap to indentify subtag consumed status */
 } ExtendProtocolDataStore;
 
-typedef ExtendProtocolDataStore* ExtendProtocolData;
+typedef ExtendProtocolDataStore*	ExtendProtocolData;
 
 extern ExtendProtocolData epd;
 
-extern void InitExtendProtocolData(void);
+extern List* ConsumeExtendProtocolData(ExtendProtocolSubTag subtag);
 
-extern void ConsumeExtendProtocolData(ExtendProtocolSubTag subtag, void *consume_p);
+extern void
+ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted,
+										Bitmapset **updated,
+										Bitmapset **deleted);
+
+extern void
+AtEOXact_ExtendProtocolData(void);
+
+extern void
+AtAort_ExtendProtocolData(void);
 
 #endif   /* CDBDISP_QUERY_H */

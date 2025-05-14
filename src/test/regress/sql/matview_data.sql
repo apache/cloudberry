@@ -295,6 +295,40 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 update par set c = 2, a = 2 where  b = 1 and c = 1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 abort;
+
+-- Test report warning if extend protocol data is not consumed.
+--start_ignore
+drop extension gp_inject_fault;
+create extension gp_inject_fault;
+--end_ignore
+
+select gp_inject_fault_infinite('consume_extend_protocol_data', 'skip', dbid)
+from gp_segment_configuration where role = 'p' and content = -1;
+
+begin;
+update par set c = 2 where b = 1 and c = 1;
+end;
+
+begin;
+insert into par values(1, 1, 1), (1, 1, 2);
+end;
+
+begin;
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+end;
+
+begin;
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+delete from par_1_prt_1_2_prt_2;
+end;
+
+begin;
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+end;
+
+select gp_inject_fault('consume_extend_protocol_data', 'reset', dbid)
+from gp_segment_configuration where role = 'p' and content = -1;
 --
 -- End of Maintain materialized views on partitioned tables from bottom to up.
 --

@@ -50,6 +50,7 @@
 #include "cdb/cdbcopy.h"
 #include "executor/execUtils.h"
 #include "cdb/cdbpq.h"
+#include "libpq/pqformat.h"
 
 #define QUERY_STRING_TRUNCATE_SIZE (1024)
 
@@ -137,7 +138,7 @@ static SerializedParams *serializeParamsForDispatch(QueryDesc *queryDesc,
 													ParamExecData *execParams,
 													Bitmapset *sendParams);
 
-
+static Bitmapset* process_epd_iud_internal(List* subtagdata);
 
 /*
  * Compose and dispatch the MPPEXEC commands corresponding to a plan tree
@@ -1685,70 +1686,102 @@ findParamType(List *params, int paramid)
 }
 
 /*
- * process data in pointer cosume_p, ex: copy everything interested in.
- * For EP_TAG_I, EP_TAG_U, EP_TAG_D, consume_p is a Bitmapset**, we just
- * copy the content and process them later.
+ * ConsumeExtendProtocolData
+ * Return the data(list of char*) belonging to the subtag
+ * and callers could use it in their own way.
+ * The original data will be freed, and marked as consumed.
  */
-void
-ConsumeExtendProtocolData(ExtendProtocolSubTag subtag, void *consume_p)
+List *
+ConsumeExtendProtocolData(ExtendProtocolSubTag subtag)
 {
+	List 	*subtagdata = NIL;
+	ListCell *lc;
+
 	Assert(epd);
+	Assert(subtag < EP_TAG_MAX);
 
-	if ((epd->consumed_bitmap & (1 << subtag)) == 0)
-		return;
-
-	switch (subtag)
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("consume_extend_protocol_data") == FaultInjectorTypeSkip)
 	{
-		case EP_TAG_I:
-		case EP_TAG_U:
-		case EP_TAG_D:
-			Assert(consume_p != NULL);
-			*((Bitmapset **) consume_p) = bms_copy(list_nth(epd->subtagdata, subtag));
-			bms_free(list_nth(epd->subtagdata, subtag)); /* clean up */
-			break;
-		default:
-			Assert(false);
+		return NIL;
+	}
+#endif
+
+	/* The subtag data has been consumed. */
+	if ((epd->consumed_bitmap & (1 << subtag)) == 0)
+		return NIL;
+
+	foreach (lc, epd->subtagdata[subtag])
+	{
+		StringInfo buf = (StringInfo) lfirst(lc);
+
+		char* data = palloc0(buf->len);
+		memcpy(data, buf->data, buf->len);
+		subtagdata = lappend(subtagdata, data);
+		pfree(buf->data);
 	}
 
-	/* Mark subtag consumed. */
+	/* Cleanup and mark subtag consumed. */
+	list_free_deep(epd->subtagdata[subtag]);
+	epd->subtagdata[subtag] = NIL;
 	epd->consumed_bitmap &= ~(1 << subtag);
+	return subtagdata;
 }
 
-/*
- * Contents must be allocated in TopTransactionMemoryContext.
- */
-void InitExtendProtocolData(void)
+void
+ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted, Bitmapset **updated, Bitmapset **deleted)
 {
-	MemoryContext oldctx = MemoryContextSwitchTo(TopTransactionContext);
+	List *ilist = NIL;
+	List *ulist = NIL;
+	List *dlist = NIL;
 
-	/* Make bitmapset allocated under the context we set. */
-	Bitmapset *inserted = bms_make_singleton(0);
-	inserted = bms_del_member(inserted, 0);
-	Bitmapset *updated = bms_make_singleton(0);
-	updated = bms_del_member(updated, 0);
-	Bitmapset *deleted = bms_make_singleton(0);
-	deleted = bms_del_member(deleted, 0);
+	ilist = ConsumeExtendProtocolData(EP_TAG_I);
+	ulist = ConsumeExtendProtocolData(EP_TAG_U);
+	dlist = ConsumeExtendProtocolData(EP_TAG_D);
 
-	epd->subtagdata = list_make1(inserted);
-	epd->subtagdata = lappend(epd->subtagdata, updated);
-	epd->subtagdata = lappend(epd->subtagdata, deleted);
+	*inserted = process_epd_iud_internal(ilist);
+	*updated = process_epd_iud_internal(ulist);
+	*deleted = process_epd_iud_internal(dlist);
 
-	epd->consumed_bitmap = 0;
+	list_free_deep(ilist);
+	list_free_deep(ulist);
+	list_free_deep(dlist);
+	return;
+}
 
-	MemoryContextSwitchTo(oldctx);
+static Bitmapset*
+process_epd_iud_internal(List* subtagdata)
+{
+	Bitmapset	*res = NULL;
+	ListCell 	*lc;
+	int 		count;
+
+	foreach (lc, subtagdata)
+	{
+		char *data = (char *) lfirst(lc);
+		memcpy(&count, data, sizeof(int));
+		data += sizeof(int);
+		for (int i = 0; i < count; i++)
+		{
+			int relid;
+			memcpy(&relid, data, sizeof(int));
+			data += sizeof(int);
+			res = bms_add_member(res, relid);
+		}
+	}
+	return res;
 }
 
 /*
  * Handle extend protocol aside from upstream.
- * Store everything in TopTransactionMemoryContext.
+ * Process subtag and store everything under TopTransactionMemoryContext.
+ * There could be multiple subtags in one run.
  * Do not error here, let libpq work.
- * End of each process when we reached a EP_TAG_MAX, callers
- * should follow this behaviour!.
  */
 bool HandleExtendProtocol(PGconn *conn)
 {
 	int		subtag;
-	int		num;
+	int		length;
 	if (Gp_role != GP_ROLE_DISPATCH)
 		return false;
 
@@ -1756,31 +1789,67 @@ bool HandleExtendProtocol(PGconn *conn)
 	{
 		if (pqGetInt(&subtag, 4, conn))
 			return false;
-		switch (subtag)
+
+		if (subtag < 0 || subtag > EP_TAG_MAX)
+			return false;
+
+		if (EP_TAG_MAX == subtag)
+			/* End of this run. */
+			return true;
+
+		if (pqGetInt(&length, 4, conn))
+			return false;
+
+		MemoryContext oldctx = MemoryContextSwitchTo(TopTransactionContext);
+		char* data = palloc0(length);
+
+		if (pqGetnchar(data, length, conn))
 		{
-			case EP_TAG_I:
-			case EP_TAG_U:
-			case EP_TAG_D:
-				if (pqGetInt(&num, 4, conn))
-					return false;
-				for (int i = 0; i < num; i++)
-				{
-					Bitmapset *relids = (Bitmapset *) list_nth(epd->subtagdata, subtag);
-					int relid;
-					if (pqGetInt(&relid, 4, conn))
-						return false;
-					relids = bms_add_member(relids, relid);
-					list_nth_replace(epd->subtagdata, subtag, relids);
-					/* Mark subtag to be consumed. */
-					epd->consumed_bitmap |= 1 << subtag;
-				}
-				break;
-			case EP_TAG_MAX:
-				/* End of this run. */
-				return true;
-			default:
-				Assert(false);
-				return false;
+			MemoryContextSwitchTo(oldctx);
+			return false;
 		}
+		StringInfo buf = makeStringInfo();
+		/* Do not change the raw data, let caller process it. */
+		appendBinaryStringInfoNT(buf, data, length);
+		epd->subtagdata[subtag] = lappend(epd->subtagdata[subtag], buf);
+		MemoryContextSwitchTo(oldctx);
+		/* Mark subtag to be consumed. */
+		epd->consumed_bitmap |= 1 << subtag;
 	}
+}
+
+/*
+ * check_extend_protocol_data
+ * Check if all the subtag data are consumed when transaction is committed.
+ * Cleanup even there are unconsumed data to keep clean for the next run.
+ */
+void
+AtEOXact_ExtendProtocolData()
+{
+	for (int i = EP_TAG_MAX - 1; i >= 0; i--)
+	{
+		if (epd->consumed_bitmap & (1 << i))
+		{
+			ereport(WARNING,
+					errmsg("Extend Protocol Data unconsumed, subtag: %d", i));
+			list_free_deep(epd->subtagdata[i]);
+		}
+		epd->subtagdata[i] = NIL;
+	}
+	epd->consumed_bitmap = 0;
+}
+
+/*
+ * AtAort_ExtendProtocolData
+ * Cleanup all the subtag data when transaction is aborted.
+ */
+void
+AtAort_ExtendProtocolData()
+{
+	for (int i = EP_TAG_MAX - 1; i >= 0; i--)
+	{
+		list_free_deep(epd->subtagdata[i]);
+		epd->subtagdata[i] = NIL;
+	}
+	epd->consumed_bitmap = 0;
 }

@@ -3720,66 +3720,6 @@ ExecEndModifyTable(ModifyTableState *node)
 		notify_modified_relations_to_QD(node);
 }
 
-/*
- * notify_modified_relations_local
- * For SINGLENODE or we are entry db, update the modified relids on local.
- * To keep consistent, we set the extend protocol data which will be processed
- * uniformly later at the end of exetuor run.
- */
-static void
-notify_modified_relations_local(ModifyTableState *node)
-{
-	Assert(epd);
-
-	if (!bms_is_empty(node->mt_leaf_relids_inserted))
-		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted);
-
-	if (!bms_is_empty(node->mt_leaf_relids_updated))
-		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated);
-
-	if (!bms_is_empty(node->mt_leaf_relids_deleted))
-		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted);
-}
-
-static void
-epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids)
-{
-	Bitmapset *data = (Bitmapset *) list_nth(epd->subtagdata, subtag);
-
-	data = bms_union(data, relids);
-	list_nth_replace(epd->subtagdata, subtag, data);
-	/* Mark subtag to be consumed. */
-	epd->consumed_bitmap |= 1 << subtag;
-}
-
-static void
-send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
-{
-	int relid = -1;
-
-	/* No need to send. */
-	if (bms_is_empty(relids))
-		return;
-
-	pq_sendint32(buf, subtag); /* subtag */
-	pq_sendint32(buf, bms_num_members(relids)); /* number of relid */
-	while ((relid = bms_next_member(relids, relid)) >= 0)
-		pq_sendint32(buf, relid); /* each relid */
-}
-
-static void
-notify_modified_relations_to_QD(ModifyTableState *node)
-{
-	StringInfoData buf;
-	pq_beginmessage(&buf, PQExtendProtocol);
-	send_subtag(&buf, EP_TAG_I, node->mt_leaf_relids_inserted);
-	send_subtag(&buf, EP_TAG_U, node->mt_leaf_relids_updated);
-	send_subtag(&buf, EP_TAG_D, node->mt_leaf_relids_deleted);
-	pq_sendint32(&buf, EP_TAG_MAX); /* Finish this run. */
-	pq_endmessage(&buf);
-	pq_flush(); /* Flush to notify QD in time. */
-}
-
 void
 ExecReScanModifyTable(ModifyTableState *node)
 {
@@ -3814,4 +3754,132 @@ ExecSquelchModifyTable(ModifyTableState *node, bool force)
 		if (!result)
 			break;
 	}
+}
+
+/*
+ * notify_modified_relations_to_QD
+ * Send modified relation info back to QD through extend libpq protocol.
+ */
+static void
+notify_modified_relations_to_QD(ModifyTableState *node)
+{
+	StringInfoData buf;
+	pq_beginmessage(&buf, PQExtendProtocol);
+
+	if (!bms_is_empty(node->mt_leaf_relids_inserted))
+		send_subtag(&buf, EP_TAG_I, node->mt_leaf_relids_inserted);
+
+	if (!bms_is_empty(node->mt_leaf_relids_updated))
+		send_subtag(&buf, EP_TAG_U, node->mt_leaf_relids_updated);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted))
+		send_subtag(&buf, EP_TAG_D, node->mt_leaf_relids_deleted);
+
+	pq_sendint32(&buf, EP_TAG_MAX); /* Finish this run. */
+	pq_endmessage(&buf);
+	pq_flush(); /* Flush to notify QD in time. */
+}
+
+/*
+ * send_subtag
+ * Send the data of subtag, the format is:
+ * 	subtag + length + data
+ * while length is the length of data followed.
+ */
+static void
+send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
+{
+
+	bytea	*res;
+	int 	rlen;
+	char	*ptr;
+	int		rcount;
+	int		relid = -1;
+
+	pq_sendint32(buf, subtag); /* subtag */
+
+	rcount = bms_num_members(relids);
+	rlen = sizeof(int)/* count of relids */ + sizeof(int) * rcount;
+
+	pq_sendint32(buf, rlen); /* length */
+
+	res = palloc(rlen + VARHDRSZ);
+	ptr = VARDATA(res);
+
+	memcpy(ptr, &rcount, sizeof(int));
+	ptr += sizeof(int);
+	while ((relid = bms_next_member(relids, relid)) >= 0)
+	{
+		memcpy(ptr, &relid, sizeof(int));
+		ptr += sizeof(int);
+	}
+
+	SET_VARSIZE(res, rlen + VARHDRSZ);
+
+	pq_sendbytes(buf, VARDATA(res),	VARSIZE(res) - VARHDRSZ);
+}
+
+/*
+ * notify_modified_relations_local
+ * For SINGLENODE or we are entry db, update the modified relids on local.
+ * To keep consistent, we set the extend protocol data which will be processed
+ * uniformly later at the end of exetuor run.
+ */
+static void
+notify_modified_relations_local(ModifyTableState *node)
+{
+	Assert(epd);
+
+	if (!bms_is_empty(node->mt_leaf_relids_inserted))
+		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted);
+
+	if (!bms_is_empty(node->mt_leaf_relids_updated))
+		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted))
+		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted);
+}
+
+/*
+ * epd_add_subtag_data
+ *
+ * Adds subtag data into the Extend Protocol Data structure directly.
+ * This function composes binary data using the provided subtag and modified relations,
+ * and stores the result in the epd's subtag data list. All memory allocations
+ * are performed under the TopTransactionContext to ensure proper memory management.
+ */
+static void
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset * relids)
+{
+	MemoryContext 	oldctx;
+	StringInfo		buf;
+	bytea	*res;
+	int 	rlen;
+	char	*ptr;
+	int		rcount;
+	int		relid = -1;
+
+	rcount = bms_num_members(relids);
+	rlen = sizeof(int) /* count of relids */ + sizeof(int) * rcount;
+	res = palloc(rlen + VARHDRSZ);
+	ptr = VARDATA(res);
+
+	memcpy(ptr, &rcount, sizeof(int));
+	ptr += sizeof(int);
+	while ((relid = bms_next_member(relids, relid)) >= 0)
+	{
+		memcpy(ptr, &relid, sizeof(int));
+		ptr += sizeof(int);
+	}
+	SET_VARSIZE(res, rlen + VARHDRSZ);
+
+	oldctx = MemoryContextSwitchTo(TopTransactionContext);
+	buf = makeStringInfo();
+	appendBinaryStringInfoNT(buf, VARDATA(res), VARSIZE(res) - VARHDRSZ);
+	epd->subtagdata[subtag] = lappend(epd->subtagdata[subtag], buf);
+	/* Mark subtag to be consumed. */
+	epd->consumed_bitmap |= 1 << subtag;
+
+	pfree(res);
+	MemoryContextSwitchTo(oldctx);
 }

@@ -813,6 +813,57 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 (6 rows)
 
 abort;
+-- Test report warning if extend protocol data is not consumed.
+--start_ignore
+drop extension gp_inject_fault;
+create extension gp_inject_fault;
+--end_ignore
+select gp_inject_fault_infinite('consume_extend_protocol_data', 'skip', dbid)
+from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+begin;
+update par set c = 2 where b = 1 and c = 1;
+WARNING:  fail to find leafs of partitioned table: par
+end;
+WARNING:  Extend Protocol Data unconsumed, subtag: 2
+WARNING:  Extend Protocol Data unconsumed, subtag: 0
+begin;
+insert into par values(1, 1, 1), (1, 1, 2);
+WARNING:  fail to find leafs of partitioned table: par
+end;
+WARNING:  Extend Protocol Data unconsumed, subtag: 0
+begin;
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+WARNING:  fail to find leafs of partitioned table: par
+end;
+WARNING:  Extend Protocol Data unconsumed, subtag: 2
+WARNING:  Extend Protocol Data unconsumed, subtag: 0
+begin;
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+WARNING:  fail to find leafs of partitioned table: par
+delete from par_1_prt_1_2_prt_2;
+end;
+WARNING:  Extend Protocol Data unconsumed, subtag: 2
+WARNING:  Extend Protocol Data unconsumed, subtag: 0
+begin;
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+WARNING:  fail to find leafs of partitioned table: par
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+WARNING:  fail to find leafs of partitioned table: par
+end;
+WARNING:  Extend Protocol Data unconsumed, subtag: 2
+WARNING:  Extend Protocol Data unconsumed, subtag: 0
+select gp_inject_fault('consume_extend_protocol_data', 'reset', dbid)
+from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 --
 -- End of Maintain materialized views on partitioned tables from bottom to up.
 --
