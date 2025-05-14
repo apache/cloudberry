@@ -77,8 +77,11 @@ enum EOptTraceFlag
 	// log results of hint parsing
 	EopttracePrintPgHintPlanLog = 101018,
 
+	// print result of preprocess
+	EopttracePrintPreProcessResult = 101019,
+
 	// print debug info of CTE
-	EopttraceDebugCTE = 101019,
+	EopttraceDebugCTE = 101020,
 
 	///////////////////////////////////////////////////////
 	////////////////// transformations flags //////////////

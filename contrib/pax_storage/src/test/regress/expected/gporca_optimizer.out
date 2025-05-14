@@ -11280,10 +11280,9 @@ EXPLAIN (COSTS OFF) WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM 
                        Filter: (share0_ref3.b = f1.b)
                        ->  Materialize
                              ->  Broadcast Motion 3:3  (slice6; segments: 3)
-                                   ->  Result
-                                         ->  Shared Scan (share slice:id 6:0)
+                                   ->  Shared Scan (share slice:id 6:0)
  Optimizer: GPORCA
-(43 rows)
+(42 rows)
 
 WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onetimefilter2 WHERE onetimefilter1.a=onetimefilter2.a) SELECT (SELECT 1 FROM abc WHERE f1.b = f2.b LIMIT 1), COALESCE((SELECT 2 FROM abc WHERE f1.a=random() AND f1.a=2), 0), (SELECT b FROM abc WHERE b=f1.b) FROM onetimefilter1 f1, onetimefilter2 f2 WHERE f1.b = f2.b;
  ?column? | coalesce | b  

@@ -2399,8 +2399,13 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, pdrgpcrRequired);
 	pcrsOutput->Release();
 
+	ULongPtrArray *producer_idx_map =  popCTEProducer->PCTEIdxMap();
+	if (producer_idx_map) {
+		producer_idx_map->AddRef();
+	}
+
 	CDXLNode *pdxlnCTEProducer = GPOS_NEW(m_mp) CDXLNode(
-		m_mp, GPOS_NEW(m_mp) CDXLPhysicalCTEProducer(m_mp, ulCTEId, colids),
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalCTEProducer(m_mp, ulCTEId, colids, producer_idx_map),
 		pdxlnPrL, child_dxlnode);
 
 	pdxlnCTEProducer->SetProperties(dxl_properties);
@@ -2444,9 +2449,13 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 
 	// translate relational child expression
 	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, colref_array);
+	ULongPtrArray *pidxmap = popCTEConsumer->PCTEIdxMap();
+	if (pidxmap) {
+		pidxmap->AddRef();
+	}
 
 	CDXLNode *pdxlnCTEConsumer = GPOS_NEW(m_mp) CDXLNode(
-		m_mp, GPOS_NEW(m_mp) CDXLPhysicalCTEConsumer(m_mp, ulCTEId, colids),
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalCTEConsumer(m_mp, ulCTEId, colids, pidxmap),
 		pdxlnPrL);
 
 	pcrsOutput->Release();

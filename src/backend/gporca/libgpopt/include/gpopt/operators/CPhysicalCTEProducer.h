@@ -40,11 +40,14 @@ private:
 	// used to record unused columns in m_pdrgpcr
 	ULongPtrArray *m_pdrgpcr_unused;
 
+	// used to mapping col index
+	ULongPtrArray *m_pidxmap;
+
 public:
 	CPhysicalCTEProducer(const CPhysicalCTEProducer &) = delete;
 
 	// ctor
-	CPhysicalCTEProducer(CMemoryPool *mp, ULONG id, CColRefArray *colref_array);
+	CPhysicalCTEProducer(CMemoryPool *mp, ULONG id, CColRefArray *colref_array, BOOL *umask);
 
 	// dtor
 	~CPhysicalCTEProducer() override;
@@ -82,6 +85,12 @@ public:
 	PdrgpcrUnused() const
 	{
 		return m_pdrgpcr_unused;
+	}
+
+	ULongPtrArray *
+	PCTEIdxMap() const
+	{
+		return m_pidxmap;
 	}
 
 	// operator specific hash function

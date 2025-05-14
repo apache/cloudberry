@@ -347,6 +347,9 @@ private:
 	CExpression *Pexpr(const CDXLNode *dxlnode,
 					   const CDXLNodeArray *query_output_dxlnode_array,
 					   const CDXLNodeArray *cte_producers);
+	
+	// Prune the CTEs producer and consumer after DXL tree translated
+	void PruneCTEs();
 
 	// translate children of a DXL node
 	CExpressionArray *PdrgpexprChildren(const CDXLNode *dxlnode);
@@ -380,11 +383,7 @@ private:
 	
 	// after the colref in CTE consumer marked used, the producer should marked 
 	// the relatived colref as used.
-	void MarkCTEConsumerColAsUsed(UlongToColRefMap *cidcrCTE, UlongToColRefArrayMap *pidcrsCTE, ULONG colid);
-
-	// after the colref in CTE producer marked used, the consumer should marked 
-	// the relatived colref as used.
-	void MarkCTEProducerColAsUsed(UlongToColRefMap *cidcrCTE, UlongToColRefArrayMap *pidcrsCTE, ULONG colid);
+	void MarkCTEConsumerColAsUsed(UlongToColRefMap *mcidcrCTE, ULONG colid);
 
 public:
 	// ctor

@@ -1,6 +1,7 @@
 -- start_ignore
-drop table if exists t1;
-drop table if exists t2;
+create schema cte_prune;
+set search_path = cte_prune;
+SET optimizer_trace_fallback = on;
 -- end_ignore
 
 create table t1(v1 int, v2 int, v3 int);
@@ -29,7 +30,7 @@ with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1
 explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
 
--- distribution col can't pruned
+-- distribution col can be pruned which is better than do redistribute in CTE consumer
 explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v2=c22.v2;
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v2=c22.v2;
 explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v3=c22.v3;
@@ -81,20 +82,7 @@ select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 with c1 as (select lt1.v3 as v3, lt1.v1 as lo1, rt1.v1 as ro1 from t1 lt1, t1 rt1 where lt1.v2 = rt1.v2 and lt1.v1 = rt1.v1)  
 select * from t1 where  t1.v1 in (select v3 from c1) and t1.v1 in (select v3 from c1 where v3 > 0);
 
--- cte in cte
-
-
--- function call 
-
-
--- TPCDS cte not support reduce producter output yet
-
--- start_ignore
-drop table if exists tpcds_store_sales;
-drop table if exists tpcds_date_dim;
-drop table if exists tpcds_item;
-drop table if exists tpcds_web_sales;
--- end_ignore
+-- TPCDS case
 
 create table tpcds_store_sales
 (
@@ -260,4 +248,218 @@ drop table tpcds_web_sales;
 
 drop table t1;
 drop table t2;
+-- end_ignore
+
+
+-- comm cases
+
+CREATE TABLE t3 AS SELECT i as a, i+1 as b from generate_series(1,10)i;
+CREATE TABLE t4 AS SELECT i as c, i+1 as d from generate_series(1,10)i;
+
+-- Additional filtering conditions are added to the consumer.
+-- This is caused by `PexprInferPredicates` in the ORCA preprocessor.
+explain verbose WITH t(a,b,d) AS
+(
+  SELECT t3.a,t3.b,t4.d FROM t3,t4 WHERE t3.a = t4.d
+)
+SELECT cup.*, SUM(t.d) OVER(PARTITION BY t.b) FROM
+  (
+    SELECT t4.*, AVG(t.b) OVER(PARTITION BY t.a ORDER BY t.b desc) AS e FROM t,t4
+  ) AS cup,
+t WHERE cup.e < 10
+GROUP BY cup.c,cup.d, cup.e ,t.d, t.b
+ORDER BY 1,2,3,4
+LIMIT 10;
+
+WITH t(a,b,d) AS
+(
+  SELECT t3.a,t3.b,t4.d FROM t3,t4 WHERE t3.a = t4.d
+)
+SELECT cup.*, SUM(t.d) OVER(PARTITION BY t.b) FROM
+  (
+    SELECT t4.*, AVG(t.b) OVER(PARTITION BY t.a ORDER BY t.b desc) AS e FROM t,t4
+  ) AS cup,
+t WHERE cup.e < 10
+GROUP BY cup.c,cup.d, cup.e ,t.d, t.b
+ORDER BY 1,2,3,4
+LIMIT 10;
+
+-- grouping set will generate the internal CTE.
+
+CREATE TABLE cte_prune_tenk1 (unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd int4, even int4, stringu1 name, stringu2 name, string4 name);
+INSERT INTO cte_prune_tenk1
+SELECT
+  i AS unique1,
+  (i + 10000) AS unique2,
+  i % 2 AS two,
+  i % 4 AS four,
+  i % 10 AS ten,
+  i % 20 AS twenty,
+  i % 100 AS hundred,
+  i % 1000 AS thousand,
+  i % 2000 AS twothousand,
+  i % 5000 AS fivethous,
+  i % 10000 AS tenthous,
+  (2 * i + 1) AS odd,
+  (2 * i) AS even,
+  ('A' || lpad(i::text, 4, '0'))::name AS stringu1,
+  ('B' || lpad(i::text, 4, '0'))::name AS stringu2,
+  (CASE (i % 4)
+    WHEN 0 THEN 'AAAA'::name
+    WHEN 1 THEN 'BBBB'::name
+    WHEN 2 THEN 'CCCC'::name
+    ELSE 'DDDD'::name
+  END) AS string4
+FROM generate_series(0, 99) AS i;
+
+explain verbose select four, x
+  from (select four, ten, 'foo'::text as x from cte_prune_tenk1) as t
+  group by grouping sets (four, x)
+  having x = 'foo';
+
+select four, x
+  from (select four, ten, 'foo'::text as x from cte_prune_tenk1) as t
+  group by grouping sets (four, x)
+  having x = 'foo';
+
+-- nest CTE cases
+
+-- start_ignore
+drop table city;
+drop table country;
+drop table countrylanguage;
+-- end_ignore
+
+CREATE TABLE city (
+    id integer NOT NULL,
+    name text NOT NULL,
+    countrycode character(3) NOT NULL,
+    district text NOT NULL,
+    population integer NOT NULL
+) distributed by(id);
+
+CREATE TABLE country (
+    code character(3) NOT NULL,
+    name text NOT NULL,
+    continent text NOT NULL,
+    region text NOT NULL,
+    surfacearea numeric(10,2) NOT NULL,
+    indepyear smallint,
+    population integer NOT NULL,
+    lifeexpectancy real,
+    gnp numeric(10,2),
+    gnpold numeric(10,2),
+    localname text NOT NULL,
+    governmentform text NOT NULL,
+    headofstate text,
+    capital integer,
+    code2 character(2) NOT NULL
+) distributed by (code);
+
+CREATE TABLE countrylanguage (
+    countrycode character(3) NOT NULL,
+    "language" text NOT NULL,
+    isofficial boolean NOT NULL,
+    percentage real NOT NULL
+)distributed by (countrycode,language);
+
+ALTER TABLE ONLY city
+    ADD CONSTRAINT city_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY country
+    ADD CONSTRAINT country_pkey PRIMARY KEY (code);
+
+ALTER TABLE ONLY countrylanguage
+    ADD CONSTRAINT countrylanguage_pkey PRIMARY KEY (countrycode, "language");
+
+-- CTE1(inlined) in CTE2(no-inlined) case
+explain verbose with country as
+(select country.code,country.name COUNTRY, city.name CAPITAL, language, isofficial, percentage
+ FROM country,city,countrylanguage
+ WHERE country.code = countrylanguage.countrycode
+ and country.capital = city.id
+ and country.continent = 'Europe'),
+countrylanguage as
+(select country.code,country.COUNTRY,country.language,country.isofficial,country.percentage
+ FROM country,countrylanguage
+ WHERE country.code = countrylanguage.countrycode
+)
+select * from
+(select * from country where isofficial='True') country,
+(select * from countrylanguage where percentage > 50) countrylanguage
+where country.percentage = countrylanguage.percentage order by countrylanguage.COUNTRY,country.language LIMIT 40;
+
+-- CTE in the main query and subqueries within the main query
+explain verbose with bad_headofstates as 
+(
+ select country.code,country.name,country.headofstate,countrylanguage.language
+ from
+ country,countrylanguage
+ where country.code = countrylanguage.countrycode and countrylanguage.isofficial=true
+ and (country.gnp < country.gnpold or country.gnp < 3000)
+)
+select OUTERMOST_FOO.*,bad_headofstates.headofstate from (
+select avg(population),region from
+(
+select FOO.*,bad_headofstates.headofstate,city.name
+from
+(select bad_headofstates.code,country.capital,country.region,country.population from
+bad_headofstates,country where bad_headofstates.code = country.code) FOO, bad_headofstates,city
+where FOO.code = bad_headofstates.code and FOO.capital = city.id) OUTER_FOO
+group by region ) OUTERMOST_FOO,bad_headofstates,country 
+where country.code = bad_headofstates.code and country.region = OUTERMOST_FOO.region
+order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
+
+-- start_ignore
+drop table city;
+drop table country;
+drop table countrylanguage;
+-- end_ignore
+
+-- inlined CTEs
+CREATE TABLE t5 AS SELECT i as c, i+1 as d from generate_series(1,10)i;
+CREATE TABLE t6 AS SELECT i as a, i+1 as b from generate_series(1,10)i;
+
+-- inlined CTEs should have not unused columns(ex. t5.*, t6.* in output)
+explain verbose WITH w AS (SELECT a, b from t6 where b < 5)
+SELECT *
+FROM t6,
+     (WITH v AS (SELECT c, d FROM t5, w WHERE c = w.a AND c < 2)
+      SELECT v1.c, v1.d FROM v v1, v v2 WHERE v1.c = v2.c AND v1.d > 1
+     ) x
+WHERE t6.a = x.c ORDER BY 1;
+
+WITH w AS (SELECT a, b from t6 where b < 5)
+SELECT *
+FROM t6,
+     (WITH v AS (SELECT c, d FROM t5, w WHERE c = w.a AND c < 2)
+      SELECT v1.c, v1.d FROM v v1, v v2 WHERE v1.c = v2.c AND v1.d > 1
+     ) x
+WHERE t6.a = x.c ORDER BY 1;
+
+CREATE TABLE t7 (f1 integer, f2 integer, f3 float);
+
+INSERT INTO t7 VALUES (1, 2, 3);
+INSERT INTO t7 VALUES (2, 3, 4);
+INSERT INTO t7 VALUES (3, 4, 5);
+INSERT INTO t7 VALUES (1, 1, 1);
+INSERT INTO t7 VALUES (2, 2, 2);
+INSERT INTO t7 VALUES (3, 3, 3);
+INSERT INTO t7 VALUES (6, 7, 8);
+INSERT INTO t7 VALUES (8, 9, NULL);
+
+-- inlined CTEs should used the origin cexpression with recreated
+explain (verbose, costs off)
+with x as (select * from (select f1 from t7) ss)
+select * from x where f1 = 1;
+
+with x as (select * from (select f1 from t7) ss)
+select * from x where f1 = 1;
+
+-- start_ignore
+drop table t5;
+drop table t6;
+drop table t7;
+
+drop schema cte_prune cascade;
 -- end_ignore
