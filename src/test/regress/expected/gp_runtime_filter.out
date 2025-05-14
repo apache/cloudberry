@@ -294,19 +294,21 @@ SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
 SET gp_enable_runtime_filter_pushdown TO on;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 SELECT t1.c3 FROM t1, t2 WHERE t1.c2 = t2.c2;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Hash Join (actual rows=0 loops=1)
          Hash Cond: (t1.c2 = t2.c2)
-         Extra Text: (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
+         Extra Text: (seg2)   RF: t1 attrno: 2, range[1, 4], n_distinct: 1.00
+ (seg2)   Hash chain length 8.0 avg, 8 max, using 4 of 524288 buckets.
          ->  Seq Scan on t1 (actual rows=1 loops=1)
                Rows Removed by Pushdown Runtime Filter: 127
+               Extra Text: (seg2)   BloomFilter[0]: fpr:0.000000,
          ->  Hash (actual rows=32 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4098kB
                ->  Seq Scan on t2 (actual rows=32 loops=1)
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
@@ -344,24 +346,28 @@ SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
 SET gp_enable_runtime_filter_pushdown TO on;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
    ->  Hash Join (actual rows=64 loops=1)
          Hash Cond: (t1.c2 = t2.c2)
-         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         Extra Text: (seg0)   RF: t1_1_prt_1 attrno: 2, range[1, 51], n_distinct: 18.00
+ (seg0)   RF: t1_1_prt_2 attrno: 2, range[1, 51], n_distinct: 20.00
+ (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
          ->  Append (actual rows=64 loops=1)
                Partition Selectors: $0
                ->  Seq Scan on t1_1_prt_1 t1_1 (actual rows=48 loops=1)
                      Rows Removed by Pushdown Runtime Filter: 240
+                     Extra Text: (seg0)   BloomFilter[0]: fpr:0.000000,
                ->  Seq Scan on t1_1_prt_2 t1_2 (actual rows=16 loops=1)
                      Rows Removed by Pushdown Runtime Filter: 304
+                     Extra Text: (seg0)   BloomFilter[0]: fpr:0.000000,
          ->  Hash (actual rows=6 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
                      ->  Seq Scan on t2 (actual rows=6 loops=1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(19 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
@@ -396,16 +402,16 @@ INSERT INTO t1 SELECT GENERATE_SERIES(1, 1000), GENERATE_SERIES(1, 1000);
 INSERT INTO t2 SELECT * FROM t1;
 SET gp_enable_runtime_filter_pushdown TO on;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT count(t1.c2) FROM t1, t2 WHERE t1.c1 = t2.c1;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=1)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
          ->  Partial Aggregate (actual rows=1 loops=1)
                ->  Hash Join (actual rows=340 loops=1)
                      Hash Cond: (t1.c1 = t2.c1)
-                     Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 340 of 524288 buckets.
+                     Extra Text: (seg2)   RF: t1 attrno: 1, range[5, 997], n_distinct: 0.00
+ (seg2)   Hash chain length 1.0 avg, 1 max, using 340 of 524288 buckets.
                      ->  Seq Scan on t1 (actual rows=340 loops=1)
-                           Rows Removed by Pushdown Runtime Filter: 0
                      ->  Hash (actual rows=340 loops=1)
                            Buckets: 524288  Batches: 1  Memory Usage: 4108kB
                            ->  Seq Scan on t2 (actual rows=340 loops=1)
@@ -443,25 +449,27 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 W
          ->  Hash (actual rows=6 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Seq Scan on t2 (actual rows=6 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SET gp_enable_runtime_filter_pushdown TO on;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT t1.c3 FROM t1, t2 WHERE t1.c1 = t2.c1;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=32 loops=1)
    ->  Hash Join (actual rows=32 loops=1)
          Hash Cond: (t1.c1 = t2.c1)
-         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 3 of 524288 buckets.
+         Extra Text: (seg0)   RF: t1 attrno: 1, range[2, 4], n_distinct: -0.12
+ (seg0)   Hash chain length 2.0 avg, 2 max, using 3 of 524288 buckets.
          ->  Result (actual rows=16 loops=1)
                ->  Seq Scan on t1 (actual rows=16 loops=1)
                      Rows Removed by Pushdown Runtime Filter: 8
+                     Extra Text: (seg0)   BloomFilter[0]: fpr:0.000000, ScanKey[c1] >= 2, ScanKey[c1] <= 4
          ->  Hash (actual rows=6 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Seq Scan on t2 (actual rows=6 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+ Optimizer: GPORCA
+(13 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
@@ -511,17 +519,20 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 W
 
 SET gp_enable_runtime_filter_pushdown TO on;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 WHERE t1.c1 = t2.c1 AND t1.c2 = t3.c2;
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1) (actual rows=256 loops=1)
    ->  Hash Join (actual rows=256 loops=1)
          Hash Cond: (t1.c1 = t2.c1)
-         Extra Text: Hash chain length 4.0 avg, 4 max, using 4 of 32768 buckets.
+         Extra Text: RF: t1 attrno: 1, range[1, 4], n_distinct: 3.00
+ Hash chain length 4.0 avg, 4 max, using 4 of 32768 buckets.
          ->  Hash Join (actual rows=64 loops=1)
                Hash Cond: (t1.c2 = t3.c2)
-               Extra Text: Hash chain length 2.0 avg, 2 max, using 4 of 32768 buckets.
+               Extra Text: RF: t1 attrno: 2, range[1, 4], n_distinct: 3.00
+ Hash chain length 2.0 avg, 2 max, using 4 of 32768 buckets.
                ->  Seq Scan on t1 (actual rows=32 loops=1)
                      Rows Removed by Pushdown Runtime Filter: 16
+                     Extra Text: BloomFilter[0]: fpr:0.000000, BloomFilter[1]: fpr:0.000000,
                ->  Hash (actual rows=8 loops=1)
                      Buckets: 32768  Batches: 1  Memory Usage: 258kB
                      ->  Seq Scan on t3 (actual rows=8 loops=1)
@@ -529,7 +540,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) SELECT * FROM t1, t2, t3 W
                Buckets: 32768  Batches: 1  Memory Usage: 260kB
                ->  Seq Scan on t2 (actual rows=16 loops=1)
  Optimizer: Postgres query optimizer
-(16 rows)
+(19 rows)
 
 RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
