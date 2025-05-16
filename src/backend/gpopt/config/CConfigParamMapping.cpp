@@ -265,6 +265,11 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 false,	 // m_negate_param
 	 GPOS_WSZ_LIT(
 		 "Always pick a plan for aggregate distinct that minimizes skew.")},
+	
+	{EopttraceForceSplitWindowFunc, &optimizer_force_split_window_function,
+		false,	 // m_negate_param
+		GPOS_WSZ_LIT(
+				"Always split the window function.")},
 
 	{EopttraceEnableEagerAgg, &optimizer_enable_eageragg,
 	 false,	 // m_negate_param

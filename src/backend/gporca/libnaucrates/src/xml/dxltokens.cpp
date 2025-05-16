@@ -96,6 +96,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenWindowOids, GPOS_WSZ_LIT("WindowOids")},
 		{EdxltokenOidRowNumber, GPOS_WSZ_LIT("RowNumber")},
 		{EdxltokenOidRank, GPOS_WSZ_LIT("Rank")},
+		{EdxltokenOidDenseRank, GPOS_WSZ_LIT("DenseRank")},
 
 		{EdxltokenPlanSamples, GPOS_WSZ_LIT("PlanSamples")},
 

@@ -57,8 +57,11 @@ CParseHandlerWindowOids::StartElement(const XMLCh *const,  //element_uri,
 	OID rank_oid = CDXLOperatorFactory::ExtractConvertAttrValueToOid(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenOidRank,
 		EdxltokenWindowOids);
+	OID dense_rank_oid = CDXLOperatorFactory::ExtractConvertAttrValueToOid(
+		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenOidDenseRank,
+		EdxltokenWindowOids);
 
-	m_window_oids = GPOS_NEW(m_mp) CWindowOids(row_number_oid, rank_oid);
+	m_window_oids = GPOS_NEW(m_mp) CWindowOids(m_mp, row_number_oid, rank_oid, dense_rank_oid);
 }
 
 // invoked by Xerces to process a closing tag

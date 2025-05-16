@@ -320,12 +320,10 @@ public:
 											BOOL fNewComputedCol);
 
 	// generate a sequence project expression
-	static CExpression *PexprLogicalSequenceProject(CMemoryPool *mp,
-													CDistributionSpec *pds,
-													COrderSpecArray *pdrgpos,
-													CWindowFrameArray *pdrgpwf,
-													CExpression *pexpr,
-													CExpression *pexprPrjList);
+	static CExpression *PexprLogicalSequenceProject(
+		CMemoryPool *mp, COperator::ESPType sptype, CDistributionSpec *pds,
+		COrderSpecArray *pdrgpos, CWindowFrameArray *pdrgpwf,
+		CExpression *pexpr, CExpression *pexprPrjList);
 
 	// generate a projection of NULL constants
 	// to the map 'colref_mapping', and add the mappings to the colref_mapping map if not NULL

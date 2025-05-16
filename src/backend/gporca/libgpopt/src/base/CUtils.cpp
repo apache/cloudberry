@@ -2269,7 +2269,8 @@ CUtils::PexprLogicalProject(CMemoryPool *mp, CExpression *pexpr,
 
 // generate a sequence project expression
 CExpression *
-CUtils::PexprLogicalSequenceProject(CMemoryPool *mp, CDistributionSpec *pds,
+CUtils::PexprLogicalSequenceProject(CMemoryPool *mp, COperator::ESPType sptype,
+									CDistributionSpec *pds,
 									COrderSpecArray *pdrgpos,
 									CWindowFrameArray *pdrgpwf,
 									CExpression *pexpr,
@@ -2285,7 +2286,8 @@ CUtils::PexprLogicalSequenceProject(CMemoryPool *mp, CDistributionSpec *pds,
 				pexprPrjList->Pop()->Eopid());
 
 	return GPOS_NEW(mp) CExpression(
-		mp, GPOS_NEW(mp) CLogicalSequenceProject(mp, pds, pdrgpos, pdrgpwf),
+		mp,
+		GPOS_NEW(mp) CLogicalSequenceProject(mp, sptype, pds, pdrgpos, pdrgpwf),
 		pexpr, pexprPrjList);
 }
 
@@ -3857,9 +3859,9 @@ CUtils::PexprFuncElemExpr(CMemoryPool *mp, CMDAccessor *md_accessor,
 		CWStringConst(mp, (cast_func->Mdname().GetMDName())->GetBuffer());
 	mdid_func->AddRef();
 	cast_func->GetResultTypeMdid()->AddRef();
-	CScalarFunc *popCastScalarFunc =
-		GPOS_NEW(mp) CScalarFunc(mp, mdid_func, cast_func->GetResultTypeMdid(),
-								 typmod, pstrFunc, 1 /* Explicit Cast */, false /* funcvariadic */);
+	CScalarFunc *popCastScalarFunc = GPOS_NEW(mp)
+		CScalarFunc(mp, mdid_func, cast_func->GetResultTypeMdid(), typmod,
+					pstrFunc, 1 /* Explicit Cast */, false /* funcvariadic */);
 	mdid_elem_type->AddRef();
 	CExpression *pexprCaseTest = GPOS_NEW(mp)
 		CExpression(mp, GPOS_NEW(mp) CScalarCaseTest(mp, mdid_elem_type));

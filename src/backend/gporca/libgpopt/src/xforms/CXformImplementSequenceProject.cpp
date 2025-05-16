@@ -72,6 +72,7 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 	// extract members of logical sequence project operator
 	CLogicalSequenceProject *popLogicalSequenceProject =
 		CLogicalSequenceProject::PopConvert(pexpr->Pop());
+	COperator::ESPType sptype = popLogicalSequenceProject->Pspt();
 	CDistributionSpec *pds = popLogicalSequenceProject->Pds();
 	COrderSpecArray *pdrgpos = popLogicalSequenceProject->Pdrgpos();
 	CWindowFrameArray *pdrgpwf = popLogicalSequenceProject->Pdrgpwf();
@@ -81,7 +82,9 @@ CXformImplementSequenceProject::Transform(CXformContext *pxfctxt,
 
 	// assemble physical operator
 	CExpression *pexprSequenceProject = GPOS_NEW(mp) CExpression(
-		mp, GPOS_NEW(mp) CPhysicalSequenceProject(mp, pds, pdrgpos, pdrgpwf),
+		mp,
+		GPOS_NEW(mp)
+			CPhysicalSequenceProject(mp, sptype, pds, pdrgpos, pdrgpwf),
 		pexprRelational, pexprScalar);
 
 	// add alternative to results
