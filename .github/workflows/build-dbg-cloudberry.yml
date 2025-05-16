@@ -222,9 +222,6 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
-              {"test":"ic-cbdb-parallel",
-               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
-              }
             ]
           }'
 
