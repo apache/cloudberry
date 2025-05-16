@@ -716,3 +716,17 @@ CREATE TYPE type_to_shorten AS (f1 int, f2 text);
 CREATE TABLE shorten_udt(c1 type_to_shorten) USING ao_column;
 INSERT INTO shorten_udt SELECT '(1,foo)';
 SELECT * FROM shorten_udt;
+
+-- Test zero-column table
+create table t1()using ao_column;
+create index on t1 using btree ((1));
+insert into t1 default values;
+select * from t1;
+
+delete from t1;
+select * from t1;
+
+insert into t1 default values;
+select * from t1;
+
+drop table t1;

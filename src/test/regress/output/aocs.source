@@ -1403,3 +1403,22 @@ SELECT * FROM shorten_udt;
  (1,foo)
 (1 row)
 
+-- Test zero-column table
+create table t1()using ao_column;
+create index on t1 using btree ((1));
+insert into t1 default values;
+select * from t1;
+--
+(0 rows)
+
+delete from t1;
+select * from t1;
+--
+(0 rows)
+
+insert into t1 default values;
+select * from t1;
+--
+(0 rows)
+
+drop table t1;
