@@ -627,6 +627,12 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 		}
 	}
 
+	// Locking clause is not supported.
+	if (m_query->canOptSelectLockingClause) {
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT("Locking clause"));
+	}
+
 	// RETURNING is not supported yet.
 	if (m_query->returningList)
 	{

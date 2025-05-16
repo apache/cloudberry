@@ -402,10 +402,7 @@ UPDATE 1
 
 2: begin;
 BEGIN
--- TODO: turn off orca, we should fix this until ORCA
--- can generate lockrows plannode.
-2: set optimizer = off;
-SET
+-- ORCA will fallback
 2&: select * from t_splitupdate_raise_error for update;  <waiting ...>
 
 1: end;

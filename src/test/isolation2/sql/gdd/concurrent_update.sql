@@ -240,9 +240,7 @@ insert into test values (1, 1, 1), (1, 2, 1);
 1: update t_splitupdate_raise_error set a = a + 1;
 
 2: begin;
--- TODO: turn off orca, we should fix this until ORCA
--- can generate lockrows plannode.
-2: set optimizer = off;
+-- ORCA will fallback
 2&: select * from t_splitupdate_raise_error for update;
 
 1: end;
