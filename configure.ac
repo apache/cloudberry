@@ -871,7 +871,7 @@ AC_SUBST(enable_mapreduce)
 #
 PGAC_ARG_BOOL(enable, shared-postgres-backend, yes, [enable Cloudberry shared postgres backend support],
               [AC_DEFINE([USE_SHARED_POSTGRES_BACKEND], 1,
-			             [Define to 1 to build with shared postgres backend capabilities (--enable-shared-postgres-backend)])])
+			             [Define to 1 to build with shared Cloudberry backend capabilities (--enable-shared-postgres-backend)])])
 AC_MSG_RESULT([checking whether to build with Cloudberry shared postgres backend... $enable_shared_postgres_backend])
 AC_SUBST(enable_shared_postgres_backend)
 
@@ -880,6 +880,22 @@ AS_IF([test "$enable_shared_postgres_backend" = yes ],
   CFLAGS="$CFLAGS -fPIC "
   CXXFLAGS="$CXXFLAGS -fPIC "
 ]) # fi
+
+#
+# --enable-link-postgres-with-shared enables linking postgres with shared library libpostgres.so
+#
+PGAC_ARG_BOOL(enable, link-postgres-with-shared, no, [build Cloudberry using the shared library libpostgres.so],
+              [AC_DEFINE([USE_LINK_POSTGRES_WITH_SHARED], 1,
+			             [Define to 1 to build Cloudberry using the shared library libpostgres.so (--enable-link-postgres-with-shared)])])
+AC_MSG_RESULT([checking whether to build Cloudberry using the shared library libpostgres.so... $enable_link_postgres_with_shared])
+AC_SUBST(enable_link_postgres_with_shared)
+
+# check if enable-shared-postgres-backend is yes when enable-link-postgres-with-shared is yes
+if test "$enable_link_postgres_with_shared" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    AC_MSG_ERROR([--enable-link-postgres-with-shared is yes, but --enable-shared-postgres-backend is no])
+  fi
+fi
 
 #
 # gpcloud, enabled by default
@@ -1782,6 +1798,13 @@ if test "$with_ldap" = yes ; then
 fi
 AC_SUBST(LDAP_LIBS_FE)
 AC_SUBST(LDAP_LIBS_BE)
+
+# for contrib/pax_storage
+if test "$enable_pax" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    AC_MSG_ERROR([PAX support requires --enable-shared-postgres-backend])
+  fi
+fi
 
 # for contrib/sepgsql
 if test "$with_selinux" = yes; then

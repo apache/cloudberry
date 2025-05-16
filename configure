@@ -761,6 +761,7 @@ enable_ic_proxy
 enable_external_fts
 HAVE_CXX14
 enable_gpcloud
+enable_link_postgres_with_shared
 enable_shared_postgres_backend
 enable_mapreduce
 enable_serverless
@@ -903,6 +904,7 @@ enable_catalog_ext
 enable_serverless
 enable_mapreduce
 enable_shared_postgres_backend
+enable_link_postgres_with_shared
 enable_gpcloud
 enable_external_fts
 enable_ic_proxy
@@ -1630,6 +1632,9 @@ Optional Features:
   --enable-mapreduce      enable Cloudberry Mapreduce support
   --disable-shared-postgres-backend
                           enable Cloudberry shared postgres backend support
+  --enable-link-postgres-with-shared
+                          build Cloudberry using the shared library
+                          libpostgres.so
   --enable-gpcloud        enable gpcloud support
   --enable-external-fts   enable external fts support
   --enable-ic-proxy       enable interconnect proxy mode (requires libuv
@@ -8588,6 +8593,45 @@ if test "$enable_shared_postgres_backend" = yes ; then :
   CXXFLAGS="$CXXFLAGS -fPIC "
 
 fi # fi
+
+#
+# --enable-link-postgres-with-shared enables linking postgres with shared library libpostgres.so
+#
+
+
+# Check whether --enable-link-postgres-with-shared was given.
+if test "${enable_link_postgres_with_shared+set}" = set; then :
+  enableval=$enable_link_postgres_with_shared;
+  case $enableval in
+    yes)
+
+$as_echo "#define USE_LINK_POSTGRES_WITH_SHARED 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-link-postgres-with-shared option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_link_postgres_with_shared=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build Cloudberry using the shared library libpostgres.so... $enable_link_postgres_with_shared" >&5
+$as_echo "checking whether to build Cloudberry using the shared library libpostgres.so... $enable_link_postgres_with_shared" >&6; }
+
+
+# check if enable-shared-postgres-backend is yes when enable-link-postgres-with-shared is yes
+if test "$enable_link_postgres_with_shared" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    as_fn_error $? "--enable-link-postgres-with-shared is yes, but --enable-shared-postgres-backend is no" "$LINENO" 5
+  fi
+fi
 
 #
 # gpcloud, enabled by default
@@ -16056,6 +16100,13 @@ fi
 fi
 
 
+
+# for contrib/pax_storage
+if test "$enable_pax" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    as_fn_error $? "PAX support requires --enable-shared-postgres-backend" "$LINENO" 5
+  fi
+fi
 
 # for contrib/sepgsql
 if test "$with_selinux" = yes; then

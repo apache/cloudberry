@@ -315,6 +315,9 @@ jobs:
               },
               {"test":"ic-parallel-retrieve-cursor",
                "make_configs":["src/test/isolation2:installcheck-parallel-retrieve-cursor"]
+              },
+              {"test":"ic-cbdb-parallel",
+               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }
             ]
           }'
