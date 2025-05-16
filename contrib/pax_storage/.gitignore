@@ -26,3 +26,4 @@ tools/**/*.txt
 # Executables
 /*.out
 !src/data/expected/*.out
+pax-cdbinit--1.0.sql
