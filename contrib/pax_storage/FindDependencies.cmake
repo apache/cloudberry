@@ -1,6 +1,6 @@
 ## protobuf
 include(FindProtobuf)
-find_package(Protobuf 3.6.1 REQUIRED)
+find_package(Protobuf 3.5.0 REQUIRED)
 
 # ztsd
 # in our image snapshot, zstd is managed using pkg-config, so so the pkg-config method is used first here

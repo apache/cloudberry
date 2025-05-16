@@ -28,6 +28,7 @@
 #pragma once
 #include "comm/cbdb_api.h"
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <utility>
@@ -190,3 +191,4 @@ class PaxSparseFilter final {
 };  // class PaxSparseFilter
 
 }  // namespace pax
+
