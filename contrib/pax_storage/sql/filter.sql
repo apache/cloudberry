@@ -1,3 +1,4 @@
+set pax_enable_debug to on;
 set pax_enable_sparse_filter = on;
 create table pax_test.null_test_t(a int, b int, c text) using pax;
 

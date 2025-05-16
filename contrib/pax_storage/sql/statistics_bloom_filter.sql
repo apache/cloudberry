@@ -6,7 +6,7 @@
 -- m/^LOG:  Missing statistics for column: .*/
 -- end_matchignore
 set default_table_access_method = pax;
-
+set pax_enable_debug to on;
 -- 
 -- Test with small group
 -- 
