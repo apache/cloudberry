@@ -73,8 +73,12 @@ LIBS += -lsystemd
 endif
 
 ##########################################################################
+TARGETS = submake-libpgport submake-catalog-headers submake-utils-headers postgres $(POSTGRES_IMP)
+ifeq ($(enable_shared_postgres_backend),yes)
+TARGETS += libpostgres.so
+endif
 
-all: submake-libpgport submake-catalog-headers submake-utils-headers postgres $(POSTGRES_IMP)
+all: $(TARGETS)
 
 ifneq ($(PORTNAME), cygwin)
 ifneq ($(PORTNAME), win32)
@@ -85,10 +89,8 @@ libpostgres.so: $(OBJS)
 	$(CXX) -shared $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_SL) $(export_dynamic) \
 	  $(filter-out main/main.o, $(call expand_subsys,$^)) $(LIBS) -o $@
 
-postgres: main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a $(top_builddir)/src/common/libpgcommon_srv.a
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) \
-	  main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a \
-	  $(top_builddir)/src/common/libpgcommon_srv.a $(LIBS) -o $@
+postgres: $(OBJS)
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) $(LIBS) -o $@
 
 else
 postgres: $(OBJS)
