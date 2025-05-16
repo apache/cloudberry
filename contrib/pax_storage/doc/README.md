@@ -21,7 +21,25 @@ PAX has the following features:
 
 ### Build PAX
 
-PAX will be built with `--enable-pax` when users building the Cloudberry.
+PAX will be built with `--enable-pax` when you build the Cloudberry. Dependency requirements are as follows:
+
+- **C/C++ Compiler**: GCC/GCC-C++ 11 or later
+- **CMake**: 3.11 or later
+- **Protobuf**: 3.5.0 or later
+- **ZSTD (libzstd)**: 1.4.0 or later
+
+Also, you need to run the following command at the top level of the Cloudberry source code directory to download the submodules:
+
+```
+git submodule update --init --recursive
+```
+
+The following submodules will be downloaded for building and tesing PAX:
+- yyjson (`dependency/yyjson`)
+- cpp-stub (`contrib/pax_storage/src/cpp/cotnrib`)
+- googlebench (`contrib/pax_storage/src/cpp/cotnrib`)
+- googletest (`contrib/pax_storage/src/cpp/cotnrib`)
+- tabulate (`contrib/pax_storage/src/cpp/cotnrib`)
 
 ### Build debug version
 
