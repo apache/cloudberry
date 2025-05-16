@@ -59,7 +59,6 @@ using UlongToExprArrayMapIter =
 	CHashMapIter<ULONG, CExpressionArray, gpos::HashValue<ULONG>,
 				 gpos::Equals<ULONG>, CleanupDelete<ULONG>, CleanupNULL>;
 
-
 //---------------------------------------------------------------------------
 //	@class:
 //		CTranslatorDXLToExpr
@@ -364,6 +363,10 @@ private:
 	// create an array of column references from an array of dxl column references
 	CColRefArray *Pdrgpcr(const CDXLColDescrArray *dxl_col_descr_array);
 
+	// construct a dynamic array of column references corresponding to the
+	// given col ids
+	CColRefArray *Pdrgpcr(const ULongPtrArray *colids);
+
 	// construct the mapping between the DXL ColId and CColRef
 	void ConstructDXLColId2ColRefMapping(
 		const CDXLColDescrArray *dxl_col_descr_array,
@@ -373,7 +376,15 @@ private:
 
 	// look up the column reference in the hash map. We raise an exception if
 	// the column is not found
-	static CColRef *LookupColRef(UlongToColRefMap *colref_mapping, ULONG colid);
+	CColRef *LookupColRef(ULONG colid, BOOL mark_used = true);
+	
+	// after the colref in CTE consumer marked used, the producer should marked 
+	// the relatived colref as used.
+	void MarkCTEConsumerColAsUsed(UlongToColRefMap *cidcrCTE, UlongToColRefArrayMap *pidcrsCTE, ULONG colid);
+
+	// after the colref in CTE producer marked used, the consumer should marked 
+	// the relatived colref as used.
+	void MarkCTEProducerColAsUsed(UlongToColRefMap *cidcrCTE, UlongToColRefArrayMap *pidcrsCTE, ULONG colid);
 
 public:
 	// ctor

@@ -31,10 +31,26 @@ using namespace gpopt;
 //---------------------------------------------------------------------------
 CPhysicalCTEProducer::CPhysicalCTEProducer(CMemoryPool *mp, ULONG id,
 										   CColRefArray *colref_array)
-	: CPhysical(mp), m_id(id), m_pdrgpcr(colref_array), m_pcrs(nullptr)
+	: CPhysical(mp), m_id(id), m_pdrgpcr(nullptr), m_pcrs(nullptr)
 {
 	GPOS_ASSERT(nullptr != colref_array);
-	m_pcrs = GPOS_NEW(mp) CColRefSet(mp, m_pdrgpcr);
+	ULONG colref_size = colref_array->Size();
+	ULONG unused_inc = 0;
+	m_pcrs = GPOS_NEW(mp) CColRefSet(mp);
+	m_pdrgpcr = GPOS_NEW(mp) CColRefArray(mp);
+	m_pdrgpcr_unused = GPOS_NEW(mp) ULongPtrArray(mp, colref_size);
+
+	for (ULONG index = 0; index < colref_size; index++) {
+		CColRef *col_ref = (*colref_array)[index];
+		GPOS_ASSERT(col_ref->GetUsage() != CColRef::EUnknown);
+		m_pdrgpcr_unused->Append(GPOS_NEW(m_mp) ULONG(unused_inc));
+		if (col_ref->GetUsage() == CColRef::EUsed) {
+			m_pdrgpcr->Append(col_ref);
+			m_pcrs->Include(col_ref);
+		} else {
+			unused_inc++;
+		}
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -49,6 +65,7 @@ CPhysicalCTEProducer::~CPhysicalCTEProducer()
 {
 	m_pdrgpcr->Release();
 	m_pcrs->Release();
+	m_pdrgpcr_unused->Release();
 }
 
 //---------------------------------------------------------------------------
@@ -69,12 +86,20 @@ CPhysicalCTEProducer::PcrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	GPOS_ASSERT(0 == child_index);
 	GPOS_ASSERT(0 == pcrsRequired->Size());
 
-	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp, *m_pcrs);
+	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
+	ULONG ccr_size = m_pdrgpcr->Size();
+	for (ULONG index = 0; index < ccr_size; index++) {
+		CColRef *col_ref = (*m_pdrgpcr)[index];
+		GPOS_ASSERT(col_ref->GetUsage() != CColRef::EUnknown);
+		if (col_ref->GetUsage() == CColRef::EUsed) {
+			pcrs->Include(col_ref);
+		}
+	}
+
 	pcrs->Union(pcrsRequired);
 	CColRefSet *pcrsChildReqd =
 		PcrsChildReqd(mp, exprhdl, pcrs, child_index, gpos::ulong_max);
 
-	GPOS_ASSERT(pcrsChildReqd->Size() == m_pdrgpcr->Size());
 	pcrs->Release();
 
 	return pcrsChildReqd;
