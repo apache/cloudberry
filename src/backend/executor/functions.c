@@ -896,9 +896,9 @@ init_sql_fcache(FunctionCallInfo fcinfo, Oid collation, bool lazyEvalOK)
 			fcache->junkFilter = ExecInitJunkFilterConversion(resulttlist,
 															  rettupdesc,
 															  slot,
-															  ExecFilterJunk);
+															  NULL);
 		else
-			fcache->junkFilter = ExecInitJunkFilter(resulttlist, slot, ExecFilterJunk);
+			fcache->junkFilter = ExecInitJunkFilter(resulttlist, slot, NULL);
 	}
 
 	if (fcache->returnsTuple)
@@ -2226,7 +2226,7 @@ sqlfunction_receive(TupleTableSlot *slot, DestReceiver *self)
 	DR_sqlfunction *myState = (DR_sqlfunction *) self;
 
 	/* Filter tuple as needed */
-	slot = myState->filter->jf_execFilterJunkFunc(myState->filter, slot);
+	slot = ExecFilterJunk(myState->filter, slot);
 
 	/* Store the filtered tuple into the tuplestore */
 	tuplestore_puttupleslot(myState->tstore, slot);

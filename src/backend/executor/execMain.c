@@ -2028,7 +2028,7 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			slot = ExecInitExtraTupleSlot(estate, NULL, &TTSOpsVirtual);
 			j = ExecInitJunkFilter(planstate->plan->targetlist,
 								   slot,
-								   ExecFilterJunk);
+								   NULL);
 			estate->es_junkFilter = j;
 
 			/* Want to return the cleaned tuple type */
@@ -2798,7 +2798,7 @@ ExecutePlan(EState *estate,
 		 * because that tuple slot has the wrong descriptor.)
 		 */
 		if (estate->es_junkFilter != NULL)
-			slot = estate->es_junkFilter->jf_execFilterJunkFunc(estate->es_junkFilter, slot);
+			slot = ExecFilterJunk(estate->es_junkFilter, slot);
 
 		if (operation != CMD_SELECT && Gp_role == GP_ROLE_EXECUTE && !Gp_is_writer)
 		{

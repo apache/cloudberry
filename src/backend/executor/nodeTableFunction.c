@@ -396,7 +396,7 @@ ExecInitTableFunction(TableFunctionScan *node, EState *estate, int eflags)
 	scanstate->inputscan->junkfilter =
 		ExecInitJunkFilter(subplan->plan->targetlist, 
 						   NULL  /* slot */,
-						   ExecFilterJunk);
+						   NULL);
 	BlessTupleDesc(scanstate->inputscan->junkfilter->jf_cleanTupType);
 
 	/*
@@ -525,7 +525,7 @@ AnyTable_GetNextTuple(AnyTable t)
 	 * ----------------------------------------
 	 */
 
-	slot = t->junkfilter->jf_execFilterJunkFunc(t->junkfilter, t->econtext->ecxt_outertuple);
+	slot = ExecFilterJunk(t->junkfilter, t->econtext->ecxt_outertuple);
 	return ExecCopySlotHeapTuple(slot);
 }
 

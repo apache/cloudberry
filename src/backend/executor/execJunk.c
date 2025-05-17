@@ -16,6 +16,9 @@
 
 #include "executor/executor.h"
 
+static TupleTableSlot *ExecFilterJunkInternal(JunkFilter *junkfilter,
+											  TupleTableSlot *slot);
+
 /*-------------------------------------------------------------------------
  *		XXX this stuff should be rewritten to take advantage
  *			of ExecProject() and the ProjectionInfo node.
@@ -121,8 +124,9 @@ ExecInitJunkFilter(List *targetList, TupleTableSlot *slot,
 	junkfilter->jf_cleanTupType = cleanTupType;
 	junkfilter->jf_cleanMap = cleanMap;
 	junkfilter->jf_resultSlot = slot;
-	junkfilter->jf_execFilterJunkFunc =
-		execFilterJunkFunc ? execFilterJunkFunc : ExecFilterJunk;
+
+	Assert(execFilterJunkFunc != ExecFilterJunk);
+	junkfilter->jf_execFilterJunkFunc = execFilterJunkFunc;
 
 	return junkfilter;
 }
@@ -201,8 +205,9 @@ ExecInitJunkFilterConversion(List *targetList,
 	junkfilter->jf_cleanTupType = cleanTupType;
 	junkfilter->jf_cleanMap = cleanMap;
 	junkfilter->jf_resultSlot = slot;
-	junkfilter->jf_execFilterJunkFunc =
-		execFilterJunkFunc ? execFilterJunkFunc : ExecFilterJunk;
+
+	Assert(execFilterJunkFunc != ExecFilterJunk);
+	junkfilter->jf_execFilterJunkFunc = execFilterJunkFunc;
 
 	return junkfilter;
 }
@@ -252,6 +257,15 @@ ExecFindJunkAttributeInTlist(List *targetlist, const char *attrName)
  */
 TupleTableSlot *
 ExecFilterJunk(JunkFilter *junkfilter, TupleTableSlot *slot)
+{
+	if (junkfilter->jf_execFilterJunkFunc)
+		return junkfilter->jf_execFilterJunkFunc(junkfilter, slot);
+
+	return ExecFilterJunkInternal(junkfilter, slot);
+}
+
+static TupleTableSlot *
+ExecFilterJunkInternal(JunkFilter *junkfilter, TupleTableSlot *slot)
 {
 	TupleTableSlot *resultSlot;
 	AttrNumber *cleanMap;

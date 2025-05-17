@@ -2928,7 +2928,7 @@ ExecInitWholeRowVar(ExprEvalStep *scratch, Var *variable, ExprState *state)
 					ExecInitJunkFilter(subplan->plan->targetlist,
 									   ExecInitExtraTupleSlot(parent->state, NULL,
 															  &TTSOpsVirtual),
-									   ExecFilterJunk);
+									   NULL);
 			}
 		}
 	}
