@@ -2027,7 +2027,8 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 
 			slot = ExecInitExtraTupleSlot(estate, NULL, &TTSOpsVirtual);
 			j = ExecInitJunkFilter(planstate->plan->targetlist,
-								   slot);
+								   slot,
+								   NULL);
 			estate->es_junkFilter = j;
 
 			/* Want to return the cleaned tuple type */

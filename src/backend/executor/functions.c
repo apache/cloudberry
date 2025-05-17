@@ -895,9 +895,10 @@ init_sql_fcache(FunctionCallInfo fcinfo, Oid collation, bool lazyEvalOK)
 		if (rettupdesc && fcache->returnsTuple)
 			fcache->junkFilter = ExecInitJunkFilterConversion(resulttlist,
 															  rettupdesc,
-															  slot);
+															  slot,
+															  NULL);
 		else
-			fcache->junkFilter = ExecInitJunkFilter(resulttlist, slot);
+			fcache->junkFilter = ExecInitJunkFilter(resulttlist, slot, NULL);
 	}
 
 	if (fcache->returnsTuple)
