@@ -3306,6 +3306,75 @@ select count(*) from par_1_prt_2;
 (6 rows)
 
 abort;
+-- Test INSERT SELECT
+begin; 
+create table t_insert(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table t_select(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_select select i from generate_series(1, 1000) i;
+analyze t_insert;
+create materialized view mv_insert_select as
+select count(a) from t_select;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_insert_select;
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose) insert into t_insert select count(a) from t_select;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Insert on aqumv.t_insert
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Output: (("*SELECT*".count)::integer)
+         Hash Key: (("*SELECT*".count)::integer)
+         ->  Subquery Scan on "*SELECT*"
+               Output: "*SELECT*".count
+               ->  Finalize Aggregate
+                     Output: count(t_select.a)
+                     ->  Gather Motion 3:1  (slice2; segments: 3)
+                           Output: (PARTIAL count(t_select.a))
+                           ->  Partial Aggregate
+                                 Output: PARTIAL count(t_select.a)
+                                 ->  Seq Scan on aqumv.t_select
+                                       Output: t_select.a
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+insert into t_insert select count(a) from t_select;
+select * from t_insert;
+  a   
+------
+ 1000
+(1 row)
+
+truncate t_insert;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose) insert into t_insert select count(a) from t_select;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Insert on aqumv.t_insert
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: (("*SELECT*".count)::integer)
+         Hash Key: (("*SELECT*".count)::integer)
+         ->  Subquery Scan on "*SELECT*"
+               Output: "*SELECT*".count
+               ->  Seq Scan on aqumv.mv_insert_select
+                     Output: mv_insert_select.count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+insert into t_insert select count(a) from t_select;
+select * from t_insert;
+  a   
+------
+ 1000
+(1 row)
+
+abort;
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore

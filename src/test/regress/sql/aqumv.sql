@@ -852,6 +852,28 @@ explain(costs off, verbose)
 select count(*) from par_1_prt_2;
 abort;
 
+-- Test INSERT SELECT
+begin; 
+create table t_insert(a int);
+create table t_select(a int);
+insert into t_select select i from generate_series(1, 1000) i;
+analyze t_insert;
+create materialized view mv_insert_select as
+select count(a) from t_select;
+analyze mv_insert_select;
+
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose) insert into t_insert select count(a) from t_select;
+insert into t_insert select count(a) from t_select;
+select * from t_insert;
+truncate t_insert;
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose) insert into t_insert select count(a) from t_select;
+insert into t_insert select count(a) from t_select;
+select * from t_insert;
+abort;
+
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore
