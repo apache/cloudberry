@@ -41,6 +41,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/indexing.h"
 #include "cdb/cdbvars.h"
+#include "commands/matview.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
@@ -153,7 +154,6 @@ add_view_dependency(Oid mvoid)
 	recordDependencyOn(&myself, &referenced, DEPENDENCY_AUTO);
 }
 
-
 /*
  * InsertMatviewAuxEntry
  *  We also insert gp_matview_tables entry here to maintain view.
@@ -168,6 +168,8 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 	List 		*relids;
 	NameData	mvname;
 	bool		has_foreign = false;
+	Relation		matviewRel;
+	char	   *viewsql;
 
 	Assert(OidIsValid(mvoid));
 
@@ -187,7 +189,12 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 	values[Anum_gp_matview_aux_mvname - 1] = NameGetDatum(&mvname);
 
 	values[Anum_gp_matview_aux_has_foreign - 1] = BoolGetDatum(has_foreign);
-	
+
+	matviewRel = table_open(mvoid, NoLock);
+	viewsql = nodeToString((Node *) copyObject(get_matview_query(matviewRel)));
+	table_close(matviewRel, NoLock);
+	values[Anum_gp_matview_aux_view_query - 1] = CStringGetTextDatum(viewsql);
+
 	if (skipdata)
 		values[Anum_gp_matview_aux_datastatus - 1] = CharGetDatum(MV_DATA_STATUS_EXPIRED);
 	else

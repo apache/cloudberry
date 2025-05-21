@@ -44,6 +44,10 @@ CATALOG(gp_matview_aux,7153,GpMatviewAuxId)
 	bool		has_foreign;	/* view query has foreign tables? */
 	/* view's data status */
 	char		datastatus; 
+
+#ifdef CATALOG_VARLEN			/* variable-length fields start here */
+	pg_node_tree view_query BKI_FORCE_NOT_NULL;
+#endif
 } FormData_gp_matview_aux;
 
 

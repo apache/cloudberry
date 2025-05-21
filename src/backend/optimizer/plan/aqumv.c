@@ -147,11 +147,12 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 	RangeTblEntry 	*rte;
 	Oid				origin_rel_oid;
 	RangeTblEntry 	*mvrte;
-	Relation		ruleDesc;
 	Relation		matviewRel;
-	SysScanDesc		rcscan;
+	Relation		mvauxDesc;
+	TupleDesc		mvaux_tupdesc;
+	SysScanDesc		mvscan;
 	HeapTuple		tup;
-	Form_pg_rewrite	rewrite_tup;
+	Form_gp_matview_aux mvaux_tup;
 	bool			need_close = false;
 	PlannerInfo		*subroot;
 	List			*mv_final_tlist = NIL; /* Final target list we want to rewrite to. */
@@ -217,20 +218,24 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 	if (relkind == RELKIND_FOREIGN_TABLE && !aqumv_allow_foreign_table)
 		return mv_final_rel;
 
-	ruleDesc = table_open(RewriteRelationId, AccessShareLock);
+	mvauxDesc = table_open(GpMatviewAuxId, AccessShareLock);
+	mvaux_tupdesc = RelationGetDescr(mvauxDesc);
 
-	rcscan = systable_beginscan(ruleDesc, InvalidOid, false,
+	mvscan = systable_beginscan(mvauxDesc, InvalidOid, false,
 								NULL, 0, NULL);
 
-	while (HeapTupleIsValid(tup = systable_getnext(rcscan)))
+	while (HeapTupleIsValid(tup = systable_getnext(mvscan)))
 	{
+		Datum		view_query_datum;
+		char		*view_query_str;
+		bool		is_null;
+
 		CHECK_FOR_INTERRUPTS();
 		if (need_close)
 			table_close(matviewRel, AccessShareLock);
 
-		rewrite_tup = (Form_pg_rewrite) GETSTRUCT(tup);
-
-		matviewRel = table_open(rewrite_tup->ev_class, AccessShareLock);
+		mvaux_tup = (Form_gp_matview_aux) GETSTRUCT(tup);
+		matviewRel = table_open(mvaux_tup->mvoid, AccessShareLock);
 		need_close = true;
 
 		if (!RelationIsPopulated(matviewRel))
@@ -251,7 +256,14 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 		/*
 		 * Get a copy of view query to rewrite.
 		 */
-		viewQuery = copyObject(get_matview_query(matviewRel));
+		view_query_datum = heap_getattr(tup,
+										Anum_gp_matview_aux_view_query,
+										mvaux_tupdesc,
+										&is_null);
+
+		view_query_str = TextDatumGetCString(view_query_datum);
+		viewQuery = copyObject(stringToNode(view_query_str));
+		pfree(view_query_str);
 		Assert(IsA(viewQuery, Query));
 
 		/*
@@ -620,8 +632,8 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 	}
 	if (need_close)
 		table_close(matviewRel, AccessShareLock);
-	systable_endscan(rcscan);
-	table_close(ruleDesc, AccessShareLock);
+	systable_endscan(mvscan);
+	table_close(mvauxDesc, AccessShareLock);
 	
 	return current_rel;
 }

@@ -104,6 +104,7 @@ ORDER BY 1, 2;
          relname          |      attname       |   atttypid   
 --------------------------+--------------------+--------------
  gp_configuration_history | desc               | text
+ gp_matview_aux           | view_query         | pg_node_tree
  gp_version_at_initdb     | productversion     | text
  gp_warehouse             | warehouse_name     | text
  pg_attribute             | attacl             | aclitem[]
@@ -137,7 +138,7 @@ ORDER BY 1, 2;
  pg_task_run_history      | return_message     | text
  pg_task_run_history      | status             | text
  pg_task_run_history      | username           | text
-(34 rows)
+(35 rows)
 
 -- start_ignore
 -- system catalogs without primary keys
