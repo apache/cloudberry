@@ -121,8 +121,9 @@ CXformSubqueryUnnest::PexprSubqueryUnnest(CMemoryPool *mp, CExpression *pexpr,
 				popSeqPrj->Pdrgpos()->AddRef();
 				popSeqPrj->Pdrgpwf()->AddRef();
 				pexprResult = CUtils::PexprLogicalSequenceProject(
-					mp, popSeqPrj->Pds(), popSeqPrj->Pdrgpos(),
-					popSeqPrj->Pdrgpwf(), pexprNewOuter, pexprResidualScalar);
+					mp, popSeqPrj->Pspt(), popSeqPrj->Pds(),
+					popSeqPrj->Pdrgpos(), popSeqPrj->Pdrgpwf(), pexprNewOuter,
+					pexprResidualScalar);
 				break;
 
 			default:

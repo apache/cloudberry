@@ -25,7 +25,8 @@
 #include "naucrates/traceflags/traceflags.h"
 
 // Macro for enabling and disabling xforms
-#define GPOPT_DISABLE_XFORM_TF(x) EopttraceDisableXformBase + static_cast<int>(x)
+#define GPOPT_DISABLE_XFORM_TF(x) \
+	EopttraceDisableXformBase + static_cast<int>(x)
 #define GPOPT_ENABLE_XFORM(x) GPOS_UNSET_TRACE(GPOPT_DISABLE_XFORM_TF(x))
 #define GPOPT_DISABLE_XFORM(x) GPOS_SET_TRACE(GPOPT_DISABLE_XFORM_TF(x))
 #define GPOPT_FENABLED_XFORM(x) !GPOS_FTRACE(GPOPT_DISABLE_XFORM_TF(x))
@@ -236,6 +237,7 @@ public:
 		ExfLimit2IndexOnlyGet,
 		ExfFullOuterJoin2HashJoin,
 		ExfFullJoinCommutativity,
+		ExfSplitWindowFunc,
 		ExfInvalid,
 		ExfSentinel = ExfInvalid
 	};
@@ -297,7 +299,8 @@ public:
 	}
 
 	// check compatibility with another xform
-	virtual BOOL FCompatible(CXform::EXformId)
+	virtual BOOL
+	FCompatible(CXform::EXformId)
 	{
 		return true;
 	}

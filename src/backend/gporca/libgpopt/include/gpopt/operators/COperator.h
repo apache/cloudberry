@@ -266,12 +266,25 @@ public:
 
 		EopLogicalIndexOnlyGet,
 		EopLogicalDynamicIndexOnlyGet,
+
+		EopLogicalWindowFunc,
 		EopSentinel
+	};
+
+	//  sequence project type
+	enum ESPType
+	{
+		EsptypeGlobalTwoStep,	// global group by sequence project
+		EsptypeGlobalOneStep,	// global group by sequence project
+		EsptypeLocal,	// local group by sequence project
+
+		EsptypeSentinel
 	};
 
 	// aggregate type
 	enum EGbAggType
 	{
+		// todo(jiaqizho): change to onestep, twostep(global), twostep(local)
 		EgbaggtypeGlobal,		 // global group by aggregate
 		EgbaggtypeLocal,		 // local group by aggregate
 		EgbaggtypeIntermediate,	 // intermediate group by aggregate

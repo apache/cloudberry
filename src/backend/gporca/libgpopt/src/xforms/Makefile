@@ -132,6 +132,7 @@ OBJS        = CDecorrelator.o \
               CXformSplitGbAgg.o \
               CXformSplitGbAggDedup.o \
               CXformSplitLimit.o \
+              CXformSplitWindowFunc.o \
               CXformSubqJoin2Apply.o \
               CXformSubqueryUnnest.o \
               CXformUnion2UnionAll.o \

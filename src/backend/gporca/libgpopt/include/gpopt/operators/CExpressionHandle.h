@@ -173,6 +173,13 @@ public:
 	// stats of attached expr/gexpr
 	IStatistics *Pstats();
 
+	// pop the memory pool
+	CMemoryPool *
+	Pmp() const
+	{
+		return m_mp;
+	}
+
 	// required properties of attached expr/gexpr
 	CReqdProp *
 	Prp() const
