@@ -480,9 +480,18 @@ SysLoggerMain(int argc, char *argv[])
 			 * was sent by pg_rotate_logfile() or "pg_ctl logrotate".
 			 */
 			if (!time_based_rotation && size_rotation_for == 0)
-				size_rotation_for = LOG_DESTINATION_STDERR |
-					LOG_DESTINATION_CSVLOG |
-					LOG_DESTINATION_JSONLOG;
+			{
+				if (Log_destination & LOG_DESTINATION_STDERR || gp_log_format == 0) {
+					size_rotation_for |= LOG_DESTINATION_STDERR;
+				}
+				if (Log_destination & LOG_DESTINATION_CSVLOG || gp_log_format == 1) {
+					size_rotation_for |= LOG_DESTINATION_CSVLOG;
+				}
+				if (Log_destination & LOG_DESTINATION_JSONLOG || gp_log_format == 2) {
+					size_rotation_for |= LOG_DESTINATION_JSONLOG;
+				}
+			}
+
 			rotation_requested = false;
 
 			all_rotations_occurred &=
@@ -1408,8 +1417,7 @@ void syslogger_log_chunk_data(PipeProtoHeader* p, char *data, int len)
 	} else if (p->flags & PIPE_PROTO_DEST_JSONLOG) {
 		write_syslogger_file(data, len, LOG_DESTINATION_JSONLOG);
 	}
-	else
-	{
+	else {
 		GpErrorData errorData;
 		memset(&errorData, 0, sizeof(errorData));
 		memcpy(&errorData.fix_fields, data, sizeof(errorData.fix_fields));
@@ -2088,7 +2096,7 @@ logfile_rotate(bool time_based_rotation, bool size_based_rotation,
  * In gpdb, `logfile_rotate` will be called separately for both csv and std log destination.
  * We keep the code below in order to make code merging easier.
  * Note the API for this function is different. PG upstream has size_rotation_for however gpdb
- * does not have. That's becasue we deal with size_rotation_for before calling this function.
+ * does not have. That's because we deal with size_rotation_for before calling this function.
  * We'll call this function separately for both cases and only pass the size_based_rotation
  * as arguments.
  */
@@ -2152,67 +2160,6 @@ logfile_rotate(bool time_based_rotation, bool size_based_rotation,
 		if (last_csv_file_name != NULL)
 			pfree(last_csv_file_name);
 		last_csv_file_name = NULL;
-	}
-
-	/*
-	 * Same as above, but for json file.  Note that if LOG_DESTINATION_JSONLOG
-	 * was just turned on, we might have to open jsonlogFile here though it was
-	 * not open before.  In such a case we'll append not overwrite (since
-	 * last_json_file_name will be NULL); that is consistent with the normal
-	 * rules since it's not a time-based rotation.
-	 */
-	if ((Log_destination & LOG_DESTINATION_JSONLOG) &&
-		(jsonlogFile == NULL ||
-		 time_based_rotation || (size_rotation_for & LOG_DESTINATION_JSONLOG)))
-	{
-		if (Log_truncate_on_rotation && time_based_rotation &&
-			last_json_file_name != NULL &&
-			strcmp(jsonfilename, last_json_file_name) != 0)
-			fh = logfile_open(jsonfilename, "w", true);
-		else
-			fh = logfile_open(jsonfilename, "a", true);
-
-		if (!fh)
-		{
-			/*
-			 * ENFILE/EMFILE are not too surprising on a busy system; just
-			 * keep using the old file till we manage to get a new one.
-			 * Otherwise, assume something's wrong with Log_directory and stop
-			 * trying to create files.
-			 */
-			if (errno != ENFILE && errno != EMFILE)
-			{
-				ereport(LOG,
-						(errmsg("disabling automatic rotation (use SIGHUP to re-enable)")));
-				rotation_disabled = true;
-			}
-
-			if (filename)
-				pfree(filename);
-			if (csvfilename)
-				pfree(csvfilename);
-			return;
-		}
-
-		if (jsonlogFile != NULL)
-			fclose(csvlogFile);
-		csvlogFile = fh;
-
-		/* instead of pfree'ing filename, remember it for next time */
-		if (last_json_file_name != NULL)
-			pfree(last_json_file_name);
-		last_json_file_name = jsonfilename;
-		jsonfilename = NULL;
-	}
-	else if (!(Log_destination & LOG_DESTINATION_JSONLOG) &&
-			 jsonlogFile != NULL)
-	{
-		/* JSONLOG was just turned off, so close the old file */
-		fclose(jsonlogFile);
-		jsonlogFile = NULL;
-		if (last_json_file_name != NULL)
-			pfree(last_json_file_name);
-		last_json_file_name = NULL;
 	}
 #endif
 
