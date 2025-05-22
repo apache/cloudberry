@@ -81,6 +81,7 @@
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
+#include "utils/builtins.h"
 #include "utils/backend_cancel.h"
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
@@ -4342,12 +4343,12 @@ ProcessInterrupts(const char* filename, int lineno)
 
 	if (ProcSignalBarrierPending)
 		ProcessProcSignalBarrier();
-
 	if (ParallelMessagePending)
 		HandleParallelMessages();
-
 	if (LogMemoryContextPending)
 		ProcessLogMemoryContextInterrupt();
+
+	CheckAndHandleCustomSignals();
 }
 
 /*

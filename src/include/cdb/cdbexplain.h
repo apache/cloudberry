@@ -16,6 +16,7 @@
 #define CDBEXPLAIN_H
 
 #include "executor/instrument.h"        /* instr_time */
+#include "cdb/cdbdispatchresult.h"
 
 struct CdbDispatchResults;              /* #include "cdb/cdbdispatchresult.h" */
 struct PlanState;                       /* #include "nodes/execnodes.h" */
@@ -92,6 +93,13 @@ void
 cdbexplain_sendExecStats(struct QueryDesc *queryDesc);
 
 /*
+ * cdbexplain_getExecStats
+ *    Called by cbdb_mpp_query_state to send EXPLAIN ANALYZE
+ *    statistics when the query is still running.
+ */
+StringInfo cdbexplain_getExecStats_runtime(QueryDesc *queryDesc);
+
+/*
  * cdbexplain_recvExecStats
  *    Called by qDisp to transfer a slice's EXPLAIN ANALYZE statistics
  *    from the CdbDispatchResults structures to the PlanState tree.
@@ -107,7 +115,7 @@ cdbexplain_recvExecStats(struct PlanState              *planstate,
                          int                            sliceIndex,
                          struct CdbExplain_ShowStatCtx *showstatctx);
 
-/*
+/* 
  * cdbexplain_showExecStatsBegin
  *    Called by qDisp process to create a CdbExplain_ShowStatCtx structure
  *    in which to accumulate overall statistics for a query.

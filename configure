@@ -751,6 +751,7 @@ ICU_CFLAGS
 with_icu
 enable_thread_safety
 INCLUDES
+enable_perfmon
 enable_pax
 enable_preload_ic_module
 enable_ic_proxy
@@ -903,6 +904,7 @@ enable_external_fts
 enable_ic_proxy
 enable_preload_ic_module
 enable_pax
+enable_perfmon
 enable_thread_safety
 with_icu
 with_tcl
@@ -1619,6 +1621,7 @@ Optional Features:
   --disable-preload-ic-module
                           disable preload interconnect module
   --enable-pax            enable pax support
+  --enable-perfmon     	  enable preload gophermeta
   --disable-thread-safety disable thread-safety in client libraries
   --enable-openssl-redirect
                           enable redirect openssl interface to internal
@@ -9131,6 +9134,35 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with pax support ... $enable_pax" >&5
 $as_echo "checking whether to build with pax support ... $enable_pax" >&6; }
+
+#
+# perfmon support
+#
+
+
+# Check whether --enable-perfmon was given.
+if test "${enable_perfmon+set}" = set; then :
+  enableval=$enable_perfmon;
+  case $enableval in
+    yes)
+
+$as_echo "#define USE_PERFMON 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-perfmon option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_perfmon=no
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with vectorization support ... $enable_perfmon" >&5
+$as_echo "checking whether to build with vectorization support ... $enable_perfmon" >&6; }
 
 #
 # Include directories
@@ -22144,6 +22176,16 @@ fi
 
 
   CPPFLAGS=$ac_save_CPPFLAGS
+fi
+
+# check for apr
+if test "$enable_perfmon" = yes; then
+	ac_fn_c_check_header_mongrel "$LINENO" "apr_getopt.h" "ac_cv_header_apr_getopt_h" "$ac_includes_default"
+if test "x$ac_cv_header_apr_getopt_h" = xyes; then :
+
+else
+  as_fn_error $? "header file <apr_getopt.h> is required for perfmon" "$LINENO" 5
+fi
 fi
 
 #

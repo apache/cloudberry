@@ -1067,6 +1067,9 @@
 /* Define to 1 to build with pax support. (--enable-pax) */
 #undef USE_PAX_STORAGE
 
+/* Define to 1 to build with perfmon. (--enable-perfmon) */
+#undef USE_PERFMON
+
 /* Define to 1 to build with PAM support. (--with-pam) */
 #undef USE_PAM
 

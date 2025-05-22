@@ -24,7 +24,6 @@
 #include "commands/queue.h"
 #include "executor/execUtils.h"
 #include "executor/hashjoin.h"
-#include "executor/nodeHash.h"
 #include "foreign/fdwapi.h"
 #include "jit/jit.h"
 #include "nodes/extensible.h"
@@ -1009,15 +1008,17 @@ ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
 	 */
 	if (es->analyze && !es->showstatctx->stats_gathered)
 	{
+		/* when es->analyze is false, the showstatctx is NULL*/
+		es->showstatctx->runtime = es->runtime;
 		if (Gp_role != GP_ROLE_EXECUTE && (!es->currentSlice || sliceRunsOnQD(es->currentSlice)))
 			cdbexplain_localExecStats(queryDesc->planstate, es->showstatctx);
 
-        /* Fill in the plan's Instrumentation with stats from qExecs. */
-        if (estate->dispatcherState && estate->dispatcherState->primaryResults)
-            cdbexplain_recvExecStats(queryDesc->planstate,
-                                     estate->dispatcherState->primaryResults,
-                                     LocallyExecutingSliceIndex(estate),
-                                     es->showstatctx);
+		/* Fill in the plan's Instrumentation with stats from qExecs. */
+		if (estate->dispatcherState && estate->dispatcherState->primaryResults)
+			cdbexplain_recvExecStats(queryDesc->planstate,
+					estate->dispatcherState->primaryResults,
+					LocallyExecutingSliceIndex(estate),
+					es->showstatctx);
 	}
 
 	ExplainPreScanNode(queryDesc->planstate, &rels_used);
@@ -1313,8 +1314,11 @@ report_triggers(ResultRelInfo *rInfo, bool show_relname, ExplainState *es)
 		char	   *relname;
 		char	   *conname = NULL;
 
-		/* Must clean up instrumentation state */
-		InstrEndLoop(instr);
+		if (!es->runtime)
+		{
+			/* Must clean up instrumentation state */
+			InstrEndLoop(instr);
+		}
 
 		/*
 		 * We ignore triggers that were never invoked; they likely aren't
@@ -2259,8 +2263,11 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	 * instrumentation results the user didn't ask for.  But we do the
 	 * InstrEndLoop call anyway, if possible, to reduce the number of cases
 	 * auto_explain has to contend with.
+	 *
+	 * If flag es->stateinfo is set, i.e. when printing the current execution
+	 * state, this step of cleaning up is missed.
 	 */
-	if (planstate->instrument)
+	if (planstate->instrument && !es->runtime)
 		InstrEndLoop(planstate->instrument);
 
 	/* GPDB_90_MERGE_FIXME: In GPDB, these are printed differently. But does that work
@@ -2297,7 +2304,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			ExplainPropertyFloat("Actual Loops", NULL, nloops, 0, es);
 		}
 	}
-	else if (es->analyze)
+	else if (es->analyze && !es->runtime)
 	{
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			appendStringInfoString(es->str, " (never executed)");
@@ -2310,6 +2317,90 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			}
 			ExplainPropertyFloat("Actual Rows", NULL, 0.0, 0, es);
 			ExplainPropertyFloat("Actual Loops", NULL, 0.0, 0, es);
+		}
+	}
+
+	/*
+	 * Print the progress of node execution at current loop.
+	 */
+	if (planstate->instrument && es->analyze && es->runtime)
+	{
+		instr_time	starttimespan;
+		double	startup_sec;
+		double	total_sec;
+		double	rows;
+		double	loop_num;
+		char 	*status;
+
+		if (!INSTR_TIME_IS_ZERO(planstate->instrument->rt_starttime))
+		{
+			INSTR_TIME_SET_CURRENT(starttimespan);
+			INSTR_TIME_SUBTRACT(starttimespan, planstate->instrument->rt_starttime);
+		}
+		else
+			INSTR_TIME_SET_ZERO(starttimespan);
+		startup_sec = 1000.0 * planstate->instrument->rt_firsttuple;
+		total_sec = 1000.0 * (INSTR_TIME_GET_DOUBLE(planstate->instrument->rt_counter)
+							+ INSTR_TIME_GET_DOUBLE(starttimespan));
+		loop_num = planstate->instrument->nloops + 1;
+		rows = planstate->instrument->rt_tuplecount / loop_num;
+
+		switch (planstate->instrument->nodeStatus)
+		{
+			case METRICS_PLAN_NODE_INITIALIZE:
+				status = &("Initialize"[0]);
+				break;
+			case METRICS_PLAN_NODE_EXECUTING:
+				status = &("Executing"[0]);
+				break;
+			case METRICS_PLAN_NODE_FINISHED:
+				status = &("Finished"[0]);
+				break;
+			default:
+				status = &("Unknown"[0]);
+				break;
+		}
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+		{
+			appendStringInfo(es->str, " (node status: %s)", status);
+		}
+		else
+		{
+			ExplainPropertyText("Node status", status, es);
+		}
+
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+		{
+			if (es->timing)
+			{
+				if (planstate->instrument->running)
+					appendStringInfo(es->str,
+									 " (actual time=%.3f..%.3f rows=%.0f, loops=%.0f)",
+									 startup_sec, total_sec, rows, loop_num);
+				else
+					appendStringInfo(es->str,
+									 " (actual time=%.3f rows=0, loops=%.0f)",
+									 total_sec, loop_num);
+			}
+			else
+				appendStringInfo(es->str,
+								 " (actual rows=%.0f, loops=%.0f)",
+								 rows, loop_num);
+		}
+		else
+		{
+			if (es->timing)
+			{
+				if (planstate->instrument->running)
+				{
+					ExplainPropertyFloat("Actual Startup Time", NULL, startup_sec, 3, es);
+					ExplainPropertyFloat("Actual Total Time", NULL, total_sec, 3, es);
+				}
+				else
+					ExplainPropertyFloat("Running Time", NULL, total_sec, 3, es);
+			}
+			ExplainPropertyFloat("Actual Rows", NULL, rows, 0, es);
+			ExplainPropertyFloat("Actual Loops", NULL, loop_num, 0, es);
 		}
 	}
 
@@ -2834,9 +2925,11 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			break;
 	}
 
-    /* Show executor statistics */
-	if (planstate->instrument && planstate->instrument->need_cdb)
+	/* Show executor statistics */
+	if (planstate->instrument && planstate->instrument->need_cdb && !es->runtime)
+	{
 		cdbexplain_showExecStats(planstate, es);
+	}
 
 	/*
 	 * Prepare per-worker JIT instrumentation.  As with the overall JIT
@@ -2865,7 +2958,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		show_wal_usage(es, &planstate->instrument->walusage);
 
 	/* Prepare per-worker buffer/WAL usage */
-	if (es->workers_state && (es->buffers || es->wal) && es->verbose)
+	if (es->workers_state && (es->buffers || es->wal) && es->verbose && !es->runtime)
 	{
 		WorkerInstrumentation *w = planstate->worker_instrument;
 
@@ -3631,7 +3724,7 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 	if (!es->analyze)
 		return;
 
-	ns = ((PlanState *) sortstate)->instrument->cdbNodeSummary;
+	ns = es->runtime?  ((PlanState *) sortstate)->instrument->rt_cdbNodeSummary :((PlanState *) sortstate)->instrument->cdbNodeSummary;
 	if (!ns)
 		return;
 
@@ -3964,7 +4057,6 @@ show_hash_info(HashState *hashstate, ExplainState *es)
 	if (hashstate->hinstrument)
 		memcpy(&hinstrument, hashstate->hinstrument,
 			   sizeof(HashInstrumentation));
-
 	/*
 	 * Merge results from workers.  In the parallel-oblivious case, the
 	 * results from all participants should be identical, except where
@@ -5025,15 +5117,27 @@ show_modifytable_info(ModifyTableState *mtstate, List *ancestors,
 			double		insert_path;
 			double		other_path;
 
-			InstrEndLoop(outerPlanState(mtstate)->instrument);
+			if (!es->runtime)
+				InstrEndLoop(outerPlanState(mtstate)->instrument);
 
 			/* count the number of source rows */
-			total = outerPlanState(mtstate)->instrument->ntuples;
 			other_path = mtstate->ps.instrument->ntuples2;
-			insert_path = total - other_path;
 
-			ExplainPropertyFloat("Tuples Inserted", NULL,
-								 insert_path, 0, es);
+			/*
+			 * Insert occurs after extracting row from subplan and in runtime mode
+			 * we can appear between these two operations - situation when
+			 * total > insert_path + other_path. Therefore we don't know exactly
+			 * whether last row from subplan is inserted.
+			 * We don't print inserted tuples in runtime mode in order to not print
+			 * inconsistent data
+			 */
+			if (!es->runtime)
+			{
+				total = outerPlanState(mtstate)->instrument->ntuples;
+				insert_path = total - other_path;
+				ExplainPropertyFloat("Tuples Inserted", NULL, insert_path, 0, es);
+			}
+
 			ExplainPropertyFloat("Conflicting Tuples", NULL,
 								 other_path, 0, es);
 		}

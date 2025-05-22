@@ -1,0 +1,32 @@
+create extension perfmon;
+ERROR:  "perfmon" extension can only be created in gpperfmon database
+CONTEXT:  PL/pgSQL function checkdbname() line 7 at RAISE
+select count(*) from pg_extension where extname = 'perfmon';
+ count 
+-------
+     0
+(1 row)
+
+\c gpperfmon
+select count(*) from pg_extension where extname = 'perfmon';
+ count 
+-------
+     1
+(1 row)
+
+set search_path to cbui;
+\d
+                             List of relations
+ Schema |               Name                |   Type   |  Owner  | Storage 
+--------+-----------------------------------+----------+---------+---------
+ cbui   | users                             | table    | gpadmin | heap
+ cbui   | users_user_id_seq                 | sequence | gpadmin | 
+ cbui   | worksheet_item_types              | table    | gpadmin | heap
+ cbui   | worksheet_item_types_type_id_seq  | sequence | gpadmin | 
+ cbui   | worksheet_items                   | table    | gpadmin | heap
+ cbui   | worksheet_items_item_id_seq       | sequence | gpadmin | 
+ cbui   | worksheet_versions                | table    | gpadmin | heap
+ cbui   | worksheet_versions_version_id_seq | sequence | gpadmin | 
+(8 rows)
+
+reset search_path;

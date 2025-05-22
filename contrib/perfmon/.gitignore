@@ -1,0 +1,8 @@
+./gpsmon
+./gpmon.so
+./gpmmon.so
+./src/gpsmon/gpsmon
+./src/gpmmon/gpmmon.so
+./src/gpmon/gpmon.so
+./gpperfmon--?.?.?.sql
+./results

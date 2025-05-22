@@ -17,6 +17,7 @@
 
 #include "nodes/plannodes.h"
 #include "portability/instr_time.h"
+#include "utils/metrics_utils.h"
 #include "utils/resowner.h"
 #include "storage/s_lock.h"
 
@@ -110,6 +111,13 @@ typedef struct Instrumentation
 	const char *sortSpaceType;	/* CDB: Sort space type (Memory / Disk) */
 	long		sortSpaceUsed;	/* CDB: Memory / Disk used by sort(KBytes) */
 	struct CdbExplain_NodeSummary *cdbNodeSummary;	/* stats from all qExecs */
+	/* runtime stats across all qEs */
+	instr_time	rt_starttime;		/* Start time of current iteration of node */
+	instr_time	rt_counter;
+	double		rt_firsttuple;	
+	uint64 rt_tuplecount; /* The max tuples aggregated across all qes*/
+	QueryMetricsStatus nodeStatus; /*CDB: node stauts*/
+	struct CdbExplain_NodeSummary *rt_cdbNodeSummary;	/* stats from all qExecs */
 } Instrumentation;
 
 typedef struct WorkerInstrumentation
