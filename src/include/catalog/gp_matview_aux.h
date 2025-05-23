@@ -94,4 +94,6 @@ extern bool MatviewIsGeneralyUpToDate(Oid mvoid);
 
 extern bool MatviewIsUpToDate(Oid mvoid);
 
+extern void mvaux_rename(Oid mvoid, char* newname);
+
 #endif			/* GP_MATVIEW_AUX_H */

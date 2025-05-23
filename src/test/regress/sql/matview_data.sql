@@ -333,6 +333,16 @@ from gp_segment_configuration where role = 'p' and content = -1;
 -- End of Maintain materialized views on partitioned tables from bottom to up.
 --
 
+-- Test Rename matview.
+begin;
+create materialized view mv_name1 as
+select * from par with no data;
+select count(*) from gp_matview_aux where mvname = 'mv_name1';
+
+alter materialized view mv_name1 rename to mv_name2;
+select count(*) from gp_matview_aux where mvname = 'mv_name1';
+select count(*) from gp_matview_aux where mvname = 'mv_name2';
+abort;
 
 --start_ignore
 drop schema matview_data_schema cascade;

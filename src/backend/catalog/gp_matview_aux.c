@@ -602,3 +602,43 @@ addRelationMVRefCount(Oid relid, int32 mvrefcount)
 
 	table_close(pgrel, RowExclusiveLock);
 }
+
+/*
+ * Rename matview's name in gp_matview_aux.
+ */
+void
+mvaux_rename(Oid mvoid, char* newname)
+{
+	HeapTuple	tuple;
+	HeapTuple	newtuple;
+	Relation 	mvauxRel;
+	NameData	mvname;
+	Datum		valuesAtt[Natts_gp_matview_aux];
+	bool		nullsAtt[Natts_gp_matview_aux];
+	bool		replacesAtt[Natts_gp_matview_aux];
+
+	tuple = SearchSysCacheCopy1(MVAUXOID, ObjectIdGetDatum(mvoid));
+
+	if (!HeapTupleIsValid(tuple))
+		return;
+
+	mvauxRel = table_open(GpMatviewAuxId, RowExclusiveLock);
+
+	MemSet(valuesAtt, 0, sizeof(valuesAtt));
+	MemSet(nullsAtt, false, sizeof(nullsAtt));
+	MemSet(replacesAtt, false, sizeof(replacesAtt));
+
+	replacesAtt[Anum_gp_matview_aux_mvname -1] = true;
+
+	namestrcpy(&mvname, newname);
+	valuesAtt[Anum_gp_matview_aux_mvname - 1] = NameGetDatum(&mvname);
+
+	newtuple = heap_modify_tuple(tuple, RelationGetDescr(mvauxRel),
+									  valuesAtt, nullsAtt, replacesAtt);
+
+	CatalogTupleUpdate(mvauxRel, &newtuple->t_self, newtuple);
+	heap_freetuple(newtuple);
+	table_close(mvauxRel, RowExclusiveLock);
+
+	CommandCounterIncrement();
+}

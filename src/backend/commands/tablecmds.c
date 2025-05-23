@@ -4519,6 +4519,10 @@ RenameRelation(RenameStmt *stmt)
 	/* Do the work */
 	RenameRelationInternal(relid, stmt->newname, false, is_index_stmt);
 
+	/* Try to Rename in gp_matview_aux too. */
+	if (stmt->renameType == OBJECT_MATVIEW)
+		mvaux_rename(relid, stmt->newname);
+
 	/*
 	 * if relation is a partitioned table, rename all children tables of it.
 	 */
