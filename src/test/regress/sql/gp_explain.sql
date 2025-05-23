@@ -229,6 +229,11 @@ explain analyze SELECT * FROM explaintest;
 set gp_enable_explain_allstat=DEFAULT;
 
 
+-- Test explain node summary.
+set gp_enable_explain_node_summary=on;
+explain analyze SELECT * FROM explaintest;
+set gp_enable_explain_node_summary=DEFAULT;
+
 --
 -- Test GPDB-specific EXPLAIN (SLICETABLE) option.
 --
