@@ -4461,6 +4461,7 @@ RenameRelation(RenameStmt *stmt)
 	ObjectAddress address;
 	Relation	targetrelation;
 	char 	*oldrelname;
+	bool		is_matview;
 
 	/*
 	 * Grab an exclusive lock on the target table, index, sequence, view,
@@ -4504,6 +4505,8 @@ RenameRelation(RenameStmt *stmt)
 						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						 errmsg("Rename directory table is not allowed.")));
 
+		is_matview = relkind == RELKIND_MATVIEW;
+
 		obj_is_index = (relkind == RELKIND_INDEX ||
 						relkind == RELKIND_PARTITIONED_INDEX);
 		if (obj_is_index || is_index_stmt == obj_is_index)
@@ -4518,6 +4521,10 @@ RenameRelation(RenameStmt *stmt)
 
 	/* Do the work */
 	RenameRelationInternal(relid, stmt->newname, false, is_index_stmt);
+
+	/* Rry to Rename in gp_matview_aux too. */
+	if (is_matview)
+		mvaux_rename(relid, stmt->newname);
 
 	/*
 	 * if relation is a partitioned table, rename all children tables of it.
