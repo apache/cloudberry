@@ -86,7 +86,7 @@ CXformImplementCTEProducer::Transform(CXformContext *pxfctxt,
 
 	// create physical CTE Producer
 	CExpression *pexprAlt = GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CPhysicalCTEProducer(mp, id, colref_array),
+		CExpression(mp, GPOS_NEW(mp) CPhysicalCTEProducer(mp, id, colref_array, popCTEProducer->UsedMask()),
 					pexprChild);
 
 	// add alternative to transformation result

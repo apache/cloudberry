@@ -2232,6 +2232,7 @@ CExpressionPreprocessor::CollectCTEPredicates(CMemoryPool *mp,
 				CLogicalCTEProducer::PopConvert(pexprProducer->Pop());
 			UlongToColRefMap *colref_mapping = CUtils::PhmulcrMapping(
 				mp, popConsumer->Pdrgpcr(), popProducer->Pdrgpcr());
+				
 			CExpression *pexprRemappedScalar =
 				pexprScalar->PexprCopyWithRemappedColumns(mp, colref_mapping,
 														  true /*must_exist*/);
@@ -3292,6 +3293,34 @@ CExpressionPreprocessor::ConvertSplitUpdateToInPlaceUpdate(CMemoryPool *mp,
 	return pexpr;
 }
 
+#if GPOS_DEBUG
+
+#define TRCAE_PREPROCESS_BEGIN(inpexpr) \
+	if (GPOS_FTRACE(EopttracePrintPreProcessResult)) { \
+		atio << "Begin pre-process. Input: " << std::endl; \
+		inpexpr->OsPrint(atio) << std::endl; \
+	}
+
+
+#define TRCAE_PREPROCESS_STEP(output, desc) \
+	if (GPOS_FTRACE(EopttracePrintPreProcessResult)) {    \
+		atio << "PreProcess(" << desc << ")"; \
+		atio << "  Output: " << std::endl; \
+		output->OsPrint(atio) << std::endl; \
+	}
+
+#define TRCAE_PREPROCESS_END() \
+	if (GPOS_FTRACE(EopttracePrintPreProcessResult)) { \
+		atio << "End pre-process." << std::endl; \
+	}
+
+#else
+#define TRCAE_PREPROCESS_BEGIN(inpexpr)
+#define TRCAE_PREPROCESS_STEP(output, desc)
+#define TRCAE_PREPROCESS_END()
+
+#endif	// GPOS_DEBUG
+
 // main driver, pre-processing of input logical expression
 CExpression *
 CExpressionPreprocessor::PexprPreprocess(
@@ -3305,6 +3334,12 @@ CExpressionPreprocessor::PexprPreprocess(
 
 	CAutoTimer at("\n[OPT]: Expression Preprocessing Time",
 				  GPOS_FTRACE(EopttracePrintOptimizationStatistics));
+#if GPOS_DEBUG
+	CAutoTrace atr(mp);
+	IOstream & atio = atr.Os();
+#endif
+
+	TRCAE_PREPROCESS_BEGIN(pexpr);
 
 	// remove unused CTE anchors
 	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
@@ -3312,22 +3347,29 @@ CExpressionPreprocessor::PexprPreprocess(
 
 	CExpression *pexprNoUnusedCTEs = PexprRemoveUnusedCTEs(mp, pexpr);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprNoUnusedCTEs, "Remove unused CTEs");
 
 	// remove intermediate superfluous limit
 	CExpression *pexprSimplifiedLimit =
 		PexprRemoveSuperfluousLimit(mp, pexprNoUnusedCTEs);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprSimplifiedLimit,
+		"Remove intermediate superfluous limit");
 	pexprNoUnusedCTEs->Release();
 
 	// remove intermediate superfluous distinct
 	CExpression *pexprSimplifiedDistinct =
 		PexprRemoveSuperfluousDistinctInDQA(mp, pexprSimplifiedLimit);
+	TRCAE_PREPROCESS_STEP(pexprSimplifiedDistinct,
+		"Remove intermediate superfluous distinct");
 	GPOS_CHECK_ABORT;
 	pexprSimplifiedLimit->Release();
 
 	// trim unnecessary existential subqueries
 	CExpression *pexprTrimmed =
 		PexprTrimExistentialSubqueries(mp, pexprSimplifiedDistinct);
+	TRCAE_PREPROCESS_STEP(pexprTrimmed,
+		"Trim unnecessary existential subqueries");
 	GPOS_CHECK_ABORT;
 	pexprSimplifiedDistinct->Release();
 
@@ -3335,6 +3377,8 @@ CExpressionPreprocessor::PexprPreprocess(
 	CExpression *pexprNaryUnionUnionAll =
 		PexprCollapseUnionUnionAll(mp, pexprTrimmed);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprNaryUnionUnionAll, 
+		"Collapse cascaded union / union all");
 	pexprTrimmed->Release();
 
 	// remove superfluous outer references from the order spec in limits, grouping columns in GbAgg, and
@@ -3342,12 +3386,16 @@ CExpressionPreprocessor::PexprPreprocess(
 	CExpression *pexprOuterRefsEleminated =
 		PexprRemoveSuperfluousOuterRefs(mp, pexprNaryUnionUnionAll);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprOuterRefsEleminated, 
+		"Remove superfluous outer references from the order spec in limits");
 	pexprNaryUnionUnionAll->Release();
 
 	// remove superfluous equality
 	CExpression *pexprTrimmed2 =
 		PexprPruneSuperfluousEquality(mp, pexprOuterRefsEleminated);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprTrimmed2, 
+		"Remove superfluous equality");
 	pexprOuterRefsEleminated->Release();
 
 	// substitute constant predicates
@@ -3355,10 +3403,12 @@ CExpressionPreprocessor::PexprPreprocess(
 	CExpression *pexprPredWithConstReplaced =
 		PexprReplaceColWithConst(mp, pexprTrimmed2, phmExprToConst, true);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprPredWithConstReplaced, 
+		"substitute constant predicates");
 	phmExprToConst->Release();
 	pexprTrimmed2->Release();
 
-	//  reorder the children of scalar cmp operator to ensure that left
+	// reorder the children of scalar cmp operator to ensure that left
 	// child is scalar ident and right child is scalar const
 	//
 	// Must happen after "substitute constant predicates" step which can insert scalar cmp children with inversed
@@ -3367,24 +3417,32 @@ CExpressionPreprocessor::PexprPreprocess(
 	CExpression *pexprReorderedScalarCmpChildren =
 		PexprReorderScalarCmpChildren(mp, pexprPredWithConstReplaced);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprReorderedScalarCmpChildren, 
+		"Reorder the children of scalar cmp operator to ensure that left child is scalar ident and right child is scalar const");
 	pexprPredWithConstReplaced->Release();
 
 	// simplify quantified subqueries
 	CExpression *pexprSubqSimplified =
 		PexprSimplifyQuantifiedSubqueries(mp, pexprReorderedScalarCmpChildren);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprSubqSimplified, 
+		"Simplify quantified subqueries");
 	pexprReorderedScalarCmpChildren->Release();
 
 	// do preliminary unnesting of scalar subqueries
 	CExpression *pexprSubqUnnested =
 		PexprUnnestScalarSubqueries(mp, pexprSubqSimplified);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprSubqUnnested, 
+		"Do preliminary unnesting of scalar subqueries");
 	pexprSubqSimplified->Release();
 
 	// unnest AND/OR/NOT predicates
 	CExpression *pexprUnnested =
 		CExpressionUtils::PexprUnnest(mp, pexprSubqUnnested);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprUnnested, 
+		"Unnest AND/OR/NOT predicates");
 	pexprSubqUnnested->Release();
 
 	CExpression *pexprConvert2In = pexprUnnested;
@@ -3405,117 +3463,158 @@ CExpressionPreprocessor::PexprPreprocess(
 		CLeftJoinPruningPreprocessor::PexprPreprocess(mp, pexprConvert2In,
 													  pcrsOutputAndOrderCols);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprJoinPruned, 
+		"Left Outer Join Pruning");
 	pexprConvert2In->Release();
 
 	// infer predicates from constraints
 	CExpression *pexprInferredPreds = PexprInferPredicates(mp, pexprJoinPruned);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprInferredPreds, 
+		"Infer predicates from constraints");
 	pexprJoinPruned->Release();
 
 	// eliminate self comparisons
 	CExpression *pexprSelfCompEliminated = PexprEliminateSelfComparison(
 		mp, pexprInferredPreds, pexprInferredPreds->DeriveNotNullColumns());
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprSelfCompEliminated, 
+		"Eliminate self comparisons");
 	pexprInferredPreds->Release();
 
 	// remove duplicate AND/OR children
 	CExpression *pexprDeduped =
 		CExpressionUtils::PexprDedupChildren(mp, pexprSelfCompEliminated);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprDeduped, 
+		"Remove duplicate AND/OR children");
 	pexprSelfCompEliminated->Release();
 
 	// factorize common expressions
 	CExpression *pexprFactorized =
 		CExpressionFactorizer::PexprFactorize(mp, pexprDeduped);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprFactorized, 
+		"Factorize common expressions");
 	pexprDeduped->Release();
 
 	// infer filters out of components of disjunctive filters
 	CExpression *pexprPrefiltersExtracted =
 		CExpressionFactorizer::PexprExtractInferredFilters(mp, pexprFactorized);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprPrefiltersExtracted, 
+		"Infer filters out of components of disjunctive filters");
 	pexprFactorized->Release();
 
 	// pre-process ordered agg functions
 	CExpression *pexprOrderedAggPreprocessed =
 		COrderedAggPreprocessor::PexprPreprocess(mp, pexprPrefiltersExtracted);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprOrderedAggPreprocessed, 
+		"Pre-process ordered agg functions");
 	pexprPrefiltersExtracted->Release();
 
 	// eliminate unused computed columns
 	CExpression *pexprNoUnusedPrEl = PexprPruneUnusedComputedCols(
 		mp, pexprOrderedAggPreprocessed, pcrsOutputAndOrderCols);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprNoUnusedPrEl, 
+		"Eliminate unused computed columns");
 	pexprOrderedAggPreprocessed->Release();
 
 	// normalize expression
 	CExpression *pexprNormalized1 =
 		CNormalizer::PexprNormalize(mp, pexprNoUnusedPrEl);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprNormalized1, 
+		"Normalize expression");
 	pexprNoUnusedPrEl->Release();
 
 	// transform outer join into inner join whenever possible
 	CExpression *pexprLOJToIJ = PexprOuterJoinToInnerJoin(mp, pexprNormalized1);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprLOJToIJ, 
+		"Transform outer join into inner join whenever possible");
 	pexprNormalized1->Release();
 
 	// collapse cascaded inner and left outer joins
 	CExpression *pexprCollapsed = PexprCollapseJoins(mp, pexprLOJToIJ);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprCollapsed, 
+		"Collapse cascaded inner and left outer joins");
 	pexprLOJToIJ->Release();
 
 	// after transforming outer joins to inner joins, we may be able to generate more predicates from constraints
 	CExpression *pexprWithPreds =
 		PexprAddPredicatesFromConstraints(mp, pexprCollapsed);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprWithPreds, 
+		"After transforming outer joins to inner joins, we may be able to generate more predicates from constraints");
 	pexprCollapsed->Release();
 
 	// eliminate empty subtrees
 	CExpression *pexprPruned = PexprPruneEmptySubtrees(mp, pexprWithPreds);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprPruned, 
+		"Eliminate empty subtrees");
 	pexprWithPreds->Release();
 
 	// collapse cascade of projects
 	CExpression *pexprCollapsedProjects =
 		PexprCollapseProjects(mp, pexprPruned);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprCollapsedProjects, 
+		"Collapse cascade of projects");
 	pexprPruned->Release();
 
 	// insert dummy project when the scalar subquery is under a project and returns an outer reference
 	CExpression *pexprSubquery = PexprProjBelowSubquery(
 		mp, pexprCollapsedProjects, false /* fUnderPrList */);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprSubquery, 
+		"Insert dummy project when the scalar subquery is under a project and returns an outer reference");
 	pexprCollapsedProjects->Release();
 
 	// rewrite IN subquery to EXIST subquery with a predicate
 	CExpression *pexprExistWithPredFromINSubq =
 		PexprExistWithPredFromINSubq(mp, pexprSubquery);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprExistWithPredFromINSubq, 
+		"Rewrite IN subquery to EXIST subquery with a predicate");
 	pexprSubquery->Release();
 
 	// prune partitions
 	CExpression *pexprPrunedPartitions =
 		PrunePartitions(mp, pexprExistWithPredFromINSubq);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprPrunedPartitions, 
+		"Prune partitions");
 	pexprExistWithPredFromINSubq->Release();
 
 	// swap logical select over logical project
 	CExpression *pexprTransposeSelectAndProject =
 		PexprTransposeSelectAndProject(mp, pexprPrunedPartitions);
+	TRCAE_PREPROCESS_STEP(pexprTransposeSelectAndProject, 
+		"Swap logical select over logical project");
 	pexprPrunedPartitions->Release();
 
 	// convert split update to inplace update
 	CExpression *pexprSplitUpdateToInplace =
 		ConvertSplitUpdateToInPlaceUpdate(mp, pexprTransposeSelectAndProject);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprSplitUpdateToInplace, 
+		"Convert split update to inplace update");
 	pexprTransposeSelectAndProject->Release();
 
 	// normalize expression again
 	CExpression *pexprNormalized2 =
 		CNormalizer::PexprNormalize(mp, pexprSplitUpdateToInplace);
 	GPOS_CHECK_ABORT;
+	TRCAE_PREPROCESS_STEP(pexprNormalized2, 
+		"Normalize expression");
 	pexprSplitUpdateToInplace->Release();
 
+	// join hint
 	CPlanHint *planhint =
 		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetPlanHint();
 	if (nullptr != planhint)
@@ -3525,11 +3624,15 @@ CExpressionPreprocessor::PexprPreprocess(
 			CJoinOrderHintsPreprocessor::PexprPreprocess(
 				mp, pexprNormalized2, nullptr /* joinnode */);
 		GPOS_CHECK_ABORT;
+		TRCAE_PREPROCESS_STEP(pexprJoinHintsApplied, 
+			"Apply join order hints");
 		pexprNormalized2->Release();
 
+		TRCAE_PREPROCESS_END();
 		return pexprJoinHintsApplied;
 	}
 
+	TRCAE_PREPROCESS_END();
 	return pexprNormalized2;
 }
 

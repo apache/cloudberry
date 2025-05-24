@@ -73,9 +73,14 @@ CParseHandlerPhysicalCTEProducer::StartElement(
 			m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenColumns,
 			EdxltokenPhysicalCTEProducer);
 
+	ULongPtrArray *output_colidx_map =
+		CDXLOperatorFactory::ExtractConvertValuesToArray(
+			m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenColIdxmap,
+			EdxltokenPhysicalCTEProducer);
+
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(
 		m_mp,
-		GPOS_NEW(m_mp) CDXLPhysicalCTEProducer(m_mp, id, output_colids_array));
+		GPOS_NEW(m_mp) CDXLPhysicalCTEProducer(m_mp, id, output_colids_array, output_colidx_map));
 
 	// create and activate the parse handler for the child expression node
 	CParseHandlerBase *child_parse_handler =

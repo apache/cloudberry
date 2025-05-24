@@ -475,11 +475,13 @@ COrderedAggPreprocessor::CreateCTE(CMemoryPool *mp, CExpression *pexprChild,
 		mp, GPOS_NEW(mp) CLogicalCTEConsumer(
 				mp, ulCTEId, CUtils::PdrgpcrCopy(mp, pdrgpcrProducerOutput)));
 	pcteinfo->IncrementConsumers(ulCTEId);
+	pcteinfo->AddCTEConsumer(*ppexprFirstConsumer);
 	pdrgpcrProducerOutput->Release();
 
 	// second consumer reuses the same output columns of SeqPrj child to be able to provide any requested columns upstream
 	*ppexprSecondConsumer = GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CLogicalCTEConsumer(mp, ulCTEId, pdrgpcrChildOutput));
+	pcteinfo->AddCTEConsumer(*ppexprSecondConsumer);
 	pcteinfo->IncrementConsumers(ulCTEId);
 }
 
