@@ -5809,3 +5809,27 @@ ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
 HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+-- Test for not adding unnecessary materialization during merge join
+create table t (a int);
+set enable_hashjoin = off;
+set enable_mergejoin = on;
+set work_mem = 64;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+explain (costs off)
+select * from t, t tt where t.a = tt.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t.a = t_1.a)
+         ->  Seq Scan on t
+         ->  Hash
+               ->  Seq Scan on t t_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+drop table t;
+reset enable_hashjoin;
+reset enable_mergejoin;
+reset work_mem;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
