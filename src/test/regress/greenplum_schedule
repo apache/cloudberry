@@ -26,6 +26,8 @@ test: gp_dispatch_keepalives
 # copy form a file with different EOL
 test: copy_eol
 
+test: dedupset
+
 test: disable_autovacuum
 test: python_processed64bit
 test: enable_autovacuum
