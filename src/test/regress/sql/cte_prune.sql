@@ -222,7 +222,7 @@ explain verbose with frequent_ss_items as
     and d_year in (1999,1999+1,1999+2,1999+3)
   group by substr(i_item_desc,1,30),i_item_sk,d_date
   having count(*) >4)
-select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items)
+select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where true)
     and t1.v1 in (select item_sk from frequent_ss_items where item_sk > 0);
 
 -- sql 95
@@ -231,14 +231,14 @@ explain verbose with ws_wh as
  from tpcds_web_sales ws1,tpcds_web_sales ws2
  where ws1.ws_order_number = ws2.ws_order_number
    and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
-select * from t1 where t1.v1 in (select ws_order_number from ws_wh) and t1.v1 in (select ws_order_number from ws_wh where ws_order_number > 0);
+select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) and t1.v1 in (select ws_order_number from ws_wh where ws_order_number > 0);
 
 explain verbose with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
  from tpcds_web_sales ws1,tpcds_web_sales ws2
  where ws1.ws_order_number = ws2.ws_order_number
    and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
-select * from t1 where t1.v1 in (select wh1 from ws_wh) and t1.v1 in (select wh1 from ws_wh where ws_order_number > 0);
+select * from t1 where t1.v1 in (select wh1 from ws_wh where true) and t1.v1 in (select wh1 from ws_wh where ws_order_number > 0);
 
 -- start_ignore
 drop table tpcds_store_sales;
