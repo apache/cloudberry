@@ -25,14 +25,14 @@ SET auto_explain.log_verbose = FALSE;
 SELECT relname FROM pg_class WHERE relname='pg_class';
 SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2;
 
-SET auto_explain.log_min_duration = 1;
+SET auto_explain.log_min_duration = 1000;
 SET auto_explain.log_triggers = FALSE;
 SET auto_explain.log_verbose = TRUE;
 
 -- this select should not dump execution plan
 SELECT relname FROM pg_class WHERE relname='pg_class';
 -- this select should also dump plan, since it takes too much time to run
-SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2;
+SELECT count(*),  pg_sleep(1) FROM auto_explain_test.t1, auto_explain_test.t2;
 
 -- clean jobs
 DROP TABLE auto_explain_test.t1;

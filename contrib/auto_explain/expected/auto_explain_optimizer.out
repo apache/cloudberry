@@ -67,8 +67,8 @@ Memory used:  128000kB
  1002001
 (1 row)
 
-SET auto_explain.log_min_duration = 1;
-LOG:  statement: SET auto_explain.log_min_duration = 1;
+SET auto_explain.log_min_duration = 1000;
+LOG:  statement: SET auto_explain.log_min_duration = 1000;
 SET auto_explain.log_triggers = FALSE;
 LOG:  statement: SET auto_explain.log_triggers = FALSE;
 SET auto_explain.log_verbose = TRUE;
@@ -83,12 +83,12 @@ LOG:  statement: SELECT relname FROM pg_class WHERE relname='pg_class';
 (1 row)
 
 -- this select should also dump plan, since it takes too much time to run
-SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2;
-LOG:  statement: SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2;
+SELECT count(*),  pg_sleep(1) FROM auto_explain_test.t1, auto_explain_test.t2;
+LOG:  statement: SELECT count(*),  pg_sleep(1) FROM auto_explain_test.t1, auto_explain_test.t2;
 LOG:  duration: 180.126 ms  plan:
-Query Text: SELECT count(*) FROM auto_explain_test.t1, auto_explain_test.t2;
+Query Text: SELECT count(*),  pg_sleep(1) FROM auto_explain_test.t1, auto_explain_test.t2;
 Finalize Aggregate  (cost=0.00..1326086.34 rows=1 width=8) (actual rows=1 loops=1)
-  Output: count(*)
+  Output: count(*), pg_sleep('1'::double precision)
   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1326086.34 rows=1 width=8) (actual rows=3 loops=1)
         Output: (PARTIAL count(*))
         ->  Partial Aggregate  (cost=0.00..1326086.34 rows=1 width=8) (actual rows=1 loops=1)
@@ -103,9 +103,9 @@ Settings: enable_nestloop = 'on'
   (slice1)    Executor memory: 119K bytes avg x 3 workers, 119K bytes max (seg0).
   (slice2)    Executor memory: 42K bytes avg x 3 workers, 42K bytes max (seg0).
 Memory used:  128000kB
-  count  
----------
- 1002001
+  count  | pg_sleep 
+---------+----------
+ 1002001 | 
 (1 row)
 
 -- clean jobs
