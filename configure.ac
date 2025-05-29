@@ -1749,6 +1749,13 @@ fi
 AC_SUBST(LDAP_LIBS_FE)
 AC_SUBST(LDAP_LIBS_BE)
 
+# for contrib/pax_storage
+if test "$enable_pax" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    AC_MSG_ERROR([pax support requires --enable-shared-postgres-backend])
+  fi
+fi
+
 # for contrib/sepgsql
 if test "$with_selinux" = yes; then
   AC_CHECK_LIB(selinux, security_compute_create_name, [],

@@ -81,14 +81,13 @@ ifneq ($(PORTNAME), win32)
 ifneq ($(PORTNAME), aix)
 
 ifeq ($(enable_shared_postgres_backend),yes)
+all: libpostgres.so
 libpostgres.so: $(OBJS)
 	$(CXX) -shared $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_SL) $(export_dynamic) \
 	  $(filter-out main/main.o, $(call expand_subsys,$^)) $(LIBS) -o $@
 
-postgres: main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a $(top_builddir)/src/common/libpgcommon_srv.a
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) \
-	  main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a \
-	  $(top_builddir)/src/common/libpgcommon_srv.a $(LIBS) -o $@
+postgres: $(OBJS)
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) $(LIBS) -o $@
 
 else
 postgres: $(OBJS)

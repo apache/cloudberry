@@ -1170,6 +1170,7 @@ jobs:
           set -eo pipefail
 
           {
+            df -h
             chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
             if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
               echo "::error::Demo cluster creation failed"
