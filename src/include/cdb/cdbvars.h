@@ -619,6 +619,12 @@ extern bool gp_enable_preunique;
  */
 extern bool gp_enable_explain_allstat;
 
+/* May Greenplum dump node summary from CdbExplain_NodeSummary
+ * during EXPLAIN ANALYZE?
+ *
+ */
+extern bool gp_enable_explain_node_summary;
+
 /*
  * What level of details of the memory accounting information to show during EXPLAIN ANALYZE?
  */
