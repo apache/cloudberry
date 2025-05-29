@@ -56,36 +56,31 @@ using HMUlDxltrctx =
 class CContextDXLToPlStmt
 {
 private:
-	// cte consumer information
-	struct SCTEConsumerInfo
+	// cte producer information
+	struct SCTEEntryInfo
 	{
-		// list of ShareInputScan represent cte consumers
-		List *m_cte_consumer_list;
+		// producer idx mapping
+		ULongPtrArray *m_pidxmap;
+
+		// producer plan
+		ShareInputScan *m_cte_producer_plan;
+
 
 		// ctor
-		SCTEConsumerInfo(List *plan_cte) : m_cte_consumer_list(plan_cte)
+		SCTEEntryInfo(ULongPtrArray *idxmap, ShareInputScan *plan_cte) : 
+		m_pidxmap(idxmap), m_cte_producer_plan(plan_cte)
 		{
+			GPOS_ASSERT(plan_cte);
 		}
 
-		void
-		AddCTEPlan(ShareInputScan *share_input_scan)
-		{
-			GPOS_ASSERT(nullptr != share_input_scan);
-			m_cte_consumer_list =
-				gpdb::LAppend(m_cte_consumer_list, share_input_scan);
-		}
-
-		~SCTEConsumerInfo()
-		{
-			gpdb::ListFree(m_cte_consumer_list);
-		}
+		~SCTEEntryInfo() = default;
 	};
 
-	// hash maps mapping ULONG -> SCTEConsumerInfo
-	using HMUlCTEConsumerInfo =
-		CHashMap<ULONG, SCTEConsumerInfo, gpos::HashValue<ULONG>,
+	// hash maps mapping ULONG -> SCTEEntryInfo
+	using HMUlCTEProducerInfo =
+		CHashMap<ULONG, SCTEEntryInfo, gpos::HashValue<ULONG>,
 				 gpos::Equals<ULONG>, CleanupDelete<ULONG>,
-				 CleanupDelete<SCTEConsumerInfo>>;
+				 CleanupDelete<SCTEEntryInfo>>;
 
 	using HMUlIndex =
 		CHashMap<ULONG, Index, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
@@ -122,7 +117,7 @@ private:
 	ULONG m_result_relation_index;
 
 	// hash map of the cte identifiers and the cte consumers with the same cte identifier
-	HMUlCTEConsumerInfo *m_cte_consumer_info;
+	HMUlCTEProducerInfo *m_cte_producer_info;
 
 	// CTAS distribution policy
 	GpPolicy *m_distribution_policy;
@@ -157,11 +152,11 @@ public:
 	// retrieve the next parameter id
 	ULONG GetNextParamId(OID typeoid);
 
-	// add a newly found CTE consumer
-	void AddCTEConsumerInfo(ULONG cte_id, ShareInputScan *share_input_scan);
+	// register a newly CTE producer
+	void RegisterCTEProducerInfo(ULONG cte_id, ULongPtrArray *producer_output_colidx_map, ShareInputScan *siscan);
 
-	// return the list of shared input scan plans representing the CTE consumers
-	List *GetCTEConsumerList(ULONG cte_id) const;
+	// return the shared input scan plans representing the CTE producer
+	std::pair<ULongPtrArray *, ShareInputScan *> GetCTEProducerInfo(ULONG cte_id) const;
 
 	// return list of range table entries
 	List *

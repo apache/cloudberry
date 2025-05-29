@@ -35,12 +35,16 @@ private:
 	// output column ids
 	ULongPtrArray *m_output_colids_array;
 
+	// output column index mapping
+	ULongPtrArray *m_output_colidx_map;
+
 public:
 	CDXLPhysicalCTEConsumer(CDXLPhysicalCTEConsumer &) = delete;
 
 	// ctor
 	CDXLPhysicalCTEConsumer(CMemoryPool *mp, ULONG id,
-							ULongPtrArray *output_colids_array);
+							ULongPtrArray *output_colids_array,
+							ULongPtrArray *output_colidx_map);
 
 	// dtor
 	~CDXLPhysicalCTEConsumer() override;
@@ -62,6 +66,12 @@ public:
 	GetOutputColIdsArray() const
 	{
 		return m_output_colids_array;
+	}
+
+	ULongPtrArray *
+	GetOutputColIdxMap() const
+	{
+		return m_output_colidx_map;
 	}
 
 	// serialize operator in DXL format
