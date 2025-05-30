@@ -639,7 +639,7 @@ private:
 	// get all non-dropped columns of a relation
 	static List *GetRelationActiveColums(const IMDRelation *md_rel);
 	
-	static Node *FixUpperExprMutatorProjectSet(Node *node, List *context);
+	static Node *FixUpperExprMutatorProjectSet(Node *node, void *context);
 
 	// checks if index is used for Order by.
 	bool IsIndexForOrderBy(

@@ -3642,7 +3642,7 @@ SearchTlistForNonVarProjectset(Expr *node, List *itlist, Index newvarno)
 }
 
 Node *
-CTranslatorDXLToPlStmt::FixUpperExprMutatorProjectSet(Node *node, List *context)
+CTranslatorDXLToPlStmt::FixUpperExprMutatorProjectSet(Node *node, void *context)
 {
 	Var *newvar;
 
@@ -3651,7 +3651,7 @@ CTranslatorDXLToPlStmt::FixUpperExprMutatorProjectSet(Node *node, List *context)
 		return nullptr;
 	}
 
-	newvar = SearchTlistForNonVarProjectset((Expr *) node, context, OUTER_VAR);
+	newvar = SearchTlistForNonVarProjectset((Expr *) node, (List *) context, OUTER_VAR);
 	if (nullptr != newvar)
 	{
 		return (Node *) newvar;
@@ -3659,8 +3659,8 @@ CTranslatorDXLToPlStmt::FixUpperExprMutatorProjectSet(Node *node, List *context)
 
 	return gpdb::Expression_tree_mutator(
 		node,
-		(Node * (*) ()) CTranslatorDXLToPlStmt::FixUpperExprMutatorProjectSet,
-		(void *) context);
+		&CTranslatorDXLToPlStmt::FixUpperExprMutatorProjectSet,
+		context);
 }
 
 //------------------------------------------------------------------------------
