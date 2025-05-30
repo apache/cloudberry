@@ -2726,11 +2726,11 @@ gpdb::MakeTlistFromPathtarget(PathTarget *target)
 }
 
 Node *
-gpdb::Expression_tree_mutator(Node *node, Node *(*mutator)(), void *context)
+gpdb::Expression_tree_mutator(Node *node, Node *(*mutator)(Node*, void*), void *context)
 {
 	GP_WRAP_START;
 	{
-		return expression_tree_mutator(node, mutator, context);
+		return expression_tree_mutator_wrapper(node, mutator, context);
 	}
 	GP_WRAP_END;
 

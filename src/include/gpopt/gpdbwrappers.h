@@ -667,7 +667,7 @@ void SplitPathtargetAtSrfs(PlannerInfo *root, PathTarget *target,
 
 List *MakeTlistFromPathtarget(PathTarget *target);
 
-Node *Expression_tree_mutator(Node *node, Node *(*mutator)(), void *context);
+Node *Expression_tree_mutator(Node *node, Node *(*mutator)(Node*, void*), void *context);
 
 TargetEntry *TlistMember(Expr *node, List *targetlist);
 
