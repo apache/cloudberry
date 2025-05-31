@@ -273,7 +273,7 @@ check_ok(void)
  *  respected.
  */
 void
-gp_fatal_log(const char *fmt,...)  __attribute__ ((format (gnu_printf, 1, 2)));
+gp_fatal_log(const char *fmt,...)  pg_attribute_printf(1, 2);
 
 void
 gp_fatal_log(const char *fmt,...)
