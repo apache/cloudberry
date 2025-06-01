@@ -35,7 +35,13 @@
 #         e.g.,     VERSION = 2.0.1-devel+dev.3.gabcd123
 #
 #   3. If *not* in a Git repo but a `VERSION` file exists:
-#         VERSION and BUILDNUMBER are read from that file (format: "<version> build <build_number>")
+#
+#      a. If the file contains a line like "<version> build <build_number>", both values are extracted.
+#
+#      b. Otherwise, the VERSION is read from the file and the BUILDNUMBER is taken from BUILD_NUMBER if it exists.
+#
+#      (This is the case for Apache Cloudberry packaging builds, where these files are created by the
+#       release script and may also be leveraged by downstream users.)
 #
 #   4. If neither a Git repo nor a VERSION file is present:
 #         VERSION = <PACKAGE_VERSION> from configure
@@ -101,8 +107,16 @@ if type git >/dev/null 2>&1 && [ -d '.git' ]; then
     fi
 # Not a git repo but VERSION file exists
 elif [[ -s ./VERSION ]]; then
-    VERSION=$(awk -F' build ' '{print $1}' ./VERSION)
-    BUILDNUMBER=$(awk -F' build ' '{print $2}' ./VERSION)
+    # Support both legacy "<version> build <build_number>" and newer single-version formats
+    if grep -q ' build ' ./VERSION; then
+        VERSION=$(awk -F' build ' '{print $1}' ./VERSION)
+        BUILDNUMBER=$(awk -F' build ' '{print $2}' ./VERSION)
+    else
+        VERSION=$(<./VERSION)
+        if [[ -f ./BUILD_NUMBER ]]; then
+            BUILDNUMBER=$(<./BUILD_NUMBER)
+        fi
+    fi
 fi
 
 # Handle optional flag
