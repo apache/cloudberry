@@ -1,6 +1,10 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
-RUN apt update && apt install -y git parallel clang-format-11 && \
+RUN echo "deb http://mirror.adsw.io/ubuntu/jammy/jammy/ jammy main restricted universe multiverse\n\
+deb http://mirror.adsw.io/ubuntu/jammy/jammy-updates/ jammy-updates main restricted universe multiverse\n\
+deb http://mirror.adsw.io/ubuntu/jammy/jammy-backports/ jammy-backports main restricted universe multiverse\n\
+deb http://mirror.adsw.io/ubuntu/jammy/jammy-security/ jammy-security main restricted universe multiverse" > /etc/apt/sources.list && \
+    apt update && apt install -y git parallel clang-format-11 && \
     ln -s /usr/bin/clang-format-11 /usr/bin/clang-format
 
 WORKDIR /opt/gpdb_src
