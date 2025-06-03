@@ -45,11 +45,4 @@ typedef AqumvContextData *AqumvContext;
 
 extern RelOptInfo* answer_query_using_materialized_views(PlannerInfo *root, AqumvContextData *aqumv_context);
 
-/*
- * Adjust parse tree storaged in view's actions.
- * Query should be a simple query, ex:
- * select from a single table.
- */
-extern void aqumv_adjust_simple_query(Query *viewQuery);
-
 #endif   /* AQUMV_H */

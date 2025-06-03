@@ -41,7 +41,6 @@
 #include "catalog/pg_type.h"
 #include "catalog/indexing.h"
 #include "cdb/cdbvars.h"
-#include "commands/matview.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
@@ -168,7 +167,6 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 	List 		*relids;
 	NameData	mvname;
 	bool		has_foreign = false;
-	Relation		matviewRel;
 	char	   *viewsql;
 
 	Assert(OidIsValid(mvoid));
@@ -190,9 +188,7 @@ InsertMatviewAuxEntry(Oid mvoid, const Query *viewQuery, bool skipdata)
 
 	values[Anum_gp_matview_aux_has_foreign - 1] = BoolGetDatum(has_foreign);
 
-	matviewRel = table_open(mvoid, NoLock);
-	viewsql = nodeToString((Node *) copyObject(get_matview_query(matviewRel)));
-	table_close(matviewRel, NoLock);
+	viewsql = nodeToString((Node *) copyObject(viewQuery));
 	values[Anum_gp_matview_aux_view_query - 1] = CStringGetTextDatum(viewsql);
 
 	if (skipdata)
