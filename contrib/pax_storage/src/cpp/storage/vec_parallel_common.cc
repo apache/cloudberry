@@ -132,7 +132,7 @@ bool PaxFragmentInterface::OpenFile() {
   InitAdapter();
 
   auto data_file = file_system->Open(m->GetFileName(), fs::kReadMode, desc->GetFileSystemOptions());
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   if (auto name = m->GetToastName(); !name.empty()) {
     toast_file = file_system->Open(name, fs::kReadMode, desc->GetFileSystemOptions());
   }
