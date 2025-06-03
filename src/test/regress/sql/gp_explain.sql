@@ -285,7 +285,10 @@ DROP USER regress_range_parted_user;
 -- Test if explain analyze will hang with materialize node
 CREATE TABLE recursive_table_ic (a INT) DISTRIBUTED BY (a);
 INSERT INTO recursive_table_ic SELECT * FROM generate_series(20, 30000);
-
+-- start_matchsubs
+-- m/Seq Scan on recursive_table_ic \(actual rows=\d+ loops=1\)/
+-- s/Seq Scan on recursive_table_ic \(actual rows=\d+ loops=1\)/Seq Scan on recursive_table_ic (actual rows=#### loops=1)/
+-- end_matchsubs
 explain (analyze, costs off, timing off, summary off) WITH RECURSIVE
 r(i) AS (
 	SELECT 1
