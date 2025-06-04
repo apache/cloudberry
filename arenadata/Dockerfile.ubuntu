@@ -1,10 +1,9 @@
 FROM ubuntu:22.04 as base
 
-RUN echo "deb http://mirror.adsw.io/ubuntu/jammy/jammy/ jammy main restricted universe multiverse\n\
-deb http://mirror.adsw.io/ubuntu/jammy/jammy-updates/ jammy-updates main restricted universe multiverse\n\
-deb http://mirror.adsw.io/ubuntu/jammy/jammy-backports/ jammy-backports main restricted universe multiverse\n\
-deb http://mirror.adsw.io/ubuntu/jammy/jammy-security/ jammy-security main restricted universe multiverse" > /etc/apt/sources.list && \
-    apt update
+ARG UBUNTU_MAIN_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_UPDATES_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_BACKPORTS_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_SECURITY_MIRROR=http://security.ubuntu.com/ubuntu
 
 ARG sigar=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar_1.6.5-3304%2Bgite8961a6_all.deb
 ARG sigar_headers=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar-headers_1.6.5-3304%2Bgite8961a6_all.deb
@@ -14,6 +13,12 @@ ARG adb_python3_bin=/opt/adb6-python3.9/bin/python3
 
 COPY README.ubuntu.bash ./
 RUN set -eux; \
+    sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy |${UBUNTU_MAIN_MIRROR}/ jammy |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy-updates |${UBUNTU_UPDATES_MIRROR}/ jammy-updates |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy-backports |${UBUNTU_BACKPORTS_MIRROR}/ jammy-backports |g" \
+      -e "s|http://security.ubuntu.com/ubuntu/ jammy-security |${UBUNTU_SECURITY_MIRROR}/ jammy-security |g" \
+      /etc/apt/sources.list; \
     ./README.ubuntu.bash; \
     rm README.ubuntu.bash; \
     wget $sigar $sigar_headers $adb_python3; \
