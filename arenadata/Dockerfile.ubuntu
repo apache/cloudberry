@@ -18,7 +18,7 @@ RUN set -eux; \
       -e "s|http://archive.ubuntu.com/ubuntu/ jammy-updates |${UBUNTU_UPDATES_MIRROR}/ jammy-updates |g" \
       -e "s|http://archive.ubuntu.com/ubuntu/ jammy-backports |${UBUNTU_BACKPORTS_MIRROR}/ jammy-backports |g" \
       -e "s|http://security.ubuntu.com/ubuntu/ jammy-security |${UBUNTU_SECURITY_MIRROR}/ jammy-security |g" \
-      /etc/apt/sources.list; \
+      /etc/apt/sources.list && \
     ./README.ubuntu.bash; \
     rm README.ubuntu.bash; \
     wget $sigar $sigar_headers $adb_python3; \
