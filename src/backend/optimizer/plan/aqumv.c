@@ -74,6 +74,13 @@ static Node *aqumv_adjust_sub_matched_expr_mutator(Node *node, aqumv_equivalent_
 static bool contain_var_or_aggstar_clause_walker(Node *node, void *context);
 static bool check_partition(Query *parse, Oid origin_rel_oid);
 
+static bool
+groupby_query_rewrite(PlannerInfo *subroot,
+						Query *parse,
+						Query *viewQuery,
+						aqumv_equivalent_transformation_context *context,
+						AqumvContext aqumv_context);
+
 typedef struct
 {
 	int	complexity;
@@ -358,19 +365,23 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 		if (!parse->hasAggs && viewQuery->hasAggs)
 			continue;
 
-		if (parse->hasAggs && viewQuery->hasAggs)
+		if (parse->groupClause != NIL && viewQuery->groupClause != NIL)
 		{
+			if (!groupby_query_rewrite(subroot, parse, viewQuery, context, aqumv_context))
+				continue;
+		}
+		else if (parse->hasAggs && viewQuery->hasAggs)
+		{
+			/* Both don't have group by. */
+			{
 			if (parse->hasDistinctOn ||
 				parse->distinctClause != NIL ||
-				parse->groupClause != NIL || /* TODO: GROUP BY */
 				parse->groupingSets != NIL ||
 				parse->groupDistinct)
 				continue;
 
-			/* No Group by now. */
 			if (viewQuery->hasDistinctOn ||
 				viewQuery->distinctClause != NIL ||
-				viewQuery->groupClause != NIL ||
 				viewQuery->groupingSets != NIL ||
 				viewQuery->groupDistinct ||
 				viewQuery->havingQual != NULL || /* HAVING clause is not supported on IMMV yet. */
@@ -388,7 +399,7 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 			 */
 			if (parse->sortClause != NIL || viewQuery->sortClause != NIL)
 			{
-				/* Earse view's sort caluse, it's ok to let alone view's target list. */
+				/* Erase view's sort caluse, it's ok to let alone view's target list. */
 				viewQuery->sortClause = NIL;
 			}
 
@@ -463,6 +474,7 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 
 			/* Select from a mv never have that.*/
 			subroot->append_rel_list = NIL;
+			}
 		}
 		else
 		{
@@ -894,5 +906,93 @@ check_partition(Query *parse, Oid origin_rel_oid)
 		if (strcmp(underling_relname, other_rte->alias->aliasname) != 0)
 			return false;
 	}
+	return true;
+}
+
+static bool
+groupby_query_rewrite(PlannerInfo *subroot,
+						Query *parse,
+						Query *viewQuery,
+						aqumv_equivalent_transformation_context *context,
+						AqumvContext aqumv_context)
+{
+	List	*post_quals = NIL;
+	List	*mv_final_tlist = NIL;
+
+	if (!parse->hasAggs || !viewQuery->hasAggs)
+		return false;
+
+	/* Both have Group by and aggregation. */
+	if (parse->groupClause == NIL || viewQuery->groupClause == NIL)
+		return false;
+
+	if (parse->hasDistinctOn ||
+		parse->distinctClause != NIL ||
+		parse->groupingSets != NIL ||
+		parse->sortClause != NIL ||
+		limit_needed(parse) ||
+		parse->havingQual != NULL ||
+		parse->groupDistinct)
+		return false;
+
+	if (viewQuery->hasDistinctOn ||
+		viewQuery->distinctClause != NIL ||
+		viewQuery->groupingSets != NIL ||
+		viewQuery->groupDistinct ||
+		viewQuery->havingQual != NULL ||
+		viewQuery->sortClause != NIL ||
+		limit_needed(viewQuery))
+		return false;
+
+	if (tlist_has_srf(parse))
+		return false;
+
+	preprocess_qual_conditions(subroot, (Node *) viewQuery->jointree);
+
+	if(!aqumv_process_from_quals(parse->jointree->quals, viewQuery->jointree->quals, &post_quals))
+		return false;
+
+	if (post_quals != NIL)
+		return false;
+
+	/*
+	 * There should be no post_quals for now, erase those from view.
+	 */
+	viewQuery->jointree->quals = NULL;
+
+	if (list_difference(parse->groupClause, viewQuery->groupClause))
+		return false;
+
+	if (list_difference(viewQuery->groupClause, parse->groupClause))
+		return false;
+
+	/*
+	 * Group By clauses are equal, erase those from view.
+	 */
+	viewQuery->groupClause = NIL;
+
+	if(!aqumv_process_targetlist(context, aqumv_context->raw_processed_tlist, &mv_final_tlist))
+		return false;
+
+	viewQuery->targetList = mv_final_tlist;
+	/* SRF is not supported now, but correct the field. */
+	viewQuery->hasTargetSRFs = parse->hasTargetSRFs;
+	viewQuery->hasAggs = false;
+	subroot->agginfos = NIL;
+	subroot->aggtransinfos = NIL;
+	subroot->hasNonPartialAggs = false;
+	subroot->hasNonSerialAggs = false;
+	subroot->numOrderedAggs = false;
+	/* CBDB specifical */
+	subroot->hasNonCombine = false;
+	subroot->numPureOrderedAggs = false;
+	/*
+	 * NB: Update processed_tlist again in case that tlist has been changed.
+	 */
+	subroot->processed_tlist = NIL;
+	preprocess_targetlist(subroot);
+
+	/* Select from a mv never have that.*/
+	subroot->append_rel_list = NIL;
 	return true;
 }
