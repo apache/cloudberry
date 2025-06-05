@@ -29,9 +29,9 @@
 -- Conflict with explicit lock
 ---------------------------------------------------------------------
 create table hs_qc_lock(a int);
-CREATE TABLE
+CREATE
 insert into hs_qc_lock select * from generate_series(1,5);
-INSERT 0 5
+INSERT 5
 -1S: begin;
 BEGIN
 -1S: select * from hs_qc_lock;
@@ -46,9 +46,9 @@ BEGIN
 1: begin;
 BEGIN
 1: lock table hs_qc_lock in access exclusive mode;
-LOCK TABLE
+LOCK
 1: end;
-COMMIT
+END
 -1S: select * from hs_qc_lock;
 FATAL:  terminating connection due to conflict with recovery
 DETAIL:  User was holding a relation lock for too long.
@@ -87,7 +87,7 @@ BEGIN
  4 
 (5 rows)
 1: alter table hs_qc_lock set access method ao_row;
-ALTER TABLE
+ALTER
 -1S: select * from hs_qc_lock;
 FATAL:  terminating connection due to conflict with recovery
 DETAIL:  User was holding a relation lock for too long.
@@ -115,7 +115,7 @@ server closed the connection unexpectedly
 -- Conflict with drop database
 ---------------------------------------------------------------------
 1: create database hs_qc_dropdb;
-CREATE DATABASE
+CREATE
 -1Sq: ... <quitting>
 -1S:@db_name hs_qc_dropdb: select 1;
  ?column? 
@@ -123,7 +123,7 @@ CREATE DATABASE
  1        
 (1 row)
 1: drop database hs_qc_dropdb;
-DROP DATABASE
+DROP
 -1S: select 1;
 FATAL:  terminating connection due to conflict with recovery
 DETAIL:  User was connected to a database that must be dropped.
@@ -137,9 +137,9 @@ server closed the connection unexpectedly
 -- Conflict with VACUUM (snapshot)
 ---------------------------------------------------------------------
 1: create table hs_qc_vac1(a int);
-CREATE TABLE
+CREATE
 1: insert into hs_qc_vac1 select * from generate_series(1,10);
-INSERT 0 10
+INSERT 10
 -1S: begin transaction isolation level repeatable read;
 BEGIN
 -1S: select count(*) from hs_qc_vac1;
@@ -168,9 +168,9 @@ HINT:  In a moment you should be able to reconnect to the database and repeat yo
 -- the previous case is that here the deleted row is already invisible to the standby.
 ---------------------------------------------------------------------
 1: create table hs_qc_vac2(a int);
-CREATE TABLE
+CREATE
 1: insert into hs_qc_vac2 values(2);
-INSERT 0 1
+INSERT 1
 1: delete from hs_qc_vac2;
 DELETE 1
 -- run select once on the standby, so the next select will fetch data from buffer
@@ -229,13 +229,13 @@ DETAIL:  User was holding shared buffer pin for too long.
 !\retcode mkdir -p @testtablespace@/hs_tablespace_directory;
 (exited with code 0)
 create tablespace hs_ts location '@testtablespace@/hs_tablespace_directory';
-CREATE TABLESPACE
+CREATE
 
 -- some prepartion on the primary
 create table hs_ts_foo (i int, j int) distributed by(i);
-CREATE TABLE
+CREATE
 insert into hs_ts_foo select i, i from generate_series(1,800000)i;
-INSERT 0 800000
+INSERT 800000
 analyze hs_ts_foo;
 ANALYZE
 
@@ -258,7 +258,7 @@ SET
 
 -- drop tablespace, should see conflict on the hot standby
 drop tablespace hs_ts;
-DROP TABLESPACE
+DROP
 select gp_inject_fault('after_open_temp_file', 'reset',dbid) from gp_segment_configuration where content=1 and role='m';
  gp_inject_fault 
 -----------------
@@ -293,9 +293,9 @@ CHECKPOINT
 ----------------------------------------------------------------
 
 1: create table hs_qc_ds1(a int);
-CREATE TABLE
+CREATE
 1: insert into hs_qc_ds1 select * from generate_series(1,10);
-INSERT 0 10
+INSERT 10
 -- standby starts a repeatable read transaction, runs a local query that
 -- creates a distributed snapshot w/o creating QE.
 -1S: select count(*) from hs_qc_ds1;
@@ -327,7 +327,7 @@ VACUUM
  0     
 (1 row)
 -1S: end;
-COMMIT
+END
 
 ----------------------------------------------------------------
 -- Test GUC hot_standby_feedback
@@ -338,9 +338,9 @@ COMMIT
 (exited with code 0)
 
 1: create table hs_qc_guc1(a int);
-CREATE TABLE
+CREATE
 1: insert into hs_qc_guc1 select * from generate_series(1,10);
-INSERT 0 10
+INSERT 10
 
 -1S: begin transaction isolation level repeatable read;
 BEGIN
@@ -383,7 +383,7 @@ VACUUM
 
 -- after the conflicting read transaction ends, the next VACUUM will successfully vacuum the table
 -1S: end;
-COMMIT
+END
 1: vacuum hs_qc_guc1;
 VACUUM
 -1S: select * from hs_qc_guc1;
@@ -408,9 +408,9 @@ VACUUM
 (exited with code 0)
 
 1: create table hs_qc_guc2(a int);
-CREATE TABLE
+CREATE
 1: insert into hs_qc_guc2 select * from generate_series(1,10);
-INSERT 0 10
+INSERT 10
 
 -1S: begin transaction isolation level repeatable read;
 BEGIN
@@ -449,7 +449,7 @@ SET
 
 -- only if the age is reached, hot standby will see the same conflict as before
 1: create temp table tt1(a int);
-CREATE TABLE
+CREATE
 1: vacuum hs_qc_guc2;
 VACUUM
 -1S: select count(*) from hs_qc_guc2;
