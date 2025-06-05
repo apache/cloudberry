@@ -27,6 +27,6 @@ SELECT pg_switch_wal();
 
 -- GPDB: enable hot_standby for this cluster
 \! gpconfig -c hot_standby -v on;
-\! gpstop -ar;
+\! gpstop -ari;
 
 -- end_ignore
