@@ -18,9 +18,9 @@
 (exited with code 0)
 
 create table hs_failover(a int);
-CREATE TABLE
+CREATE
 insert into hs_failover select * from generate_series(1,10);
-INSERT 0 10
+INSERT 10
 -1S: select * from hs_failover;
  a  
 ----
@@ -47,7 +47,7 @@ select pg_ctl(datadir, 'stop', 'immediate') from gp_segment_configuration where 
 
 -- make sure mirror is detected down
 create temp table hs_tt(a int);
-CREATE TABLE
+CREATE
 select gp_request_fts_probe_scan();
  gp_request_fts_probe_scan 
 ---------------------------
@@ -137,10 +137,9 @@ HINT:  Exit the current session and re-connect.
 -- will fail due to downed mirror (previous primary)
 -1S: select * from hs_failover;
 ERROR:  failed to acquire resources on one or more segments
-DETAIL:  could not connect to server: Connection refused
-	Is the server running on host "127.0.1.1" and accepting
-	TCP/IP connections on port 7003?
- (seg1 127.0.1.1:7003)
+DETAIL:  connection to server at "10.13.9.74", port 7003 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+ (seg1 10.13.9.74:7003)
 -1Sq: ... <quitting>
 
 -- bring the downed mirror up
@@ -219,7 +218,7 @@ select wait_until_all_segments_synchronized();
 (1 row)
 
 1: create table tt_hs_dtx(a int);
-CREATE TABLE
+CREATE
 
 -- inject fault to repeatedly fail the COMMIT PREPARE phase of 2PC, which ensures that the dtx cannot finish even by the dtx recovery process.
 select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp_segment_configuration where content=1 and role='p';

@@ -66,7 +66,7 @@ SELECT count(*) FROM hs1;
 (1 row)
 
 PREPARE TRANSACTION 'foobar';
-ERROR:  PREPARE TRANSACTION is not yet supported in Greenplum Database
+ERROR:  cannot execute PREPARE TRANSACTION during recovery
 ROLLBACK;
 BEGIN;
 SELECT count(*) FROM hs1;
@@ -76,7 +76,7 @@ SELECT count(*) FROM hs1;
 (1 row)
 
 COMMIT PREPARED 'foobar';
-ERROR:  COMMIT PREPARED is not yet supported in Greenplum Database
+ERROR:  cannot execute COMMIT PREPARED during recovery
 ROLLBACK;
 BEGIN;
 SELECT count(*) FROM hs1;
@@ -86,7 +86,7 @@ SELECT count(*) FROM hs1;
 (1 row)
 
 PREPARE TRANSACTION 'foobar';
-ERROR:  PREPARE TRANSACTION is not yet supported in Greenplum Database
+ERROR:  cannot execute PREPARE TRANSACTION during recovery
 ROLLBACK PREPARED 'foobar';
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
@@ -98,7 +98,7 @@ SELECT count(*) FROM hs1;
 (1 row)
 
 ROLLBACK PREPARED 'foobar';
-ERROR:  ROLLBACK PREPARED is not yet supported in Greenplum Database
+ERROR:  cannot execute ROLLBACK PREPARED during recovery
 ROLLBACK;
 -- Locks
 BEGIN;
@@ -153,5 +153,5 @@ fetch next from hsc;
 (1 row)
 
 fetch first from hsc;
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Apache Cloudberry
 COMMIT;
