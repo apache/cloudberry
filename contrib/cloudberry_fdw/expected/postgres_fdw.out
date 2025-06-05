@@ -9655,17 +9655,17 @@ ERROR:  08006
 COMMIT;
 RESET debug_discard_caches;
 -- =============================================================================
--- test connection invalidation cases and postgres_fdw_get_connections function
+-- test connection invalidation cases and cloudberry_fdw_get_connections function
 -- =============================================================================
 -- Let's ensure to close all the existing cached connections.
-SELECT 1 FROM postgres_fdw_disconnect_all();
+SELECT 1 FROM cloudberry_fdw_disconnect_all();
  ?column? 
 ----------
         1
 (1 row)
 
 -- No cached connections, so no records should be output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
 (0 rows)
@@ -9687,7 +9687,7 @@ SELECT 1 FROM ft7 LIMIT 1;
 
 -- List all the existing cached connections. loopback and loopback3 should be
 -- output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
  loopback
@@ -9705,7 +9705,7 @@ drop cascades to foreign table ft7
 -- List all the existing cached connections. loopback and loopback3
 -- should be output as invalid connections. Also the server name for
 -- loopback3 should be NULL because the server was dropped.
-SELECT * FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT * FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name | valid 
 -------------+-------
  loopback    | f
@@ -9716,13 +9716,13 @@ SELECT * FROM postgres_fdw_get_connections() ORDER BY 1;
 COMMIT;
 -- All cached connections were closed while committing above xact, so no
 -- records should be output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
 (0 rows)
 
 -- =======================================================================
--- test postgres_fdw_disconnect and postgres_fdw_disconnect_all functions
+-- test cloudberry_fdw_disconnect and cloudberry_fdw_disconnect_all functions
 -- =======================================================================
 BEGIN;
 -- Ensure to cache loopback connection.
@@ -9741,7 +9741,7 @@ SELECT 1 FROM ft6 LIMIT 1;
 
 -- List all the existing cached connections. loopback and loopback2 should be
 -- output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
  loopback
@@ -9750,16 +9750,16 @@ SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
 
 -- Issue a warning and return false as loopback connection is still in use and
 -- can not be closed.
-SELECT postgres_fdw_disconnect('loopback');
+SELECT cloudberry_fdw_disconnect('loopback');
 WARNING:  cannot close connection for server "loopback" because it is still in use
- postgres_fdw_disconnect 
+ cloudberry_fdw_disconnect 
 -------------------------
  f
 (1 row)
 
 -- List all the existing cached connections. loopback and loopback2 should be
 -- output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
  loopback
@@ -9769,8 +9769,8 @@ SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
 -- Return false as connections are still in use, warnings are issued.
 -- But disable warnings temporarily because the order of them is not stable.
 SET client_min_messages = 'ERROR';
-SELECT postgres_fdw_disconnect_all();
- postgres_fdw_disconnect_all 
+SELECT cloudberry_fdw_disconnect_all();
+ cloudberry_fdw_disconnect_all 
 -----------------------------
  f
 (1 row)
@@ -9778,36 +9778,36 @@ SELECT postgres_fdw_disconnect_all();
 RESET client_min_messages;
 COMMIT;
 -- Ensure that loopback2 connection is closed.
-SELECT 1 FROM postgres_fdw_disconnect('loopback2');
+SELECT 1 FROM cloudberry_fdw_disconnect('loopback2');
  ?column? 
 ----------
         1
 (1 row)
 
-SELECT server_name FROM postgres_fdw_get_connections() WHERE server_name = 'loopback2';
+SELECT server_name FROM cloudberry_fdw_get_connections() WHERE server_name = 'loopback2';
  server_name 
 -------------
 (0 rows)
 
 -- Return false as loopback2 connection is closed already.
-SELECT postgres_fdw_disconnect('loopback2');
- postgres_fdw_disconnect 
+SELECT cloudberry_fdw_disconnect('loopback2');
+ cloudberry_fdw_disconnect 
 -------------------------
  f
 (1 row)
 
 -- Return an error as there is no foreign server with given name.
-SELECT postgres_fdw_disconnect('unknownserver');
+SELECT cloudberry_fdw_disconnect('unknownserver');
 ERROR:  server "unknownserver" does not exist
 -- Let's ensure to close all the existing cached connections.
-SELECT 1 FROM postgres_fdw_disconnect_all();
+SELECT 1 FROM cloudberry_fdw_disconnect_all();
  ?column? 
 ----------
         1
 (1 row)
 
 -- No cached connections, so no records should be output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
 (0 rows)
@@ -9839,7 +9839,7 @@ SELECT 1 FROM ft1 LIMIT 1;
 
 RESET ROLE;
 -- Should output two connections for loopback server
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
  loopback
@@ -9848,14 +9848,14 @@ SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
 
 COMMIT;
 -- Let's ensure to close all the existing cached connections.
-SELECT 1 FROM postgres_fdw_disconnect_all();
+SELECT 1 FROM cloudberry_fdw_disconnect_all();
  ?column? 
 ----------
         1
 (1 row)
 
 -- No cached connections, so no records should be output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
 (0 rows)
@@ -9880,7 +9880,7 @@ SELECT 1 FROM ft1 LIMIT 1;
 (1 row)
 
 -- No cached connections, so no records should be output.
-SELECT server_name FROM postgres_fdw_get_connections() ORDER BY 1;
+SELECT server_name FROM cloudberry_fdw_get_connections() ORDER BY 1;
  server_name 
 -------------
 (0 rows)

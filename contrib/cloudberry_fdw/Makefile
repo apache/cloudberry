@@ -1,6 +1,6 @@
-# contrib/postgres_fdw/Makefile
+# contrib/cloudberry_fdw/Makefile
 
-MODULE_big = postgres_fdw
+MODULE_big = cloudberry_fdw
 OBJS_FRONTEND = \
 	link-canary.o
 
@@ -10,18 +10,18 @@ OBJS = \
 	connection.o \
 	deparse.o \
 	option.o \
-	postgres_fdw.o \
+	cloudberry_fdw.o \
 	shippable.o
 
-PGFILEDESC = "postgres_fdw - foreign data wrapper for PostgreSQL"
+PGFILEDESC = "cloudberry_fdw - foreign data wrapper for Cloudberry"
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
 SHLIB_LINK_INTERNAL = -Wl,-Bsymbolic -Wl,-Bstatic -Wl,-Bstatic $(libpq) -Wl,-Bdynamic
 
-EXTENSION = postgres_fdw
-DATA = postgres_fdw--1.0.sql postgres_fdw--1.0--1.1.sql
+EXTENSION = cloudberry_fdw
+DATA = cloudberry_fdw--1.0.sql cloudberry_fdw--1.0--1.1.sql
 
-REGRESS = gp2pg_postgres_fdw gp_postgres_fdw mpp_postgres_fdw #postgres_fdw
+REGRESS = gp2pg_cloudberry_fdw gp_cloudberry_fdw mpp_cloudberry_fdw #cloudberry_fdw
 REGRESS_OPTS += --init-file=$(top_srcdir)/src/test/regress/init_file
 
 ifdef USE_PGXS
@@ -30,7 +30,7 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
 SHLIB_PREREQS = submake-libpq
-subdir = contrib/postgres_fdw
+subdir = contrib/cloudberry_fdw
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
@@ -47,7 +47,7 @@ clean: clean-symlinks
 clean-symlinks:
 	rm -f link-canary.c
 
-# For postgres_fdw test
+# For cloudberry_fdw test
 export PG_PORT=5432
 installcheck: install prep_postgres
 clean: clean_postgres

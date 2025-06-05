@@ -15,12 +15,12 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_user_mapping.h"
+#include "cloudberry_fdw.h"
 #include "commands/defrem.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "pgstat.h"
-#include "postgres_fdw.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
@@ -82,9 +82,9 @@ static bool xact_got_connection = false;
 /*
  * SQL functions
  */
-PG_FUNCTION_INFO_V1(postgres_fdw_get_connections);
-PG_FUNCTION_INFO_V1(postgres_fdw_disconnect);
-PG_FUNCTION_INFO_V1(postgres_fdw_disconnect_all);
+PG_FUNCTION_INFO_V1(cloudberry_fdw_get_connections);
+PG_FUNCTION_INFO_V1(cloudberry_fdw_disconnect);
+PG_FUNCTION_INFO_V1(cloudberry_fdw_disconnect_all);
 
 /* prototypes of private functions */
 static void make_new_connection(ConnCacheEntry *entry, UserMapping *user);
@@ -1427,7 +1427,7 @@ exit:	;
  * No records are returned when there are no cached connections at all.
  */
 Datum
-postgres_fdw_get_connections(PG_FUNCTION_ARGS)
+cloudberry_fdw_get_connections(PG_FUNCTION_ARGS)
 {
 #define POSTGRES_FDW_GET_CONNECTIONS_COLS	2
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
@@ -1554,7 +1554,7 @@ postgres_fdw_get_connections(PG_FUNCTION_ARGS)
  * foreign server with the given name is found, an error is reported.
  */
 Datum
-postgres_fdw_disconnect(PG_FUNCTION_ARGS)
+cloudberry_fdw_disconnect(PG_FUNCTION_ARGS)
 {
 	ForeignServer *server;
 	char	   *servername;
@@ -1575,7 +1575,7 @@ postgres_fdw_disconnect(PG_FUNCTION_ARGS)
  * returns true if it disconnects at least one connection, otherwise false.
  */
 Datum
-postgres_fdw_disconnect_all(PG_FUNCTION_ARGS)
+cloudberry_fdw_disconnect_all(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_BOOL(disconnect_cached_connections(InvalidOid));
 }

@@ -25,7 +25,7 @@
 
 #include "access/transam.h"
 #include "catalog/dependency.h"
-#include "postgres_fdw.h"
+#include "cloudberry_fdw.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
 #include "utils/syscache.h"

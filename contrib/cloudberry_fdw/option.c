@@ -18,7 +18,7 @@
 #include "catalog/pg_user_mapping.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "postgres_fdw.h"
+#include "cloudberry_fdw.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/varlena.h"
@@ -60,10 +60,10 @@ static bool is_libpq_option(const char *keyword);
  *
  * Raise an ERROR if the option or its value is considered invalid.
  */
-PG_FUNCTION_INFO_V1(postgres_fdw_validator);
+PG_FUNCTION_INFO_V1(cloudberry_fdw_validator);
 
 Datum
-postgres_fdw_validator(PG_FUNCTION_ARGS)
+cloudberry_fdw_validator(PG_FUNCTION_ARGS)
 {
 	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
 	Oid			catalog = PG_GETARG_OID(1);

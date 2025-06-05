@@ -22,6 +22,7 @@
 #include "commands/defrem.h"
 #include "commands/explain.h"
 #include "commands/vacuum.h"
+#include "cloudberry_fdw.h"
 #include "executor/execAsync.h"
 #include "foreign/fdwapi.h"
 #include "funcapi.h"
@@ -39,7 +40,6 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
-#include "postgres_fdw.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
 #include "utils/float.h"
@@ -318,7 +318,7 @@ typedef struct
 /*
  * SQL functions
  */
-PG_FUNCTION_INFO_V1(postgres_fdw_handler);
+PG_FUNCTION_INFO_V1(cloudberry_fdw_handler);
 
 /*
  * FDW callback routines
@@ -550,7 +550,7 @@ static int	get_batch_size_option(Relation rel);
  * to my callback routines.
  */
 Datum
-postgres_fdw_handler(PG_FUNCTION_ARGS)
+cloudberry_fdw_handler(PG_FUNCTION_ARGS)
 {
 	FdwRoutine *routine = makeNode(FdwRoutine);
 
