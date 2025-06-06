@@ -59,7 +59,7 @@ static int localFileRead(UFile *file, char *buffer, int amount);
 static int localFileWrite(UFile *file, char *buffer, int amount);
 static off_t localFileSize(UFile *file);
 static void localFileUnlink(Oid spcId, const char *fileName);
-static char *localFormatPathName(RelFileLocator *relFileNode);
+static char *localFormatPathName(Oid relid, RelFileLocator *relFileNode);
 static bool localEnsurePath(Oid spcId, const char *PathName);
 static bool localFileExists(Oid spcId, const char *fileName);
 static const char *localFileName(UFile *file);
@@ -307,7 +307,7 @@ localFileUnlink(Oid spcId, const char *fileName)
 }
 
 static char *
-localFormatPathName(RelFileLocator *relFileNode)
+localFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
 	if (relFileNode->spcOid == DEFAULTTABLESPACE_OID)
 		return psprintf("base/%u/%u_dirtable",
@@ -440,13 +440,13 @@ UFileUnlink(Oid spcId, const char *fileName)
 }
 
 char *
-UFileFormatPathName(RelFileLocator *relFileNode)
+UFileFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
 	FileAm *fileAm;
 
 	fileAm = GetTablespaceFileHandler(relFileNode->spcOid);
 
-	return fileAm->formatPathName(relFileNode);
+	return fileAm->formatPathName(relid, relFileNode);
 }
 
 bool
