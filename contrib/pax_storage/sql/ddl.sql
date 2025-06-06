@@ -58,3 +58,21 @@ PARTITION BY RANGE (date)
 SELECT pg_catalog.pg_relation_size('pt_pax'::regclass);
 select 1 from (select count(*) from gp_toolkit.gp_size_of_schema_disk) empty_out;
 drop table pt_pax;
+
+-- expect create ok 
+create table pax_test.partition_cow(c1 int, c2 bigint, c3 varchar, c4 text, c5 date, c6 float4, c7 float8, c8 numeric, c9 interval)
+partition by range(c1) (start(1) end(15000) every(5000))
+with (minmax_columns='c1,c2,c3,c4,c5,c6,c7,c8,c9');
+-- expect create ok 
+create table pax_test.partition_cow_1(c1 int, c2 bigint, c3 varchar, c4 text, c5 date, c6 float4, c7 float8, c8 numeric, c9 interval)
+partition by range(c1) (start(1) end(15000) every(5000))
+using pax with (minmax_columns='c1,c2,c3,c4,c5,c6,c7,c8,c9');
+
+set default_table_access_method = heap;
+-- expect create fail
+create table pax_test.partition_cow_2(c1 int, c2 bigint, c3 varchar, c4 text, c5 date, c6 float4, c7 float8, c8 numeric, c9 interval)
+partition by range(c1) (start(1) end(15000) every(5000))
+with (minmax_columns='c1,c2,c3,c4,c5,c6,c7,c8,c9');
+set default_table_access_method = pax;
+drop table pax_test.partition_cow;
+drop table pax_test.partition_cow_1;
