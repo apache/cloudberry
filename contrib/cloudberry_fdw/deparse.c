@@ -412,6 +412,11 @@ foreign_expr_walker(Node *node,
 				if (p->paramkind == PARAM_MULTIEXPR)
 					return false;
 
+				/* Otherwise it will try to get the param before executor, and fail */
+				if (glob_cxt->foreignrel->exec_location == FTEXECLOCATION_ALL_SEGMENTS
+					&& p->paramkind == PARAM_EXEC)
+					return false;
+
 				/*
 				 * Collation rule is same as for Consts and non-foreign Vars.
 				 */

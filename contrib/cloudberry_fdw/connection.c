@@ -20,6 +20,7 @@
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "pgstat.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
@@ -46,7 +47,11 @@
  * ourselves, so that rolling back a subtransaction will kill the right
  * queries and not the wrong ones.
  */
-typedef Oid ConnCacheKey;
+typedef struct ConnCacheKey
+{
+	Oid			umid;			/* Oid of user mapping */
+	int			segid;			/* the segment ID of the foreign Cloudberry cluster */
+} ConnCacheKey;
 
 typedef struct ConnCacheEntry
 {
@@ -87,8 +92,9 @@ PG_FUNCTION_INFO_V1(cloudberry_fdw_disconnect);
 PG_FUNCTION_INFO_V1(cloudberry_fdw_disconnect_all);
 
 /* prototypes of private functions */
-static void make_new_connection(ConnCacheEntry *entry, UserMapping *user);
-static PGconn *connect_pg_server(ForeignServer *server, UserMapping *user);
+static void make_new_connection(ConnCacheEntry *entry, UserMapping *user,
+								List *server_options, bool is_gp_retrieve);
+static PGconn *connect_pg_server(ForeignServer *server, UserMapping *user, bool is_gp_retrieve);
 static void disconnect_pg_server(ConnCacheEntry *entry);
 static void check_conn_params(const char **keywords, const char **values, UserMapping *user);
 static void configure_remote_session(PGconn *conn);
@@ -124,11 +130,36 @@ static bool disconnect_cached_connections(Oid serverid);
 PGconn *
 GetConnection(UserMapping *user, bool will_prep_stmt, PgFdwConnState **state)
 {
+	return GetCustomConnection(user, will_prep_stmt, state, false, 0, NULL);
+}
+
+/*
+ * Same as GetConnection(), except if it's for gp retrieve connection,
+ * segid & server_options are used, else segid & server_options mean nothing.
+ */
+PGconn *
+GetCustomConnection(UserMapping *user, bool will_prep_stmt,
+					PgFdwConnState **state, bool is_gp_retrieve,
+					int segid, List *server_options)
+{
 	bool		found;
 	bool		retry = false;
 	ConnCacheEntry *entry;
 	ConnCacheKey key;
 	MemoryContext ccxt = CurrentMemoryContext;
+
+	/*
+	 * segid & server_options mean nothing for non-retrieve connection.  Clean
+	 * up server_options to avoid potential issues. segid is used in connection
+	 * cache hash so hardcoding segid as -2 (invalid segid) for non-retrieve
+	 * connection to avoid collision with retrieve connection with normal segid
+	 * values.
+	 */
+	if (!is_gp_retrieve)
+	{
+		segid = -2;
+		server_options = NULL;
+	}
 
 	/* First time through, initialize connection cache hashtable */
 	if (ConnectionHash == NULL)
@@ -157,7 +188,8 @@ GetConnection(UserMapping *user, bool will_prep_stmt, PgFdwConnState **state)
 	xact_got_connection = true;
 
 	/* Create hash key for the entry.  Assume no pad bytes in key struct */
-	key = user->umid;
+	key.umid = user->umid;
+	key.segid = segid;
 
 	/*
 	 * Find or create cached entry for requested connection.
@@ -192,7 +224,7 @@ GetConnection(UserMapping *user, bool will_prep_stmt, PgFdwConnState **state)
 	 * will remain in a valid empty state, ie conn == NULL.)
 	 */
 	if (entry->conn == NULL)
-		make_new_connection(entry, user);
+		make_new_connection(entry, user, server_options, is_gp_retrieve);
 
 	/*
 	 * We check the health of the cached connection here when using it.  In
@@ -205,7 +237,8 @@ GetConnection(UserMapping *user, bool will_prep_stmt, PgFdwConnState **state)
 		if (entry->state.pendingAreq)
 			process_pending_request(entry->state.pendingAreq);
 		/* Start a new transaction or subtransaction if needed. */
-		begin_remote_xact(entry);
+		if (!is_gp_retrieve)
+			begin_remote_xact(entry);
 	}
 	PG_CATCH();
 	{
@@ -262,9 +295,10 @@ GetConnection(UserMapping *user, bool will_prep_stmt, PgFdwConnState **state)
 		disconnect_pg_server(entry);
 
 		if (entry->conn == NULL)
-			make_new_connection(entry, user);
+			make_new_connection(entry, user, server_options, is_gp_retrieve);
 
-		begin_remote_xact(entry);
+		if (!is_gp_retrieve)
+			begin_remote_xact(entry);
 	}
 
 	/* Remember if caller will prepare statements */
@@ -282,12 +316,45 @@ GetConnection(UserMapping *user, bool will_prep_stmt, PgFdwConnState **state)
  * establish new connection to the remote server.
  */
 static void
-make_new_connection(ConnCacheEntry *entry, UserMapping *user)
+make_new_connection(ConnCacheEntry *entry, UserMapping *user,
+					List *server_options, bool is_gp_retrieve)
 {
 	ForeignServer *server = GetForeignServer(user->serverid);
-	ListCell   *lc;
+	ListCell   *lc,
+			   *lc2;
+	DefElem    *dbname;
 
 	Assert(entry->conn == NULL);
+
+	/*
+	 * Set the dbname option if possible. Note only server options could
+	 * include 'dbname'.
+	 */
+	if (server_options != NULL)
+	{
+		/* Find the value of foreign sever option "dbname" if have */
+		dbname = NULL;
+		foreach(lc, server->options)
+		{
+			DefElem    *defel = (DefElem *) lfirst(lc);
+
+			if (strcmp(defel->defname, "dbname") == 0)
+			{
+				dbname = defel;
+				break;
+			}
+		}
+
+		/*
+		 * It is possible that server options does not include 'dbname'. If
+		 * so libpq would use the other ways to get an available dbname,
+		 * e.g. via the related environment variable.
+		 */
+		if (dbname != NULL)
+			server_options = lappend(server_options, makeDefElem("dbname", dbname->arg, -1));
+
+		server->options = server_options;
+	}
 
 	/* Reset all transient state fields, to be sure all are clean */
 	entry->xact_depth = 0;
@@ -316,16 +383,16 @@ make_new_connection(ConnCacheEntry *entry, UserMapping *user)
 	 * By default, all the connections to any foreign servers are kept open.
 	 */
 	entry->keep_connections = true;
-	foreach(lc, server->options)
+	foreach(lc2, server->options)
 	{
-		DefElem    *def = (DefElem *) lfirst(lc);
+		DefElem    *def = (DefElem *) lfirst(lc2);
 
 		if (strcmp(def->defname, "keep_connections") == 0)
 			entry->keep_connections = defGetBoolean(def);
 	}
 
 	/* Now try to make the connection */
-	entry->conn = connect_pg_server(server, user);
+	entry->conn = connect_pg_server(server, user, is_gp_retrieve);
 
 	elog(DEBUG3, "new postgres_fdw connection %p for server \"%s\" (user mapping oid %u, userid %u)",
 		 entry->conn, server->servername, user->umid, user->userid);
@@ -335,7 +402,7 @@ make_new_connection(ConnCacheEntry *entry, UserMapping *user)
  * Connect to remote server using specified server and user mapping properties.
  */
 static PGconn *
-connect_pg_server(ForeignServer *server, UserMapping *user)
+connect_pg_server(ForeignServer *server, UserMapping *user, bool is_gp_retrieve)
 {
 	PGconn	   *volatile conn = NULL;
 
@@ -431,7 +498,8 @@ connect_pg_server(ForeignServer *server, UserMapping *user)
 					 errhint("Target server's authentication method must be changed or password_required=false set in the user mapping attributes.")));
 
 		/* Prepare new session for use */
-		configure_remote_session(conn);
+		if (!is_gp_retrieve)
+			configure_remote_session(conn);
 
 		pfree(keywords);
 		pfree(values);

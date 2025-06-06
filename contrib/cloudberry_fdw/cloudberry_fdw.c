@@ -18,7 +18,10 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_foreign_server.h"
 #include "catalog/pg_opfamily.h"
+#include "cdb/cdbvars.h"
+#include "cdb/cdbgang.h"
 #include "commands/defrem.h"
 #include "commands/explain.h"
 #include "commands/vacuum.h"
@@ -41,6 +44,7 @@
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
 #include "storage/latch.h"
+#include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/float.h"
 #include "utils/guc.h"
@@ -49,6 +53,7 @@
 #include "utils/rel.h"
 #include "utils/sampling.h"
 #include "utils/selfuncs.h"
+#include "utils/syscache.h"
 
 PG_MODULE_MAGIC;
 
@@ -60,6 +65,8 @@ PG_MODULE_MAGIC;
 
 /* If no remote estimates, assume a sort costs 20% extra */
 #define DEFAULT_FDW_SORT_MULTIPLIER 1.2
+
+static ProcessUtility_hook_type cbdb_fdw_prev_ProcessUtility = NULL;
 
 /*
  * Indexes of FDW-private information stored in fdw_private lists.
@@ -81,7 +88,22 @@ enum FdwScanPrivateIndex
 	 * String describing join i.e. names of relations being joined and types
 	 * of join, added when the scan is join
 	 */
-	FdwScanPrivateRelations
+	FdwScanPrivateRelations,
+
+	/*
+	 * Cloudberry specific, for parallel retrieve cursor. Do not modify the
+	 * orders since they need to match get_endpoints_info(), etc.
+	 *
+	 * NOTE: Put them at the end. At least at this moment upstream uses the
+	 * below code for EXPLAIN output (used on the coordinator) and the below
+	 * cbdb specific entries are populated in QE nodes.
+	 *
+	 * postgresExplainForeignScan()
+	 *    if (list_length(fdw_private) > FdwScanPrivateRelations)
+	 */
+	FdwScanPrivateEndpoints,
+	FdwScanPrivateUserName,
+	FdwScanPrivateEndpointName,
 };
 
 /*
@@ -172,6 +194,12 @@ typedef struct PgFdwScanState
 	MemoryContext temp_cxt;		/* context for per-tuple temporary data */
 
 	int			fetch_size;		/* number of tuples per fetch */
+
+	/* cloudberry: parallel retrieve cursor relevant */
+	bool		is_gp_retrieve;
+	bool		is_gp_parallel_retrieve_cursor;
+	List		*endpoints;
+	char		*endpoint_name;
 } PgFdwScanState;
 
 /*
@@ -543,7 +571,15 @@ static void merge_fdw_options(PgFdwRelationInfo *fpinfo,
 							  const PgFdwRelationInfo *fpinfo_o,
 							  const PgFdwRelationInfo *fpinfo_i);
 static int	get_batch_size_option(Relation rel);
-
+static int get_remote_num_segments(UserMapping *user);
+static void get_endpoints_info(PGconn *conn, int cursor_number,
+							   int session_id, List **endpoints);
+static void create_parallel_retrieve_cursor(ForeignScanState *node);
+static void cbdb_fdw_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
+									bool readOnlyTree,
+									ProcessUtilityContext context, ParamListInfo params,
+									QueryEnvironment *queryEnv,
+									DestReceiver *dest, QueryCompletion *qc);
 
 /*
  * Foreign-data wrapper handler function: return a struct with pointers
@@ -1500,6 +1536,13 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
 	UserMapping *user;
 	int			rtindex;
 	int			numParams;
+	Value		*host = NULL;
+	Value		*port = NULL;
+	int32 		segid = -1;
+	char		*auth_token = NULL;
+	Value		*foreign_username = NULL;
+	int			process_no = -1;
+	List		*server_options = NIL;
 
 	/*
 	 * Do nothing in EXPLAIN (no ANALYZE) case.  node->fdw_state stays NULL.
@@ -1530,14 +1573,77 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
 	table = GetForeignTable(rte->relid);
 	user = GetUserMapping(userid, table->serverid);
 
-	/*
-	 * Get connection to the foreign server.  Connection manager will
-	 * establish new connection if necessary.
-	 */
-	fsstate->conn = GetConnection(user, false, &fsstate->conn_state);
+	/* Use parallel retrieve cursor if mpp_execute is 'all segments' */
+	fsstate->is_gp_retrieve =
+		(table->exec_location == FTEXECLOCATION_ALL_SEGMENTS &&
+		 Gp_role == GP_ROLE_EXECUTE);
 
-	/* Assign a unique ID for my cursor */
-	fsstate->cursor_number = GetCursorNumber(fsstate->conn);
+	fsstate->is_gp_parallel_retrieve_cursor =
+		(table->exec_location == FTEXECLOCATION_ALL_SEGMENTS &&
+		 Gp_role == GP_ROLE_DISPATCH);
+
+	if (fsstate->is_gp_parallel_retrieve_cursor)
+	{
+		int num_segments = get_remote_num_segments(user);
+		if (num_segments!= table->num_segments)
+			ereport(ERROR, (errmsg("Option segment_number %d doesn't match remote "
+					"segment number %d", table->num_segments, num_segments)));
+	}
+
+	if (!fsstate->is_gp_retrieve)
+	{
+		/*
+		 * Get connection to the foreign server.  Connection manager will
+		 * establish new connection if necessary.
+		 */
+		fsstate->conn = GetConnection(user, false, &fsstate->conn_state);
+		/* Assign a unique ID for my cursor */
+		fsstate->cursor_number = GetCursorNumber(fsstate->conn);
+	}
+	else
+	{
+		/* Get the process nth number in current gang */
+		{
+			ExecSlice *current_slice = &node->ss.ps.state->es_sliceTable->slices[currentSliceId];
+
+			int num = -1;
+			while ((num = bms_next_member(current_slice->processesMap, num)) >= 0)
+			{
+				process_no++;
+				if (qe_identifier == num)
+					break;
+			}
+		}
+
+		foreign_username = list_nth(fsplan->fdw_private, FdwScanPrivateUserName);
+		fsstate->endpoint_name = strVal(list_nth(fsplan->fdw_private, FdwScanPrivateEndpointName));
+		fsstate->endpoints = list_nth(fsplan->fdw_private, FdwScanPrivateEndpoints);
+
+		if (process_no < 0)
+			ereport(ERROR, (errmsg("No valid slice number")));
+
+		if (process_no < list_length(fsstate->endpoints))
+		{
+			List *endpoint = list_nth(fsstate->endpoints, process_no);
+			host = list_nth(endpoint, 0);
+			port = list_nth(endpoint, 1);
+			segid = atoi(strVal(list_nth(endpoint, 2)));
+			auth_token = list_nth(endpoint, 3);
+
+			/* Customize the fdw connection for parallel retrieve cursor. */
+			server_options = lappend(server_options, makeDefElem(pstrdup("host"), (Node *)host, -1));
+			server_options = lappend(server_options, makeDefElem(pstrdup("port"), (Node *)port, -1));
+			/* dbname will be populated in GetCustomConnection() since we need to get the database name there. */
+			server_options = lappend(server_options, makeDefElem(pstrdup("options"), (Node *) makeString("-c gp_retrieve_conn=true"), -1));
+
+			user->options = NIL;
+			user->options = lappend(user->options, makeDefElem(pstrdup("user"), (Node *)foreign_username, -1));
+			user->options = lappend(user->options, makeDefElem(pstrdup("password"), (Node *)auth_token, -1));
+
+			fsstate->conn = GetCustomConnection(user, false, &fsstate->conn_state, true, segid, server_options);
+		}
+	}
+
 	fsstate->cursor_exists = false;
 
 	/* Get private info created by planner functions. */
@@ -1588,6 +1694,14 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
 
 	/* Set the async-capable flag */
 	fsstate->async_capable = node->ss.ps.async_capable;
+
+	/*
+	 * Should not run it in postgresIterateForeignScan() like what
+	 * create_cursor() does since we need to dispatch the endpoints information
+	 * to QE in advance.
+	 */
+	if (fsstate->is_gp_parallel_retrieve_cursor)
+		create_parallel_retrieve_cursor(node);
 }
 
 /*
@@ -1725,6 +1839,13 @@ postgresEndForeignScan(ForeignScanState *node)
 	/* Release remote connection */
 	ReleaseConnection(fsstate->conn);
 	fsstate->conn = NULL;
+
+	/* cbdb: Release retrieve connection specific variable. */
+	if (fsstate->endpoint_name)
+	{
+		pfree(fsstate->endpoint_name);
+		fsstate->endpoint_name = NULL;
+	}
 
 	/* MemoryContexts will be deleted automatically. */
 }
@@ -2330,7 +2451,7 @@ postgresIsForeignRelUpdatable(Relation rel)
 	 * the hidden column gp_segment_id and the other "ModifyTable mixes
 	 * distributed and entry-only tables" issue.
 	 */
-	UserMapping *user = GetUserMapping(rel->rd_rel->relowner, table->serverid);
+	UserMapping *user = GetUserMapping(GetUserId(), server->serverid);
 	if (greenplumCheckIsCloudberry(user))
 		return (1 << CMD_INSERT);
 	else
@@ -3724,6 +3845,10 @@ create_cursor(ForeignScanState *node)
 	StringInfoData buf;
 	PGresult   *res;
 
+	/* No need to create a cursor for the retrieve connection. */
+	if (fsstate->is_gp_retrieve)
+		return;
+
 	/* First, process a pending asynchronous request, if any. */
 	if (fsstate->conn_state->pendingAreq)
 		process_pending_request(fsstate->conn_state->pendingAreq);
@@ -3749,8 +3874,12 @@ create_cursor(ForeignScanState *node)
 
 	/* Construct the DECLARE CURSOR command */
 	initStringInfo(&buf);
-	appendStringInfo(&buf, "DECLARE c%u CURSOR FOR\n%s",
-					 fsstate->cursor_number, fsstate->query);
+	if (fsstate->is_gp_parallel_retrieve_cursor)
+		appendStringInfo(&buf, "DECLARE c%u PARALLEL RETRIEVE CURSOR FOR\n%s",
+						 fsstate->cursor_number, fsstate->query);
+	else
+		appendStringInfo(&buf, "DECLARE c%u CURSOR FOR\n%s",
+						 fsstate->cursor_number, fsstate->query);
 
 	/*
 	 * Notice that we pass NULL for paramTypes, thus forcing the remote server
@@ -3832,8 +3961,18 @@ fetch_more_data(ForeignScanState *node)
 			char		sql[64];
 
 			/* This is a regular synchronous fetch. */
-			snprintf(sql, sizeof(sql), "FETCH %d FROM c%u",
-					 fsstate->fetch_size, fsstate->cursor_number);
+			if (conn == NULL)
+			{
+				fsstate->eof_reached = true;
+				return;
+			}
+
+			if (fsstate->is_gp_retrieve)
+				snprintf(sql, sizeof(sql), "RETRIEVE %d FROM ENDPOINT %s",
+					fsstate->fetch_size, fsstate->endpoint_name);
+			else
+				snprintf(sql, sizeof(sql), "FETCH %d FROM c%u",
+					fsstate->fetch_size, fsstate->cursor_number);
 
 			res = pgfdw_exec_query(conn, sql, fsstate->conn_state);
 			/* On error, report the original query, not the FETCH. */
@@ -3875,6 +4014,16 @@ fetch_more_data(ForeignScanState *node)
 	PG_END_TRY();
 
 	MemoryContextSwitchTo(oldcontext);
+}
+
+void
+_PG_init(void)
+{
+	if (!process_shared_preload_libraries_in_progress)
+		return;
+
+	cbdb_fdw_prev_ProcessUtility = ProcessUtility_hook;
+	ProcessUtility_hook = cbdb_fdw_ProcessUtility;
 }
 
 /*
@@ -7664,4 +7813,223 @@ greenplumCheckIsCloudberry(UserMapping *user)
 	ReleaseConnection(conn);
 
 	return ret;
+}
+
+static int
+get_remote_num_segments(UserMapping *user)
+{
+	PGconn	   *conn;
+	PGresult   *res;
+	int			size;
+
+	char *query = "SELECT count(DISTINCT content) FROM pg_catalog.gp_segment_configuration WHERE content >= 0";
+
+	conn = GetConnection(user, false, NULL);
+
+	res = pgfdw_exec_query(conn, query, NULL);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pgfdw_report_error(ERROR, res, conn, true, query);
+
+	if (PQntuples(res) == 0)
+		pgfdw_report_error(ERROR, res, conn, true, query);
+
+	size = pg_atoi(PQgetvalue(res, 0, 0), sizeof(int), 0);
+
+	PQclear(res);
+	ReleaseConnection(conn);
+
+	return size;
+}
+
+static void
+get_session_id(PGconn *conn, int *session_id)
+{
+	PGresult   *res;
+
+	res = pgfdw_exec_query(conn, "SHOW gp_session_id", NULL);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+	{
+		pgfdw_report_error(ERROR, res, conn, true, "SHOW gp_session_id");
+	}
+
+	*session_id = atoi(PQgetvalue(res, 0, 0));
+	PQclear(res);
+}
+
+static void
+get_endpoints_info(PGconn *conn,
+				   int cursor_number,
+				   int session_id,
+				   List **fdw_private)
+{
+	StringInfoData	 sql_buf;
+	PGresult		*res;
+	List			*endpoints;
+	char			*foreign_username = NULL;
+	char			*endpoint_name = NULL;
+	char			*auth_token;
+
+	initStringInfo(&sql_buf);
+	appendStringInfo(&sql_buf,
+					 "SELECT hostname, port, gp_segment_id, auth_token, username, endpointname FROM gp_endpoints "
+					 "WHERE sessionid=%d AND cursorname = 'c%d'",
+					 session_id, cursor_number);
+
+	res = pgfdw_exec_query(conn, sql_buf.data, NULL);
+
+	if (PQresultStatus(res) != PGRES_TUPLES_OK ||
+		PQntuples(res) == 0 ||
+		PQnfields(res) != 6)
+	{
+		pgfdw_report_error(ERROR, res, conn, true, sql_buf.data);
+	}
+
+	endpoints = NIL;
+	for (int row = 0; row < PQntuples(res); row++)
+	{
+		char	   *host;
+		char	   *port;
+		char	   *segid;
+		List	   *endpoint = NIL;
+
+		host = pstrdup(PQgetvalue(res, row, 0));
+		port = pstrdup(PQgetvalue(res, row, 1));
+		segid = pstrdup(PQgetvalue(res, row, 2));
+		auth_token = pstrdup(PQgetvalue(res, row, 3));
+		if (row == 0)
+		{
+			foreign_username = pstrdup(PQgetvalue(res, row, 4));
+			endpoint_name = pstrdup(PQgetvalue(res, row, 5));
+		}
+
+		endpoint = list_make4(makeString(host), makeString(port), makeString(segid), makeString(auth_token));
+		endpoints = lappend(endpoints, endpoint);
+	}
+
+	/* The order should be same as enum FdwScanPrivateIndex definition */
+	*fdw_private = lappend(*fdw_private, endpoints);
+	*fdw_private = lappend(*fdw_private, makeString(foreign_username));
+	*fdw_private = lappend(*fdw_private, makeString(endpoint_name));
+
+	PQclear(res);
+}
+
+static void
+create_parallel_retrieve_cursor(ForeignScanState *node)
+{
+	PgFdwScanState	*fsstate = (PgFdwScanState *) node->fdw_state;
+	ForeignScan		*foreign_scan;
+	int				 session_id;
+	int				 list_len;
+
+	create_cursor(node);
+	foreign_scan = (ForeignScan *) node->ss.ps.plan;
+	get_session_id(fsstate->conn, &session_id);
+	list_len = list_length(foreign_scan->fdw_private);
+	if (list_len == FdwScanPrivateRelations)
+	{
+		/*
+		 * Create a dummy entry so that we could populate fdw_private later
+		 * correctly.
+		 */
+		foreign_scan->fdw_private = lappend(foreign_scan->fdw_private, makeString(""));
+
+	}
+	else if (list_len != (FdwScanPrivateRelations + 1))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("fdw_private was not correctly populated (length: %d)",
+						list_len)));
+	}
+
+	get_endpoints_info(fsstate->conn, fsstate->cursor_number, session_id,
+					   &foreign_scan->fdw_private);
+}
+
+static void
+cbdb_fdw_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
+						bool readOnlyTree,
+						ProcessUtilityContext context, ParamListInfo params,
+						QueryEnvironment *queryEnv,
+						DestReceiver *dest, QueryCompletion *qc)
+{
+	switch (nodeTag(pstmt->utilityStmt))
+	{
+		case T_CreateForeignServerStmt:
+		{
+			CreateForeignServerStmt *stmt;
+			ListCell *lc;
+			char *mpp_execute = NULL;
+
+			stmt = (CreateForeignServerStmt *) pstmt->utilityStmt;
+
+			if (pg_strcasecmp(stmt->fdwname, "cloudberry_fdw") == 0)
+			{
+				foreach(lc, stmt->options)
+				{
+					DefElem *def = lfirst(lc);
+					if (strcmp(def->defname, "mpp_execute") == 0)
+					{
+						mpp_execute = defGetString(def);
+						if (pg_strcasecmp(mpp_execute, "all segments") != 0)
+						{
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									errmsg("mpp_execute value must be 'all segments' in cloudberry fdw")));
+						}
+						break;
+					}
+				}
+
+				if (mpp_execute == NULL)
+				{
+					DefElem *elem = makeDefElem("mpp_execute", (Node *) makeString("all segments"), -1);
+					stmt->options = lappend(stmt->options, elem);
+				}
+			}
+			break;
+		}
+		case T_AlterForeignServerStmt:
+		{
+			AlterForeignServerStmt *stmt;
+			ListCell	*lc;
+			HeapTuple	tup;
+			Form_pg_foreign_server srvForm;
+
+			stmt = (AlterForeignServerStmt *) pstmt->utilityStmt;
+
+			foreach(lc, stmt->options)
+			{
+				DefElem *def = lfirst(lc);
+				if (strcmp(def->defname, "mpp_execute") == 0)
+				{
+					tup = SearchSysCacheCopy1(FOREIGNSERVERNAME,
+											  CStringGetDatum(stmt->servername));
+					if (HeapTupleIsValid(tup))
+					{
+						srvForm = (Form_pg_foreign_server) GETSTRUCT(tup);
+						ForeignDataWrapper *fdw = GetForeignDataWrapper(srvForm->srvfdw);
+						if (pg_strcasecmp(fdw->fdwname, "cloudberry_fdw") == 0)
+						{
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									errmsg("canno set value of mpp_execute in cloudberry fdw")));
+						}
+					}
+					break;
+				}
+			}
+			break;
+		}
+		default:
+			break;
+	}
+
+	if (cbdb_fdw_prev_ProcessUtility)
+		(*cbdb_fdw_prev_ProcessUtility) (pstmt, queryString, readOnlyTree,
+										 context, params, queryEnv, dest, qc);
+	else
+		standard_ProcessUtility(pstmt, queryString, readOnlyTree,
+								context, params, queryEnv, dest, qc);
 }
