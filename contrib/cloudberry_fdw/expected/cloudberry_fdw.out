@@ -1,0 +1,1227 @@
+-- ===================================================================
+-- create FDW objects
+-- ===================================================================
+-- start_ignore
+DROP EXTENSION IF EXISTS cloudberry_fdw CASCADE;
+NOTICE:  drop cascades to 12 other objects
+DETAIL:  drop cascades to server testserver1
+drop cascades to user mapping for public on server testserver1
+drop cascades to server loopback
+drop cascades to user mapping for pguo on server loopback
+drop cascades to foreign table ft1
+drop cascades to foreign table ft2
+drop cascades to foreign table ft4
+drop cascades to foreign table ft5
+drop cascades to foreign table gp_ft1
+drop cascades to server loopback2
+drop cascades to user mapping for pguo on server loopback2
+drop cascades to foreign table ft6
+DROP TYPE IF EXISTS user_enum CASCADE;
+NOTICE:  drop cascades to column c8 of table "S 1"."T 1"
+DROP FUNCTION IF EXISTS cloudberry_fdw_abs(int) CASCADE;
+NOTICE:  function cloudberry_fdw_abs(pg_catalog.int4) does not exist, skipping
+DROP OPERATOR IF EXISTS ===(int, int) CASCADE;
+NOTICE:  operator === does not exist, skipping
+DROP TABLE IF EXISTS loc1;
+NOTICE:  table "loc1" does not exist, skipping
+select current_database() as cur_db; \gset
+       cur_db       
+--------------------
+ contrib_regression
+(1 row)
+
+-- end_ignore
+SET optimizer=off;
+CREATE EXTENSION cloudberry_fdw;
+CREATE SERVER testserver1 FOREIGN DATA WRAPPER cloudberry_fdw
+	OPTIONS (mpp_execute 'all segments');
+CREATE SERVER loopback FOREIGN DATA WRAPPER cloudberry_fdw
+	OPTIONS (dbname :'cur_db', mpp_execute 'all segments');
+CREATE USER MAPPING FOR CURRENT_USER SERVER testserver1;
+CREATE USER MAPPING FOR CURRENT_USER SERVER loopback;
+-- ===================================================================
+-- create objects used through FDW server
+-- ===================================================================
+CREATE TYPE user_enum AS ENUM ('foo', 'bar', 'buz');
+CREATE TABLE t1 (
+	c1 int NOT NULL,
+	c2 int NOT NULL,
+	c3 text,
+	c4 timestamptz,
+	c5 timestamp,
+	c6 varchar(10),
+	c7 char(10),
+	c8 user_enum,
+	CONSTRAINT t1_pkey PRIMARY KEY (c1)
+);
+CREATE TABLE t2 (
+	c1 int NOT NULL,
+	c2 text,
+	CONSTRAINT t2_pkey PRIMARY KEY (c1)
+) DISTRIBUTED BY (c1);
+INSERT INTO t1
+	SELECT id,
+	       id % 10,
+	       to_char(id, 'FM00000'),
+	       '1970-01-01'::timestamptz + ((id % 100) || ' days')::interval,
+	       '1970-01-01'::timestamp + ((id % 100) || ' days')::interval,
+	       id % 10,
+	       id % 10,
+	       'foo'::user_enum
+	FROM generate_series(1, 1000) id;
+INSERT INTO t2
+	SELECT id,
+	       'AAA' || to_char(id, 'FM000')
+	FROM generate_series(1, 100) id;
+ANALYZE t1;
+ANALYZE t2;
+-- ===================================================================
+-- create foreign tables
+-- ===================================================================
+CREATE FOREIGN TABLE ft1 (
+	c0 int,
+	c1 int NOT NULL,
+	c2 int NOT NULL,
+	c3 text,
+	c4 timestamptz,
+	c5 timestamp,
+	c6 varchar(10),
+	c7 char(10) default 'ft1',
+	c8 user_enum
+) SERVER loopback OPTIONS(schema_name 'public', table_name 't1');
+ALTER FOREIGN TABLE ft1 DROP COLUMN c0;
+CREATE FOREIGN TABLE ft2 (
+	c1 int NOT NULL,
+	c2 int NOT NULL,
+	cx int,
+	c3 text,
+	c4 timestamptz,
+	c5 timestamp,
+	c6 varchar(10),
+	c7 char(10) default 'ft2',
+	c8 user_enum
+) SERVER loopback OPTIONS(schema_name 'public', table_name 't1');
+ALTER FOREIGN TABLE ft2 DROP COLUMN cx;
+ALTER FOREIGN TABLE ft2 OPTIONS (schema_name 'public', table_name 't1');
+ERROR:  option "schema_name" provided more than once
+CREATE FOREIGN TABLE _ft2 (
+	c1 int NOT NULL,
+	c2 text
+) SERVER loopback OPTIONS(schema_name 'public', table_name 't2');
+-- ===================================================================
+-- directly dispatch
+-- ===================================================================
+SELECT * FROM _ft2 WHERE c1 = 10;
+ c1 |   c2   
+----+--------
+ 10 | AAA010
+(1 row)
+
+SELECT c3, c4 FROM ft1 ORDER BY c3, c1 LIMIT 1;
+  c3   |              c4              
+-------+------------------------------
+ 00001 | Fri Jan 02 00:00:00 1970 PST
+(1 row)
+
+ALTER SERVER loopback OPTIONS (SET dbname 'no such database');
+SELECT c3, c4 FROM ft1 ORDER BY c3, c1 LIMIT 1;  -- should fail
+ERROR:  could not connect to server "loopback"
+DETAIL:  connection to server on socket "/tmp/.s.PGSQL.7000" failed: FATAL:  database "no such database" does not exist
+ALTER SERVER loopback OPTIONS (SET dbname :'cur_db');
+SELECT c3, c4 FROM ft1 ORDER BY c3, c1 LIMIT 1;  -- should work
+  c3   |              c4              
+-------+------------------------------
+ 00001 | Fri Jan 02 00:00:00 1970 PST
+(1 row)
+
+-- ===================================================================
+-- simple queries
+-- ===================================================================
+-- single table, with/without alias
+EXPLAIN (COSTS false) SELECT * FROM ft1 ORDER BY c3, c1 OFFSET 100 LIMIT 10;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: c3, c1
+         ->  Limit
+               ->  Foreign Scan on ft1
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+SELECT * FROM ft1 ORDER BY c3, c1 OFFSET 100 LIMIT 10;
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 101 |  1 | 00101 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+ 102 |  2 | 00102 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+ 103 |  3 | 00103 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+ 104 |  4 | 00104 | Mon Jan 05 00:00:00 1970 PST | Mon Jan 05 00:00:00 1970 | 4  | 4          | foo
+ 105 |  5 | 00105 | Tue Jan 06 00:00:00 1970 PST | Tue Jan 06 00:00:00 1970 | 5  | 5          | foo
+ 106 |  6 | 00106 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 107 |  7 | 00107 | Thu Jan 08 00:00:00 1970 PST | Thu Jan 08 00:00:00 1970 | 7  | 7          | foo
+ 108 |  8 | 00108 | Fri Jan 09 00:00:00 1970 PST | Fri Jan 09 00:00:00 1970 | 8  | 8          | foo
+ 109 |  9 | 00109 | Sat Jan 10 00:00:00 1970 PST | Sat Jan 10 00:00:00 1970 | 9  | 9          | foo
+ 110 |  0 | 00110 | Sun Jan 11 00:00:00 1970 PST | Sun Jan 11 00:00:00 1970 | 0  | 0          | foo
+(10 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 ORDER BY t1.c3, t1.c1 OFFSET 100 LIMIT 10;
+                                         QUERY PLAN                                         
+------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Merge Key: c3, c1
+         ->  Limit
+               Output: c1, c2, c3, c4, c5, c6, c7, c8
+               ->  Foreign Scan on public.ft1 t1
+                     Output: c1, c2, c3, c4, c5, c6, c7, c8
+                     Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 ORDER BY c3 ASC NULLS LAST, c1 ASC NULLS LAST
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+SELECT * FROM ft1 t1 ORDER BY t1.c3, t1.c1 OFFSET 100 LIMIT 10;
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 101 |  1 | 00101 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+ 102 |  2 | 00102 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+ 103 |  3 | 00103 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+ 104 |  4 | 00104 | Mon Jan 05 00:00:00 1970 PST | Mon Jan 05 00:00:00 1970 | 4  | 4          | foo
+ 105 |  5 | 00105 | Tue Jan 06 00:00:00 1970 PST | Tue Jan 06 00:00:00 1970 | 5  | 5          | foo
+ 106 |  6 | 00106 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 107 |  7 | 00107 | Thu Jan 08 00:00:00 1970 PST | Thu Jan 08 00:00:00 1970 | 7  | 7          | foo
+ 108 |  8 | 00108 | Fri Jan 09 00:00:00 1970 PST | Fri Jan 09 00:00:00 1970 | 8  | 8          | foo
+ 109 |  9 | 00109 | Sat Jan 10 00:00:00 1970 PST | Sat Jan 10 00:00:00 1970 | 9  | 9          | foo
+ 110 |  0 | 00110 | Sun Jan 11 00:00:00 1970 PST | Sun Jan 11 00:00:00 1970 | 0  | 0          | foo
+(10 rows)
+
+-- whole-row reference
+EXPLAIN (VERBOSE, COSTS false) SELECT t1 FROM ft1 t1 ORDER BY t1.c3, t1.c1 OFFSET 100 LIMIT 10;
+                                         QUERY PLAN                                         
+------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   Output: t1.*, c3, c1
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: t1.*, c3, c1
+         Merge Key: c3, c1
+         ->  Limit
+               Output: t1.*, c3, c1
+               ->  Foreign Scan on public.ft1 t1
+                     Output: t1.*, c3, c1
+                     Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 ORDER BY c3 ASC NULLS LAST, c1 ASC NULLS LAST
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+SELECT t1 FROM ft1 t1 ORDER BY t1.c3, t1.c1 OFFSET 100 LIMIT 10;
+                                             t1                                             
+--------------------------------------------------------------------------------------------
+ (101,1,00101,"Fri Jan 02 00:00:00 1970 PST","Fri Jan 02 00:00:00 1970",1,"1         ",foo)
+ (102,2,00102,"Sat Jan 03 00:00:00 1970 PST","Sat Jan 03 00:00:00 1970",2,"2         ",foo)
+ (103,3,00103,"Sun Jan 04 00:00:00 1970 PST","Sun Jan 04 00:00:00 1970",3,"3         ",foo)
+ (104,4,00104,"Mon Jan 05 00:00:00 1970 PST","Mon Jan 05 00:00:00 1970",4,"4         ",foo)
+ (105,5,00105,"Tue Jan 06 00:00:00 1970 PST","Tue Jan 06 00:00:00 1970",5,"5         ",foo)
+ (106,6,00106,"Wed Jan 07 00:00:00 1970 PST","Wed Jan 07 00:00:00 1970",6,"6         ",foo)
+ (107,7,00107,"Thu Jan 08 00:00:00 1970 PST","Thu Jan 08 00:00:00 1970",7,"7         ",foo)
+ (108,8,00108,"Fri Jan 09 00:00:00 1970 PST","Fri Jan 09 00:00:00 1970",8,"8         ",foo)
+ (109,9,00109,"Sat Jan 10 00:00:00 1970 PST","Sat Jan 10 00:00:00 1970",9,"9         ",foo)
+ (110,0,00110,"Sun Jan 11 00:00:00 1970 PST","Sun Jan 11 00:00:00 1970",0,"0         ",foo)
+(10 rows)
+
+-- empty result
+SELECT * FROM ft1 WHERE false;
+ c1 | c2 | c3 | c4 | c5 | c6 | c7 | c8 
+----+----+----+----+----+----+----+----
+(0 rows)
+
+-- with WHERE clause
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 = 101 AND t1.c6 = '1' AND t1.c7 >= '1';
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c7 >= '1'::bpchar)) AND ((c1 = 101)) AND ((c6 = '1'::text))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+SELECT * FROM ft1 t1 WHERE t1.c1 = 101 AND t1.c6 = '1' AND t1.c7 >= '1';
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 101 |  1 | 00101 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+(1 row)
+
+-- with FOR UPDATE/SHARE
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 = 101 FOR UPDATE;
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8, t1.*
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8, t1.*
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 101)) FOR UPDATE
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+SELECT * FROM ft1 t1 WHERE c1 = 101 FOR UPDATE;
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 101 |  1 | 00101 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+(1 row)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 = 102 FOR SHARE;
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8, t1.*
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8, t1.*
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 102)) FOR SHARE
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+SELECT * FROM ft1 t1 WHERE c1 = 102 FOR SHARE;
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 102 |  2 | 00102 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+(1 row)
+
+-- aggregate
+SELECT COUNT(*) FROM ft1 t1;
+ count 
+-------
+  1000
+(1 row)
+
+-- join two tables
+SELECT t1.c1 FROM ft1 t1 JOIN ft2 t2 ON (t1.c1 = t2.c1) ORDER BY t1.c3, t1.c1 OFFSET 100 LIMIT 10;
+ c1  
+-----
+ 101
+ 102
+ 103
+ 104
+ 105
+ 106
+ 107
+ 108
+ 109
+ 110
+(10 rows)
+
+-- subquery
+SELECT * FROM ft1 t1 WHERE t1.c3 IN (SELECT c3 FROM ft2 t2 WHERE c1 <= 10) ORDER BY c1;
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+  2 |  2 | 00002 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+  3 |  3 | 00003 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+  4 |  4 | 00004 | Mon Jan 05 00:00:00 1970 PST | Mon Jan 05 00:00:00 1970 | 4  | 4          | foo
+  5 |  5 | 00005 | Tue Jan 06 00:00:00 1970 PST | Tue Jan 06 00:00:00 1970 | 5  | 5          | foo
+  6 |  6 | 00006 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+  7 |  7 | 00007 | Thu Jan 08 00:00:00 1970 PST | Thu Jan 08 00:00:00 1970 | 7  | 7          | foo
+  8 |  8 | 00008 | Fri Jan 09 00:00:00 1970 PST | Fri Jan 09 00:00:00 1970 | 8  | 8          | foo
+  9 |  9 | 00009 | Sat Jan 10 00:00:00 1970 PST | Sat Jan 10 00:00:00 1970 | 9  | 9          | foo
+ 10 |  0 | 00010 | Sun Jan 11 00:00:00 1970 PST | Sun Jan 11 00:00:00 1970 | 0  | 0          | foo
+(10 rows)
+
+-- subquery+MAX
+SELECT * FROM ft1 t1 WHERE t1.c3 = (SELECT MAX(c3) FROM ft2 t2) ORDER BY c1;
+  c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+------+----+-------+------------------------------+--------------------------+----+------------+-----
+ 1000 |  0 | 01000 | Thu Jan 01 00:00:00 1970 PST | Thu Jan 01 00:00:00 1970 | 0  | 0          | foo
+(1 row)
+
+-- used in CTE
+WITH t1 AS (SELECT * FROM ft1 WHERE c1 <= 10) SELECT t2.c1, t2.c2, t2.c3, t2.c4 FROM t1, ft2 t2 WHERE t1.c1 = t2.c1 ORDER BY t1.c1;
+ c1 | c2 |  c3   |              c4              
+----+----+-------+------------------------------
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST
+  2 |  2 | 00002 | Sat Jan 03 00:00:00 1970 PST
+  3 |  3 | 00003 | Sun Jan 04 00:00:00 1970 PST
+  4 |  4 | 00004 | Mon Jan 05 00:00:00 1970 PST
+  5 |  5 | 00005 | Tue Jan 06 00:00:00 1970 PST
+  6 |  6 | 00006 | Wed Jan 07 00:00:00 1970 PST
+  7 |  7 | 00007 | Thu Jan 08 00:00:00 1970 PST
+  8 |  8 | 00008 | Fri Jan 09 00:00:00 1970 PST
+  9 |  9 | 00009 | Sat Jan 10 00:00:00 1970 PST
+ 10 |  0 | 00010 | Sun Jan 11 00:00:00 1970 PST
+(10 rows)
+
+-- fixed values
+SELECT 'fixed', NULL FROM ft1 t1 WHERE c1 = 1;
+ ?column? | ?column? 
+----------+----------
+ fixed    | 
+(1 row)
+
+-- user-defined operator/function
+CREATE FUNCTION cloudberry_fdw_abs(int) RETURNS int AS $$
+BEGIN
+RETURN abs($1);
+END
+$$ LANGUAGE plpgsql IMMUTABLE;
+CREATE OPERATOR === (
+    LEFTARG = int,
+    RIGHTARG = int,
+    PROCEDURE = int4eq,
+    COMMUTATOR = ===,
+    NEGATOR = !==
+);
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 = cloudberry_fdw_abs(t1.c2);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c1 = cloudberry_fdw_abs(t1.c2))
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 === t1.c2;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c1 === t1.c2)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 = abs(t1.c2);
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = abs(c2)))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 = t1.c2;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = c2))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+-- ===================================================================
+-- WHERE with remotely-executable conditions
+-- ===================================================================
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 = 1;         -- Var, OpExpr(b), Const
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE t1.c1 = 100 AND t1.c2 = 0; -- BoolExpr
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 100)) AND ((c2 = 0))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 IS NULL;        -- NullTest
+                QUERY PLAN                
+------------------------------------------
+ Result
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   One-Time Filter: false
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(5 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 IS NOT NULL;    -- NullTest
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 IS NOT NULL))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE round(abs(c1), 0) = 1; -- FuncExpr
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((round(abs(c1), 0) = 1::numeric))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 = -c1;          -- OpExpr(l)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = (- c1)))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE 1 = c1;           -- OpExpr(r)
+                                               QUERY PLAN                                               
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((1 = c1))
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE (c1 IS NOT NULL) IS DISTINCT FROM (c1 IS NOT NULL); -- DistinctExpr
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE (((c1 IS NOT NULL) IS DISTINCT FROM (c1 IS NOT NULL)))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 = ANY(ARRAY[c2, 1, c1 + 0]); -- ScalarArrayOpExpr
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = ANY (ARRAY[c2, 1, (c1 + 0)])))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c1 = (ARRAY[c1,c2,3])[1]; -- ArrayRef
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = ((ARRAY[c1, c2, 3])[1])))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c6 = E'foo''s\\bar';  -- check special chars
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c6 = E'foo''s\\bar'::text))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) SELECT * FROM ft1 t1 WHERE c8 = 'foo';  -- can't be sent to remote
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = 'foo'::user_enum)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+-- parameterized remote path
+EXPLAIN (VERBOSE, COSTS false)
+  SELECT * FROM ft2 a, ft2 b WHERE a.c1 = 47 AND b.c1 = a.c2;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
+   ->  Hash Join
+         Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
+         Hash Cond: (b.c1 = a.c2)
+         ->  Foreign Scan on public.ft2 b
+               Output: b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
+               Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1
+         ->  Hash
+               Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
+                     ->  Foreign Scan on public.ft2 a
+                           Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
+                           Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 47))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(17 rows)
+
+SELECT * FROM ft2 a, ft2 b WHERE a.c1 = 47 AND b.c1 = a.c2;
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  | c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----+----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 47 |  7 | 00047 | Tue Feb 17 00:00:00 1970 PST | Tue Feb 17 00:00:00 1970 | 7  | 7          | foo |  7 |  7 | 00007 | Thu Jan 08 00:00:00 1970 PST | Thu Jan 08 00:00:00 1970 | 7  | 7          | foo
+(1 row)
+
+EXPLAIN (VERBOSE, COSTS false)
+  SELECT * FROM ft2 a, ft2 b
+  WHERE a.c2 = 6 AND b.c1 = a.c1 AND a.c8 = 'foo' AND b.c7 = upper(a.c7);
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
+   ->  Hash Join
+         Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
+         Hash Cond: ((b.c1 = a.c1) AND ((b.c7)::text = upper((a.c7)::text)))
+         ->  Foreign Scan on public.ft2 b
+               Output: b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
+               Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1
+         ->  Hash
+               Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
+                     ->  Foreign Scan on public.ft2 a
+                           Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
+                           Filter: (a.c8 = 'foo'::user_enum)
+                           Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c2 = 6))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(18 rows)
+
+SELECT * FROM ft2 a, ft2 b
+WHERE a.c2 = 6 AND b.c1 = a.c1 AND a.c8 = 'foo' AND b.c7 = upper(a.c7);
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  | c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+  26 |  6 | 00026 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo |  26 |  6 | 00026 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+  36 |  6 | 00036 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo |  36 |  6 | 00036 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+  46 |  6 | 00046 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo |  46 |  6 | 00046 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+  56 |  6 | 00056 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo |  56 |  6 | 00056 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+  76 |  6 | 00076 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo |  76 |  6 | 00076 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+  86 |  6 | 00086 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo |  86 |  6 | 00086 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+  96 |  6 | 00096 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo |  96 |  6 | 00096 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 106 |  6 | 00106 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 106 |  6 | 00106 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 116 |  6 | 00116 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 116 |  6 | 00116 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 136 |  6 | 00136 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 136 |  6 | 00136 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 166 |  6 | 00166 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 166 |  6 | 00166 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 186 |  6 | 00186 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 186 |  6 | 00186 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 196 |  6 | 00196 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 196 |  6 | 00196 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 206 |  6 | 00206 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 206 |  6 | 00206 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 216 |  6 | 00216 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 216 |  6 | 00216 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 226 |  6 | 00226 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 226 |  6 | 00226 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 276 |  6 | 00276 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 276 |  6 | 00276 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 306 |  6 | 00306 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 306 |  6 | 00306 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 316 |  6 | 00316 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 316 |  6 | 00316 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 336 |  6 | 00336 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 336 |  6 | 00336 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 376 |  6 | 00376 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 376 |  6 | 00376 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 386 |  6 | 00386 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 386 |  6 | 00386 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 396 |  6 | 00396 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 396 |  6 | 00396 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 496 |  6 | 00496 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 496 |  6 | 00496 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 536 |  6 | 00536 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 536 |  6 | 00536 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 546 |  6 | 00546 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 546 |  6 | 00546 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 566 |  6 | 00566 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 566 |  6 | 00566 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 596 |  6 | 00596 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 596 |  6 | 00596 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 606 |  6 | 00606 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 606 |  6 | 00606 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 636 |  6 | 00636 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 636 |  6 | 00636 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 646 |  6 | 00646 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 646 |  6 | 00646 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 676 |  6 | 00676 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 676 |  6 | 00676 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 686 |  6 | 00686 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 686 |  6 | 00686 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 706 |  6 | 00706 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 706 |  6 | 00706 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 716 |  6 | 00716 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 716 |  6 | 00716 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 736 |  6 | 00736 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 736 |  6 | 00736 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 766 |  6 | 00766 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 766 |  6 | 00766 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 776 |  6 | 00776 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 776 |  6 | 00776 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 786 |  6 | 00786 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 786 |  6 | 00786 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 796 |  6 | 00796 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 796 |  6 | 00796 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 816 |  6 | 00816 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 816 |  6 | 00816 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 836 |  6 | 00836 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 836 |  6 | 00836 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 846 |  6 | 00846 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 846 |  6 | 00846 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 856 |  6 | 00856 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 856 |  6 | 00856 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 866 |  6 | 00866 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 866 |  6 | 00866 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 886 |  6 | 00886 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 886 |  6 | 00886 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 906 |  6 | 00906 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 906 |  6 | 00906 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 916 |  6 | 00916 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 916 |  6 | 00916 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 946 |  6 | 00946 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 946 |  6 | 00946 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 966 |  6 | 00966 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 966 |  6 | 00966 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 996 |  6 | 00996 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 996 |  6 | 00996 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+   6 |  6 | 00006 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo |   6 |  6 | 00006 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+  16 |  6 | 00016 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo |  16 |  6 | 00016 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+  66 |  6 | 00066 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo |  66 |  6 | 00066 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 126 |  6 | 00126 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 126 |  6 | 00126 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 146 |  6 | 00146 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 146 |  6 | 00146 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 156 |  6 | 00156 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 156 |  6 | 00156 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 176 |  6 | 00176 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 176 |  6 | 00176 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 236 |  6 | 00236 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 236 |  6 | 00236 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 246 |  6 | 00246 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 246 |  6 | 00246 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 256 |  6 | 00256 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 256 |  6 | 00256 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 266 |  6 | 00266 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 266 |  6 | 00266 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 286 |  6 | 00286 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 286 |  6 | 00286 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 296 |  6 | 00296 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 296 |  6 | 00296 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 326 |  6 | 00326 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 326 |  6 | 00326 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 346 |  6 | 00346 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 346 |  6 | 00346 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 356 |  6 | 00356 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 356 |  6 | 00356 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 366 |  6 | 00366 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 366 |  6 | 00366 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 406 |  6 | 00406 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 406 |  6 | 00406 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 416 |  6 | 00416 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 416 |  6 | 00416 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 426 |  6 | 00426 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 426 |  6 | 00426 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 436 |  6 | 00436 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 436 |  6 | 00436 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 446 |  6 | 00446 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 446 |  6 | 00446 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 456 |  6 | 00456 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 456 |  6 | 00456 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 466 |  6 | 00466 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 466 |  6 | 00466 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 476 |  6 | 00476 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 476 |  6 | 00476 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 486 |  6 | 00486 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 486 |  6 | 00486 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 506 |  6 | 00506 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 506 |  6 | 00506 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 516 |  6 | 00516 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 516 |  6 | 00516 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 526 |  6 | 00526 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 526 |  6 | 00526 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 556 |  6 | 00556 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 556 |  6 | 00556 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 576 |  6 | 00576 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 576 |  6 | 00576 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 586 |  6 | 00586 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 586 |  6 | 00586 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+ 616 |  6 | 00616 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo | 616 |  6 | 00616 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+ 626 |  6 | 00626 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 626 |  6 | 00626 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 656 |  6 | 00656 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 656 |  6 | 00656 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 666 |  6 | 00666 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo | 666 |  6 | 00666 | Sun Mar 08 00:00:00 1970 PST | Sun Mar 08 00:00:00 1970 | 6  | 6          | foo
+ 696 |  6 | 00696 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 696 |  6 | 00696 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 726 |  6 | 00726 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 726 |  6 | 00726 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 746 |  6 | 00746 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo | 746 |  6 | 00746 | Mon Feb 16 00:00:00 1970 PST | Mon Feb 16 00:00:00 1970 | 6  | 6          | foo
+ 756 |  6 | 00756 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 756 |  6 | 00756 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 806 |  6 | 00806 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo | 806 |  6 | 00806 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 826 |  6 | 00826 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 826 |  6 | 00826 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 876 |  6 | 00876 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 876 |  6 | 00876 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 896 |  6 | 00896 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo | 896 |  6 | 00896 | Tue Apr 07 00:00:00 1970 PST | Tue Apr 07 00:00:00 1970 | 6  | 6          | foo
+ 926 |  6 | 00926 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo | 926 |  6 | 00926 | Tue Jan 27 00:00:00 1970 PST | Tue Jan 27 00:00:00 1970 | 6  | 6          | foo
+ 936 |  6 | 00936 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo | 936 |  6 | 00936 | Fri Feb 06 00:00:00 1970 PST | Fri Feb 06 00:00:00 1970 | 6  | 6          | foo
+ 956 |  6 | 00956 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo | 956 |  6 | 00956 | Thu Feb 26 00:00:00 1970 PST | Thu Feb 26 00:00:00 1970 | 6  | 6          | foo
+ 976 |  6 | 00976 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo | 976 |  6 | 00976 | Wed Mar 18 00:00:00 1970 PST | Wed Mar 18 00:00:00 1970 | 6  | 6          | foo
+ 986 |  6 | 00986 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo | 986 |  6 | 00986 | Sat Mar 28 00:00:00 1970 PST | Sat Mar 28 00:00:00 1970 | 6  | 6          | foo
+(100 rows)
+
+-- bug before 9.3.5 due to sloppy handling of remote-estimate parameters
+SELECT * FROM ft1 WHERE c1 = ANY (ARRAY(SELECT c1 FROM ft2 WHERE c1 < 5));
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  2 |  2 | 00002 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+  3 |  3 | 00003 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+  4 |  4 | 00004 | Mon Jan 05 00:00:00 1970 PST | Mon Jan 05 00:00:00 1970 | 4  | 4          | foo
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+(4 rows)
+
+SELECT * FROM ft2 WHERE c1 = ANY (ARRAY(SELECT c1 FROM ft1 WHERE c1 < 5));
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+  2 |  2 | 00002 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+  3 |  3 | 00003 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+  4 |  4 | 00004 | Mon Jan 05 00:00:00 1970 PST | Mon Jan 05 00:00:00 1970 | 4  | 4          | foo
+(4 rows)
+
+-- simple join
+PREPARE st1(int, int) AS SELECT t1.c3, t2.c3 FROM ft1 t1, ft2 t2 WHERE t1.c1 = $1 AND t2.c1 = $2;
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st1(1, 2);
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.c3, t2.c3
+   ->  Nested Loop
+         Output: t1.c3, t2.c3
+         ->  Foreign Scan on public.ft1 t1
+               Output: t1.c3
+               Remote SQL: SELECT c3 FROM public.t1 WHERE ((c1 = 1))
+         ->  Materialize
+               Output: t2.c3
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     Output: t2.c3
+                     ->  Foreign Scan on public.ft2 t2
+                           Output: t2.c3
+                           Remote SQL: SELECT c3 FROM public.t1 WHERE ((c1 = 2))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(16 rows)
+
+EXECUTE st1(1, 1);
+  c3   |  c3   
+-------+-------
+ 00001 | 00001
+(1 row)
+
+EXECUTE st1(101, 101);
+  c3   |  c3   
+-------+-------
+ 00101 | 00101
+(1 row)
+
+-- subquery using stable function (can't be sent to remote)
+PREPARE st2(int) AS SELECT * FROM ft1 t1 WHERE t1.c1 < $2 AND t1.c3 IN (SELECT c3 FROM ft2 t2 WHERE c1 > $1 AND date(c4) = '1970-01-17'::date) ORDER BY c1;
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st2(10, 20);
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+   Merge Key: t1.c1
+   ->  Sort
+         Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+         Sort Key: t1.c1
+         ->  Hash Join
+               Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+               Inner Unique: true
+               Hash Cond: (t1.c3 = t2.c3)
+               ->  Foreign Scan on public.ft1 t1
+                     Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+                     Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 < 20))
+               ->  Hash
+                     Output: t2.c3
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           Output: t2.c3
+                           ->  HashAggregate
+                                 Output: t2.c3
+                                 Group Key: t2.c3
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Output: t2.c3
+                                       Hash Key: t2.c3
+                                       ->  Foreign Scan on public.ft2 t2
+                                             Output: t2.c3
+                                             Filter: (date(t2.c4) = '01-17-1970'::date)
+                                             Remote SQL: SELECT c3, c4 FROM public.t1 WHERE ((c1 > 10))
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(29 rows)
+
+EXECUTE st2(10, 20);
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 16 |  6 | 00016 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+(1 row)
+
+EXECUTE st2(101, 121);
+ c1  | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+-----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 116 |  6 | 00116 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+(1 row)
+
+-- subquery using immutable function (can be sent to remote)
+PREPARE st3(int) AS SELECT * FROM ft1 t1 WHERE t1.c1 < $2 AND t1.c3 IN (SELECT c3 FROM ft2 t2 WHERE c1 > $1 AND date(c5) = '1970-01-17'::date) ORDER BY c1;
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st3(10, 20);
+                                                                QUERY PLAN                                                                
+------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+   Merge Key: t1.c1
+   ->  Sort
+         Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+         Sort Key: t1.c1
+         ->  Hash Join
+               Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+               Inner Unique: true
+               Hash Cond: (t1.c3 = t2.c3)
+               ->  Foreign Scan on public.ft1 t1
+                     Output: t1.c1, t1.c2, t1.c3, t1.c4, t1.c5, t1.c6, t1.c7, t1.c8
+                     Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 < 20))
+               ->  Hash
+                     Output: t2.c3
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           Output: t2.c3
+                           ->  HashAggregate
+                                 Output: t2.c3
+                                 Group Key: t2.c3
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Output: t2.c3
+                                       Hash Key: t2.c3
+                                       ->  Foreign Scan on public.ft2 t2
+                                             Output: t2.c3
+                                             Remote SQL: SELECT c3 FROM public.t1 WHERE ((c1 > 10)) AND ((date(c5) = '1970-01-17'::date))
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+EXECUTE st3(10, 20);
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+ 16 |  6 | 00016 | Sat Jan 17 00:00:00 1970 PST | Sat Jan 17 00:00:00 1970 | 6  | 6          | foo
+(1 row)
+
+EXECUTE st3(20, 30);
+ c1 | c2 | c3 | c4 | c5 | c6 | c7 | c8 
+----+----+----+----+----+----+----+----
+(0 rows)
+
+-- custom plan should be chosen initially
+PREPARE st4(int) AS SELECT * FROM ft1 t1 WHERE t1.c1 = $1;
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st4(1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st4(1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st4(1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st4(1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st4(1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+-- once we try it enough times, should switch to generic plan
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st4(1);
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = $1::integer))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+-- value of $1 should not be sent to remote
+PREPARE st5(user_enum,int) AS SELECT * FROM ft1 t1 WHERE c8 = $1 and c1 = $2;
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st5('foo', 1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = 'foo'::user_enum)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st5('foo', 1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = 'foo'::user_enum)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st5('foo', 1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = 'foo'::user_enum)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st5('foo', 1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = 'foo'::user_enum)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st5('foo', 1);
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = 'foo'::user_enum)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = 1))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXPLAIN (VERBOSE, COSTS false) EXECUTE st5('foo', 1);
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Filter: (t1.c8 = $1)
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((c1 = $1::integer))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(8 rows)
+
+EXECUTE st5('foo', 1);
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+(1 row)
+
+-- cleanup
+DEALLOCATE st1;
+DEALLOCATE st2;
+DEALLOCATE st3;
+DEALLOCATE st4;
+DEALLOCATE st5;
+-- System columns, except ctid, should not be sent to remote
+EXPLAIN (VERBOSE, COSTS false)
+SELECT * FROM ft1 t1 WHERE t1.tableoid = 'pg_class'::regclass LIMIT 1 WHERE c2 = 1;
+ERROR:  syntax error at or near "WHERE"
+LINE 2: ... WHERE t1.tableoid = 'pg_class'::regclass LIMIT 1 WHERE c2 =...
+                                                             ^
+SELECT * FROM ft1 t1 WHERE t1.tableoid = 'ft1'::regclass LIMIT 1  WHERE c2 = 1;
+ERROR:  syntax error at or near "WHERE"
+LINE 1: ...1 t1 WHERE t1.tableoid = 'ft1'::regclass LIMIT 1  WHERE c2 =...
+                                                             ^
+EXPLAIN (VERBOSE, COSTS false)
+SELECT tableoid::regclass, * FROM ft1 t1 LIMIT 1 WHERE c2 = 1;
+ERROR:  syntax error at or near "WHERE"
+LINE 2: SELECT tableoid::regclass, * FROM ft1 t1 LIMIT 1 WHERE c2 = ...
+                                                         ^
+SELECT tableoid::regclass, * FROM ft1 t1 LIMIT 1 WHERE c2 = 1;
+ERROR:  syntax error at or near "WHERE"
+LINE 1: SELECT tableoid::regclass, * FROM ft1 t1 LIMIT 1 WHERE c2 = ...
+                                                         ^
+EXPLAIN (VERBOSE, COSTS false)
+SELECT * FROM ft1 t1 WHERE t1.ctid = '(0,2)';
+NOTICE:  SELECT uses system-defined column "t1.ctid" without the necessary companion column "t1.gp_segment_id"
+HINT:  To uniquely identify a row within a distributed table, use the "gp_segment_id" column together with the "ctid" column.
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c1, c2, c3, c4, c5, c6, c7, c8
+   ->  Foreign Scan on public.ft1 t1
+         Output: c1, c2, c3, c4, c5, c6, c7, c8
+         Remote SQL: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE ((ctid = '(0,2)'::tid))
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(7 rows)
+
+SELECT * FROM ft1 t1 WHERE t1.ctid = '(0,2)';
+NOTICE:  SELECT uses system-defined column "t1.ctid" without the necessary companion column "t1.gp_segment_id"
+HINT:  To uniquely identify a row within a distributed table, use the "gp_segment_id" column together with the "ctid" column.
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  6 |  6 | 00006 | Wed Jan 07 00:00:00 1970 PST | Wed Jan 07 00:00:00 1970 | 6  | 6          | foo
+ 12 |  2 | 00012 | Tue Jan 13 00:00:00 1970 PST | Tue Jan 13 00:00:00 1970 | 2  | 2          | foo
+  3 |  3 | 00003 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+(3 rows)
+
+EXPLAIN (VERBOSE, COSTS false)
+SELECT ctid, * FROM ft1 t1 LIMIT 1 WHERE c2 = 1;
+ERROR:  syntax error at or near "WHERE"
+LINE 2: SELECT ctid, * FROM ft1 t1 LIMIT 1 WHERE c2 = 1;
+                                           ^
+SELECT ctid, * FROM ft1 t1 LIMIT 1 WHERE c2 = 1;
+ERROR:  syntax error at or near "WHERE"
+LINE 1: SELECT ctid, * FROM ft1 t1 LIMIT 1 WHERE c2 = 1;
+                                           ^
+-- ===================================================================
+-- used in pl/pgsql function
+-- ===================================================================
+CREATE OR REPLACE FUNCTION f_test(p_c1 int) RETURNS int AS $$
+DECLARE
+	v_c1 int;
+BEGIN
+    SELECT c1 INTO v_c1 FROM ft1 WHERE c1 = p_c1 LIMIT 1;
+    PERFORM c1 FROM ft1 WHERE c1 = p_c1 AND p_c1 = v_c1 LIMIT 1;
+    RETURN v_c1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT f_test(100);
+ f_test 
+--------
+    100
+(1 row)
+
+DROP FUNCTION f_test(int);
+-- ===================================================================
+-- conversion error
+-- ===================================================================
+ALTER FOREIGN TABLE ft1 ALTER COLUMN c8 TYPE int;
+SELECT * FROM ft1 WHERE c1 = 1;  -- ERROR
+ERROR:  invalid input syntax for type integer: "foo"
+CONTEXT:  column "c8" of foreign table "ft1"
+ALTER FOREIGN TABLE ft1 ALTER COLUMN c8 TYPE user_enum;
+-- ===================================================================
+-- subtransaction
+--  + local/remote error doesn't break cursor
+-- ===================================================================
+BEGIN;
+DECLARE c CURSOR FOR SELECT * FROM ft1 ORDER BY c1;
+FETCH c;
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+(1 row)
+
+SAVEPOINT s;
+ERROR OUT;          -- ERROR
+ERROR:  syntax error at or near "ERROR"
+LINE 1: ERROR OUT;
+        ^
+ROLLBACK TO s;
+FETCH c;
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  2 |  2 | 00002 | Sat Jan 03 00:00:00 1970 PST | Sat Jan 03 00:00:00 1970 | 2  | 2          | foo
+(1 row)
+
+SAVEPOINT s;
+SELECT * FROM ft1 WHERE 1 / (c1 - 1) > 0;
+ERROR:  division by zero
+CONTEXT:  Remote SQL command: SELECT c1, c2, c3, c4, c5, c6, c7, c8 FROM public.t1 WHERE (((1 / (c1 - 1)) > 0))
+ROLLBACK TO s;
+FETCH c;
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  3 |  3 | 00003 | Sun Jan 04 00:00:00 1970 PST | Sun Jan 04 00:00:00 1970 | 3  | 3          | foo
+(1 row)
+
+SELECT * FROM ft1 ORDER BY c1 LIMIT 1;
+ c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
+----+----+-------+------------------------------+--------------------------+----+------------+-----
+  1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
+(1 row)
+
+COMMIT;
+-- ===================================================================
+-- test writable foreign table stuff
+-- ===================================================================
+INSERT INTO ft2 (c1,c2,c3)
+  VALUES (1101,201,'aaa'), (1102,202,'bbb'), (1103,203,'ccc') RETURNING *;
+  c1  | c2  | c3  | c4 | c5 | c6 |     c7     | c8 
+------+-----+-----+----+----+----+------------+----
+ 1101 | 201 | aaa |    |    |    | ft2        | 
+ 1102 | 202 | bbb |    |    |    | ft2        | 
+ 1103 | 203 | ccc |    |    |    | ft2        | 
+(3 rows)
+
+UPDATE ft2 SET c2 = c2 + 300, c3 = c3 || '_update3' WHERE c1 % 10 = 3;
+ERROR:  foreign table "ft2" does not allow updates
+DELETE FROM ft2 WHERE c1 = 9999 RETURNING tableoid::regclass;
+ERROR:  foreign table "ft2" does not allow deletes
+-- ===================================================================
+-- test serial columns (ie, sequence-based defaults)
+-- ===================================================================
+create table loc1 (f1 serial, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create foreign table rem1 (f1 serial, f2 text)
+  server loopback options(table_name 'loc1');
+select pg_catalog.setval('rem1_f1_seq', 10, false);
+ setval 
+--------
+     10
+(1 row)
+
+insert into loc1(f2) values('hi');
+insert into rem1(f2) values('hi remote');
+insert into loc1(f2) values('bye');
+insert into rem1(f2) values('bye remote');
+select * from loc1;
+ f1 |     f2     
+----+------------
+  2 | bye
+  1 | hi
+ 10 | hi remote
+ 11 | bye remote
+(4 rows)
+
+select * from rem1;
+ f1 |     f2     
+----+------------
+ 10 | hi remote
+ 11 | bye remote
+  2 | bye
+  1 | hi
+(4 rows)
+
+-- ===================================================================
+-- test analyze foreign table
+-- ===================================================================
+ANALYZE ft1;
+ANALYZE ft2;
