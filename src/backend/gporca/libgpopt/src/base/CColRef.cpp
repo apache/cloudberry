@@ -107,9 +107,23 @@ IOstream &
 CColRef::OsPrint(IOstream &os) const
 {
 	m_pname->OsPrint(os);
-	os << " (" << Id() << ")";
+	os << " (" << Id() << "," << UsedStatusToString(m_used) << ")";
 
 	return os;
+}
+
+const char* 
+CColRef::UsedStatusToString(CColRef::EUsedStatus status) const {
+	switch (status) {
+		case EUsed: return "Used";
+		case EUnused: return "Unused";
+		case EUnknown: return "Unknown";
+		case ESentinel: return "Invalid";
+		default: 
+			return "Invalid";
+	}
+
+	return "Invalid";
 }
 
 //---------------------------------------------------------------------------

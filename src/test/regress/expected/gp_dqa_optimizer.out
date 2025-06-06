@@ -3269,8 +3269,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 set optimizer_enable_multiple_distinct_aggs=on;
 explain (verbose on, costs off) select count(distinct a), count(distinct b) from dqa_f4 group by c;
-                                                                                                                                   QUERY PLAN                                                                                                                                    
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                 QUERY PLAN                                                                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: (count(DISTINCT share0_ref3.a)), (count(DISTINCT share0_ref2.b))
    ->  Sequence
@@ -3294,7 +3294,7 @@ explain (verbose on, costs off) select count(distinct a), count(distinct b) from
                                  ->  Result
                                        Output: share0_ref3.a, share0_ref3.c
                                        ->  Shared Scan (share slice:id 2:0)
-                                             Output: share0_ref3.a, share0_ref3.b, share0_ref3.c, share0_ref3.ctid, share0_ref3.xmin, share0_ref3.cmin, share0_ref3.xmax, share0_ref3.cmax, share0_ref3.tableoid, share0_ref3.gp_segment_id, share0_ref3.gp_foreign_server
+                                             Output: share0_ref3.a, share0_ref3.b, share0_ref3.c
                ->  Hash
                      Output: (count(DISTINCT share0_ref2.b)), share0_ref2.c
                      ->  GroupAggregate
@@ -3309,9 +3309,9 @@ explain (verbose on, costs off) select count(distinct a), count(distinct b) from
                                        ->  Result
                                              Output: share0_ref2.b, share0_ref2.c
                                              ->  Shared Scan (share slice:id 3:0)
-                                                   Output: share0_ref2.a, share0_ref2.b, share0_ref2.c, share0_ref2.ctid, share0_ref2.xmin, share0_ref2.cmin, share0_ref2.xmax, share0_ref2.cmax, share0_ref2.tableoid, share0_ref2.gp_segment_id, share0_ref2.gp_foreign_server
+                                                   Output: share0_ref2.a, share0_ref2.b, share0_ref2.c
  Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'on'
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (41 rows)
 
 select count(distinct a), count(distinct b) from dqa_f4 group by c;
