@@ -970,7 +970,12 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 			if (OidIsValid(accessMethodId))
 				(void) table_reloptions_am(accessMethodId, reloptions, 'r', true);
 			else
-				(void) partitioned_table_reloptions(reloptions, true);
+			{
+				bool validate = !strcasecmp(default_table_access_method, DEFAULT_TABLE_ACCESS_METHOD) ||
+							  !strcasecmp(default_table_access_method, "AO_ROW") ||
+							  !strcasecmp(default_table_access_method, "AO_COLUMN");
+				(void) partitioned_table_reloptions(reloptions, validate);
+			}
 			break;
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
