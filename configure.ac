@@ -881,6 +881,22 @@ AS_IF([test "$enable_shared_postgres_backend" = yes ],
 ]) # fi
 
 #
+# --enable-link-postgres-with-shared enables linking postgres with shared library libpostgres.so
+#
+PGAC_ARG_BOOL(enable, link-postgres-with-shared, no, [build postgres using the shared library libpostgres.so ],
+              [AC_DEFINE([USE_LINK_POSTGRES_WITH_SHARED], 1,
+			             [Define to 1 to build postgres using the shared library libpostgres.so (--enable-link-postgres-with-shared)])])
+AC_MSG_RESULT([checking whether to build postgres using the shared library libpostgres.so... $enable_link_postgres_with_shared])
+AC_SUBST(enable_link_postgres_with_shared)
+
+# check if enable-shared-postgres-backend is yes if enable-link-postgres-with-shared is yes
+if test "$enable_link_postgres_with_shared" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    AC_MSG_ERROR([--enable-link-postgres-with-shared is yes, but --enable-shared-postgres-backend is no])
+  fi
+fi
+
+#
 # gpcloud, enabled by default
 #
 PGAC_ARG_BOOL(enable, gpcloud, no, [enable gpcloud support],
@@ -1748,6 +1764,13 @@ if test "$with_ldap" = yes ; then
 fi
 AC_SUBST(LDAP_LIBS_FE)
 AC_SUBST(LDAP_LIBS_BE)
+
+# for contrib/pax_storage
+if test "$enable_pax" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    AC_MSG_ERROR([pax support requires --enable-shared-postgres-backend])
+  fi
+fi
 
 # for contrib/sepgsql
 if test "$with_selinux" = yes; then
