@@ -1050,6 +1050,7 @@ code or new licensing patterns.
             <exclude>src/backend/postmaster/test/checkpointer_test.c</exclude>
             <exclude>src/backend/postmaster/README.auto-ANALYZE</exclude>
             <exclude>src/backend/mock.mk</exclude>
+            <exclude>src/backend/catalog/system_views_gp.in</exclude>
             <exclude>src/backend/catalog/storage_tablespace.c</exclude>
             <exclude>src/backend/catalog/test/storage_tablespace_test.c</exclude>
             <exclude>src/backend/catalog/sql_features.txt</exclude>
