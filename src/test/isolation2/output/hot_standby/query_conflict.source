@@ -269,11 +269,11 @@ ERROR:  canceling statement due to conflict with recovery  (seg1 slice3 127.0.1.
 DETAIL:  User was or might have been using tablespace that must be dropped.
 -1Sq: ... <quitting>
 
--- conflict has been recorded
--1S: select max(confl_tablespace) from gp_stat_database_conflicts where datname = 'isolation2-hot-standby';
- max 
------
- 1   
+-- conflict has been recorded. The query has multiple slices
+-1S: select max(confl_tablespace) >= 1 from gp_stat_database_conflicts where datname = 'isolation2-hot-standby';
+ ?column? 
+----------
+ t        
 (1 row)
 
 -- cleanup

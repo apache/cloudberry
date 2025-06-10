@@ -126,8 +126,8 @@ select gp_inject_fault('after_open_temp_file', 'reset',dbid) from gp_segment_con
 -1S<:
 -1Sq:
 
--- conflict has been recorded
--1S: select max(confl_tablespace) from gp_stat_database_conflicts where datname = 'isolation2-hot-standby';
+-- conflict has been recorded. The query has multiple slices
+-1S: select max(confl_tablespace) >= 1 from gp_stat_database_conflicts where datname = 'isolation2-hot-standby';
 
 -- cleanup
 !\retcode rm -rf @testtablespace@/hs_tablespace_directory;
