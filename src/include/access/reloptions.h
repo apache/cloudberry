@@ -317,4 +317,5 @@ extern List *build_ao_rel_storage_opts(List *opts, Relation rel);
 extern relopt_value *
 parseRelOptions(Datum options, bool validate, relopt_kind kind, int *numrelopts);
 
+
 #endif							/* RELOPTIONS_H */
