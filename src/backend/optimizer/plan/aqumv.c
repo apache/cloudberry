@@ -353,19 +353,6 @@ answer_query_using_materialized_views(PlannerInfo *root, AqumvContext aqumv_cont
 		subroot->tuple_fraction = root->tuple_fraction;
 		subroot->limit_tuples = root->limit_tuples;
 
-		/*
-		 * AQUMV_FIXME_MVP
-		 * Are stable functions OK?
-		 * A STABLE function cannot modify the database and is guaranteed to
-		 * return the same results given the same arguments for all rows
-		 * within a single statement.
-		 * But AQUMV rewrites the query to a new SQL actually, though the same
-		 * results is guaranteed.
-		 * Its's unclear whether STABLE is OK, let's be conservative for now.
-		 */
-		if(contain_mutable_functions((Node *)viewQuery))
-			continue;
-
 		context = aqumv_init_context(viewQuery->targetList, matviewRel->rd_att);
 
 		if (!parse->hasAggs && viewQuery->hasAggs)
