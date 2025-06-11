@@ -3375,6 +3375,477 @@ select * from t_insert;
 (1 row)
 
 abort;
+-- Test view has Group By
+begin;
+create table t0 as select i as a, i+1 as b , i+2 as c, i+3 as d from generate_series(1, 5) i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+insert into t0 select * from t0;
+analyze t0;
+create materialized view mv_group_0 as select c, b, sum(a), count(b) from t0 group by b, c;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b, c' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_group_1 as select c, b, count(b) from t0 where a > 3 group by c, b;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c, b' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_group_0;
+analyze mv_group_1;
+-- no qual, exactly match
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c, b, sum(a), count(b) from t0 group by b, c;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c, b, (sum(a)), (count(b))
+   ->  Finalize HashAggregate
+         Output: c, b, sum(a), count(b)
+         Group Key: t0.b, t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: c, b, (PARTIAL sum(a)), (PARTIAL count(b))
+               Hash Key: b, c
+               ->  Partial HashAggregate
+                     Output: c, b, PARTIAL sum(a), PARTIAL count(b)
+                     Group Key: t0.b, t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select c, b, sum(a), count(b) from t0 group by b, c;
+ c | b | sum  | count 
+---+---+------+-------
+ 6 | 5 | 2048 |   512
+ 3 | 2 |  512 |   512
+ 5 | 4 | 1536 |   512
+ 4 | 3 | 1024 |   512
+ 7 | 6 | 2560 |   512
+(5 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c, b, sum(a), count(b) from t0 group by b, c;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c, b, sum, count
+   ->  Seq Scan on aqumv.mv_group_0
+         Output: c, b, sum, count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select c, b, sum(a), count(b) from t0 group by b, c;
+ c | b | sum  | count 
+---+---+------+-------
+ 6 | 5 | 2048 |   512
+ 3 | 2 |  512 |   512
+ 5 | 4 | 1536 |   512
+ 4 | 3 | 1024 |   512
+ 7 | 6 | 2560 |   512
+(5 rows)
+
+-- no qual, different order
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select b, sum(a), c, count(b) from t0 group by c, b;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: b, (sum(a)), c, (count(b))
+   ->  Finalize HashAggregate
+         Output: b, sum(a), c, count(b)
+         Group Key: t0.c, t0.b
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: b, c, (PARTIAL sum(a)), (PARTIAL count(b))
+               Hash Key: c, b
+               ->  Partial HashAggregate
+                     Output: b, c, PARTIAL sum(a), PARTIAL count(b)
+                     Group Key: t0.c, t0.b
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select b, sum(a), c, count(b) from t0 group by c, b;
+ b | sum  | c | count 
+---+------+---+-------
+ 6 | 2560 | 7 |   512
+ 4 | 1536 | 5 |   512
+ 5 | 2048 | 6 |   512
+ 3 | 1024 | 4 |   512
+ 2 |  512 | 3 |   512
+(5 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select b, sum(a), c, count(b) from t0 group by c, b;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: b, sum, c, count
+   ->  Seq Scan on aqumv.mv_group_0
+         Output: b, sum, c, count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select b, sum(a), c, count(b) from t0 group by c, b;
+ b | sum  | c | count 
+---+------+---+-------
+ 5 | 2048 | 6 |   512
+ 2 |  512 | 3 |   512
+ 4 | 1536 | 5 |   512
+ 3 | 1024 | 4 |   512
+ 6 | 2560 | 7 |   512
+(5 rows)
+
+-- no qual, different expr
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select b + c + 1, sum(a) + count(b) from t0 group by c, b;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (((b + c) + 1)), ((sum(a) + count(b))), c, b
+   ->  Finalize HashAggregate
+         Output: ((b + c) + 1), (sum(a) + count(b)), c, b
+         Group Key: t0.c, t0.b
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: c, b, (PARTIAL sum(a)), (PARTIAL count(b))
+               Hash Key: c, b
+               ->  Partial HashAggregate
+                     Output: c, b, PARTIAL sum(a), PARTIAL count(b)
+                     Group Key: t0.c, t0.b
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select b + c + 1, sum(a) + count(b) from t0 group by c, b;
+ ?column? | ?column? 
+----------+----------
+        8 |     1536
+       14 |     3072
+       10 |     2048
+       12 |     2560
+        6 |     1024
+(5 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select b + c + 1, sum(a) + count(b) from t0 group by c, b;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (((b + c) + 1)), ((sum + count)), c, b
+   ->  Seq Scan on aqumv.mv_group_0
+         Output: ((b + c) + 1), (sum + count), c, b
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select b + c + 1, sum(a) + count(b) from t0 group by c, b;
+ ?column? | ?column? 
+----------+----------
+        8 |     1536
+       14 |     3072
+       12 |     2560
+        6 |     1024
+       10 |     2048
+(5 rows)
+
+-- no qual, should not match 
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c, count(b) from t0 group by c ;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c, (count(b))
+   ->  Finalize HashAggregate
+         Output: c, count(b)
+         Group Key: t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: c, (PARTIAL count(b))
+               Hash Key: c
+               ->  Partial HashAggregate
+                     Output: c, PARTIAL count(b)
+                     Group Key: t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select c, count(b) from t0 group by c ;
+ c | count 
+---+-------
+ 4 |   512
+ 3 |   512
+ 7 |   512
+ 5 |   512
+ 6 |   512
+(5 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c, count(b) from t0 group by c ;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c, (count(b))
+   ->  Finalize HashAggregate
+         Output: c, count(b)
+         Group Key: t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: c, (PARTIAL count(b))
+               Hash Key: c
+               ->  Partial HashAggregate
+                     Output: c, PARTIAL count(b)
+                     Group Key: t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select c, count(b) from t0 group by c ;
+ c | count 
+---+-------
+ 4 |   512
+ 3 |   512
+ 7 |   512
+ 5 |   512
+ 6 |   512
+(5 rows)
+
+-- with qual, exactly match
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c, b, count(b) from t0 where a > 3 group by c, b;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c, b, (count(b))
+   ->  Finalize HashAggregate
+         Output: c, b, count(b)
+         Group Key: t0.c, t0.b
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: c, b, (PARTIAL count(b))
+               Hash Key: c, b
+               ->  Partial HashAggregate
+                     Output: c, b, PARTIAL count(b)
+                     Group Key: t0.c, t0.b
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+                           Filter: (t0.a > 3)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select c, b, count(b) from t0 where a > 3 group by c, b;
+ c | b | count 
+---+---+-------
+ 7 | 6 |   512
+ 6 | 5 |   512
+(2 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c, b, count(b) from t0 where a > 3 group by c, b;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: c, b, count
+   ->  Seq Scan on aqumv.mv_group_1
+         Output: c, b, count
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select c, b, count(b) from t0 where a > 3 group by c, b;
+ c | b | count 
+---+---+-------
+ 7 | 6 |   512
+ 6 | 5 |   512
+(2 rows)
+
+-- with qual, different order
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select count(b), b, c from t0 where a > 3 group by b, c;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (count(b)), b, c
+   ->  Finalize HashAggregate
+         Output: count(b), b, c
+         Group Key: t0.b, t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: b, c, (PARTIAL count(b))
+               Hash Key: b, c
+               ->  Partial HashAggregate
+                     Output: b, c, PARTIAL count(b)
+                     Group Key: t0.b, t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+                           Filter: (t0.a > 3)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select count(b), b, c from t0 where a > 3 group by b, c;
+ count | b | c 
+-------+---+---
+   512 | 5 | 6
+   512 | 6 | 7
+(2 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select count(b), b, c from t0 where a > 3 group by b, c;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: count, b, c
+   ->  Seq Scan on aqumv.mv_group_1
+         Output: count, b, c
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select count(b), b, c from t0 where a > 3 group by b, c;
+ count | b | c 
+-------+---+---
+   512 | 6 | 7
+   512 | 5 | 6
+(2 rows)
+
+-- with qual, different expr
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select count(b) + 1, b + 1, c from t0 where a > 3 group by b, c;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((count(b) + 1)), ((b + 1)), c, b
+   ->  Finalize HashAggregate
+         Output: (count(b) + 1), (b + 1), c, b
+         Group Key: t0.b, t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: c, b, (PARTIAL count(b))
+               Hash Key: b, c
+               ->  Partial HashAggregate
+                     Output: c, b, PARTIAL count(b)
+                     Group Key: t0.b, t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+                           Filter: (t0.a > 3)
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select count(b) + 1, b + 1, c from t0 where a > 3 group by b, c;
+ ?column? | ?column? | c 
+----------+----------+---
+      513 |        6 | 6
+      513 |        7 | 7
+(2 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select count(b) + 1, b + 1, c from t0 where a > 3 group by b, c;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((count + 1)), ((b + 1)), c, b
+   ->  Seq Scan on aqumv.mv_group_1
+         Output: (count + 1), (b + 1), c, b
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select count(b) + 1, b + 1, c from t0 where a > 3 group by b, c;
+ ?column? | ?column? | c 
+----------+----------+---
+      513 |        7 | 7
+      513 |        6 | 6
+(2 rows)
+
+-- with qual, should not match
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select b, c, count(b) from t0 where a > 3 and b > 1 group by b, c;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: b, c, (count(b))
+   ->  Finalize HashAggregate
+         Output: b, c, count(b)
+         Group Key: t0.b, t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: b, c, (PARTIAL count(b))
+               Hash Key: b, c
+               ->  Partial HashAggregate
+                     Output: b, c, PARTIAL count(b)
+                     Group Key: t0.b, t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+                           Filter: ((t0.a > 3) AND (t0.b > 1))
+ Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select b, c, count(b) from t0 where a > 3 and b > 1 group by b, c;
+ b | c | count 
+---+---+-------
+ 5 | 6 |   512
+ 6 | 7 |   512
+(2 rows)
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select b, c, count(b) from t0 where a > 3 and b > 1 group by b, c;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: b, c, (count(b))
+   ->  Finalize HashAggregate
+         Output: b, c, count(b)
+         Group Key: t0.b, t0.c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: b, c, (PARTIAL count(b))
+               Hash Key: b, c
+               ->  Partial HashAggregate
+                     Output: b, c, PARTIAL count(b)
+                     Group Key: t0.b, t0.c
+                     ->  Seq Scan on aqumv.t0
+                           Output: a, b, c, d
+                           Filter: ((t0.a > 3) AND (t0.b > 1))
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select b, c, count(b) from t0 where a > 3 and b > 1 group by b, c;
+ b | c | count 
+---+---+-------
+ 5 | 6 |   512
+ 6 | 7 |   512
+(2 rows)
+
+abort;
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore
