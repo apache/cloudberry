@@ -24,6 +24,7 @@
 #include "gpopt/base/CUtils.h"
 #include "gpopt/exception.h"
 #include "gpopt/mdcache/CMDAccessor.h"
+#include "gpopt/operators/CDedupSupersetPreprocessor.h"
 #include "gpopt/operators/CExpressionFactorizer.h"
 #include "gpopt/operators/CExpressionUtils.h"
 #include "gpopt/operators/CJoinOrderHintsPreprocessor.h"
@@ -3325,11 +3326,17 @@ CExpressionPreprocessor::PexprPreprocess(
 	GPOS_CHECK_ABORT;
 	pexprSimplifiedLimit->Release();
 
-	// trim unnecessary existential subqueries
-	CExpression *pexprTrimmed =
-		PexprTrimExistentialSubqueries(mp, pexprSimplifiedDistinct);
+	// remove dedup superset scalar
+	CExpression *pexprRmDupSupersetScalar =
+		CDedupSupersetPreprocessor::PexprPreprocess(mp, pexprSimplifiedDistinct);
 	GPOS_CHECK_ABORT;
 	pexprSimplifiedDistinct->Release();
+
+	// trim unnecessary existential subqueries
+	CExpression *pexprTrimmed =
+		PexprTrimExistentialSubqueries(mp, pexprRmDupSupersetScalar);
+	GPOS_CHECK_ABORT;
+	pexprRmDupSupersetScalar->Release();
 
 	// collapse cascaded union / union all
 	CExpression *pexprNaryUnionUnionAll =
