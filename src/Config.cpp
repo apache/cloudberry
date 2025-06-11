@@ -6,7 +6,6 @@
 
 extern "C" {
 #include "postgres.h"
-#include "utils/builtins.h"
 #include "utils/guc.h"
 }
 
@@ -17,39 +16,11 @@ static bool guc_enable_collector = true;
 static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
 static int guc_max_text_size = 1024; // in KB
-static std::unique_ptr<std::unordered_set<std::string>> ignored_users = nullptr;
+std::unique_ptr<std::unordered_set<std::string>> ignored_users_set = nullptr;
+bool ignored_users_guc_dirty = false;
 
-extern "C" void update_ignored_users(const char *new_guc_ignored_users) {
-  auto new_ignored_users = std::make_unique<std::unordered_set<std::string>>();
-  if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
-    /* Need a modifiable copy of string */
-    char *rawstring = pstrdup(new_guc_ignored_users);
-    List *elemlist;
-    ListCell *l;
-
-    /* Parse string into list of identifiers */
-    if (!SplitIdentifierString(rawstring, ',', &elemlist)) {
-      /* syntax error in list */
-      pfree(rawstring);
-      list_free(elemlist);
-      ereport(
-          LOG,
-          (errcode(ERRCODE_SYNTAX_ERROR),
-           errmsg(
-               "invalid list syntax in parameter yagpcc.ignored_users_list")));
-      return;
-    }
-    foreach (l, elemlist) {
-      new_ignored_users->insert((char *)lfirst(l));
-    }
-    pfree(rawstring);
-    list_free(elemlist);
-  }
-  ignored_users = std::move(new_ignored_users);
-}
-
-static void assign_ignored_users_hook(const char *newval, void *extra) {
-  update_ignored_users(newval);
+static void assign_ignored_users_hook(const char *, void *) {
+  ignored_users_guc_dirty = true;
 }
 
 void Config::init() {
@@ -96,11 +67,12 @@ bool Config::enable_analyze() { return guc_enable_analyze; }
 bool Config::enable_cdbstats() { return guc_enable_cdbstats; }
 bool Config::enable_collector() { return guc_enable_collector; }
 bool Config::report_nested_queries() { return guc_report_nested_queries; }
+const char *Config::ignored_users() { return guc_ignored_users; }
 size_t Config::max_text_size() { return guc_max_text_size * 1024; }
 
 bool Config::filter_user(const std::string *username) {
-  if (!username || !ignored_users) {
+  if (!username || !ignored_users_set) {
     return true;
   }
-  return ignored_users->find(*username) != ignored_users->end();
+  return ignored_users_set->find(*username) != ignored_users_set->end();
 }

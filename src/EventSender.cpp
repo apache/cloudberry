@@ -8,6 +8,7 @@ extern "C" {
 #include "access/hash.h"
 #include "executor/executor.h"
 #include "utils/elog.h"
+#include "utils/builtins.h"
 
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
@@ -19,6 +20,9 @@ extern "C" {
 #include "EventSender.h"
 #include "PgUtils.h"
 #include "ProtoUtils.h"
+
+extern std::unique_ptr<std::unordered_set<std::string>> ignored_users_set;
+extern bool ignored_users_guc_dirty;
 
 void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
@@ -61,6 +65,10 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
   if (is_top_level_query(query_desc, nesting_level)) {
     nested_timing = 0;
     nested_calls = 0;
+  }
+  if (ignored_users_guc_dirty) {
+    update_ignored_users(Config::ignored_users());
+    ignored_users_guc_dirty = false;
   }
   if (!need_collect(query_desc, nesting_level)) {
     return;
@@ -345,6 +353,36 @@ void EventSender::update_nested_counters(QueryDesc *query_desc) {
               (errmsg("YAGPCC nested query text %s", query_desc->sourceText)));
     }
   }
+}
+
+void EventSender::update_ignored_users(const char *new_guc_ignored_users) {
+  auto new_ignored_users_set =
+      std::make_unique<std::unordered_set<std::string>>();
+  if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
+    /* Need a modifiable copy of string */
+    char *rawstring = pstrdup(new_guc_ignored_users);
+    List *elemlist;
+    ListCell *l;
+
+    /* Parse string into list of identifiers */
+    if (!SplitIdentifierString(rawstring, ',', &elemlist)) {
+      /* syntax error in list */
+      pfree(rawstring);
+      list_free(elemlist);
+      ereport(
+          LOG,
+          (errcode(ERRCODE_SYNTAX_ERROR),
+           errmsg(
+               "invalid list syntax in parameter yagpcc.ignored_users_list")));
+      return;
+    }
+    foreach (l, elemlist) {
+      new_ignored_users_set->insert((char *)lfirst(l));
+    }
+    pfree(rawstring);
+    list_free(elemlist);
+  }
+  ignored_users_set = std::move(new_ignored_users_set);
 }
 
 EventSender::QueryItem::QueryItem(EventSender::QueryState st,
