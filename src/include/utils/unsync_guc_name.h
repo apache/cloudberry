@@ -7,7 +7,6 @@
 *--------------------------------------------------------------------------
 */
 /* items in this file should be ordered */
-		"enable_answer_query_using_materialized_views",
 		"application_name",
 		"aqumv_allow_foreign_table",
 		"archive_cleanup_command",
@@ -44,6 +43,7 @@
 		"checkpoint_warning",
 		"client_connection_check_interval",
 		"client_encoding",
+		"cluster_key_command",
 		"cluster_name",
 		"compute_query_id",
 		"config_file",
@@ -106,6 +106,7 @@
 		"dynamic_shared_memory_type",
 		"effective_cache_size",
 		"effective_io_concurrency",
+		"enable_answer_query_using_materialized_views",
 		"enable_async_append",
 		"enable_bitmapscan",
 		"enable_gathermerge",
@@ -140,6 +141,7 @@
 		"exit_on_error",
 		"external_pid_file",
 		"extra_float_digits",
+		"file_encryption_method",
 		"from_collapse_limit",
 		"fsync",
 		"full_page_writes",
@@ -572,6 +574,7 @@
 		"task_log_statement",
 		"task_use_background_worker",
 		"task_timezone",
+		"tde_force_switch",
 		"temp_file_limit",
 		"test_AppendOnlyHash_eviction_vs_just_marking_not_inuse",
 		"test_print_direct_dispatch_info",
@@ -623,6 +626,3 @@
 		"xid_warn_limit",
 		"xmlbinary",
 		"xmloption",
-		"cluster_key_command",
-		"file_encryption_method",
-		"tde_force_switch",
