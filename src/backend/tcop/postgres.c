@@ -1529,6 +1529,8 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 	qc.commandTag = GetCommandTagEnum(loggingStr);
 	qc.nprocessed = 1;
 
+	SIMPLE_FAULT_INJECTOR("exec_dtx_protocol_start");
+
 	if (log_statement == LOGSTMT_ALL)
 		elog(LOG,"DTM protocol command '%s' for gid = %s", loggingStr, gid);
 
@@ -5714,6 +5716,7 @@ PostgresMain(int argc, char *argv[],
 					const char *serializedQueryDispatchDesc = NULL;
 					const char *resgroupInfoBuf = NULL;
 
+					int is_hs_dispatch;
 					int query_string_len = 0;
 					int serializedDtxContextInfolen = 0;
 					int serializedPlantreelen = 0;
@@ -5750,6 +5753,20 @@ PostgresMain(int argc, char *argv[],
 					cuid = pq_getmsgint(&input_message, 4);
 
 					statementStart = pq_getmsgint64(&input_message);
+
+					/* check if the message is from standby QD and is expected */
+					is_hs_dispatch = pq_getmsgint(&input_message, 4);
+					if (is_hs_dispatch == 0 && IS_HOT_STANDBY_QE())
+						ereport(ERROR,
+								(errcode(ERRCODE_PROTOCOL_VIOLATION),
+								 errmsg("mirror segments can only process MPP protocol messages from standby QD"),
+								 errhint("Exit the current session and re-connect.")));
+					else if (is_hs_dispatch != 0 && !IS_HOT_STANDBY_QE())
+						ereport(ERROR,
+								(errcode(ERRCODE_PROTOCOL_VIOLATION),
+								 errmsg("primary segments can only process MPP protocol messages from primary QD"),
+								 errhint("Exit the current session and re-connect.")));
+
 					query_string_len = pq_getmsgint(&input_message, 4);
 					serializedPlantreelen = pq_getmsgint(&input_message, 4);
 					serializedQueryDispatchDesclen = pq_getmsgint(&input_message, 4);

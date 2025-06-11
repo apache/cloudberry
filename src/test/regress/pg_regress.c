@@ -3615,9 +3615,20 @@ cluster_healthy(void)
 		return false;
 	}
 
+	char *p;
+	/* skip if the instance is hot standby */
+	psql_command_output("postgres", line, sizeof(line),
+			"SELECT pg_is_in_recovery();");
+	p = &line[0];
+	while (*p == ' ')
+		p++;
+	if (*p == 't')
+	{
+		return !halt_work;
+	}
+
 	i = 120;
 	do {
-		char *p;
 		/* check for the health for standby coordinator */
 		psql_command_output("postgres", line, sizeof(line),
 							"SELECT sync_state FROM pg_stat_get_wal_senders();");
