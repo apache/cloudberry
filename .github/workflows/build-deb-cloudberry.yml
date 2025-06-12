@@ -1,0 +1,1759 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry Build Pipeline
+# --------------------------------------------------------------------
+# Description:
+#
+#   This workflow builds, tests, and packages Apache Cloudberry on
+#   Ubuntu 22.04. It ensures artifact integrity and performs installation
+#   tests.
+#
+# Workflow Overview:
+# 1. **Build Job**:
+#    - Configures and builds Apache Cloudberry.
+#    - Supports debug build configuration via ENABLE_DEBUG flag.
+#    - Runs unit tests and verifies build artifacts.
+#    - Creates DEB packages (regular and debug), source tarball
+#    and additional files for dupload utility.
+#    - **Key Artifacts**: DEB package, source tarball, changes and dsc files, build logs.
+#
+# 2. **DEB Install Test Job**:
+#    - Verifies DEB integrity and installs Cloudberry.
+#    - Validates successful installation.
+#    - **Key Artifacts**: Installation logs, verification results.
+#
+# 3. **Report Job**:
+#    - Aggregates job results into a final report.
+#    - Sends failure notifications if any step fails.
+#
+# Execution Environment:
+# - **Runs On**: ubuntu-22.04 with ubuntu-22.04 containers.
+# - **Resource Requirements**:
+#   - Disk: Minimum 20GB free space.
+#   - Memory: Minimum 8GB RAM.
+#   - CPU: Recommended 4+ cores.
+#
+# Triggers:
+# - Push to `main` branch.
+# - Pull requests to `main` branch.
+# - Manual workflow dispatch.
+#
+# Container Images:
+# - **Build**: `apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest`
+# - **Test**: `apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest`
+#
+# Artifacts:
+# - DEB Package           (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Changes and DSC files (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Source Tarball        (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Logs and Test Results (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+#
+# Notes:
+# - Supports concurrent job execution.
+# - Supports debug builds with preserved symbols.
+# --------------------------------------------------------------------
+
+name: Apache Cloudberry Debian Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      test_selection:
+        description: 'Select tests to run (comma-separated). Examples: ic-good-opt-off,ic-contrib'
+        required: false
+        default: 'all'
+        type: string
+      reuse_artifacts_from_run_id:
+        description: 'Reuse build artifacts from a previous run ID (leave empty to build fresh)'
+        required: false
+        default: ''
+        type: string
+
+# Note: Step details, logs, and artifacts require users to be logged into GitHub
+# even for public repositories. This is a GitHub security feature and cannot
+# be overridden by permissions.
+
+permissions:
+  # READ permissions allow viewing repository contents
+  contents: read      # Required for checking out code and reading repository files
+
+  # READ permissions for packages (Container registry, etc)
+  packages: read      # Allows reading from GitHub package registry
+
+  # WRITE permissions for actions includes read access to:
+  # - Workflow runs
+  # - Artifacts (requires GitHub login)
+  # - Logs (requires GitHub login)
+  actions: write
+
+  # READ permissions for checks API:
+  # - Step details visibility (requires GitHub login)
+  # - Check run status and details
+  checks: read
+
+  # READ permissions for pull request metadata:
+  # - PR status
+  # - Associated checks
+  # - Review states
+  pull-requests: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+  ENABLE_DEBUG: false
+
+jobs:
+
+  ## ======================================================================
+  ## Job: check-skip
+  ## ======================================================================
+
+  check-skip:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    steps:
+      - id: skip-check
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          # Default to not skipping
+          echo "should_skip=false" >> "$GITHUB_OUTPUT"
+
+          # Apply skip logic only for pull_request events
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            # Combine PR title and body for skip check
+            MESSAGE="${PR_TITLE}\n${PR_BODY}"
+
+            # Escape special characters using printf %s
+            ESCAPED_MESSAGE=$(printf "%s" "$MESSAGE")
+
+            echo "Checking PR title and body (escaped): $ESCAPED_MESSAGE"
+
+            # Check for skip patterns
+            if echo -e "$ESCAPED_MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
+              echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Skip logic is not applied for $EVENT_NAME events."
+          fi
+
+      - name: Report Skip Status
+        if: steps.skip-check.outputs.should_skip == 'true'
+        run: |
+          echo "CI Skip flag detected in PR - skipping all checks."
+          exit 0
+
+  ## ======================================================================
+  ## Job: prepare-test-matrix-deb
+  ## ======================================================================
+
+  prepare-test-matrix-deb:
+    runs-on: ubuntu-22.04
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should_skip != 'true'
+    outputs:
+      test-matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - id: set-matrix
+        run: |
+          echo "=== Matrix Preparation Diagnostics ==="
+          echo "Event type: ${{ github.event_name }}"
+          echo "Test selection input: '${{ github.event.inputs.test_selection }}'"
+
+          # Define defaults
+          DEFAULT_NUM_PRIMARY_MIRROR_PAIRS=3
+          DEFAULT_ENABLE_CGROUPS=false
+          DEFAULT_ENABLE_CORE_CHECK=true
+          DEFAULT_PG_SETTINGS_OPTIMIZER=""
+
+          # Define base test configurations
+          ALL_TESTS='{
+            "include": [
+              {"test":"ic-deb-good-opt-off",
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"off"}
+              },
+              {"test":"ic-deb-good-opt-on",
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"on"}
+              },
+              {"test":"pax-ic-deb-good-opt-off",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"off",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"pax-ic-deb-good-opt-on",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"on",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"ic-deb-contrib",
+               "make_configs":["contrib/auto_explain:installcheck",
+                               "contrib/citext:installcheck",
+                               "contrib/btree_gin:installcheck",
+                               "contrib/file_fdw:installcheck",
+                               "contrib/formatter_fixedwidth:installcheck",
+                               "contrib/extprotocol:installcheck",
+                               "contrib/dblink:installcheck",
+                               "contrib/pg_trgm:installcheck",
+                               "contrib/indexscan:installcheck",
+                               "contrib/hstore:installcheck",
+                               "contrib/pgcrypto:installcheck",
+                               "contrib/tablefunc:installcheck",
+                               "contrib/passwordcheck:installcheck",
+                               "contrib/sslinfo:installcheck"]
+              },
+              {"test":"ic-deb-gpcontrib",
+               "make_configs":["gpcontrib/orafce:installcheck",
+                               "gpcontrib/pxf_fdw:installcheck",
+                               "gpcontrib/zstd:installcheck",
+                               "gpcontrib/gp_sparse_vector:installcheck",
+                               "gpcontrib/gp_toolkit:installcheck"]
+              },
+              {"test":"ic-cbdb-parallel",
+               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              }
+            ]
+          }'
+
+          # Function to apply defaults
+          apply_defaults() {
+            echo "$1" | jq --arg     npm "$DEFAULT_NUM_PRIMARY_MIRROR_PAIRS" \
+                           --argjson ec  "$DEFAULT_ENABLE_CGROUPS" \
+                           --argjson ecc "$DEFAULT_ENABLE_CORE_CHECK" \
+                           --arg     opt "$DEFAULT_PG_SETTINGS_OPTIMIZER" \
+              'def get_defaults:
+                {
+                  num_primary_mirror_pairs: ($npm|tonumber),
+                  enable_cgroups: $ec,
+                  enable_core_check: $ecc,
+                  pg_settings: {
+                    optimizer: $opt
+                  }
+                };
+               get_defaults * .'
+          }
+
+          # Extract all valid test names from ALL_TESTS
+          VALID_TESTS=$(echo "$ALL_TESTS" | jq -r '.include[].test')
+
+          # Parse input test selection
+          IFS=',' read -ra SELECTED_TESTS <<< "${{ github.event.inputs.test_selection }}"
+
+          # Default to all tests if selection is empty or 'all'
+          if [[ "${SELECTED_TESTS[*]}" == "all" || -z "${SELECTED_TESTS[*]}" ]]; then
+            mapfile -t SELECTED_TESTS <<< "$VALID_TESTS"
+          fi
+
+          # Validate and filter selected tests
+          INVALID_TESTS=()
+          FILTERED_TESTS=()
+          for TEST in "${SELECTED_TESTS[@]}"; do
+            TEST=$(echo "$TEST" | tr -d '[:space:]') # Trim whitespace
+            if echo "$VALID_TESTS" | grep -qw "$TEST"; then
+              FILTERED_TESTS+=("$TEST")
+            else
+              INVALID_TESTS+=("$TEST")
+            fi
+          done
+
+          # Handle invalid tests
+          if [[ ${#INVALID_TESTS[@]} -gt 0 ]]; then
+            echo "::error::Invalid test(s) selected: ${INVALID_TESTS[*]}"
+            echo "Valid tests are: $(echo "$VALID_TESTS" | tr '\n' ', ')"
+            exit 1
+          fi
+
+          # Build result JSON with defaults applied
+          RESULT='{"include":['
+          FIRST=true
+          for TEST in "${FILTERED_TESTS[@]}"; do
+            CONFIG=$(jq -c --arg test "$TEST" '.include[] | select(.test == $test)' <<< "$ALL_TESTS")
+            FILTERED_WITH_DEFAULTS=$(apply_defaults "$CONFIG")
+            if [[ "$FIRST" == true ]]; then
+              FIRST=false
+            else
+              RESULT="${RESULT},"
+            fi
+            RESULT="${RESULT}${FILTERED_WITH_DEFAULTS}"
+          done
+          RESULT="${RESULT}]}"
+
+          # Output the matrix for GitHub Actions
+          echo "Final matrix configuration:"
+          echo "$RESULT" | jq .
+
+          # Fix: Use block redirection
+          {
+            echo "matrix<<EOF"
+            echo "$RESULT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "=== Matrix Preparation Complete ==="
+
+  ## ======================================================================
+  ## Job: build-deb
+  ## ======================================================================
+
+  build-deb:
+    name: Build Apache Cloudberry DEB
+    env:
+      JOB_TYPE: build
+    needs: [check-skip]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    if: github.event.inputs.reuse_artifacts_from_run_id == ''
+    outputs:
+      build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+      - name: Skip Check
+        if: needs.check-skip.outputs.should_skip == 'true'
+        run: |
+          echo "Build skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Set build timestamp
+        id: set_timestamp  # Add an ID to reference this step
+        run: |
+          timestamp=$(date +'%Y%m%d_%H%M%S')
+          echo "timestamp=$timestamp" | tee -a "$GITHUB_OUTPUT"  # Use GITHUB_OUTPUT for job outputs
+          echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV" # Also set as environment variable
+
+      - name: Checkout Apache Cloudberry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Generate Build Job Summary Start
+        run: |
+          {
+            echo "# Build Job Summary"
+            echo "## Environment"
+            echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- ENABLE_DEBUG: ${{ env.ENABLE_DEBUG }}"
+            echo "- OS Version: $(lsb_release -sd)"
+            echo "- GCC Version: $(gcc --version | head -n1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Apache Cloudberry configure script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} BUILD_DESTINATION=${BUILD_DESTINATION} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure script failed"
+            exit 1
+          fi
+
+      - name: Run Apache Cloudberry build script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} BUILD_DESTINATION=${BUILD_DESTINATION} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build script failed"
+            exit 1
+          fi
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+          echo "Verifying build artifacts..."
+          {
+            echo "=== Build Artifacts Verification ==="
+            echo "Timestamp: $(date -u)"
+
+            if [ ! -d "${BUILD_DESTINATION}" ]; then
+              echo "::error::Build artifacts directory not found"
+              exit 1
+            fi
+
+            # Verify critical binaries
+            critical_binaries=(
+              "${BUILD_DESTINATION}/bin/postgres"
+              "${BUILD_DESTINATION}/bin/psql"
+            )
+
+            echo "Checking critical binaries..."
+            for binary in "${critical_binaries[@]}"; do
+              if [ ! -f "$binary" ]; then
+                echo "::error::Critical binary missing: $binary"
+                exit 1
+              fi
+              if [ ! -x "$binary" ]; then
+                echo "::error::Binary not executable: $binary"
+                exit 1
+              fi
+              echo "Binary verified: $binary"
+              ls -l "$binary"
+            done
+
+            # Test binary execution
+            echo "Testing binary execution..."
+            if ! ${BUILD_DESTINATION}/bin/postgres --version; then
+              echo "::error::postgres binary verification failed"
+              exit 1
+            fi
+            if ! ${BUILD_DESTINATION}/bin/psql --version; then
+              echo "::error::psql binary verification failed"
+              exit 1
+            fi
+
+            echo "All build artifacts verified successfully"
+          } 2>&1 | tee -a build-logs/details/build-verification.log
+
+      - name: Create Source tarball, create DEB and verify artifacts
+        shell: bash
+        env:
+          CBDB_VERSION: 99.0.0
+          BUILD_NUMBER: 1
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== Artifact Creation Log ==="
+            echo "Timestamp: $(date -u)"
+
+            cp -r "${SRC_DIR}"/devops/build/packaging/deb/ubuntu22.04/* debian/
+            chown -R "$(whoami)" debian
+            chmod -x debian/*install
+
+            # replace not supported symbols in version
+            CBDB_VERSION=$(echo "$CBDB_VERSION" | sed "s/\//./g")
+            CBDB_VERSION=$(echo "$CBDB_VERSION" | sed "s/_/-/g")
+          
+            echo "We will built ${CBDB_VERSION}"
+            export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+            if ! ${SRC_DIR}/devops/build/packaging/deb/build-deb.sh -v $CBDB_VERSION; then
+              echo "::error::Build script failed"
+              exit 1
+            fi
+
+            ARCH="amd64"
+            CBDB_PKG_VERSION=${CBDB_VERSION}-${BUILD_NUMBER}-$(git --git-dir=.git rev-list HEAD --count).$(git --git-dir=.git rev-parse --short HEAD)
+
+            echo "Produced artifacts"
+            ls -l ../
+
+            echo "Copy artifacts to subdirectory for sign/upload"
+            mkdir ${SRC_DIR}/deb
+            DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}"_"${ARCH}".deb
+            DBG_DEB_FILE="apache-cloudberry-db-incubating-dbgsym_${CBDB_PKG_VERSION}"_"${ARCH}".ddeb
+            CHANGES_DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}"_"${ARCH}".changes
+            BUILDINFO_DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}"_"${ARCH}".buildinfo
+            DSC_DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}".dsc
+            SOURCE_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}".tar.xz
+            cp ../"${DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${DBG_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${CHANGES_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${BUILDINFO_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${DSC_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${SOURCE_FILE}" "${SRC_DIR}/deb"
+            mkdir "${SRC_DIR}/deb/debian"
+            cp debian/changelog "${SRC_DIR}/deb/debian"
+
+            # Get package information
+            echo "Package Information:"
+            dpkg --info "${SRC_DIR}/deb/${DEB_FILE}"
+            dpkg --contents "${SRC_DIR}/deb/${DEB_FILE}"
+
+            # Verify critical files in DEB
+            echo "Verifying critical files in DEB..."
+            for binary in "bin/postgres" "bin/psql"; do
+              if ! dpkg --contents "${SRC_DIR}/deb/${DEB_FILE}" | grep -c "${binary}$"; then
+                echo "::error::Critical binary '${binary}' not found in DEB"
+                exit 1
+              fi
+            done
+
+            # Record checksums
+            echo "Calculating checksums..."
+            sha256sum "${SRC_DIR}/deb/${DEB_FILE}" | tee -a build-logs/details/checksums.log
+
+            echo "Artifacts created and verified successfully"
+
+
+          } 2>&1 | tee -a build-logs/details/artifact-creation.log
+
+      - name: Run Apache Cloudberry unittest script
+        if: needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+            echo "::error::Unittest script failed"
+            exit 1
+          fi
+
+      - name: Generate Build Job Summary End
+        run: |
+          {
+            echo "## Build Results"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ env.BUILD_TIMESTAMP }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload Cloudberry DEB build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            deb/*.deb
+            deb/*.ddeb
+
+      - name: Upload Cloudberry deb source build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-source-build-artifacts
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            deb/*.tar.xz
+            deb/*.changes
+            deb/*.dsc
+            deb/*.buildinfo
+            deb/debian/changelog
+
+  ## ======================================================================
+  ## Job: deb-install-test
+  ## ======================================================================
+
+  deb-install-test:
+    name: DEB Install Test Apache Cloudberry
+    needs: [check-skip, build-deb]
+    if: |
+      !cancelled() &&
+      (needs.build-deb.result == 'success' || needs.build-deb.result == 'skipped') &&
+      github.event.inputs.reuse_artifacts_from_run_id == ''
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+      - name: Skip Check
+        if: needs.check-skip.outputs.should_skip == 'true'
+        run: |
+          echo "DEB install test skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Download Cloudberry DEB build artifacts
+        if: needs.check-skip.outputs.should_skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          path: ${{ github.workspace }}/deb_build_artifacts
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          merge-multiple: false
+
+      - name: Cloudberry Environment Initialization
+        if: needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          LOGS_DIR: install-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Verify DEB artifacts
+        id: verify-artifacts
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          DEB_FILE=$(ls "${GITHUB_WORKSPACE}"/deb_build_artifacts/*.deb)
+          if [ ! -f "${DEB_FILE}" ]; then
+            echo "::error::DEB file not found"
+            exit 1
+          fi
+
+          echo "deb_file=${DEB_FILE}" >> "$GITHUB_OUTPUT"
+
+          echo "Verifying DEB artifacts..."
+          {
+            echo "=== DEB Verification Summary ==="
+            echo "Timestamp: $(date -u)"
+            echo "DEB File: ${DEB_FILE}"
+
+            # Get DEB metadata and verify contents
+            echo "Package Information:"
+            dpkg-deb -f "${DEB_FILE}"
+
+            # Get key DEB attributes for verification
+            DEB_VERSION=$(dpkg-deb -f "${DEB_FILE}" Version | cut -d'-' -f 1)
+            DEB_RELEASE=$(dpkg-deb -f "${DEB_FILE}" Version | cut -d'-' -f 3)
+            echo "version=${DEB_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "release=${DEB_RELEASE}" >> "$GITHUB_OUTPUT"
+
+            # Verify expected binaries are in the DEB
+            echo "Verifying critical files in DEB..."
+            for binary in "bin/postgres" "bin/psql"; do
+              if ! dpkg-deb -c "${DEB_FILE}" | grep "${binary}" > /dev/null; then
+                echo "::error::Critical binary '${binary}' not found in DEB"
+                exit 1
+              fi
+            done
+
+            echo "DEB Details:"
+            echo "- Version: ${DEB_VERSION}"
+            echo "- Release: ${DEB_RELEASE}"
+
+            # Calculate and store checksum
+            echo "Checksum:"
+            sha256sum "${DEB_FILE}"
+
+          } 2>&1 | tee -a install-logs/details/deb-verification.log
+
+      - name: Install Cloudberry DEB
+        shell: bash
+        env:
+          DEB_FILE: ${{ steps.verify-artifacts.outputs.deb_file }}
+          DEB_VERSION: ${{ steps.verify-artifacts.outputs.version }}
+          DEB_RELEASE: ${{ steps.verify-artifacts.outputs.release }}
+        run: |
+          set -eo pipefail
+
+          if [ -z "${DEB_FILE}" ]; then
+            echo "::error::DEB_FILE environment variable is not set"
+            exit 1
+          fi
+
+          {
+            echo "=== DEB Installation Log ==="
+            echo "Timestamp: $(date -u)"
+            echo "DEB File: ${DEB_FILE}"
+            echo "Version: ${DEB_VERSION}"
+            echo "Release: ${DEB_RELEASE}"
+
+            # Clean install location
+            rm -rf /usr/local/cloudberry-db
+
+            # Install DEB
+            echo "Starting installation..."
+            apt-get update
+            if ! apt-get -y install "${DEB_FILE}"; then
+              echo "::error::DEB installation failed"
+              exit 1
+            fi
+
+            # Change ownership back to gpadmin - it is needed for future tests
+            chown -R gpadmin:gpadmin /usr/local/cloudberry-db
+
+            echo "Installation completed successfully"
+            dpkg-query -s apache-cloudberry-db-incubating
+            echo "Installed files:"
+            dpkg-query -L apache-cloudberry-db-incubating
+          } 2>&1 | tee -a install-logs/details/deb-installation.log
+
+      - name: Upload install logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-logs-${{ matrix.name }}-${{ needs.build-deb.outputs.build_timestamp }}
+          path: |
+            install-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Generate Install Test Job Summary End
+        if: always()
+        shell: bash {0}
+        run: |
+          {
+            echo "# Installed Package Summary"
+            echo "\`\`\`"
+
+            dpkg-query -s apache-cloudberry-db-incubating
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+  ## ======================================================================
+  ## Job: test-deb
+  ## ======================================================================
+
+  test-deb:
+    name: ${{ matrix.test }}
+    needs: [check-skip, build-deb, prepare-test-matrix-deb]
+    if: |
+      !cancelled() &&
+      (needs.build-deb.result == 'success' || needs.build-deb.result == 'skipped')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    # actionlint-allow matrix[*].pg_settings
+    strategy:
+      fail-fast: false  # Continue with other tests if one fails
+      matrix: ${{ fromJson(needs.prepare-test-matrix-deb.outputs.test-matrix) }}
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      options: >-
+        --privileged
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        --ulimit core=-1
+        --cgroupns=host
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+
+    steps:
+      - name: Skip Check
+        if: needs.check-skip.outputs.should_skip == 'true'
+        run: |
+          echo "Test ${{ matrix.test }} skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Use timestamp from previous job
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "Timestamp from output: ${{ needs.build-deb.outputs.build_timestamp }}"
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Setup cgroups
+        if: needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        run: |
+          set -uxo pipefail
+
+          if [ "${{ matrix.enable_cgroups }}" = "true" ]; then
+
+            echo "Current mounts:"
+            mount | grep cgroup
+
+            CGROUP_BASEDIR=/sys/fs/cgroup
+
+            # 1. Basic setup with permissions
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/
+            sudo mkdir -p ${CGROUP_BASEDIR}/gpdb
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
+            sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
+
+            # 2. Enable controllers
+            sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/cgroup.subtree_control" || true
+            sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control" || true
+
+            # 3. CPU settings
+            sudo bash -c "echo 'max 100000' > ${CGROUP_BASEDIR}/gpdb/cpu.max" || true
+            sudo bash -c "echo '100' > ${CGROUP_BASEDIR}/gpdb/cpu.weight" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpu.weight.nice" || true
+            sudo bash -c "echo 0-$(( $(nproc) - 1 )) > ${CGROUP_BASEDIR}/gpdb/cpuset.cpus" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpuset.mems" || true
+
+            # 4. Memory settings
+            sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.max" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/memory.min" || true
+            sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.high" || true
+
+            # 5. IO settings
+            echo "Available block devices:"
+            lsblk
+
+            sudo bash -c "
+              if [ -f \${CGROUP_BASEDIR}/gpdb/io.stat ]; then
+                echo 'Detected IO devices:'
+                cat \${CGROUP_BASEDIR}/gpdb/io.stat
+              fi
+              echo '' > \${CGROUP_BASEDIR}/gpdb/io.max || true
+            "
+
+            # 6. Fix permissions again after all writes
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
+            sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
+
+            # 7. Check required files
+            echo "Checking required files:"
+            required_files=(
+                "cgroup.procs"
+                "cpu.max"
+                "cpu.pressure"
+                "cpu.weight"
+                "cpu.weight.nice"
+                "cpu.stat"
+                "cpuset.cpus"
+                "cpuset.mems"
+                "cpuset.cpus.effective"
+                "cpuset.mems.effective"
+                "memory.current"
+                "io.max"
+            )
+
+            for file in "${required_files[@]}"; do
+                if [ -f "${CGROUP_BASEDIR}/gpdb/$file" ]; then
+                    echo "✓ $file exists"
+                    ls -l "${CGROUP_BASEDIR}/gpdb/$file"
+                else
+                    echo "✗ $file missing"
+                fi
+            done
+
+            # 8. Test subdirectory creation
+            echo "Testing subdirectory creation..."
+            sudo -u gpadmin bash -c "
+              TEST_DIR=\${CGROUP_BASEDIR}/gpdb/test6448
+              if mkdir -p \$TEST_DIR; then
+                echo 'Created test directory'
+                sudo chmod -R 777 \$TEST_DIR
+                if echo \$\$ > \$TEST_DIR/cgroup.procs; then
+                  echo 'Successfully wrote to cgroup.procs'
+                  cat \$TEST_DIR/cgroup.procs
+                  # Move processes back to parent before cleanup
+                  echo \$\$ > \${CGROUP_BASEDIR}/gpdb/cgroup.procs
+                else
+                  echo 'Failed to write to cgroup.procs'
+                  ls -la \$TEST_DIR/cgroup.procs
+                fi
+                ls -la \$TEST_DIR/
+                rmdir \$TEST_DIR || {
+                  echo 'Moving all processes to parent before cleanup'
+                  cat \$TEST_DIR/cgroup.procs | while read pid; do
+                    echo \$pid > \${CGROUP_BASEDIR}/gpdb/cgroup.procs 2>/dev/null || true
+                  done
+                  rmdir \$TEST_DIR
+                }
+              else
+                echo 'Failed to create test directory'
+              fi
+            "
+
+            # 9. Verify setup as gpadmin user
+            echo "Testing cgroup access as gpadmin..."
+            sudo -u gpadmin bash -c "
+              echo 'Checking mounts...'
+              mount | grep cgroup
+
+              echo 'Checking /proc/self/mounts...'
+              cat /proc/self/mounts | grep cgroup
+
+              if ! grep -q cgroup2 /proc/self/mounts; then
+                  echo 'ERROR: cgroup2 mount NOT visible to gpadmin'
+                  exit 1
+              fi
+              echo 'SUCCESS: cgroup2 mount visible to gpadmin'
+
+              if ! [ -w ${CGROUP_BASEDIR}/gpdb ]; then
+                  echo 'ERROR: gpadmin cannot write to gpdb cgroup'
+                  exit 1
+              fi
+              echo 'SUCCESS: gpadmin can write to gpdb cgroup'
+
+              echo 'Verifying key files content:'
+              echo 'cpu.max:'
+              cat ${CGROUP_BASEDIR}/gpdb/cpu.max || echo 'Failed to read cpu.max'
+              echo 'cpuset.cpus:'
+              cat ${CGROUP_BASEDIR}/gpdb/cpuset.cpus || echo 'Failed to read cpuset.cpus'
+              echo 'cgroup.subtree_control:'
+              cat ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control || echo 'Failed to read cgroup.subtree_control'
+            "
+
+            # 10. Show final state
+            echo "Final cgroup state:"
+            ls -la ${CGROUP_BASEDIR}/gpdb/
+            echo "Cgroup setup completed successfully"
+          else
+            echo "Cgroup setup skipped"
+          fi
+
+      - name: "Generate Test Job Summary Start: ${{ matrix.test }}"
+        if: always()
+        run: |
+          {
+            echo "# Test Job Summary: ${{ matrix.test }}"
+            echo "## Environment"
+            echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+              echo "## Skip Status"
+              echo "✓ Test execution skipped via CI skip flag"
+            else
+              echo "- OS Version: $(cat /etc/redhat-release)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download Cloudberry DEB build artifacts
+        if: needs.check-skip.outputs.should_skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          path: ${{ github.workspace }}/deb_build_artifacts
+          merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Cloudberry Source build artifacts
+        if: needs.check-skip.outputs.should_skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-source-build-artifacts
+          path: ${{ github.workspace }}/source_build_artifacts
+          merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify DEB artifacts
+        if: needs.check-skip.outputs.should_skip != 'true'
+        id: verify-artifacts
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          SRC_TARBALL_FILE=$(ls "${GITHUB_WORKSPACE}"/source_build_artifacts/apache-cloudberry-db-incubating_*.tar.xz)
+          if [ ! -f "${SRC_TARBALL_FILE}" ]; then
+            echo "::error::SRC TARBALL file not found"
+            exit 1
+          fi
+
+          echo "src_tarball_file=${SRC_TARBALL_FILE}" >> "$GITHUB_OUTPUT"
+
+          echo "Verifying SRC TARBALL artifacts..."
+          {
+            echo "=== SRC TARBALL Verification Summary ==="
+            echo "Timestamp: $(date -u)"
+            echo "SRC TARBALL File: ${SRC_TARBALL_FILE}"
+
+            # Calculate and store checksum
+            echo "Checksum:"
+            sha256sum "${SRC_TARBALL_FILE}"
+
+          } 2>&1 | tee -a build-logs/details/src-tarball-verification.log
+
+          DEB_FILE=$(ls "${GITHUB_WORKSPACE}"/deb_build_artifacts/*.deb)
+          if [ ! -f "${DEB_FILE}" ]; then
+            echo "::error::DEB file not found"
+            exit 1
+          fi
+
+          echo "deb_file=${DEB_FILE}" >> "$GITHUB_OUTPUT"
+
+          echo "Verifying DEB artifacts..."
+          {
+            echo "=== DEB Verification Summary ==="
+            echo "Timestamp: $(date -u)"
+            echo "DEB File: ${DEB_FILE}"
+
+            # Get DEB metadata and verify contents
+            echo "Package Information:"
+            dpkg-deb -f "${DEB_FILE}"
+
+            # Get key DEB attributes for verification
+            DEB_VERSION=$(dpkg-deb -f "${DEB_FILE}" Version | cut -d'-' -f 1)
+            DEB_RELEASE=$(dpkg-deb -f "${DEB_FILE}" Version | cut -d'-' -f 3)
+            echo "version=${DEB_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "release=${DEB_RELEASE}" >> "$GITHUB_OUTPUT"
+
+            # Verify expected binaries are in the DEB
+            echo "Verifying critical files in DEB..."
+            for binary in "bin/postgres" "bin/psql"; do
+              if ! dpkg-deb -c "${DEB_FILE}" | grep "${binary}" > /dev/null; then
+                echo "::error::Critical binary '${binary}' not found in DEB"
+                exit 1
+              fi
+            done
+
+            echo "DEB Details:"
+            echo "- Version: ${DEB_VERSION}"
+            echo "- Release: ${DEB_RELEASE}"
+
+            # Calculate and store checksum
+            echo "Checksum:"
+            sha256sum "${DEB_FILE}"
+
+          } 2>&1 | tee -a build-logs/details/deb-verification.log
+
+      - name: Install Cloudberry DEB
+        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          DEB_FILE: ${{ steps.verify-artifacts.outputs.deb_file }}
+          DEB_VERSION: ${{ steps.verify-artifacts.outputs.version }}
+          DEB_RELEASE: ${{ steps.verify-artifacts.outputs.release }}
+        run: |
+          set -eo pipefail
+
+          if [ -z "${DEB_FILE}" ]; then
+            echo "::error::DEB_FILE environment variable is not set"
+            exit 1
+          fi
+
+          {
+            echo "=== DEB Installation Log ==="
+            echo "Timestamp: $(date -u)"
+            echo "DEB File: ${DEB_FILE}"
+            echo "Version: ${DEB_VERSION}"
+            echo "Release: ${DEB_RELEASE}"
+
+            # Clean install location
+            rm -rf /usr/local/cloudberry-db
+
+            # Install DEB
+            echo "Starting installation..."
+            apt-get update
+            if ! apt-get -y install "${DEB_FILE}"; then
+              echo "::error::DEB installation failed"
+              exit 1
+            fi
+
+            # Change ownership back to gpadmin - it is needed for future tests
+            chown -R gpadmin:gpadmin /usr/local/cloudberry-db
+
+            echo "Installation completed successfully"
+            dpkg-query -s apache-cloudberry-db-incubating
+            echo "Installed files:"
+            dpkg-query -L apache-cloudberry-db-incubating
+          } 2>&1 | tee -a build-logs/details/deb-installation.log
+
+      - name: Extract source tarball
+        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          SRC_TARBALL_FILE: ${{ steps.verify-artifacts.outputs.src_tarball_file }}
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== Source Extraction Log ==="
+            echo "Timestamp: $(date -u)"
+
+            echo "Starting extraction..."
+            file "${SRC_TARBALL_FILE}"
+            if ! time tar xf "${SRC_TARBALL_FILE}" -C "${SRC_DIR}"/.. ; then
+              echo "::error::Source extraction failed"
+              exit 1
+            fi
+
+            echo "Extraction completed successfully"
+            echo "Extracted contents:"
+            ls -la "${SRC_DIR}/../cloudberry"
+            echo "Directory size:"
+            du -sh "${SRC_DIR}/../cloudberry"
+          } 2>&1 | tee -a build-logs/details/source-extraction.log
+
+      - name: Prepare DEB Environment
+        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+
+            # change ownership to gpadmin
+            chown -R gpadmin "${SRC_DIR}/../cloudberry"
+            touch build-logs/sections.log
+            chown gpadmin build-logs/sections.log
+            chmod 777 build-logs
+
+            # configure link lib directory to temporary location, fix it
+            rm -rf "${SRC_DIR}"/debian/build/lib
+            ln -sf /usr/cloudberry-db/lib "${SRC_DIR}"/debian/build/lib
+
+            # check if regress.so exists in src directory - it is needed for contrib/dblink tests
+            if [ ! -f ${SRC_DIR}/src/test/regress/regress.so ]; then
+                ln -sf /usr/cloudberry-db/lib/postgresql/regress.so ${SRC_DIR}/src/test/regress/regress.so
+            fi
+
+            # FIXME
+            # temporary install gdb - delete after creating new docker build/test contaners
+            apt-get update
+            apt-get -y install gdb
+
+          } 2>&1 | tee -a build-logs/details/prepare-deb-env.log
+
+      - name: Create Apache Cloudberry demo cluster
+        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+              echo "::error::Demo cluster creation failed"
+              exit 1
+            fi
+
+          } 2>&1 | tee -a build-logs/details/create-cloudberry-demo-cluster.log
+
+      - name: "Run Tests: ${{ matrix.test }}"
+        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        shell: bash {0}
+        run: |
+          set -o pipefail
+
+          # Initialize test status
+          overall_status=0
+
+          # Create logs directory structure
+          mkdir -p build-logs/details
+
+          # Core file config
+          mkdir -p "/tmp/cloudberry-cores"
+          chmod 1777 "/tmp/cloudberry-cores"
+          sysctl -w kernel.core_pattern="/tmp/cloudberry-cores/core-%e-%s-%u-%g-%p-%t"
+          sysctl kernel.core_pattern
+          su - gpadmin -c "ulimit -c"
+
+          # WARNING: PostgreSQL Settings
+          # When adding new pg_settings key/value pairs:
+          # 1. Add a new check below for the setting
+          # 2. Follow the same pattern as optimizer
+          # 3. Update matrix entries to include the new setting
+
+
+          # Set PostgreSQL options if defined
+          PG_OPTS=""
+          if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          fi
+
+          if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
+          fi
+
+          # Read configs into array
+          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+
+          echo "=== Starting test execution for ${{ matrix.test }} ==="
+          echo "Number of configurations to execute: ${#configs[@]}"
+          echo ""
+
+          # Execute each config separately
+          for ((i=0; i<${#configs[@]}; i++)); do
+            config="${configs[$i]}"
+            IFS=':' read -r dir target <<< "$config"
+
+            echo "=== Executing configuration $((i+1))/${#configs[@]} ==="
+            echo "Make command: make -C $dir $target"
+            echo "Environment:"
+            echo "- PGOPTIONS: ${PG_OPTS}"
+
+            # Create unique log file for this configuration
+            config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
+
+            # Clean up any existing core files
+            echo "Cleaning up existing core files..."
+            rm -f /tmp/cloudberry-cores/core-*
+
+            # Execute test script with proper environment setup
+            if ! time su - gpadmin -c "cd ${SRC_DIR} && \
+                 MAKE_NAME='${{ matrix.test }}-config$i' \
+                 MAKE_TARGET='$target' \
+                 MAKE_DIRECTORY='-C $dir' \
+                 PGOPTIONS='${PG_OPTS}' \
+                 SRC_DIR='${SRC_DIR}' \
+                 ${SRC_DIR}/devops/build/automation/cloudberry/scripts/test-cloudberry.sh" \
+                 2>&1 | tee "$config_log"; then
+              echo "::warning::Test execution failed for configuration $((i+1)): make -C $dir $target"
+              overall_status=1
+            fi
+
+            # Check for results directory
+            results_dir="${dir}/results"
+
+            if [[ -d "$results_dir" ]]; then
+              echo "-----------------------------------------" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              echo "Found results directory: $results_dir" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              echo "Contents of results directory:" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+
+              find "$results_dir" -type f -ls >> "$log_file" 2>&1 | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+              echo "-----------------------------------------" | tee -a build-logs/details/make-${{ matrix.test }}-config$i-results.log
+            else
+              echo "-----------------------------------------"
+              echo "Results directory $results_dir does not exit"
+              echo "-----------------------------------------"
+            fi
+
+            # Analyze any core files generated by this test configuration
+            echo "Analyzing core files for configuration ${{ matrix.test }}-config$i..."
+            test_id="${{ matrix.test }}-config$i"
+
+            # List the cores directory
+            echo "-----------------------------------------"
+            echo "Cores directory: /tmp/cloudberry-cores"
+            echo "Contents of cores directory:"
+            ls -Rl "/tmp/cloudberry-cores"
+            echo "-----------------------------------------"
+
+            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/analyze_core_dumps.sh "$test_id"
+            core_analysis_rc=$?
+            case "$core_analysis_rc" in
+              0) echo "No core dumps found for this configuration" ;;
+              1) echo "Core dumps were found and analyzed successfully" ;;
+              2) echo "::warning::Issues encountered during core dump analysis" ;;
+              *) echo "::error::Unexpected return code from core dump analysis: $core_analysis_rc" ;;
+            esac
+
+            echo "Log file: $config_log"
+            echo "=== End configuration $((i+1)) execution ==="
+            echo ""
+          done
+
+          echo "=== Test execution completed ==="
+          echo "Log files:"
+          ls -l build-logs/details/
+
+          # Store number of configurations for parsing step
+          echo "NUM_CONFIGS=${#configs[@]}" >> "$GITHUB_ENV"
+
+          # Report overall status
+          if [ $overall_status -eq 0 ]; then
+            echo "All test executions completed successfully"
+          else
+            echo "::warning::Some test executions failed, check individual logs for details"
+          fi
+
+          exit $overall_status
+
+      - name: "Parse Test Results: ${{ matrix.test }}"
+        id: test-results
+        if: always() && needs.check-skip.outputs.should_skip != 'true'
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        shell: bash {0}
+        run: |
+          set -o pipefail
+
+          overall_status=0
+
+          # Get configs array to create context for results
+          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+
+          echo "=== Starting results parsing for ${{ matrix.test }} ==="
+          echo "Number of configurations to parse: ${#configs[@]}"
+          echo ""
+
+          # Parse each configuration's results independently
+          for ((i=0; i<NUM_CONFIGS; i++)); do
+            config="${configs[$i]}"
+            IFS=':' read -r dir target <<< "$config"
+
+            config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
+
+            echo "=== Parsing results for configuration $((i+1))/${NUM_CONFIGS} ==="
+            echo "Make command: make -C $dir $target"
+            echo "Log file: $config_log"
+
+            if [ ! -f "$config_log" ]; then
+              echo "::error::Log file not found: $config_log"
+              {
+                echo "MAKE_COMMAND=make -C $dir $target"
+                echo "STATUS=missing_log"
+                echo "TOTAL_TESTS=0"
+                echo "FAILED_TESTS=0"
+                echo "PASSED_TESTS=0"
+                echo "IGNORED_TESTS=0"
+              } > "test_results.$i.txt"
+              overall_status=1
+              continue
+            fi
+
+            # Parse this configuration's results
+
+            MAKE_NAME="${{ matrix.test }}-config$i" \
+            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/parse-test-results.sh "$config_log"
+            status_code=$?
+
+            {
+                echo "SUITE_NAME=${{ matrix.test }}"
+                echo "DIR=${dir}"
+                echo "TARGET=${target}"
+            } >> test_results.txt
+
+            # Process return code
+            case $status_code in
+              0)  # All tests passed
+                  echo "All tests passed successfully"
+                  if [ -f test_results.txt ]; then
+                    (echo "MAKE_COMMAND=\"make -C $dir $target\""; cat test_results.txt) | tee "test_results.${{ matrix.test }}.$i.txt"
+                    rm test_results.txt
+                  fi
+                  ;;
+              1)  # Tests failed but parsed successfully
+                  echo "Test failures detected but properly parsed"
+                  if [ -f test_results.txt ]; then
+                    (echo "MAKE_COMMAND=\"make -C $dir $target\""; cat test_results.txt) | tee "test_results.${{ matrix.test }}.$i.txt"
+                    rm test_results.txt
+                  fi
+                  overall_status=1
+                  ;;
+              2)  # Parse error or missing file
+                  echo "::warning::Could not parse test results properly for configuration $((i+1))"
+                  {
+                    echo "MAKE_COMMAND=\"make -C $dir $target\""
+                    echo "STATUS=parse_error"
+                    echo "TOTAL_TESTS=0"
+                    echo "FAILED_TESTS=0"
+                    echo "PASSED_TESTS=0"
+                    echo "IGNORED_TESTS=0"
+                  } | tee "test_results.${{ matrix.test }}.$i.txt"
+                  overall_status=1
+                  ;;
+              *)  # Unexpected error
+                  echo "::warning::Unexpected error during test results parsing for configuration $((i+1))"
+                  {
+                    echo "MAKE_COMMAND=\"make -C $dir $target\""
+                    echo "STATUS=unknown_error"
+                    echo "TOTAL_TESTS=0"
+                    echo "FAILED_TESTS=0"
+                    echo "PASSED_TESTS=0"
+                    echo "IGNORED_TESTS=0"
+                  } | tee "test_results.${{ matrix.test }}.$i.txt"
+                  overall_status=1
+                  ;;
+            esac
+
+            echo "Results stored in test_results.$i.txt"
+            echo "=== End parsing for configuration $((i+1)) ==="
+            echo ""
+          done
+
+          # Report status of results files
+          echo "=== Results file status ==="
+          echo "Generated results files:"
+          for ((i=0; i<NUM_CONFIGS; i++)); do
+            if [ -f "test_results.${{ matrix.test }}.$i.txt" ]; then
+              echo "- test_results.${{ matrix.test }}.$i.txt exists"
+              echo ""
+            else
+              echo "::error::Missing results file: test_results.${{ matrix.test }}.$i.txt"
+              overall_status=1
+            fi
+          done
+
+          exit $overall_status
+
+      - name: Check and Display Regression Diffs
+        if: always()
+        run: |
+          # Search for regression.diffs recursively
+          found_file=$(find . -type f -name "regression.diffs" | head -n 1)
+          if [[ -n "$found_file" ]]; then
+            echo "Found regression.diffs at: $found_file"
+            cat "$found_file"
+          else
+            echo "No regression.diffs file found in the hierarchy."
+          fi
+
+      - name: "Check for Core Dumps Across All Configurations: ${{ matrix.test }}"
+        if: always() && needs.check-skip.outputs.should_skip != 'true'
+        shell: bash {0}
+        run: |
+          # Look for any core analysis files from this test matrix entry
+          core_files=$(find "${SRC_DIR}/build-logs" -name "core_analysis_*.log")
+
+          if [ -n "$core_files" ]; then
+            echo "::error::Core dumps were found during test execution:"
+            echo "$core_files" | while read -r file; do
+              echo "Core analysis file: $file"
+              echo "=== Content ==="
+              cat "$file"
+              echo "=============="
+            done
+            if [ "${{ matrix.enable_core_check }}" = "true" ]; then
+              exit 1
+            else
+              echo "::warning::Special case - core checks will generate a warning"
+            fi
+          else
+            echo "No core dumps were found during test execution"
+          fi
+
+      - name: "Generate Test Job Summary End: ${{ matrix.test }}"
+        if: always()
+        shell: bash {0}
+        run: |
+          {
+            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+              echo "## Test Results - SKIPPED"
+              echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+              exit 0
+            fi
+
+            echo "## Test Results"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+            # Check if job was cancelled
+            if [[ "${{ job.status }}" == "cancelled" ]]; then
+              echo "### Test Status"
+              echo "🚫 Test execution was cancelled"
+              echo ""
+              echo "### Execution Summary"
+              echo "Test run was interrupted and did not complete. No test results are available."
+              exit 0
+            fi
+
+            # Check for core analysis files
+            core_files=$(find "${SRC_DIR}/build-logs" -name "core_analysis_*.log")
+
+            if [ -n "$core_files" ]; then
+              if [ "${{ matrix.enable_core_check }}" = "true" ]; then
+                echo "❌ Core dumps were detected"
+              else
+                echo "⚠️  Core dumps were detected - enable_core_check: false"
+              fi
+              echo ""
+              echo "#### Core Analysis Files"
+              echo "\`\`\`"
+              echo "$core_files"
+              echo "\`\`\`"
+
+              echo ""
+              echo "#### Analysis Details"
+              echo "\`\`\`"
+              while read -r file; do
+                echo "=== $file ==="
+                cat "$file"
+                echo ""
+              done <<< "$core_files"
+              echo "\`\`\`"
+            else
+              echo "✅ No core dumps detected"
+            fi
+
+            # Process results for each configuration
+            IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+
+            for ((i=0; i<NUM_CONFIGS; i++)); do
+              config="${configs[$i]}"
+              IFS=':' read -r dir target <<< "$config"
+
+              echo "### Configuration $((i+1)): \`make -C $dir $target\`"
+
+              if [[ ! -f "test_results.${{ matrix.test }}.$i.txt" ]]; then
+                echo "⚠️ No results file found for this configuration"
+                continue
+              fi
+
+              # Source configuration results
+              # shellcheck source=/dev/null
+              . "test_results.${{ matrix.test }}.$i.txt"
+
+              # Rest of the code remains the same...
+              # Display status with emoji
+              echo "#### Status"
+              case "${STATUS:-unknown}" in
+                passed)
+                  echo "✅ All tests passed"
+                  ;;
+                failed)
+                  echo "❌ Some tests failed"
+                  ;;
+                parse_error)
+                  echo "⚠️ Could not parse test results"
+                  ;;
+                unknown_error)
+                  echo "⚠️ Unexpected error during test execution/parsing"
+                  ;;
+                missing_log)
+                  echo "⚠️ Test log file missing"
+                  ;;
+                *)
+                  echo "⚠️ Unknown status: ${status:-unknown}"
+                  ;;
+              esac
+
+              echo ""
+              echo "#### Test Counts"
+              echo "| Metric | Count |"
+              echo "|--------|-------|"
+              echo "| Total Tests | ${TOTAL_TESTS:-0} |"
+              echo "| Passed Tests | ${PASSED_TESTS:-0} |"
+              echo "| Failed Tests | ${FAILED_TESTS:-0} |"
+              echo "| Ignored Tests | ${IGNORED_TESTS:-0} |"
+
+              # Add failed tests if any
+              if [[ -n "${FAILED_TEST_NAMES:-}" && "${FAILED_TESTS:-0}" != "0" ]]; then
+                echo ""
+                echo "#### Failed Tests"
+                echo "${FAILED_TEST_NAMES}" | tr ',' '\n' | while read -r test; do
+                  if [[ -n "$test" ]]; then
+                    echo "* \`${test}\`"
+                  fi
+                done
+              fi
+
+              # Add ignored tests if any
+              if [[ -n "${IGNORED_TEST_NAMES:-}" && "${IGNORED_TESTS:-0}" != "0" ]]; then
+                echo ""
+                echo "#### Ignored Tests"
+                echo "${IGNORED_TEST_NAMES}" | tr ',' '\n' | while read -r test; do
+                  if [[ -n "$test" ]]; then
+                    echo "* \`${test}\`"
+                  fi
+                done
+              fi
+
+              echo ""
+              echo "---"
+            done
+
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.test }}-${{ needs.build-deb.outputs.build_timestamp }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload Test Metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-metadata-${{ matrix.test }}
+          path: |
+            test_results*.txt
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload test results files
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.test }}-${{ needs.build-deb.outputs.build_timestamp }}
+          path: |
+            **/regression.out
+            **/regression.diffs
+            **/results/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload test regression logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-logs-${{ matrix.test }}-${{ needs.build-deb.outputs.build_timestamp }}
+          path: |
+            **/regression.out
+            **/regression.diffs
+            **/results/
+            gpAux/gpdemo/datadirs/standby/log/
+            gpAux/gpdemo/datadirs/qddir/demoDataDir-1/log/
+            gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/log/
+            gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/log/
+            gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/log/
+            gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0/log/
+            gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/log/
+            gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/log/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+  ## ======================================================================
+  ## Job: report-deb
+  ## ======================================================================
+
+  report-deb:
+    name: Generate Apache Cloudberry Build Report
+    needs: [check-skip, build-deb, prepare-test-matrix-deb, deb-install-test, test-deb]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Generate Final Report
+        run: |
+          {
+            echo "# Apache Cloudberry Build Pipeline Report"
+
+            if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
+              echo "## CI Skip Status"
+              echo "✅ CI checks skipped via skip flag"
+              echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            else
+              echo "## Job Status"
+              echo "- Build Job: ${{ needs.build-deb.result }}"
+              echo "- Test Job: ${{ needs.test-deb.result }}"
+              echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+              if [[ "${{ needs.build-deb.result }}" == "success" && "${{ needs.test-deb.result }}" == "success" ]]; then
+                echo "✅ Pipeline completed successfully"
+              else
+                echo "⚠️ Pipeline completed with failures"
+
+                if [[ "${{ needs.build-deb.result }}" != "success" ]]; then
+                  echo "### Build Job Failure"
+                  echo "Check build logs for details"
+                fi
+
+                if [[ "${{ needs.test-deb.result }}" != "success" ]]; then
+                  echo "### Test Job Failure"
+                  echo "Check test logs and regression files for details"
+                fi
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: |
+          needs.check-skip.outputs.should_skip != 'true' &&
+          (needs.build-deb.result != 'success' || needs.test-deb.result != 'success')
+        run: |
+          echo "::error::Build/Test pipeline failed! Check job summaries and logs for details"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Build Result: ${{ needs.build-deb.result }}"
+          echo "Test Result: ${{ needs.test-deb.result }}"
