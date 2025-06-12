@@ -9,7 +9,8 @@ $(recurse)
 generate_greenplum_path_file:
 	mkdir -p $(DESTDIR)$(prefix)
 	unset LIBPATH; \
-	bin/generate-greenplum-path.sh > $(DESTDIR)$(prefix)/greenplum_path.sh
+	bin/generate-cloudberry-env.sh > $(DESTDIR)$(prefix)/cloudberry-env.sh
+	ln -s  $(DESTDIR)$(prefix)/cloudberry-env.sh $(DESTDIR)$(prefix)/greenplum_path.sh
 
 install: generate_greenplum_path_file
 	mkdir -p $(DESTDIR)$(prefix)/lib/python
