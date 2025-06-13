@@ -5029,6 +5029,16 @@ struct config_string ConfigureNamesString_gp[] =
 		"",
 		NULL, NULL, NULL
 	},
+	{
+		{"gp_segment_configuration_file", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Specifies the recovery cluster gp_segment_configuration file"),
+			gettext_noop(""),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_segment_configuration_file,
+		"",
+		NULL, NULL, NULL
+	},
 
 	/* End-of-list marker */
 	{

@@ -181,86 +181,11 @@ static void
 remove_segment_config(int16 dbid)
 {
 #ifdef USE_INTERNAL_FTS
-	int			numDel = 0;
-	ScanKeyData scankey;
-	SysScanDesc sscan;
-	HeapTuple	tuple;
-	Relation	rel;
-
-	rel = table_open(GpSegmentConfigRelationId, RowExclusiveLock);
-
-	ScanKeyInit(&scankey,
-				Anum_gp_segment_configuration_dbid,
-				BTEqualStrategyNumber, F_INT2EQ,
-				Int16GetDatum(dbid));
-	sscan = systable_beginscan(rel, GpSegmentConfigDbidWarehouseIndexId, true,
-							   NULL, 1, &scankey);
-	while ((tuple = systable_getnext(sscan)) != NULL)
-	{
-		Datum		attr;
-		bool		isNull;
-		Oid			warehouseid = InvalidOid;
-
-		attr = heap_getattr(tuple, Anum_gp_segment_configuration_warehouseid,
-							RelationGetDescr(rel), &isNull);
-		Assert(!isNull);
-		warehouseid = DatumGetObjectId(attr);
-
-		if (!OidIsValid(warehouseid) || warehouseid == GetCurrentWarehouseId())
-		{
-			CatalogTupleDelete(rel, &tuple->t_self);
-			numDel++;
-		}
-	}
-	systable_endscan(sscan);
-
-	Assert(numDel > 0);
-
-	table_close(rel, NoLock);
+	remove_segment_config_entry(dbid);
 #else
 	delSegment(dbid);
 #endif
 }
-
-#ifdef USE_INTERNAL_FTS
-static void
-add_segment_config_entry(GpSegConfigEntry *i)
-{
-	Relation	rel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
-	Datum		values[Natts_gp_segment_configuration];
-	bool		nulls[Natts_gp_segment_configuration];
-	HeapTuple	tuple;
-
-	MemSet(nulls, false, sizeof(nulls));
-
-	values[Anum_gp_segment_configuration_dbid - 1] = Int16GetDatum(i->dbid);
-	values[Anum_gp_segment_configuration_content - 1] = Int16GetDatum(i->segindex);
-	values[Anum_gp_segment_configuration_role - 1] = CharGetDatum(i->role);
-	values[Anum_gp_segment_configuration_preferred_role - 1] =
-		CharGetDatum(i->preferred_role);
-	values[Anum_gp_segment_configuration_mode - 1] =
-		CharGetDatum(i->mode);
-	values[Anum_gp_segment_configuration_status - 1] =
-		CharGetDatum(i->status);
-	values[Anum_gp_segment_configuration_port - 1] =
-		Int32GetDatum(i->port);
-	values[Anum_gp_segment_configuration_hostname - 1] =
-		CStringGetTextDatum(i->hostname);
-	values[Anum_gp_segment_configuration_address - 1] =
-		CStringGetTextDatum(i->address);
-	values[Anum_gp_segment_configuration_datadir - 1] =
-		CStringGetTextDatum(i->datadir);
-	values[Anum_gp_segment_configuration_warehouseid - 1] =
-		ObjectIdGetDatum(i->warehouseid);
-
-	tuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
-
-	/* insert a new tuple */
-	CatalogTupleInsert(rel, tuple);
-
-	table_close(rel, NoLock);
-}
-#endif
 
 static void
 add_segment(GpSegConfigEntry *new_segment_information)

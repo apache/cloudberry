@@ -37,6 +37,7 @@
 #include "utils/memutils.h"
 #include "catalog/gp_id.h"
 #include "catalog/indexing.h"
+#include "catalog/heap.h"
 #include "cdb/cdbhash.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbmotion.h"
@@ -60,6 +61,9 @@
 #include "catalog/gp_indexing.h"
 #include "utils/etcd.h"
 #include "common/etcdutils.h"
+#include "storage/sinvaladt.h"
+#include "storage/bufmgr.h"
+#include "utils/syscache.h"
 
 #include "catalog/gp_indexing.h"
 
@@ -79,6 +83,7 @@
 
 MemoryContext CdbComponentsContext = NULL;
 static CdbComponentDatabases *cdb_component_dbs = NULL;
+char *gp_segment_configuration_file = NULL;
 
 #ifdef USE_INTERNAL_FTS
 
@@ -92,6 +97,7 @@ static int	CdbComponentDatabaseInfoCompare(const void *p1, const void *p2);
 
 static GpSegConfigEntry * readGpSegConfigFromCatalog(int *total_dbs);
 static GpSegConfigEntry * readGpSegConfigFromFTSFiles(int *total_dbs);
+static GpSegConfigEntry * readGpSegConfigFromExtFile(int *total_dbs);
 
 static void getAddressesForDBid(GpSegConfigEntry *c, int elevel);
 static HTAB *hostPrimaryCountHashTableInit(void);
@@ -372,7 +378,14 @@ getCdbComponentInfo(void)
 
 	HTAB	   *hostPrimaryCountHash = hostPrimaryCountHashTableInit();
 
-	if (IsTransactionState())
+	/* On hotstandby, if gp_segment_configuration_file is configured, try
+	 * to load configs from it. Since hotstandby may be created from a
+	 * basebackup that the table gp_segment_configuration is backuped from
+	 * the souce cluster and cannot be modified in read repilca mode.
+	 */
+	if (EnableHotStandby && gp_segment_configuration_file)
+		configs = readGpSegConfigFromExtFile(&total_dbs);
+	else if (IsTransactionState())
 		configs = readGpSegConfigFromCatalog(&total_dbs);
 	else
 		configs = readGpSegConfigFromFTSFiles(&total_dbs);
@@ -1998,7 +2011,172 @@ gp_get_suboverflowed_backends(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 }
 
-#else 
+void
+add_segment_config_entry(GpSegConfigEntry *i)
+{
+	Relation	rel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
+	Datum		values[Natts_gp_segment_configuration];
+	bool		nulls[Natts_gp_segment_configuration];
+	HeapTuple	tuple;
+
+	MemSet(nulls, false, sizeof(nulls));
+
+	values[Anum_gp_segment_configuration_dbid - 1] = Int16GetDatum(i->dbid);
+	values[Anum_gp_segment_configuration_content - 1] = Int16GetDatum(i->segindex);
+	values[Anum_gp_segment_configuration_role - 1] = CharGetDatum(i->role);
+	values[Anum_gp_segment_configuration_preferred_role - 1] =
+		CharGetDatum(i->preferred_role);
+	values[Anum_gp_segment_configuration_mode - 1] =
+		CharGetDatum(i->mode);
+	values[Anum_gp_segment_configuration_status - 1] =
+		CharGetDatum(i->status);
+	values[Anum_gp_segment_configuration_port - 1] =
+		Int32GetDatum(i->port);
+	values[Anum_gp_segment_configuration_hostname - 1] =
+		CStringGetTextDatum(i->hostname);
+	values[Anum_gp_segment_configuration_address - 1] =
+		CStringGetTextDatum(i->address);
+	values[Anum_gp_segment_configuration_datadir - 1] =
+		CStringGetTextDatum(i->datadir);
+	values[Anum_gp_segment_configuration_warehouseid - 1] =
+		ObjectIdGetDatum(i->warehouseid);
+
+	tuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
+
+	/* insert a new tuple */
+	CatalogTupleInsert(rel, tuple);
+
+	table_close(rel, NoLock);
+}
+
+void
+remove_segment_config_entry(int16 dbid)
+{
+	int			numDel = 0;
+	ScanKeyData scankey;
+	SysScanDesc sscan;
+	HeapTuple	tuple;
+	Relation	rel;
+
+	rel = table_open(GpSegmentConfigRelationId, RowExclusiveLock);
+
+	ScanKeyInit(&scankey,
+				Anum_gp_segment_configuration_dbid,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(dbid));
+	sscan = systable_beginscan(rel, GpSegmentConfigDbidWarehouseIndexId, true,
+							   NULL, 1, &scankey);
+	while ((tuple = systable_getnext(sscan)) != NULL)
+	{
+		Datum		attr;
+		bool		isNull;
+		Oid			warehouseid = InvalidOid;
+
+		attr = heap_getattr(tuple, Anum_gp_segment_configuration_warehouseid,
+							RelationGetDescr(rel), &isNull);
+		Assert(!isNull);
+		warehouseid = DatumGetObjectId(attr);
+
+		if (!OidIsValid(warehouseid) || warehouseid == GetCurrentWarehouseId())
+		{
+			CatalogTupleDelete(rel, &tuple->t_self);
+			numDel++;
+		}
+	}
+	systable_endscan(sscan);
+
+	Assert(numDel > 0);
+
+	table_close(rel, NoLock);
+}
+
+static GpSegConfigEntry*
+readGpSegConfigFromExtFile(int *total_dbs)
+{
+	FILE	*fd;
+	int		idx = 0;
+	int		array_size = 500;
+	GpSegConfigEntry *configs = NULL;
+	GpSegConfigEntry *config = NULL;
+
+	char	hostname[MAXHOSTNAMELEN];
+	char	address[MAXHOSTNAMELEN];
+	char	datadir[1000];
+	char	buf[MAXHOSTNAMELEN * 2 + 32 + 2000];
+
+	Assert(gp_segment_configuration_file && strcmp(gp_segment_configuration_file, "") != 0);
+
+	/* notify and wait FTS to finish a probe and update the dump file */
+
+	fd = AllocateFile(gp_segment_configuration_file, "r");
+
+	if (!fd)
+		elog(ERROR, "could not open gp_segment_configutation dump file:%s:%m", gp_segment_configuration_file);
+
+	configs = palloc0(sizeof (GpSegConfigEntry) * array_size);
+	while (fgets(buf, sizeof(buf), fd))
+	{
+		config = &configs[idx];
+
+		if (sscanf(buf, "%d %d %c %c %c %c %d %s %s %s", (int *)&config->dbid, (int *)&config->segindex,
+					&config->role, &config->preferred_role, &config->mode, &config->status,
+					&config->port, hostname, address, datadir) != 10)
+		{
+			FreeFile(fd);
+			elog(ERROR, "invalid data in gp_segment_configuration dump file: %s:%m", gp_segment_configuration_file);
+		}
+
+		config->hostname = pstrdup(hostname);
+		config->address = pstrdup(address);
+		config->datadir = pstrdup(datadir);
+
+		idx++;
+		/*
+		 * Expand CdbComponentDatabaseInfo array if we've used up
+		 * currently allocated space
+		 */
+		if (idx >= array_size)
+		{
+			array_size = array_size * 2;
+			configs = (GpSegConfigEntry *)
+				repalloc(configs, sizeof(GpSegConfigEntry) * array_size);
+		}
+	}
+
+	FreeFile(fd);
+
+	*total_dbs = idx;
+	return configs;
+}
+
+void
+write_gp_segment_configuration(void)
+{
+	Relation rel;
+	GpSegConfigEntry *configs;
+	int total_dbs;
+	SysScanDesc sscan;
+	HeapTuple   tuple;
+
+	rel = table_open(GpSegmentConfigRelationId, RowExclusiveLock);
+	sscan = systable_beginscan(rel, GpSegmentConfigDbidWarehouseIndexId, true,
+			NULL, 0, NULL);
+	while ((tuple = systable_getnext(sscan)) != NULL)
+	{
+		CatalogTupleDelete(rel, &tuple->t_self);
+	}
+	systable_endscan(sscan);
+
+	/* insert new configs into gp_segment_configuration table */
+	configs = readGpSegConfigFromExtFile(&total_dbs);
+	for (int i = 0; i < total_dbs; i++) {
+		GpSegConfigEntry config = configs[i];
+		add_segment_config_entry(&config);
+	}
+	table_close(rel, RowExclusiveLock);
+}
+
+#else
 bool am_ftshandler = false;
 
 
