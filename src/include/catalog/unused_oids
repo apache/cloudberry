@@ -28,9 +28,21 @@ chdir $FindBin::RealBin or die "could not cd to $FindBin::RealBin: $!\n";
 use lib "$FindBin::RealBin/../../backend/catalog/";
 use Catalog;
 
+# Some of OIDs register in CBDB kernel
+my @excluded_oids = (
+    # ex.
+    # 4, 5           # excluded single OID
+    # 10000..10050   # excluded range OIDs
+
+    7047             # PAX AM ID
+);
+
 my @input_files = (glob("pg_*.h"), glob("gp_*.h"));
 
 my $oids = Catalog::FindAllOidsFromHeaders(@input_files);
+
+# Push the excluded OIDs
+push @{$oids}, @excluded_oids;
 
 # Also push FirstGenbkiObjectId to serve as a terminator for the last gap.
 my $FirstGenbkiObjectId =
