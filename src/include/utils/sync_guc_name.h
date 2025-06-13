@@ -196,5 +196,6 @@
 		"gp_appendonly_insert_files",
 		"gp_appendonly_insert_files_tuples_range",
 		"gp_enable_runtime_filter_pushdown",
+		"gp_runtime_filter_selectivity_threshold",
 		"gp_random_insert_segments",
 		"zero_damaged_pages",

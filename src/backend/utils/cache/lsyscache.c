@@ -4566,7 +4566,49 @@ get_operator_opfamilies(Oid opno)
 	ReleaseSysCacheList(catlist);
 
 	return opfam_oids;
-} 
+}
+
+Oid
+get_operator(Oid opno, Oid oprleft, Oid oprright, Oid namespaceId,
+			 const char *oprname, bool noError)
+{
+	HeapTuple tup;
+	Form_pg_operator oprform;
+	Oid result = InvalidOid;
+
+	/* If opno is valid, just look up the operator directly */
+	if (OidIsValid(opno))
+	{
+		tup = SearchSysCache1(OPEROID, ObjectIdGetDatum(opno));
+		if (HeapTupleIsValid(tup))
+		{
+			result = opno;
+			ReleaseSysCache(tup);
+		}
+		return result;
+	}
+
+	/* Search for the operator based on name and argument types */
+	tup = SearchSysCache4(OPERNAMENSP, PointerGetDatum(oprname),
+						  ObjectIdGetDatum(oprleft), ObjectIdGetDatum(oprright),
+						  ObjectIdGetDatum(namespaceId));
+
+	if (HeapTupleIsValid(tup))
+	{
+		oprform = (Form_pg_operator) GETSTRUCT(tup);
+		result = oprform->oid;
+		ReleaseSysCache(tup);
+	}
+	else if (!noError)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_FUNCTION),
+				 errmsg("operator does not exist: %s(%s, %s)", oprname,
+						format_type_be(oprleft), format_type_be(oprright))));
+	}
+
+	return result;
+}
 
 /*
  * get_index_opfamilies

@@ -462,6 +462,8 @@ int  gp_predicate_pushdown_sample_rows;
 
 bool gp_enable_runtime_filter_pushdown;
 
+double gp_runtime_filter_selectivity_threshold;
+
 bool        enable_offload_entry_to_qe = false;
 bool 		enable_answer_query_using_materialized_views = false;
 bool		aqumv_allow_foreign_table = false;
@@ -4739,6 +4741,17 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&optimizer_spilling_mem_threshold,
 		0.0, 0.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_runtime_filter_selectivity_threshold", PGC_USERSET, QUERY_TUNING_OTHER,
+			gettext_noop("The threshold of selectivity to optimize runtime filter pushdown."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_runtime_filter_selectivity_threshold,
+		0.8, 0.0, DBL_MAX,
 		NULL, NULL, NULL
 	},
 

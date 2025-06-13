@@ -651,6 +651,7 @@ extern bool gp_allow_date_field_width_5digits;
  * bloom filter for performance.
  */
 extern bool gp_enable_runtime_filter_pushdown;
+extern double gp_runtime_filter_selectivity_threshold;
 
 typedef enum
 {

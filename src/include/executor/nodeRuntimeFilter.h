@@ -38,5 +38,6 @@ extern void RFAddTupleValues(RuntimeFilterState *rfstate, List *vals);
 
 extern void ExecInitRuntimeFilterFinish(RuntimeFilterState *node,
                                         double inner_rows);
+extern void ExecRFExplainEnd(HashState *hashState, struct StringInfoData *buf);
 
 #endif							/* NODERUNTIMEFILTER_H */

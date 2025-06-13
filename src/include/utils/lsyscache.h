@@ -264,6 +264,8 @@ extern Oid default_partition_opfamily_for_type(Oid typeoid);
 
 extern int get_relnatts(Oid relid);
 
+extern Oid get_operator(Oid opno, Oid oprleft, Oid oprright, Oid namespaceId, const char *oprname,bool noError);
+
 #define type_is_array(typid)  (get_element_type(typid) != InvalidOid)
 /* type_is_array_domain accepts both plain arrays and domains over arrays */
 #define type_is_array_domain(typid)  (get_base_element_type(typid) != InvalidOid)
