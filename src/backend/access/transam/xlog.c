@@ -6629,6 +6629,7 @@ UpdateCatalogForStandbyPromotion(void)
 	/* I am privileged */
 	InitializeSessionUserIdStandalone();
 	gp_activate_standby();
+	write_gp_segment_configuration();
 	/* close the transaction we started above */
 	CommitTransactionCommand();
 	Gp_role = old_role;
