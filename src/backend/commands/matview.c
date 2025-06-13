@@ -463,7 +463,8 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	if (!stmt->skipData && RelationIsIVM(matviewRel))
 		dataQuery = rewriteQueryForIMMV(viewQuery,NIL);
 	else
-		dataQuery = viewQuery;
+		/* viewQuery maybe released in make_new_heap_with_colname. */
+		dataQuery = copyObject(viewQuery);
 
 	/*
 	 * Check that there is a unique index with no WHERE clause on one or more
