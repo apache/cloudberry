@@ -37,6 +37,11 @@ private:
 	// hashmap for all the columns in the CTE expression
 	UlongToColRefMap *m_phmulcr;
 
+	// mapping index of colref to origin idx
+	// if current colref not used, then set -1 in the position
+	// if all used, then m_pidxmap will be nullptr
+	ULongPtrArray *m_pidxmap;
+
 public:
 	CPhysicalCTEConsumer(const CPhysicalCTEConsumer &) = delete;
 
@@ -79,6 +84,12 @@ public:
 	Phmulcr() const
 	{
 		return m_phmulcr;
+	}
+
+	ULongPtrArray *
+	PCTEIdxMap() const
+	{
+		return m_pidxmap;
 	}
 
 	// operator specific hash function
