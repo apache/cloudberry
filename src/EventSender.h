@@ -57,7 +57,6 @@ private:
   void collect_query_done(QueryDesc *query_desc, QueryMetricsStatus status);
   void cleanup_messages();
   void update_nested_counters(QueryDesc *query_desc);
-  void update_ignored_users(const char *new_guc_ignored_users);
 
   UDSConnector *connector = nullptr;
   int nesting_level = 0;
