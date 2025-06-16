@@ -51,36 +51,10 @@ TEST_F(MicroPartitionStatsTest, MicroPartitionStatsInfoCombine) {
       cbdb::Palloc0(sizeof(TupleDescData) + sizeof(FormData_pg_attribute) * 4));
 
   tuple_desc->natts = 4;
-  tuple_desc->attrs[0] = {.atttypid = INT4OID,
-                          .attlen = 4,
-                          .attbyval = true,
-                          .attalign = TYPALIGN_INT,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = InvalidOid};
-
-  tuple_desc->attrs[1] = {.atttypid = TEXTOID,
-                          .attlen = -1,
-                          .attbyval = false,
-                          .attalign = TYPALIGN_DOUBLE,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = DEFAULT_COLLATION_OID};
-
-  tuple_desc->attrs[2] = {.atttypid = INT4OID,
-                          .attlen = 4,
-                          .attbyval = true,
-                          .attalign = TYPALIGN_INT,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = InvalidOid};
-  tuple_desc->attrs[3] = {.atttypid = INT4OID,
-                          .attlen = 4,
-                          .attbyval = true,
-                          .attalign = TYPALIGN_INT,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = InvalidOid};
+  InitAttribute_int4(&tuple_desc->attrs[0]);
+  InitAttribute_text(&tuple_desc->attrs[1]);
+  InitAttribute_int4(&tuple_desc->attrs[2]);
+  InitAttribute_int4(&tuple_desc->attrs[3]);
 
   auto col_stats1_1 = mp_stats_info1.add_columnstats();
   auto col_stats1_2 = mp_stats_info1.add_columnstats();
