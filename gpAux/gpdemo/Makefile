@@ -9,7 +9,7 @@
 top_builddir = ../..
 -include $(top_builddir)/src/Makefile.global
 
-SHELL := /usr/bin/bash
+SHELL := /usr/bin/env bash
 
 all:
 	$(MAKE) clean
