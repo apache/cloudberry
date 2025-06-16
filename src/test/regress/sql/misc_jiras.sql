@@ -70,3 +70,8 @@ from gp_dist_random('gp_distribution_policy') where localoid = 't2_17271'::regcl
 drop table t_17271;
 drop table t1_17271;
 drop table t2_17271;
+
+-- Github Issue 1055
+-- AO column storage not supported for zero-column tables
+set default_table_access_method = ao_column;
+create table t_1055();

@@ -1047,6 +1047,15 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		 */
 		if (GpPolicyIsHashPartitioned(policy))
 			policy = createRandomPartitionedPolicy(policy->numsegments);
+
+		/*
+		 * Issue #1055: AO column storage not supported for zero-column tables,
+		 * report error.
+		 */
+		if (accessMethodId == AO_COLUMN_TABLE_AM_OID)
+			ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("AO column storage is not supported for zero-column tables")));
 	}
 
 	if (partitioned && GpPolicyIsReplicated(policy))
