@@ -40,7 +40,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp)
 	  m_pdrgpcr(nullptr),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_egbaggtype(COperator::EgbaggtypeSentinel),
-	  m_aggStage(EasOthers)
+	  m_aggStage(EasOthers),
+	  m_aggpushdown(false)
 {
 	m_fPattern = true;
 }
@@ -62,7 +63,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp, CColRefArray *colref_array,
 	  m_pdrgpcr(colref_array),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_egbaggtype(egbaggtype),
-	  m_aggStage(EasOthers)
+	  m_aggStage(EasOthers),
+	  m_aggpushdown(false)
 {
 	if (COperator::EgbaggtypeLocal == egbaggtype)
 	{
@@ -86,7 +88,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp, CColRefArray *colref_array,
 	  m_pdrgpcr(colref_array),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_egbaggtype(egbaggtype),
-	  m_aggStage(aggStage)
+	  m_aggStage(aggStage),
+	  m_aggpushdown(false)
 {
 	if (COperator::EgbaggtypeLocal == egbaggtype)
 	{
@@ -120,7 +123,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp, CColRefArray *colref_array,
 	  m_pdrgpcr(colref_array),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_egbaggtype(egbaggtype),
-	  m_aggStage(EasOthers)
+	  m_aggStage(EasOthers),
+	  m_aggpushdown(false)
 {
 	GPOS_ASSERT(nullptr != colref_array);
 	GPOS_ASSERT(COperator::EgbaggtypeSentinel > egbaggtype);
@@ -142,7 +146,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp, CColRefArray *colref_array,
 	  m_pdrgpcr(colref_array),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_egbaggtype(egbaggtype),
-	  m_aggStage(aggStage)
+	  m_aggStage(aggStage),
+	  m_aggpushdown(false)
 {
 	GPOS_ASSERT(nullptr != colref_array);
 	GPOS_ASSERT(COperator::EgbaggtypeSentinel > egbaggtype);
@@ -171,7 +176,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp, CColRefArray *colref_array,
 	  m_pdrgpcr(colref_array),
 	  m_pdrgpcrMinimal(pdrgpcrMinimal),
 	  m_egbaggtype(egbaggtype),
-	  m_aggStage(EasOthers)
+	  m_aggStage(EasOthers),
+	  m_aggpushdown(false)
 {
 	GPOS_ASSERT(nullptr != colref_array);
 	GPOS_ASSERT(COperator::EgbaggtypeSentinel > egbaggtype);
@@ -209,7 +215,8 @@ CLogicalGbAgg::CLogicalGbAgg(CMemoryPool *mp, CColRefArray *colref_array,
 	  m_pdrgpcr(colref_array),
 	  m_pdrgpcrMinimal(pdrgpcrMinimal),
 	  m_egbaggtype(egbaggtype),
-	  m_aggStage(EasOthers)
+	  m_aggStage(EasOthers),
+	  m_aggpushdown(false)
 {
 	GPOS_ASSERT(nullptr != colref_array);
 	GPOS_ASSERT(COperator::EgbaggtypeSentinel > egbaggtype);
@@ -592,6 +599,7 @@ CLogicalGbAgg::PxfsCandidates(CMemoryPool *mp) const
 	(void) xform_set->ExchangeSet(CXform::ExfPushGbBelowUnionAll);
 	if (FGlobal())
 	{
+		(void) xform_set->ExchangeSet(CXform::ExfPushPartialAggBelowJoin);
 		(void) xform_set->ExchangeSet(CXform::ExfSplitGbAgg);
 	}
 	(void) xform_set->ExchangeSet(CXform::ExfSplitDQA);
@@ -698,7 +706,7 @@ CLogicalGbAgg::OsPrint(IOstream &os) const
 
 	os << SzId() << "( ";
 	OsPrintGbAggType(os, m_egbaggtype);
-	os << " )";
+	os << (m_aggpushdown ? ", pushdown )" : " )");
 	os << " Grp Cols: [";
 	CUtils::OsPrintDrgPcr(os, m_pdrgpcr);
 	os << "]"
