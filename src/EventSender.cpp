@@ -62,6 +62,7 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     nested_timing = 0;
     nested_calls = 0;
   }
+  Config::sync();
   if (!need_collect(query_desc, nesting_level)) {
     return;
   }
@@ -262,7 +263,7 @@ void EventSender::ic_metrics_collect() {
 }
 
 EventSender::EventSender() {
-  if (Config::enable_collector() && !Config::filter_user(get_user_name())) {
+  if (Config::enable_collector()) {
     try {
       connector = new UDSConnector();
     } catch (const std::exception &e) {

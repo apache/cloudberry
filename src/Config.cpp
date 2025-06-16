@@ -17,7 +17,43 @@ static bool guc_enable_collector = true;
 static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
 static int guc_max_text_size = 1024; // in KB
-static std::unique_ptr<std::unordered_set<std::string>> ignored_users = nullptr;
+static std::unique_ptr<std::unordered_set<std::string>> ignored_users_set =
+    nullptr;
+static bool ignored_users_guc_dirty = false;
+
+static void update_ignored_users(const char *new_guc_ignored_users) {
+  auto new_ignored_users_set =
+      std::make_unique<std::unordered_set<std::string>>();
+  if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
+    /* Need a modifiable copy of string */
+    char *rawstring = pstrdup(new_guc_ignored_users);
+    List *elemlist;
+    ListCell *l;
+
+    /* Parse string into list of identifiers */
+    if (!SplitIdentifierString(rawstring, ',', &elemlist)) {
+      /* syntax error in list */
+      pfree(rawstring);
+      list_free(elemlist);
+      ereport(
+          LOG,
+          (errcode(ERRCODE_SYNTAX_ERROR),
+           errmsg(
+               "invalid list syntax in parameter yagpcc.ignored_users_list")));
+      return;
+    }
+    foreach (l, elemlist) {
+      new_ignored_users_set->insert((char *)lfirst(l));
+    }
+    pfree(rawstring);
+    list_free(elemlist);
+  }
+  ignored_users_set = std::move(new_ignored_users_set);
+}
+
+static void assign_ignored_users_hook(const char *, void *) {
+  ignored_users_guc_dirty = true;
+}
 
 void Config::init() {
   DefineCustomStringVariable(
@@ -44,11 +80,12 @@ void Config::init() {
       &guc_report_nested_queries, true, PGC_USERSET,
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
 
-  DefineCustomStringVariable(
-      "yagpcc.ignored_users_list",
-      "Make yagpcc ignore queries issued by given users", 0LL,
-      &guc_ignored_users, "gpadmin,repl,gpperfmon,monitor", PGC_SUSET,
-      GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
+  DefineCustomStringVariable("yagpcc.ignored_users_list",
+                             "Make yagpcc ignore queries issued by given users",
+                             0LL, &guc_ignored_users,
+                             "gpadmin,repl,gpperfmon,monitor", PGC_SUSET,
+                             GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL,
+                             assign_ignored_users_hook, 0LL);
 
   DefineCustomIntVariable(
       "yagpcc.max_text_size",
@@ -65,33 +102,15 @@ bool Config::report_nested_queries() { return guc_report_nested_queries; }
 size_t Config::max_text_size() { return guc_max_text_size * 1024; }
 
 bool Config::filter_user(const std::string *username) {
-  if (!ignored_users) {
-    ignored_users.reset(new std::unordered_set<std::string>());
-    if (guc_ignored_users == nullptr || guc_ignored_users[0] == '0') {
-      return false;
-    }
-    /* Need a modifiable copy of string */
-    char *rawstring = pstrdup(guc_ignored_users);
-    List *elemlist;
-    ListCell *l;
-
-    /* Parse string into list of identifiers */
-    if (!SplitIdentifierString(rawstring, ',', &elemlist)) {
-      /* syntax error in list */
-      pfree(rawstring);
-      list_free(elemlist);
-      ereport(
-          LOG,
-          (errcode(ERRCODE_SYNTAX_ERROR),
-           errmsg(
-               "invalid list syntax in parameter yagpcc.ignored_users_list")));
-      return false;
-    }
-    foreach (l, elemlist) {
-      ignored_users->insert((char *)lfirst(l));
-    }
-    pfree(rawstring);
-    list_free(elemlist);
+  if (!username || !ignored_users_set) {
+    return true;
   }
-  return !username || ignored_users->find(*username) != ignored_users->end();
+  return ignored_users_set->find(*username) != ignored_users_set->end();
+}
+
+void Config::sync() {
+  if (ignored_users_guc_dirty) {
+    update_ignored_users(guc_ignored_users);
+    ignored_users_guc_dirty = false;
+  }
 }
