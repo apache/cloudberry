@@ -23,7 +23,7 @@ PAX has the following features:
 
 PAX will be built with `--enable-pax` when you build the Cloudberry. Dependency requirements are as follows:
 
-- **C/C++ Compiler**: GCC/GCC-C++ 11 or later
+- **C/C++ Compiler**: GCC/GCC-C++ 8 or later
 - **CMake**: 3.11 or later
 - **Protobuf**: 3.5.0 or later
 - **ZSTD (libzstd)**: 1.4.0 or later

@@ -487,16 +487,13 @@ TEST_F(OrcTest, WriteReadTupleWithToast) {
   pax_min_size_of_external_toast = 1024;
 
   tuple_desc->natts = TOAST_COLUMN_NUMS;
-  tuple_desc->attrs[0] = {.atttypid = TEXTOID,
-                          .attlen = -1,
-                          .attbyval = false,
-                          .attalign = TYPALIGN_DOUBLE,
-                          .attstorage = TYPSTORAGE_EXTENDED,
-                          .attisdropped = false,
-                          .attcollation = DEFAULT_COLLATION_OID};
-  tuple_desc->attrs[1] = tuple_desc->attrs[0];
-  tuple_desc->attrs[2] = tuple_desc->attrs[0];
-  tuple_desc->attrs[3] = tuple_desc->attrs[0];
+  InitAttribute_text(&tuple_desc->attrs[0]);
+  InitAttribute_text(&tuple_desc->attrs[1]);
+  InitAttribute_text(&tuple_desc->attrs[2]);
+  InitAttribute_text(&tuple_desc->attrs[3]);
+  tuple_desc->attrs[0].attstorage = TYPSTORAGE_EXTENDED;
+  tuple_desc->attrs[1].attstorage = TYPSTORAGE_EXTENDED;
+  tuple_desc->attrs[2].attstorage = TYPSTORAGE_EXTENDED;
   // column 4 is external but no compress
   tuple_desc->attrs[3].attstorage = TYPSTORAGE_EXTERNAL;
 
@@ -763,19 +760,8 @@ TEST_P(OrcEncodingTest, ReadTupleWithEncoding) {
       cbdb::Palloc0(sizeof(TupleDescData) + sizeof(FormData_pg_attribute) * 2));
 
   tuple_desc->natts = 2;
-  tuple_desc->attrs[0] = {
-      .attlen = 8,
-      .attbyval = true,
-      .attalign = TYPALIGN_DOUBLE,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
-
-  tuple_desc->attrs[1] = {
-      .attlen = 8,
-      .attbyval = true,
-      .attalign = TYPALIGN_DOUBLE,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
+  InitAttribute_int8(&tuple_desc->attrs[0]);
+  InitAttribute_int8(&tuple_desc->attrs[1]);
 
   tuple_slot = MakeTupleTableSlot(tuple_desc, &TTSOpsVirtual);
   bool *fake_is_null =
@@ -847,19 +833,8 @@ TEST_P(OrcCompressTest, ReadTupleWithCompress) {
       cbdb::Palloc0(sizeof(TupleDescData) + sizeof(FormData_pg_attribute) * 2));
 
   tuple_desc->natts = 2;
-  tuple_desc->attrs[0] = {
-      .attlen = -1,
-      .attbyval = false,
-      .attalign = TYPALIGN_DOUBLE,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
-
-  tuple_desc->attrs[1] = {
-      .attlen = -1,
-      .attbyval = false,
-      .attalign = TYPALIGN_DOUBLE,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
+  InitAttribute_text(&tuple_desc->attrs[0]);
+  InitAttribute_text(&tuple_desc->attrs[1]);
 
   tuple_slot = MakeTupleTableSlot(tuple_desc, &TTSOpsVirtual);
   bool *fake_is_null =
@@ -963,11 +938,7 @@ TEST_F(OrcTest, ReadTupleDefaultColumn) {
   EXPECT_EQ(1UL, reader->GetGroupNums());
 
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false, 4);
-  tuple_slot_empty->tts_tupleDescriptor->attrs[3] = {
-      .attlen = 4,
-      .attbyval = true,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
+  InitAttribute_int4(&tuple_slot_empty->tts_tupleDescriptor->attrs[3]);
 
   tuple_slot_empty->tts_tupleDescriptor->natts = COLUMN_NUMS + 1;
 
@@ -1071,18 +1042,8 @@ TEST_F(OrcTest, WriteReadBigTuple) {
       cbdb::Palloc0(sizeof(TupleDescData) + sizeof(FormData_pg_attribute) * 2));
 
   tuple_desc->natts = 2;
-  tuple_desc->attrs[0] = {
-      .attlen = 4,
-      .attbyval = true,
-      .attalign = TYPALIGN_INT,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
-  tuple_desc->attrs[1] = {
-      .attlen = 4,
-      .attbyval = true,
-      .attalign = TYPALIGN_INT,
-      .attstorage = TYPSTORAGE_PLAIN,
-  };
+  InitAttribute_int4(&tuple_desc->attrs[0]);
+  InitAttribute_int4(&tuple_desc->attrs[1]);
 
   tuple_slot = MakeTupleTableSlot(tuple_desc, &TTSOpsVirtual);
   bool *fake_is_null =
