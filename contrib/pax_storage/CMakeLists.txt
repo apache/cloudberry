@@ -13,7 +13,7 @@ option(USE_PAX_CATALOG "Use manifest API, by pax impl" ON)
 
 # Build gtest options
 option(BUILD_GTEST "Build with google test" ON)
-option(BUILD_GBENCH "Build with google benchmark" ON)
+option(BUILD_GBENCH "Build with google benchmark" OFF)
 
 # Build pax tools
 option(BUILD_TOOLS "Build with pax tools" OFF)
