@@ -41,7 +41,7 @@ public:
 					 BOOL fGeneratesDuplicates, CColRefArray *pdrgpcrArgDQA,
 					 BOOL fMultiStage, BOOL isAggFromSplitDQA,
 					 CLogicalGbAgg::EAggStage aggStage,
-					 BOOL should_enforce_distribution = true
+					 BOOL isAggPushdown, BOOL should_enforce_distribution
 					 // should_enforce_distribution should be set to false if
 					 // 'local' and 'global' splits don't need to have different
 					 // distributions. This flag is set to false if the local

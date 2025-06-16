@@ -560,6 +560,7 @@ CXformUtils::PexprPushGbBelowJoin(CMemoryPool *mp, CExpression *pexpr)
 
 	pexprOuter->AddRef();
 	pexprPrjList->AddRef();
+	popGbAggNew->MarkAggPushdown();
 	CExpression *pexprNewGb =
 		GPOS_NEW(mp) CExpression(mp, popGbAggNew, pexprOuter, pexprPrjList);
 

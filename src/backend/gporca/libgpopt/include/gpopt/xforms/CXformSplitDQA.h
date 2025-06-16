@@ -117,7 +117,8 @@ public:
 	FCompatible(CXform::EXformId exfid) override
 	{
 		return (CXform::ExfSplitDQA != exfid) &&
-			   (CXform::ExfSplitGbAgg != exfid);
+			   (CXform::ExfSplitGbAgg != exfid) &&
+			   (CXform::ExfPushPartialAggBelowJoin != exfid);
 	}
 
 	// compute xform promise for a given expression handle

@@ -43,6 +43,7 @@ public:
 								  BOOL fGeneratesDuplicates, BOOL fMultiStage,
 								  BOOL isAggFromSplitDQA,
 								  CLogicalGbAgg::EAggStage aggStage,
+								  BOOL isAggPushdown,
 								  BOOL should_enforce_distribution);
 
 	// dtor
