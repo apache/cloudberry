@@ -210,7 +210,9 @@ AC_SUBST(enable_gpfdist)
 # include debug extensions in gpcontrib
 #
 PGAC_ARG_BOOL(enable, debug-extensions, no,
-              [include debug extensions in gpcontrib])
+              [include debug extensions in gpcontrib],
+              [AC_DEFINE([FAULT_INJECTOR], 1,
+                         [Define to 1 to build with fault injector. (--enable-debug-extensions)])])
 AC_SUBST(enable_debug_extensions)
 
 #
