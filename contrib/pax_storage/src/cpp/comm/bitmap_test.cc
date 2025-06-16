@@ -36,7 +36,7 @@ TEST_F(BitMapTest, Bitmap8) {
   Bitmap8 bm(20);
 
   ASSERT_TRUE(bm.Empty());
-  for (auto i = 0; i <= 128; i++) {
+  for (uint32 i = 0; i <= 128; i++) {
     ASSERT_FALSE(bm.Test(i));  // zeros
     ASSERT_FALSE(bm.Toggle(i));
     ASSERT_TRUE(bm.Test(i));
@@ -61,14 +61,14 @@ TEST_F(BitMapTest, Bitmap8) {
 
 TEST_F(BitMapTest, Bitmap8SetN) {
   Bitmap8 bm(10);
-  const auto nbits = 128;
+  const uint32 nbits = 128;
 
   ASSERT_TRUE(bm.Empty());
-  for (auto i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
+  for (uint32 i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
 
   auto fn = [&bm, nbits](uint32 index) {
     bm.ClearAll();
-    for (auto i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
+    for (uint32 i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
     bm.SetN(index);
     for (uint32 i = 0; i <= index; i++) ASSERT_TRUE(bm.Test(i));
     for (uint32 i = index + 1; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
@@ -78,13 +78,13 @@ TEST_F(BitMapTest, Bitmap8SetN) {
 
 TEST_F(BitMapTest, Bitmap8ClearN) {
   Bitmap8 bm(10);
-  const auto nbits = 128;
+  const uint32 nbits = 128;
 
   ASSERT_TRUE(bm.Empty());
-  for (auto i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
+  for (uint32 i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
 
   auto fn = [&bm, nbits](uint32 index) {
-    for (auto i = 0; i <= nbits; i++) {
+    for (uint32 i = 0; i <= nbits; i++) {
       bm.Set(i);
       ASSERT_TRUE(bm.Test(i));
     }
@@ -99,7 +99,7 @@ TEST_F(BitMapTest, Bitmap64) {
   Bitmap64 bm(100);
 
   ASSERT_TRUE(bm.Empty());
-  for (auto i = 0; i <= 128; i++) {
+  for (uint32 i = 0; i <= 128; i++) {
     ASSERT_FALSE(bm.Test(i));  // zeros
     ASSERT_FALSE(bm.Toggle(i));
     ASSERT_TRUE(bm.Test(i));
@@ -122,14 +122,14 @@ TEST_F(BitMapTest, Bitmap64) {
 }
 TEST_F(BitMapTest, Bitmap64SetN) {
   Bitmap64 bm(1);
-  const auto nbits = 512;
+  const uint32 nbits = 512;
 
   ASSERT_TRUE(bm.Empty());
-  for (auto i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
+  for (uint32 i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
 
   auto fn = [&bm, nbits](uint32 index) {
     bm.ClearAll();
-    for (auto i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
+    for (uint32 i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
     bm.SetN(index);
     for (uint32 i = 0; i <= index; i++) ASSERT_TRUE(bm.Test(i));
     for (uint32 i = index + 1; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
@@ -139,13 +139,13 @@ TEST_F(BitMapTest, Bitmap64SetN) {
 
 TEST_F(BitMapTest, Bitmap64ClearN) {
   Bitmap64 bm(1);
-  const auto nbits = 512;
+  const uint32 nbits = 512;
 
   ASSERT_TRUE(bm.Empty());
-  for (auto i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
+  for (uint32 i = 0; i <= nbits; i++) ASSERT_FALSE(bm.Test(i));
 
   auto fn = [&bm, &nbits](uint32 index) {
-    for (auto i = 0; i <= nbits; i++) {
+    for (uint32 i = 0; i <= nbits; i++) {
       bm.Set(i);
       ASSERT_TRUE(bm.Test(i));
     }
