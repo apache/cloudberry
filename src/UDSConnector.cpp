@@ -30,7 +30,13 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
                                 const std::string &event) {
   sockaddr_un address;
   address.sun_family = AF_UNIX;
-  strcpy(address.sun_path, Config::uds_path().c_str());
+  std::string uds_path = Config::uds_path();
+  if (uds_path.size() >= sizeof(address.sun_path)) {
+    ereport(WARNING, (errmsg("UDS path is too long for socket buffer")));
+    YagpStat::report_error();
+    return false;
+  }
+  strcpy(address.sun_path, uds_path.c_str());
   bool success = true;
   auto sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sockfd != -1) {
