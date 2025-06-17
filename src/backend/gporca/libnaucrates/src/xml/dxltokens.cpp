@@ -400,6 +400,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 
 		{EdxltokenColDescr, GPOS_WSZ_LIT("Column")},
 		{EdxltokenColRef, GPOS_WSZ_LIT("ColRef")},
+		{EdxltokenColIdxmap, GPOS_WSZ_LIT("ColIdxMap")},
 
 		{EdxltokenColumns, GPOS_WSZ_LIT("Columns")},
 		{EdxltokenColumn, GPOS_WSZ_LIT("Column")},

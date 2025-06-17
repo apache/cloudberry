@@ -37,11 +37,17 @@ private:
 	// set representation of cte columns
 	CColRefSet *m_pcrs;
 
+	// used to record unused columns in m_pdrgpcr
+	ULongPtrArray *m_pdrgpcr_unused;
+
+	// used to mapping col index
+	ULongPtrArray *m_pidxmap;
+
 public:
 	CPhysicalCTEProducer(const CPhysicalCTEProducer &) = delete;
 
 	// ctor
-	CPhysicalCTEProducer(CMemoryPool *mp, ULONG id, CColRefArray *colref_array);
+	CPhysicalCTEProducer(CMemoryPool *mp, ULONG id, CColRefArray *colref_array, BOOL *umask);
 
 	// dtor
 	~CPhysicalCTEProducer() override;
@@ -71,6 +77,20 @@ public:
 	Pdrgpcr() const
 	{
 		return m_pdrgpcr;
+	}
+
+	// used to make the CTE consumer colid get the right position in m_pdrgpcr.
+	// more details see the function CCTEInfo::PhmulcrConsumerToProducer()
+	ULongPtrArray *
+	PdrgpcrUnused() const
+	{
+		return m_pdrgpcr_unused;
+	}
+
+	ULongPtrArray *
+	PCTEIdxMap() const
+	{
+		return m_pidxmap;
 	}
 
 	// operator specific hash function
