@@ -61,6 +61,4 @@ test: resgroup/resgroup_large_group_id
 
 test: resgroup/resgroup_startup_memory
 
-test: resgroup/resgroup_oom
-
 test: resgroup/disable_resgroup

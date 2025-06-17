@@ -151,7 +151,7 @@ PQmakeEmptyPGresult(PGconn *conn, ExecStatusType status)
 {
 	PGresult   *result;
 
-	result = (PGresult *) pqPalloc(sizeof(PGresult));
+	result = (PGresult *) malloc(sizeof(PGresult));
 	if (!result)
 		return NULL;
 
@@ -407,7 +407,7 @@ dupEvents(PGEvent *events, int count)
 	if (!events || count <= 0)
 		return NULL;
 
-	newEvents = (PGEvent *) pqPalloc(count * sizeof(PGEvent));
+	newEvents = (PGEvent *) malloc(count * sizeof(PGEvent));
 	if (!newEvents)
 		return NULL;
 
@@ -417,12 +417,12 @@ dupEvents(PGEvent *events, int count)
 		newEvents[i].passThrough = events[i].passThrough;
 		newEvents[i].data = NULL;
 		newEvents[i].resultInitialized = FALSE;
-		newEvents[i].name = pqPstrdup(events[i].name);
+		newEvents[i].name = strdup(events[i].name);
 		if (!newEvents[i].name)
 		{
 			while (--i >= 0)
-				pqPfree(newEvents[i].name);
-			pqPfree(newEvents);
+				free(newEvents[i].name);
+			free(newEvents);
 			return NULL;
 		}
 	}
@@ -585,7 +585,7 @@ pqResultAlloc(PGresult *res, size_t nBytes, bool isBinary)
 	 */
 	if (nBytes >= PGRESULT_SEP_ALLOC_THRESHOLD)
 	{
-		block = (PGresult_data *) pqPalloc(nBytes + PGRESULT_BLOCK_OVERHEAD);
+		block = (PGresult_data *) malloc(nBytes + PGRESULT_BLOCK_OVERHEAD);
 		if (!block)
 			return NULL;
 		space = block->space + PGRESULT_BLOCK_OVERHEAD;
@@ -609,7 +609,7 @@ pqResultAlloc(PGresult *res, size_t nBytes, bool isBinary)
 	}
 
 	/* Otherwise, start a new block. */
-	block = (PGresult_data *) pqPalloc(PGRESULT_DATA_BLOCKSIZE);
+	block = (PGresult_data *) malloc(PGRESULT_DATA_BLOCKSIZE);
 	if (!block)
 		return NULL;
 	block->next = res->curBlock;
@@ -709,18 +709,18 @@ PQclear(PGresult *res)
 	}
 
 	if (res->events)
-		pqPfree(res->events);
+		free(res->events);
 
 	/* Free all the subsidiary blocks */
 	while ((block = res->curBlock) != NULL)
 	{
 		res->curBlock = block->next;
-		pqPfree(block);
+		free(block);
 	}
 
 	/* Free the top-level tuple pointer array */
 	if (res->tuples)
-		pqPfree(res->tuples);
+		free(res->tuples);
 
 	/* zero out the pointer fields to catch programming errors */
 	res->attDescs = NULL;
@@ -732,20 +732,20 @@ PQclear(PGresult *res)
 	/* res->curBlock was zeroed out earlier */
 
 	if (res->extras)
-		pqPfree(res->extras);
+		free(res->extras);
 	res->extraslen = 0;
 	res->extras = NULL;
 
 	if (res->aotupcounts)
-		pqPfree(res->aotupcounts);
+		free(res->aotupcounts);
 	res->naotupcounts = 0;
 
 	if (res->waitGxids)
-		pqPfree(res->waitGxids);
+		free(res->waitGxids);
 	res->waitGxids = NULL;
 	res->nWaits = 0;
 	/* Free the PGresult structure itself */
-	pqPfree(res);
+	free(res);
 }
 
 /*
@@ -951,10 +951,10 @@ pqAddTuple(PGresult *res, PGresAttValue *tup, const char **errmsgp)
 
 		if (res->tuples == NULL)
 			newTuples = (PGresAttValue **)
-				pqPalloc(newSize * sizeof(PGresAttValue *));
+				malloc(newSize * sizeof(PGresAttValue *));
 		else
 			newTuples = (PGresAttValue **)
-				pqRepalloc(res->tuples, newSize * sizeof(PGresAttValue *));
+				realloc(res->tuples, newSize * sizeof(PGresAttValue *));
 		if (!newTuples)
 			return FALSE;		/* malloc or realloc failed */
 		res->tupArrSize = newSize;
