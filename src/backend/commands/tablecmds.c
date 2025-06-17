@@ -6858,6 +6858,13 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			else
 				NewAccessMethod = OldHeap->rd_rel->relam;
 
+			if (OldHeap->rd_rel->relnatts == 0 && NewAccessMethod == AO_COLUMN_TABLE_AM_OID)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot rewrite empty table \"%s\" as an AO columnar table",
+								RelationGetRelationName(OldHeap))));
+			}
 			/*
 			 * Select persistence of transient table (same as original unless
 			 * user requested a change)
