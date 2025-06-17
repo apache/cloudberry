@@ -1,3 +1,23 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+
 services:
   cbdb-coordinator:
     container_name: cbdb-cdw
@@ -11,6 +31,9 @@ services:
         ipv4_address: 10.5.0.10
     environment:
       MULTINODE: "true"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+
   cbdb-standby-coordinator:
     container_name: cbdb-scdw
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -19,6 +42,10 @@ services:
     networks:
       interconnect:
         ipv4_address: 10.5.0.11
+    environment:
+      MULTINODE: "true"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
   cbdb-segment-host-1:
     container_name: cbdb-sdw1
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -27,6 +54,10 @@ services:
     networks:
       interconnect:
         ipv4_address: 10.5.0.12
+    environment:
+      MULTINODE: "true"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
   cbdb-segment-host-2:
     container_name: cbdb-sdw2
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -35,6 +66,11 @@ services:
     networks:
       interconnect:
         ipv4_address: 10.5.0.13
+    environment:
+      MULTINODE: "true"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+
 networks:
   interconnect:
     name: cbdb-interconnect
