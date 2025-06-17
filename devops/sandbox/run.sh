@@ -1,5 +1,24 @@
-#!/bin/bash
-set -eu
+#!/usr/bin/env bash
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+set -euo pipefail
 
 # Default values
 DEFAULT_OS_VERSION="rockylinux9"
@@ -19,7 +38,7 @@ PIP_INDEX_URL_VAR="${PIP_INDEX_URL_VAR:-$DEFAULT_PIP_INDEX_URL_VAR}"
 # Function to display help message
 function usage() {
     echo "Usage: $0 [-o <os_version>] [-c <codebase_version>] [-b] [-m]"
-    echo "  -c  Codebase version (valid values: main, or determined from release zip file name)"
+    echo "  -c  Codebase version (valid values: main, or other available version like 2.0.0)"
     echo "  -t  Timezone (default: America/Los_Angeles, or set via TIMEZONE_VAR environment variable)"
     echo "  -p  Python Package Index (PyPI) (default: https://pypi.org/simple, or set via PIP_INDEX_URL_VAR environment variable)"
     echo "  -b  Build only, do not run the container (default: false, or set via BUILD_ONLY environment variable)"
@@ -64,23 +83,10 @@ if [[ "${MULTINODE}" == "true" && "${BUILD_ONLY}" == "true" ]]; then
     exit 1
 fi
 
-# If CODEBASE_VERSION is not specified, determine it from the file name
+# CODEBASE_VERSION must be specified via -c argument or CODEBASE_VERSION environment variable
 if [[ -z "$CODEBASE_VERSION" ]]; then
-    BASE_CODEBASE_FILE=$(ls configs/cloudberrydb-*.zip 2>/dev/null)
-
-    if [[ -z "$BASE_CODEBASE_FILE" ]]; then
-        echo "Error: No configs/cloudberrydb-*.zip file found and codebase version not specified."
-        exit 1
-    fi
-
-    CODEBASE_FILE=$(basename ${BASE_CODEBASE_FILE})
-
-    if [[ $CODEBASE_FILE =~ cloudberrydb-([0-9]+\.[0-9]+\.[0-9]+)\.zip ]]; then
-        CODEBASE_VERSION="${BASH_REMATCH[1]}"
-    else
-        echo "Error: Cannot extract version from file name $CODEBASE_FILE"
-        exit 1
-    fi
+    echo "Error: CODEBASE_VERSION must be specified via environment variable or '-c' command line parameter."
+    usage
 fi
 
 # Validate OS_VERSION and map to appropriate Docker image
@@ -104,6 +110,7 @@ fi
 if [[ "${CODEBASE_VERSION}" = "main"  ]]; then
     DOCKERFILE=Dockerfile.${CODEBASE_VERSION}.${OS_VERSION}
 
+    # Single image build
     docker build --file ${DOCKERFILE} \
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
@@ -112,7 +119,6 @@ else
 
     docker build --file ${DOCKERFILE} \
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
-                 --build-arg PIP_INDEX_URL_VAR="${PIP_INDEX_URL_VAR}" \
                  --build-arg CODEBASE_VERSION_VAR="${CODEBASE_VERSION}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
 fi
