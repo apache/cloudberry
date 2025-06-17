@@ -1748,6 +1748,10 @@ code or new licensing patterns.
             -->
             <exclude>devops/build/packaging/deb/ubuntu22.04/**</exclude>
 
+            <!-- Exclude the multinode hosts configuration file for Cloudberry sandbox
+            -->
+            <exclude>devops/sandbox/configs/multinode-gpinit-hosts</exclude>
+
           </excludes>
 
           <!--

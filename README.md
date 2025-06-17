@@ -68,9 +68,8 @@ Linux OS (including RHEL/Rocky Linux, and Ubuntu) and macOS.
 ### Try out quickly
 
 Welcome to try out Cloudberry via building [one Docker-based
-Sandbox](https://github.com/apache/cloudberry-bootcamp), which is tailored to
-help you gain a basic understanding of Cloudberry's capabilities and features
-a range of materials, including tutorials, sample code, and crash courses.
+Sandbox](./devops/sandbox), which is tailored to help you gain a basic
+understanding of Cloudberry's capabilities and features.
 
 ## Repositories
 
@@ -79,10 +78,8 @@ this, there are several ecosystem repositories for Cloudberry, including the
 website, extensions, connectors, adapters, and other utilities.
 
 * [apache/cloudberry-site](https://github.com/apache/cloudberry-site): website and documentation sources.
-* [apache/cloudberry-bootcamp](https://github.com/apache/cloudberry-bootcamp): help you quickly try out Cloudberry via one Docker-based Sandbox.
-* [apache/cloudberry-gpbackup](https://github.com/apache/cloudberry-gpbackup): backup utility for Cloudberry.
+* [apache/cloudberry-backup](https://github.com/apache/cloudberry-backup): backup utility for Cloudberry.
 * [apache/cloudberry-go-libs](https://github.com/apache/cloudberry-go-libs): go-libs for Cloudberry.
-* [apache/cloudberry-gpbackup-s3-plugin](https://github.com/apache/cloudberry-gpbackup-s3-plugin): S3 plugin for use with Cloudberry backup utility.
 * [apache/cloudberry-pxf](https://github.com/apache/cloudberry-pxf): Platform Extension Framework (PXF) for Cloudberry.
 
 ## Community & Support
