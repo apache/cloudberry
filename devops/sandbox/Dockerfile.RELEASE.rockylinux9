@@ -1,155 +1,287 @@
-FROM rockylinux/rockylinux:9
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# Multi-stage Dockerfile for Apache Cloudberry Sandbox Environment (Release)
+# --------------------------------------------------------------------
+# This Dockerfile compiles and installs a specific release version of
+# Cloudberry, then creates a runtime environment for testing and development.
+# --------------------------------------------------------------------
 
-ARG CODEBASE_VERSION_VAR=${CODEBASE_VERSION_VAR}
-ARG TIMEZONE_VAR="Asia/Shanghai"
+# --------------------------------------------------------------------
+# Build stage: Rocky Linux 9 builder to compile Cloudberry (release tarball)
+# --------------------------------------------------------------------
+FROM rockylinux/rockylinux:9.6 AS builder
 
-ENV container=docker
-ENV MULTINODE=false
+# Install build toolchains and development headers (avoid coreutils/curl conflicts on arm64)
+RUN dnf makecache && \
+    dnf install -y \
+        epel-release \
+        git && \
+    dnf config-manager --disable epel-cisco-openh264 && \
+    dnf makecache && \
+    dnf config-manager --disable epel && \
+    dnf install -y --enablerepo=epel \
+        the_silver_searcher \
+        bat \
+        htop && \
+    dnf install -y \
+        bison \
+        cmake3 \
+        ed \
+        file \
+        flex \
+        gcc \
+        gcc-c++ \
+        gdb \
+        glibc-langpack-en \
+        glibc-locale-source \
+        initscripts \
+        iproute \
+        less \
+        lsof \
+        m4 \
+        net-tools \
+        openssh-clients \
+        openssh-server \
+        perl \
+        rpm-build \
+        rpmdevtools \
+        rsync \
+        sudo \
+        tar \
+        unzip \
+        util-linux-ng \
+        wget \
+        sshpass \
+        which && \
+    dnf install -y \
+        apr-devel \
+        bzip2-devel \
+        java-11-openjdk \
+        java-11-openjdk-devel \
+        krb5-devel \
+        libcurl-devel \
+        libevent-devel \
+        libxml2-devel \
+        libuuid-devel \
+        libzstd-devel \
+        lz4 \
+        lz4-devel \
+        openldap-devel \
+        openssl-devel \
+        pam-devel \
+        perl-ExtUtils-Embed \
+        perl-Test-Simple \
+        perl-core \
+        python3-devel \
+        python3-pytest \
+        readline-devel \
+        zlib-devel && \
+    dnf install -y --enablerepo=crb \
+        libuv-devel \
+        libyaml-devel \
+        perl-IPC-Run \
+        protobuf-devel && \
+    dnf clean all && \
+    cd && XERCES_LATEST_RELEASE=3.3.0 && \
+    wget -nv "https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-${XERCES_LATEST_RELEASE}.tar.gz" && \
+    echo "$(curl -sL https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-${XERCES_LATEST_RELEASE}.tar.gz.sha256)" | sha256sum -c - && \
+    tar xf "xerces-c-${XERCES_LATEST_RELEASE}.tar.gz"; rm "xerces-c-${XERCES_LATEST_RELEASE}.tar.gz" && \
+    cd xerces-c-${XERCES_LATEST_RELEASE} && \
+    ./configure --prefix=/usr/local/xerces-c && \
+    make -j$(nproc) && \
+    make install -C ~/xerces-c-${XERCES_LATEST_RELEASE} && \
+    rm -rf ~/xerces-c*
 
-RUN dnf update -y && \
-    dnf install -y systemd \
-                   systemd-libs && \
-    dnf clean all
+# Create gpadmin user and grant passwordless sudo in builder
+RUN groupadd -r gpadmin && \
+    useradd -m -r -g gpadmin -s /bin/bash gpadmin && \
+    echo "gpadmin ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/gpadmin && \
+    chmod 440 /etc/sudoers.d/gpadmin
 
-# Clean up unnecessary systemd units
-RUN [ -d /lib/systemd/system/sysinit.target.wants ] && find /lib/systemd/system/sysinit.target.wants/ -type l -not -name 'systemd-tmpfiles-setup.service' -delete || echo "Directory /lib/systemd/system/sysinit.target.wants does not exist" && \
-    [ -d /lib/systemd/system/multi-user.target.wants ] && find /lib/systemd/system/multi-user.target.wants/ -type l -delete || echo "Directory /lib/systemd/system/multi-user.target.wants does not exist" && \
-    find /etc/systemd/system/*.wants/ -type l -delete || echo "Directory /etc/systemd/system/*.wants does not exist" && \
-    [ -d /lib/systemd/system/local-fs.target.wants ] && find /lib/systemd/system/local-fs.target.wants/ -type l -delete || echo "Directory /lib/systemd/system/local-fs.target.wants does not exist" && \
-    [ -d /lib/systemd/system/sockets.target.wants ] && find /lib/systemd/system/sockets.target.wants/ -type l -not -name '*udev*' -delete || echo "Directory /lib/systemd/system/sockets.target.wants does not exist" && \
-    [ -d /lib/systemd/system/basic.target.wants ] && find /lib/systemd/system/basic.target.wants/ -type l -delete || echo "Directory /lib/systemd/system/basic.target.wants does not exist" && \
-    [ -d /lib/systemd/system/anaconda.target.wants ] && find /lib/systemd/system/anaconda.target.wants/ -type l -delete || echo "Directory /lib/systemd/system/anaconda.target.wants does not exist"
-
-COPY ./configs/* /tmp/
-
-RUN     echo root:cbdb@123 | chpasswd && \
-        dnf makecache && \
-        dnf install -y yum-utils \
-                       epel-release \
-                       git && \
-        yum-config-manager --disable epel-cisco-openh264 && \
-        dnf makecache && \
-        yum-config-manager --disable epel && \
-        dnf install -y --enablerepo=epel \
-                       the_silver_searcher \
-                       bat \
-                       htop && \
-        dnf install -y bison \
-                       cmake3 \
-                       ed \
-                       flex \
-                       gcc \
-                       gcc-c++ \
-                       glibc-langpack-en \
-                       go \
-                       initscripts \
-                       iproute \
-                       less \
-                       m4 \
-                       net-tools \
-                       openssh-clients \
-                       openssh-server \
-                       passwd \
-                       perl \
-                       rsync \
-                       sudo \
-                       tar \
-                       unzip \
-                       util-linux-ng \
-                       wget \
-                       sshpass \
-                       which && \
-        dnf install -y apr-devel \
-                       bzip2-devel \
-                       krb5-devel \
-                       libcurl-devel \
-                       libevent-devel \
-                       libxml2-devel \
-                       libzstd-devel \
-                       openldap-devel \
-                       openssl-devel \
-                       pam-devel \
-                       perl-ExtUtils-Embed \
-                       perl-Test-Simple \
-                       perl-core \
-                       python3-devel \
-                       readline-devel \
-                       zlib-devel && \
-        dnf install -y --enablerepo=crb \
-                       libuv-devel \
-                       libyaml-devel \
-                       perl-IPC-Run && \
-        dnf install -y --enablerepo=epel \
-                       xerces-c-devel
-
-RUN     cp /tmp/90-cbdb-sysctl.conf /etc/sysctl.conf && \
-        cp /tmp/90-cbdb-limits.conf /etc/security/limits.d/90-cbdb-limits.conf && \
-        cat /usr/share/zoneinfo/${TIMEZONE_VAR} > /etc/localtime && \
-        echo "cdw" > /tmp/gpdb-hosts && \
-        echo "/usr/local/lib" >> /etc/ld.so.conf && \
-        echo "/usr/local/lib64" >> /etc/ld.so.conf && \
-        ldconfig && \
-        chmod 777 /tmp/gpinitsystem_singlenode && \
-        chmod 777 /tmp/init_system.sh && \
-        hostname > ~/orig_hostname && \
-        /usr/sbin/groupadd gpadmin && \
-        /usr/sbin/useradd  gpadmin -g gpadmin -G wheel && \
-        setcap cap_net_raw+ep /usr/bin/ping && \
-        echo "cbdb@123"|passwd --stdin gpadmin && \
-        echo "gpadmin        ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \
-        echo "root           ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \
-        echo "export COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1" >> /home/gpadmin/.bashrc && \
-        echo "source /usr/local/cloudberry-db/greenplum_path.sh"                >> /home/gpadmin/.bashrc && \
-        mkdir -p /data0/database/coordinator /data0/database/primary /data0/database/mirror && \
-        chown -R gpadmin:gpadmin /data0 && \
-        ssh-keygen -A && \
-        echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-
-RUN     cd /tmp/ && \
-        unzip -d /tmp /tmp/cloudberrydb-${CODEBASE_VERSION_VAR}.zip && \
-        mv /tmp/cloudberrydb-${CODEBASE_VERSION_VAR} /tmp/cloudberry
-
-RUN     cd /tmp/cloudberry && \
-        ./configure --prefix=/usr/local/cloudberry-db \
-                    --enable-cassert                  \
-                    --enable-debug-extensions         \
-                    --enable-ic-proxy                 \
-                    --enable-mapreduce                \
-                    --enable-orafce                   \
-                    --enable-orca                     \
-                    --enable-pxf                      \
-                    --enable-tap-tests                \
-                    --with-gssapi                     \
-                    --with-ldap                       \
-                    --with-libxml                     \
-                    --with-openssl                    \
-                    --with-pam                        \
-                    --with-perl                       \
-                    --with-pgport=5432                \
-                    --with-python                     \
-                    --with-pythonsrc-ext
-
-RUN     cd /tmp/cloudberry && \
-        make -j$(nproc) && \
-        make install
-
-RUN     cd /tmp/cloudberry/contrib && \
-        make -j$(nproc) && \
-        make install
-
-# ----------------------------------------------------------------------
-# Set the Default User and Command
-# ----------------------------------------------------------------------
-# The default user is set to 'gpadmin', and the container starts by
-# running the init_system.sh script. This container serves as a base
-# environment, and the Apache Cloudberry RPM can be installed for
-# testing and functional verification.
-# ----------------------------------------------------------------------
+# Switch to gpadmin user
 USER gpadmin
-ENV USER=gpadmin
+WORKDIR /home/gpadmin
+
+# Release version to build (Apache official tarball)
+ARG CB_RELEASE_VERSION=2.0.0-incubating
+
+# Download and extract the specified release version from Apache
+RUN wget -nv "https://downloads.apache.org/incubator/cloudberry/${CB_RELEASE_VERSION}/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz" -O /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz && \
+    tar -xzf /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz -C /home/gpadmin && \
+    rm -f /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz && \
+    mv /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION} /home/gpadmin/cloudberry
+
+# Build Cloudberry using the official build scripts
+RUN cd /home/gpadmin/cloudberry && \
+    export SRC_DIR=/home/gpadmin/cloudberry && \
+    mkdir -p "${SRC_DIR}/build-logs" && \
+    # Ensure Cloudberry lib dir exists and has Xerces libs available
+    sudo rm -rf /usr/local/cloudberry-db && \
+    sudo mkdir -p /usr/local/cloudberry-db/lib && \
+    sudo cp -v /usr/local/xerces-c/lib/libxerces-c.so \
+              /usr/local/xerces-c/lib/libxerces-c-3.*.so \
+              /usr/local/cloudberry-db/lib/ && \
+    sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db && \
+    # Configure with required features and paths
+    export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:$LD_LIBRARY_PATH && \
+    ./configure --prefix=/usr/local/cloudberry-db \
+                --disable-external-fts \
+                --enable-debug \
+                --enable-cassert \
+                --enable-debug-extensions \
+                --enable-gpcloud \
+                --enable-ic-proxy \
+                --enable-mapreduce \
+                --enable-orafce \
+                --enable-orca \
+                --enable-pax \
+                --enable-pxf \
+                --enable-tap-tests \
+                --with-gssapi \
+                --with-ldap \
+                --with-libxml \
+                --with-lz4 \
+                --with-pam \
+                --with-perl \
+                --with-pgport=5432 \
+                --with-python \
+                --with-pythonsrc-ext \
+                --with-ssl=openssl \
+                --with-uuid=e2fs \
+                --with-includes=/usr/local/xerces-c/include \
+                --with-libraries=/usr/local/cloudberry-db/lib && \
+    # Build and install
+    make -j$(nproc) --directory ${SRC_DIR} && \
+    make -j$(nproc) --directory ${SRC_DIR}/contrib && \
+    make install --directory ${SRC_DIR} && \
+    make install --directory "${SRC_DIR}/contrib"
+
+# --------------------------------------------------------------------
+# Runtime stage: Rocky Linux 9 runtime with required dependencies
+# --------------------------------------------------------------------
+FROM rockylinux/rockylinux:9.6
+
+# Install required runtime dependencies, SSH server, sudo, and tools
+# Note: Use dnf on Rocky Linux 9
+RUN dnf -y update && \
+    dnf -y install \
+      openssh-server openssh-clients \
+      sudo shadow-utils \
+      bash procps-ng \
+      ca-certificates \
+      python3 \
+      apr \
+      bzip2-libs \
+      krb5-libs \
+      libevent \
+      libicu \
+      libuuid \
+      libxml2 \
+      libyaml \
+      libzstd \
+      lz4 \
+      ncurses \
+      openldap \
+      openssl \
+      pam \
+      pcre2 \
+      perl \
+      protobuf \
+      readline \
+      zlib \
+      glibc-langpack-en \
+      libuv \
+      iproute \
+      net-tools \
+      which \
+      rsync \
+      keyutils \
+      libstdc++ && \
+    dnf clean all && rm -rf /var/cache/dnf
+
+# Create gpadmin user and group, grant passwordless sudo
+RUN groupadd -r gpadmin && \
+    useradd -m -r -g gpadmin -s /bin/bash gpadmin && \
+    echo "gpadmin ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/gpadmin && \
+    chmod 440 /etc/sudoers.d/gpadmin
+
+# Prepare SSH daemon: generate host keys, ensure runtime dir, and allow gpadmin to start it
+RUN ssh-keygen -A && mkdir -p /run/sshd && chmod u+s /usr/sbin/sshd
+
+# Copy built Cloudberry from builder stage
+COPY --from=builder /usr/local/cloudberry-db /usr/local/cloudberry-db
+
+# Bring Xerces libs into Cloudberry lib dir
+COPY --from=builder /usr/local/xerces-c/lib/libxerces-c.so /usr/local/cloudberry-db/lib/
+COPY --from=builder /usr/local/xerces-c/lib/libxerces-c-3.*.so /usr/local/cloudberry-db/lib/
+
+# Copy configuration files to their final destinations
+COPY ./configs/90-cbdb-limits.conf /etc/security/limits.d/90-cbdb-limits.conf
+COPY ./configs/90-cbdb-sysctl.conf /etc/sysctl.d/90-cbdb-sysctl.conf
+COPY ./configs/gpinitsystem_singlenode /tmp/gpinitsystem_singlenode
+COPY ./configs/gpinitsystem_multinode /tmp/gpinitsystem_multinode
+COPY ./configs/multinode-gpinit-hosts /tmp/multinode-gpinit-hosts
+COPY ./configs/init_system.sh /tmp/init_system.sh
+
+# Runtime configuration
+RUN echo "cdw" > /tmp/gpdb-hosts && \
+    chmod 755 /tmp/gpinitsystem_singlenode && \
+    chmod 755 /tmp/gpinitsystem_multinode && \
+    chmod 755 /tmp/init_system.sh && \
+    mkdir -p /data0/database/coordinator /data0/database/primary /data0/database/mirror && \
+    chown -R gpadmin:gpadmin \
+      /usr/local/cloudberry-db \
+      /tmp/gpinitsystem_singlenode \
+      /tmp/gpinitsystem_multinode \
+      /tmp/gpdb-hosts \
+      /tmp/multinode-gpinit-hosts \
+      /data0 && \
+    echo "export COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1" >> /home/gpadmin/.bashrc && \
+    echo -e '\n# Add Cloudberry entries\nif [ -f /usr/local/cloudberry-db/cloudberry-env.sh ]; then\n  source /usr/local/cloudberry-db/cloudberry-env.sh\nfi\n# Add Greenplum compatibility entries\nif [ -f /usr/local/cloudberry-db/greenplum_path.sh ]; then\n  source /usr/local/cloudberry-db/greenplum_path.sh\nfi' >> /home/gpadmin/.bashrc
+
+# ----------------------------------------------------------------------
+# Generate SSH keypair for gpadmin user at build time
+# ----------------------------------------------------------------------
+# WARNING: This embeds a fixed SSH keypair in the Docker image for
+# sandbox convenience. This is ONLY suitable for local testing and
+# development. DO NOT use this image in production or any environment
+# where security is a concern.
+# ----------------------------------------------------------------------
+RUN mkdir -p /home/gpadmin/.ssh && \
+    ssh-keygen -t rsa -b 4096 -N '' -C 'gpadmin@cloudberry-sandbox' \
+               -f /home/gpadmin/.ssh/id_rsa && \
+    cat /home/gpadmin/.ssh/id_rsa.pub >> /home/gpadmin/.ssh/authorized_keys && \
+    chmod 700 /home/gpadmin/.ssh && \
+    chmod 600 /home/gpadmin/.ssh/id_rsa && \
+    chmod 644 /home/gpadmin/.ssh/id_rsa.pub && \
+    chmod 600 /home/gpadmin/.ssh/authorized_keys && \
+    chown -R gpadmin:gpadmin /home/gpadmin/.ssh
+
+# Set default user and working directory
+USER gpadmin
 WORKDIR /home/gpadmin
 
 EXPOSE 5432 22
 
+# cgroup mount (provided by compose/run)
 VOLUME [ "/sys/fs/cgroup" ]
+
+# Start the container by running the initialization script
 CMD ["bash","-c","/tmp/init_system.sh"]
