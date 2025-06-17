@@ -1,5 +1,24 @@
-#!/bin/bash
-set -eu
+#!/usr/bin/env bash
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+set -euo pipefail
 
 # Default values
 DEFAULT_OS_VERSION="rockylinux9"
@@ -19,7 +38,7 @@ PIP_INDEX_URL_VAR="${PIP_INDEX_URL_VAR:-$DEFAULT_PIP_INDEX_URL_VAR}"
 # Function to display help message
 function usage() {
     echo "Usage: $0 [-o <os_version>] [-c <codebase_version>] [-b] [-m]"
-    echo "  -c  Codebase version (valid values: main, or determined from release zip file name)"
+    echo "  -c  Codebase version (valid values: main, or other available version like 2.0.0)"
     echo "  -t  Timezone (default: America/Los_Angeles, or set via TIMEZONE_VAR environment variable)"
     echo "  -p  Python Package Index (PyPI) (default: https://pypi.org/simple, or set via PIP_INDEX_URL_VAR environment variable)"
     echo "  -b  Build only, do not run the container (default: false, or set via BUILD_ONLY environment variable)"
@@ -64,23 +83,10 @@ if [[ "${MULTINODE}" == "true" && "${BUILD_ONLY}" == "true" ]]; then
     exit 1
 fi
 
-# If CODEBASE_VERSION is not specified, determine it from the file name
+# CODEBASE_VERSION must be specified via -c argument or CODEBASE_VERSION environment variable
 if [[ -z "$CODEBASE_VERSION" ]]; then
-    BASE_CODEBASE_FILE=$(ls configs/cloudberrydb-*.zip 2>/dev/null)
-
-    if [[ -z "$BASE_CODEBASE_FILE" ]]; then
-        echo "Error: No configs/cloudberrydb-*.zip file found and codebase version not specified."
-        exit 1
-    fi
-
-    CODEBASE_FILE=$(basename ${BASE_CODEBASE_FILE})
-
-    if [[ $CODEBASE_FILE =~ cloudberrydb-([0-9]+\.[0-9]+\.[0-9]+)\.zip ]]; then
-        CODEBASE_VERSION="${BASH_REMATCH[1]}"
-    else
-        echo "Error: Cannot extract version from file name $CODEBASE_FILE"
-        exit 1
-    fi
+    echo "Error: CODEBASE_VERSION must be specified via environment variable or '-c' command line parameter."
+    usage
 fi
 
 # Validate OS_VERSION and map to appropriate Docker image
@@ -104,17 +110,42 @@ fi
 if [[ "${CODEBASE_VERSION}" = "main"  ]]; then
     DOCKERFILE=Dockerfile.${CODEBASE_VERSION}.${OS_VERSION}
 
+    # Single image build
     docker build --file ${DOCKERFILE} \
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
+
+    # Prepare shared cluster-ssh volume for multinode (keys live in /opt/cbdb/cluster-ssh inside the volume)
+    if [[ "${MULTINODE}" == "true" ]]; then
+        TMP_CLUSTER_SSH_DIR="$(mktemp -d)"
+        ssh-keygen -t rsa -b 4096 -N "" -f "${TMP_CLUSTER_SSH_DIR}/id_rsa" >/dev/null 2>&1
+        docker volume create cbdb-cluster-ssh >/dev/null 2>&1 || true
+        # Populate the volume using a one-off container
+        docker run --rm \
+          -v cbdb-cluster-ssh:/opt/cbdb/cluster-ssh \
+          -v "${TMP_CLUSTER_SSH_DIR}":/tmp/keys:ro \
+          cbdb-${CODEBASE_VERSION}:${OS_VERSION} bash -lc 'set -e; sudo mkdir -p /opt/cbdb/cluster-ssh; sudo cp /tmp/keys/id_rsa /opt/cbdb/cluster-ssh/id_rsa; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/id_rsa.pub; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub; sudo chmod 700 /opt/cbdb/cluster-ssh; sudo chmod 600 /opt/cbdb/cluster-ssh/id_rsa; sudo chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub'
+        rm -rf "${TMP_CLUSTER_SSH_DIR}"
+    fi
 else
     DOCKERFILE=Dockerfile.RELEASE.${OS_VERSION}
 
     docker build --file ${DOCKERFILE} \
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
-                 --build-arg PIP_INDEX_URL_VAR="${PIP_INDEX_URL_VAR}" \
                  --build-arg CODEBASE_VERSION_VAR="${CODEBASE_VERSION}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
+
+    # For release multinode, also prepare shared cluster-ssh volume (same as main)
+    if [[ "${MULTINODE}" == "true" ]]; then
+        TMP_CLUSTER_SSH_DIR="$(mktemp -d)"
+        ssh-keygen -t rsa -b 4096 -N "" -f "${TMP_CLUSTER_SSH_DIR}/id_rsa" >/dev/null 2>&1
+        docker volume create cbdb-cluster-ssh >/dev/null 2>&1 || true
+        docker run --rm \
+          -v cbdb-cluster-ssh:/opt/cbdb/cluster-ssh \
+          -v "${TMP_CLUSTER_SSH_DIR}":/tmp/keys:ro \
+          cbdb-${CODEBASE_VERSION}:${OS_VERSION} bash -lc 'set -e; sudo mkdir -p /opt/cbdb/cluster-ssh; sudo cp /tmp/keys/id_rsa /opt/cbdb/cluster-ssh/id_rsa; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/id_rsa.pub; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub; sudo chmod 700 /opt/cbdb/cluster-ssh; sudo chmod 600 /opt/cbdb/cluster-ssh/id_rsa; sudo chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub'
+        rm -rf "${TMP_CLUSTER_SSH_DIR}"
+    fi
 fi
 
 # Check if build only flag is set
@@ -132,8 +163,8 @@ else
            --name cbdb-cdw \
            --detach \
            --volume /sys/fs/cgroup:/sys/fs/cgroup:ro \
+           --hostname cdw \
            --publish 122:22 \
            --publish 15432:5432 \
-           --hostname cdw \
            cbdb-${CODEBASE_VERSION}:${OS_VERSION}
 fi
