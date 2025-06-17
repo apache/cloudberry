@@ -489,6 +489,8 @@ extern bool	optimizer_print_group_properties;
 extern bool	optimizer_print_optimization_context;
 extern bool optimizer_print_optimization_stats;
 extern bool optimizer_print_xform_results;
+extern bool optimizer_print_preprocess_result;
+extern bool optimizer_debug_cte;
 
 /* array of xforms disable flags */
 extern bool optimizer_xforms[OPTIMIZER_XFORMS_COUNT];

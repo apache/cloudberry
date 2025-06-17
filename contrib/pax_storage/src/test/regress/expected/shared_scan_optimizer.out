@@ -111,7 +111,7 @@ WITH cte AS (SELECT * FROM t1 WHERE random() < 0.1 LIMIT 10) SELECT a, 1, 1 FROM
                                  ->  Shared Scan (share slice:id 3:0)
                      ->  Hash
                            ->  Seq Scan on t2
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (17 rows)
 
 -- This functions returns one more column than expected.

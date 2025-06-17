@@ -354,6 +354,7 @@ enum Edxltoken
 
 	EdxltokenColDescr,
 	EdxltokenColRef,
+	EdxltokenColIdxmap,
 
 	EdxltokenColumns,
 	EdxltokenColumn,

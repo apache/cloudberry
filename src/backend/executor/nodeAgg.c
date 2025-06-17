@@ -481,6 +481,8 @@ static void build_pertrans_for_aggref(AggStatePerTrans pertrans,
 
 static void ExecEagerFreeAgg(AggState *node);
 
+void agg_hash_explain_extra_message(AggState *aggstate);
+
 /*
  * Select the current grouping set; affects current_set and
  * curaggcontext.
@@ -1540,6 +1542,16 @@ build_hash_tables(AggState *aggstate)
 										   memory);
 
 		build_hash_table(aggstate, setno, nbuckets);
+
+		/* initialize some statistic info of hash table */
+		perhash->num_output_groups = 0;
+		perhash->num_spill_parts = 0;
+		perhash->num_expansions = 0;
+		perhash->bucket_total = 0;
+		perhash->bucket_used = 0;
+		perhash->chain_count = 0;
+		perhash->chain_length_total = 0;
+		perhash->chain_length_max = 0;
 	}
 
 	aggstate->hash_ngroups_current = 0;
@@ -1966,6 +1978,7 @@ hash_agg_enter_spill_mode(AggState *aggstate)
 			hashagg_spill_init(aggstate, spill, aggstate->hash_tapeinfo, 0,
 							   perhash->aggnode->numGroups,
 							   aggstate->hashentrysize);
+			perhash->num_spill_parts += spill->npartitions;
 		}
 
 		if (aggstate->ss.ps.instrument)
@@ -2019,6 +2032,12 @@ hash_agg_update_metrics(AggState *aggstate, bool from_tape, int npartitions)
 	}
 
 	/* update hashentrysize estimate based on contents */
+	/*
+	 * Greenplum doesn't use hashentrysize in the instrumentation, it will
+	 * calculate hash table chain length to get an accurate number.
+	 *
+	 * See the following code to collect hash table statistic info.
+	 */
 	if (aggstate->hash_ngroups_current > 0)
 	{
 		aggstate->hashentrysize =
@@ -2031,6 +2050,47 @@ hash_agg_update_metrics(AggState *aggstate, bool from_tape, int npartitions)
 		Instrumentation    *instrument = aggstate->ss.ps.instrument;
 
 		instrument->workmemused = aggstate->hash_mem_peak;
+
+		/*
+		 * workmemwanted to avoid scratch i/o, that how much memory is needed
+		 * if we want to load into the hashtable at once:
+		 *
+		 * 1. add meta_mem only when from_tape is false, because when we are
+		 *	  reading from tape/spilled file, we can reuse the existing hash
+		 *	  table's meta.
+		 * 2. add hash_mem every time.
+		 * 3. don't add buffer_mem since it's unnecessary when we can load into
+		 *    into the memory at once.
+		 */
+		if (!from_tape)
+			instrument->workmemwanted += meta_mem;
+		instrument->workmemwanted += hashkey_mem;
+
+		/* Scan all perhashs and collect hash table statistic info */
+		for (int setno = 0; setno < aggstate->num_hashes; setno++)
+		{
+			AggStatePerHash perhash = &aggstate->perhash[setno];
+			tuplehash_hash *hashtab = perhash->hashtable->hashtab;
+
+			Assert(hashtab);
+
+			perhash->num_expansions += hashtab->num_expansions;
+			perhash->bucket_total += hashtab->size;
+			perhash->bucket_used += hashtab->members;
+			if (hashtab->members > 0)
+			{
+				uint32  perht_chain_length_total = 0;
+				uint32  perht_chain_count = 0;
+
+				/* collect statistic info of chain length per hash table */
+				tuplehash_coll_stat(hashtab,
+									&(perhash->chain_length_max),
+									&perht_chain_length_total,
+									&perht_chain_count);
+				perhash->chain_count += perht_chain_count;
+				perhash->chain_length_total += perht_chain_length_total;
+			}
+		}
 	}
 }
 
@@ -2225,6 +2285,7 @@ lookup_hash_entries(AggState *aggstate)
 				hashagg_spill_init(aggstate, spill, aggstate->hash_tapeinfo, 0,
 								   perhash->aggnode->numGroups,
 								   aggstate->hashentrysize);
+			perhash->num_spill_parts += spill->npartitions;
 
 			hashagg_spill_tuple(aggstate, spill, slot, hash);
 			pergroup[setno] = NULL;
@@ -2276,6 +2337,13 @@ ExecAgg(PlanState *pstate)
 		if (!TupIsNull(result))
 			return result;
 	}
+
+	/* Save statistics into the cdbexplainbuf for EXPLAIN ANALYZE */
+	if (node->ss.ps.instrument &&
+			(node->ss.ps.instrument)->need_cdb &&
+			(node->phase->aggstrategy == AGG_HASHED ||
+			node->phase->aggstrategy == AGG_MIXED))
+		agg_hash_explain_extra_message(node);
 
 	return NULL;
 }
@@ -2807,6 +2875,7 @@ agg_refill_hash_table(AggState *aggstate)
 				spill_initialized = true;
 				hashagg_spill_init(aggstate, &spill, tapeinfo, batch->used_bits,
 								   batch->input_card, aggstate->hashentrysize);
+				aggstate->perhash[aggstate->current_set].num_spill_parts += spill.npartitions;
 			}
 			/* no memory for a new group, spill */
 			hashagg_spill_tuple(aggstate, &spill, spillslot, hash);
@@ -2980,6 +3049,8 @@ agg_retrieve_hash_table_in_memory(AggState *aggstate)
 				return NULL;
 			}
 		}
+
+		perhash->num_output_groups++;
 
 		/*
 		 * Clear the per-output-tuple context for each group
@@ -5138,4 +5209,78 @@ ReuseHashTable(AggState *node)
 			!node->hash_ever_spilled &&
 			!node->streaming &&
 			!bms_overlap(node->ss.ps.chgParam, aggnode->aggParams));
+}
+
+/*
+ * Save statistics into the cdbexplainbuf for EXPLAIN ANALYZE
+ */
+void
+agg_hash_explain_extra_message(AggState *aggstate)
+{
+	/*
+	 * Check cdbexplain_depositStatsToNode(), Greenplum only saves extra
+	 * message text for the most interesting winning qExecs.
+	 */
+	StringInfo hbuf = aggstate->ss.ps.cdbexplainbuf;
+	uint64	sum_num_expansions = 0;
+	uint64	sum_output_groups = 0;
+	uint64	sum_spill_parts = 0;
+	uint64	sum_chain_length_total = 0;
+	uint64	sum_chain_count = 0;
+	uint32	chain_length_max = 0;
+	uint64	sum_bucket_used = 0;
+	uint64	sum_bucket_total = 0;
+
+	Assert(hbuf);
+
+	appendStringInfo(hbuf, "hash table(s): %d", aggstate->num_hashes);
+
+	/* Scan all perhashs and collect statistic info */
+	for (int setno = 0; setno < aggstate->num_hashes; setno++)
+	{
+		AggStatePerHash perhash = &aggstate->perhash[setno];
+
+		/* spill statistic info */
+		if (aggstate->hash_ever_spilled)
+		{
+			sum_output_groups += perhash->num_output_groups;
+			sum_spill_parts += perhash->num_spill_parts;
+		}
+
+		/* inner hash table statistic info */
+		if (perhash->chain_count > 0)
+		{
+			sum_chain_length_total += perhash->chain_length_total;
+			sum_chain_count += perhash->chain_count;
+			if (perhash->chain_length_max > chain_length_max)
+				chain_length_max = perhash->chain_length_max;
+			sum_bucket_used = perhash->bucket_used;
+			sum_bucket_total = perhash->bucket_total;
+			sum_num_expansions += perhash->num_expansions;
+		}
+	}
+
+	if (aggstate->hash_ever_spilled)
+	{
+		appendStringInfo(hbuf,
+			"; " UINT64_FORMAT " groups total in %d batches, " UINT64_FORMAT
+			" spill partitions; disk usage: " INT64_FORMAT "KB",
+			sum_output_groups,
+			aggstate->hash_batches_used,
+			sum_spill_parts,
+			aggstate->hash_disk_used);
+	}
+
+	if (sum_chain_count > 0)
+	{
+		appendStringInfo(hbuf,
+				"; chain length %.1f avg, %d max;"
+				" using " INT64_FORMAT " of " INT64_FORMAT " buckets;"
+				" total " INT64_FORMAT " expansions.\n",
+				(double)sum_chain_length_total / sum_chain_count,
+				chain_length_max,
+				sum_bucket_used,
+				sum_bucket_total,
+				sum_num_expansions);
+	}
 }

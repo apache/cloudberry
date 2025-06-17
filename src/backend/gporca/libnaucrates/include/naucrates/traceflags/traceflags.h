@@ -71,14 +71,17 @@ enum EOptTraceFlag
 	// print MEMO during property enforcement process
 	EopttracePrintMemoEnforcement = 101015,
 
-	// print required columns
-	EopttracePrintRequiredColumns = 101016,
-
 	// print equivalent distribution specs
 	EopttracePrintEquivDistrSpecs = 101017,
 
 	// log results of hint parsing
 	EopttracePrintPgHintPlanLog = 101018,
+
+	// print result of preprocess
+	EopttracePrintPreProcessResult = 101019,
+
+	// print debug info of CTE
+	EopttraceDebugCTE = 101020,
 
 	///////////////////////////////////////////////////////
 	////////////////// transformations flags //////////////
@@ -273,6 +276,8 @@ enum EOptTraceFlag
 
 	// is nestloop params enabled, it is only enabled in GPDB 6.x onwards.
 	EopttraceIndexedNLJOuterRefAsParams = 106000,
+
+	// 
 
 	// max
 	EopttraceSentinel = 199999

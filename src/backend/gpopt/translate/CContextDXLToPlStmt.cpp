@@ -58,7 +58,7 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_distribution_policy(nullptr),
 	  m_part_selector_to_param_map(nullptr)
 {
-	m_cte_consumer_info = GPOS_NEW(m_mp) HMUlCTEConsumerInfo(m_mp);
+	m_cte_producer_info = GPOS_NEW(m_mp) HMUlCTEProducerInfo(m_mp);
 	m_part_selector_to_param_map = GPOS_NEW(m_mp) UlongToUlongMap(m_mp);
 	m_used_rte_indexes = GPOS_NEW(m_mp) HMUlIndex(m_mp);
 }
@@ -73,7 +73,7 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 //---------------------------------------------------------------------------
 CContextDXLToPlStmt::~CContextDXLToPlStmt()
 {
-	m_cte_consumer_info->Release();
+	m_cte_producer_info->Release();
 	m_part_selector_to_param_map->Release();
 	m_used_rte_indexes->Release();
 }
@@ -152,52 +152,37 @@ CContextDXLToPlStmt::GetParamTypes()
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CContextDXLToPlStmt::AddCTEConsumerInfo
+//		CContextDXLToPlStmt::RegisterCTEProducerPlan
 //
 //	@doc:
-//		Add information about the newly found CTE entry
+//		Register information about the CTE producer
 //
 //---------------------------------------------------------------------------
 void
-CContextDXLToPlStmt::AddCTEConsumerInfo(ULONG cte_id,
-										ShareInputScan *share_input_scan)
+CContextDXLToPlStmt::RegisterCTEProducerInfo(ULONG cte_id,
+	ULongPtrArray *producer_output_colidx_map, ShareInputScan *siscan)
 {
-	GPOS_ASSERT(nullptr != share_input_scan);
-
-	SCTEConsumerInfo *cte_info = m_cte_consumer_info->Find(&cte_id);
-	if (nullptr != cte_info)
-	{
-		cte_info->AddCTEPlan(share_input_scan);
-		return;
-	}
-
-	List *cte_plan = ListMake1(share_input_scan);
-
 	ULONG *key = GPOS_NEW(m_mp) ULONG(cte_id);
-	BOOL result GPOS_ASSERTS_ONLY = m_cte_consumer_info->Insert(
-		key, GPOS_NEW(m_mp) SCTEConsumerInfo(cte_plan));
+	BOOL result GPOS_ASSERTS_ONLY = m_cte_producer_info->Insert(
+		key, GPOS_NEW(m_mp) SCTEEntryInfo(producer_output_colidx_map, siscan));
 
 	GPOS_ASSERT(result);
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CContextDXLToPlStmt::GetCTEConsumerList
+//		CContextDXLToPlStmt::GetCTEProducerInfo
 //
 //	@doc:
-//		Return the list of GPDB plan nodes representing the CTE consumers
-//		with the given CTE identifier
+//		Return the producer in CTE
 //---------------------------------------------------------------------------
-List *
-CContextDXLToPlStmt::GetCTEConsumerList(ULONG cte_id) const
+std::pair<ULongPtrArray *, ShareInputScan *>
+CContextDXLToPlStmt::GetCTEProducerInfo(ULONG cte_id) const
 {
-	SCTEConsumerInfo *cte_info = m_cte_consumer_info->Find(&cte_id);
-	if (nullptr != cte_info)
-	{
-		return cte_info->m_cte_consumer_list;
-	}
+	SCTEEntryInfo *sctepinfo = m_cte_producer_info->Find(&cte_id);
+	GPOS_ASSERT(sctepinfo);
 
-	return nullptr;
+	return std::make_pair(sctepinfo->m_pidxmap, sctepinfo->m_cte_producer_plan);
 }
 
 //---------------------------------------------------------------------------
