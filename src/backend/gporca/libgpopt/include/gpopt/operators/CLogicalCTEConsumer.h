@@ -47,6 +47,13 @@ private:
 	// create the inlined version of this consumer as well as the column mapping
 	void CreateInlinedExpr(CMemoryPool *mp);
 
+	// is pruned
+	BOOL m_pruned;
+
+	void MarkAsNotPruned() {
+		m_pruned = false;
+	}
+
 public:
 	CLogicalCTEConsumer(const CLogicalCTEConsumer &) = delete;
 
@@ -58,6 +65,12 @@ public:
 
 	// dtor
 	~CLogicalCTEConsumer() override;
+
+	void MarkAsPruned() {
+		m_pruned = true;
+	}
+
+	void ApplyInline();
 
 	// ident accessors
 	EOperatorId
@@ -93,6 +106,7 @@ public:
 		return m_phmulcr;
 	}
 
+	// get the inlined expression
 	CExpression *
 	PexprInlined() const
 	{

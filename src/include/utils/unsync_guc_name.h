@@ -475,6 +475,8 @@
 		"optimizer_print_query",
 		"optimizer_print_xform",
 		"optimizer_print_xform_results",
+		"optimizer_print_preprocess_result",
+		"optimizer_debug_cte",
 		"optimizer_prune_computed_columns",
 		"optimizer_push_group_by_below_setop_threshold",
 		"optimizer_push_requirements_from_consumer_to_producer",

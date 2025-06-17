@@ -158,7 +158,7 @@ test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath
 # NB: temp.sql does a reconnect which transiently uses 2 connections,
 # so keep this parallel group to at most 19 tests
 # ----------
-test: plancache limit plpgsql copy2 temp domain rangefuncs prepare conversion truncate alter_table sequence polymorphism rowtypes returning with xml
+test: plancache limit plpgsql copy2 temp domain rangefuncs prepare conversion truncate alter_table sequence polymorphism rowtypes returning with xml cte_prune
 # large objects are not supported by GPDB
 # test: largeobject
 
