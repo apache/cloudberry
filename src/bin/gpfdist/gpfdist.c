@@ -198,7 +198,8 @@ static struct
 	const char* ssl; /* path to certificates in case we use gpfdist with ssl */
 	int			w; /* The time used for session timeout in seconds */
 	int			compress; /* The flag to indicate whether comopression transmission is open */
-} opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, 0, 0};
+	int			compress_level; /* ZSTD compression level (1-9) */
+} opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, 0, 0, DEFAULT_COMPRESS_LEVEL};
 
 
 typedef union address
@@ -577,9 +578,9 @@ static void usage_error(const char* msg, int print_usage)
 		}
 		else
 		{
-			fprintf(stderr,
+							fprintf(stderr,
 					"gpfdist -- file distribution web server\n\n"
-						"usage: gpfdist [--ssl <certificates_directory>] [-d <directory>] [-p <http(s)_port>] [-l <log_file>] [-t <timeout>] [-v | -V | -s] [-m <maxlen>] [-w <timeout>]"
+						"usage: gpfdist [--ssl <certificates_directory>] [-d <directory>] [-p <http(s)_port>] [-l <log_file>] [-t <timeout>] [-v | -V | -s] [-m <maxlen>] [-w <timeout>] [--compress] [--compress-level <level>]"
 #ifdef GPFXDIST
 					    "[-c file]"
 #endif
@@ -605,7 +606,12 @@ static void usage_error(const char* msg, int print_usage)
 					    "        -c file    : configuration file for transformations\n"
 #endif
 						"        --version  : print version information\n"
-						"        -w timeout : timeout in seconds before close target file\n\n");
+						"        -w timeout : timeout in seconds before close target file\n"
+#ifdef USE_ZSTD
+						"        --compress : enable ZSTD compression\n"
+						"        --compress-level : ZSTD compression level (1-9, default=1)\n"
+#endif
+						"\n");
 		}
 	}
 
@@ -669,6 +675,7 @@ static void parse_command_line(int argc, const char* const argv[],
 	{ "version", 256, 0, "print version number" },
 	{ NULL, 'w', 1, "wait for session timeout in seconds" },
 	{"compress", 258, 0, "turn on compressed transmission"},
+	{"compress-level", 259, 1, "ZSTD compression level (1-9, default=1)"},
 	{ 0 } };
 
 	status = apr_getopt_init(&os, pool, argc, argv);
@@ -757,9 +764,18 @@ static void parse_command_line(int argc, const char* const argv[],
 		case 258:
 			opt.compress = 1;
 			break;
+		case 259:
+			opt.compress_level = atoi(arg);
+			if (opt.compress_level < 1 || opt.compress_level > 9) {
+				usage_error("Error: compression level must be between 1 and 9", 0);
+			}
+			break;
 #else
 		case 258:
 			usage_error("ZSTD is not supported by this build", 0);
+			break;
+		case 259:
+			usage_error("ZSTD compression level option is not supported by this build", 0);
 			break;
 #endif
 		}
@@ -4867,7 +4883,8 @@ static int compress_zstd(const request_t *r, block_t *blk, int buflen)
 		return -1;
 	}
 
-	size_t init_result = ZSTD_initCStream(r->zstd_cctx, DEFAULT_COMPRESS_LEVEL);
+	/* Use configurable compression level */
+	size_t init_result = ZSTD_initCStream(r->zstd_cctx, opt.compress_level);
 	if (ZSTD_isError(init_result)) 
 	{
 		snprintf(r->zstd_error, r->zstd_err_len, "Creating compression context initialization failed, error is %s.", ZSTD_getErrorName(init_result));
@@ -4905,7 +4922,7 @@ static int compress_zstd(const request_t *r, block_t *blk, int buflen)
 	}
 	offset += output.pos;
 
-	gdebug(NULL, "compress_zstd finished, input size = %d, output size = %d.", buflen, offset);
+	gdebug(NULL, "compress_zstd finished, input size = %d, output size = %d, compression level = %d.", buflen, offset, opt.compress_level);
 
 	return offset;
 }
