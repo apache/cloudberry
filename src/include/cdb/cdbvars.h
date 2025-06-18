@@ -619,9 +619,8 @@ extern bool gp_enable_preunique;
  */
 extern bool gp_enable_explain_allstat;
 
-/* May Greenplum dump node summary from CdbExplain_NodeSummary
+/* May Cloudberry dump node summary from CdbExplain_NodeSummary
  * during EXPLAIN ANALYZE?
- *
  */
 extern bool gp_enable_explain_node_summary;
 
