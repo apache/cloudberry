@@ -10,7 +10,7 @@ SYNOPSIS
 gpfdist [-d <directory>] [-p <http_port>] [-l <log_file>] [-t <timeout>] 
 [-S] [-w <time>] [-v | -V] [-m <max_length>] [--ssl <certificate_path>]
 [--ssl_verify_peer <on/off>]
-[--compress]
+[--compress] [--compress-level]
 
 gpfdist [-? | --help] | --version
 
@@ -161,6 +161,15 @@ OPTIONS
  usage. However, it is important to note that compression can be a
  time-intensive process, which may potentially result in reduced
  transmission speeds.
+
+--compress-level <level>
+
+ Specifies the compression level to be used with the Zstandard (zstd) compression
+ when the --compress option is enabled. The <level> parameter is an integer value
+ that controls the trade-off between compression ratio and speed. Higher values
+ typically result in better compression ratios but may require more CPU time.
+ The valid range is 1 (fastest, least compression) to 9 (slowest, best compression).
+ The default compression level is 1 if not specified.
 
 
 -v (verbose) 
