@@ -130,6 +130,9 @@ private:
 	// hash map of the queryid (of DML query) and the target relation index
 	HMUlIndex *m_used_rte_indexes;
 
+	// the aggno and aggtransno in agg 
+	List	   *m_agg_infos;		/* AggInfo structs */
+	List	   *m_agg_trans_infos;	/* AggTransInfo structs */
 public:
 	// ctor/dtor
 	CContextDXLToPlStmt(CMemoryPool *mp, CIdGenerator *plan_id_counter,
@@ -249,6 +252,21 @@ public:
 
 	// get perm info from m_perminfo_list by given index
 	RTEPermissionInfo *GetPermInfoByIndex(Index index);
+
+	// List of AggInfo and AggTransInfo
+	inline List *GetAggInfos() const 
+	{
+		return m_agg_infos;
+	}
+
+	inline List *GetAggTransInfos() const 
+	{
+		return m_agg_trans_infos;
+	}
+
+	void AppendAggInfos(AggInfo *agginfo);
+	void AppendAggTransInfos(AggTransInfo *transinfo);
+	void ResetAggInfosAndTransInfos();
 };
 
 }  // namespace gpdxl

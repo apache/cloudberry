@@ -53,16 +53,6 @@
 #include "utils/syscache.h"
 
 static bool preprocess_aggrefs_walker(Node *node, PlannerInfo *root);
-static int	find_compatible_agg(PlannerInfo *root, Aggref *newagg,
-								List **same_input_transnos);
-static int	find_compatible_trans(PlannerInfo *root, Aggref *newagg,
-								  bool shareable,
-								  Oid aggtransfn, Oid aggtranstype,
-								  int transtypeLen, bool transtypeByVal,
-								  Oid aggcombinefn,
-								  Oid aggserialfn, Oid aggdeserialfn,
-								  Datum initValue, bool initValueIsNull,
-								  List *transnos);
 static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
 
 /* -----------------
@@ -220,7 +210,7 @@ preprocess_aggref(Aggref *aggref, PlannerInfo *root)
 	 * 1. See if this is identical to another aggregate function call that
 	 * we've seen already.
 	 */
-	aggno = find_compatible_agg(root, aggref, &same_input_transnos);
+	aggno = find_compatible_agg(root->agginfos, aggref, &same_input_transnos);
 	if (aggno != -1)
 	{
 		AggInfo    *agginfo = list_nth_node(AggInfo, root->agginfos, aggno);
@@ -267,7 +257,7 @@ preprocess_aggref(Aggref *aggref, PlannerInfo *root)
 		 * 2. See if this aggregate can share transition state with another
 		 * aggregate that we've initialized already.
 		 */
-		transno = find_compatible_trans(root, aggref, shareable,
+		transno = find_compatible_trans(root->aggtransinfos, shareable,
 										aggtransfn, aggtranstype,
 										transtypeLen, transtypeByVal,
 										aggcombinefn,
@@ -388,8 +378,8 @@ preprocess_aggrefs_walker(Node *node, PlannerInfo *root)
  * passed later to find_compatible_trans, to see if we can at least reuse
  * the state value of another aggregate.
  */
-static int
-find_compatible_agg(PlannerInfo *root, Aggref *newagg,
+int
+find_compatible_agg(List *agginfos, Aggref *newagg,
 					List **same_input_transnos)
 {
 	ListCell   *lc;
@@ -411,7 +401,7 @@ find_compatible_agg(PlannerInfo *root, Aggref *newagg,
 	 * same transition function will be checked later.)
 	 */
 	aggno = -1;
-	foreach(lc, root->agginfos)
+	foreach(lc, agginfos)
 	{
 		AggInfo    *agginfo = lfirst_node(AggInfo, lc);
 		Aggref	   *existingRef;
@@ -466,8 +456,8 @@ find_compatible_agg(PlannerInfo *root, Aggref *newagg,
  * transition function and initial condition. (The inputs have already been
  * verified to match.)
  */
-static int
-find_compatible_trans(PlannerInfo *root, Aggref *newagg, bool shareable,
+int
+find_compatible_trans(List *aggtransinfos, bool shareable,
 					  Oid aggtransfn, Oid aggtranstype,
 					  int transtypeLen, bool transtypeByVal,
 					  Oid aggcombinefn,
@@ -484,9 +474,7 @@ find_compatible_trans(PlannerInfo *root, Aggref *newagg, bool shareable,
 	foreach(lc, transnos)
 	{
 		int			transno = lfirst_int(lc);
-		AggTransInfo *pertrans = list_nth_node(AggTransInfo,
-											   root->aggtransinfos,
-											   transno);
+		AggTransInfo *pertrans = (AggTransInfo *) list_nth(aggtransinfos, transno);
 
 		/*
 		 * if the transfns or transition state types are not the same then the
