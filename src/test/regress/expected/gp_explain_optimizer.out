@@ -459,11 +459,24 @@ explain analyze SELECT * FROM explaintest;
 
 set gp_enable_explain_allstat=DEFAULT;
 -- Test explain node summary.
+-- start_matchsubs
+-- m/\(seg-?\d+\) \d+ \d+ \d+ \d+.\d+ \d+.\d+ \d+.\d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+/
+-- s/\(seg-?\d+\) \d+ \d+ \d+ \d+.\d+ \d+.\d+ \d+.\d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+/(segX) X X X X.X X.X X.X X X X X X X X X X X X X X X/
+-- m/\(cost=\d+.\d+..\d+.\d+ rows=\d+ width=\d+\)/
+-- s/\(cost=\d+.\d+..\d+.\d+ /(cost=X.X..X.X /
+-- m/\(actual time=\d+.\d+..\d+.\d+ rows=\d+ loops=\d+\)/
+-- s/\(actual time=\d+.\d+..\d+.\d+ /(actual time=X.X..X.X /
+-- m/"firststart": \d+,/
+-- s/"firststart": \d+,/"firststart": XXXXXX,/
+-- m/"Actual Total Time": \d+,/
+-- s/"Actual Total Time": \d+,/"Actual Total Time": X.XXX,/
+-- end_matchsubs
 set gp_enable_explain_node_summary=on;
-explain analyze SELECT * FROM explaintest;
-                                                                                                             QUERY PLAN                                                                                                              
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.17 rows=10 width=4) (actual time=1.000..1.000 rows=10 loops=1)
+explain (analyze, summary off)
+SELECT * FROM explaintest;
+                                                                                                             QUERY PLAN                                                                                                             
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.17 rows=10 width=4) (actual time=0.000..0.000 rows=10 loops=1)
    Node Summary:                  vmax       vsum       vcnt       imax
      ntuples:                       10         10          1         -1
      nloops:                         1          1          1         -1
@@ -475,8 +488,8 @@ explain analyze SELECT * FROM explaintest;
      segindex0: -1
      ninst: 1
      StatInsts:
-       (segN) pstype starttime counter firsttuple startup total ntuples ntuples2 nloops nfiltered1 nfiltered2 execmemused workmemused workmemwanted workfileCreated firststart numPartScanned bnotes enotes, nworkers_launched
-       (seg-1) 138 0 0 0.00 0.00 0.00 10 0 1 0 0 0 0 0 0 1798475 0 0 0 0
+       (segN) pstype starttime counter firsttuple startup total ntuples ntuples2 nloops nfiltered1 nfiltered2 execmemused workmemused workmemwanted workfileCreated firststart numPartScanned bnotes enotes nworkers_launched
+       (seg-1) 138 0 0 0.00 0.00 0.00 10 0 1 0 0 0 0 0 0 686899 0 0 0 0
    ->  Seq Scan on explaintest  (cost=0.00..1.03 rows=3 width=4) (actual time=0.000..0.000 rows=5 loops=1)
          Node Summary:                  vmax       vsum       vcnt       imax
            ntuples:                        5         10          3          0
@@ -489,17 +502,254 @@ explain analyze SELECT * FROM explaintest;
            segindex0: 0
            ninst: 3
            StatInsts:
-             (segN) pstype starttime counter firsttuple startup total ntuples ntuples2 nloops nfiltered1 nfiltered2 execmemused workmemused workmemwanted workfileCreated firststart numPartScanned bnotes enotes, nworkers_launched
-             (seg0) 95 0 0 0.00 0.00 0.00 5 0 1 0 0 0 0 0 0 1798475 0 0 0 0
-             (seg1) 95 0 0 0.00 0.00 0.00 1 0 1 0 0 0 0 0 0 1798475 0 0 0 0
-             (seg2) 95 0 0 0.00 0.00 0.00 4 0 1 0 0 0 0 0 0 1798475 0 0 0 0
- Planning Time: 0.079 ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 110K bytes avg x 3x(0) workers, 110K bytes max (seg0).
- Memory used:  128000kB
+             (segN) pstype starttime counter firsttuple startup total ntuples ntuples2 nloops nfiltered1 nfiltered2 execmemused workmemused workmemwanted workfileCreated firststart numPartScanned bnotes enotes nworkers_launched
+             (seg0) 95 0 0 0.00 0.00 0.00 5 0 1 0 0 0 0 0 0 686899 0 0 0 0
+             (seg1) 95 0 0 0.00 0.00 0.00 1 0 1 0 0 0 0 0 0 686899 0 0 0 0
+             (seg2) 95 0 0 0.00 0.00 0.00 4 0 1 0 0 0 0 0 0 686899 0 0 0 0
  Optimizer: Postgres query optimizer
- Execution Time: 0.496 ms
-(36 rows)
+(31 rows)
+
+explain (analyze, summary off, format json)
+SELECT * FROM explaintest;
+                  QUERY PLAN                   
+-----------------------------------------------
+ [                                            +
+   {                                          +
+     "Plan": {                                +
+       "Node Type": "Gather Motion",          +
+       "Senders": 3,                          +
+       "Receivers": 1,                        +
+       "Slice": 1,                            +
+       "Segments": 3,                         +
+       "Gang Type": "primary reader",         +
+       "Parallel Aware": false,               +
+       "Async Capable": false,                +
+       "Startup Cost": 0.00,                  +
+       "Total Cost": 1.17,                    +
+       "Plan Rows": 10,                       +
+       "Plan Width": 4,                       +
+       "Actual Startup Time": 0.000,          +
+       "Actual Total Time": 0.000,            +
+       "Actual Rows": 10,                     +
+       "Actual Loops": 1,                     +
+       "CdbExplain_NodeSummary": {            +
+         "ntuples": {                         +
+           "vmax": 10,                        +
+           "vsum": 10,                        +
+           "vcnt": 1,                         +
+           "imax": -1                         +
+         },                                   +
+         "nloops": {                          +
+           "vmax": 1,                         +
+           "vsum": 1,                         +
+           "vcnt": 1,                         +
+           "imax": -1                         +
+         },                                   +
+         "execmemused": {                     +
+           "vmax": 0,                         +
+           "vsum": 0,                         +
+           "vcnt": 0,                         +
+           "imax": 0                          +
+         },                                   +
+         "workmemused": {                     +
+           "vmax": 0,                         +
+           "vsum": 0,                         +
+           "vcnt": 0,                         +
+           "imax": 0                          +
+         },                                   +
+         "workmemwanted": {                   +
+           "vmax": 0,                         +
+           "vsum": 0,                         +
+           "vcnt": 0,                         +
+           "imax": 0                          +
+         },                                   +
+         "totalWorkfileCreated": {            +
+           "vmax": 0,                         +
+           "vsum": 0,                         +
+           "vcnt": 0,                         +
+           "imax": 0                          +
+         },                                   +
+         "totalPartTableScanned": {           +
+           "vmax": 0,                         +
+           "vsum": 0,                         +
+           "vcnt": 0,                         +
+           "imax": 0                          +
+         },                                   +
+         "segindex0": -1,                     +
+         "ninst": 1,                          +
+         "CdbExplain_StatInsts": [            +
+           {                                  +
+             "Segment": -1,                   +
+             "pstype": 138,                   +
+             "starttime": 0,                  +
+             "counter": 0,                    +
+             "firsttuple": 0.00,              +
+             "startup": 0.00,                 +
+             "total": 0.00,                   +
+             "ntuples": 10,                   +
+             "ntuples2": 0,                   +
+             "nloops": 1,                     +
+             "nfiltered1": 0,                 +
+             "nfiltered2": 0,                 +
+             "execmemused": 0,                +
+             "workmemused": 0,                +
+             "workmemwanted": 0,              +
+             "workfileCreated": false,        +
+             "firststart": XXXXXX,            +
+             "numPartScanned": 0,             +
+             "bnotes": 0,                     +
+             "enotes": 0,                     +
+             "nworkers_launched": 0           +
+           }                                  +
+         ]                                    +
+       },                                     +
+       "Plans": [                             +
+         {                                    +
+           "Node Type": "Seq Scan",           +
+           "Parent Relationship": "Outer",    +
+           "Slice": 1,                        +
+           "Segments": 3,                     +
+           "Gang Type": "primary reader",     +
+           "Parallel Aware": false,           +
+           "Async Capable": false,            +
+           "Relation Name": "explaintest",    +
+           "Alias": "explaintest",            +
+           "Startup Cost": 0.00,              +
+           "Total Cost": 1.03,                +
+           "Plan Rows": 3,                    +
+           "Plan Width": 4,                   +
+           "Actual Startup Time": 0.000,      +
+           "Actual Total Time": 0.000,        +
+           "Actual Rows": 5,                  +
+           "Actual Loops": 1,                 +
+           "CdbExplain_NodeSummary": {        +
+             "ntuples": {                     +
+               "vmax": 5,                     +
+               "vsum": 10,                    +
+               "vcnt": 3,                     +
+               "imax": 0                      +
+             },                               +
+             "nloops": {                      +
+               "vmax": 1,                     +
+               "vsum": 3,                     +
+               "vcnt": 3,                     +
+               "imax": 0                      +
+             },                               +
+             "execmemused": {                 +
+               "vmax": 0,                     +
+               "vsum": 0,                     +
+               "vcnt": 0,                     +
+               "imax": 0                      +
+             },                               +
+             "workmemused": {                 +
+               "vmax": 0,                     +
+               "vsum": 0,                     +
+               "vcnt": 0,                     +
+               "imax": 0                      +
+             },                               +
+             "workmemwanted": {               +
+               "vmax": 0,                     +
+               "vsum": 0,                     +
+               "vcnt": 0,                     +
+               "imax": 0                      +
+             },                               +
+             "totalWorkfileCreated": {        +
+               "vmax": 0,                     +
+               "vsum": 0,                     +
+               "vcnt": 0,                     +
+               "imax": 0                      +
+             },                               +
+             "totalPartTableScanned": {       +
+               "vmax": 0,                     +
+               "vsum": 0,                     +
+               "vcnt": 0,                     +
+               "imax": 0                      +
+             },                               +
+             "segindex0": 0,                  +
+             "ninst": 3,                      +
+             "CdbExplain_StatInsts": [        +
+               {                              +
+                 "Segment": 0,                +
+                 "pstype": 95,                +
+                 "starttime": 0,              +
+                 "counter": 0,                +
+                 "firsttuple": 0.00,          +
+                 "startup": 0.00,             +
+                 "total": 0.00,               +
+                 "ntuples": 5,                +
+                 "ntuples2": 0,               +
+                 "nloops": 1,                 +
+                 "nfiltered1": 0,             +
+                 "nfiltered2": 0,             +
+                 "execmemused": 0,            +
+                 "workmemused": 0,            +
+                 "workmemwanted": 0,          +
+                 "workfileCreated": false,    +
+                 "firststart": XXXXXX,        +
+                 "numPartScanned": 0,         +
+                 "bnotes": 0,                 +
+                 "enotes": 0,                 +
+                 "nworkers_launched": 0       +
+               },                             +
+               {                              +
+                 "Segment": 1,                +
+                 "pstype": 95,                +
+                 "starttime": 0,              +
+                 "counter": 0,                +
+                 "firsttuple": 0.00,          +
+                 "startup": 0.00,             +
+                 "total": 0.00,               +
+                 "ntuples": 1,                +
+                 "ntuples2": 0,               +
+                 "nloops": 1,                 +
+                 "nfiltered1": 0,             +
+                 "nfiltered2": 0,             +
+                 "execmemused": 0,            +
+                 "workmemused": 0,            +
+                 "workmemwanted": 0,          +
+                 "workfileCreated": false,    +
+                 "firststart": XXXXXX,        +
+                 "numPartScanned": 0,         +
+                 "bnotes": 0,                 +
+                 "enotes": 0,                 +
+                 "nworkers_launched": 0       +
+               },                             +
+               {                              +
+                 "Segment": 2,                +
+                 "pstype": 95,                +
+                 "starttime": 0,              +
+                 "counter": 0,                +
+                 "firsttuple": 0.00,          +
+                 "startup": 0.00,             +
+                 "total": 0.00,               +
+                 "ntuples": 4,                +
+                 "ntuples2": 0,               +
+                 "nloops": 1,                 +
+                 "nfiltered1": 0,             +
+                 "nfiltered2": 0,             +
+                 "execmemused": 0,            +
+                 "workmemused": 0,            +
+                 "workmemwanted": 0,          +
+                 "workfileCreated": false,    +
+                 "firststart": XXXXXX,        +
+                 "numPartScanned": 0,         +
+                 "bnotes": 0,                 +
+                 "enotes": 0,                 +
+                 "nworkers_launched": 0       +
+               }                              +
+             ]                                +
+           }                                  +
+         }                                    +
+       ]                                      +
+     },                                       +
+     "Settings": {                            +
+       "Optimizer": "Postgres query optimizer"+
+     },                                       +
+     "Triggers": [                            +
+     ]                                        +
+   }                                          +
+ ]
+(1 row)
 
 set gp_enable_explain_node_summary=DEFAULT;
 --
