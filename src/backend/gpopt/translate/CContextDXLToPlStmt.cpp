@@ -56,7 +56,9 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_slices_list(nullptr),
 	  m_result_relation_index(0),
 	  m_distribution_policy(nullptr),
-	  m_part_selector_to_param_map(nullptr)
+	  m_part_selector_to_param_map(nullptr),
+	  m_agg_infos(nullptr),
+	  m_agg_trans_infos(nullptr)
 {
 	m_cte_producer_info = GPOS_NEW(m_mp) HMUlCTEProducerInfo(m_mp);
 	m_part_selector_to_param_map = GPOS_NEW(m_mp) UlongToUlongMap(m_mp);
@@ -159,8 +161,9 @@ CContextDXLToPlStmt::GetParamTypes()
 //
 //---------------------------------------------------------------------------
 void
-CContextDXLToPlStmt::RegisterCTEProducerInfo(ULONG cte_id,
-	ULongPtrArray *producer_output_colidx_map, ShareInputScan *siscan)
+CContextDXLToPlStmt::RegisterCTEProducerInfo(
+	ULONG cte_id, ULongPtrArray *producer_output_colidx_map,
+	ShareInputScan *siscan)
 {
 	ULONG *key = GPOS_NEW(m_mp) ULONG(cte_id);
 	BOOL result GPOS_ASSERTS_ONLY = m_cte_producer_info->Insert(
@@ -573,6 +576,42 @@ CContextDXLToPlStmt::GetRTEIndexByAssignedQueryId(
 	//	`assigned_query_id_for_target_rel` of table descriptor which points to
 	//	result relation wasn't previously processed - create a new index.
 	return gpdb::ListLength(m_rtable_entries_list) + 1;
+}
+
+void
+CContextDXLToPlStmt::AppendAggInfos(AggInfo *agginfo)
+{
+	m_agg_infos = gpdb::LAppend(m_agg_infos, agginfo);
+}
+
+void
+CContextDXLToPlStmt::AppendAggTransInfos(AggTransInfo *transinfo)
+{
+	m_agg_trans_infos = gpdb::LAppend(m_agg_trans_infos, transinfo);
+}
+
+void
+CContextDXLToPlStmt::ResetAggInfosAndTransInfos()
+{
+	ListCell *lc;
+	foreach (lc, m_agg_infos)
+	{
+		AggInfo *agginfo = (AggInfo *) lfirst(lc);
+		gpdb::GPDBFree(agginfo);
+	}
+
+	gpdb::ListFree(m_agg_infos);
+
+	foreach (lc, m_agg_trans_infos)
+	{
+		AggTransInfo *aggtransinfo = (AggTransInfo *) lfirst(lc);
+		gpdb::GPDBFree(aggtransinfo);
+	}
+
+	gpdb::ListFree(m_agg_trans_infos);
+
+	m_agg_infos = nullptr;
+	m_agg_trans_infos = nullptr;
 }
 
 // EOF

@@ -261,6 +261,7 @@ extern bool Debug_print_parse;
 extern bool Debug_print_rewritten;
 extern bool Debug_pretty_print;
 extern bool Debug_print_ivm;
+extern bool Debug_print_aggref_in_explain;
 
 extern bool	Debug_print_full_dtm;
 extern bool	Debug_print_snapshot_dtm;

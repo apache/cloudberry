@@ -2765,6 +2765,124 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 	return (Plan *) result;
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateAggFillInfo
+//
+//	@doc:
+//		Fill the aggregate node with aggno and aggtransno
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
+											 Aggref *aggref)
+{
+	Oid aggtransfn;
+	Oid aggfinalfn;
+	Oid aggcombinefn;
+	Oid aggserialfn;
+	Oid aggdeserialfn;
+	Oid aggtranstype;
+	int32 aggtranstypmod;
+	int32 aggtransspace;
+
+	Datum initValue;
+	bool initValueIsNull;
+	List *same_input_transnos;
+
+	bool shareable;
+	int16 resulttypeLen;
+	bool resulttypeByVal;
+	int16 transtypeLen;
+	bool transtypeByVal;
+
+	int aggno, transno;
+
+	gpdb::GetAggregateInfo(aggref, &aggtransfn, &aggfinalfn,
+						   &aggcombinefn, &aggserialfn, &aggdeserialfn,
+						   &aggtranstype, &aggtransspace, &initValue,
+						   &initValueIsNull, &shareable);
+
+	/*
+	 * If transition state is of same type as first aggregated input, assume
+	 * it's the same typmod (same width) as well.  This works for cases like
+	 * MAX/MIN and is probably somewhat reasonable otherwise.
+	 */
+	aggtranstypmod = -1;
+	if (aggref->args)
+	{
+		TargetEntry *tle = (TargetEntry *) linitial(aggref->args);
+
+		if (aggtranstype == gpdb::ExprType((Node *) tle->expr))
+			aggtranstypmod = gpdb::ExprTypeMod((Node *) tle->expr);
+	}
+
+	gpdb::TypLenByVal(aggref->aggtype, &resulttypeLen, &resulttypeByVal);
+
+	/*
+	 * 1. See if this is identical to another aggregate function call that
+	 * we've seen already.
+	 */
+	aggno = gpdb::FindCompatibleAgg(ctx->GetAggInfos(), aggref,
+									&same_input_transnos);
+	if (aggno != -1)
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::ListNth(ctx->GetAggInfos(), aggno);
+
+		transno = agginfo->transno;
+	}
+	else
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::GPDBAlloc(sizeof(AggInfo));
+
+		agginfo->finalfn_oid = aggfinalfn;
+		agginfo->representative_aggref = aggref;
+		agginfo->shareable = shareable;
+
+		aggno = gpdb::ListLength(ctx->GetAggInfos());
+		ctx->AppendAggInfos(agginfo);
+
+		gpdb::TypLenByVal(aggtranstype, &transtypeLen, &transtypeByVal);
+
+		/*
+		 * 2. See if this aggregate can share transition state with another
+		 * aggregate that we've initialized already.
+		 */
+		transno = gpdb::FindCompatibleTrans(
+			ctx->GetAggTransInfos(), shareable, aggtransfn, aggtranstype,
+			transtypeLen, transtypeByVal, aggcombinefn, aggserialfn,
+			aggdeserialfn, initValue, initValueIsNull, same_input_transnos);
+		if (transno == -1)
+		{
+			AggTransInfo *transinfo =
+				(AggTransInfo *) gpdb::GPDBAlloc(sizeof(AggTransInfo));
+
+			transinfo->args = aggref->args;
+			transinfo->aggfilter = aggref->aggfilter;
+			transinfo->transfn_oid = aggtransfn;
+			transinfo->combinefn_oid = aggcombinefn;
+			transinfo->serialfn_oid = aggserialfn;
+			transinfo->deserialfn_oid = aggdeserialfn;
+			transinfo->aggtranstype = aggtranstype;
+			transinfo->aggtranstypmod = aggtranstypmod;
+			transinfo->transtypeLen = transtypeLen;
+			transinfo->transtypeByVal = transtypeByVal;
+			transinfo->aggtransspace = aggtransspace;
+			transinfo->initValue = initValue;
+			transinfo->initValueIsNull = initValueIsNull;
+
+			transno = gpdb::ListLength(ctx->GetAggTransInfos());
+			ctx->AppendAggTransInfos(transinfo);
+		}
+		agginfo->transno = transno;
+	}
+
+	// setting the aggno and transno
+	aggref->aggno = aggno;
+	aggref->aggtransno = transno;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLAgg
@@ -2811,44 +2929,6 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 							   nullptr,	 // translate context for the base table
 							   child_contexts,	// pdxltrctxRight,
 							   &plan->targetlist, &plan->qual, output_context);
-
-	/*
-	 * GPDB_14_MERGE_FIXME: TODO Deduplicate aggregates and transition functions in orca
-	 */
-	// Set the aggsplit for the agg node
-	ListCell *lc;
-	INT aggsplit = 0;
-	int idx = 0;
-	ForEach (lc, plan->targetlist)
-	{
-		TargetEntry *te = (TargetEntry *) lfirst(lc);
-		if (IsA(te->expr, Aggref))
-		{
-			Aggref *aggref = (Aggref *) te->expr;
-
-			if (AGGSPLIT_INTERMEDIATE != aggsplit)
-			{
-				aggsplit |= aggref->aggsplit;
-			}
-
-			aggref->aggno = idx;
-			aggref->aggtransno = idx;
-			idx++;
-		}
-	}
-	agg->aggsplit = (AggSplit) aggsplit;
-
-	ForEach (lc, plan->qual)
-	{
-		Expr *expr = (Expr *) lfirst(lc);
-		if (IsA(expr, Aggref))
-		{
-			Aggref *aggref = (Aggref *) expr;
-			aggref->aggno = idx;
-			aggref->aggtransno = idx;
-			idx++;
-		}
-	}
 
 	plan->lefttree = child_plan;
 
@@ -2919,6 +2999,39 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 
 	agg->numGroups =
 		std::max(1L, (long) std::min(agg->plan.plan_rows, (double) LONG_MAX));
+
+	// Set the aggsplit,aggno,aggtransno for the agg node
+	ListCell *lc;
+	INT aggsplit = 0;
+	ForEach (lc, plan->targetlist)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+		if (IsA(te->expr, Aggref))
+		{
+			Aggref *aggref = (Aggref *) te->expr;
+
+			if (AGGSPLIT_INTERMEDIATE != aggsplit)
+			{
+				aggsplit |= aggref->aggsplit;
+			}
+			TranslateAggFillInfo(m_dxl_to_plstmt_context, aggref);
+		}
+	}
+	agg->aggsplit = (AggSplit) aggsplit;
+
+	ForEach (lc, plan->qual)
+	{
+		Expr *expr = (Expr *) lfirst(lc);
+		if (IsA(expr, Aggref))
+		{
+			Aggref *aggref = (Aggref *) expr;
+			// ORCA won't create the qual but a scalar in AGG
+			TranslateAggFillInfo(m_dxl_to_plstmt_context, aggref);
+		}
+	}
+
+	m_dxl_to_plstmt_context->ResetAggInfosAndTransInfos();
+
 	SetParamIds(plan);
 
 	// cleanup

@@ -36,12 +36,14 @@ extern "C" {
 #include "access/amapi.h"
 #include "access/external.h"
 #include "access/genam.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_inherits.h"
 #include "foreign/fdwapi.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
+#include "optimizer/prep.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
 #include "partitioning/partdesc.h"
@@ -490,6 +492,15 @@ gpdb::TypeCollation(Oid type)
 	return 0;
 }
 
+void
+gpdb::TypLenByVal(Oid typid, int16 *typlen, bool *typbyval)
+{
+	GP_WRAP_START;
+	{
+		get_typlenbyval(typid, typlen, typbyval);
+	}
+	GP_WRAP_END;
+}
 
 List *
 gpdb::ExtractNodesPlan(Plan *pl, int node_tag, bool descend_into_subqueries)
@@ -660,6 +671,129 @@ gpdb::ResolveAggregateTransType(Oid aggfnoid, Oid aggtranstype, Oid *inputTypes,
 	GP_WRAP_END;
 	return 0;
 }
+
+static Datum
+GetAggInitVal(Datum textInitVal, Oid transtype)
+{
+	Oid			typinput,
+				typioparam;
+	char	   *strInitVal;
+	Datum		initVal;
+
+	getTypeInputInfo(transtype, &typinput, &typioparam);
+	strInitVal = TextDatumGetCString(textInitVal);
+	initVal = OidInputFunctionCall(typinput, strInitVal,
+								   typioparam, -1);
+	pfree(strInitVal);
+	return initVal;
+}
+
+void
+gpdb::GetAggregateInfo(Aggref *aggref, Oid *aggtransfn,
+					   Oid *aggfinalfn, Oid *aggcombinefn,
+					   Oid *aggserialfn, Oid *aggdeserialfn,
+					   Oid *aggtranstype, int *aggtransspace,
+					   Datum *initValue, bool *initValueIsNull,
+					   bool *shareable)
+{
+	GP_WRAP_START;
+	{
+		HeapTuple	aggTuple;
+		Form_pg_aggregate aggform;
+		Datum		textInitVal;
+		Oid			inputTypes[FUNC_MAX_ARGS];
+		int			numArguments;
+
+		aggTuple = SearchSysCache1(AGGFNOID,
+							   ObjectIdGetDatum(aggref->aggfnoid));
+		if (!HeapTupleIsValid(aggTuple))
+			elog(ERROR, "cache lookup failed for aggregate %u",
+				 aggref->aggfnoid);
+
+		aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+		*aggtransfn = aggform->aggtransfn;
+		*aggfinalfn = aggform->aggfinalfn;
+		*aggcombinefn = aggform->aggcombinefn;
+		*aggserialfn = aggform->aggserialfn;
+		*aggdeserialfn = aggform->aggdeserialfn;
+		*aggtranstype = aggform->aggtranstype;
+		*aggtransspace = aggform->aggtransspace;
+
+		(aggform->aggfinalmodify != AGGMODIFY_READ_WRITE);
+
+
+		/*
+		 * Resolve the possibly-polymorphic aggregate transition type.
+		 */
+		/* extract argument types (ignoring any ORDER BY expressions) */
+		numArguments = get_aggregate_argtypes(aggref, inputTypes);
+
+		/* resolve actual type of transition state, if polymorphic */
+		*aggtranstype = resolve_aggregate_transtype(aggref->aggfnoid,
+											   *aggtranstype,
+											   inputTypes,
+											   numArguments);
+
+		/* get initial value */
+		textInitVal = SysCacheGetAttr(AGGFNOID, aggTuple,
+									Anum_pg_aggregate_agginitval,
+									initValueIsNull);
+
+
+		if (*initValueIsNull)
+			*initValue = (Datum) 0;
+		else
+			*initValue = GetAggInitVal(textInitVal, *aggtranstype);
+		
+		/*
+		 * If finalfn is marked read-write, we can't share transition states; but
+		 * it is okay to share states for AGGMODIFY_SHAREABLE aggs.
+		 *
+		 * In principle, in a partial aggregate, we could share the transition
+		 * state even if the final function is marked as read-write, because the
+		 * partial aggregate doesn't execute the final function.  But it's too
+		 * early to know whether we're going perform a partial aggregate.
+		 */
+		*shareable = (aggform->aggfinalmodify != AGGMODIFY_READ_WRITE);
+
+		ReleaseSysCache(aggTuple);
+
+	}
+	GP_WRAP_END;
+}
+
+
+int
+gpdb::FindCompatibleAgg(List *agginfos, Aggref *newagg,
+						List **same_input_transnos)
+{
+
+	GP_WRAP_START;
+	{
+		return find_compatible_agg(agginfos, newagg, same_input_transnos);
+	}
+	GP_WRAP_END;
+	return -1;
+}
+
+int
+gpdb::FindCompatibleTrans(List *aggtransinfos, bool shareable,
+						  Oid aggtransfn, Oid aggtranstype,
+						  int transtypeLen, bool transtypeByVal,
+						  Oid aggcombinefn, Oid aggserialfn,
+						  Oid aggdeserialfn, Datum initValue, 
+						  bool initValueIsNull, List *transnos)
+{
+	GP_WRAP_START;
+	{
+		return find_compatible_trans(aggtransinfos, shareable, aggtransfn,
+			aggtranstype, transtypeLen, transtypeByVal, aggcombinefn, aggserialfn,
+			aggdeserialfn, initValue, initValueIsNull, transnos);
+	}
+	GP_WRAP_END;
+	return -1;
+}
+
 
 Query *
 gpdb::FlattenJoinAliasVar(Query *query, gpos::ULONG query_level)

@@ -647,6 +647,9 @@ private:
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
 		CDXLTranslateContext *output_context,
 		CDXLNode *index_cond_list_dxlnode);
+
+	// fill the aggno and transno for the aggnode
+	static void TranslateAggFillInfo(CContextDXLToPlStmt *context, Aggref *aggref);
 };
 }  // namespace gpdxl
 
