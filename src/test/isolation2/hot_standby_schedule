@@ -4,3 +4,4 @@ test: hot_standby/transaction_isolation
 test: hot_standby/query_conflict
 test: hot_standby/faults
 test: hot_standby/teardown
+test: hot_standby/snapshot

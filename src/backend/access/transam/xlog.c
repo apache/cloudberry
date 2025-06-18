@@ -10757,6 +10757,9 @@ XLogRestorePoint(const char *rpName)
 	xlrec.rp_time = GetCurrentTimestamp();
 	strlcpy(xlrec.rp_name, rpName, MAXFNAMELEN);
 
+	/* LogHotStandby for the restore here */
+	LogRestorePointStandbySnapshot(rpName);
+
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xl_restore_point));
 

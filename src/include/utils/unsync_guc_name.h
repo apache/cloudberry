@@ -241,6 +241,7 @@
 		"gp_max_slices",
 		"gp_motion_cost_per_row",
 		"gp_pause_on_restore_point_replay",
+		"gp_hot_standby_snapshot_restore_point_name",
 		"gp_predicate_pushdown_sample_rows",
 		"gp_print_create_gang_time",
 		"gp_qd_hostname",

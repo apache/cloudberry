@@ -47,6 +47,7 @@
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
 #include "storage/proc.h"
+#include "storage/standby.h"
 #include "task/pg_cron.h"
 #include "tcop/idle_resource_cleaner.h"
 #include "utils/builtins.h"
@@ -5030,6 +5031,16 @@ struct config_string ConfigureNamesString_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"gp_hot_standby_snapshot_restore_point_name", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Specifies the hot standby snapshot's restore point name."),
+			gettext_noop(""),
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_hot_standby_snapshot_restore_point_name,
+		"",
+		NULL, NULL, NULL
+	},
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, NULL, NULL, NULL

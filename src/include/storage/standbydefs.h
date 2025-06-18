@@ -31,10 +31,11 @@ extern void standby_desc_invalidations(StringInfo buf,
 /*
  * XLOG message types
  */
-#define XLOG_STANDBY_LOCK			0x00
-#define XLOG_RUNNING_XACTS			0x10
-#define XLOG_INVALIDATIONS			0x20
-#define XLOG_LATESTCOMPLETED_GXID   0xF0
+#define XLOG_STANDBY_LOCK							0x00
+#define XLOG_RUNNING_XACTS							0x10
+#define XLOG_INVALIDATIONS							0x20
+#define XLOG_RESTORE_POINT_RUNNING_XACTS			0xE0
+#define XLOG_LATESTCOMPLETED_GXID					0xF0
 
 typedef struct xl_standby_locks
 {
@@ -56,6 +57,20 @@ typedef struct xl_running_xacts
 
 	TransactionId xids[FLEXIBLE_ARRAY_MEMBER];
 } xl_running_xacts;
+
+#define MAXFNAMELEN		64
+typedef struct xl_restore_point_running_xacts
+{
+	int			xcnt;			/* # of xact ids in xids[] */
+	int			subxcnt;		/* # of subxact ids in xids[] */
+	bool		subxid_overflow;	/* snapshot overflowed, subxids missing */
+	TransactionId nextXid;		/* xid from ShmemVariableCache->nextXid */
+	TransactionId oldestRunningXid; /* *not* oldestXmin */
+	TransactionId latestCompletedXid;	/* so we can set xmax */
+	char		rpName[MAXFNAMELEN]; /* cbdr: log the running xact with restore_point_name */
+
+	TransactionId xids[FLEXIBLE_ARRAY_MEMBER];
+} xl_restore_point_running_xacts;
 
 /*
  * Invalidations for standby, currently only when transactions without an
