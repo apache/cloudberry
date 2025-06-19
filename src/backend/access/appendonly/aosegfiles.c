@@ -109,7 +109,7 @@ InsertInitialSegnoEntry(Relation parentrel, int segno)
 	/* New segments are always created in the latest format */
 	formatVersion = AOSegfileFormatVersion_GetLatest();
 
-	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
 
 	pg_aoseg_rel = heap_open(segrelid, RowExclusiveLock);
 
@@ -194,7 +194,7 @@ GetFileSegInfo(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot, int segn
 	FileSegInfo *fsinfo;
 	Oid segrelid;
 
-	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
 
 	/*
 	 * Check the pg_aoseg relation to be certain the ao table segment file is
@@ -360,7 +360,7 @@ GetAllFileSegInfo(Relation parentrel,
 	FileSegInfo **result;
 	Oid segrelid;
 
-	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
 
 	if (segrelid == InvalidOid)
 		elog(ERROR, "could not find pg_aoseg aux table for AO table \"%s\"",
@@ -622,7 +622,7 @@ ClearFileSegInfo(Relation parentrel, int segno)
 	bool		isNull;
 	Oid segrelid;
 
-	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
 
 	elogif(Debug_appendonly_print_compaction, LOG,
 		   "Clear seg file info: segno %d table '%s'",
@@ -759,7 +759,7 @@ UpdateFileSegInfo_internal(Relation parentrel,
 	Oid segrelid;
 
 	Assert(RelationStorageIsAoRows(parentrel));
-	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
 
 	Assert(newState >= AOSEG_STATE_USECURRENT && newState <= AOSEG_STATE_AWAITING_DROP);
 
@@ -963,7 +963,7 @@ GetSegFilesTotals(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot)
 
 	result = (FileSegTotals *) palloc0(sizeof(FileSegTotals));
 
-	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL, NULL, NULL);
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
 
 	if (segrelid == InvalidOid)
 		elog(ERROR, "could not find pg_aoseg aux table for AO table \"%s\"",
@@ -1082,7 +1082,7 @@ gp_aoseg_history(PG_FUNCTION_ARGS)
 					 errmsg("Relation '%s' does not have appendoptimized row-oriented storage",
 							RelationGetRelationName(aocsRel))));
 
-		GetAppendOnlyEntryAuxOids(aocsRel, &segrelid, NULL, NULL, NULL, NULL);
+		GetAppendOnlyEntryAuxOids(aocsRel, &segrelid, NULL, NULL);
 
 		pg_aoseg_rel = table_open(segrelid, AccessShareLock);
 
@@ -1234,7 +1234,7 @@ gp_aoseg(PG_FUNCTION_ARGS)
 					 errmsg("Relation '%s' does not have appendoptimized row-oriented storage",
 							RelationGetRelationName(aocsRel))));
 
-		GetAppendOnlyEntryAuxOids(aocsRel, &segrelid, NULL, NULL, NULL, NULL);
+		GetAppendOnlyEntryAuxOids(aocsRel, &segrelid, NULL, NULL);
 
 		pg_aoseg_rel = table_open(segrelid, AccessShareLock);
 
@@ -1391,7 +1391,7 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 							RelationGetRelationName(parentrel))));
 
 		GetAppendOnlyEntryAuxOids(parentrel,
-								  &segrelid, NULL, NULL, NULL, NULL);
+								  &segrelid, NULL, NULL);
 		Assert(OidIsValid(segrelid));
 
 		/*
@@ -1575,7 +1575,7 @@ aorow_compression_ratio_internal(Relation parentrel)
 
 	GetAppendOnlyEntryAuxOids(parentrel,
 							  &segrelid,
-							  NULL, NULL, NULL, NULL);
+							  NULL, NULL);
 	Assert(OidIsValid(segrelid));
 
 	/*

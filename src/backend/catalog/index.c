@@ -4211,8 +4211,8 @@ reindex_relation(Oid relid, int flags, ReindexParams *params)
 	if ((flags & REINDEX_REL_PROCESS_TOAST) && relIsAO)
 		GetAppendOnlyEntryAuxOids(rel,
 								  &aoseg_relid,
-								  &aoblkdir_relid, NULL,
-								  &aovisimap_relid, NULL);
+								  &aoblkdir_relid,
+								  &aovisimap_relid);
 
 	/*
 	 * Close rel, but continue to hold the lock.

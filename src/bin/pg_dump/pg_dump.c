@@ -5336,15 +5336,6 @@ create_ao_relname(char *dst, size_t len, const char *prefix, Oid auxoid)
 		fatal("create_ao_relname: destination buffer is too short");
 }
 
-static void
-create_ao_idxname(char *dst, size_t len, const char *prefix, Oid auxoid)
-{
-	size_t actual = snprintf(dst, len, "%s_%u_index", prefix, auxoid);
-
-	if (actual >= len)
-		fatal("create_ao_idxname: destination buffer is too short");
-}
-
 /*
  * GPDB: the implementation of this function has moved below, to
  * binary_upgrade_set_pg_class_oids_impl(), so that we can handle some of the
@@ -5389,9 +5380,7 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 	Oid			pg_class_bmidxoid;
 	Oid			ao_segrelid = InvalidOid;
 	Oid			ao_blkdirrelid = InvalidOid;
-	Oid			ao_blkdiridxid = InvalidOid;
 	Oid			ao_visimaprelid = InvalidOid;
-	Oid			ao_visimapidxid = InvalidOid;
 	bool		ao_columnstore = false;
 	char		pg_class_relkind;
 
@@ -5402,8 +5391,8 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 					  "       i.indexrelid, ti.relname AS tidx_relname, "
 					  "       bi.oid AS bmoid, bidx.oid AS bmidxoid, "
 					  "       pgao.segrelid, pgao.columnstore, "
-					  "       pgao.blkdirrelid, pgao.blkdiridxid, "
-					  "       pgao.visimaprelid, pgao.visimapidxid "
+					  "       pgao.blkdirrelid, "
+					  "       pgao.visimaprelid "
 					  "FROM pg_catalog.pg_class c "
 					  "LEFT JOIN pg_catalog.pg_class t ON (c.reltoastrelid = t.oid) "
 					  "LEFT JOIN pg_catalog.pg_index i ON (c.reltoastrelid = i.indrelid AND i.indisvalid) "
@@ -5442,9 +5431,7 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 		ao_segrelid = atooid(PQgetvalue(upgrade_res, 0, PQfnumber(upgrade_res, "segrelid")));
 		ao_columnstore = (PQgetvalue(upgrade_res, 0, PQfnumber(upgrade_res, "columnstore"))[0] == 't');
 		ao_blkdirrelid = atooid(PQgetvalue(upgrade_res, 0, PQfnumber(upgrade_res, "blkdirrelid")));
-		ao_blkdiridxid = atooid(PQgetvalue(upgrade_res, 0, PQfnumber(upgrade_res, "blkdiridxid")));
 		ao_visimaprelid = atooid(PQgetvalue(upgrade_res, 0, PQfnumber(upgrade_res, "visimaprelid")));
-		ao_visimapidxid = atooid(PQgetvalue(upgrade_res, 0, PQfnumber(upgrade_res, "visimapidxid")));
 	}
 
 
@@ -5526,17 +5513,11 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 				create_ao_relname(ao_relname, sizeof(ao_relname), "pg_aoblkdir", pg_class_oid);
 				binary_upgrade_set_pg_class_oids_for_ao(fout, upgrade_buffer, ao_blkdirrelid, false, ao_relname);
 				binary_upgrade_set_type_oids_for_ao(fout, upgrade_buffer, ao_blkdirrelid, ao_relname);
-
-				create_ao_idxname(ao_relname, sizeof(ao_relname), "pg_aoblkdir", pg_class_oid);
-				binary_upgrade_set_pg_class_oids_for_ao(fout, upgrade_buffer, ao_blkdiridxid, true, ao_relname);
 			}
 
 			create_ao_relname(ao_relname, sizeof(ao_relname), "pg_aovisimap", pg_class_oid);
 			binary_upgrade_set_pg_class_oids_for_ao(fout, upgrade_buffer, ao_visimaprelid, false, ao_relname);
 			binary_upgrade_set_type_oids_for_ao(fout, upgrade_buffer, ao_visimaprelid, ao_relname);
-
-			create_ao_idxname(ao_relname, sizeof(ao_relname), "pg_aovisimap", pg_class_oid);
-			binary_upgrade_set_pg_class_oids_for_ao(fout, upgrade_buffer, ao_visimapidxid, true, ao_relname);
 		}
 
 		PQclear(upgrade_res);

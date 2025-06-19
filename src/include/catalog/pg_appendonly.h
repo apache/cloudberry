@@ -36,9 +36,7 @@ CATALOG(pg_appendonly,6105,AppendOnlyRelationId)
     int16           segfilecount;		/* the (per seg) average total number of segment file */
     int16			version;			/* AO relation version see AORelationVersion for detail */
     Oid             blkdirrelid;        /* OID of aoblkdir table; 0 if none */
-    Oid             blkdiridxid;        /* if aoblkdir table, OID of aoblkdir index */
 	Oid             visimaprelid;		/* OID of the aovisimap table */
-	Oid             visimapidxid;		/* OID of aovisimap index */
 } FormData_pg_appendonly;
 
 /* GPDB added foreign key definitions for gpcheckcat. */
@@ -49,7 +47,7 @@ FOREIGN_KEY(relid REFERENCES pg_class(oid));
  * (there are no var-length fields currentl.)
 */
 #define APPENDONLY_TUPLE_SIZE \
-	 (offsetof(FormData_pg_appendonly,visimapidxid) + sizeof(Oid))
+	 (offsetof(FormData_pg_appendonly,visimaprelid) + sizeof(Oid))
 
 /* ----------------
 *		Form_pg_appendonly corresponds to a pointer to a tuple with
@@ -127,9 +125,7 @@ InsertAppendOnlyEntry(Oid relid,
 					  char* compresstype,
 					  Oid segrelid,
 					  Oid blkdirrelid,
-					  Oid blkdiridxid,
 					  Oid visimaprelid,
-					  Oid visimapidxid,
 					  int16 version);
 
 void
@@ -150,9 +146,7 @@ void
 GetAppendOnlyEntryAuxOids(Relation rel,
 						  Oid *segrelid,
 						  Oid *blkdirrelid,
-						  Oid *blkdiridxid,
-						  Oid *visimaprelid,
-						  Oid *visimapidxid);
+						  Oid *visimaprelid);
 
 void
 GetAppendOnlyEntry(Relation rel, Form_pg_appendonly aoEntry);
@@ -164,9 +158,7 @@ extern void
 UpdateAppendOnlyEntryAuxOids(Oid relid,
 							 Oid newSegrelid,
 							 Oid newBlkdirrelid,
-							 Oid newBlkdiridxid,
-							 Oid newVisimaprelid,
-							 Oid newVisimapidxid);
+							 Oid newVisimaprelid);
 
 extern void
 RemoveAppendonlyEntry(Oid relid);
