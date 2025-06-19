@@ -151,6 +151,7 @@ bool		enable_parallel = false;
 bool		enable_parallel_semi_join = true;
 bool		enable_parallel_dedup_semi_join = true;
 bool		enable_parallel_dedup_semi_reverse_join = true;
+bool		parallel_query_use_streaming_hashagg = false;
 int			gp_appendonly_insert_files = 0;
 int			gp_appendonly_insert_files_tuples_range = 0;
 int			gp_random_insert_segments = 0;
@@ -3224,6 +3225,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_EXPLAIN
 		},
 		&enable_parallel_dedup_semi_reverse_join,
+		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"parallel_query_use_streaming_hashagg", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("allow to use of streaming hashagg in parallel query for DISTINCT."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&parallel_query_use_streaming_hashagg,
 		true,
 		NULL, NULL, NULL
 	},

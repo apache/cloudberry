@@ -498,6 +498,7 @@
 		"optimizer_use_gpdb_allocators",
 		"optimizer_xform_bind_threshold",
 		"parallel_leader_participation",
+		"parallel_query_use_streaming_hashagg",
 		"parallel_setup_cost",
 		"parallel_tuple_cost",
 		"password_encryption",
