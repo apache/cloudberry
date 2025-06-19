@@ -1390,23 +1390,21 @@ where i < (select count(*) from smallt where smallt.i = smallt2.i) order by 1,2,
 
 explain select smallt2.* from smallt2
 where i < (select count(*) from smallt where smallt.i = smallt2.i);
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.02 rows=50 width=15)
-   ->  Result  (cost=0.00..862.01 rows=17 width=15)
-         Filter: smallt2.i < COALESCE((count()), 0::bigint)
-         ->  Result  (cost=0.00..862.01 rows=17 width=24)
-               ->  Hash Left Join  (cost=0.00..862.01 rows=17 width=23)
-                     Hash Cond: smallt2.i = smallt.i
-                     ->  Seq Scan on smallt2  (cost=0.00..431.00 rows=17 width=15)
-                     ->  Hash  (cost=431.01..431.01 rows=4 width=12)
-                           ->  GroupAggregate  (cost=0.00..431.01 rows=4 width=12)
-                                 Group Key: smallt.i
-                                 ->  Sort  (cost=0.00..431.00 rows=34 width=4)
-                                       Sort Key: smallt.i
-                                       ->  Seq Scan on smallt  (cost=0.00..431.00 rows=34 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.67.0
-(14 rows)
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1324412.64 rows=50 width=15)
+   ->  Result  (cost=0.00..1324412.64 rows=17 width=15)
+         Filter: (smallt2.i < (SubPlan 1))
+         ->  Seq Scan on smallt2  (cost=0.00..1324412.62 rows=334 width=24)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Aggregate  (cost=0.00..431.34 rows=1 width=8)
+                 ->  Result  (cost=0.00..431.34 rows=10 width=1)
+                       Filter: (smallt.i = smallt2.i)
+                       ->  Materialize  (cost=0.00..431.01 rows=100 width=4)
+                             ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                                   ->  Seq Scan on smallt  (cost=0.00..431.00 rows=34 width=4)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
 
 -- Sort in MergeJoin
 -- start_ignore
@@ -1620,23 +1618,23 @@ select t1.* from smallt as t1, smallt as t2 where t1.i = t2.i and t1.i < 2;
 (200 rows)
 
 explain analyze select t1.* from smallt as t1, smallt as t2 where t1.i = t2.i and t1.i < 2;
-                                                         QUERY PLAN                                                          
------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.02 rows=200 width=15) (actual time=1.423..1.484 rows=100 loops=2)
-   ->  Hash Join  (cost=0.00..862.01 rows=67 width=15) (actual time=0.289..1.208 rows=50 loops=2)
-         Hash Cond: smallt.i = smallt_1.i
-         Extra Text: (seg0)   Hash chain length 10.0 avg, 10 max, using 1 of 524288 buckets.
- 
-         ->  Seq Scan on smallt  (cost=0.00..431.00 rows=7 width=15) (actual time=0.002..0.007 rows=5 loops=2)
-               Filter: i < 2
-         ->  Hash  (cost=431.00..431.00 rows=7 width=4) (actual time=0.049..0.049 rows=5 loops=2)
-               ->  Seq Scan on smallt smallt_1  (cost=0.00..431.00 rows=7 width=4) (actual time=0.037..0.044 rows=5 loops=2)
-                     Filter: i < 2
-   (slice0)    Executor memory: 322K bytes.
-   (slice1)    Executor memory: 4182K bytes avg x 3 workers, 4182K bytes max (seg0).  Work_mem: 1K bytes max.
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.02 rows=200 width=15) (actual time=1.180..1.194 rows=200 loops=1)
+   ->  Hash Join  (cost=0.00..862.01 rows=67 width=15) (actual time=0.263..0.914 rows=200 loops=1)
+         Hash Cond: (smallt.i = smallt_1.i)
+         Extra Text: (seg1)   Hash chain length 10.0 avg, 10 max, using 2 of 524288 buckets.
+         ->  Seq Scan on smallt  (cost=0.00..431.00 rows=7 width=15) (actual time=0.001..0.004 rows=20 loops=1)
+               Filter: (i < 2)
+         ->  Hash  (cost=431.00..431.00 rows=7 width=4) (actual time=0.013..0.013 rows=20 loops=1)
+               ->  Seq Scan on smallt smallt_1  (cost=0.00..431.00 rows=7 width=4) (actual time=0.005..0.007 rows=20 loops=1)
+                     Filter: (i < 2)
+ Planning time: 8.321 ms
+   (slice0)    Executor memory: 87K bytes.
+   (slice1)    Executor memory: 4172K bytes avg x 3 workers, 4172K bytes max (seg0).  Work_mem: 1K bytes max.
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
- Total runtime: 3.631 ms
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Execution time: 1.562 ms
 (15 rows)
 
 select t1.* from smallt as t1, smallt as t2 where t1.d = t2.d and t1.i < 2;
