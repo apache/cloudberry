@@ -986,6 +986,69 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
 select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_anti.a where t2_anti.a is null;
 abort;
 
+--
+-- Test Parallel DISTINCT
+--
+drop table if exists t_distinct_0;
+create table t_distinct_0(a int, b int) using ao_column distributed randomly;
+insert into t_distinct_0 select i, i+1 from generate_series(1, 1000) i;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+analyze t_distinct_0;
+explain(costs off)
+select distinct a from t_distinct_0;
+set enable_parallel = on;
+-- first stage HashAgg, second stage GroupAgg
+explain(costs off)
+select distinct a from t_distinct_0;
+set parallel_query_use_streaming_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+-- GroupAgg
+set enable_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+-- HashAgg
+set enable_hashagg = on;
+set enable_groupagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+set parallel_query_use_streaming_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0;
+-- multi DISTINCT tlist
+explain(costs off)
+select distinct a, b from t_distinct_0;
+
+-- DISTINCT on distribution key 
+drop table if exists t_distinct_1;
+create table t_distinct_1(a int, b int) using ao_column;
+insert into t_distinct_1 select * from t_distinct_0;
+analyze t_distinct_1;
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_1;
+set enable_parallel = on;
+explain(costs off)
+select distinct a from t_distinct_1;
+
+--
+-- End of test Parallel DISTINCT
+--
+
 -- start_ignore
 drop schema test_parallel cascade;
 -- end_ignore
