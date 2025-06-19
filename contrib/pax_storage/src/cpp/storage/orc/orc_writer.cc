@@ -225,12 +225,12 @@ static std::unique_ptr<PaxColumns> BuildColumns(
 OrcWriter::OrcWriter(
     const MicroPartitionWriter::WriterOptions &writer_options,
     const std::vector<pax::porc::proto::Type_Kind> &column_types,
-    std::shared_ptr<File> file, std::shared_ptr<File> toast_file)
+    std::unique_ptr<File> file, std::unique_ptr<File> toast_file)
     : MicroPartitionWriter(writer_options),
       is_closed_(false),
       column_types_(column_types),
-      file_(file),
-      toast_file_(toast_file),
+      file_(std::move(file)),
+      toast_file_(std::move(toast_file)),
       current_written_phy_size_(0),
       row_index_(0),
       total_rows_(0),

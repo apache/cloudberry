@@ -50,7 +50,7 @@ class OrcWriter : public MicroPartitionWriter {
  public:
   OrcWriter(const MicroPartitionWriter::WriterOptions &orc_writer_options,
             const std::vector<pax::porc::proto::Type_Kind> &column_types,
-            std::shared_ptr<File> file, std::shared_ptr<File> toast_file = nullptr);
+            std::unique_ptr<File> file, std::unique_ptr<File> toast_file = nullptr);
 
   ~OrcWriter() override;
 
@@ -75,8 +75,8 @@ class OrcWriter : public MicroPartitionWriter {
   // only for test
   static std::unique_ptr<MicroPartitionWriter> CreateWriter(
       MicroPartitionWriter::WriterOptions options,
-      const std::vector<pax::porc::proto::Type_Kind> &column_types, std::shared_ptr<File> file,
-      std::shared_ptr<File> toast_file = nullptr) {
+      const std::vector<pax::porc::proto::Type_Kind> &column_types, std::unique_ptr<File> file,
+      std::unique_ptr<File> toast_file = nullptr) {
     std::vector<std::tuple<ColumnEncoding_Kind, int>> all_no_encoding_types;
     for (auto _ : column_types) {
       (void)_;
@@ -86,7 +86,7 @@ class OrcWriter : public MicroPartitionWriter {
 
     options.encoding_opts = all_no_encoding_types;
 
-    return std::make_unique<OrcWriter>(options, column_types, file, toast_file);
+    return std::make_unique<OrcWriter>(options, column_types, std::move(file), std::move(toast_file));
   }
 #endif
 
@@ -125,8 +125,8 @@ class OrcWriter : public MicroPartitionWriter {
   std::vector<void*> detoast_memory_holder_;
 
   const std::vector<pax::porc::proto::Type_Kind> column_types_;
-  std::shared_ptr<File> file_;
-  std::shared_ptr<File> toast_file_;
+  std::unique_ptr<File> file_;
+  std::unique_ptr<File> toast_file_;
   int32 current_written_phy_size_;
   WriteSummary summary_;
 
@@ -142,7 +142,7 @@ class OrcWriter : public MicroPartitionWriter {
 
 class OrcReader : public MicroPartitionReader {
  public:
-  explicit OrcReader(std::shared_ptr<File> file, std::shared_ptr<File> toast_file = nullptr);
+  explicit OrcReader(std::unique_ptr<File> file, std::unique_ptr<File> toast_file = nullptr);
 
   ~OrcReader() override = default;
 
