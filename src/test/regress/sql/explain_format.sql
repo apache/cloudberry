@@ -128,6 +128,7 @@ set optimizer_enable_hashagg = on;
 SET statement_mem = '1000kB';
 
 -- Hashagg with spilling
+set hash_mem_multiplier = 1;
 CREATE TABLE test_hashagg_spill AS
 SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;
 EXPLAIN (analyze, costs off) SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;
@@ -139,6 +140,7 @@ SELECT a, avg(b) AS b FROM test_src_tbl GROUP BY grouping sets ((a), (b));
 -- flaky test
 -- EXPLAIN (analyze, costs off) SELECT a, avg(b) AS b FROM test_src_tbl GROUP BY grouping sets ((a), (b));
 
+reset hash_mem_multiplier;
 RESET optimizer_enable_hashagg;
 RESET statement_mem;
 

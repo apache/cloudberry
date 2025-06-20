@@ -1230,14 +1230,14 @@ LIMIT 10;
                                        ->  HashAggregate  (cost=102580688686565152.00..102596190789768272.00 rows=247107000000000 width=48)
                                              Output: cup.c, cup.d, cup.e, t.d, t.b
                                              Group Key: cup.c, cup.d, cup.e, t.d, t.b
-                                             Planned Partitions: 256
+                                             Planned Partitions: 512
                                              ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=93196181903903024.00..102459992361252656.00 rows=741321000000000 width=48)
                                                    Output: cup.c, cup.d, cup.e, t.d, t.b
                                                    Hash Key: cup.c, cup.d, cup.e, t.d, t.b
                                                    ->  HashAggregate  (cost=93196181903903024.00..102445165941252656.00 rows=741321000000000 width=48)
                                                          Output: cup.c, cup.d, cup.e, t.d, t.b
                                                          Group Key: cup.c, cup.d, cup.e, t.d, t.b
-                                                         Planned Partitions: 256
+                                                         Planned Partitions: 512
                                                          ->  Nested Loop  (cost=67221234716.02..7598699218584692.00 rows=525742695955889984 width=48)
                                                                Output: cup.c, cup.d, cup.e, t.d, t.b
                                                                ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=679.75..228161.25 rows=7413210 width=8)
@@ -1443,20 +1443,20 @@ select * from
 where country.percentage = countrylanguage.percentage order by countrylanguage.COUNTRY,country.language LIMIT 40;
                                                                                                                            QUERY PLAN                                                                                                                           
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=1051.23..1051.63 rows=28 width=202)
+ Limit  (cost=1051.23..1051.62 rows=28 width=202)
    Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1051.23..1051.63 rows=28 width=202)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1051.23..1051.62 rows=28 width=202)
          Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
          Merge Key: country.country, countrylanguage_2.language
-         ->  Limit  (cost=1051.23..1051.26 rows=9 width=202)
+         ->  Limit  (cost=1051.23..1051.25 rows=9 width=202)
                Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
-               ->  Sort  (cost=1051.23..1051.26 rows=9 width=202)
+               ->  Sort  (cost=1051.23..1051.25 rows=9 width=202)
                      Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
                      Sort Key: country.country, countrylanguage_2.language
                      ->  Hash Join  (cost=846.99..1051.08 rows=9 width=202)
                            Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
                            Hash Cond: (country.percentage = countrylanguage_2.percentage)
-                           ->  Hash Join  (cost=436.98..637.91 rows=245 width=85)
+                           ->  Hash Join  (cost=436.98..637.90 rows=245 width=85)
                                  Output: country.code, country.country, country.language, country.isofficial, country.percentage
                                  Hash Cond: (countrylanguage.countrycode = country.code)
                                  ->  Seq Scan on cte_prune.countrylanguage  (cost=0.00..165.33 rows=13133 width=16)
@@ -1490,9 +1490,9 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                                        ->  Seq Scan on cte_prune.country country_1  (cost=0.00..77.33 rows=3 width=52)
                                                                                              Output: country_1.code, country_1.name, country_1.capital
                                                                                              Filter: (country_1.continent = 'Europe'::text)
-                           ->  Hash  (cost=409.67..409.67 rows=28 width=117)
+                           ->  Hash  (cost=409.66..409.66 rows=28 width=117)
                                  Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
-                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=227.29..409.67 rows=28 width=117)
+                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=227.29..409.66 rows=28 width=117)
                                        Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
                                        ->  Hash Join  (cost=227.29..409.20 rows=9 width=117)
                                              Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
