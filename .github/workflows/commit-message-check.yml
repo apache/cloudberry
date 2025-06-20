@@ -1,0 +1,85 @@
+name: Commit Message Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check-commit-message:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        run: |
+          PR_COMMITS=$(git log --format="%H" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          
+          echo "## Commit Message Style Check" >> $GITHUB_STEP_SUMMARY
+          echo "Non-mandatory suggestions for reference only" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          HAS_ISSUES=false
+          
+          for COMMIT in $PR_COMMITS; do
+            TITLE=$(git log --format="%s" -n 1 $COMMIT)
+            BODY=$(git log --format="%b" -n 1 $COMMIT)
+            RAW=$(git log --format="%B" -n 1 $COMMIT)
+            
+            echo "### Checking commit: ${COMMIT:0:8}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$RAW" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            
+            ISSUES=()
+            
+            # Check title length and capitalization
+            if [[ ${#TITLE} -gt 50 ]]; then
+              ISSUES+=("- Title length is ${#TITLE} characters (recommended: 50 or less)")
+            fi
+            
+            if [[ ! $TITLE =~ ^[A-Z] ]]; then
+              ISSUES+=("- Title should start with an uppercase letter")
+            fi
+            
+            # Check body is not empty
+            if [[ -z "$BODY" || "$BODY" =~ ^[[:space:]]*$ ]]; then
+              ISSUES+=("- Commit body should not be empty")
+            fi
+            
+            # Check body line length
+            if [[ -n "$BODY" ]]; then
+              LONG_LINES=0
+              while IFS= read -r line; do
+                if [[ ${#line} -gt 72 && -n "$line" ]]; then
+                  ((LONG_LINES++))
+                fi
+              done <<< "$BODY"
+              
+              if [[ $LONG_LINES -gt 0 ]]; then
+                ISSUES+=("- Found $LONG_LINES line(s) in body exceeding 72 characters")
+              fi
+            fi
+            
+            # Output issues
+            if [[ ${#ISSUES[@]} -gt 0 ]]; then
+              HAS_ISSUES=true
+              echo "#### Suggestions:" >> $GITHUB_STEP_SUMMARY
+              for issue in "${ISSUES[@]}"; do
+                echo "$issue" >> $GITHUB_STEP_SUMMARY
+              done
+              echo "" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ Commit message follows recommended style" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          if [[ "$HAS_ISSUES" == "true" ]]; then
+            echo "### Note" >> $GITHUB_STEP_SUMMARY
+            echo "These suggestions are for reference only and won't block PR merging. Consider using the project's .gitmessage template." >> $GITHUB_STEP_SUMMARY
+          fi
