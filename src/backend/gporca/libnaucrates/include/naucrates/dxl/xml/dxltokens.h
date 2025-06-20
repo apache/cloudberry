@@ -132,6 +132,8 @@ enum Edxltoken
 
 	EdxltokenDuplicateSensitive,
 
+	EdxltokenPartIndexId,
+	EdxltokenPartIndexIdPrintable,
 	EdxltokenSegmentIdCol,
 
 	EdxltokenScalar,

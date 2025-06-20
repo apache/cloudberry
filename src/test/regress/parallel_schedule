@@ -169,6 +169,11 @@ test: gp_foreign_data
 # ----------
 test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize
 
+# tese the partition table with append
+test: partition_append_setup
+test: partition_append partition_prune_append partition_prune_opfamily_append partition_pruning_append
+test: partition_append_teardown
+
 # event triggers cannot run concurrently with any test that runs DDL
 # oidjoins is read-only, though, and should run late for best coverage
 test: event_trigger oidjoins
