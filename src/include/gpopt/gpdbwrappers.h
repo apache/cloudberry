@@ -166,6 +166,9 @@ Oid ExprCollation(Node *expr);
 // expression collation - GPDB_91_MERGE_FIXME
 Oid TypeCollation(Oid type);
 
+// Byval type get len
+void TypLenByVal(Oid typid, int16 *typlen, bool *typbyval);
+
 // extract nodes with specific tag from a plan tree
 List *ExtractNodesPlan(Plan *pl, int node_tag, bool descend_into_subqueries);
 
@@ -182,6 +185,26 @@ int GetAggregateArgTypes(Aggref *aggref, Oid *inputTypes);
 // Identify the transition state value's datatype for an aggregate call.
 Oid ResolveAggregateTransType(Oid aggfnoid, Oid aggtranstype, Oid *inputTypes,
 							  int numArguments);
+
+// intermediate result of given aggregate
+void GetAggregateInfo(Aggref *aggref, Oid *aggtransfn,
+					  Oid *aggfinalfn, Oid *aggcombinefn, 
+					  Oid *aggserialfn, Oid *aggdeserialfn,
+					  Oid *aggtranstype, int *aggtransspace,
+					  Datum *initValue, bool *initValueIsNull,
+					  bool *shareable);
+
+int
+FindCompatibleAgg(List *agginfos, Aggref *newagg,
+				  List **same_input_transnos);
+int
+FindCompatibleTrans(List *aggtransinfos, bool shareable,
+					Oid aggtransfn, Oid aggtranstype,
+					int transtypeLen, bool transtypeByVal,
+					Oid aggcombinefn, Oid aggserialfn,
+					Oid aggdeserialfn, Datum initValue, 
+					bool initValueIsNull, List *transnos);
+
 
 // replace Vars that reference JOIN outputs with references to the original
 // relation variables instead

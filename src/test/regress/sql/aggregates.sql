@@ -1447,3 +1447,80 @@ drop table agg_hash_4;
 -- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
 explain analyze select count(*) from pg_class, (select count(*) > 0 from (select count(*) from pg_class where relnatts > 8) x) y;
+
+-- test aggno
+create table tgb1(v1 int, v2 int, v3 int);
+create table tgb2(v1 int, v2 int, v3 int);
+
+insert into tgb1 values(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3);
+insert into tgb2 values(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3);
+
+set debug_print_aggref_in_explain to on;
+
+explain select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+
+select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+
+set optimizer_force_multistage_agg to on;
+explain select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+
+select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+
+reset debug_print_aggref_in_explain;
+reset optimizer_force_multistage_agg;

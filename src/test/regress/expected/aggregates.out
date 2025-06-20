@@ -3279,3 +3279,124 @@ explain analyze select count(*) from pg_class, (select count(*) > 0 from (select
  Execution Time: 0.302 ms
 (10 rows)
 
+-- test aggno
+create table tgb1(v1 int, v2 int, v3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table tgb2(v1 int, v2 int, v3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into tgb1 values(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3);
+insert into tgb2 values(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3),(1,2,3);
+set debug_print_aggref_in_explain to on;
+explain select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=145986.91..145999.46 rows=4 width=12)
+   ->  Finalize HashAggregate  (cost=145986.91..145999.41 rows=1 width=12)
+         Group Key: tgb2.v2
+         Filter: ((sum((tgb1.v3 * tgb2.v3)) > 100) AND (sum((tgb1.v3 * tgb2.v3)) > 101) AND (sum((tgb1.v3 * tgb2.v3)) < 1020) AND (sum((tgb1.v3 * tgb2.v3)) <> 103) AND (sum((tgb1.v3 * tgb2.v3)) >= 104) AND (avg((tgb1.v3 * tgb2.v3)) <> '11'::numeric) AND (avg((tgb1.v3 * tgb2.v3)) <> '12'::numeric) AND (avg((tgb2.v1 * tgb1.v1)) <> '13'::numeric) AND (sum(tgb1.v3) > 200))
+         AggRefs(TargetList): [(0, 0)]
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
+               Hash Key: tgb2.v2
+               ->  Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
+                     Group Key: tgb2.v2
+                     AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
+                     ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
+                           Hash Cond: (tgb1.v1 = tgb2.v1)
+                           ->  Seq Scan on tgb1  (cost=0.00..293.67 rows=25967 width=8)
+                           ->  Hash  (cost=293.67..293.67 rows=25967 width=12)
+                                 ->  Seq Scan on tgb2  (cost=0.00..293.67 rows=25967 width=12)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+ sum 
+-----
+(0 rows)
+
+set optimizer_force_multistage_agg to on;
+explain select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=145986.91..145999.46 rows=4 width=12)
+   ->  Finalize HashAggregate  (cost=145986.91..145999.41 rows=1 width=12)
+         Group Key: tgb2.v2
+         Filter: ((sum((tgb1.v3 * tgb2.v3)) > 100) AND (sum((tgb1.v3 * tgb2.v3)) > 101) AND (sum((tgb1.v3 * tgb2.v3)) < 1020) AND (sum((tgb1.v3 * tgb2.v3)) <> 103) AND (sum((tgb1.v3 * tgb2.v3)) >= 104) AND (avg((tgb1.v3 * tgb2.v3)) <> '11'::numeric) AND (avg((tgb1.v3 * tgb2.v3)) <> '12'::numeric) AND (avg((tgb2.v1 * tgb1.v1)) <> '13'::numeric) AND (sum(tgb1.v3) > 200))
+         AggRefs(TargetList): [(0, 0)]
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
+               Hash Key: tgb2.v2
+               ->  Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
+                     Group Key: tgb2.v2
+                     AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
+                     ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
+                           Hash Cond: (tgb1.v1 = tgb2.v1)
+                           ->  Seq Scan on tgb1  (cost=0.00..293.67 rows=25967 width=8)
+                           ->  Hash  (cost=293.67..293.67 rows=25967 width=12)
+                                 ->  Seq Scan on tgb2  (cost=0.00..293.67 rows=25967 width=12)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select
+  sum(tgb1.v3 * tgb2.v3) 
+from 
+  tgb1,tgb2 
+where 
+  tgb1.v1 = tgb2.v1 group by tgb2.v2 
+having sum(tgb1.v3 * tgb2.v3) > 100 and
+  sum(tgb1.v3 * tgb2.v3) > 101 and 
+  sum(tgb1.v3 * tgb2.v3) < 1020 and
+  sum(tgb1.v3 * tgb2.v3) != 103 and
+  sum(tgb1.v3 * tgb2.v3) >= 104 and
+  avg(tgb1.v3 * tgb2.v3) != 11 and
+  avg(tgb1.v3 * tgb2.v3) != 12 and
+  avg(tgb2.v1 * tgb1.v1) != 13 and
+  sum(tgb1.v3) > 200;
+ sum 
+-----
+(0 rows)
+
+reset debug_print_aggref_in_explain;
+reset optimizer_force_multistage_agg;

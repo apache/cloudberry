@@ -134,6 +134,7 @@ static void show_tablesample(TableSampleClause *tsc, PlanState *planstate,
 							 List *ancestors, ExplainState *es);
 static void show_sort_info(SortState *sortstate, ExplainState *es);
 static void show_windowagg_keys(WindowAggState *waggstate, List *ancestors, ExplainState *es);
+static void show_aggref_info(List *targetList, const char *qlabel, ExplainState *es);
 static void show_incremental_sort_info(IncrementalSortState *incrsortstate,
 									   ExplainState *es);
 static void show_hash_info(HashState *hashstate, ExplainState *es);
@@ -2737,6 +2738,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		case T_Agg:
 			show_agg_keys(castNode(AggState, planstate), ancestors, es);
 			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			show_aggref_info(plan->targetlist, "AggRefs(TargetList)", es);
 			show_hashagg_info((AggState *) planstate, es);
 			if (plan->qual)
 				show_instrumentation_count("Rows Removed by Filter", 1,
@@ -3166,6 +3168,44 @@ show_sort_keys(SortState *sortstate, List *ancestors, ExplainState *es)
 						 plan->sortOperators, plan->collations,
 						 plan->nullsFirst,
 						 ancestors, es);
+}
+
+static void
+show_aggref_info(List *targetList, const char *qlabel, ExplainState *es) {
+	StringInfoData buf;
+	ListCell *lc;
+	bool already_got_one = false;
+
+	if (!Debug_print_aggref_in_explain) {
+		return;
+	}
+
+	initStringInfo(&buf);
+	appendStringInfoString(&buf, "[");
+
+	foreach (lc, targetList)
+	{
+		if (!IsA(lfirst(lc),TargetEntry)) {
+			continue;
+		}
+
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+		if (!IsA(te->expr, Aggref))
+		{
+			continue;
+		}
+
+		Aggref *aggref = (Aggref *) te->expr;
+		if (already_got_one) {
+			appendStringInfo(&buf, ", (%d, %d)", aggref->aggno, aggref->aggtransno);
+		} else {
+			appendStringInfo(&buf, "(%d, %d)", aggref->aggno, aggref->aggtransno);
+			already_got_one = true;
+		}
+	}
+	appendStringInfoString(&buf, "]");
+	
+	ExplainPropertyText(qlabel, buf.data, es);
 }
 
 static void

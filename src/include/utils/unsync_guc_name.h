@@ -89,6 +89,7 @@
 		"debug_print_slice_table",
 		"debug_print_snapshot_dtm",
 		"debug_print_ivm",
+		"debug_print_aggref_in_explain",
 		"debug_resource_group",
 		"debug_walrepl_rcv",
 		"debug_walrepl_snd",
