@@ -599,6 +599,7 @@ ANALYZE test_src_tbl;
 set optimizer_enable_hashagg = on;
 SET statement_mem = '1000kB';
 -- Hashagg with spilling
+set hash_mem_multiplier = 1;
 CREATE TABLE test_hashagg_spill AS
 SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
@@ -631,6 +632,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 -- The planner generates multiple hash tables but ORCA uses Shared Scan.
 -- flaky test
 -- EXPLAIN (analyze, costs off) SELECT a, avg(b) AS b FROM test_src_tbl GROUP BY grouping sets ((a), (b));
+reset hash_mem_multiplier;
 RESET optimizer_enable_hashagg;
 RESET statement_mem;
 -- Cleanup
