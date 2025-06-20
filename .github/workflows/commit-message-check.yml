@@ -1,0 +1,153 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# Commit Message Check
+# --------------------------------------------------------------------
+# Checks the commit messages for a pull request to ensure they follow
+# the project's guidelines. This is not a required check and will not
+# block the PR from being merged. It provides suggestions for improving
+# commit messages.
+#
+# The main checks include:
+#  * Title length (recommended: 50 characters or less)
+#  * Title capitalization (should start with an uppercase letter)
+#  * Body presence (should not be empty)
+#  * Body line length (recommended: 72 characters or less)
+# --------------------------------------------------------------------
+
+name: Commit Message Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MAX_TITLE_LENGTH: 50
+  MAX_BODY_LINE_LENGTH: 72
+  MAX_COMMITS_TO_CHECK: 20
+
+jobs:
+  check-commit-message:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        shell: bash
+        run: |
+          set -e
+          
+          # Get PR commits with limit
+          PR_COMMITS=$(git log --format="%H" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | head -${MAX_COMMITS_TO_CHECK})
+          
+          # Check if there are any commits
+          if [[ -z "$PR_COMMITS" ]]; then
+            echo "## Commit Message Style Check" >> $GITHUB_STEP_SUMMARY
+            echo "No commits found in this PR" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          
+          COMMIT_COUNT=$(echo "$PR_COMMITS" | wc -l)
+          
+          echo "## Commit Message Style Check" >> $GITHUB_STEP_SUMMARY
+          echo "Non-mandatory suggestions for reference only" >> $GITHUB_STEP_SUMMARY
+          echo "Checking $COMMIT_COUNT commit(s)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          HAS_ISSUES=false
+          
+          for COMMIT in $PR_COMMITS; do
+            TITLE=$(git log --format="%s" -n 1 "$COMMIT")
+            BODY=$(git log --format="%b" -n 1 "$COMMIT")
+            RAW=$(git log --format="%B" -n 1 "$COMMIT")
+            
+            echo "### Checking commit: ${COMMIT:0:8}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$RAW" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            
+            ISSUES=()
+            
+            # Check title length
+            if [[ ${#TITLE} -gt ${MAX_TITLE_LENGTH} ]]; then
+              ISSUES+=("- Title length is ${#TITLE} characters (recommended: ${MAX_TITLE_LENGTH} or less)")
+            fi
+            
+            # Check title capitalization
+            if [[ ! $TITLE =~ ^[A-Z] ]]; then
+              ISSUES+=("- Title should start with an uppercase letter")
+            fi
+            
+            # Check body is not empty (optional for simple fixes)
+            if [[ -z "$BODY" || "$BODY" =~ ^[[:space:]]*$ ]]; then
+              # Only suggest body for non-trivial commits
+              if [[ ! $TITLE =~ (typo|whitespace|comment|indentation) ]]; then
+                ISSUES+=("- Consider adding a commit body for better context")
+              fi
+            fi
+            
+            # Check body line length
+            if [[ -n "$BODY" ]]; then
+              LONG_LINES=0
+              while IFS= read -r line; do
+                if [[ ${#line} -gt ${MAX_BODY_LINE_LENGTH} && -n "$line" ]]; then
+                  ((LONG_LINES++))
+                fi
+              done <<< "$BODY"
+              
+              if [[ $LONG_LINES -gt 0 ]]; then
+                ISSUES+=("- Found $LONG_LINES line(s) in body exceeding ${MAX_BODY_LINE_LENGTH} characters")
+              fi
+            fi
+                        
+            # Output issues
+            if [[ ${#ISSUES[@]} -gt 0 ]]; then
+              HAS_ISSUES=true
+              echo "#### ⚠️ Suggestions:" >> $GITHUB_STEP_SUMMARY
+              for issue in "${ISSUES[@]}"; do
+                echo "$issue" >> $GITHUB_STEP_SUMMARY
+              done
+              echo "" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ Commit message follows recommended style" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "$HAS_ISSUES" == "true" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📝 Note" >> $GITHUB_STEP_SUMMARY
+            echo "These suggestions are for reference only and won't block PR merging." >> $GITHUB_STEP_SUMMARY
+            echo "Please refer to the project's .gitmessage template for detailed guidelines." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 All commits follow the recommended guidelines!" >> $GITHUB_STEP_SUMMARY
+          fi
