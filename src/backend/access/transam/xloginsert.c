@@ -655,8 +655,6 @@ XLogRecordAssemble(RmgrId rmid, uint8 info,
 											cbimg.hole_length,
 											regbuf->compressed_page,
 											&compressed_len);
-				if (!is_compressed)
-					elog(LOG, "WAL compression failed, using uncompressed image");
 			}
 
 			/*
