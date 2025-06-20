@@ -3069,6 +3069,201 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
 (4 rows)
 
 abort;
+--
+-- Test Parallel DISTINCT
+--
+drop table if exists t_distinct_0;
+NOTICE:  table "t_distinct_0" does not exist, skipping
+create table t_distinct_0(a int, b int) using ao_column distributed randomly;
+insert into t_distinct_0 select i, i+1 from generate_series(1, 1000) i;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+analyze t_distinct_0;
+explain(costs off)
+select distinct a from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: a
+               ->  HashAggregate
+                     Group Key: a
+                     ->  Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+set enable_parallel = on;
+-- first stage HashAgg, second stage GroupAgg
+explain(costs off)
+select distinct a from t_distinct_0;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: a
+   ->  GroupAggregate
+         Group Key: a
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: a
+                     Hash Module: 3
+                     ->  Streaming HashAggregate
+                           Group Key: a
+                           ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+set parallel_query_use_streaming_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: a
+   ->  GroupAggregate
+         Group Key: a
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: a
+                     Hash Module: 3
+                     ->  HashAggregate
+                           Group Key: a
+                           ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+-- GroupAgg
+set enable_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: a
+   ->  GroupAggregate
+         Group Key: a
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: a
+                     Hash Module: 3
+                     ->  GroupAggregate
+                           Group Key: a
+                           ->  Sort
+                                 Sort Key: a
+                                 ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+-- HashAgg
+set enable_hashagg = on;
+set enable_groupagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a
+               Hash Module: 3
+               ->  HashAggregate
+                     Group Key: a
+                     ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+set parallel_query_use_streaming_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a
+               Hash Module: 3
+               ->  Streaming HashAggregate
+                     Group Key: a
+                     ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+-- multi DISTINCT tlist
+explain(costs off)
+select distinct a, b from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a, b
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a, b
+               Hash Module: 3
+               ->  Streaming HashAggregate
+                     Group Key: a, b
+                     ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+-- DISTINCT on distribution key 
+drop table if exists t_distinct_1;
+NOTICE:  table "t_distinct_1" does not exist, skipping
+create table t_distinct_1(a int, b int) using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_distinct_1 select * from t_distinct_0;
+analyze t_distinct_1;
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_1;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: a
+         ->  Seq Scan on t_distinct_1
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+set enable_parallel = on;
+explain(costs off)
+select distinct a from t_distinct_1;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a
+               Hash Module: 3
+               ->  Streaming HashAggregate
+                     Group Key: a
+                     ->  Parallel Seq Scan on t_distinct_1
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+--
+-- End of test Parallel DISTINCT
+--
 -- start_ignore
 drop schema test_parallel cascade;
 -- end_ignore
