@@ -4601,17 +4601,17 @@ numeric_pg_lsn(PG_FUNCTION_ARGS)
 
 typedef struct NumericAggState
 {
-	bool		calcSumX2;		/* if true, calculate sumX2 */
 	MemoryContext agg_context;	/* context we're calculating in */
 	int64		N;				/* count of processed numbers */
 	NumericSumAccum sumX;		/* sum of processed numbers */
 	NumericSumAccum sumX2;		/* sum of squares of processed numbers */
-	int			maxScale;		/* maximum scale seen so far */
 	int64		maxScaleCount;	/* number of values seen with maximum scale */
 	/* These counts are *not* included in N!  Use NA_TOTAL_COUNT() as needed */
 	int64		NaNcount;		/* count of NaN values */
-	int64		pInfcount;		/* count of +Inf values */
-	int64		nInfcount;		/* count of -Inf values */
+	uint32		pInfcount;		/* count of +Inf values */
+	uint32		nInfcount;		/* count of -Inf values */
+	int32		maxScale;		/* maximum scale seen so far */
+	bool		calcSumX2;		/* if true, calculate sumX2 */
 } NumericAggState;
 
 #define NA_TOTAL_COUNT(na) \
@@ -4661,6 +4661,18 @@ makeNumericAggStateCurrentContext(bool calcSumX2)
 }
 
 /*
+ * Check for overflow when incrementing uint32 counters
+ */
+static inline void
+check_uint32_overflow(uint32 current, uint32 increment, const char *counter_name)
+{
+	if (increment > 0 && current > UINT32_MAX - increment)
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("%s count overflow: too many values, disable gp_enable_numeric_inf_count_check to avoid this error", counter_name)));
+}
+
+/*
  * Accumulate a new input value for numeric aggregate functions.
  */
 static void
@@ -4673,10 +4685,16 @@ do_numeric_accum(NumericAggState *state, Numeric newval)
 	/* Count NaN/infinity inputs separately from all else */
 	if (NUMERIC_IS_SPECIAL(newval))
 	{
-		if (NUMERIC_IS_PINF(newval))
+		if (NUMERIC_IS_PINF(newval) && gp_enable_numeric_inf_count_check)
+		{
+			check_uint32_overflow(state->pInfcount, 1, "pInfcount");
 			state->pInfcount++;
-		else if (NUMERIC_IS_NINF(newval))
+		}
+		else if (NUMERIC_IS_NINF(newval) && gp_enable_numeric_inf_count_check)
+		{
+			check_uint32_overflow(state->nInfcount, 1, "nInfcount");
 			state->nInfcount++;
+		}
 		else
 			state->NaNcount++;
 		return;
@@ -4743,9 +4761,9 @@ do_numeric_discard(NumericAggState *state, Numeric newval)
 	/* Count NaN/infinity inputs separately from all else */
 	if (NUMERIC_IS_SPECIAL(newval))
 	{
-		if (NUMERIC_IS_PINF(newval))
+		if (NUMERIC_IS_PINF(newval) && gp_enable_numeric_inf_count_check)
 			state->pInfcount--;
-		else if (NUMERIC_IS_NINF(newval))
+		else if (NUMERIC_IS_NINF(newval) && gp_enable_numeric_inf_count_check)
 			state->nInfcount--;
 		else
 			state->NaNcount--;
@@ -4890,7 +4908,9 @@ numeric_combine(PG_FUNCTION_ARGS)
 
 	state1->N += state2->N;
 	state1->NaNcount += state2->NaNcount;
+	check_uint32_overflow(state1->pInfcount, state2->pInfcount, "+Inf");
 	state1->pInfcount += state2->pInfcount;
+	check_uint32_overflow(state1->nInfcount, state2->nInfcount, "-Inf");
 	state1->nInfcount += state2->nInfcount;
 
 	if (state2->N > 0)
@@ -4985,7 +5005,9 @@ numeric_avg_combine(PG_FUNCTION_ARGS)
 
 	state1->N += state2->N;
 	state1->NaNcount += state2->NaNcount;
+	check_uint32_overflow(state1->pInfcount, state2->pInfcount, "+Inf");
 	state1->pInfcount += state2->pInfcount;
+	check_uint32_overflow(state1->nInfcount, state2->nInfcount, "-Inf");
 	state1->nInfcount += state2->nInfcount;
 
 	if (state2->N > 0)
@@ -5069,10 +5091,10 @@ numeric_avg_serialize(PG_FUNCTION_ARGS)
 	pq_sendint64(&buf, state->NaNcount);
 
 	/* pInfcount */
-	pq_sendint64(&buf, state->pInfcount);
+	pq_sendint32(&buf, state->pInfcount);
 
 	/* nInfcount */
-	pq_sendint64(&buf, state->nInfcount);
+	pq_sendint32(&buf, state->nInfcount);
 
 	result = pq_endtypsend(&buf);
 
@@ -5133,10 +5155,10 @@ numeric_avg_deserialize(PG_FUNCTION_ARGS)
 	result->NaNcount = pq_getmsgint64(&buf);
 
 	/* pInfcount */
-	result->pInfcount = pq_getmsgint64(&buf);
+	result->pInfcount = pq_getmsgint(&buf, sizeof(uint32));
 
 	/* nInfcount */
-	result->nInfcount = pq_getmsgint64(&buf);
+	result->nInfcount = pq_getmsgint(&buf, sizeof(uint32));
 
 	pq_getmsgend(&buf);
 	pfree(buf.data);
@@ -5212,10 +5234,10 @@ numeric_serialize(PG_FUNCTION_ARGS)
 	pq_sendint64(&buf, state->NaNcount);
 
 	/* pInfcount */
-	pq_sendint64(&buf, state->pInfcount);
+	pq_sendint32(&buf, state->pInfcount);
 
 	/* nInfcount */
-	pq_sendint64(&buf, state->nInfcount);
+	pq_sendint32(&buf, state->nInfcount);
 
 	result = pq_endtypsend(&buf);
 
@@ -5285,10 +5307,10 @@ numeric_deserialize(PG_FUNCTION_ARGS)
 	result->NaNcount = pq_getmsgint64(&buf);
 
 	/* pInfcount */
-	result->pInfcount = pq_getmsgint64(&buf);
+	result->pInfcount = pq_getmsgint(&buf, sizeof(uint32));
 
 	/* nInfcount */
-	result->nInfcount = pq_getmsgint64(&buf);
+	result->nInfcount = pq_getmsgint(&buf, sizeof(uint32));
 
 	pq_getmsgend(&buf);
 	pfree(buf.data);

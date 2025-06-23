@@ -476,6 +476,9 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
+/* if numeric inf count is too large, disable this */
+bool		gp_enable_numeric_inf_count_check = true;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -3302,6 +3305,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_enable_refresh_fast_path,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_enable_numeric_inf_count_check", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable numeric inf count check."),
+			NULL
+		},
+		&gp_enable_numeric_inf_count_check,
+		false,
 		NULL, NULL, NULL
 	},
 
