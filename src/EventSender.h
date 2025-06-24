@@ -27,6 +27,7 @@ public:
   void executor_end(QueryDesc *query_desc);
   void query_metrics_collect(QueryMetricsStatus status, void *arg);
   void ic_metrics_collect();
+  void analyze_stats_collect(QueryDesc *query_desc);
   void incr_depth() { nesting_level++; }
   void decr_depth() { nesting_level--; }
   EventSender();
