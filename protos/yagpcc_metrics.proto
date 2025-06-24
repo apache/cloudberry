@@ -34,6 +34,7 @@ message QueryInfo {
     string userName = 8;
     string databaseName = 9;
     string rsgname = 10;
+    string analyze_text = 11;
 }
 
 message AdditionalQueryInfo {
