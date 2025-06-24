@@ -20,6 +20,10 @@ extern "C" {
 #include "PgUtils.h"
 #include "ProtoUtils.h"
 
+#define need_collect_analyze()                                                 \
+  (Gp_role == GP_ROLE_DISPATCH && Config::min_analyze_time() >= 0 &&           \
+   Config::enable_analyze())
+
 void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
     return;
@@ -53,8 +57,7 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   }
 }
 
-void EventSender::executor_before_start(QueryDesc *query_desc,
-                                        int /* eflags*/) {
+void EventSender::executor_before_start(QueryDesc *query_desc, int eflags) {
   if (!connector) {
     return;
   }
@@ -67,7 +70,8 @@ void EventSender::executor_before_start(QueryDesc *query_desc,
     return;
   }
   collect_query_submit(query_desc);
-  if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze()) {
+  if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze() &&
+      (eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0) {
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
     query_desc->instrument_options |= INSTRUMENT_TIMER;
@@ -97,6 +101,17 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
       }
       update_query_state(query_desc, query, QueryState::START);
       set_query_plan(query_msg, query_desc);
+      if (need_collect_analyze()) {
+        // Set up to track total elapsed time during query run.
+        // Make sure the space is allocated in the per-query
+        // context so it will go away at executor_end.
+        if (query_desc->totaltime == NULL) {
+          MemoryContext oldcxt;
+          oldcxt = MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
+          query_desc->totaltime = InstrAlloc(1, INSTRUMENT_ALL);
+          MemoryContextSwitchTo(oldcxt);
+        }
+      }
       yagpcc::GPMetrics stats;
       std::swap(stats, *query_msg->mutable_query_metrics());
       if (connector->report_query(*query_msg, "started")) {
@@ -260,6 +275,34 @@ void EventSender::ic_metrics_collect() {
   ic_statistics.recvAckNum += metrics.recvAckNum;
   ic_statistics.statusQueryMsgNum += metrics.statusQueryMsgNum;
 #endif
+}
+
+void EventSender::analyze_stats_collect(QueryDesc *query_desc) {
+  if (!connector || Gp_role != GP_ROLE_DISPATCH) {
+    return;
+  }
+  if (!need_collect(query_desc, nesting_level)) {
+    return;
+  }
+  auto query = get_query_message(query_desc);
+  auto query_msg = query->message;
+  *query_msg->mutable_end_time() = current_ts();
+  // Yet another greenplum weirdness: thats actually a nested query
+  // which is being committed/rollbacked. Treat it accordingly.
+  if (query->state == UNKNOWN && !need_report_nested_query()) {
+    return;
+  }
+  if (!query_desc->totaltime || !need_collect_analyze()) {
+    return;
+  }
+  // Make sure stats accumulation is done.
+  // (Note: it's okay if several levels of hook all do this.)
+  InstrEndLoop(query_desc->totaltime);
+
+  double ms = query_desc->totaltime->total * 1000.0;
+  if (ms >= Config::min_analyze_time()) {
+    set_analyze_plan_text_json(query_desc, query_msg);
+  }
 }
 
 EventSender::EventSender() {

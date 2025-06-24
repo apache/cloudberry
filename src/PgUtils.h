@@ -14,3 +14,4 @@ bool need_report_nested_query();
 bool filter_query(QueryDesc *query_desc);
 bool need_collect(QueryDesc *query_desc, int nesting_level);
 ExplainState get_explain_state(QueryDesc *query_desc, bool costs);
+ExplainState get_analyze_state_json(QueryDesc *query_desc, bool analyze);

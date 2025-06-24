@@ -8,6 +8,7 @@
 extern "C" {
 #include "postgres.h"
 #include "access/hash.h"
+#include "access/xact.h"
 #include "cdb/cdbinterconnect.h"
 #include "cdb/cdbvars.h"
 #include "cdb/ml_ipc.h"
@@ -47,8 +48,9 @@ void set_segment_key(yagpcc::SegmentKey *key) {
   key->set_segindex(GpIdentity.segindex);
 }
 
-inline std::string char_to_trimmed_str(const char *str, size_t len) {
-  return std::string(str, std::min(len, Config::max_text_size()));
+inline std::string char_to_trimmed_str(const char *str, size_t len,
+                                       size_t lim) {
+  return std::string(str, std::min(len, lim));
 }
 
 void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
@@ -61,10 +63,11 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
         MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
     auto es = get_explain_state(query_desc, true);
     MemoryContextSwitchTo(oldcxt);
-    *qi->mutable_plan_text() = char_to_trimmed_str(es.str->data, es.str->len);
+    *qi->mutable_plan_text() =
+        char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
     StringInfo norm_plan = gen_normplan(es.str->data);
-    *qi->mutable_template_plan_text() =
-        char_to_trimmed_str(norm_plan->data, norm_plan->len);
+    *qi->mutable_template_plan_text() = char_to_trimmed_str(
+        norm_plan->data, norm_plan->len, Config::max_plan_size());
     qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
     qi->set_query_id(query_desc->plannedstmt->queryId);
     pfree(es.str->data);
@@ -76,10 +79,11 @@ void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
   if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
     auto qi = req->mutable_query_info();
     *qi->mutable_query_text() = char_to_trimmed_str(
-        query_desc->sourceText, strlen(query_desc->sourceText));
+        query_desc->sourceText, strlen(query_desc->sourceText),
+        Config::max_text_size());
     char *norm_query = gen_normquery(query_desc->sourceText);
-    *qi->mutable_template_query_text() =
-        char_to_trimmed_str(norm_query, strlen(norm_query));
+    *qi->mutable_template_query_text() = char_to_trimmed_str(
+        norm_query, strlen(norm_query), Config::max_text_size());
   }
 }
 
@@ -90,6 +94,7 @@ void clear_big_fields(yagpcc::SetQueryReq *req) {
     qi->clear_template_plan_text();
     qi->clear_query_text();
     qi->clear_template_query_text();
+    qi->clear_analyze_text();
   }
 }
 
@@ -115,7 +120,8 @@ void set_qi_slice_id(yagpcc::SetQueryReq *req) {
 void set_qi_error_message(yagpcc::SetQueryReq *req) {
   auto aqi = req->mutable_add_info();
   auto error = elog_message();
-  *aqi->mutable_error_message() = char_to_trimmed_str(error, strlen(error));
+  *aqi->mutable_error_message() =
+      char_to_trimmed_str(error, strlen(error), Config::max_text_size());
 }
 
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
@@ -217,4 +223,33 @@ yagpcc::SetQueryReq create_query_req(yagpcc::QueryStatus status) {
 
 double protots_to_double(const google::protobuf::Timestamp &ts) {
   return double(ts.seconds()) + double(ts.nanos()) / 1000000000.0;
+}
+
+void set_analyze_plan_text_json(QueryDesc *query_desc,
+                                yagpcc::SetQueryReq *req) {
+  // Make sure it is a valid txn and it is not an utility
+  // statement for ExplainPrintPlan() later.
+  if (!IsTransactionState() || !query_desc->plannedstmt) {
+    return;
+  }
+  MemoryContext oldcxt =
+      MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
+
+  ExplainState es = get_analyze_state_json(
+      query_desc, query_desc->instrument_options && Config::enable_analyze());
+  // Remove last line break.
+  if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
+    es.str->data[--es.str->len] = '\0';
+  }
+  // Convert JSON array to JSON object.
+  if (es.str->len > 0) {
+    es.str->data[0] = '{';
+    es.str->data[es.str->len - 1] = '}';
+  }
+  auto trimmed_analyze =
+      char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
+  req->mutable_query_info()->set_analyze_text(trimmed_analyze);
+
+  pfree(es.str->data);
+  MemoryContextSwitchTo(oldcxt);
 }
