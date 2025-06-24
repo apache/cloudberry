@@ -36,6 +36,13 @@ standby_desc_running_xacts(StringInfo buf, xl_running_xacts *xlrec)
 		appendStringInfoString(buf, "; subxid ovf");
 }
 
+static void
+standby_desc_rp_running_xacts(StringInfo buf, xl_running_xacts *xlrec, const char *rpName)
+{
+	standby_desc_running_xacts(buf, xlrec);
+	appendStringInfo(buf, "restore_point %s", rpName);
+}
+
 void
 standby_desc(StringInfo buf, XLogReaderState *record)
 {
@@ -66,6 +73,32 @@ standby_desc(StringInfo buf, XLogReaderState *record)
 								   xlrec->dbId, xlrec->tsId,
 								   xlrec->relcacheInitFileInval);
 	}
+	else if (info == XLOG_LATESTCOMPLETED_GXID)
+	{
+		DistributedTransactionId gxid;
+
+		gxid = *((DistributedTransactionId *) rec);
+		appendStringInfo(buf, UINT64_FORMAT, gxid);
+	}
+	else if (info == XLOG_RESTORE_POINT_RUNNING_XACTS)
+	{
+		xl_restore_point_running_xacts *xlrec
+			= (xl_restore_point_running_xacts *) rec;
+		xl_running_xacts *xlrecRunning= (xl_running_xacts*) palloc(offsetof(xl_running_xacts, xids) +
+				(xlrec->xcnt + xlrec->subxcnt) * sizeof(TransactionId));
+		xlrecRunning->xcnt = xlrec->xcnt;
+		xlrecRunning->subxcnt = xlrec->subxcnt;
+		xlrecRunning->subxid_overflow = xlrec->subxid_overflow;
+		xlrecRunning->nextXid = xlrec->nextXid;
+		xlrecRunning->oldestRunningXid = xlrec->oldestRunningXid;
+		xlrecRunning->latestCompletedXid = xlrec->latestCompletedXid;
+		memcpy(xlrecRunning->xids, xlrec->xids,
+				(xlrec->xcnt + xlrec->subxcnt) * sizeof(TransactionId));
+
+		standby_desc_rp_running_xacts(buf, xlrecRunning, xlrec->rpName);
+		pfree(xlrecRunning);
+	}
+
 }
 
 const char *
@@ -83,6 +116,12 @@ standby_identify(uint8 info)
 			break;
 		case XLOG_INVALIDATIONS:
 			id = "INVALIDATIONS";
+			break;
+		case XLOG_LATESTCOMPLETED_GXID:
+			id = "XLOG_LATESTCOMPLETED_GXID";
+			break;
+		case XLOG_RESTORE_POINT_RUNNING_XACTS:
+			id = "XLOG_RESTORE_POINT_RUNNING_XACTS";
 			break;
 	}
 

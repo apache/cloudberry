@@ -21,6 +21,7 @@
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
+#include "cdb/cdbvars.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/bufmgr.h"
@@ -29,6 +30,7 @@
 #include "storage/procarray.h"
 #include "storage/sinvaladt.h"
 #include "storage/standby.h"
+#include "utils/faultinjector.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
@@ -40,6 +42,7 @@ int			vacuum_defer_cleanup_age;
 int			max_standby_archive_delay = 30 * 1000;
 int			max_standby_streaming_delay = 30 * 1000;
 bool		log_recovery_conflict_waits = false;
+char		*gp_hot_standby_snapshot_restore_point_name = NULL;
 
 static HTAB *RecoveryLockLists;
 
@@ -53,7 +56,9 @@ static void ResolveRecoveryConflictWithVirtualXIDs(VirtualTransactionId *waitlis
 												   uint32 wait_event_info,
 												   bool report_waiting);
 static void SendRecoveryConflictWithBufferPin(ProcSignalReason reason);
+static XLogRecPtr LogStandbySnapshotImpl(const char *rpName);
 static XLogRecPtr LogCurrentRunningXacts(RunningTransactions CurrRunningXacts);
+static XLogRecPtr CbdbLogRestorePointRunningXacts(RunningTransactions CurrRunningXacts, const char *rpName);
 static void LogAccessExclusiveLocks(int nlocks, xl_standby_lock *locks);
 static const char *get_recovery_conflict_desc(ProcSignalReason reason);
 
@@ -848,6 +853,8 @@ SendRecoveryConflictWithBufferPin(ProcSignalReason reason)
 	 * SIGUSR1 handling in each backend decide their own fate.
 	 */
 	CancelDBBackends(InvalidOid, reason, false);
+
+	SIMPLE_FAULT_INJECTOR("recovery_conflict_bufferpin_signal_sent");
 }
 
 /*
@@ -1125,6 +1132,12 @@ standby_redo(XLogReaderState *record)
 	}
 	else if (info == XLOG_RUNNING_XACTS)
 	{
+		if (EnableHotStandby && gp_hot_standby_snapshot_restore_point_name)
+		{
+			elog(LOG, "not calling redo");
+			return;
+		}
+
 		xl_running_xacts *xlrec = (xl_running_xacts *) XLogRecGetData(record);
 		RunningTransactionsData running;
 
@@ -1147,6 +1160,48 @@ standby_redo(XLogReaderState *record)
 											 xlrec->relcacheInitFileInval,
 											 xlrec->dbId,
 											 xlrec->tsId);
+	}
+	else if (info == XLOG_LATESTCOMPLETED_GXID)
+	{
+		/*
+		 * This record is only logged by coordinator. But the segment in
+		 * some situation might see it too (e.g. gpexpand), but segment
+		 * doesn't need to update latestCompletedGxid.
+		 */
+		if (IS_QUERY_DISPATCHER())
+		{
+			DistributedTransactionId gxid;
+
+			gxid = *((DistributedTransactionId *) XLogRecGetData(record));
+			LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
+			ShmemVariableCache->latestCompletedGxid = gxid;
+			LWLockRelease(ProcArrayLock);
+		}
+	}
+	else if (info == XLOG_RESTORE_POINT_RUNNING_XACTS)
+	{
+		if (!gp_hot_standby_snapshot_restore_point_name)
+			return;
+		xl_restore_point_running_xacts *xlrec =
+			(xl_restore_point_running_xacts *) XLogRecGetData(record);
+		char *rpName = gp_hot_standby_snapshot_restore_point_name;
+
+		if (EnableHotStandby && rpName &&
+				strcmp(xlrec->rpName, rpName) == 0)
+		{
+			RunningTransactionsData running;
+
+			running.xcnt = xlrec->xcnt;
+			running.subxcnt = xlrec->subxcnt;
+			running.subxid_overflow = xlrec->subxid_overflow;
+			running.nextXid = xlrec->nextXid;
+			running.latestCompletedXid = xlrec->latestCompletedXid;
+			running.oldestRunningXid = xlrec->oldestRunningXid;
+			running.xids = xlrec->xids;
+
+			elog(LOG, "update running xact %s", rpName);
+			ProcArrayApplyRecoveryInfo(&running);
+		}
 	}
 	else
 		elog(PANIC, "standby_redo: unknown op code %u", info);
@@ -1221,6 +1276,12 @@ standby_redo(XLogReaderState *record)
 XLogRecPtr
 LogStandbySnapshot(void)
 {
+	return LogStandbySnapshotImpl(NULL);
+}
+
+static XLogRecPtr
+LogStandbySnapshotImpl(const char *rpName)
+{
 	XLogRecPtr	recptr;
 	RunningTransactions running;
 	xl_standby_lock *locks;
@@ -1257,7 +1318,15 @@ LogStandbySnapshot(void)
 	if (wal_level < WAL_LEVEL_LOGICAL)
 		LWLockRelease(ProcArrayLock);
 
-	recptr = LogCurrentRunningXacts(running);
+	if (rpName == NULL)
+	{
+		recptr = LogCurrentRunningXacts(running);
+	}
+	else
+	{
+		recptr = CbdbLogRestorePointRunningXacts(running, rpName);
+	}
+
 
 	/* Release lock if we kept it longer ... */
 	if (wal_level >= WAL_LEVEL_LOGICAL)
@@ -1265,6 +1334,21 @@ LogStandbySnapshot(void)
 
 	/* GetRunningTransactionData() acquired XidGenLock, we must release it */
 	LWLockRelease(XidGenLock);
+	if (IS_QUERY_DISPATCHER())
+	{
+		/*
+		 * GPDB: write latestCompletedGxid too, because the standby needs this
+		 * value for creating distributed snapshot. The standby cannot rely on
+		 * the nextGxid value to set latestCompletedGxid during restart (which
+		 * the primary does) because nextGxid was bumped in the checkpoint.
+		 */
+		LWLockAcquire(ProcArrayLock, LW_SHARED);
+		DistributedTransactionId lcgxid = ShmemVariableCache->latestCompletedGxid;
+		LWLockRelease(ProcArrayLock);
+		XLogBeginInsert();
+		XLogRegisterData((char *) (&lcgxid), sizeof(lcgxid));
+		recptr = XLogInsert(RM_STANDBY_ID, XLOG_LATESTCOMPLETED_GXID);
+	}
 
 	return recptr;
 }
@@ -1334,6 +1418,69 @@ LogCurrentRunningXacts(RunningTransactions CurrRunningXacts)
 	return recptr;
 }
 
+XLogRecPtr
+LogRestorePointStandbySnapshot(const char *rpName)
+{
+	return LogStandbySnapshotImpl(rpName);
+}
+
+static XLogRecPtr
+CbdbLogRestorePointRunningXacts(RunningTransactions CurrRunningXacts, const char *rpName)
+{
+	xl_restore_point_running_xacts	xlrec;
+	XLogRecPtr	recptr;
+
+	xlrec.xcnt = CurrRunningXacts->xcnt;
+	xlrec.subxcnt = CurrRunningXacts->subxcnt;
+	xlrec.subxid_overflow = CurrRunningXacts->subxid_overflow;
+	xlrec.nextXid = CurrRunningXacts->nextXid;
+	xlrec.oldestRunningXid = CurrRunningXacts->oldestRunningXid;
+	xlrec.latestCompletedXid = CurrRunningXacts->latestCompletedXid;
+	strlcpy(xlrec.rpName, rpName, MAXFNAMELEN);
+
+	/* Header */
+	XLogBeginInsert();
+	XLogSetRecordFlags(XLOG_MARK_UNIMPORTANT);
+	XLogRegisterData((char *) (&xlrec), MinSizeOfXactRpRunningXacts);
+
+	/* array of TransactionIds */
+	if (xlrec.xcnt > 0)
+		XLogRegisterData((char *) CurrRunningXacts->xids,
+						 (xlrec.xcnt + xlrec.subxcnt) * sizeof(TransactionId));
+
+	recptr = XLogInsert(RM_STANDBY_ID, XLOG_RESTORE_POINT_RUNNING_XACTS);
+
+	/* report error if subxid_overflow */
+	if (CurrRunningXacts->subxid_overflow)
+		elog(ERROR,
+			 "snapshot of %u running transactions overflowed (lsn %X/%X oldest xid %u latest complete %u next xid %u)",
+			 CurrRunningXacts->xcnt,
+			 LSN_FORMAT_ARGS(recptr),
+			 CurrRunningXacts->oldestRunningXid,
+			 CurrRunningXacts->latestCompletedXid,
+			 CurrRunningXacts->nextXid);
+	else
+		elog(trace_recovery(DEBUG2),
+			 "snapshot of %u+%u running transaction ids (lsn %X/%X oldest xid %u latest complete %u next xid %u)",
+			 CurrRunningXacts->xcnt, CurrRunningXacts->subxcnt,
+			 LSN_FORMAT_ARGS(recptr),
+			 CurrRunningXacts->oldestRunningXid,
+			 CurrRunningXacts->latestCompletedXid,
+			 CurrRunningXacts->nextXid);
+
+	/*
+	 * Ensure running_xacts information is synced to disk not too far in the
+	 * future. We don't want to stall anything though (i.e. use XLogFlush()),
+	 * so we let the wal writer do it during normal operation.
+	 * XLogSetAsyncXactLSN() conveniently will mark the LSN as to-be-synced
+	 * and nudge the WALWriter into action if sleeping. Check
+	 * XLogBackgroundFlush() for details why a record might not be flushed
+	 * without it.
+	 */
+	XLogSetAsyncXactLSN(recptr);
+
+	return recptr;
+}
 /*
  * Wholesale logging of AccessExclusiveLocks. Other lock types need not be
  * logged, as described in backend/storage/lmgr/README.

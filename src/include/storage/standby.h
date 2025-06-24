@@ -25,6 +25,7 @@ extern int	vacuum_defer_cleanup_age;
 extern int	max_standby_archive_delay;
 extern int	max_standby_streaming_delay;
 extern bool log_recovery_conflict_waits;
+extern char *gp_hot_standby_snapshot_restore_point_name;
 
 extern void InitRecoveryTransactionEnvironment(void);
 extern void ShutdownRecoveryTransactionEnvironment(void);
@@ -60,6 +61,7 @@ extern void StandbyReleaseAllLocks(void);
 extern void StandbyReleaseOldLocks(TransactionId oldxid);
 
 #define MinSizeOfXactRunningXacts offsetof(xl_running_xacts, xids)
+#define MinSizeOfXactRpRunningXacts offsetof(xl_restore_point_running_xacts, xids)
 
 
 /*
@@ -84,6 +86,7 @@ typedef struct RunningTransactionsData
 	TransactionId latestCompletedXid;	/* so we can set xmax */
 
 	TransactionId *xids;		/* array of (sub)xids still running */
+	char		*restore_point_name;
 } RunningTransactionsData;
 
 typedef RunningTransactionsData *RunningTransactions;
@@ -94,5 +97,7 @@ extern void LogAccessExclusiveLockPrepare(void);
 extern XLogRecPtr LogStandbySnapshot(void);
 extern void LogStandbyInvalidations(int nmsgs, SharedInvalidationMessage *msgs,
 									bool relcacheInitFileInval);
+
+extern XLogRecPtr LogRestorePointStandbySnapshot(const char *rpName);
 
 #endif							/* STANDBY_H */
