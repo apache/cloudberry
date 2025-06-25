@@ -264,6 +264,21 @@ currentDtxActivate(void)
 {
 	bool signal_dtx_recovery;
 
+	/*
+	 * A hot standby transaction does not have a valid gxid, so can skip 
+	 * most of the things in this function. We still explicitly set some 
+	 * fields that are irrelevant to hot standby for cleanness.
+	 */
+	if (IS_HOT_STANDBY_QD())
+	{
+		/* standby QD will stay in this state until transaction completed */
+		setCurrentDtxState(DTX_STATE_ACTIVE_DISTRIBUTED);
+		MyTmGxact->sessionId = gp_session_id;
+		MyTmGxact->gxid = InvalidDistributedTransactionId;
+		MyTmGxact->includeInCkpt = false;
+		return;
+	}
+
 	if (ShmemVariableCache->GxidCount <= GXID_PRETCH_THRESHOLD &&
 		(GetDtxRecoveryEvent() & DTX_RECOVERY_EVENT_BUMP_GXID) == 0)
 	{
@@ -1644,7 +1659,7 @@ isDtxQueryDispatcher(void)
 	isSharedLocalSnapshotSlotPresent = (SharedLocalSnapshotSlot != NULL);
 
 	return (Gp_role == GP_ROLE_DISPATCH &&
-			isDtmStarted &&
+			(isDtmStarted || EnableHotStandby) &&
 			isSharedLocalSnapshotSlotPresent);
 }
 
@@ -2047,6 +2062,8 @@ sendDtxExplicitBegin(void)
 static void
 performDtxProtocolPrepare(const char *gid)
 {
+	SIMPLE_FAULT_INJECTOR("qe_start_prepared");
+
 	StartTransactionCommand();
 
 	elog(DTM_DEBUG5, "performDtxProtocolCommand going to call PrepareTransactionBlock for distributed transaction (id = '%s')", gid);
@@ -2126,6 +2143,7 @@ performDtxProtocolCommitOnePhase(const char *gid)
 static void
 performDtxProtocolCommitPrepared(const char *gid, bool raiseErrorIfNotFound)
 {
+	SIMPLE_FAULT_INJECTOR("qe_start_commit_prepared");
 	Assert(Gp_role == GP_ROLE_EXECUTE);
 
 	elog(DTM_DEBUG5,
@@ -2158,6 +2176,7 @@ performDtxProtocolCommitPrepared(const char *gid, bool raiseErrorIfNotFound)
 	sendWaitGxidsToQD(waitGxids);
 
 	finishDistributedTransactionContext("performDtxProtocolCommitPrepared -- Commit Prepared", false);
+	SIMPLE_FAULT_INJECTOR("finish_commit_prepared");
 }
 
 /**

@@ -511,6 +511,9 @@ class GpStart:
         logger.info("Obtaining Segment details from coordinator...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
         self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
+		## standby cluster load gp_segment_configuration from file.
+        #self.gparray = GpArray.initFromFile("/usr/local/gpdr/gpdr_gp_segment_configuration_1")
+        #self.gparray.is_singlenode= False
 
         logger.info("Setting new coordinator era")
         e = GpEraFile(self.coordinator_datadir, logger=get_logger_if_verbose())
