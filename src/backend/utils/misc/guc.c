@@ -582,6 +582,7 @@ bool		Debug_print_parse = false;
 bool		Debug_print_rewritten = false;
 bool		Debug_pretty_print = true;
 bool 		Debug_print_ivm = false;
+bool 		Debug_print_aggref_in_explain = false;
 
 bool		log_parser_stats = false;
 bool		log_planner_stats = false;
@@ -1542,6 +1543,15 @@ static struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&Debug_print_ivm,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"debug_print_aggref_in_explain", PGC_USERSET, LOGGING_WHAT,
+			gettext_noop("Logs the aggnos/aggtransno in explain."),
+			NULL
+		},
+		&Debug_print_aggref_in_explain,
 		false,
 		NULL, NULL, NULL
 	},

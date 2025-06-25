@@ -30,8 +30,8 @@ using namespace gpdxl;
 //
 //---------------------------------------------------------------------------
 CDXLPhysicalCTEConsumer::CDXLPhysicalCTEConsumer(
-	CMemoryPool *mp, ULONG id, ULongPtrArray *output_colids_array)
-	: CDXLPhysical(mp), m_id(id), m_output_colids_array(output_colids_array)
+	CMemoryPool *mp, ULONG id, ULongPtrArray *output_colids_array, ULongPtrArray *output_colidx_map)
+	: CDXLPhysical(mp), m_id(id), m_output_colids_array(output_colids_array), m_output_colidx_map(output_colidx_map)
 {
 	GPOS_ASSERT(nullptr != output_colids_array);
 }
@@ -47,6 +47,7 @@ CDXLPhysicalCTEConsumer::CDXLPhysicalCTEConsumer(
 CDXLPhysicalCTEConsumer::~CDXLPhysicalCTEConsumer()
 {
 	m_output_colids_array->Release();
+	CRefCount::SafeRelease(m_output_colidx_map);
 }
 
 //---------------------------------------------------------------------------
@@ -101,6 +102,15 @@ CDXLPhysicalCTEConsumer::SerializeToDXL(CXMLSerializer *xml_serializer,
 	xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenColumns),
 								 str_colids);
 	GPOS_DELETE(str_colids);
+
+	if (m_output_colidx_map) {
+		CWStringDynamic *str_colidx_map =
+			CDXLUtils::Serialize(m_mp, m_output_colidx_map);
+
+		xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenColIdxmap),
+			str_colidx_map);
+		GPOS_DELETE(str_colidx_map);
+	}
 
 	// serialize properties
 	dxlnode->SerializePropertiesToDXL(xml_serializer);

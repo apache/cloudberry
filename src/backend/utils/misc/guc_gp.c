@@ -311,6 +311,8 @@ bool		optimizer_print_group_properties;
 bool		optimizer_print_optimization_context;
 bool		optimizer_print_optimization_stats;
 bool		optimizer_print_xform_results;
+bool		optimizer_print_preprocess_result;
+bool		optimizer_debug_cte;
 
 /* array of xforms disable flags */
 bool		optimizer_xforms[OPTIMIZER_XFORMS_COUNT] = {[0 ... OPTIMIZER_XFORMS_COUNT - 1] = false};
@@ -419,6 +421,7 @@ bool		optimizer_enable_range_predicate_dpe;
 bool		optimizer_enable_use_distribution_in_dqa;
 bool		optimizer_enable_push_join_below_union_all;
 bool		optimizer_enable_orderedagg;
+bool		optimizer_disable_dynamic_table_scan;
 
 /* Analyze related GUCs for Optimizer */
 bool		optimizer_analyze_root_partition;
@@ -1969,6 +1972,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"optimizer_print_preprocess_result", PGC_USERSET, LOGGING_WHAT,
+			gettext_noop("Prints the expression tree produced by the optimizer preprocess(every steps). Only worked with debug version of CBDB."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_print_preprocess_result,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"optimizer_print_xform", PGC_USERSET, LOGGING_WHAT,
 			gettext_noop("Prints optimizer transformation information."),
 			NULL,
@@ -2007,6 +2021,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_print_xform_results,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_debug_cte", PGC_USERSET, LOGGING_WHAT,
+			gettext_noop("Print the debug info of CTE in ORCA. Only worked with debug version of CBDB."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_debug_cte,
 		false,
 		NULL, NULL, NULL
 	},
@@ -3056,6 +3081,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		&optimizer_enable_push_join_below_union_all,
 		false,
 		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_disable_dynamic_table_scan", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Disable the dynamic seq/bitmap/index scan in partition table."),
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
+		 },
+		 &optimizer_disable_dynamic_table_scan,
+		 false,
+		 NULL, NULL, NULL
 	},
 
 	{

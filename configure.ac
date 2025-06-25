@@ -31,6 +31,7 @@ dnl your responsibility whether the result works or not.])])
 AC_COPYRIGHT([Copyright (c) 1996-2021, PostgreSQL Global Development Group])
 AC_CONFIG_SRCDIR([src/backend/access/common/heaptuple.c])
 AC_CONFIG_AUX_DIR(config)
+m4_include([config/ax_compare_version.m4])
 AC_PREFIX_DEFAULT(/usr/local/cbdb)
 AC_SUBST(configure_args, [$ac_configure_args])
 AC_DEFINE_UNQUOTED(CONFIGURE_ARGS, ["$ac_configure_args"], [Saved arguments from configure])
@@ -932,7 +933,40 @@ PGAC_ARG_BOOL(enable, pax, no,
               [enable PAX support],
               [AC_DEFINE(USE_PAX_STORAGE, 1,
                          [Define to 1 to support PAX])])
-AC_MSG_RESULT([checking whether to build with PAX support ... $enable_pax])
+if test "$enable_pax" = yes; then
+  # Check protobuf >= 3.5.0
+  PKG_CHECK_MODULES([PROTOBUF], [protobuf >= 3.5.0],
+    [AC_DEFINE([HAVE_PROTOBUF], [1], [Define if protobuf is available])],
+    [AC_MSG_ERROR([protobuf >= 3.5.0 is required for PAX support])]
+  )
+
+  # Check libzstd >= 1.4.0
+  PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0],
+    [AC_DEFINE([HAVE_ZSTD], [1], [Define if zstd is available])],
+    [AC_MSG_ERROR([libzstd >= 1.4.0 is required for PAX support])]
+  )
+
+  # Check cmake >= 3.11.0 using AX_COMPARE_VERSION
+  AC_PATH_PROG([CMAKE], [cmake], [no])
+  if test "$CMAKE" = "no"; then
+    AC_MSG_ERROR([cmake is required for PAX support but was not found in PATH])
+  fi
+
+  AC_MSG_CHECKING([CMake version])
+  CMAKE_VERSION=`$CMAKE --version | head -n1 | sed 's/[^0-9]*\([0-9][0-9.]*\).*/\1/'`
+  AC_MSG_RESULT([$CMAKE_VERSION])
+
+  AX_COMPARE_VERSION([$CMAKE_VERSION], [ge], [3.11.0],
+    [],
+    [AC_MSG_ERROR([cmake >= 3.11.0 is required for PAX support])]
+  )
+
+  # All checks passed
+  AC_MSG_RESULT([checking whether to build with PAX support ... yes])
+else
+  # Explicitly disabled
+  AC_MSG_RESULT([checking whether to build with PAX support ... no])
+fi
 AC_SUBST(enable_pax)
 
 #

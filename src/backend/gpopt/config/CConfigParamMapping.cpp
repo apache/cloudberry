@@ -81,6 +81,14 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 false,	 // m_negate_param
 	 GPOS_WSZ_LIT("Prints optimization stats.")},
 
+	{EopttracePrintPreProcessResult, &optimizer_print_preprocess_result,
+		false,	 // m_negate_param
+		GPOS_WSZ_LIT("Prints the expression tree produced by the optimizer preprocess(every steps). Only worked with debug version of CBDB.")},
+
+	{EopttraceDebugCTE, &optimizer_debug_cte,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT("Print debug info of CTE. Only worked with debug version of CBDB.")},
+
 	{EopttraceMinidump,
 	 // GPDB_91_MERGE_FIXME: I turned optimizer_minidump from bool into
 	 // an enum-type GUC. It's a bit dirty to cast it like this..
@@ -306,8 +314,7 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	{EopttraceEnableUseDistributionInDQA,
 	 &optimizer_enable_use_distribution_in_dqa,
 	 false,	 // m_negate_param
-	 GPOS_WSZ_LIT(
-		 "Enable use the distribution key in DQA")},
+	 GPOS_WSZ_LIT("Enable use the distribution key in DQA")},
 	{EopttraceDisableInnerHashJoin, &optimizer_enable_hashjoin,
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Explore hash join alternatives")},
@@ -315,6 +322,10 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Enable nested loop join alternatives")},
 
+	{EopttraceDisableDynamicTableScan, &optimizer_disable_dynamic_table_scan,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT(
+		 "Disable the dynamic seq/bitmap/index scan in partition table")},
 };
 
 //---------------------------------------------------------------------------

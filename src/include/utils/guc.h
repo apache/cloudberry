@@ -261,6 +261,7 @@ extern bool Debug_print_parse;
 extern bool Debug_print_rewritten;
 extern bool Debug_pretty_print;
 extern bool Debug_print_ivm;
+extern bool Debug_print_aggref_in_explain;
 
 extern bool	Debug_print_full_dtm;
 extern bool	Debug_print_snapshot_dtm;
@@ -489,6 +490,8 @@ extern bool	optimizer_print_group_properties;
 extern bool	optimizer_print_optimization_context;
 extern bool optimizer_print_optimization_stats;
 extern bool optimizer_print_xform_results;
+extern bool optimizer_print_preprocess_result;
+extern bool optimizer_debug_cte;
 
 /* array of xforms disable flags */
 extern bool optimizer_xforms[OPTIMIZER_XFORMS_COUNT];
@@ -597,6 +600,7 @@ extern bool optimizer_enable_associativity;
 extern bool optimizer_enable_range_predicate_dpe;
 extern bool optimizer_enable_use_distribution_in_dqa;
 extern bool optimizer_enable_push_join_below_union_all;
+extern bool optimizer_disable_dynamic_table_scan;
 
 /* Analyze related GUCs for Optimizer */
 extern bool optimizer_analyze_root_partition;

@@ -415,7 +415,7 @@ COptimizationContext::PrppCTEProducer(CMemoryPool *mp,
 	UlongToColRefMap *colref_mapping =
 		COptCtxt::PoctxtFromTLS()->Pcteinfo()->PhmulcrConsumerToProducer(
 			mp, popProducer->UlCTEId(), pcrsInnerOutput,
-			popProducer->Pdrgpcr());
+			popProducer->Pdrgpcr(), popProducer->PdrgpcrUnused());
 	CReqdPropPlan *prppProducer = CReqdPropPlan::PrppRemapForCTE(
 		mp, pocProducer->Prpp(), pccProducer->Pdpplan(), pccConsumer->Pdpplan(),
 		colref_mapping);

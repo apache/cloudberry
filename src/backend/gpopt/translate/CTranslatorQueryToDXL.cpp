@@ -528,6 +528,11 @@ CTranslatorQueryToDXL::CheckRangeTable(Query *query)
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 					   GPOS_WSZ_LIT("TABLESAMPLE in the FROM clause"));
 		}
+
+		if (rte->relkind == RELKIND_PARTITIONED_TABLE && query->hasRowSecurity && GPOS_FTRACE(EopttraceDisableDynamicTableScan)) {
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				GPOS_WSZ_LIT("ORCA not support row-level security if dynamic table scan is disabled."));
+		}
 	}
 }
 
@@ -2577,7 +2582,8 @@ CTranslatorQueryToDXL::CreateDXLUnionAllForGroupingSets(
 	GPOS_ASSERT(nullptr != m_dxl_cte_producers);
 
 	CDXLLogicalCTEProducer *cte_prod_dxlop = GPOS_NEW(m_mp)
-		CDXLLogicalCTEProducer(m_mp, cte_id, op_colid_array_cte_producer);
+		CDXLLogicalCTEProducer(m_mp, cte_id, op_colid_array_cte_producer,
+			false /*could_be_pruned*/);
 	CDXLNode *cte_producer_dxlnode = GPOS_NEW(m_mp)
 		CDXLNode(m_mp, cte_prod_dxlop, select_project_join_dxlnode);
 	m_dxl_cte_producers->Append(cte_producer_dxlnode);
@@ -4785,7 +4791,8 @@ CTranslatorQueryToDXL::ConstructCTEProducerList(List *cte_list,
 
 		CDXLLogicalCTEProducer *lg_cte_prod_dxlop =
 			GPOS_NEW(m_mp) CDXLLogicalCTEProducer(
-				m_mp, m_context->m_cte_id_counter->next_id(), colid_array);
+				m_mp, m_context->m_cte_id_counter->next_id(), colid_array,
+				!GPOS_FTRACE(EopttraceEnableCTEInlining) /*can_be_pruned*/);
 		CDXLNode *cte_producer_dxlnode =
 			GPOS_NEW(m_mp) CDXLNode(m_mp, lg_cte_prod_dxlop, cte_child_dxlnode);
 

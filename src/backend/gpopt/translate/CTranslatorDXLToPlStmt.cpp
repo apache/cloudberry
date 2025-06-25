@@ -2765,6 +2765,124 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 	return (Plan *) result;
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateAggFillInfo
+//
+//	@doc:
+//		Fill the aggregate node with aggno and aggtransno
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
+											 Aggref *aggref)
+{
+	Oid aggtransfn;
+	Oid aggfinalfn;
+	Oid aggcombinefn;
+	Oid aggserialfn;
+	Oid aggdeserialfn;
+	Oid aggtranstype;
+	int32 aggtranstypmod;
+	int32 aggtransspace;
+
+	Datum initValue;
+	bool initValueIsNull;
+	List *same_input_transnos;
+
+	bool shareable;
+	int16 resulttypeLen;
+	bool resulttypeByVal;
+	int16 transtypeLen;
+	bool transtypeByVal;
+
+	int aggno, transno;
+
+	gpdb::GetAggregateInfo(aggref, &aggtransfn, &aggfinalfn,
+						   &aggcombinefn, &aggserialfn, &aggdeserialfn,
+						   &aggtranstype, &aggtransspace, &initValue,
+						   &initValueIsNull, &shareable);
+
+	/*
+	 * If transition state is of same type as first aggregated input, assume
+	 * it's the same typmod (same width) as well.  This works for cases like
+	 * MAX/MIN and is probably somewhat reasonable otherwise.
+	 */
+	aggtranstypmod = -1;
+	if (aggref->args)
+	{
+		TargetEntry *tle = (TargetEntry *) linitial(aggref->args);
+
+		if (aggtranstype == gpdb::ExprType((Node *) tle->expr))
+			aggtranstypmod = gpdb::ExprTypeMod((Node *) tle->expr);
+	}
+
+	gpdb::TypLenByVal(aggref->aggtype, &resulttypeLen, &resulttypeByVal);
+
+	/*
+	 * 1. See if this is identical to another aggregate function call that
+	 * we've seen already.
+	 */
+	aggno = gpdb::FindCompatibleAgg(ctx->GetAggInfos(), aggref,
+									&same_input_transnos);
+	if (aggno != -1)
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::ListNth(ctx->GetAggInfos(), aggno);
+
+		transno = agginfo->transno;
+	}
+	else
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::GPDBAlloc(sizeof(AggInfo));
+
+		agginfo->finalfn_oid = aggfinalfn;
+		agginfo->representative_aggref = aggref;
+		agginfo->shareable = shareable;
+
+		aggno = gpdb::ListLength(ctx->GetAggInfos());
+		ctx->AppendAggInfos(agginfo);
+
+		gpdb::TypLenByVal(aggtranstype, &transtypeLen, &transtypeByVal);
+
+		/*
+		 * 2. See if this aggregate can share transition state with another
+		 * aggregate that we've initialized already.
+		 */
+		transno = gpdb::FindCompatibleTrans(
+			ctx->GetAggTransInfos(), shareable, aggtransfn, aggtranstype,
+			transtypeLen, transtypeByVal, aggcombinefn, aggserialfn,
+			aggdeserialfn, initValue, initValueIsNull, same_input_transnos);
+		if (transno == -1)
+		{
+			AggTransInfo *transinfo =
+				(AggTransInfo *) gpdb::GPDBAlloc(sizeof(AggTransInfo));
+
+			transinfo->args = aggref->args;
+			transinfo->aggfilter = aggref->aggfilter;
+			transinfo->transfn_oid = aggtransfn;
+			transinfo->combinefn_oid = aggcombinefn;
+			transinfo->serialfn_oid = aggserialfn;
+			transinfo->deserialfn_oid = aggdeserialfn;
+			transinfo->aggtranstype = aggtranstype;
+			transinfo->aggtranstypmod = aggtranstypmod;
+			transinfo->transtypeLen = transtypeLen;
+			transinfo->transtypeByVal = transtypeByVal;
+			transinfo->aggtransspace = aggtransspace;
+			transinfo->initValue = initValue;
+			transinfo->initValueIsNull = initValueIsNull;
+
+			transno = gpdb::ListLength(ctx->GetAggTransInfos());
+			ctx->AppendAggTransInfos(transinfo);
+		}
+		agginfo->transno = transno;
+	}
+
+	// setting the aggno and transno
+	aggref->aggno = aggno;
+	aggref->aggtransno = transno;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLAgg
@@ -2811,44 +2929,6 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 							   nullptr,	 // translate context for the base table
 							   child_contexts,	// pdxltrctxRight,
 							   &plan->targetlist, &plan->qual, output_context);
-
-	/*
-	 * GPDB_14_MERGE_FIXME: TODO Deduplicate aggregates and transition functions in orca
-	 */
-	// Set the aggsplit for the agg node
-	ListCell *lc;
-	INT aggsplit = 0;
-	int idx = 0;
-	ForEach (lc, plan->targetlist)
-	{
-		TargetEntry *te = (TargetEntry *) lfirst(lc);
-		if (IsA(te->expr, Aggref))
-		{
-			Aggref *aggref = (Aggref *) te->expr;
-
-			if (AGGSPLIT_INTERMEDIATE != aggsplit)
-			{
-				aggsplit |= aggref->aggsplit;
-			}
-
-			aggref->aggno = idx;
-			aggref->aggtransno = idx;
-			idx++;
-		}
-	}
-	agg->aggsplit = (AggSplit) aggsplit;
-
-	ForEach (lc, plan->qual)
-	{
-		Expr *expr = (Expr *) lfirst(lc);
-		if (IsA(expr, Aggref))
-		{
-			Aggref *aggref = (Aggref *) expr;
-			aggref->aggno = idx;
-			aggref->aggtransno = idx;
-			idx++;
-		}
-	}
 
 	plan->lefttree = child_plan;
 
@@ -2919,6 +2999,39 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 
 	agg->numGroups =
 		std::max(1L, (long) std::min(agg->plan.plan_rows, (double) LONG_MAX));
+
+	// Set the aggsplit,aggno,aggtransno for the agg node
+	ListCell *lc;
+	INT aggsplit = 0;
+	ForEach (lc, plan->targetlist)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+		if (IsA(te->expr, Aggref))
+		{
+			Aggref *aggref = (Aggref *) te->expr;
+
+			if (AGGSPLIT_INTERMEDIATE != aggsplit)
+			{
+				aggsplit |= aggref->aggsplit;
+			}
+			TranslateAggFillInfo(m_dxl_to_plstmt_context, aggref);
+		}
+	}
+	agg->aggsplit = (AggSplit) aggsplit;
+
+	ForEach (lc, plan->qual)
+	{
+		Expr *expr = (Expr *) lfirst(lc);
+		if (IsA(expr, Aggref))
+		{
+			Aggref *aggref = (Aggref *) expr;
+			// ORCA won't create the qual but a scalar in AGG
+			TranslateAggFillInfo(m_dxl_to_plstmt_context, aggref);
+		}
+	}
+
+	m_dxl_to_plstmt_context->ResetAggInfosAndTransInfos();
+
 	SetParamIds(plan);
 
 	// cleanup
@@ -3917,6 +4030,31 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 	GPOS_ASSERT(EdxlappendIndexFirstChild < arity);
 	append->appendplans = NIL;
 
+	// translate table descriptor into a range table entry
+	CDXLPhysicalAppend *phy_append_dxlop =
+		CDXLPhysicalAppend::Cast(append_dxlnode->GetOperator());
+
+	// If this append was create from a DynamicTableScan node in ORCA, it will
+	// contain the table descriptor of the root partitioned table. Add that to
+	// the range table in the PlStmt.
+	if (phy_append_dxlop->GetScanId() != gpos::ulong_max)
+	{
+		GPOS_ASSERT(nullptr != phy_append_dxlop->GetDXLTableDesc());
+
+		// translation context for column mappings in the base relation
+		CDXLTranslateContextBaseTable base_table_context(m_mp);
+
+		(void) ProcessDXLTblDescr(phy_append_dxlop->GetDXLTableDesc(),
+								  &base_table_context);
+
+		OID oid_type =
+			CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
+				->Oid();
+		append->join_prune_paramids =
+			TranslateJoinPruneParamids(phy_append_dxlop->GetSelectorIds(),
+									   oid_type, m_dxl_to_plstmt_context);
+	}
+
 	// translate children
 	CDXLTranslateContext child_context(m_mp, false,
 									   output_context->GetColIdToParamIdMap());
@@ -4076,11 +4214,12 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 	ShareInputScan *shared_input_scan = MakeNode(ShareInputScan);
 	shared_input_scan->share_id = cte_id;
 	shared_input_scan->discard_output = true;
+
 	Plan *plan = &(shared_input_scan->scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 
-	// store share scan node for the translation of CTE Consumers
-	m_dxl_to_plstmt_context->AddCTEConsumerInfo(cte_id, shared_input_scan);
+	m_dxl_to_plstmt_context->RegisterCTEProducerInfo(cte_id, 
+		cte_prod_dxlop->GetOutputColIdxMap(), shared_input_scan);
 
 	// translate cost of the producer
 	TranslatePlanCosts(cte_producer_dxlnode, plan);
@@ -4130,7 +4269,16 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	CDXLPhysicalCTEConsumer *cte_consumer_dxlop =
 		CDXLPhysicalCTEConsumer::Cast(cte_consumer_dxlnode->GetOperator());
 	ULONG cte_id = cte_consumer_dxlop->Id();
+	ULongPtrArray *output_colidx_map = cte_consumer_dxlop->GetOutputColIdxMap();
 
+	// get the producer idx map
+	ULongPtrArray *producer_colidx_map;
+	ShareInputScan *share_input_scan_cte_producer;
+	
+	std::tie(producer_colidx_map, share_input_scan_cte_producer) 
+		= m_dxl_to_plstmt_context->GetCTEProducerInfo(cte_id);
+
+	// init the consumer plan
 	ShareInputScan *share_input_scan_cte_consumer = MakeNode(ShareInputScan);
 	share_input_scan_cte_consumer->share_id = cte_id;
 	share_input_scan_cte_consumer->discard_output = false;
@@ -4153,6 +4301,17 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
 	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
 	{
+		AttrNumber varattno = (AttrNumber)ul + 1;
+		if (output_colidx_map) {
+			ULONG remapping_idx;
+			remapping_idx = *(*output_colidx_map)[ul];
+			if (producer_colidx_map) {
+				remapping_idx = *(*producer_colidx_map)[remapping_idx];
+			}
+			GPOS_ASSERT(remapping_idx != gpos::ulong_max);
+			varattno = (AttrNumber)remapping_idx + 1;
+		}
+
 		CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
 		CDXLScalarProjElem *sc_proj_elem_dxlop =
 			CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
@@ -4165,7 +4324,7 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 		OID oid_type = CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid();
 
 		Var *var =
-			gpdb::MakeVar(OUTER_VAR, (AttrNumber)(ul + 1), oid_type,
+			gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
 						  sc_ident_dxlop->TypeModifier(), 0 /* varlevelsup */);
 
 		CHAR *resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
@@ -4181,9 +4340,17 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 
 	SetParamIds(plan);
 
-	// store share scan node for the translation of CTE Consumers
-	m_dxl_to_plstmt_context->AddCTEConsumerInfo(cte_id,
-												share_input_scan_cte_consumer);
+	// DON'T REMOVE, if current consumer need projection, then we can direct add it.
+	// we still keep the path of projection in consumer
+	
+	// 	Plan *producer_plan = &(share_input_scan_cte_producer->scan.plan);
+	// if (output_colidx_map != nullptr) {
+	// 	share_input_scan_cte_consumer->need_projection = true;
+	// 	share_input_scan_cte_consumer->producer_targetlist = gpdb::ListCopy(producer_plan->targetlist);
+	// 	if (!share_input_scan_cte_consumer->producer_targetlist) {
+	// 		share_input_scan_cte_consumer->need_projection = false;
+	// 	}
+	// }
 
 	return (Plan *) share_input_scan_cte_consumer;
 }

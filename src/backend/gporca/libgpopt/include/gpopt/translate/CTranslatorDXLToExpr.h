@@ -59,7 +59,6 @@ using UlongToExprArrayMapIter =
 	CHashMapIter<ULONG, CExpressionArray, gpos::HashValue<ULONG>,
 				 gpos::Equals<ULONG>, CleanupDelete<ULONG>, CleanupNULL>;
 
-
 //---------------------------------------------------------------------------
 //	@class:
 //		CTranslatorDXLToExpr
@@ -348,6 +347,9 @@ private:
 	CExpression *Pexpr(const CDXLNode *dxlnode,
 					   const CDXLNodeArray *query_output_dxlnode_array,
 					   const CDXLNodeArray *cte_producers);
+	
+	// Prune the CTEs producer and consumer after DXL tree translated
+	void PruneCTEs();
 
 	// translate children of a DXL node
 	CExpressionArray *PdrgpexprChildren(const CDXLNode *dxlnode);
@@ -364,6 +366,10 @@ private:
 	// create an array of column references from an array of dxl column references
 	CColRefArray *Pdrgpcr(const CDXLColDescrArray *dxl_col_descr_array);
 
+	// construct a dynamic array of column references corresponding to the
+	// given col ids
+	CColRefArray *Pdrgpcr(const ULongPtrArray *colids);
+
 	// construct the mapping between the DXL ColId and CColRef
 	void ConstructDXLColId2ColRefMapping(
 		const CDXLColDescrArray *dxl_col_descr_array,
@@ -373,7 +379,11 @@ private:
 
 	// look up the column reference in the hash map. We raise an exception if
 	// the column is not found
-	static CColRef *LookupColRef(UlongToColRefMap *colref_mapping, ULONG colid);
+	CColRef *LookupColRef(ULONG colid, BOOL mark_used = true);
+	
+	// after the colref in CTE consumer marked used, the producer should marked 
+	// the relatived colref as used.
+	void MarkCTEConsumerColAsUsed(UlongToColRefMap *mcidcrCTE, ULONG colid);
 
 public:
 	// ctor
