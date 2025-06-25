@@ -1,3 +1,11 @@
+# Notice from the Apache Cloudberry PPMC team as follows:
+# These files use the term 'greenplum' to maintain compatibility with
+# original versions of Apache Cloudberry, which was originally called
+# Greenplum. This usage does not relate to the VMware Tanzu Greenplum
+# product, neither do we imply that Apache Cloudberry (Incubating) is
+# affiliated with, endorsed by, or sponsored by Broadcom Inc.
+# See discussion at https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
+
 if test -n "${ZSH_VERSION:-}"; then
     # zsh
     SCRIPT_PATH="${(%):-%x}"
