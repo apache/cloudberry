@@ -82,7 +82,7 @@ where storage_parameter is:
    APPENDONLY={TRUE|FALSE}
    BLOCKSIZE={8192-2097152}
    ORIENTATION={COLUMN|ROW}
-   COMPRESSTYPE={ZLIB|QUICKLZ|RLE_TYPE|NONE}
+   COMPRESSTYPE={ZLIB|RLE_TYPE|NONE}
    COMPRESSLEVEL={0-9}
    CHECKSUM={TRUE|FALSE}
    FILLFACTOR={10-100}
@@ -136,7 +136,50 @@ WITH ( MODULUS <replaceable class="parameter">numeric_literal</replaceable>, REM
 
 { <replaceable class="parameter">column_name</replaceable> | ( <replaceable class="parameter">expression</replaceable> ) } [ COLLATE <replaceable class="parameter">collation</replaceable> ] [ <replaceable class="parameter">opclass</replaceable> [ ( <replaceable class="parameter">opclass_parameter</replaceable> = <replaceable class="parameter">value</replaceable> [, ... ] ) ] ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
 
-<phrase><replaceable class="parameter">referential_action</replaceable> in a <literal>FOREIGN KEY</literal>/<literal>REFERENCES</literal> constraint is:</phrase>
+where partition_type is:
+    LIST
+  | RANGE
+
+where partition_specification is:
+partition_element [, ...]
+and partition_element is:
+   DEFAULT PARTITION name
+  | [PARTITION name] VALUES (list_value [,...] )
+  | [PARTITION name] 
+     START ([datatype] 'start_value') [INCLUSIVE | EXCLUSIVE]
+     [ END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE] ]
+     [ EVERY ([datatype] [number | INTERVAL] 'interval_value') ]
+  | [PARTITION name] 
+     END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE]
+     [ EVERY ([datatype] [number | INTERVAL] 'interval_value') ]
+[ WITH ( partition_storage_parameter=value [, ... ] ) ]
+[column_reference_storage_directive [, ...] ]
+[ TABLESPACE tablespace ]
+
+where subpartition_spec or template_spec is:
+subpartition_element [, ...]
+and subpartition_element is:
+   DEFAULT SUBPARTITION name
+  | [SUBPARTITION name] VALUES (list_value [,...] )
+  | [SUBPARTITION name] 
+     START ([datatype] 'start_value') [INCLUSIVE | EXCLUSIVE]
+     [ END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE] ]
+     [ EVERY ([datatype] [number | INTERVAL] 'interval_value') ]
+  | [SUBPARTITION name] 
+     END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE]
+     [ EVERY ([datatype] [number | INTERVAL] 'interval_value') ]
+[ WITH ( partition_storage_parameter=value [, ... ] ) ]
+[column_reference_storage_directive [, ...] ]
+[ TABLESPACE tablespace ]
+
+where storage_directive is:
+   COMPRESSTYPE={ZLIB | RLE_TYPE | NONE} 
+ | COMPRESSLEVEL={0-9} 
+ | BLOCKSIZE={8192-2097152}
+
+Where column_reference_storage_directive is:
+   COLUMN column_name ENCODING ( storage_directive [, ... ] ), ... 
+ | DEFAULT COLUMN ENCODING ( storage_directive [, ... ] )
 
 { NO ACTION | RESTRICT | CASCADE | SET NULL [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] | SET DEFAULT [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] }
 </synopsis>

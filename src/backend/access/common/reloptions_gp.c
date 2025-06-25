@@ -954,24 +954,9 @@ validate_and_adjust_options(StdRdOptions *result,
 
 		if (result->compresstype[0] &&
 			(pg_strcasecmp(result->compresstype, "quicklz") == 0))
-		{
-#ifndef HAVE_LIBQUICKLZ
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("QuickLZ library is not supported by this build"),
-					 errhint("Compile with --with-quicklz to use QuickLZ compression.")));
-#endif
-			if (result->compresslevel != 1)
-			{
-				if (validate)
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							 errmsg("compresslevel=%d is out of range for quicklz (should be 1)",
-									result->compresslevel)));
-
-				result->compresslevel = setDefaultCompressionLevel(result->compresstype);
-			}
-		}
+					 errmsg("QuickLZ compression is no longer supported. Please use 'zstd' or 'zlib' compression instead.")));
 
 		if (result->compresstype[0] &&
 			(pg_strcasecmp(result->compresstype, "rle_type") == 0) &&
@@ -1059,8 +1044,7 @@ validateAppendOnlyRelOptions(int blocksize,
 							 bool co)
 {
 	if (comptype &&
-		(pg_strcasecmp(comptype, "quicklz") == 0 ||
-		 pg_strcasecmp(comptype, "zlib") == 0 ||
+		(pg_strcasecmp(comptype, "zlib") == 0 ||
 		 pg_strcasecmp(comptype, "rle_type") == 0 ||
 		 pg_strcasecmp(comptype, "zstd") == 0))
 	{
@@ -1110,20 +1094,6 @@ validateAppendOnlyRelOptions(int blocksize,
 								complevel)));
 		}
 
-		if (comptype && (pg_strcasecmp(comptype, "quicklz") == 0))
-		{
-#ifndef HAVE_LIBQUICKLZ
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("QuickLZ library is not supported by this build"),
-					 errhint("Compile with --with-quicklz to use QuickLZ compression.")));
-#endif
-			if (complevel != 1)
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("compresslevel=%d is out of range for quicklz (should be 1)",
-								complevel)));
-		}
 		if (comptype && (pg_strcasecmp(comptype, "rle_type") == 0) &&
 			(complevel < 0 || complevel > 4))
 		{
@@ -1144,7 +1114,7 @@ validateAppendOnlyRelOptions(int blocksize,
 
 /*
  * if no compressor type was specified, we set to no compression (level 0)
- * otherwise default for both zlib, quicklz, zstd and RLE to level 1.
+ * otherwise default for both zlib, zstd and RLE to level 1.
  */
 static int
 setDefaultCompressionLevel(char *compresstype)
