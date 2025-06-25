@@ -2475,11 +2475,10 @@ StartTransaction(void)
 
 	/*
 	 * Transactions may be started while recovery is in progress, if
-	 * hot standby is enabled.  This mode is not supported in
-	 * Cloudberry yet.
+	 * hot standby is enabled.
 	 */
 	AssertImply(DistributedTransactionContext != DTX_CONTEXT_LOCAL_ONLY,
-				!s->startedInRecovery);
+				EnableHotStandby || !s->startedInRecovery);
 	/*
 	 * MPP Modification
 	 *
@@ -2526,19 +2525,38 @@ StartTransaction(void)
 
 		case DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER:
 		case DTX_CONTEXT_QE_TWO_PHASE_IMPLICIT_WRITER:
+			/*
+			 * Sanity check for the global xid.
+			 * 
+			 * Note for hot standby dispatch: the standby QEs are still 
+			 * writers, just like primary QEs for SELECT queries. But 
+			 * hot standby dispatch never has a valid gxid, so we skip
+			 * the gxid checks for the standby QEs.
+			 */
+			if (!IS_HOT_STANDBY_QE())
+			{
+				if (QEDtxContextInfo.distributedXid == InvalidDistributedTransactionId)
+					elog(ERROR,
+						 "distributed transaction id is invalid in context %s",
+						 DtxContextToString(DistributedTransactionContext));
+
+				/*
+				 * Update distributed XID info, this is only used for
+				 * debugging.
+				 */
+				LocalDistribXactData *ele = &MyProc->localDistribXactData;
+				ele->distribXid = QEDtxContextInfo.distributedXid;
+				ele->state = LOCALDISTRIBXACT_STATE_ACTIVE;
+			}
+			else
+				Assert(QEDtxContextInfo.distributedXid == InvalidDistributedTransactionId);
+
+			/* fall through */
 		case DTX_CONTEXT_QE_AUTO_COMMIT_IMPLICIT:
 		{
 			/* If we're running in test-mode insert a delay in writer. */
 			if (gp_enable_slow_writer_testmode)
 				pg_usleep(500000);
-
-			if (DistributedTransactionContext != DTX_CONTEXT_QE_AUTO_COMMIT_IMPLICIT &&
-				QEDtxContextInfo.distributedXid == InvalidDistributedTransactionId)
-			{
-				elog(ERROR,
-					 "distributed transaction id is invalid in context %s",
-					 DtxContextToString(DistributedTransactionContext));
-			}
 
 			/*
 			 * Snapshot must not be created before setting transaction
@@ -2552,27 +2570,13 @@ StartTransaction(void)
 			XactReadOnly = isMppTxOptions_ReadOnly(
 				QEDtxContextInfo.distributedTxnOptions);
 
+			/* a hot standby transaction must be read-only */
+			AssertImply(IS_HOT_STANDBY_QE(), XactReadOnly);
+
 			/*
 			 * MPP: we're a QE Writer.
 			 */
 			MyTmGxact->gxid = QEDtxContextInfo.distributedXid;
-
-			if (DistributedTransactionContext ==
-				DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER ||
-				DistributedTransactionContext ==
-				DTX_CONTEXT_QE_TWO_PHASE_IMPLICIT_WRITER)
-			{
-				Assert(QEDtxContextInfo.distributedXid !=
-					   InvalidDistributedTransactionId);
-
-				/*
-				 * Update distributed XID info, this is only used for
-				 * debugging.
-				 */
-				LocalDistribXactData *ele = &MyProc->localDistribXactData;
-				ele->distribXid = QEDtxContextInfo.distributedXid;
-				ele->state = LOCALDISTRIBXACT_STATE_ACTIVE;
-			}
 
 			if (SharedLocalSnapshotSlot != NULL)
 			{
@@ -6880,8 +6884,8 @@ XactLogCommitRecord(TimestampTz commit_time,
 	xl_xact_distrib xl_distrib;
 	xl_xact_deldbs xl_deldbs;
 	XLogRecPtr recptr;
-	bool isOnePhaseQE = (Gp_role == GP_ROLE_EXECUTE && MyTmGxactLocal->isOnePhaseCommit);
 	bool isDtxPrepared = isPreparedDtxTransaction();
+	DistributedTransactionId distrib_xid = getDistributedTransactionId();
 
 	uint8		info;
 
@@ -6971,10 +6975,11 @@ XactLogCommitRecord(TimestampTz commit_time,
 		xl_origin.origin_timestamp = replorigin_session_origin_timestamp;
 	}
 
-	if (isDtxPrepared || isOnePhaseQE)
+	/* include distributed xid if there's one */
+	if (distrib_xid != InvalidDistributedTransactionId)
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_DISTRIB;
-		xl_distrib.distrib_xid = getDistributedTransactionId();
+		xl_distrib.distrib_xid = distrib_xid;
 	}
 
 #if 0
