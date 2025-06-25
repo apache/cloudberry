@@ -131,9 +131,7 @@ code or new licensing patterns.
 
             <exclude>gpcontrib/zstd/zstd_compression.c</exclude>
             <exclude>gpcontrib/zstd/Makefile</exclude>
-
-            <exclude>gpcontrib/quicklz/Makefile</exclude>
-
+            
             <exclude>gpcontrib/gp_toolkit/**</exclude>
 
             <exclude>gpcontrib/pg_hint_plan/**/*.source</exclude>

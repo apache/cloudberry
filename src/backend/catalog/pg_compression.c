@@ -508,9 +508,6 @@ compresstype_is_valid(char *comptype)
 	 * must change!
 	 */
 	static const char *const valid_comptypes[] = {
-#ifdef HAVE_LIBQUICKLZ
-			"quicklz",
-#endif
 #ifdef HAVE_LIBZ
 			"zlib",
 #endif
