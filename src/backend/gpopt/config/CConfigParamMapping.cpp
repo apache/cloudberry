@@ -578,6 +578,14 @@ CConfigParamMapping::PackConfigParamInBitset(
 		traceflag_bitset->ExchangeSet(EopttraceEnableWindowHashAgg);
 	}
 
+	if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_FIRST_KEY) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSFirstKey);
+	} else if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_MINIMAL_LEN_KEY) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSMinimalLenKey);
+	} else if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_EXCLUDE_NON_FIXED) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSExcludeNonFixedKey);
+	}
+
 	return traceflag_bitset;
 }
 
