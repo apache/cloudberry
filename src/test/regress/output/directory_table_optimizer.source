@@ -1651,6 +1651,8 @@ SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
  nation4       | 2199 | nation
 (3 rows)
 
+-- Test create policy for directory table
+CREATE POLICY dirtable_policy ON dir_table1 FOR SELECT USING (tag = '''');
 -- Test transaction commit of directory table manipulation
 CREATE DIRECTORY TABLE dir_table4 TABLESPACE directory_tblspc;
 BEGIN;
