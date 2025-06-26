@@ -113,3 +113,13 @@ from gp_dist_random('gp_distribution_policy') where localoid = 't2_17271'::regcl
 drop table t_17271;
 drop table t1_17271;
 drop table t2_17271;
+-- Github Issue 1055
+-- AO column storage not supported for zero-column tables
+create table t_1055() using ao_column;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+ERROR:  AO column storage is not supported for zero-column tables
+-- This should fail because the table is empty and AO column storage is not supported for zero-column
+create table t1_1055() using ao_row;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+alter table t1_1055 set access method ao_column;
+ERROR:  cannot rewrite empty table "t1_1055" as an AO columnar table
