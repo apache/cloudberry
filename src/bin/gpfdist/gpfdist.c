@@ -71,7 +71,7 @@
 #include <openssl/err.h>
 #endif
 
-#define DEFAULT_COMPRESS_LEVEL 1
+#define DEFAULT_COMPRESS_LEVEL 3
 #define MAX_FRAME_SIZE 65536
 
 /*  A data block */
