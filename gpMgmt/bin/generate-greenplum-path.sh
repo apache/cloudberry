@@ -1,28 +1,38 @@
 #!/usr/bin/env bash
-# Notice from the Apache Cloudberry PPMC team as follows:
-# These files use the term 'greenplum' to maintain compatibility with
-# original versions of Apache Cloudberry, which was originally called
-# Greenplum. This usage does not relate to the VMware Tanzu Greenplum
-# product, neither do we imply that Apache Cloudberry (Incubating) is
-# affiliated with, endorsed by, or sponsored by Broadcom Inc.
-# See discussion at https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
+# --------------------------------------------------------------------
+# NOTICE from the Apache Cloudberry PPMC
+# --------------------------------------------------------------------
+# This file uses the term 'greenplum' to maintain compatibility with
+# earlier versions of Apache Cloudberry, which was originally called
+# Greenplum. This usage does not refer to VMware Tanzu Greenplum,
+# nor does it imply that Apache Cloudberry (Incubating) is affiliated
+# with, endorsed by, or sponsored by Broadcom Inc.
+#
+# This file will be renamed in a future Apache Cloudberry release to
+# ensure compliance with Apache Software Foundation guidelines.
+# We will announce the change on the project mailing list and website.
+#
+# See: https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
+# --------------------------------------------------------------------
 
 cat <<"EOF"
 if [ -n "${PS1-}" ]; then
-    echo "Notice from the Apache Cloudberry PPMC team
------------------------------------------------------------------------
-This file uses the term 'greenplum' to maintain compatibility with
-original versions of Apache Cloudberry, which was originally called
-Greenplum. This usage does not relate to the VMware Tanzu Greenplum
-product, neither do we imply that Apache Cloudberry (Incubating) is
-affiliated with, endorsed by, or sponsored by Broadcom Inc.
-
-This file will be renamed in the next Apache Cloudberry release to
-ensure better compliance with Apache guidelines. We will announce
-this change on both the mailing list and the project website.
-
-See discussion at https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
------------------------------------------------------------------------
+    echo "
+# --------------------------------------------------------------------
+# NOTICE from the Apache Cloudberry PPMC
+# --------------------------------------------------------------------
+# This file uses the term 'greenplum' to maintain compatibility with
+# earlier versions of Apache Cloudberry, which was originally called
+# Greenplum. This usage does not refer to VMware Tanzu Greenplum,
+# nor does it imply that Apache Cloudberry (Incubating) is affiliated
+# with, endorsed by, or sponsored by Broadcom Inc.
+#
+# This file will be renamed in a future Apache Cloudberry release to
+# ensure compliance with Apache Software Foundation guidelines.
+# We will announce the change on the project mailing list and website.
+#
+# See: https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
+# --------------------------------------------------------------------
 "
 fi
 EOF
