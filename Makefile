@@ -44,9 +44,9 @@ include $(PGXS)
 $(GEN_DIR)/yagpcc_set_service.pb.o: $(GEN_DIR)/yagpcc_metrics.pb.h
 
 PROTO_INCLUDES = $(GEN_DIR)/yagpcc_set_service.pb.h $(GEN_DIR)/yagpcc_metrics.pb.h $(GEN_DIR)/yagpcc_plan.pb.h
-$(SRC_DIR)/UDSConnector.o: PROTO_INCLUDES
-$(SRC_DIR)/ProtoUtils.o: PROTO_INCLUDES
-$(SRC_DIR)/EventSender.o: PROTO_INCLUDES
+$(SRC_DIR)/UDSConnector.o: $(PROTO_INCLUDES)
+$(SRC_DIR)/ProtoUtils.o: $(PROTO_INCLUDES)
+$(SRC_DIR)/EventSender.o: $(PROTO_INCLUDES)
 $(SRC_DIR)/ProcStats.o: $(GEN_DIR)/yagpcc_metrics.pb.h
 
 gen: $(PROTO_GEN_OBJECTS)
