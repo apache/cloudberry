@@ -1,4 +1,41 @@
 #!/usr/bin/env bash
+# --------------------------------------------------------------------
+# NOTICE from the Apache Cloudberry PPMC
+# --------------------------------------------------------------------
+# This file uses the term 'greenplum' to maintain compatibility with
+# earlier versions of Apache Cloudberry, which was originally called
+# Greenplum. This usage does not refer to VMware Tanzu Greenplum,
+# nor does it imply that Apache Cloudberry (Incubating) is affiliated
+# with, endorsed by, or sponsored by Broadcom Inc.
+#
+# This file will be renamed in a future Apache Cloudberry release to
+# ensure compliance with Apache Software Foundation guidelines.
+# We will announce the change on the project mailing list and website.
+#
+# See: https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
+# --------------------------------------------------------------------
+
+cat <<"EOF"
+if [ -n "${PS1-}" ]; then
+    echo "
+# --------------------------------------------------------------------
+# NOTICE from the Apache Cloudberry PPMC
+# --------------------------------------------------------------------
+# This file uses the term 'greenplum' to maintain compatibility with
+# earlier versions of Apache Cloudberry, which was originally called
+# Greenplum. This usage does not refer to VMware Tanzu Greenplum,
+# nor does it imply that Apache Cloudberry (Incubating) is affiliated
+# with, endorsed by, or sponsored by Broadcom Inc.
+#
+# This file will be renamed in a future Apache Cloudberry release to
+# ensure compliance with Apache Software Foundation guidelines.
+# We will announce the change on the project mailing list and website.
+#
+# See: https://lists.apache.org/thread/b8o974mnnqk6zpy86dgll2pgqcvqgnwm
+# --------------------------------------------------------------------
+"
+fi
+EOF
 
 cat <<"EOF"
 if test -n "${ZSH_VERSION:-}"; then
