@@ -1,7 +1,6 @@
 #pragma once
 
 #include "protos/yagpcc_set_service.pb.h"
-#include <queue>
 
 class UDSConnector {
 public:
