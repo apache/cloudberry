@@ -1,13 +1,10 @@
 #pragma once
 
-#include <memory>
 #include <unordered_map>
-#include <string>
 
 #define typeid __typeid
 extern "C" {
 #include "utils/metrics_utils.h"
-#include "cdb/ml_ipc.h"
 #ifdef IC_TEARDOWN_HOOK
 #include "cdb/ic_udpifc.h"
 #endif

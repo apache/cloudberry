@@ -1,15 +1,14 @@
 #include "Config.h"
 #include "UDSConnector.h"
+#include "memory/gpdbwrappers.h"
 
 #define typeid __typeid
 extern "C" {
 #include "postgres.h"
 
-#include "access/hash.h"
 #include "executor/executor.h"
 #include "utils/elog.h"
 
-#include "cdb/cdbdisp.h"
 #include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
 #include "cdb/ml_ipc.h"
@@ -81,7 +80,7 @@ void EventSender::executor_before_start(QueryDesc *query_desc, int eflags) {
         instr_time starttime;
         INSTR_TIME_SET_CURRENT(starttime);
         query_desc->showstatctx =
-            cdbexplain_showExecStatsBegin(query_desc, starttime);
+            gpdb::cdbexplain_showExecStatsBegin(query_desc, starttime);
       }
     }
   }
@@ -106,10 +105,10 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
         // Make sure the space is allocated in the per-query
         // context so it will go away at executor_end.
         if (query_desc->totaltime == NULL) {
-          MemoryContext oldcxt;
-          oldcxt = MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
-          query_desc->totaltime = InstrAlloc(1, INSTRUMENT_ALL);
-          MemoryContextSwitchTo(oldcxt);
+          MemoryContext oldcxt =
+              gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
+          query_desc->totaltime = gpdb::instr_alloc(1, INSTRUMENT_ALL);
+          gpdb::mem_ctx_switch_to(oldcxt);
         }
       }
       yagpcc::GPMetrics stats;
@@ -240,7 +239,7 @@ void EventSender::collect_query_done(QueryDesc *query_desc,
     }
     query_msgs.erase({query_desc->gpmon_pkt->u.qexec.key.ccnt,
                       query_desc->gpmon_pkt->u.qexec.key.tmid});
-    pfree(query_desc->gpmon_pkt);
+    gpdb::pfree(query_desc->gpmon_pkt);
   }
 }
 
@@ -297,7 +296,7 @@ void EventSender::analyze_stats_collect(QueryDesc *query_desc) {
   }
   // Make sure stats accumulation is done.
   // (Note: it's okay if several levels of hook all do this.)
-  InstrEndLoop(query_desc->totaltime);
+  gpdb::instr_end_loop(query_desc->totaltime);
 
   double ms = query_desc->totaltime->total * 1000.0;
   if (ms >= Config::min_analyze_time()) {
@@ -364,7 +363,8 @@ EventSender::QueryItem *EventSender::get_query_message(QueryDesc *query_desc) {
       query_msgs.find({query_desc->gpmon_pkt->u.qexec.key.ccnt,
                        query_desc->gpmon_pkt->u.qexec.key.tmid}) ==
           query_msgs.end()) {
-    query_desc->gpmon_pkt = (gpmon_packet_t *)palloc0(sizeof(gpmon_packet_t));
+    query_desc->gpmon_pkt =
+        (gpmon_packet_t *)gpdb::palloc0(sizeof(gpmon_packet_t));
     query_desc->gpmon_pkt->u.qexec.key.ccnt = gp_command_count;
     query_desc->gpmon_pkt->u.qexec.key.tmid = nesting_level;
     query_msgs.insert({{gp_command_count, nesting_level},
