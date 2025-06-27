@@ -1,8 +1,8 @@
 override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
-override CXXFLAGS = -fPIC -lstdc++ -lpthread -g3 -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -Iinclude -Isrc/protos -Isrc -DGPBUILD
+override CXXFLAGS = -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -Iinclude -Isrc/protos -Isrc -DGPBUILD
 COMMON_CPP_FLAGS := -Isrc -Iinclude -Isrc/stat_statements_parser
 PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
-SHLIB_LINK += -lprotobuf
+SHLIB_LINK += -lprotobuf -lpthread -lstdc++
 
 PROTOC = protoc
 SRC_DIR = ./src
@@ -11,7 +11,7 @@ PROTO_DIR = ./protos
 PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o \
 					$(GEN_DIR)/yagpcc_set_service.pb.o
 
-$(GEN_DIR)/%.pb.cpp : $(PROTO_DIR)/%.proto
+$(GEN_DIR)/%.pb.cpp $(GEN_DIR)/%.pb.h: $(PROTO_DIR)/%.proto
 	sed -i 's/optional //g' $^
 	sed -i 's/cloud\/mdb\/yagpcc\/api\/proto\/common\//\protos\//g' $^
 	$(PROTOC) --cpp_out=$(SRC_DIR) $^
@@ -40,6 +40,14 @@ MODULE_big		:= yagp_hooks_collector
 PG_CONFIG		:= pg_config
 PGXS			:= $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+$(GEN_DIR)/yagpcc_set_service.pb.o: $(GEN_DIR)/yagpcc_metrics.pb.h
+
+PROTO_INCLUDES = $(GEN_DIR)/yagpcc_set_service.pb.h $(GEN_DIR)/yagpcc_metrics.pb.h $(GEN_DIR)/yagpcc_plan.pb.h
+$(SRC_DIR)/UDSConnector.o: PROTO_INCLUDES
+$(SRC_DIR)/ProtoUtils.o: PROTO_INCLUDES
+$(SRC_DIR)/EventSender.o: PROTO_INCLUDES
+$(SRC_DIR)/ProcStats.o: $(GEN_DIR)/yagpcc_metrics.pb.h
 
 gen: $(PROTO_GEN_OBJECTS)
 
