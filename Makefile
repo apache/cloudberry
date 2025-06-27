@@ -8,8 +8,10 @@
 # to "Makefile" if it exists. PostgreSQL is shipped with a
 # "GNUmakefile". If the user hasn't run the configure script yet, the
 # GNUmakefile won't exist yet, so we catch that case as well.
+
 # AIX make defaults to building *every* target of the first rule.  Start with
 # a single-target, empty rule to make the other targets non-default.
+all:
 
 all check install installdirs installcheck installcheck-parallel uninstall clean distclean maintainer-clean dist distcheck world check-world install-world installcheck-world installcheck-resgroup installcheck-resgroup-v2:
 	@if [ ! -f GNUmakefile ] ; then \

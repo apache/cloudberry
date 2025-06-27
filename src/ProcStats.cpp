@@ -75,16 +75,16 @@ void fill_status_stats(yagpcc::SystemStat *stats) {
       stats->set_vmpeakkb(value);
       proc_stat >> measure;
       if (measure != "kB") {
-        ereport(FATAL, (errmsg("Expected memory sizes in kB, but got in %s",
-                               measure.c_str())));
+        throw std::runtime_error("Expected memory sizes in kB, but got in " +
+                                 measure);
       }
     } else if (key == "VmSize:") {
       uint64_t value;
       proc_stat >> value;
       stats->set_vmsizekb(value);
       if (measure != "kB") {
-        ereport(FATAL, (errmsg("Expected memory sizes in kB, but got in %s",
-                               measure.c_str())));
+        throw std::runtime_error("Expected memory sizes in kB, but got in " +
+                                 measure);
       }
     }
   }
