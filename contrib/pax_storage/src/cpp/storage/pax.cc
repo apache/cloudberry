@@ -174,8 +174,8 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   std::string file_path;
   std::string toast_file_path;
   std::string block_id;
-  std::shared_ptr<File> file;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> file;
+  std::unique_ptr<File> toast_file;
   int open_flags;
   int block_number;
 
@@ -239,7 +239,7 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   }
 
   auto mp_writer = MicroPartitionFileFactory::CreateMicroPartitionWriter(
-      std::move(options), file, toast_file);
+      std::move(options), std::move(file), std::move(toast_file));
 
   Assert(mp_writer);
   mp_writer->SetWriteSummaryCallback(summary_callback_)
@@ -374,7 +374,7 @@ bool TableReader::GetTuple(TupleTableSlot *slot, ScanDirection direction,
   size_t row_index = current_block_row_index_;
   size_t max_row_index;
   size_t remaining_offset = offset;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   bool ok;
 
   if (!reader_) {
@@ -460,7 +460,7 @@ bool TableReader::GetTuple(TupleTableSlot *slot, ScanDirection direction,
   reader_ = MicroPartitionFileFactory::CreateMicroPartitionReader(
       std::move(options), reader_flags,
       file_system_->Open(current_block_metadata_.GetFileName(), fs::kReadMode),
-      toast_file);
+      std::move(toast_file));
 
   // row_index start from 0, so row_index = offset -1
   current_block_row_index_ = remaining_offset - 1;
@@ -476,7 +476,7 @@ void TableReader::OpenFile() {
   auto it = iterator_->Next();
   current_block_metadata_ = it;
   MicroPartitionReader::ReaderOptions options;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   int32 reader_flags = FLAGS_EMPTY;
 
   micro_partition_id_ = it.GetMicroPartitionId();
@@ -516,7 +516,7 @@ void TableReader::OpenFile() {
   reader_ = MicroPartitionFileFactory::CreateMicroPartitionReader(
       std::move(options), reader_flags,
       file_system_->Open(it.GetFileName(), fs::kReadMode),
-      toast_file);
+      std::move(toast_file));
 }
 
 TableDeleter::TableDeleter(
@@ -534,7 +534,7 @@ void TableDeleter::UpdateStatsInAuxTable(
     const std::vector<int> &min_max_col_idxs,
     const std::vector<int> &bf_col_idxs, std::shared_ptr<PaxFilter> filter) {
   MicroPartitionReader::ReaderOptions options;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   int32 reader_flags = FLAGS_EMPTY;
   TupleTableSlot *slot;
 
@@ -553,7 +553,7 @@ void TableDeleter::UpdateStatsInAuxTable(
       std::move(options), reader_flags,
       file_system_->Open(meta.GetFileName(), fs::kReadMode,
                          file_system_options_),
-      toast_file);
+      std::move(toast_file));
 
   slot = MakeTupleTableSlot(rel_->rd_att, &TTSOpsVirtual);
   auto updated_stats = MicroPartitionStatsUpdater(mp_reader.get(), visi_bitmap)

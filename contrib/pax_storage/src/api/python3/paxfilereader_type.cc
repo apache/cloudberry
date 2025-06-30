@@ -107,7 +107,7 @@ static int paxfilereader_init(PyObject *self, PyObject *args,
   PyObject *schema = NULL, *proj = NULL, *pax_file = NULL;
   PaxFileObject *pax_file_obj;
   std::shared_ptr<pax::Bitmap8> visible_map_bm = nullptr;
-  std::shared_ptr<pax::File> toast_file = nullptr;
+  std::unique_ptr<pax::File> toast_file = nullptr;
 
   PaxFileReaderObject *pax_file_reader;
   pax_file_reader = (PaxFileReaderObject *)self;
@@ -205,7 +205,7 @@ static int paxfilereader_init(PyObject *self, PyObject *args,
 
     auto file_ptr = pax::Singleton<pax::LocalFileSystem>::GetInstance()->Open(
         pax_file_obj->filepath, pax::fs::kReadMode);
-    auto reader = new pax::OrcReader(std::move(file_ptr), toast_file);
+    auto reader = new pax::OrcReader(std::move(file_ptr), std::move(toast_file));
     reader->Open(std::move(read_options));
     pax_file_reader->reader = reader;
   } catch (cbdb::CException &e) {
