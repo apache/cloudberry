@@ -1,0 +1,113 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# Apache Rat Audit Workflow
+# Checks if all files comply with Apache licensing requirements
+# This workflow is based on the Apache Rat tool, you can run it locally
+# using the command: `mvn clean verify -Drat.consoleOutput=true`
+# --------------------------------------------------------------------
+
+name: Apache Rat Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rat-check:
+    name: Apache Rat License Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
+
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@d6af6abeda15e98926a57b5aa970a96bb37f97d1
+        with:
+          maven-version: '3.8.6'
+
+      - name: Run Apache Rat check
+        id: rat-check
+        run: |
+          echo "Running Apache Rat license check..."
+          mvn clean verify -Drat.consoleOutput=true | tee rat-output.log
+          
+          # Check for build failure
+          if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+            echo "rat_failed=true" >> $GITHUB_OUTPUT
+            echo "::error::Apache Rat check failed - build failure detected"
+            exit 1
+          fi
+          
+          # If we got here, the check passed
+          echo "rat_failed=false" >> $GITHUB_OUTPUT
+          echo "Apache Rat check passed successfully"
+
+      - name: Upload Rat check results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rat-check-results
+          path: rat-output.log
+          retention-days: 7
+
+      - name: Generate Job Summary
+        if: always()
+        run: |
+          {
+            echo "## Apache Rat Audit Results"
+            echo "- Run Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            
+            if [[ -f rat-output.log ]]; then
+              if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+                echo "### ❌ Check Failed - License Compliance Issues Detected"
+                echo "```"
+                grep -B 5 -A 20 "\[INFO\] BUILD FAILURE" rat-output.log
+                echo "```"
+              elif grep -q "\[INFO\] BUILD SUCCESS" rat-output.log; then
+                echo "### ✅ Check Passed - All Files Comply with Apache License Requirements"
+              else
+                echo "### ⚠️ Indeterminate result - check log for details"
+              fi
+            else
+              echo "### ⚠️ No output log found"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
