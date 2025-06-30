@@ -65,7 +65,6 @@ typedef struct AOCSInsertDescData
     Oid         segrelid;
     Oid         blkdirrelid;
     Oid         visimaprelid;
-    Oid         visimapidxid;
 	struct DatumStreamWrite **ds;
 
 	AppendOnlyBlockDirectory blockDirectory;
@@ -401,6 +400,10 @@ extern void aoco_dml_init(Relation relation, CmdType operation);
 extern void aoco_dml_finish(Relation relation, CmdType operation);
 
 extern bool extractcolumns_from_node(Node *expr, bool *cols, AttrNumber natts);
+extern AOCSScanDesc aoco_beginscan_extractcolumns_quals(Relation rel, Snapshot snapshot,
+					List *targetlist, List *qual,
+					ParallelTableScanDesc parallel_scan, uint32 flags);
+
 extern ExprState * aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 								List *qual,
 								ExprState *state,
