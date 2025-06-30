@@ -185,6 +185,7 @@
 		"gp_enable_agg_pushdown",
 		"gp_enable_ao_indexscan",
 		"gp_enable_direct_dispatch",
+		"gp_enable_explain_rows_out",
 		"gp_enable_explain_allstat",
 		"gp_enable_fast_sri",
 		"gp_enable_global_deadlock_detector",
