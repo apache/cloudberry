@@ -148,9 +148,6 @@
  */
 #define GP_HLL_ERROR_MARGIN  0.003
 
-/* Fix attr number of return record of function gp_acquire_sample_rows */
-#define FIX_ATTR_NUM  3
-
 /* Per-index data for ANALYZE */
 typedef struct AnlIndexData
 {
@@ -170,7 +167,7 @@ static BufferAccessStrategy vac_strategy;
 
 Bitmapset	**acquire_func_colLargeRowIndexes;
 double		 *acquire_func_colLargeRowLength;
-
+double		 *acquire_func_colNDVBySeg;
 
 static void do_analyze_rel(Relation onerel,
 						   VacuumParams *params, List *va_cols,
@@ -500,6 +497,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 
 	Bitmapset **colLargeRowIndexes;
 	double     *colLargeRowLength;
+	double     *colNDVBySeg;
 	bool		sample_needed;
 
 	int64		AnalyzePageHit = VacuumPageHit;
@@ -742,7 +740,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	}
 	colLargeRowIndexes = (Bitmapset **) palloc0(sizeof(Bitmapset *) * max_natts);
 	colLargeRowLength = (double *)palloc0(sizeof(double) * max_natts);
-
+	colNDVBySeg = (double *)palloc0(sizeof(double) * max_natts);
 
 	if ((params->options & VACOPT_FULLSCAN) != 0)
 	{
@@ -776,6 +774,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		 */
 		acquire_func_colLargeRowIndexes = colLargeRowIndexes;
 		acquire_func_colLargeRowLength = colLargeRowLength;
+		acquire_func_colNDVBySeg = colNDVBySeg;
 		pgstat_progress_update_param(PROGRESS_ANALYZE_PHASE,
 									 inh ? PROGRESS_ANALYZE_PHASE_ACQUIRE_SAMPLE_ROWS_INH :
 									 PROGRESS_ANALYZE_PHASE_ACQUIRE_SAMPLE_ROWS);
@@ -789,6 +788,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 									  &totalrows, &totaldeadrows);
 		acquire_func_colLargeRowIndexes = NULL;
 		acquire_func_colLargeRowLength = NULL;
+		acquire_func_colNDVBySeg = NULL;
 		if (ctx)
 			MemoryContextSwitchTo(anl_context);
 	}
@@ -881,6 +881,12 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		for (i = 0; i < attr_cnt; i++)
 		{
 			VacAttrStats *stats = vacattrstats[i];
+
+			if (Gp_role == GP_ROLE_DISPATCH && GpPolicyIsPartitioned(onerel->rd_cdbpolicy))
+			{
+				stats->stadistinctbyseg = colNDVBySeg[i];
+			}
+
 			stats->tupDesc = onerel->rd_att;
 			/*
 			 * utilize hyperloglog and merge utilities to derive
@@ -1000,6 +1006,11 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 					stats->stadistinct = n_distinct;
 			}
 
+			if (Gp_role == GP_ROLE_EXECUTE) {
+				Assert(ctx->stadistincts);
+				ctx->stadistincts[i] = Float8GetDatum(stats->stadistinct);
+			}
+
 			MemoryContextResetAndDeleteChildren(col_context);
 		}
 
@@ -1085,7 +1096,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		if (RelationStorageIsAO(onerel))
 			relallvisible = 0;
 		else
-            		relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
+			relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
 
 		/* Update pg_class for table relation */
 		vac_update_relstats(onerel,
@@ -2684,6 +2695,7 @@ process_sample_rows(Portal portal,
 	 */
 	Bitmapset **colLargeRowIndexes = acquire_func_colLargeRowIndexes;
 	double     *colLargeRowLength = acquire_func_colLargeRowLength;
+	double     *colNDVBySeg = acquire_func_colNDVBySeg;
 	TupleDesc	relDesc = RelationGetDescr(onerel);
 	TupleDesc	funcTupleDesc;
 	TupleDesc	sampleTupleDesc;
@@ -2723,12 +2735,13 @@ process_sample_rows(Portal portal,
 	 * Also create tupledesc of return record of function gp_acquire_sample_rows.
 	 */
 	sampleTupleDesc = CreateTupleDescCopy(relDesc);
-	ncolumns = numLiveColumns + FIX_ATTR_NUM;
+	ncolumns = NUM_SAMPLE_FIXED_COLS + numLiveColumns;
 	
 	funcTupleDesc = CreateTemplateTupleDesc(ncolumns);
 	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 1, "", FLOAT8OID, -1, 0);
 	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 2, "", FLOAT8OID, -1, 0);
 	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 3, "", FLOAT8ARRAYOID, -1, 0);
+	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 4, "", FLOAT8ARRAYOID, -1, 0);
 	
 	for (i = 0; i < relDesc->natts; i++)
 	{
@@ -2838,10 +2851,34 @@ process_sample_rows(Portal portal,
 			if (!funcRetNulls[0])
 			{
 				/* This is a summary row. */
+				ArrayType  *arrayVal;
+				Datum	   *colndv;
+				bool	   *nulls;
+				int	    numelems;
+
+				Assert(!funcRetNulls[1] && !funcRetNulls[3]);
+
 				this_totalrows = DatumGetFloat8(funcRetValues[0]);
 				this_totaldeadrows = DatumGetFloat8(funcRetValues[1]);
 				(*totalrows) += this_totalrows;
 				(*totaldeadrows) += this_totaldeadrows;
+
+				arrayVal = DatumGetArrayTypeP(funcRetValues[3]);
+				deconstruct_array(arrayVal, FLOAT8OID, 8, true, 'd',
+								&colndv, &nulls, &numelems);
+				for (i = 0; i < relDesc->natts; i++)
+				{
+					double this_colndv = DatumGetFloat8(colndv[i]);
+					if (this_colndv < 0) {
+						Assert(this_colndv >= -1);
+						colNDVBySeg[i] += abs(this_colndv) * this_totalrows;
+					} else {
+						/* if current segment have any data, then ndv won't be 0.
+						 * if current segment have no rows, ndv is 0.
+						 */
+						colNDVBySeg[i] += DatumGetFloat8(colndv[i]);
+					}
+				}
 			}
 			else
 			{
@@ -2887,8 +2924,8 @@ process_sample_rows(Portal portal,
 						continue;
 					}
 
-					dnulls[i] = funcRetNulls[FIX_ATTR_NUM + index];
-					dvalues[i] = funcRetValues[FIX_ATTR_NUM + index];
+					dnulls[i] = funcRetNulls[NUM_SAMPLE_FIXED_COLS + index];
+					dvalues[i] = funcRetValues[NUM_SAMPLE_FIXED_COLS + index];
 					index++;	/* Move index to the next result set attribute */
 				}
 
@@ -4350,6 +4387,33 @@ compute_scalar_stats(VacAttrStatsP stats,
 				slot_idx++;
 			}
 		}
+
+		/* set the ndv from segments */
+		if (stats->stadistinctbyseg != 0 && slot_idx < STATISTIC_NUM_SLOTS - 1
+			&& !OidIsValid(stats->attrtype->typanalyze))  // should not be the array
+		{
+			MemoryContext old_context;
+			Datum	   *ndvbs;
+
+			/* Must copy the target values into anl_context */
+			old_context = MemoryContextSwitchTo(stats->anl_context);
+			ndvbs = (Datum *) palloc(sizeof(Datum));
+			ndvbs[0] = Float8GetDatum(stats->stadistinctbyseg);
+			MemoryContextSwitchTo(old_context);
+
+			stats->stakind[slot_idx] = STATISTIC_KIND_NDV_BY_SEGMENTS;
+			stats->staop[slot_idx] = mystats->ltopr;
+			stats->stacoll[slot_idx] = stats->attrcollid;
+
+			stats->statypid[slot_idx] = FLOAT8OID;
+			stats->statyplen[slot_idx] = 8;
+			stats->statypbyval[slot_idx] = true;
+			stats->statypalign[slot_idx] = TYPALIGN_DOUBLE;
+
+			stats->stavalues[slot_idx] = ndvbs;
+			stats->numvalues[slot_idx] = 1;
+			slot_idx++;
+		}
 	}
 	else if (nonnull_cnt > 0)
 	{
@@ -4892,6 +4956,37 @@ merge_leaf_stats(VacAttrStatsP stats,
 			slot_idx++;
 		}
 	}
+
+	// ndistinct by segments calculation
+	{
+		old_context = MemoryContextSwitchTo(stats->anl_context);
+		bool valid;
+		double ndinstinct_by_segs = 0;
+		Datum *ndvbs;
+
+		valid = aggregate_leaf_partition_ndvbs(
+			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs);
+
+		if (valid)
+		{
+			ndvbs = (Datum *) palloc(sizeof(Datum));
+			ndvbs[0] = Float8GetDatum(ndinstinct_by_segs);
+
+			stats->stakind[slot_idx] = STATISTIC_KIND_NDV_BY_SEGMENTS;
+			stats->staop[slot_idx] = mystats->ltopr;
+
+			stats->statypid[slot_idx] = FLOAT8OID;
+			stats->statyplen[slot_idx] = 8;
+			stats->statypbyval[slot_idx] = true;
+			stats->statypalign[slot_idx] = TYPALIGN_DOUBLE;
+
+			stats->stavalues[slot_idx] = ndvbs;
+			stats->numvalues[slot_idx] = 1;
+			slot_idx++;
+		}
+		MemoryContextSwitchTo(old_context);
+	}
+
 	for (i = 0; i < numPartitions; i++)
 	{
 		if (HeapTupleIsValid(heaptupleStats[i]))

@@ -150,6 +150,7 @@ typedef struct VacAttrStats
 	float4		stanullfrac;	/* fraction of entries that are NULL */
 	int32		stawidth;		/* average width of column values */
 	float4		stadistinct;	/* # distinct values */
+	double		stadistinctbyseg;	/* # distinct values by segments*/
 	int16		stakind[STATISTIC_NUM_SLOTS];
 	Oid			staop[STATISTIC_NUM_SLOTS];
 	Oid			stacoll[STATISTIC_NUM_SLOTS];
@@ -323,13 +324,16 @@ typedef struct
 	double		totalrows;
 	double		totaldeadrows;
 
+	/* Only used if current role is excutor */
+	Datum*		stadistincts;
+
 	/*
 	 * Result tuple descriptor. Each returned row consists of three "fixed"
 	 * columns, plus all the columns of the sampled table (excluding dropped
 	 * columns).
 	 */
 	TupleDesc	outDesc;
-#define NUM_SAMPLE_FIXED_COLS 3
+#define NUM_SAMPLE_FIXED_COLS 4
 
 	/* SRF state, to track which rows have already been returned. */
 	int			index;
