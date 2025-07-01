@@ -2037,9 +2037,24 @@ CTranslatorRelcacheToDXL::RetrieveColStats(CMemoryPool *mp,
 			std::max(CDouble(0.0), (1 - num_freq_buckets - null_freq));
 	}
 
+	// histogram values extracted from the pg_statistic tuple for a given column
+	AttStatsSlot ndvbs_slot;
+
+	// get histogram datums from pg_statistic entry
+	(void) gpdb::GetAttrStatsSlot(&ndvbs_slot, stats_tup,
+								  STATISTIC_KIND_NDV_BY_SEGMENTS, InvalidOid,
+								  ATTSTATSSLOT_VALUES);
+	CDouble ndvbs = CHistogram::DefaultNDVBySegments;
+	if (InvalidOid != ndvbs_slot.valuetype)
+	{
+		GPOS_ASSERT(ndvbs_slot.nvalues == 1);
+		ndvbs = CDouble(gpdb::Float8FromDatum(ndvbs_slot.values[0]));
+	}
+
 	// free up allocated datum and float4 arrays
 	gpdb::FreeAttrStatsSlot(&mcv_slot);
 	gpdb::FreeAttrStatsSlot(&hist_slot);
+	gpdb::FreeAttrStatsSlot(&ndvbs_slot);
 
 	gpdb::FreeHeapTuple(stats_tup);
 
@@ -2047,8 +2062,7 @@ CTranslatorRelcacheToDXL::RetrieveColStats(CMemoryPool *mp,
 	mdid_col_stats->AddRef();
 	CDXLColStats *dxl_col_stats = GPOS_NEW(mp) CDXLColStats(
 		mp, mdid_col_stats, md_colname, width, null_freq, distinct_remaining,
-		freq_remaining, dxl_stats_bucket_array, false /* is_col_stats_missing */
-	);
+		freq_remaining, ndvbs, dxl_stats_bucket_array, false /* is_col_stats_missing */);
 
 	return dxl_col_stats;
 }
@@ -2118,7 +2132,7 @@ CTranslatorRelcacheToDXL::GenerateStatsForSystemCols(
 
 	return GPOS_NEW(mp) CDXLColStats(
 		mp, mdid_col_stats, md_colname, width, null_freq, distinct_remaining,
-		freq_remaining, dxl_stats_bucket_array, is_col_stats_missing);
+		freq_remaining, CHistogram::DefaultNDVBySegments, dxl_stats_bucket_array, is_col_stats_missing);
 }
 
 //---------------------------------------------------------------------------

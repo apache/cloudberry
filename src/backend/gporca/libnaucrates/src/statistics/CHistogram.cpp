@@ -47,6 +47,9 @@ const CDouble CHistogram::DefaultNDVRemain(0.0);
 // default frequency of NDV remain
 const CDouble CHistogram::DefaultNDVFreqRemain(0.0);
 
+// default NDV by segments
+const CDouble CHistogram::DefaultNDVBySegments(0.0);
+
 // sample size used to estimate skew
 #define GPOPT_SKEW_SAMPLE_SIZE 1000
 
@@ -59,6 +62,7 @@ CHistogram::CHistogram(CMemoryPool *mp, CBucketArray *histogram_buckets,
 	  m_null_freq(CHistogram::DefaultNullFreq),
 	  m_distinct_remaining(DefaultNDVRemain),
 	  m_freq_remaining(DefaultNDVFreqRemain),
+	  m_distinct_by_segs(DefaultNDVBySegments),
 	  m_skew_was_measured(false),
 	  m_skew(1.0),
 	  m_NDVs_were_scaled(false),
@@ -75,6 +79,7 @@ CHistogram::CHistogram(CMemoryPool *mp, BOOL is_well_defined)
 	  m_null_freq(CHistogram::DefaultNullFreq),
 	  m_distinct_remaining(DefaultNDVRemain),
 	  m_freq_remaining(DefaultNDVFreqRemain),
+	  m_distinct_by_segs(DefaultNDVBySegments),
 	  m_skew_was_measured(false),
 	  m_skew(1.0),
 	  m_NDVs_were_scaled(false),
@@ -87,13 +92,14 @@ CHistogram::CHistogram(CMemoryPool *mp, BOOL is_well_defined)
 CHistogram::CHistogram(CMemoryPool *mp, CBucketArray *histogram_buckets,
 					   BOOL is_well_defined, CDouble null_freq,
 					   CDouble distinct_remaining, CDouble freq_remaining,
-					   BOOL is_col_stats_missing)
+					   CDouble distinct_by_segs, BOOL is_col_stats_missing)
 	: m_mp(mp),
 	  m_histogram_buckets(histogram_buckets),
 	  m_is_well_defined(is_well_defined),
 	  m_null_freq(null_freq),
 	  m_distinct_remaining(distinct_remaining),
 	  m_freq_remaining(freq_remaining),
+	  m_distinct_by_segs(distinct_by_segs),
 	  m_skew_was_measured(false),
 	  m_skew(1.0),
 	  m_NDVs_were_scaled(false),
@@ -144,6 +150,7 @@ CHistogram::OsPrint(IOstream &os) const
 	os << "Total NDV          : " << GetNumDistinct() << std::endl;
 	os << "Remaining frequency: " << GetFreqRemain() << std::endl;
 	os << "Total frequency    : " << GetFrequency() << std::endl;
+	os << "NDV by segs        : " << GetDistinctBySegs() << std::endl;
 
 	if (m_skew_was_measured)
 	{
@@ -207,16 +214,20 @@ CHistogram::MakeHistogramLessThanOrLessThanEqualFilter(
 
 	CDouble distinct_remaining = 0.0;
 	CDouble freq_remaining = 0.0;
+	CDouble distinct_by_segs = 0.0;
 	if (CStatistics::Epsilon < m_distinct_remaining * DefaultSelectivity)
 	{
 		distinct_remaining = m_distinct_remaining * DefaultSelectivity;
 		freq_remaining = m_freq_remaining * DefaultSelectivity;
+		distinct_by_segs = m_distinct_by_segs * DefaultSelectivity;
 	}
 
 	return GPOS_NEW(m_mp) CHistogram(m_mp, new_buckets,
 									 true,			// is_well_defined
 									 CDouble(0.0),	// fNullFreq
-									 distinct_remaining, freq_remaining);
+									 distinct_remaining,
+									 freq_remaining,
+									 distinct_by_segs);
 }
 
 // return an array buckets after applying non equality filter on the histogram buckets
@@ -267,7 +278,7 @@ CHistogram::MakeHistogramInequalityFilter(CPoint *point) const
 
 	return GPOS_NEW(m_mp)
 		CHistogram(m_mp, histogram_buckets, true /*is_well_defined*/, null_freq,
-				   m_distinct_remaining, m_freq_remaining);
+				   m_distinct_remaining, m_freq_remaining, m_distinct_by_segs);
 }
 
 // construct new histogram with IDF filter
@@ -286,7 +297,7 @@ CHistogram::MakeHistogramIDFFilter(CPoint *point) const
 
 	return GPOS_NEW(m_mp)
 		CHistogram(m_mp, histogram_buckets, true /*is_well_defined*/, null_freq,
-				   m_distinct_remaining, m_freq_remaining);
+				   m_distinct_remaining, m_freq_remaining, m_distinct_by_segs);
 }
 
 // return an array buckets after applying equality filter on the histogram buckets
@@ -339,7 +350,7 @@ CHistogram::MakeHistogramEqualFilter(CPoint *point) const
 	{
 		return GPOS_NEW(m_mp) CHistogram(
 			m_mp, GPOS_NEW(m_mp) CBucketArray(m_mp), true /* is_well_defined */,
-			m_null_freq, DefaultNDVRemain, DefaultNDVFreqRemain);
+			m_null_freq, DefaultNDVRemain, DefaultNDVFreqRemain, DefaultNDVBySegments);
 	}
 
 	CBucketArray *histogram_buckets = MakeBucketsWithEqualityFilter(point);
@@ -353,7 +364,8 @@ CHistogram::MakeHistogramEqualFilter(CPoint *point) const
 			0.0,   // null_freq
 			1.0,   // distinct_remaining
 			std::min(CDouble(1.0),
-					 m_freq_remaining / m_distinct_remaining)  // freq_remaining
+					 m_freq_remaining / m_distinct_remaining),  // freq_remaining
+			DefaultNDVBySegments // distinct by segments
 		);
 	}
 
@@ -385,13 +397,15 @@ CHistogram::MakeHistogramINDFFilter(CPoint *point) const
 			null_freq,
 			1.0,  // distinct_remaining
 			std::min(CDouble(1.0),
-					 m_freq_remaining / m_distinct_remaining)  // freq_remaining
+					 m_freq_remaining / m_distinct_remaining),  // freq_remaining
+			DefaultNDVBySegments // distinct by segments
 		);
 	}
 
 	return GPOS_NEW(m_mp) CHistogram(
 		m_mp, histogram_buckets, true /* is_well_defined */, null_freq,
-		CHistogram::DefaultNDVRemain, CHistogram::DefaultNDVFreqRemain);
+		CHistogram::DefaultNDVRemain, CHistogram::DefaultNDVFreqRemain,
+		CHistogram::DefaultNDVBySegments);
 }
 
 // construct new histogram with greater than or greater than equal filter
@@ -446,16 +460,18 @@ CHistogram::MakeHistogramGreaterThanOrGreaterThanEqualFilter(
 
 	CDouble distinct_remaining = 0.0;
 	CDouble freq_remaining = 0.0;
+	CDouble distinct_by_segs = 0.0;
 	if (CStatistics::Epsilon < m_distinct_remaining * DefaultSelectivity)
 	{
 		distinct_remaining = m_distinct_remaining * DefaultSelectivity;
 		freq_remaining = m_freq_remaining * DefaultSelectivity;
+		distinct_by_segs = m_distinct_by_segs * DefaultSelectivity;
 	}
 
 	return GPOS_NEW(m_mp) CHistogram(m_mp, new_buckets,
 									 true,			// is_well_defined
 									 CDouble(0.0),	// fNullFreq
-									 distinct_remaining, freq_remaining);
+									 distinct_remaining, freq_remaining, distinct_by_segs);
 }
 
 // sum of frequencies from buckets.
@@ -964,7 +980,7 @@ CHistogram::MakeLASJHistogram(CStatsPred::EStatsCmpType stats_cmp_type,
 
 	return GPOS_NEW(m_mp)
 		CHistogram(m_mp, new_buckets, true /*is_well_defined*/, null_freq,
-				   m_distinct_remaining, m_freq_remaining);
+				   m_distinct_remaining, m_freq_remaining, m_distinct_by_segs);
 }
 
 // scales frequencies on histogram so that they add up to 1.0.
@@ -1020,7 +1036,7 @@ CHistogram::CopyHistogram() const
 	m_histogram_buckets->AddRef();
 	CHistogram *histogram_copy = GPOS_NEW(m_mp)
 		CHistogram(m_mp, m_histogram_buckets, m_is_well_defined, m_null_freq,
-				   m_distinct_remaining, m_freq_remaining);
+				   m_distinct_remaining, m_freq_remaining, m_distinct_by_segs);
 	if (WereNDVsScaled())
 	{
 		histogram_copy->SetNDVScaled();
@@ -1163,7 +1179,9 @@ CHistogram::MakeJoinHistogramEqualityFilter(const CHistogram *histogram) const
 
 	return GPOS_NEW(m_mp)
 		CHistogram(m_mp, join_buckets, true /*is_well_defined*/,
-				   0.0 /*null_freq*/, distinct_remaining, freq_remaining);
+				   0.0 /*null_freq*/, distinct_remaining, freq_remaining,
+				   DefaultNDVRemain // ndv from segs will be distortion after join 
+				   );
 }
 
 // construct a new histogram for NDV based cardinality estimation
@@ -1214,7 +1232,9 @@ CHistogram::MakeNDVBasedJoinHistogramEqualityFilter(
 
 	return GPOS_NEW(m_mp)
 		CHistogram(m_mp, join_buckets, true /*is_well_defined*/,
-				   0.0 /*null_freq*/, distinct_remaining, freq_remaining);
+				   0.0 /*null_freq*/, distinct_remaining, freq_remaining,
+				   DefaultNDVRemain // ndv from segs will be distortion after join
+				   );
 }
 
 // construct a new histogram for an INDF join predicate
@@ -1419,7 +1439,9 @@ CHistogram::MakeGroupByHistogramNormalize(CDouble,	// rows,
 
 	CHistogram *result_histogram = GPOS_NEW(m_mp)
 		CHistogram(m_mp, new_buckets, true /*is_well_defined*/, new_null_freq,
-				   m_distinct_remaining, freq_remaining);
+				   m_distinct_remaining, freq_remaining,
+				   DefaultNDVRemain // ndv from segs will be distortion after gb
+				   );
 	*result_distinct_values = result_histogram->GetNumDistinct();
 
 	return result_histogram;
@@ -1518,6 +1540,13 @@ CHistogram::MakeUnionAllHistogramNormalize(CDouble rows,
 		(m_freq_remaining * rows + histogram->GetFreqRemain() * rows_other) /
 		rows_new;
 
+	CDouble distinct_by_seg = DefaultNDVBySegments;
+	if (m_distinct_by_segs > CStatistics::Epsilon &&
+		histogram->GetDistinctBySegs() > CStatistics::Epsilon)
+	{
+		distinct_by_seg = m_distinct_by_segs + histogram->GetDistinctBySegs();
+	}
+
 	ULONG max_num_buckets = COptCtxt::PoctxtFromTLS()
 								->GetOptimizerConfig()
 								->GetStatsConf()
@@ -1528,7 +1557,7 @@ CHistogram::MakeUnionAllHistogramNormalize(CDouble rows,
 		CombineBuckets(m_mp, new_buckets, desired_num_buckets);
 	CHistogram *result_histogram = GPOS_NEW(m_mp)
 		CHistogram(m_mp, result_buckets, true /*is_well_defined*/,
-				   new_null_freq, distinct_remaining, freq_remaining);
+				   new_null_freq, distinct_remaining, freq_remaining, distinct_by_seg);
 	(void) result_histogram->NormalizeHistogram();
 	GPOS_ASSERT(result_histogram->IsValid());
 
@@ -2051,7 +2080,7 @@ CHistogram::TranslateToDXLDerivedColumnStats(CMDAccessor *md_accessor,
 
 	return GPOS_NEW(m_mp)
 		CDXLStatsDerivedColumn(colid, width, m_null_freq, m_distinct_remaining,
-							   m_freq_remaining, dxl_stats_bucket_array);
+							   m_freq_remaining, m_distinct_by_segs, dxl_stats_bucket_array);
 }
 
 // randomly pick a bucket index based on bucket frequency values
@@ -2218,10 +2247,11 @@ CHistogram::MakeDefaultBoolHistogram(CMemoryPool *mp)
 	CDouble distinct_remaining = CDouble(3.0);
 	CDouble freq_remaining = CDouble(1.0);
 	CDouble null_freq = CDouble(0.0);
+	CDouble distinct_by_segs = CDouble(0.0);
 
 	return GPOS_NEW(mp) CHistogram(
 		mp, buckets, true /* is_well_defined */, null_freq, distinct_remaining,
-		freq_remaining, true /*is_col_stats_missing */
+		freq_remaining, distinct_by_segs, true /*is_col_stats_missing */
 	);
 }
 

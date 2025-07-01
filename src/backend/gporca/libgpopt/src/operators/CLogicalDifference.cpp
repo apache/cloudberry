@@ -174,7 +174,8 @@ CLogicalDifference::PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		mp, LASJ_stats,
 		(*m_pdrgpdrgpcrInput)[0],  // we group by the columns of the first child
 		pdrgpulComputedCols,	   // no computed columns for set ops
-		nullptr					   // no keys, use all grouping cols
+		nullptr,				   // no keys, use all grouping cols
+		false // is local agg?
 	);
 
 	// clean up

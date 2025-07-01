@@ -621,13 +621,15 @@ CDXLUtils::ParseDXLToOptimizerStatisticObjArray(
 			CDouble distinct_remaining =
 				dxl_derived_col_stats->GetDistinctRemain();
 			CDouble freq_remaining = dxl_derived_col_stats->GetFreqRemain();
+			CDouble distinct_by_segs = dxl_derived_col_stats->GetDistinctBySeg();
 
 			CBucketArray *stats_buckets_array =
 				CDXLUtils::ParseDXLToBucketsArray(mp, md_accessor,
 												  dxl_derived_col_stats);
 			CHistogram *histogram = GPOS_NEW(mp)
 				CHistogram(mp, stats_buckets_array, true /*is_well_defined*/,
-						   null_freq, distinct_remaining, freq_remaining);
+						   null_freq, distinct_remaining, freq_remaining,
+						   distinct_by_segs);
 
 			column_id_histogram_map->Insert(GPOS_NEW(mp) ULONG(column_id),
 											histogram);
