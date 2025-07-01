@@ -131,6 +131,9 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		onerel = table_open(relOid, AccessShareLock);
 		relDesc = RelationGetDescr(onerel);
 
+		/* will be init in `analyze_rel` */
+		ctx->stadistincts = (Datum *) palloc0(relDesc->natts * sizeof(Datum));
+
 		MemSet(&params, 0, sizeof(VacuumParams));
 		params.options |= VACOPT_ANALYZE;
 		params.freeze_min_age = -1;
@@ -181,6 +184,13 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		TupleDescInitEntry(outDesc,
 						   3,
 						   "oversized_cols_length",
+						   FLOAT8ARRAYOID,
+						   -1,
+						   0);
+		/* stadistinct for each live column */
+		TupleDescInitEntry(outDesc,
+						   4,
+						   "stadistinct_array",
 						   FLOAT8ARRAYOID,
 						   -1,
 						   0);
@@ -243,7 +253,8 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		HeapTuple	relTuple = ctx->sample_rows[ctx->index];
 		int			attno;
 		int			outattno;
-		bool			has_toolarge = false;
+
+		bool	   has_toolarge = false;
 		Datum	   *relvalues = (Datum *) palloc(relDesc->natts * sizeof(Datum));
 		bool	   *relnulls = (bool *) palloc(relDesc->natts * sizeof(bool));
 		Datum      *oversized_cols_length = (Datum *) palloc0(relDesc->natts * sizeof(Datum));
@@ -300,6 +311,9 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		outvalues[1] = (Datum) 0;
 		outnulls[1] = true;
 
+		outvalues[3] = (Datum) 0;
+		outnulls[3] = true;
+
 		res = heap_form_tuple(outDesc, outvalues, outnulls);
 
 		ctx->index++;
@@ -320,6 +334,11 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 
 		outvalues[2] = (Datum) 0;
 		outnulls[2] = true;
+
+		outvalues[3] = PointerGetDatum(construct_array(ctx->stadistincts, relDesc->natts,
+														FLOAT8OID, 8, true, 'd'));
+		outnulls[3] = false;
+
 		for (outattno = NUM_SAMPLE_FIXED_COLS + 1; outattno <= outDesc->natts; outattno++)
 		{
 			outvalues[outattno - 1] = (Datum) 0;

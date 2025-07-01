@@ -743,6 +743,37 @@ getHistogramMCVTuple(AttStatsSlot * *histSlots, MCVFreqPair **mcvRemaining,
 	}
 }
 
+static bool
+getNdvBySegHeapTuple(AttStatsSlot * *ndvbsSlots, HeapTuple *heaptupleStats, float4 *relTuples, int nParts)
+{
+	bool valid = true;
+
+	for (int i = 0; i < nParts; i++)
+	{
+		if (!HeapTupleIsValid(heaptupleStats[i]))
+		{
+			continue;
+		}
+
+		ndvbsSlots[i] = (AttStatsSlot *) palloc(sizeof(AttStatsSlot));
+		(void) get_attstatsslot(ndvbsSlots[i], heaptupleStats[i],
+			STATISTIC_KIND_NDV_BY_SEGMENTS, InvalidOid, ATTSTATSSLOT_VALUES);
+
+		if ((InvalidOid != ndvbsSlots[i]->valuetype && // result is not empty
+			// not empty partition with invalid ndvbs
+			(relTuples[i] > 0 && DatumGetFloat8(ndvbsSlots[i]->values[0]) == 0)) ||
+			// not empty partition without ndvbs
+			(InvalidOid == ndvbsSlots[i]->valuetype && relTuples[i] > 0)) {
+			valid = false;
+			break;
+		}
+
+		Assert(ndvbsSlots[i]->valuetype == FLOAT8OID);
+		Assert(ndvbsSlots[i]->nvalues == 1);
+	}
+	return valid;
+}
+
 /*
  * Initialize heap by inserting the second histogram bound from each partition histogram.
  * Input:
@@ -1301,4 +1332,29 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 	}
 
 	return !all_parts_empty;
+}
+
+
+bool
+aggregate_leaf_partition_ndvbs(int nParts,
+							   HeapTuple *heaptupleStats,
+							   float4 *relTuples,
+							   float8 *result)
+{
+	bool valid;
+	Assert(nParts > 0);
+	Assert(result);
+
+	AttStatsSlot **ndvbsSlots = (AttStatsSlot **) palloc0((nParts) * sizeof(AttStatsSlot *));
+	valid = getNdvBySegHeapTuple(ndvbsSlots, heaptupleStats, relTuples, nParts);
+	if (valid) {
+		for (int i = 0; i < nParts; i++)
+		{
+			if (ndvbsSlots[i]) {
+				*result += DatumGetFloat8(ndvbsSlots[i]->values[0]);
+			}
+		}
+	}
+
+	return valid;
 }
