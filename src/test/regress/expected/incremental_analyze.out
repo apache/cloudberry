@@ -1949,7 +1949,7 @@ SELECT staattnum, stakind1, stakind2, stakind3, stakind4, stakind5,
 FROM pg_statistic WHERE starelid = 'simple_table_no_hll'::regclass;
  staattnum | stakind1 | stakind2 | stakind3 | stakind4 | stakind5 |  stavalues1  | stavalues2 | stavalues3 | stavalues4 | stavalues5 
 -----------+----------+----------+----------+----------+----------+--------------+------------+------------+------------+------------
-         1 |        2 |        3 |        0 |        0 |        0 | {1,3,5,7,10} |            |            |            | 
+         1 |        2 |        3 |        8 |        0 |        0 | {1,3,5,7,10} |            | {10}       |            | 
 (1 row)
 
 -- Make sure analyze rootpartition option works in an option list

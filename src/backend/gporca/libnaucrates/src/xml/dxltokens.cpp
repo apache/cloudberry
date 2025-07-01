@@ -417,6 +417,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenColNdvRemain, GPOS_WSZ_LIT("NdvRemain")},
 		{EdxltokenColFreqRemain, GPOS_WSZ_LIT("FreqRemain")},
 		{EdxltokenColStatsMissing, GPOS_WSZ_LIT("ColStatsMissing")},
+		{EdxltokenColNdvBySeg, GPOS_WSZ_LIT("NdvBySeg")},
 
 		{EdxltokenParamId, GPOS_WSZ_LIT("ParamId")},
 

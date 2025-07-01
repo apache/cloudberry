@@ -42,7 +42,8 @@ CParseHandlerColStats::CParseHandlerColStats(
 	  m_null_freq(0.0),
 	  m_distinct_remaining(0.0),
 	  m_freq_remaining(0.0),
-	  m_is_column_stats_missing(false)
+	  m_is_column_stats_missing(false),
+	  m_distinct_by_segs(0.0)
 {
 }
 
@@ -129,6 +130,17 @@ CParseHandlerColStats::StartElement(const XMLCh *const element_uri,
 					parsed_is_column_stats_missing, EdxltokenColStatsMissing,
 					EdxltokenColumnStats);
 		}
+
+		const XMLCh *parsed_distinct_by_segs =
+			attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenColNdvBySeg));
+		if (nullptr != parsed_distinct_by_segs)
+		{
+			m_distinct_by_segs =
+				CDXLOperatorFactory::ConvertAttrValueToBool(
+					m_parse_handler_mgr->GetDXLMemoryManager(),
+					parsed_distinct_by_segs, EdxltokenColNdvBySeg,
+					EdxltokenColumnStats);
+		}
 	}
 	else if (0 == XMLString::compareString(
 					  CDXLTokens::XmlstrToken(EdxltokenColumnStatsBucket),
@@ -198,7 +210,7 @@ CParseHandlerColStats::EndElement(const XMLCh *const,  // element_uri,
 
 	m_imd_obj = GPOS_NEW(m_mp) CDXLColStats(
 		m_mp, m_mdid, m_md_name, m_width, m_null_freq, m_distinct_remaining,
-		m_freq_remaining, dxl_stats_bucket_array, m_is_column_stats_missing);
+		m_freq_remaining, m_distinct_by_segs, dxl_stats_bucket_array, m_is_column_stats_missing);
 
 	// deactivate handler
 	m_parse_handler_mgr->DeactivateHandler();

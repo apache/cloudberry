@@ -1356,7 +1356,8 @@ CStatisticsUtils::AddNdvForAllGrpCols(
 	CMemoryPool *mp, const CStatistics *input_stats,
 	const ULongPtrArray
 		*grouping_columns,	   // array of grouping column ids from a source
-	CDoubleArray *output_ndvs  // output array of ndvs
+	CDoubleArray *output_ndvs, // output array of ndvs
+	BOOL is_partial            // cal ndvs with segment generated
 )
 {
 	GPOS_ASSERT(nullptr != grouping_columns);
@@ -1374,10 +1375,14 @@ CStatisticsUtils::AddNdvForAllGrpCols(
 		const CHistogram *histogram = input_stats->GetHistogram(colid);
 		if (nullptr != histogram)
 		{
-			distinct_vals = histogram->GetNumDistinct();
-			if (histogram->IsEmpty())
-			{
-				distinct_vals = DefaultDistinctVals(input_stats->Rows());
+			if (is_partial && histogram->GetDistinctBySegs() > CStatistics::Epsilon) {
+				distinct_vals = histogram->GetDistinctBySegs();
+			} else {
+				distinct_vals = histogram->GetNumDistinct();
+				if (histogram->IsEmpty())
+				{
+					distinct_vals = DefaultDistinctVals(input_stats->Rows());
+				}
 			}
 		}
 		output_ndvs->Append(GPOS_NEW(mp) CDouble(distinct_vals));
@@ -1401,7 +1406,8 @@ CDoubleArray *
 CStatisticsUtils::ExtractNDVForGrpCols(
 	CMemoryPool *mp, const CStatisticsConfig *stats_config,
 	const IStatistics *stats, CColRefSet *grp_cols_refset,
-	CBitSet *keys  // keys derived during optimization
+	CBitSet *keys,  // keys derived during optimization
+	BOOL is_partial
 )
 {
 	GPOS_ASSERT(nullptr != stats);
@@ -1425,13 +1431,13 @@ CStatisticsUtils::ExtractNDVForGrpCols(
 		{
 			// this array of grouping columns represents computed columns.
 			// Since we currently do not cap computed columns, we add all of their NDVs as is
-			AddNdvForAllGrpCols(mp, input_stats, src_grouping_cols, ndvs);
+			AddNdvForAllGrpCols(mp, input_stats, src_grouping_cols, ndvs, is_partial);
 		}
 		else
 		{
 			// compute the maximum number of groups when aggregated on columns from the given source
 			CDouble max_grps_per_src = MaxNumGroupsForGivenSrcGprCols(
-				mp, stats_config, input_stats, src_grouping_cols);
+				mp, stats_config, input_stats, src_grouping_cols, is_partial);
 			ndvs->Append(GPOS_NEW(mp) CDouble(max_grps_per_src));
 		}
 	}
@@ -1524,7 +1530,8 @@ CStatisticsUtils::MaxNdv(const CStatistics *stats,
 CDouble
 CStatisticsUtils::MaxNumGroupsForGivenSrcGprCols(
 	CMemoryPool *mp, const CStatisticsConfig *stats_config,
-	CStatistics *input_stats, const ULongPtrArray *src_grouping_cols)
+	CStatistics *input_stats, const ULongPtrArray *src_grouping_cols,
+	BOOL is_partial)
 {
 	GPOS_ASSERT(nullptr != input_stats);
 	GPOS_ASSERT(nullptr != src_grouping_cols);
@@ -1565,7 +1572,7 @@ CStatisticsUtils::MaxNumGroupsForGivenSrcGprCols(
 
 	// add any remaining columns not covered by multivariate n-distinct
 	// correlated stats
-	AddNdvForAllGrpCols(mp, input_stats, updated_src_grouping_cols, ndvs);
+	AddNdvForAllGrpCols(mp, input_stats, updated_src_grouping_cols, ndvs, is_partial);
 	updated_src_grouping_cols->Release();
 
 	// take the minimum of (a) the estimated number of groups from the columns of this source,
@@ -1597,7 +1604,8 @@ CDouble
 CStatisticsUtils::Groups(CMemoryPool *mp, IStatistics *stats,
 						 const CStatisticsConfig *stats_config,
 						 ULongPtrArray *grouping_cols,
-						 CBitSet *keys	// keys derived during optimization
+						 CBitSet *keys,	// keys derived during optimization
+						 BOOL is_partial
 )
 {
 	GPOS_ASSERT(nullptr != stats);
@@ -1609,7 +1617,7 @@ CStatisticsUtils::Groups(CMemoryPool *mp, IStatistics *stats,
 		MakeGroupByColsForStats(mp, grouping_cols, computed_groupby_cols);
 
 	CDoubleArray *ndvs =
-		ExtractNDVForGrpCols(mp, stats_config, stats, grp_col_for_stats, keys);
+		ExtractNDVForGrpCols(mp, stats_config, stats, grp_col_for_stats, keys, is_partial);
 	CDouble groups =
 		std::min(std::max(CStatistics::MinRows.Get(),
 						  GetCumulativeNDVs(stats_config, ndvs).Get()),

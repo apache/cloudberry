@@ -625,7 +625,9 @@ CLogicalGbAgg::PxfsCandidates(CMemoryPool *mp) const
 IStatistics *
 CLogicalGbAgg::PstatsDerive(CMemoryPool *mp, IStatistics *child_stats,
 							CColRefArray *pdrgpcrGroupingCols,
-							ULongPtrArray *pdrgpulComputedCols, CBitSet *keys)
+							ULongPtrArray *pdrgpulComputedCols, 
+							CBitSet *keys,
+							BOOL isLocal)
 {
 	const ULONG ulGroupingCols = pdrgpcrGroupingCols->Size();
 
@@ -639,7 +641,7 @@ CLogicalGbAgg::PstatsDerive(CMemoryPool *mp, IStatistics *child_stats,
 
 	IStatistics *stats = CGroupByStatsProcessor::CalcGroupByStats(
 		mp, dynamic_cast<CStatistics *>(child_stats), pdrgpulGroupingCols,
-		pdrgpulComputedCols, keys);
+		pdrgpulComputedCols, keys, isLocal);
 
 	// clean up
 	pdrgpulGroupingCols->Release();
@@ -669,7 +671,8 @@ CLogicalGbAgg::PstatsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	exprhdl.DeriveDefinedColumns(1)->ExtractColIds(mp, pdrgpulComputedCols);
 
 	IStatistics *stats = PstatsDerive(mp, child_stats, Pdrgpcr(),
-									  pdrgpulComputedCols, nullptr /*keys*/);
+									  pdrgpulComputedCols, nullptr /*keys*/,
+									  FLocal());
 
 	pdrgpulComputedCols->Release();
 

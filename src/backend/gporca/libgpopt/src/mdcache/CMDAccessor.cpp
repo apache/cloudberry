@@ -1192,10 +1192,12 @@ CMDAccessor::GetHistogram(CMemoryPool *mp, IMDId *mdid_type,
 	CDouble null_freq = pmdcolstats->GetNullFreq();
 	CDouble distinct_remaining = pmdcolstats->GetDistinctRemain();
 	CDouble freq_remaining = pmdcolstats->GetFreqRemain();
+	CDouble distinct_by_segs = pmdcolstats->GetDistinctBySegs();
 
 	CHistogram *histogram = GPOS_NEW(mp)
 		CHistogram(mp, buckets, true /*is_well_defined*/, null_freq,
-				   distinct_remaining, freq_remaining, is_col_stats_missing);
+				   distinct_remaining, freq_remaining, distinct_by_segs,
+				   is_col_stats_missing);
 	GPOS_ASSERT_IMP(fBoolType,
 					3 >= histogram->GetNumDistinct() - CStatistics::Epsilon);
 

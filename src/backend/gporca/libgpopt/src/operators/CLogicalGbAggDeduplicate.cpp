@@ -255,7 +255,8 @@ CLogicalGbAggDeduplicate::PstatsDerive(CMemoryPool *mp,
 	}
 
 	IStatistics *stats = CLogicalGbAgg::PstatsDerive(mp, child_stats, Pdrgpcr(),
-													 pdrgpulComputedCols, keys);
+													 pdrgpulComputedCols, keys,
+													 FLocal());
 	keys->Release();
 	pdrgpulComputedCols->Release();
 

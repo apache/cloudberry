@@ -936,30 +936,33 @@ SELECT dim.proj_name, sum(val)
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: dim.proj_name, (sum(fact.val))
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Output: dim.proj_name, sum(fact.val)
          Group Key: dim.proj_name
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Sort
                Output: dim.proj_name, (PARTIAL sum(fact.val))
-               Hash Key: dim.proj_name
-               ->  Streaming Partial HashAggregate
-                     Output: dim.proj_name, PARTIAL sum(fact.val)
-                     Group Key: dim.proj_name
-                     ->  Hash Join
-                           Output: fact.val, dim.proj_name
-                           Hash Cond: (fact.did = dim.did)
-                           ->  Seq Scan on public.fact
-                                 Output: fact.did, fact.val
-                                 Filter: ((fact.fact_time > 10) AND (fact.fact_time < 2000))
-                           ->  Hash
-                                 Output: dim.did, dim.proj_name
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+               Sort Key: dim.proj_name
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: dim.proj_name, (PARTIAL sum(fact.val))
+                     Hash Key: dim.proj_name
+                     ->  Streaming Partial HashAggregate
+                           Output: dim.proj_name, PARTIAL sum(fact.val)
+                           Group Key: dim.proj_name
+                           ->  Hash Join
+                                 Output: fact.val, dim.proj_name
+                                 Hash Cond: (fact.did = dim.did)
+                                 ->  Seq Scan on public.fact
+                                       Output: fact.did, fact.val
+                                       Filter: ((fact.fact_time > 10) AND (fact.fact_time < 2000))
+                                 ->  Hash
                                        Output: dim.did, dim.proj_name
-                                       ->  Seq Scan on public.dim
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                              Output: dim.did, dim.proj_name
+                                             ->  Seq Scan on public.dim
+                                                   Output: dim.did, dim.proj_name
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_parallel = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'on'
  Optimizer: GPORCA
-(25 rows)
+(28 rows)
 
 -- Clear tables
 DROP TABLE dim, fact;
