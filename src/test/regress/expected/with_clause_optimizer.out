@@ -2413,3 +2413,4 @@ SELECT EXISTS(
  t
 (1 row)
 
+DROP TABLE foo_issue_1204_test;
