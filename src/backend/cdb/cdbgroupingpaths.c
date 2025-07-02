@@ -757,28 +757,28 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 		{
 			Path *path = (Path *)lfirst(lc);
 
-			if (!cdbpathlocus_collocates_tlist(root, path->locus, ctx->group_tles))
-			{
-				if (ctx->is_distinct && ctx->can_hash)
-				{
-					double dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
-																		path->rows,
-																		path->locus);
+			if (cdbpathlocus_collocates_tlist(root, path->locus, ctx->group_tles))
+				continue;
 
-					path = (Path *) create_agg_path(root,
-												  ctx->partial_rel,
-												  path,
-												  ctx->partial_grouping_target,
-												  AGG_HASHED,
-												  ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
-												  parallel_query_use_streaming_hashagg, /* streaming */
-												  ctx->groupClause,
-												  NIL,
-												  ctx->agg_partial_costs,
-												  dNumGroups);
-				}
-				add_partial_path(ctx->partial_rel, path);
+			if (ctx->is_distinct && ctx->can_hash)
+			{
+				double dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+																	path->rows,
+																	path->locus);
+
+				path = (Path *) create_agg_path(root,
+											  ctx->partial_rel,
+											  path,
+											  ctx->partial_grouping_target,
+											  AGG_HASHED,
+											  ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
+											  parallel_query_use_streaming_hashagg, /* streaming */
+											  ctx->groupClause,
+											  NIL,
+											  ctx->agg_partial_costs,
+											  dNumGroups);
 			}
+			add_partial_path(ctx->partial_rel, path);
 		}
 	}
 
