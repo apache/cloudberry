@@ -38,6 +38,11 @@ command_fails(
 	[ 'initdb', '-U', 'pg_test', $datadir ],
 	'role names cannot begin with "pg_"');
 
+command_fails_like(
+	[ 'initdb', '--username' => '', $datadir ],
+	qr/superuser name must not be empty./,
+	'empty username not allowed');
+
 mkdir $datadir;
 
 # make sure we run one successful test without a TZ setting so we test
