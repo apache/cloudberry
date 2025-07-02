@@ -437,7 +437,7 @@ AppendOnlyStorageRead_CloseFile(AppendOnlyStorageRead *storageRead)
 	if (storageRead->file == -1)
 		return;
 
-	FileClose(storageRead->file);
+	storageRead->smgrAO->smgr_FileClose(storageRead->file);
 
 	storageRead->file = -1;
 	storageRead->formatVersion = -1;
