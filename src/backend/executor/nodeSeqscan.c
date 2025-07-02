@@ -42,8 +42,6 @@
 #include "cdb/cdbvars.h"
 
 static TupleTableSlot *SeqNext(SeqScanState *node);
-
-static bool PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot);
 static ScanKey ScanKeyListToArray(List *keys, int *num);
 
 /* ----------------------------------------------------------------
@@ -104,7 +102,7 @@ SeqNext(SeqScanState *node)
 	{
 		while (table_scan_getnextslot(scandesc, direction, slot))
 		{
-			if (!PassByBloomFilter(node, slot))
+			if (!PassByBloomFilter(&node->ss.ps, node->filters, slot))
 				continue;
 
 			return slot;
@@ -405,8 +403,8 @@ ExecSeqScanInitializeWorker(SeqScanState *node,
 /*
  * Returns true if the element may be in the bloom filter.
  */
-static bool
-PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
+bool
+PassByBloomFilter(PlanState *ps, List *filters, TupleTableSlot *slot)
 {
 	ScanKey	sk;
 	Datum	val;
@@ -417,12 +415,10 @@ PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 	/*
 	 * Mark that the pushdown runtime filter is actually taking effect.
 	 */
-	if (node->ss.ps.instrument &&
-		!node->ss.ps.instrument->prf_work &&
-		list_length(node->filters))
-		node->ss.ps.instrument->prf_work = true;
+	if (ps->instrument && !ps->instrument->prf_work && list_length(filters))
+		ps->instrument->prf_work = true;
 
-	foreach (lc, node->filters)
+	foreach (lc, filters)
 	{
 		sk = lfirst(lc);
 		if (sk->sk_flags != SK_BLOOM_FILTER)
@@ -435,7 +431,7 @@ PassByBloomFilter(SeqScanState *node, TupleTableSlot *slot)
 		blm_filter = (bloom_filter *)DatumGetPointer(sk->sk_argument);
 		if (bloom_lacks_element(blm_filter, (unsigned char *)&val, sizeof(Datum)))
 		{
-			InstrCountFilteredPRF(node, 1);
+			InstrCountFilteredPRF(ps, 1);
 			return false;
 		}
 	}
