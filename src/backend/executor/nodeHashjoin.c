@@ -2352,7 +2352,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		foreach(lc2, targets)
 		{
 			PlanState *target = lfirst(lc2);
-			Assert(IsA(target, SeqScanState));
+			Assert(IsA(target, SeqScanState) || IsA(target, DynamicSeqScanState));
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
 					hstate->ps.plan->plan_rows);
@@ -2447,7 +2447,7 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	Var *var;
 	TargetEntry *te;
 
-	if (!IsA(node, SeqScanState))
+	if (!IsA(node, SeqScanState) && !IsA(node, DynamicSeqScanState))
 		return false;
 
 	te = (TargetEntry *)list_nth(node->plan->targetlist, attno - 1);
@@ -2488,16 +2488,14 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 	targetNodes = NIL;
 	while (true)
 	{
-		/* target is seqscan */
-		if ((IsA(parent, HashJoinState) || IsA(parent, ResultState)) && IsA(child, SeqScanState))
+		/* target is seqscan or dynamic seqscan */
+		if ((IsA(parent, HashJoinState) || IsA(parent, ResultState)) && 
+			(IsA(child, SeqScanState) || IsA(child, DynamicSeqScanState)))
 		{
 			/*
 			 * hashjoin
-			 *   seqscan
-			 * or
-			 * hashjoin
-			 *   result
-			 *     seqscan
+			 *   [result]
+			 *     seqscan | dynamicseqscan
 			 */
 			if (!CheckTargetNode(child, attno, lattno))
 				return NULL;
