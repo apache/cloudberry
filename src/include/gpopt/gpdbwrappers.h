@@ -63,82 +63,163 @@ struct ArrayExpr;
 
 #include "gpopt/utils/RelationWrapper.h"
 
+// without GP_WRAP try...catch functions
 namespace gpdb
 {
 // convert datum to bool
-bool BoolFromDatum(Datum d);
+static inline bool BoolFromDatum(Datum d) 
+{
+	return DatumGetBool(d);
+}
 
 // convert bool to datum
-Datum DatumFromBool(bool b);
+static inline Datum DatumFromBool(bool b)
+{
+	return BoolGetDatum(b);
+}
 
 // convert datum to char
-char CharFromDatum(Datum d);
+static inline char CharFromDatum(Datum d)
+{
+	return DatumGetChar(d);
+}
 
 // convert char to datum
-Datum DatumFromChar(char c);
+static inline Datum DatumFromChar(char c)
+{
+	return CharGetDatum(c);
+}
 
 // convert datum to int8
-int8 Int8FromDatum(Datum d);
+static inline int8 Int8FromDatum(Datum d)
+{
+	return DatumGetInt8(d);
+}
 
 // convert int8 to datum
-Datum DatumFromInt8(int8 i8);
+static inline Datum DatumFromInt8(int8 i8)
+{
+	return Int8GetDatum(i8);
+}
 
 // convert datum to uint8
-uint8 Uint8FromDatum(Datum d);
+static inline uint8 Uint8FromDatum(Datum d)
+{
+	return DatumGetUInt8(d);
+}
 
 // convert uint8 to datum
-Datum DatumFromUint8(uint8 ui8);
+static inline Datum DatumFromUint8(uint8 ui8)
+{
+	return UInt8GetDatum(ui8);
+}
 
 // convert datum to int16
-int16 Int16FromDatum(Datum d);
+static inline int16 Int16FromDatum(Datum d)
+{
+	return DatumGetInt16(d);
+}
 
 // convert int16 to datum
-Datum DatumFromInt16(int16 i16);
+static inline Datum DatumFromInt16(int16 i16)
+{
+	return Int16GetDatum(i16);
+}
 
 // convert datum to uint16
-uint16 Uint16FromDatum(Datum d);
+static inline uint16 Uint16FromDatum(Datum d)
+{
+	return DatumGetUInt16(d);
+}
 
 // convert uint16 to datum
-Datum DatumFromUint16(uint16 ui16);
+static inline Datum DatumFromUint16(uint16 ui16)
+{
+	return UInt16GetDatum(ui16);
+}
 
 // convert datum to int32
-int32 Int32FromDatum(Datum d);
+static inline int32 Int32FromDatum(Datum d)
+{
+	return DatumGetInt32(d);
+}
 
 // convert int32 to datum
-Datum DatumFromInt32(int32 i32);
+static inline Datum DatumFromInt32(int32 i32)
+{
+	return Int32GetDatum(i32);
+}
 
 // convert datum to uint32
-uint32 lUint32FromDatum(Datum d);
+static inline uint32 Uint32FromDatum(Datum d)
+{
+	return DatumGetUInt32(d);
+}
 
 // convert uint32 to datum
-Datum DatumFromUint32(uint32 ui32);
+static inline Datum DatumFromUint32(uint32 ui32)
+{
+	return UInt32GetDatum(ui32);
+}
 
 // convert datum to int64
-int64 Int64FromDatum(Datum d);
+static inline int64 Int64FromDatum(Datum d)
+{
+	return DatumGetInt64(d);
+}
 
 // convert int64 to datum
-Datum DatumFromInt64(int64 i64);
+static inline Datum DatumFromInt64(int64 i64)
+{
+	return Int64GetDatum(i64);
+}
 
 // convert datum to uint64
-uint64 Uint64FromDatum(Datum d);
+static inline uint64 Uint64FromDatum(Datum d)
+{
+	return DatumGetUInt64(d);
+}
 
 // convert uint64 to datum
-Datum DatumFromUint64(uint64 ui64);
+static inline Datum DatumFromUint64(uint64 ui64)
+{
+	return UInt64GetDatum(ui64);
+}
 
 // convert datum to oid
-Oid OidFromDatum(Datum d);
+static inline Oid OidFromDatum(Datum d)
+{
+	return DatumGetObjectId(d);
+}
 
 // convert datum to generic object with pointer handle
-void *PointerFromDatum(Datum d);
-
-// convert datum to float4
-float4 Float4FromDatum(Datum d);
-
-// convert datum to float8
-float8 Float8FromDatum(Datum d);
+static inline void *PointerFromDatum(Datum d)
+{
+	return DatumGetPointer(d);
+}
 
 // convert pointer to datum
-Datum DatumFromPointer(const void *p);
+static inline Datum DatumFromPointer(const void *p)
+{
+	return PointerGetDatum(p);
+}
+
+// convert datum to float4
+static inline float4 Float4FromDatum(Datum d)
+{
+	return DatumGetFloat4(d);
+}
+
+// convert datum to float8
+static inline float8 Float8FromDatum(Datum d)
+{
+	return DatumGetFloat8(d);
+}
+
+}
+
+namespace gpdb
+{
 
 // does an aggregate exist with the given oid
 bool AggregateExists(Oid oid);
