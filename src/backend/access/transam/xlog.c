@@ -6629,7 +6629,16 @@ UpdateCatalogForStandbyPromotion(void)
 	/* I am privileged */
 	InitializeSessionUserIdStandalone();
 	gp_activate_standby();
-	write_gp_segment_configuration();
+
+        if (gp_segment_configuration_file && access(gp_segment_configuration_file, F_OK) == 0)
+        {
+                write_gp_segment_configuration();
+        }
+        else
+        {
+                elog(DEBUG1, "Skipping write_gp_segment_configuration: file not found or not configured");
+        }
+
 	/* close the transaction we started above */
 	CommitTransactionCommand();
 	Gp_role = old_role;
