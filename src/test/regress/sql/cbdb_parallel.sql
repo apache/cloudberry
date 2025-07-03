@@ -619,7 +619,7 @@ explain (locus, costs off) select * from rt1 union all select * from rt2;
 explain (locus, costs off) select * from rt1 union all select * from t1;
 -- SegmentGeneralWorkers (Converted to Strewn, Limited on One Segment) + Hashed = Strewn
 explain (locus, costs off) select * from rt1 union all select * from t2;
--- SingleQE as subquery seems cannot produce partial_pathlist and don't have chance to parallel append.
+-- partial subpath under UNION ALL
 explain (locus, costs off) select a from rt1 union all select count(*) as a from sq1;
 -- SegmentGeneralWorkers + General = SegmentGeneralWorkers
 explain (locus, costs off) select a from rt1 union all select a from generate_series(1, 1000) a;
@@ -1047,6 +1047,31 @@ select distinct a from t_distinct_1;
 
 --
 -- End of test Parallel DISTINCT
+--
+
+--
+-- Test Parallel UNION
+--
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+set enable_parallel = on;
+set enable_groupagg = off;
+set enable_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+reset enable_groupagg;
+set enable_hashagg = off;
+set enable_groupagg = on;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+reset enable_groupagg;
+reset enable_hashagg;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+reset enable_parallel;
+--
+-- End of test Parallel UNION
 --
 
 -- start_ignore
