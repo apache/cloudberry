@@ -2118,9 +2118,9 @@ readGpSegConfigFromExtFile(int *total_dbs)
 	{
 		config = &configs[idx];
 
-		if (sscanf(buf, "%d %d %c %c %c %c %d %s %s %s", (int *)&config->dbid, (int *)&config->segindex,
-					&config->role, &config->preferred_role, &config->mode, &config->status,
-					&config->port, hostname, address, datadir) != 10)
+		if (sscanf(buf, "%d|%d|%c|%c|%c|%c|%255[^|]|%255[^|]|%d|%999s", (int *)&config->dbid, (int *)&config->segindex,
+				   &config->role, &config->preferred_role, &config->mode, &config->status,
+				   hostname, address, &config->port, datadir) != 10)
 		{
 			FreeFile(fd);
 			elog(ERROR, "invalid data in gp_segment_configuration dump file: %s:%m", gp_segment_configuration_file);

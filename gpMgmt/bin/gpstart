@@ -55,7 +55,8 @@ class GpStart:
                  skip_heap_checksum_validation=False,
                  fts_hosts=None,
                  etcd_hosts=None,
-                 is_external_fts=False
+                 is_external_fts=False,
+                 segment_config_file=None
                  ):
         assert (specialMode in [None, 'maintenance'])
         self.specialMode = specialMode
@@ -78,6 +79,7 @@ class GpStart:
         self.etcd_hosts = etcd_hosts
         self.is_external_fts = is_external_fts
         self.singlenodemode = False
+        self.segment_config_file = segment_config_file
 
         #
         # Some variables that are set during execution
@@ -510,10 +512,11 @@ class GpStart:
 
         logger.info("Obtaining Segment details from coordinator...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
-        self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
-		## standby cluster load gp_segment_configuration from file.
-        #self.gparray = GpArray.initFromFile("/usr/local/gpdr/gpdr_gp_segment_configuration_1")
-        #self.gparray.is_singlenode= False
+        if self.segment_config_file:
+            self.gparray = GpArray.initFromFile(self.segment_config_file)
+            self.gparray.is_singlenode= False
+        else:
+            self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
 
         logger.info("Setting new coordinator era")
         e = GpEraFile(self.coordinator_datadir, logger=get_logger_if_verbose())
@@ -879,6 +882,8 @@ class GpStart:
         addTo.add_option('-E', dest='etcd_hosts', type='string',default=None ,
                          help='specify the file that contains all etcd hosts.If this argument is set, `gpstart` will attempt'
                                 'to start all etcd in the specified hosts')
+        addTo.add_option('-f', '--segment_config_file', dest='segment_config_file', type='string', default=None,
+                         help='specify the gp_segment_configuration file to load for this cluster')
 
         parser.set_defaults(verbose=False, filters=[], slice=(None, None))
 
@@ -925,7 +930,8 @@ class GpStart:
                        skip_heap_checksum_validation=options.skip_heap_checksum_validation,
                        fts_hosts=options.fts_hosts,
                        etcd_hosts=options.etcd_hosts,
-                       is_external_fts=external_fts
+                       is_external_fts=external_fts,
+                       segment_config_file=options.segment_config_file
                        )
 
 

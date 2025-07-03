@@ -6629,7 +6629,16 @@ UpdateCatalogForStandbyPromotion(void)
 	/* I am privileged */
 	InitializeSessionUserIdStandalone();
 	gp_activate_standby();
-	write_gp_segment_configuration();
+
+	if (gp_segment_configuration_file && access(gp_segment_configuration_file, F_OK) == 0)
+	{
+		write_gp_segment_configuration();
+	}
+	else
+	{
+		elog(DEBUG1, "Skipping write_gp_segment_configuration: file not found or not configured");
+	}
+
 	/* close the transaction we started above */
 	CommitTransactionCommand();
 	Gp_role = old_role;
@@ -7967,6 +7976,12 @@ StartupXLOG(void)
 
 				if (gp_pause_on_restore_point_replay)
 					pauseRecoveryOnRestorePoint(xlogreader);
+
+				/* Exit the recovery loop if a promotion is triggered in pauseRecoveryOnRestorePoint() */
+				if (reachedContinuousRecoveryTarget && recoveryTargetAction == RECOVERY_TARGET_ACTION_PROMOTE){
+					reachedRecoveryTarget = true;
+					break;
+				}
 
 				/* Exit loop if we reached inclusive recovery target */
 				if (recoveryStopsAfter(xlogreader))
@@ -10757,6 +10772,9 @@ XLogRestorePoint(const char *rpName)
 
 	xlrec.rp_time = GetCurrentTimestamp();
 	strlcpy(xlrec.rp_name, rpName, MAXFNAMELEN);
+
+	/* LogHotStandby for the restore here */
+	LogStandbySnapshot();
 
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xl_restore_point));

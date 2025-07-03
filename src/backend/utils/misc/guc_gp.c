@@ -5043,7 +5043,7 @@ struct config_string ConfigureNamesString_gp[] =
 		check_gp_interconnect_type, assign_gp_interconnect_type, show_gp_interconnect_type
 	},
 	{
-		{"gp_pause_on_restore_point_replay", PGC_SUSET, DEVELOPER_OPTIONS,
+		{"gp_pause_on_restore_point_replay", PGC_SIGHUP, DEVELOPER_OPTIONS,
 			gettext_noop("Specifies the restore point to pause replay on."),
 			gettext_noop("Unlike recovery_target_name, this can be used to continuously set/reset "
 						"how much a standby should replay up to."),
