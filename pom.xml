@@ -665,7 +665,6 @@ code or new licensing patterns.
             <exclude>src/tools/make_mkid</exclude>
             <exclude>src/tools/tidy</exclude>
             <exclude>src/tools/find_typedef</exclude>
-            <exclude>src/tools/hooks/pre-push</exclude>
             <exclude>src/tools/valgrind.supp</exclude>
             <exclude>src/tools/pgindent/perltidyrc</exclude>
             <exclude>src/tools/pgindent/README.gpdb</exclude>
