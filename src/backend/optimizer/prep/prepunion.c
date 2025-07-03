@@ -595,7 +595,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 	ListCell   *lc;
 	List	   *pathlist = NIL;
 	List	   *partial_pathlist = NIL;
-	bool		partial_paths_valid = false; /* CBDB_PARALLEL_FIXME: temproary disable partial path */
+	bool		partial_paths_valid = true;
 	bool		consider_parallel = true;
 	List	   *rellist;
 	List	   *tlist_list;
@@ -730,7 +730,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 		ppath = (Path *)
 			create_append_path(root, result_rel, NIL, partial_pathlist,
 							   NIL, NULL,
-							   parallel_workers, enable_parallel_append,
+							   parallel_workers, false /* enable_parallel_append */,
 							   -1);
 		/* CBDB_PARALLEL_FIXME: we disable pg styple Gather/GatherMerge node */
 #if 0
@@ -739,7 +739,14 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 							   result_rel->reltarget, NULL, NULL);
 #endif
 		if (!op->all)
+		{
+			/* CDB: Hash motion to collocate non-distinct tuples. */
+			if (CdbPathLocus_IsPartitioned(ppath->locus))
+			{
+				ppath = make_motion_hash_all_targets(root, ppath, tlist);
+			}
 			ppath = make_union_unique(op, ppath, tlist, root);
+		}
 		add_path(result_rel, ppath, root);
 	}
 
