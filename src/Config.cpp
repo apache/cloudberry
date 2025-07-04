@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "memory/gpdbwrappers.h"
 #include <limits.h>
 #include <memory>
 #include <string>
@@ -6,7 +7,6 @@
 
 extern "C" {
 #include "postgres.h"
-#include "utils/builtins.h"
 #include "utils/guc.h"
 }
 
@@ -29,15 +29,15 @@ static void update_ignored_users(const char *new_guc_ignored_users) {
       std::make_unique<std::unordered_set<std::string>>();
   if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
     /* Need a modifiable copy of string */
-    char *rawstring = pstrdup(new_guc_ignored_users);
+    char *rawstring = gpdb::pstrdup(new_guc_ignored_users);
     List *elemlist;
     ListCell *l;
 
     /* Parse string into list of identifiers */
-    if (!SplitIdentifierString(rawstring, ',', &elemlist)) {
+    if (!gpdb::split_identifier_string(rawstring, ',', &elemlist)) {
       /* syntax error in list */
-      pfree(rawstring);
-      list_free(elemlist);
+      gpdb::pfree(rawstring);
+      gpdb::list_free(elemlist);
       ereport(
           LOG,
           (errcode(ERRCODE_SYNTAX_ERROR),
@@ -48,8 +48,8 @@ static void update_ignored_users(const char *new_guc_ignored_users) {
     foreach (l, elemlist) {
       new_ignored_users_set->insert((char *)lfirst(l));
     }
-    pfree(rawstring);
-    list_free(elemlist);
+    gpdb::pfree(rawstring);
+    gpdb::list_free(elemlist);
   }
   ignored_users_set = std::move(new_ignored_users_set);
 }

@@ -30,6 +30,7 @@ OBJS			:=	$(PG_STAT_OBJS)						\
 					$(SRC_DIR)/UDSConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\
+					$(SRC_DIR)/memory/gpdbwrappers.o	\
 					$(SRC_DIR)/yagp_hooks_collector.o
 EXTRA_CLEAN     := $(GEN_DIR)
 DATA			:= $(wildcard sql/*--*.sql)

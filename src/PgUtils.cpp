@@ -1,5 +1,6 @@
 #include "PgUtils.h"
 #include "Config.h"
+#include "memory/gpdbwrappers.h"
 
 extern "C" {
 #include "utils/guc.h"
@@ -9,17 +10,18 @@ extern "C" {
 }
 
 std::string *get_user_name() {
-  const char *username = GetConfigOption("session_authorization", false, false);
+  const char *username =
+      gpdb::get_config_option("session_authorization", false, false);
   // username is not to be freed
   return username ? new std::string(username) : nullptr;
 }
 
 std::string *get_db_name() {
-  char *dbname = get_database_name(MyDatabaseId);
+  char *dbname = gpdb::get_database_name(MyDatabaseId);
   std::string *result = nullptr;
   if (dbname) {
     result = new std::string(dbname);
-    pfree(dbname);
+    gpdb::pfree(dbname);
   }
   return result;
 }
@@ -79,70 +81,4 @@ bool filter_query(QueryDesc *query_desc) {
 bool need_collect(QueryDesc *query_desc, int nesting_level) {
   return !filter_query(query_desc) &&
          nesting_is_valid(query_desc, nesting_level);
-}
-
-ExplainState get_explain_state(QueryDesc *query_desc, bool costs) {
-  ExplainState es;
-  ExplainInitState(&es);
-  es.costs = costs;
-  es.verbose = true;
-  es.format = EXPLAIN_FORMAT_TEXT;
-  ExplainBeginOutput(&es);
-  PG_TRY();
-  { ExplainPrintPlan(&es, query_desc); }
-  PG_CATCH();
-  {
-    // PG and GP both have known and yet unknown bugs in EXPLAIN VERBOSE
-    // implementation. We don't want any queries to fail due to those bugs, so
-    // we report the bug here for future investigatin and continue collecting
-    // metrics w/o reporting any plans
-    resetStringInfo(es.str);
-    appendStringInfo(
-        es.str,
-        "Unable to restore query plan due to PostgreSQL internal error. "
-        "See logs for more information");
-    ereport(INFO,
-            (errmsg("YAGPCC failed to reconstruct explain text for query: %s",
-                    query_desc->sourceText)));
-  }
-  PG_END_TRY();
-  ExplainEndOutput(&es);
-  return es;
-}
-
-ExplainState get_analyze_state_json(QueryDesc *query_desc, bool analyze) {
-  ExplainState es;
-  ExplainInitState(&es);
-  es.analyze = analyze;
-  es.verbose = true;
-  es.buffers = es.analyze;
-  es.timing = es.analyze;
-  es.summary = es.analyze;
-  es.format = EXPLAIN_FORMAT_JSON;
-  ExplainBeginOutput(&es);
-  if (analyze) {
-    PG_TRY();
-    {
-      ExplainPrintPlan(&es, query_desc);
-      ExplainPrintExecStatsEnd(&es, query_desc);
-    }
-    PG_CATCH();
-    {
-      // PG and GP both have known and yet unknown bugs in EXPLAIN VERBOSE
-      // implementation. We don't want any queries to fail due to those bugs, so
-      // we report the bug here for future investigatin and continue collecting
-      // metrics w/o reporting any plans
-      resetStringInfo(es.str);
-      appendStringInfo(
-          es.str,
-          "Unable to restore analyze plan due to PostgreSQL internal error. "
-          "See logs for more information");
-      ereport(INFO,
-              (errmsg("YAGPCC failed to reconstruct analyze text for query: %s",
-                      query_desc->sourceText)));
-    }
-    PG_END_TRY();
-  }
-  ExplainEndOutput(&es);
-  return es;
 }
