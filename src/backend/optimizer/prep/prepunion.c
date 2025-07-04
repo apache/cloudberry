@@ -79,7 +79,8 @@ static List *plan_union_children(PlannerInfo *root,
 								 List *refnames_tlist,
 								 List **tlist_list);
 static Path *make_union_unique(SetOperationStmt *op, Path *path, List *tlist,
-							   PlannerInfo *root);
+							   PlannerInfo *root,
+							   Relids relids);
 static void postprocess_setop_rel(PlannerInfo *root, RelOptInfo *rel);
 static bool choose_hashed_setop(PlannerInfo *root, List *groupClauses,
 								Path *input_path,
@@ -573,7 +574,7 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 	if (!setOp->all && CdbPathLocus_IsPartitioned(path->locus))
 	{
 		path = make_motion_hash_all_targets(root, path, tlist);
-		path = make_union_unique(setOp, path, tlist, root);
+		path = make_union_unique(setOp, path, tlist, root, bms_union(lrel->relids, rrel->relids));
 	}
 
 	add_path(result_rel, path, root);
@@ -680,7 +681,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 			/* CDB: Hash motion to collocate non-distinct tuples. */
 			path = make_motion_hash_all_targets(root, path, tlist);
 		}
-		path = make_union_unique(op, path, tlist, root);
+		path = make_union_unique(op, path, tlist, root, relids);
 	}
 
 	add_path(result_rel, path, root);
@@ -745,9 +746,9 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 			{
 				ppath = make_motion_hash_all_targets(root, ppath, tlist);
 			}
-			ppath = make_union_unique(op, ppath, tlist, root);
+			ppath = make_union_unique(op, ppath, tlist, root, relids);
 		}
-		add_path(result_rel, ppath, root);
+		add_partial_path(result_rel, ppath);
 	}
 
 	/* Undo effects of possibly forcing tuple_fraction to 0 */
@@ -1017,9 +1018,9 @@ plan_union_children(PlannerInfo *root,
  */
 static Path *
 make_union_unique(SetOperationStmt *op, Path *path, List *tlist,
-				  PlannerInfo *root)
+				  PlannerInfo *root, Relids relids)
 {
-	RelOptInfo *result_rel = fetch_upper_rel(root, UPPERREL_SETOP, NULL);
+	RelOptInfo *result_rel = fetch_upper_rel(root, UPPERREL_SETOP, relids);
 	List	   *groupList;
 	double		dNumGroups;
 
