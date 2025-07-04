@@ -2325,6 +2325,22 @@ static void do_accept(int fd, short event, void* arg)
 		closesocket(sock);
 		goto failure;
 	}
+
+	if (opt.compress)
+	{
+		int recv_buf_size = 128 * 1024;  /* 128KB receive buffer */
+		int send_buf_size = 128 * 1024;  /* 128KB send buffer */
+
+		if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (void*)&recv_buf_size, sizeof(recv_buf_size)) == -1)
+		{
+			gwarning(NULL, "Setting SO_RCVBUF to 128KB failed, using system default");
+		}
+
+		if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (void*)&send_buf_size, sizeof(send_buf_size)) == -1)
+		{
+			gwarning(NULL, "Setting SO_SNDBUF to 128KB failed, using system default");
+		}
+	}
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void*) &on, sizeof(on)) == -1)
 	{
 		gwarning(NULL, "Setting SO_REUSEADDR on socket failed");
