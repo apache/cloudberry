@@ -3828,7 +3828,7 @@ static struct config_real ConfigureNamesReal[] =
 			GUC_EXPLAIN
 		},
 		&hash_mem_multiplier,
-		1.0, 1.0, 1000.0,
+		1.5, 1.0, 1000.0,
 		NULL, NULL, NULL
 	},
 
