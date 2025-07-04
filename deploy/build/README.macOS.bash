@@ -47,7 +47,7 @@ if [ ! -d /tmp/cbdb-devenv/gp-xerces ] ; then
   cd - || exit
 fi
 
-# Needed for pygresql, or you can source greenplum_path.sh after compiling database and installing python-dependencies then
+# Needed for pygresql, or you can source cloudberry-env.sh after compiling database and installing python-dependencies then
 brew install postgresql@14
 
 brew install python3
@@ -107,7 +107,7 @@ cat << EOF
 
 ================
 
-Please source greenplum_path.sh after compiling database, then
+Please source cloudberry-env.sh after compiling database, then
 
 pip3 install --user -r ../../python-dependencies.txt
 

@@ -1654,7 +1654,7 @@ class gpload:
                                            'greenplum_loaders_path.sh')
                     elif os.environ.get('GPHOME'):
                         srcfile = os.path.join(os.environ.get('GPHOME'),
-                                           'greenplum_path.sh')
+                                           'cloudberry-env.sh')
 
                     if (not (srcfile and os.path.exists(srcfile))):
                         self.log(self.ERROR, 'cannot find cloudberry environment ' +

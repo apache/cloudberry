@@ -24,7 +24,7 @@ try:
     from gppylib.logfilter import *
     from gppylib.commands.gp import get_coordinatordatadir
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced cloudberry-env.sh.  Detail: ' + str(e))
 
 # These values are from cdb-pg/src/backend/po/*.po
 TROUBLE_VALUES = [

@@ -24,7 +24,7 @@ try:
     from gppylib.operations.segment_tablespace_locations import get_tablespace_locations
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
-             'have sourced greenplum_path.sh.  Detail: ' + str(e))
+             'have sourced cloudberry-env.sh.  Detail: ' + str(e))
 
 EXECNAME = os.path.split(__file__)[-1]
 

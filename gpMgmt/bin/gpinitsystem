@@ -2271,7 +2271,7 @@ LOG_MSG "[INFO]:-Apache Cloudberry instance successfully created" 1
 LOG_MSG "[INFO]:-------------------------------------------------------" 1
 LOG_MSG "[INFO]:-To complete the environment configuration, please " 1
 LOG_MSG "[INFO]:-update $USER_NAME .bashrc file with the following" 1
-LOG_MSG "[INFO]:-1. Ensure that the greenplum_path.sh file is sourced" 1
+LOG_MSG "[INFO]:-1. Ensure that the cloudberry-env.sh file is sourced" 1
 LOG_MSG "[INFO]:-2. Add \"export COORDINATOR_DATA_DIRECTORY=${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1\"" 1
 LOG_MSG "[INFO]:-   to access the Cloudberry scripts for this instance:" 1
 LOG_MSG "[INFO]:-   or, use -d ${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1 option for the Cloudberry scripts" 1

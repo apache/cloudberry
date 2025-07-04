@@ -170,7 +170,7 @@ After you have installed all the dependencies and performed the prerequisite pla
     make -j8 install
     ```
 
-3. Bring in the Greenplum environment for your running shell.
+3. Bring in the Cloudberry environment for your running shell.
 
     ```bash
     cd ..
@@ -179,7 +179,7 @@ After you have installed all the dependencies and performed the prerequisite pla
     chown -R gpadmin:gpadmin cloudberry/
     su - gpadmin
     cd cloudberry/
-    source /usr/local/cloudberry/greenplum_path.sh
+    source /usr/local/cloudberry/cloudberry-env.sh
     ```
 
 4. Start the demo cluster.

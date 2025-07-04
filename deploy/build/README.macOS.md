@@ -60,9 +60,9 @@ BREWPREFIX=$(brew --prefix); export PATH="$BREWPREFIX/opt/gnu-sed/libexec/gnubin
 make -j8
 make -j8 install
 
-# 3. Bring in Greenplum environment for Apache Cloudberry into your running shell.
+# 3. Bring in Cloudberry environment for Apache Cloudberry into your running shell.
 
-source $(cd ~; pwd)/install/cbdb/greenplum_path.sh
+source $(cd ~; pwd)/install/cbdb/cloudberry-env.sh
 
 # 4. Install the Python dependencies.
 

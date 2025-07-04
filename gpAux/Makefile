@@ -221,7 +221,6 @@ define BUILD_STEPS
 	cd $(BUILDDIR) && PYGRESQL_LDFLAGS=' -Wl,-rpath,\$$$$ORIGIN/.. -Wl,--enable-new-dtags ' $(MAKE) $(PARALLEL_MAKE_OPTS) install
 	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	cd $(BUILDDIR)/src/pl/plperl && $(MAKE) clean && echo "LDFLAGS += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && echo "LDFLAGS_SL += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
-	#@$(MAKE) greenplum_path INSTLOC=$(INSTLOC)
 	#@$(MAKE) mgmtcopy INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
 	@$(MAKE) clients INSTLOC=$(INSTLOC) CLIENTSINSTLOC=$(CLIENTSINSTLOC)
@@ -233,7 +232,7 @@ endef
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
 	rm -rf $(INSTLOC)
-	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greenplum_path_file
+	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_cloudberry_env_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/fmgroids.h

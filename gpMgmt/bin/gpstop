@@ -36,7 +36,7 @@ try:
     from gppylib.operations.rebalanceSegments import ReconfigDetectionSQLQueryCommand
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced cloudberry-env.sh.  Detail: ' + str(e))
 
 DEFAULT_NUM_WORKERS = 64
 logger = get_default_logger()

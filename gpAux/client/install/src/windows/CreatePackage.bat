@@ -3,7 +3,7 @@ set VERSION=%2
 echo %VERSION% > %GPDB_INSTALL_PATH%\VERSION
 copy ..\..\..\..\..\NOTICE %GPDB_INSTALL_PATH%
 copy ..\..\..\..\..\LICENSE %GPDB_INSTALL_PATH%
-copy ..\..\..\scripts\greenplum_clients_path.bat %GPDB_INSTALL_PATH%
+copy ..\..\..\scripts\cloudberry_clients_path.bat %GPDB_INSTALL_PATH%
 mkdir %GPDB_INSTALL_PATH%\lib\python\yaml
 copy ..\..\..\..\..\gpMgmt\bin\gpload.py %GPDB_INSTALL_PATH%\bin
 mkdir %GPDB_INSTALL_PATH%\bin\gppylib
