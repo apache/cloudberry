@@ -294,7 +294,7 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/gpsync</exclude>
             <exclude>gpMgmt/bin/gpssh-exkeys</exclude>
 
-            <exclude>gpMgmt/bin/generate-greenplum-path.sh</exclude>
+            <exclude>gpMgmt/bin/generate-cloudberry-env.sh</exclude>
             <exclude>gpMgmt/bin/ifaddrs/Makefile</exclude>
             <exclude>gpMgmt/bin/ifaddrs/main.c</exclude>
             <exclude>gpMgmt/Makefile</exclude>
@@ -558,8 +558,8 @@ code or new licensing patterns.
             <exclude>gpAux/client/install/src/windows/CreatePackage.bat</exclude>
             <exclude>gpAux/client/install/src/windows/CopyDependencies.bat</exclude>
             <exclude>gpAux/client/install/src/windows/license.rtf</exclude>
-            <exclude>gpAux/client/scripts/greenplum_clients_path.sh</exclude>
-            <exclude>gpAux/client/scripts/greenplum_clients_path.bat</exclude>
+            <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
+            <exclude>gpAux/client/scripts/cloudberry_clients_path.bat</exclude>
 
             <exclude>doc/**</exclude>
 
