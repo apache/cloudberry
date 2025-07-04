@@ -23,7 +23,8 @@ CStatistics *
 CGroupByStatsProcessor::CalcGroupByStats(CMemoryPool *mp,
 										 const CStatistics *input_stats,
 										 ULongPtrArray *GCs,
-										 ULongPtrArray *aggs, CBitSet *keys)
+										 ULongPtrArray *aggs, CBitSet *keys,
+										 BOOL is_partial)
 {
 	// create hash map from colid -> histogram for resultant structure
 	UlongToHistogramMap *col_histogram_mapping =
@@ -74,7 +75,7 @@ CGroupByStatsProcessor::CalcGroupByStats(CMemoryPool *mp,
 		const CStatisticsConfig *stats_config = input_stats->GetStatsConfig();
 
 		CDoubleArray *NDVs = CStatisticsUtils::ExtractNDVForGrpCols(
-			mp, stats_config, input_stats, groupby_cols_for_stats, keys);
+			mp, stats_config, input_stats, groupby_cols_for_stats, keys, is_partial);
 		CDouble groups =
 			CStatisticsUtils::GetCumulativeNDVs(stats_config, NDVs);
 
