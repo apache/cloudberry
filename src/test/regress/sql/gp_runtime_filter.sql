@@ -227,6 +227,35 @@ DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 DROP TABLE IF EXISTS t3;
 
+-- case 7: scan partition table with dynamic scan
+CREATE TABLE t1 (c1 INT, c2 INT) DISTRIBUTED BY (c1) PARTITION BY RANGE (c2) (START (1) END (100) EVERY (50));
+CREATE TABLE t2 (c1 INT, c2 INT) DISTRIBUTED REPLICATED;
+INSERT INTO t1 SELECT generate_series(1, 99), generate_series(1, 99);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 SELECT generate_series(1, 5), generate_series(1, 5);
+INSERT INTO t2 SELECT generate_series(51, 51), generate_series(51, 51);
+ANALYZE;
+
+SET optimizer TO on;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+SET gp_enable_runtime_filter_pushdown TO on;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+
+RESET gp_enable_runtime_filter_pushdown;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+
+SET optimizer TO off;
+
 RESET enable_parallel;
 
 -- Clean up: reset guc
