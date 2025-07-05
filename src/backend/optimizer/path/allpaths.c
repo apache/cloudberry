@@ -1826,7 +1826,6 @@ add_paths_to_append_rel(PlannerInfo *root, RelOptInfo *rel,
 		Assert(parallel_workers > 0);
 #endif
 
-		/* GPDB parallel, parallel_workers <= 1 is bogus */
 		if (parallel_workers > 1)
 		{
 			/* Generate a partial append path. */
