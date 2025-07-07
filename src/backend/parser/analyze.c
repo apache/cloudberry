@@ -340,6 +340,25 @@ transformOptionalSelectInto(ParseState *pstate, Node *parseTree)
 			stmt->intoClause = NULL;
 
 			parseTree = (Node *) ctas;
+
+			if (stmt->withClause)
+			{
+				/*
+				 * Just transform to check p_hasModifyingCTE, cte list will be transformed inside SELECT stmt.
+				 */
+				transformWithClause(pstate, stmt->withClause);
+				/*
+				 * Since Cloudberry currently only support a single writer gang, only one
+				 * writable clause is permitted per CTE. Once we get flexible gangs
+				 * with more than one writer gang we can lift this restriction.
+				 */
+				if (pstate->p_hasModifyingCTE)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("writable CTE queries cannot be used with writable queries"),
+							 errdetail("Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context."),
+							 errhint("Rewrite the query to only include one writable clause.")));
+			}
 		}
 	}
 
