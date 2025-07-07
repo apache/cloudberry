@@ -1,0 +1,5 @@
+# try_convert extension
+comment = 'function for type cast'
+default_version = '1.0'
+module_pathname = '$libdir/try_convert'
+relocatable = true

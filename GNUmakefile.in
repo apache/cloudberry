@@ -74,6 +74,7 @@ install:
 	$(MAKE) -C contrib/btree_gin $@
 	$(MAKE) -C contrib/pg_trgm $@
 	$(MAKE) -C contrib/tablefunc $@
+	$(MAKE) -C contrib/try_convert all
 	$(MAKE) -C contrib/passwordcheck $@
 	$(MAKE) -C contrib/pg_buffercache $@
 ifeq ($(enable_pax), yes)
