@@ -1575,3 +1575,22 @@ create temp table with_test (i int);
 with with_test as (select 42) insert into with_test select * from with_test;
 select * from with_test;
 drop table with_test;
+
+--
+-- writable CTE with SELECT INTO clause.
+--
+CREATE TABLE t_w_cte(a integer);
+EXPLAIN(COSTS OFF, VERBOSE) WITH ins AS (
+  INSERT INTO t_w_cte(a) VALUES (1), (2), (3)
+  RETURNING a
+)
+SELECT sum(a) INTO t_w_cte_1 FROM ins;
+DROP TABLE t_w_cte;
+
+CREATE TABLE t_w_cte_relp(a integer) distributed replicated;
+EXPLAIN(COSTS OFF, VERBOSE) WITH ins AS (
+  INSERT INTO t_w_cte_relp(a) VALUES (1), (2), (3)
+  RETURNING a
+)
+SELECT sum(a) INTO t_w_cte_relp_1 FROM ins;
+DROP TABLE t_w_cte_relp;
