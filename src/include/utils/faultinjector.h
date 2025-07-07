@@ -120,7 +120,7 @@ extern bool am_faulthandler;
 	FaultInjector_InjectFaultIfSet(FaultName, DDLNotSpecified, "", "")
 #else
 #define am_faulthandler false
-#define SIMPLE_FAULT_INJECTOR(FaultName)
+#define SIMPLE_FAULT_INJECTOR(FaultName) (FaultInjectorTypeNotSpecified)
 #endif
 
 #endif	/* FAULTINJECTOR_H */
