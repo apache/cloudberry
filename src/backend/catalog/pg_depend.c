@@ -24,6 +24,8 @@
 #include "catalog/pg_extension.h"
 #include "commands/extension.h"
 #include "miscadmin.h"
+#include "storage/lmgr.h"
+#include "utils/syscache.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -31,6 +33,7 @@
 
 
 static bool isObjectPinned(const ObjectAddress *object, Relation rel);
+static void depLockAndCheckObject(const ObjectAddress *referenced);
 
 
 /*
@@ -91,6 +94,13 @@ recordMultipleDependencies(const ObjectAddress *depender,
 		 */
 		if (!isObjectPinned(referenced, dependDesc))
 		{
+			/*
+			 * Lock the referenced object to protect it from dropping by
+			 * another transaction.
+			 */
+			if (behavior == DEPENDENCY_NORMAL || behavior == DEPENDENCY_AUTO)
+				depLockAndCheckObject(referenced);
+
 			/*
 			 * Record the Dependency.  Note we don't bother to check for
 			 * duplicate dependencies; there's no harm in them.
@@ -786,4 +796,118 @@ get_index_constraint(Oid indexId)
 	heap_close(depRel, AccessShareLock);
 
 	return constraintId;
+}
+
+/*
+ * depLockAndCheckObject
+ *
+ * Lock the object that we are about to record a dependency on.
+ * After it's locked, verify that it hasn't been dropped while we
+ * weren't looking.  If the object has been dropped, this function
+ * does not return!
+ */
+static void
+depLockAndCheckObject(const ObjectAddress *referenced)
+{
+	enum SysCacheIdentifier cacheId;
+	const char *objName;
+
+	switch (getObjectClass(referenced))
+	{
+		case OCLASS_SCHEMA:
+			cacheId = NAMESPACEOID;
+			objName = "namespace";
+			break;
+		case OCLASS_TYPE:
+			cacheId = TYPEOID;
+			objName = "type";
+			break;
+		case OCLASS_COLLATION:
+			cacheId = COLLOID;
+			objName = "collation";
+			break;
+		case OCLASS_LANGUAGE:
+			cacheId = LANGOID;
+			objName = "language";
+			break;
+		case OCLASS_PROC:
+			cacheId = PROCOID;
+			objName = "procedure";
+			break;
+		case OCLASS_TSPARSER:
+			cacheId = TSPARSEROID;
+			objName = "text search parser";
+			break;
+		case OCLASS_TSTEMPLATE:
+			cacheId = TSTEMPLATEOID;
+			objName = "text search template";
+			break;
+		case OCLASS_FDW:
+			cacheId = FOREIGNDATAWRAPPEROID;
+			objName = "foreign data wrapper";
+			break;
+		case OCLASS_FOREIGN_SERVER:
+			cacheId = FOREIGNSERVEROID;
+			objName = "server";
+			break;
+		case OCLASS_EXTPROTOCOL:
+			cacheId = EXTPROTOCOLOID;
+			objName = "protocol";
+			break;
+		case OCLASS_TSDICT:
+			cacheId = TSDICTOID;
+			objName = "text search dictionary";
+			break;
+		case OCLASS_OPERATOR:
+			cacheId = OPEROID;
+			objName = "operator";
+			break;
+		case OCLASS_OPCLASS:
+			cacheId = CLAOID;
+			objName = "operator class";
+			break;
+		case OCLASS_OPFAMILY:
+			cacheId = OPFAMILYOID;
+			objName = "operator family";
+			break;
+		case OCLASS_CLASS:
+			if (get_rel_relkind(referenced->objectId) == RELKIND_SEQUENCE)
+			{
+				cacheId = RELOID;
+				objName = "sequence";
+				break;
+			}
+			return;
+		default:
+			return;
+	}
+
+	/*
+	 * Type and op family can be not defined at this point. It is normal
+	 * situation. Type can be not defined, if we define the I/O procs for a
+	 * new type. Op family can be not defined yet, if the op class is created
+	 * without specification of a family. We do not lock in this case.
+	 */
+	if ((cacheId == TYPEOID || cacheId == OPFAMILYOID) &&
+		!SearchSysCacheExists1(cacheId,
+							   ObjectIdGetDatum(referenced->objectId)))
+		return;
+
+	/*
+	 * AccessShareLock should be OK, since we are not modifying the object.
+	 */
+	if (cacheId == RELOID)
+		LockRelationOid(referenced->objectId, AccessShareLock);
+	else
+		LockDatabaseObject(referenced->classId,
+						   referenced->objectId,
+						   referenced->objectSubId,
+						   AccessShareLock);
+
+	if (!SearchSysCacheExists1(cacheId,
+							   ObjectIdGetDatum(referenced->objectId)))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("%s %u was concurrently dropped",
+						objName, referenced->objectId)));
 }
