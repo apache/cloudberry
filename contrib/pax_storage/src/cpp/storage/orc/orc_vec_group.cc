@@ -32,7 +32,7 @@ namespace pax {
 inline static std::pair<Datum, bool> GetColumnDatum(PaxColumn *column,
                                                     size_t row_index) {
   if (column->HasNull()) {
-    auto bm = column->GetBitmap();
+    const auto &bm = column->GetBitmap();
     Assert(bm);
     if (!bm->Test(row_index)) {
       return {0, true};

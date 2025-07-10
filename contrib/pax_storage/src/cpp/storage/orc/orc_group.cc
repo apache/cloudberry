@@ -49,7 +49,7 @@ inline static std::pair<Datum, bool> GetColumnDatum(PaxColumn *column,
   Datum rc;
 
   if (column->HasNull()) {
-    auto bm = column->GetBitmap();
+    const auto &bm = column->GetBitmap();
     Assert(bm);
     if (!bm->Test(row_index)) {
       *null_counts += 1;
@@ -123,7 +123,7 @@ std::pair<bool, size_t> OrcGroup::ReadTuple(TupleTableSlot *slot) {
         }
 
         if (column->HasNull()) {
-          auto bm = column->GetBitmap();
+          const auto &bm = column->GetBitmap();
           Assert(bm);
           if (!bm->Test(current_row_index_)) {
             current_nulls_[index]++;
@@ -307,7 +307,7 @@ std::pair<Datum, bool> OrcGroup::GetColumnValueNoMissing(size_t column_index,
 void OrcGroup::CalcNullShuffle(PaxColumn *column, size_t column_index) {
   auto rows = column->GetRows();
   uint32 n_counts = 0;
-  auto bm = column->GetBitmap();
+  const auto &bm = column->GetBitmap();
 
   Assert(bm);
   Assert(column->HasNull() && !nulls_shuffle_[column_index]);

@@ -233,13 +233,13 @@ class PaxColumn {
   inline bool AllNull() const { return null_bitmap_ && null_bitmap_->Empty(); }
 
   // Set the null bitmap
-  inline void SetBitmap(std::shared_ptr<Bitmap8> null_bitmap) {
+  inline void SetBitmap(std::unique_ptr<Bitmap8> null_bitmap) {
     Assert(!null_bitmap_);
     null_bitmap_ = std::move(null_bitmap);
   }
 
   // Get the null bitmap
-  inline std::shared_ptr<Bitmap8> GetBitmap() const { return null_bitmap_; }
+  inline const std::unique_ptr<Bitmap8>& GetBitmap() const { return null_bitmap_; }
 
   // Set the column kv attributes
   void SetAttributes(const std::map<std::string, std::string> &attrs);
@@ -354,7 +354,7 @@ class PaxColumn {
 
  protected:
   // null field bit map
-  std::shared_ptr<Bitmap8> null_bitmap_;
+  std::unique_ptr<Bitmap8> null_bitmap_;
 
   // Writer: write pointer
   // Reader: total rows
