@@ -27,3 +27,8 @@
 # ignore anything in ext but keep folder
 ext/*
 !ext/.gitkeep
+
+# Extracted sources and temporary install dirs
+pythonSrc/ext/PyGreSQL-*/
+pythonSrc/ext/psutil-*/
+pythonSrc/ext/PyYAML-*/
