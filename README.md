@@ -1,6 +1,6 @@
 ## YAGP Hooks Collector
 
-An extension for collecting greenplum query execution metrics and reporting then to an external agent
+An extension for collecting greenplum query execution metrics and reporting them to an external agent
 
 ### Collected Statistics
 
@@ -16,7 +16,13 @@ An extension for collecting greenplum query execution metrics and reporting then
 -   **What:** Triggers generation of the `EXPLAIN (JSON, ANALYZE, BUFFERS, TIMING, VERBOSE)` and captures it.
 -   **GUCs:** `yagpcc.enable`, `yagpcc.min_analyze_time`, `yagpcc.enable_cdbstats`(ANALYZE), `yagpcc.enable_analyze`(BUFFERS, TIMING, VERBOSE).
 
-#### 4. Other Metrics
+#### 4. Nested queries
+-   **What:** 
+    -   Disabled: Top-level queries are being reported from coordinator and segments.
+    -   Enabled: Top-level and nested queries are being reported from coordinator. Any nested queries from segments are collected as aggregates.
+-   **GUC:** `yagpcc.report_nested_queries`.
+
+#### 5. Other Metrics
 -   **What:** Captures Instrument, Greenplum, System, Network, Interconnect, Spill metrics.
 -   **GUC:** `yagpcc.enable`.
 
