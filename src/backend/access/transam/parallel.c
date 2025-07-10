@@ -91,8 +91,9 @@
 #define PARALLEL_KEY_REINDEX_STATE			UINT64CONST(0xFFFFFFFFFFFF000C)
 #define PARALLEL_KEY_RELMAPPER_STATE		UINT64CONST(0xFFFFFFFFFFFF000D)
 #define PARALLEL_KEY_UNCOMMITTEDENUMS		UINT64CONST(0xFFFFFFFFFFFF000E)
-<<<<<<< HEAD
-#define PARALLEL_KEY_GP_DSA					UINT64CONST(0xFFFFFFFFFFFF000F)
+#define PARALLEL_KEY_CLIENTCONNINFO			UINT64CONST(0xFFFFFFFFFFFF000F)
+
+#define PARALLEL_KEY_GP_DSA					UINT64CONST(0xFFFFFFFFFFFF0010)
 
 
 /* Shared parallel dsm entry table size. estimated number = 100 connections * average 50 slices. */
@@ -106,9 +107,6 @@ typedef struct CdbParallelAuxState
 	int 		ic_htab_size;
 	char		interconnect_address[NI_MAXHOST];
 } CdbParallelAuxState;
-=======
-#define PARALLEL_KEY_CLIENTCONNINFO			UINT64CONST(0xFFFFFFFFFFFF000F)
->>>>>>> REL_16_9
 
 /* Fixed-size parallel state. */
 typedef struct FixedParallelState
@@ -439,13 +437,8 @@ InitializeParallelDSM(ParallelContext *pcxt)
 		shm_toc_insert(pcxt->toc, PARALLEL_KEY_COMBO_CID, combocidspace);
 
 		/*
-<<<<<<< HEAD
-		 * Serialize the transaction snapshot if the transaction
-		 * isolation-level uses a transaction snapshot.
-=======
 		 * Serialize the transaction snapshot if the transaction isolation
 		 * level uses a transaction snapshot.
->>>>>>> REL_16_9
 		 */
 		if (IsolationUsesXactSnapshot())
 		{

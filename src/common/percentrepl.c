@@ -22,6 +22,7 @@
 
 #include "common/percentrepl.h"
 #include "lib/stringinfo.h"
+#include "utils/builtins.h"
 
 /*
  * replace_percent_placeholders
@@ -85,6 +86,13 @@ replace_percent_placeholders(const char *instr, const char *param_name, const ch
 						errmsg("invalid value for parameter \"%s\": \"%s\"", param_name, instr),
 						errdetail("String ends unexpectedly after escape character \"%%\"."));
 #endif
+			}
+			else if (sp[1] == 'c')
+			{
+				/* GPDB: %c: contentId of segment */
+				Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
+				sp++;
+				pg_ltoa(GpIdentity.segindex, contentid);
 			}
 			else
 			{

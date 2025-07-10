@@ -34,7 +34,6 @@
 #include "utils/builtins.h"
 #include "utils/relmapper.h"
 
-<<<<<<< HEAD
 #include "access/bitmap_xlog.h"
 #include "access/distributedlog.h"
 #include "cdb/cdbappendonlyxlog.h"
@@ -44,14 +43,7 @@
 #define PG_RMGR(symname,name,redo,desc,identify,startup,cleanup,mask,decode) \
 	{ name, redo, desc, identify, startup, cleanup, mask, decode },
 
-RmgrData RmgrTable[RM_MAX_ID + 1] = {
-=======
-/* must be kept in sync with RmgrData definition in xlog_internal.h */
-#define PG_RMGR(symname,name,redo,desc,identify,startup,cleanup,mask,decode) \
-	{ name, redo, desc, identify, startup, cleanup, mask, decode },
-
 RmgrData	RmgrTable[RM_MAX_ID + 1] = {
->>>>>>> REL_16_9
 #include "access/rmgrlist.h"
 };
 
@@ -102,21 +94,13 @@ RmgrNotFound(RmgrId rmid)
  * Register a new custom WAL resource manager.
  *
  * Resource manager IDs must be globally unique across all extensions. Refer
-<<<<<<< HEAD
- * to https://wiki.postgresql.org/wiki/CustomWALResourceManager to reserve a
-=======
  * to https://wiki.postgresql.org/wiki/CustomWALResourceManagers to reserve a
->>>>>>> REL_16_9
  * unique RmgrId for your extension, to avoid conflicts with other extension
  * developers. During development, use RM_EXPERIMENTAL_ID to avoid needlessly
  * reserving a new ID.
  */
 void
-<<<<<<< HEAD
-RegisterCustomRmgr(RmgrId rmid, RmgrData *rmgr)
-=======
 RegisterCustomRmgr(RmgrId rmid, const RmgrData *rmgr)
->>>>>>> REL_16_9
 {
 	if (rmgr->rm_name == NULL || strlen(rmgr->rm_name) == 0)
 		ereport(ERROR, (errmsg("custom resource manager name is invalid"),
@@ -146,13 +130,8 @@ RegisterCustomRmgr(RmgrId rmid, const RmgrData *rmgr)
 
 		if (!pg_strcasecmp(RmgrTable[existing_rmid].rm_name, rmgr->rm_name))
 			ereport(ERROR,
-<<<<<<< HEAD
-				(errmsg("failed to register custom resource manager \"%s\" with ID %d", rmgr->rm_name, rmid),
-				 errdetail("Existing resource manager with ID %d has the same name.", existing_rmid)));
-=======
 					(errmsg("failed to register custom resource manager \"%s\" with ID %d", rmgr->rm_name, rmid),
 					 errdetail("Existing resource manager with ID %d has the same name.", existing_rmid)));
->>>>>>> REL_16_9
 	}
 
 	/* register it */

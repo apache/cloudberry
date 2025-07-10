@@ -562,10 +562,7 @@ XLogDecodeNextRecord(XLogReaderState *state, bool nonblocking)
 	state->errormsg_buf[0] = '\0';
 	decoded = NULL;
 
-<<<<<<< HEAD
 	ResetDecoder(state);
-=======
->>>>>>> REL_16_9
 	state->abortedRecPtr = InvalidXLogRecPtr;
 	state->missingContrecPtr = InvalidXLogRecPtr;
 
@@ -596,10 +593,7 @@ XLogDecodeNextRecord(XLogReaderState *state, bool nonblocking)
 	}
 
 restart:
-<<<<<<< HEAD
-=======
 	state->nonblocking = nonblocking;
->>>>>>> REL_16_9
 	state->currRecPtr = RecPtr;
 	assembled = false;
 
@@ -764,10 +758,7 @@ restart:
 			if (pageHeader->xlp_info & XLP_FIRST_IS_OVERWRITE_CONTRECORD)
 			{
 				state->overwrittenRecPtr = RecPtr;
-<<<<<<< HEAD
 				ResetDecoder(state);
-=======
->>>>>>> REL_16_9
 				RecPtr = targetPagePtr;
 				goto restart;
 			}
@@ -948,9 +939,6 @@ err:
 		 */
 		state->abortedRecPtr = RecPtr;
 		state->missingContrecPtr = targetPagePtr;
-<<<<<<< HEAD
-	}
-=======
 
 		/*
 		 * If we got here without reporting an error, make sure an error is
@@ -962,7 +950,6 @@ err:
 
 	if (decoded && decoded->oversized)
 		pfree(decoded);
->>>>>>> REL_16_9
 
 	/*
 	 * Invalidate the read state. We might read from a different source after
@@ -1383,7 +1370,6 @@ XLogReaderValidatePageHeader(XLogReaderState *state, XLogRecPtr recptr,
 	return true;
 }
 
-<<<<<<< HEAD
 /*
  * In GPDB, this is used in the test in src/test/walrep, so we need it in the
  * backend, too.
@@ -1391,8 +1377,6 @@ XLogReaderValidatePageHeader(XLogReaderState *state, XLogRecPtr recptr,
 /* #ifdef FRONTEND */
 #if 1
 
-=======
->>>>>>> REL_16_9
 /*
  * Forget about an error produced by XLogReaderValidatePageHeader().
  */
@@ -2121,13 +2105,17 @@ RestoreBlockImage(XLogReaderState *record, uint8 block_id, char *page)
 	{
 		char errormessage[MAX_ERRORMSG_LEN];
 		/* If a backup block image is compressed, decompress it */
-<<<<<<< HEAD
 		if (!zstd_decompress_backupblock(ptr, bkpb->bimg_len, tmp.data,
 										 BLCKSZ - bkpb->hole_length,
 										 errormessage))
 		{
 			report_invalid_record(record, "invalid compressed image at %X/%X, block %d (%s)",
-=======
+								  LSN_FORMAT_ARGS(record->ReadRecPtr),
+								  block_id,
+								  errormessage);
+			return false;
+		}
+
 		bool		decomp_success = true;
 
 		if ((bkpb->bimg_info & BKPIMAGE_COMPRESS_PGLZ) != 0)
@@ -2170,7 +2158,6 @@ RestoreBlockImage(XLogReaderState *record, uint8 block_id, char *page)
 		else
 		{
 			report_invalid_record(record, "could not restore image at %X/%X compressed with unknown method, block %d",
->>>>>>> REL_16_9
 								  LSN_FORMAT_ARGS(record->ReadRecPtr),
 								  block_id,
 								  errormessage);

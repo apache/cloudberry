@@ -8,13 +8,9 @@
  * None of this code is used during normal system operation.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/access/transam/xlogutils.c
@@ -509,13 +505,6 @@ XLogReadBufferExtended(RelFileLocator rlocator, ForkNumber forknum,
 
 	Assert(blkno != P_NEW);
 
-<<<<<<< HEAD
-	/*
-	 * Open the relation at smgr level.  Relations using shared buffers need
-	 * the default SMGR implementation.
-	 */
-	smgr = smgropen(rnode, InvalidBackendId, SMGR_MD, NULL);
-=======
 	/* Do we have a clue where the buffer might be already? */
 	if (BufferIsValid(recent_buffer) &&
 		mode == RBM_NORMAL &&
@@ -526,8 +515,7 @@ XLogReadBufferExtended(RelFileLocator rlocator, ForkNumber forknum,
 	}
 
 	/* Open the relation at smgr level */
-	smgr = smgropen(rlocator, InvalidBackendId);
->>>>>>> REL_16_9
+	smgr = smgropen(rlocator, InvalidBackendId, SMGR_MD, NULL);
 
 	/*
 	 * Create the target file if it doesn't already exist.  This lets us cope
@@ -664,13 +652,8 @@ CreateFakeRelcacheEntry(RelFileLocator rlocator)
 	 * In recovery, we are running by ourselves and can't have any lock
 	 * conflicts.  While syncing, we already hold AccessExclusiveLock.
 	 */
-<<<<<<< HEAD
-	rel->rd_lockInfo.lockRelId.dbId = rnode.dbNode;
-	rel->rd_lockInfo.lockRelId.relId = (Oid)rnode.relNode;
-=======
 	rel->rd_lockInfo.lockRelId.dbId = rlocator.dbOid;
 	rel->rd_lockInfo.lockRelId.relId = rlocator.relNumber;
->>>>>>> REL_16_9
 
 	rel->rd_smgr = NULL;
 

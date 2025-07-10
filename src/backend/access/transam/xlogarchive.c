@@ -325,54 +325,8 @@ ExecuteRecoveryCommand(const char *command, const char *commandName,
 	/*
 	 * construct the command to be executed
 	 */
-<<<<<<< HEAD
-	dp = xlogRecoveryCmd;
-	endp = xlogRecoveryCmd + MAXPGPATH - 1;
-	*endp = '\0';
-
-	for (sp = command; *sp; sp++)
-	{
-		if (*sp == '%')
-		{
-			switch (sp[1])
-			{
-				case 'r':
-					/* %r: filename of last restartpoint */
-					sp++;
-					strlcpy(dp, lastRestartPointFname, endp - dp);
-					dp += strlen(dp);
-					break;
-				case 'c':
-					/* GPDB: %c: contentId of segment */
-					Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
-					sp++;
-					pg_ltoa(GpIdentity.segindex, contentid);
-					strlcpy(dp, contentid, endp - dp);
-					dp += strlen(dp);
-					break;
-				case '%':
-					/* convert %% to a single % */
-					sp++;
-					if (dp < endp)
-						*dp++ = *sp;
-					break;
-				default:
-					/* otherwise treat the % as not special */
-					if (dp < endp)
-						*dp++ = *sp;
-					break;
-			}
-		}
-		else
-		{
-			if (dp < endp)
-				*dp++ = *sp;
-		}
-	}
-	*dp = '\0';
-=======
-	xlogRecoveryCmd = replace_percent_placeholders(command, commandName, "r", lastRestartPointFname);
->>>>>>> REL_16_9
+	pg_ltoa(GpIdentity.segindex, contentid);
+	xlogRecoveryCmd = replace_percent_placeholders(command, commandName, "r", lastRestartPointFname, "c", contentid);
 
 	ereport(DEBUG3,
 			(errmsg_internal("executing %s \"%s\"", commandName, command)));
@@ -522,17 +476,6 @@ XLogArchiveNotify(const char *xlog)
 	}
 
 	/*
-<<<<<<< HEAD
-	 * Timeline history files are given the highest archival priority to
-	 * lower the chance that a promoted standby will choose a timeline that
-	 * is already in use.  However, the archiver ordinarily tries to gather
-	 * multiple files to archive from each scan of the archive_status
-	 * directory, which means that newly created timeline history files
-	 * could be left unarchived for a while.  To ensure that the archiver
-	 * picks up timeline history files as soon as possible, we force the
-	 * archiver to scan the archive_status directory the next time it looks
-	 * for a file to archive.
-=======
 	 * Timeline history files are given the highest archival priority to lower
 	 * the chance that a promoted standby will choose a timeline that is
 	 * already in use.  However, the archiver ordinarily tries to gather
@@ -542,7 +485,6 @@ XLogArchiveNotify(const char *xlog)
 	 * timeline history files as soon as possible, we force the archiver to
 	 * scan the archive_status directory the next time it looks for a file to
 	 * archive.
->>>>>>> REL_16_9
 	 */
 	if (IsTLHistoryFileName(xlog))
 		PgArchForceDirScan();

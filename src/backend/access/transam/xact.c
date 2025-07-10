@@ -30,11 +30,8 @@
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
-<<<<<<< HEAD
 #include "access/xact_storage_tablespace.h"
-=======
 #include "access/xlogrecovery.h"
->>>>>>> REL_16_9
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
@@ -255,12 +252,9 @@ typedef struct TransactionStateData
 	bool		didLogXid;		/* has xid been included in WAL record? */
 	int			parallelModeLevel;	/* Enter/ExitParallelMode counter */
 	bool		chain;			/* start a new block after this one */
-<<<<<<< HEAD
+	bool		topXidLogged;	/* for a subxact: is top-level XID logged? */
 	bool		assigned;		/* assigned to top-level XID */
 	bool		executorSaysXactDoesWrites;	/* GP executor says xact does writes */
-=======
-	bool		topXidLogged;	/* for a subxact: is top-level XID logged? */
->>>>>>> REL_16_9
 	struct TransactionStateData *parent;	/* back link to parent */
 	struct TransactionStateData *fastLink;	/* back link to jump to parent for efficient search */
 } TransactionStateData;
@@ -651,12 +645,12 @@ MarkCurrentTransactionIdLoggedIfAny(void)
 		CurrentTransactionState->didLogXid = true;
 }
 
-<<<<<<< HEAD
 void
 MarkTopTransactionWriteXLogOnExecutor(void)
 {
 	TopXactexecutorDidWriteXLog = true;
-=======
+}
+
 /*
  * IsSubxactTopXidLogPending
  *
@@ -706,7 +700,6 @@ MarkSubxactTopXidLogged(void)
 	Assert(IsSubxactTopXidLogPending());
 
 	CurrentTransactionState->topXidLogged = true;
->>>>>>> REL_16_9
 }
 
 /*
@@ -1572,13 +1565,9 @@ RecordTransactionCommit(void)
 	bool		markXidCommitted;
 	TransactionId latestXid = InvalidTransactionId;
 	int			nrels;
-<<<<<<< HEAD
 	RelFileNodePendingDelete *rels;
 	DbDirNode	*deldbs;
 	int			ndeldbs;
-=======
-	RelFileLocator *rels;
->>>>>>> REL_16_9
 	int			nchildren;
 	TransactionId *children;
 	int			ndroppedstats = 0;
@@ -1687,7 +1676,6 @@ RecordTransactionCommit(void)
 					  replorigin_session_origin != DoNotReplicateId);
 
 		/*
-<<<<<<< HEAD
 		 * Begin commit critical section and insert the commit XLOG record.
 		 */
 		/* Tell bufmgr and smgr to prepare for commit */
@@ -1698,8 +1686,6 @@ RecordTransactionCommit(void)
 			SIMPLE_FAULT_INJECTOR("before_xlog_xact_distributed_commit");
 
 		/*
-=======
->>>>>>> REL_16_9
 		 * Mark ourselves as within our "commit critical section".  This
 		 * forces any concurrent checkpoint to wait until we've updated
 		 * pg_xact.  Without this, it is possible for the checkpoint to set
@@ -1711,50 +1697,19 @@ RecordTransactionCommit(void)
 		 * RecordTransactionAbort.  That's because loss of a transaction abort
 		 * is noncritical; the presumption would be that it aborted, anyway.
 		 *
-<<<<<<< HEAD
-		 * It's safe to change the delayChkpt flag of our own backend without
-		 * holding the ProcArrayLock, since we're the only one modifying it.
-		 * This makes checkpoint's determination of which xacts are delayChkpt
-		 * a bit fuzzy, but it doesn't matter.
-		 *
-		 * In GPDB, if this is a distributed transaction, checkpoint process
-		 * should hold off obtaining the REDO pointer while a backend is
-		 * writing distributed commit xlog record and changing state of the
-		 * distributed transaction.  Otherwise, it is possible that a commit
-		 * record is written by a transaction and the checkpointer determines
-		 * REDO pointer to be after this commit record.  But the transaction is
-		 * yet to change its state to INSERTED_DISRIBUTED_COMMITTED and the
-		 * checkpoint process fails to record this transaction in the
-		 * checkpoint.  Crash recovery will never see the commit record for
-		 * this transaction and the second phase of 2PC will never happen.  The
-		 * delayChkpt flag avoids this situation by blocking checkpointer until a
-		 * backend has finished updating the state.
-		 */
-		Assert(!MyProc->delayChkpt);
-=======
 		 * It's safe to change the delayChkptFlags flag of our own backend
 		 * without holding the ProcArrayLock, since we're the only one
 		 * modifying it.  This makes checkpoint's determination of which xacts
 		 * are delaying the checkpoint a bit fuzzy, but it doesn't matter.
 		 */
 		Assert((MyProc->delayChkptFlags & DELAY_CHKPT_START) == 0);
->>>>>>> REL_16_9
 		START_CRIT_SECTION();
 		MyProc->delayChkptFlags |= DELAY_CHKPT_START;
 
-<<<<<<< HEAD
-		SetCurrentTransactionStopTimestamp();
-
 		SIMPLE_FAULT_INJECTOR("onephase_transaction_commit");
 
-		XactLogCommitRecord(xactStopTimestamp,
-							GetPendingTablespaceForDeletionForCommit(),
-=======
-		/*
-		 * Insert the commit XLOG record.
-		 */
 		XactLogCommitRecord(GetCurrentTransactionStopTimestamp(),
->>>>>>> REL_16_9
+							GetPendingTablespaceForDeletionForCommit(),
 							nchildren, children, nrels, rels,
 							ndroppedstats, droppedstats,
 							nmsgs, invalMessages,
@@ -1914,15 +1869,11 @@ RecordTransactionCommit(void)
 	/* Reset XactLastRecEnd until the next transaction writes something */
 	XactLastRecEnd = 0;
 cleanup:
-<<<<<<< HEAD
-	/* And clean up local data */
-=======
 	/* Clean up local data */
 	if (rels)
 		pfree(rels);
 	if (ndroppedstats)
 		pfree(droppedstats);
->>>>>>> REL_16_9
 
 	return latestXid;
 }
@@ -2124,11 +2075,13 @@ RecordTransactionAbort(bool isSubXact)
 	TransactionId xid;
 	TransactionId latestXid;
 	int			nrels;
-<<<<<<< HEAD
 	RelFileNodePendingDelete *rels;
+	int			ndroppedstats = 0;
+	xl_xact_stats_item *droppedstats = NULL;
 	int			nchildren;
 	TransactionId *children;
 	TimestampTz xact_time;
+	bool		replorigin;
 	DbDirNode	*deldbs;
 	int			ndeldbs;
 	bool		isQEReader;
@@ -2152,15 +2105,6 @@ RecordTransactionAbort(bool isSubXact)
 		xid = InvalidTransactionId;
 	else
 		xid = GetCurrentTransactionIdIfAny();
-=======
-	RelFileLocator *rels;
-	int			ndroppedstats = 0;
-	xl_xact_stats_item *droppedstats = NULL;
-	int			nchildren;
-	TransactionId *children;
-	TimestampTz xact_time;
-	bool		replorigin;
->>>>>>> REL_16_9
 
 	/*
 	 * If we haven't been assigned an XID, nobody will care whether we aborted
@@ -2220,11 +2164,8 @@ RecordTransactionAbort(bool isSubXact)
 					   GetPendingTablespaceForDeletionForAbort(),
 					   nchildren, children,
 					   nrels, rels,
-<<<<<<< HEAD
 					   ndeldbs, deldbs,
-=======
 					   ndroppedstats, droppedstats,
->>>>>>> REL_16_9
 					   MyXactFlags, InvalidTransactionId,
 					   NULL);
 
@@ -2273,16 +2214,14 @@ RecordTransactionAbort(bool isSubXact)
 	if (!isSubXact)
 		XactLastRecEnd = 0;
 
-<<<<<<< HEAD
 	if (max_wal_senders > 0)
 		WalSndWakeup();
-=======
+
 	/* And clean up local data */
 	if (rels)
 		pfree(rels);
 	if (ndroppedstats)
 		pfree(droppedstats);
->>>>>>> REL_16_9
 
 	return latestXid;
 }
@@ -3168,7 +3107,6 @@ CommitTransaction(void)
 	DoPendingDbDeletes(true);
 
 	/*
-<<<<<<< HEAD
 	 * Only QD holds the session level lock this long for a movedb operation.
 	 * This is to prevent another transaction from moving database objects into
 	 * the source database oid directory while it is being deleted. We don't
@@ -3179,8 +3117,6 @@ CommitTransaction(void)
 		MoveDbSessionLockRelease();
 
 	/*
-=======
->>>>>>> REL_16_9
 	 * Send out notification signals to other backends (and do other
 	 * post-commit NOTIFY cleanup).  This must not happen until after our
 	 * transaction is fully done from the viewpoint of other backends.
@@ -3203,11 +3139,8 @@ CommitTransaction(void)
 	AtEOXact_PgStat(true, is_parallel_worker);
 	AtEOXact_Snapshot(true, false);
 	AtEOXact_ApplyLauncher(true);
-<<<<<<< HEAD
 	AtEOXact_WorkFile();
-=======
 	AtEOXact_LogicalRepWorkers(true);
->>>>>>> REL_16_9
 	pgstat_report_xact_timestamp(0);
 
 	CurrentResourceOwner = NULL;
@@ -3542,13 +3475,10 @@ PrepareTransaction(void)
 	AtEOXact_HashTables(true);
 	/* don't call AtEOXact_PgStat here; we fixed pgstat state above */
 	AtEOXact_Snapshot(true, true);
-<<<<<<< HEAD
 	AtEOXact_WorkFile();
-=======
 	/* we treat PREPARE as ROLLBACK so far as waking workers goes */
 	AtEOXact_ApplyLauncher(false);
 	AtEOXact_LogicalRepWorkers(false);
->>>>>>> REL_16_9
 	pgstat_report_xact_timestamp(0);
 
 	CurrentResourceOwner = NULL;
@@ -3825,11 +3755,8 @@ AbortTransaction(void)
 		AtEOXact_HashTables(false);
 		AtEOXact_PgStat(false, is_parallel_worker);
 		AtEOXact_ApplyLauncher(false);
-<<<<<<< HEAD
 		AtEOXact_WorkFile();
-=======
 		AtEOXact_LogicalRepWorkers(false);
->>>>>>> REL_16_9
 		pgstat_report_xact_timestamp(0);
 	}
 
@@ -4088,17 +4015,12 @@ CommitTransactionCommand(void)
 	TransactionState s = CurrentTransactionState;
 	SavedTransactionCharacteristics savetc;
 
-<<<<<<< HEAD
 	if (Gp_role == GP_ROLE_EXECUTE && !Gp_is_writer)
 		elog(DEBUG1,"CommitTransactionCommand: called as segment Reader in state %s",
 		     BlockStateAsString(s->blockState));
 
-	if (s->chain)
-		SaveTransactionCharacteristics();
-=======
 	/* Must save in case we need to restore below */
 	SaveTransactionCharacteristics(&savetc);
->>>>>>> REL_16_9
 
 	switch (s->blockState)
 	{
@@ -4794,11 +4716,7 @@ CallXactCallbacks(XactEvent event)
 		/* allow callbacks to unregister themselves when called */
 		next = item->next;
 		item->callback(event, item->arg);
-<<<<<<< HEAD
-
-=======
 	}
->>>>>>> REL_16_9
 }
 
 /* Register or deregister callback functions for start/end Xact.  Call only once. */
@@ -5952,7 +5870,6 @@ RollbackAndReleaseCurrentSubTransaction(void)
 	CleanupSubTransaction();
 
 	s = CurrentTransactionState;	/* changed by pop */
-<<<<<<< HEAD
 	AssertState(s->blockState == TBLOCK_SUBINPROGRESS ||
 				s->blockState == TBLOCK_INPROGRESS ||
 				s->blockState == TBLOCK_IMPLICIT_INPROGRESS ||
@@ -5967,12 +5884,6 @@ RollbackAndReleaseCurrentSubTransaction(void)
 							errmsg("DTX RollbackAndReleaseCurrentSubTransaction dispatch failed")));
 		}
 	}
-=======
-	Assert(s->blockState == TBLOCK_SUBINPROGRESS ||
-		   s->blockState == TBLOCK_INPROGRESS ||
-		   s->blockState == TBLOCK_IMPLICIT_INPROGRESS ||
-		   s->blockState == TBLOCK_STARTED);
->>>>>>> REL_16_9
 }
 
 /*
@@ -7055,12 +6966,8 @@ XLogRecPtr
 XactLogCommitRecord(TimestampTz commit_time,
 					Oid tablespace_oid_to_delete_on_commit,
 					int nsubxacts, TransactionId *subxacts,
-<<<<<<< HEAD
 					int nrels, RelFileNodePendingDelete *rels,
-=======
-					int nrels, RelFileLocator *rels,
 					int ndroppedstats, xl_xact_stats_item *droppedstats,
->>>>>>> REL_16_9
 					int nmsgs, SharedInvalidationMessage *msgs,
 					int ndeldbs, DbDirNode *deldbs,
 					bool relcacheInval,
@@ -7210,10 +7117,7 @@ XactLogCommitRecord(TimestampTz commit_time,
 		XLogRegisterData((char *) (&xl_relfilelocators),
 						 MinSizeOfXactRelfileLocators);
 		XLogRegisterData((char *) rels,
-<<<<<<< HEAD
 						 nrels * sizeof(RelFileNodePendingDelete));
-=======
-						 nrels * sizeof(RelFileLocator));
 	}
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_DROPPED_STATS)
@@ -7222,7 +7126,6 @@ XactLogCommitRecord(TimestampTz commit_time,
 						 MinSizeOfXactStatsItems);
 		XLogRegisterData((char *) droppedstats,
 						 ndroppedstats * sizeof(xl_xact_stats_item));
->>>>>>> REL_16_9
 	}
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_INVALS)
@@ -7276,26 +7179,18 @@ XLogRecPtr
 XactLogAbortRecord(TimestampTz abort_time,
 				   Oid tablespace_oid_to_delete_on_abort,
 				   int nsubxacts, TransactionId *subxacts,
-<<<<<<< HEAD
 				   int nrels, RelFileNodePendingDelete *rels,
 				   int ndeldbs, DbDirNode *deldbs,
-=======
-				   int nrels, RelFileLocator *rels,
 				   int ndroppedstats, xl_xact_stats_item *droppedstats,
->>>>>>> REL_16_9
 				   int xactflags, TransactionId twophase_xid,
 				   const char *twophase_gid)
 {
 	xl_xact_abort xlrec;
 	xl_xact_xinfo xl_xinfo;
 	xl_xact_subxacts xl_subxacts;
-<<<<<<< HEAD
 	xl_xact_relfilenodes xl_relfilenodes;
 	xl_xact_deldbs xl_deldbs;
-=======
-	xl_xact_relfilelocators xl_relfilelocators;
 	xl_xact_stats_items xl_dropped_stats;
->>>>>>> REL_16_9
 	xl_xact_twophase xl_twophase;
 	xl_xact_dbinfo xl_dbinfo;
 	xl_xact_origin xl_origin;
@@ -7330,21 +7225,20 @@ XactLogAbortRecord(TimestampTz abort_time,
 	if (nrels > 0)
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_RELFILELOCATORS;
-		xl_relfilelocators.nrels = nrels;
+		xl_relfilenodes.nrels = nrels;
 		info |= XLR_SPECIAL_REL_UPDATE;
 	}
 
-<<<<<<< HEAD
 	if (ndeldbs > 0)
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_DELDBS;
 		xl_deldbs.ndeldbs = ndeldbs;
-=======
+	}
+
 	if (ndroppedstats > 0)
 	{
 		xl_xinfo.xinfo |= XACT_XINFO_HAS_DROPPED_STATS;
 		xl_dropped_stats.nitems = ndroppedstats;
->>>>>>> REL_16_9
 	}
 
 	if (TransactionIdIsValid(twophase_xid))
@@ -7403,10 +7297,7 @@ XactLogAbortRecord(TimestampTz abort_time,
 		XLogRegisterData((char *) (&xl_relfilelocators),
 						 MinSizeOfXactRelfileLocators);
 		XLogRegisterData((char *) rels,
-<<<<<<< HEAD
 						 nrels * sizeof(RelFileNodePendingDelete));
-=======
-						 nrels * sizeof(RelFileLocator));
 	}
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_DROPPED_STATS)
@@ -7415,7 +7306,6 @@ XactLogAbortRecord(TimestampTz abort_time,
 						 MinSizeOfXactStatsItems);
 		XLogRegisterData((char *) droppedstats,
 						 ndroppedstats * sizeof(xl_xact_stats_item));
->>>>>>> REL_16_9
 	}
 
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_DELDBS)
@@ -7701,7 +7591,6 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 		 */
 		XLogFlush(lsn);
 
-<<<<<<< HEAD
 		DropRelationFiles(parsed->xnodes, parsed->nrels, true);
 	}
 
@@ -7711,9 +7600,6 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 	 */
 	DropDatabaseDirectories(parsed->deldbs, parsed->ndeldbs, true);
 	DoTablespaceDeletionForRedoXlog(parsed->tablespace_oid_to_delete_on_abort);
-=======
-		DropRelationFiles(parsed->xlocators, parsed->nrels, true);
-	}
 
 	if (parsed->nstats > 0)
 	{
@@ -7722,7 +7608,6 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 
 		pgstat_execute_transactional_drops(parsed->nstats, parsed->stats, true);
 	}
->>>>>>> REL_16_9
 }
 
 static void
