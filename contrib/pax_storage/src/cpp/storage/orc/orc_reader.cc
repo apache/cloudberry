@@ -129,7 +129,7 @@ std::unique_ptr<MicroPartitionReader::Group> OrcReader::ReadGroup(
   for (size_t i = 0; i < pax_columns->GetColumns(); i++) {
     auto column = (*pax_columns)[i].get();
     if (column && !column->GetBuffer().first) {
-      auto bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
       // Assert(bm);
       if (bm) {
         for (size_t n = 0; n < column->GetRows(); n++) {

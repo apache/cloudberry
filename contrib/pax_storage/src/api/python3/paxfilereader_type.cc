@@ -345,7 +345,6 @@ static PyObject *paxfilereader_readgroup(PaxFileReaderObject *self,
   try {
     for (; column_index < col_nums; column_index++) {
       const auto &column = (*columns)[column_index];
-      std::shared_ptr<pax::Bitmap8> bm;
       auto null_counts = 0;
       PyObject *schema_item = nullptr;
       long col_oid;
@@ -373,7 +372,7 @@ static PyObject *paxfilereader_readgroup(PaxFileReaderObject *self,
         continue;
       }
 
-      bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
 
       py_rows = PyList_New(0);
       if (!py_rows) {
@@ -403,7 +402,7 @@ static PyObject *paxfilereader_readgroup(PaxFileReaderObject *self,
           if (column->IsToast(row_index)) {
             // safe to no keep the ref, because paxbuffer_to_pyobj will copy the
             // detoast datum
-            std::shared_ptr<pax::MemoryObject> ref = nullptr;
+            std::unique_ptr<pax::MemoryObject> ref = nullptr;
 
             auto datum = PointerGetDatum(buff);
             auto external_buffer = column->GetExternalToastDataBuffer();
