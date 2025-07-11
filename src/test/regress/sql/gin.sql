@@ -184,3 +184,13 @@ values
   ('{}',    null),
   ('{1}',   '{2,3}');
 drop table t_gin_test_tbl;
+
+--
+-- Github issue: https://github.com/apache/cloudberry/issues/1222
+--
+begin;
+create table t_issue_1222(i int4[]) with (appendonly=true);
+create index t_issue_1222_idx on t_issue_1222 using gin (i)
+  with (fastupdate = on, gin_pending_list_limit = 4096);
+insert into t_issue_1222 select array[1, 2, g] from generate_series(1, 400000) g;
+abort;
