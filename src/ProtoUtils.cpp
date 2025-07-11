@@ -59,7 +59,7 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
                           : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
     MemoryContext oldcxt =
         gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
-    auto es = gpdb::get_explain_state(query_desc, true);
+    ExplainState es = gpdb::get_explain_state(query_desc, true);
     if (es.str) {
       *qi->mutable_plan_text() = char_to_trimmed_str(es.str->data, es.str->len,
                                                      Config::max_plan_size());
@@ -69,8 +69,8 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
       qi->set_plan_id(
           hash_any((unsigned char *)norm_plan->data, norm_plan->len));
       qi->set_query_id(query_desc->plannedstmt->queryId);
-      pfree(es.str->data);
-      pfree(norm_plan->data);
+      gpdb::pfree(es.str->data);
+      gpdb::pfree(norm_plan->data);
     }
     gpdb::mem_ctx_switch_to(oldcxt);
   }

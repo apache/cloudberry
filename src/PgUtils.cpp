@@ -3,8 +3,6 @@
 #include "memory/gpdbwrappers.h"
 
 extern "C" {
-#include "utils/guc.h"
-#include "commands/dbcommands.h"
 #include "commands/resgroupcmds.h"
 #include "cdb/cdbvars.h"
 }
@@ -27,10 +25,10 @@ std::string *get_db_name() {
 }
 
 std::string *get_rg_name() {
-  auto groupId = ResGroupGetGroupIdBySessionId(MySessionState->sessionId);
+  auto groupId = gpdb::get_rg_id_by_session_id(MySessionState->sessionId);
   if (!OidIsValid(groupId))
     return nullptr;
-  char *rgname = GetResGroupNameForId(groupId);
+  char *rgname = gpdb::get_rg_name_for_id(groupId);
   if (rgname == nullptr)
     return nullptr;
   return new std::string(rgname);
