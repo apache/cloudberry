@@ -10,6 +10,7 @@ top_builddir = ../../../../..
 include $(top_builddir)/src/Makefile.global
 
 override CPPFLAGS := -I$(srcdir) $(CPPFLAGS)
+override CPPFLAGS := -I$(srcdir) $(CPPFLAGS) -lssh2 -I/usr/local
 
 OBJS = fstream.o gfile.o
 
