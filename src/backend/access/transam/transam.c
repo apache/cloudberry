@@ -228,7 +228,6 @@ TransactionIdDidAbort(TransactionId transactionId)
 }
 
 /*
-<<<<<<< HEAD
  * A QE reader uses this interface to determine commit status of a
  * subtransaction ID that is known to be our own subtransaction.  This is used
  * only in the case that subtransaction ID cache maintained in writer's PGPROC
@@ -278,8 +277,6 @@ TransactionIdIsKnownCompleted(TransactionId transactionId)
 }
 
 /*
-=======
->>>>>>> REL_16_9
  * TransactionIdCommitTree
  *		Marks the given transaction and children as committed
  *

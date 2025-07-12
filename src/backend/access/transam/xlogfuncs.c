@@ -101,42 +101,11 @@ pg_backup_start(PG_FUNCTION_ARGS)
 	tablespace_map = makeStringInfo();
 	MemoryContextSwitchTo(oldcontext);
 
-<<<<<<< HEAD
-/*
- * pg_stop_backup: finish taking an on-line backup dump
- *
- * We write an end-of-backup WAL record, and remove the backup label file
- * created by pg_start_backup, creating a backup history file in pg_wal
- * instead (whence it will immediately be archived). The backup history file
- * contains the same info found in the label file, plus the backup-end time
- * and WAL location. Before 9.0, the backup-end time was read from the backup
- * history file at the beginning of archive recovery, but we now use the WAL
- * record for that and the file is for informational and debug purposes only.
- *
- * Note: different from CancelBackup which just cancels online backup mode.
- *
- * Note: this version is only called to stop an exclusive backup. The function
- *		 pg_stop_backup_v2 (overloaded as pg_stop_backup in SQL) is called to
- *		 stop non-exclusive backups.
- *
- * Permission checking for this function is managed through the normal
- * GRANT system.
- *
- * **Note :- Currently this functionality is not supported.**
- */
-Datum
-pg_stop_backup(PG_FUNCTION_ARGS)
-{
-	XLogRecPtr	stoppoint = InvalidXLogRecPtr;
-	SessionBackupState status = get_backup_status();
-=======
 	register_persistent_abort_backup_handler();
 	do_pg_backup_start(backupidstr, fast, NULL, backup_state, tablespace_map);
->>>>>>> REL_16_9
 
 	PG_RETURN_LSN(backup_state->startpoint);
 }
-
 
 /*
  * pg_backup_stop: finish taking an on-line backup.

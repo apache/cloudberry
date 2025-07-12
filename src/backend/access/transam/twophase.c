@@ -214,15 +214,11 @@ static void RecordTransactionCommitPrepared(TransactionId xid,
 											int nchildren,
 											TransactionId *children,
 											int nrels,
-<<<<<<< HEAD
 											RelFileNodePendingDelete *rels,
 											int ndeldbs,
 											DbDirNode *deldbs,
-=======
-											RelFileLocator *rels,
 											int nstats,
 											xl_xact_stats_item *stats,
->>>>>>> REL_16_9
 											int ninvalmsgs,
 											SharedInvalidationMessage *invalmsgs,
 											bool initfileinval,
@@ -231,15 +227,11 @@ static void RecordTransactionAbortPrepared(TransactionId xid,
 										   int nchildren,
 										   TransactionId *children,
 										   int nrels,
-<<<<<<< HEAD
 										   RelFileNodePendingDelete *rels,
 										   int ndeldbs,
 										   DbDirNode *deldbs,
-=======
-										   RelFileLocator *rels,
 										   int nstats,
 										   xl_xact_stats_item *stats,
->>>>>>> REL_16_9
 										   const char *gid);
 static void ProcessRecords(char *bufptr, TransactionId xid,
 						   const TwoPhaseCallback callbacks[]);
@@ -512,14 +504,9 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	proc->databaseId = databaseid;
 	proc->roleId = owner;
 	proc->tempNamespaceId = InvalidOid;
-<<<<<<< HEAD
 	proc->isBackgroundWorker = false;
 	proc->mppSessionId = gp_session_id;
-	proc->lwWaiting = false;
-=======
-	proc->isBackgroundWorker = true;
 	proc->lwWaiting = LW_WS_NOT_WAITING;
->>>>>>> REL_16_9
 	proc->lwWaitMode = 0;
 	proc->waitLock = NULL;
 	proc->waitProcLock = NULL;
@@ -997,7 +984,6 @@ TwoPhaseGetDummyProc(TransactionId xid, bool lock_held)
  *
  *	1. TwoPhaseFileHeader
  *	2. TransactionId[] (subtransactions)
-<<<<<<< HEAD
  *	3. RelFileNodePendingDelete[] (relation files to be deleted at commit)
  *	4. RelFileNodePendingDelete[] (relation files to be deleted at abort)
  *	5. DbDirNode[] (database oid directories to be deleted at commit)
@@ -1007,15 +993,6 @@ TwoPhaseGetDummyProc(TransactionId xid, bool lock_held)
  *	9. ...
  *	10. TwoPhaseRecordOnDisk (end sentinel, rmid == TWOPHASE_RM_END_ID)
  *	11. CRC32
-=======
- *	3. RelFileLocator[] (files to be deleted at commit)
- *	4. RelFileLocator[] (files to be deleted at abort)
- *	5. SharedInvalidationMessage[] (inval messages to be sent at commit)
- *	6. TwoPhaseRecordOnDisk
- *	7. ...
- *	8. TwoPhaseRecordOnDisk (end sentinel, rmid == TWOPHASE_RM_END_ID)
- *	9. checksum (CRC-32C)
->>>>>>> REL_16_9
  *
  * Each segment except the final checksum is MAXALIGN'd.
  */
@@ -1103,17 +1080,12 @@ StartPrepare(GlobalTransaction gxact)
 	TransactionId xid = gxact->xid;
 	TwoPhaseFileHeader hdr;
 	TransactionId *children;
-<<<<<<< HEAD
 	RelFileNodePendingDelete *commitrels;
 	RelFileNodePendingDelete *abortrels;
 	DbDirNode *commitdbs;
 	DbDirNode *abortdbs;
-=======
-	RelFileLocator *commitrels;
-	RelFileLocator *abortrels;
 	xl_xact_stats_item *abortstats = NULL;
 	xl_xact_stats_item *commitstats = NULL;
->>>>>>> REL_16_9
 	SharedInvalidationMessage *invalmsgs;
 
 	/* Initialize linked list */
@@ -1141,15 +1113,12 @@ StartPrepare(GlobalTransaction gxact)
 	hdr.nsubxacts = xactGetCommittedChildren(&children);
 	hdr.ncommitrels = smgrGetPendingDeletes(true, &commitrels);
 	hdr.nabortrels = smgrGetPendingDeletes(false, &abortrels);
-<<<<<<< HEAD
 	hdr.ncommitdbs = GetPendingDbDeletes(true, &commitdbs);
 	hdr.nabortdbs = GetPendingDbDeletes(false, &abortdbs);
-=======
 	hdr.ncommitstats =
 		pgstat_get_transactional_drops(true, &commitstats);
 	hdr.nabortstats =
 		pgstat_get_transactional_drops(false, &abortstats);
->>>>>>> REL_16_9
 	hdr.ninvalmsgs = xactGetCommittedInvalidationMessages(&invalmsgs,
 														  &hdr.initfileinval);
 	hdr.gidlen = strlen(gxact->gid) + 1;	/* Include '\0' */
@@ -1172,16 +1141,11 @@ StartPrepare(GlobalTransaction gxact)
 	}
 	if (hdr.ncommitrels > 0)
 	{
-<<<<<<< HEAD
 		save_state_data(commitrels, hdr.ncommitrels * sizeof(RelFileNodePendingDelete));
-=======
-		save_state_data(commitrels, hdr.ncommitrels * sizeof(RelFileLocator));
->>>>>>> REL_16_9
 		pfree(commitrels);
 	}
 	if (hdr.nabortrels > 0)
 	{
-<<<<<<< HEAD
 		save_state_data(abortrels, hdr.nabortrels * sizeof(RelFileNodePendingDelete));
 		pfree(abortrels);
 	}
@@ -1194,9 +1158,6 @@ StartPrepare(GlobalTransaction gxact)
 	{
 		save_state_data(abortdbs, hdr.nabortdbs * sizeof(DbDirNode));
 		pfree(abortdbs);
-=======
-		save_state_data(abortrels, hdr.nabortrels * sizeof(RelFileLocator));
-		pfree(abortrels);
 	}
 	if (hdr.ncommitstats > 0)
 	{
@@ -1209,7 +1170,6 @@ StartPrepare(GlobalTransaction gxact)
 		save_state_data(abortstats,
 						hdr.nabortstats * sizeof(xl_xact_stats_item));
 		pfree(abortstats);
->>>>>>> REL_16_9
 	}
 	if (hdr.ninvalmsgs > 0)
 	{
@@ -1276,13 +1236,8 @@ EndPrepare(GlobalTransaction gxact)
 
 	START_CRIT_SECTION();
 
-<<<<<<< HEAD
-	Assert(!MyProc->delayChkpt);
-	MyProc->delayChkpt = true;
-=======
 	Assert((MyProc->delayChkptFlags & DELAY_CHKPT_START) == 0);
 	MyProc->delayChkptFlags |= DELAY_CHKPT_START;
->>>>>>> REL_16_9
 
 	XLogBeginInsert();
 	for (record = records.head; record != NULL; record = record->next)
@@ -1612,7 +1567,6 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	TwoPhaseFileHeader *hdr;
 	TransactionId latestXid;
 	TransactionId *children;
-<<<<<<< HEAD
 	RelFileNodePendingDelete *commitrels;
 	RelFileNodePendingDelete *abortrels;
 	DbDirNode *commitdbs;
@@ -1621,14 +1575,8 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	int			ndelrels;
 	DbDirNode *deldbs;
 	int			ndeldbs;
-=======
-	RelFileLocator *commitrels;
-	RelFileLocator *abortrels;
-	RelFileLocator *delrels;
-	int			ndelrels;
 	xl_xact_stats_item *commitstats;
 	xl_xact_stats_item *abortstats;
->>>>>>> REL_16_9
 	SharedInvalidationMessage *invalmsgs;
 
 	SIMPLE_FAULT_INJECTOR("finish_prepared_start_of_function");
@@ -1688,7 +1636,6 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	bufptr += MAXALIGN(hdr->gidlen);
 	children = (TransactionId *) bufptr;
 	bufptr += MAXALIGN(hdr->nsubxacts * sizeof(TransactionId));
-<<<<<<< HEAD
 	commitrels = (RelFileNodePendingDelete *) bufptr;
 	bufptr += MAXALIGN(hdr->ncommitrels * sizeof(RelFileNodePendingDelete));
 	abortrels = (RelFileNodePendingDelete *) bufptr;
@@ -1697,16 +1644,10 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	bufptr += MAXALIGN(hdr->ncommitdbs * sizeof(DbDirNode));
 	abortdbs = (DbDirNode *) bufptr;
 	bufptr += MAXALIGN(hdr->nabortdbs * sizeof(DbDirNode));
-=======
-	commitrels = (RelFileLocator *) bufptr;
-	bufptr += MAXALIGN(hdr->ncommitrels * sizeof(RelFileLocator));
-	abortrels = (RelFileLocator *) bufptr;
-	bufptr += MAXALIGN(hdr->nabortrels * sizeof(RelFileLocator));
 	commitstats = (xl_xact_stats_item *) bufptr;
 	bufptr += MAXALIGN(hdr->ncommitstats * sizeof(xl_xact_stats_item));
 	abortstats = (xl_xact_stats_item *) bufptr;
 	bufptr += MAXALIGN(hdr->nabortstats * sizeof(xl_xact_stats_item));
->>>>>>> REL_16_9
 	invalmsgs = (SharedInvalidationMessage *) bufptr;
 	bufptr += MAXALIGN(hdr->ninvalmsgs * sizeof(SharedInvalidationMessage));
 
@@ -1732,24 +1673,18 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 		RecordTransactionCommitPrepared(xid,
 										hdr->nsubxacts, children,
 										hdr->ncommitrels, commitrels,
-<<<<<<< HEAD
 										hdr->ncommitdbs, commitdbs,
-=======
 										hdr->ncommitstats,
 										commitstats,
->>>>>>> REL_16_9
 										hdr->ninvalmsgs, invalmsgs,
 										hdr->initfileinval, gid);
 	else
 		RecordTransactionAbortPrepared(xid,
 									   hdr->nsubxacts, children,
 									   hdr->nabortrels, abortrels,
-<<<<<<< HEAD
 									   hdr->nabortdbs, abortdbs,
-=======
 									   hdr->nabortstats,
 									   abortstats,
->>>>>>> REL_16_9
 									   gid);
 
 	ProcArrayRemove(proc, latestXid);
@@ -1789,17 +1724,15 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	/* Make sure files supposed to be dropped are dropped */
 	DropRelationFiles(delrels, ndelrels, false);
 
-<<<<<<< HEAD
 	/* Make sure database folders to be dropped are dropped */
 	DropDatabaseDirectories(deldbs, ndeldbs, false);
 
 	finish_prepared_transaction_tablespace_storage(isCommit);
-=======
+
 	if (isCommit)
 		pgstat_execute_transactional_drops(hdr->ncommitstats, commitstats, false);
 	else
 		pgstat_execute_transactional_drops(hdr->nabortstats, abortstats, false);
->>>>>>> REL_16_9
 
 	/*
 	 * Handle cache invalidation messages.
@@ -2308,17 +2241,12 @@ RecoverPreparedTransactions(void)
 		bufptr += MAXALIGN(hdr->gidlen);
 		subxids = (TransactionId *) bufptr;
 		bufptr += MAXALIGN(hdr->nsubxacts * sizeof(TransactionId));
-<<<<<<< HEAD
 		bufptr += MAXALIGN(hdr->ncommitrels * sizeof(RelFileNodePendingDelete));
 		bufptr += MAXALIGN(hdr->nabortrels * sizeof(RelFileNodePendingDelete));
 		bufptr += MAXALIGN(hdr->ncommitdbs * sizeof(DbDirNode));
 		bufptr += MAXALIGN(hdr->nabortdbs * sizeof(DbDirNode));
-=======
-		bufptr += MAXALIGN(hdr->ncommitrels * sizeof(RelFileLocator));
-		bufptr += MAXALIGN(hdr->nabortrels * sizeof(RelFileLocator));
 		bufptr += MAXALIGN(hdr->ncommitstats * sizeof(xl_xact_stats_item));
 		bufptr += MAXALIGN(hdr->nabortstats * sizeof(xl_xact_stats_item));
->>>>>>> REL_16_9
 		bufptr += MAXALIGN(hdr->ninvalmsgs * sizeof(SharedInvalidationMessage));
 
 		/*
@@ -2509,15 +2437,11 @@ RecordTransactionCommitPrepared(TransactionId xid,
 								int nchildren,
 								TransactionId *children,
 								int nrels,
-<<<<<<< HEAD
 								RelFileNodePendingDelete *rels,
 								int ndeldbs,
 								DbDirNode *deldbs,
-=======
-								RelFileLocator *rels,
 								int nstats,
 								xl_xact_stats_item *stats,
->>>>>>> REL_16_9
 								int ninvalmsgs,
 								SharedInvalidationMessage *invalmsgs,
 								bool initfileinval,
@@ -2538,13 +2462,8 @@ RecordTransactionCommitPrepared(TransactionId xid,
 	START_CRIT_SECTION();
 
 	/* See notes in RecordTransactionCommit */
-<<<<<<< HEAD
-	Assert(!MyProc->delayChkpt);
-	MyProc->delayChkpt = true;
-=======
 	Assert((MyProc->delayChkptFlags & DELAY_CHKPT_START) == 0);
 	MyProc->delayChkptFlags |= DELAY_CHKPT_START;
->>>>>>> REL_16_9
 
 	/*
 	 * Crack open the gid to get the DTM start time and distributed
@@ -2637,15 +2556,11 @@ RecordTransactionAbortPrepared(TransactionId xid,
 							   int nchildren,
 							   TransactionId *children,
 							   int nrels,
-<<<<<<< HEAD
 							   RelFileNodePendingDelete *rels,
 							   int ndeldbs,
 							   DbDirNode *deldbs,
-=======
-							   RelFileLocator *rels,
 							   int nstats,
 							   xl_xact_stats_item *stats,
->>>>>>> REL_16_9
 							   const char *gid)
 {
 	XLogRecPtr	recptr;
@@ -2679,11 +2594,8 @@ RecordTransactionAbortPrepared(TransactionId xid,
 								GetPendingTablespaceForDeletionForAbort(),
 								nchildren, children,
 								nrels, rels,
-<<<<<<< HEAD
 								ndeldbs, deldbs,
-=======
 								nstats, stats,
->>>>>>> REL_16_9
 								MyXactFlags | XACT_FLAGS_ACQUIREDACCESSEXCLUSIVELOCK,
 								xid, gid);
 

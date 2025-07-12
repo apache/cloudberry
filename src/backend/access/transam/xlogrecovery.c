@@ -4041,6 +4041,29 @@ ReadCheckpointRecord(XLogPrefetcher *xlogprefetcher, XLogRecPtr RecPtr,
 				(errmsg("invalid length of checkpoint record")));
 		return NULL;
 	}
+
+	/*
+	 * We should be wary of conflating "report" parameter.  It is currently
+	 * always true when we want to process the extended checkpoint record.
+	 * For now this seems fine as it avoids a diff with postgres.
+	 *
+	 * The coordinator may execute write DTX during gpexpand, so the newly
+	 * added segment may contain DTX info in checkpoint XLOG. However, this step
+	 * is useless and should be avoided for segments, or fatal may be thrown since
+	 * max_tm_gxacts is 0 in segments.
+	 */
+	if (report && IS_QUERY_DISPATCHER())
+	{
+		CheckpointExtendedRecord ckptExtended;
+		UnpackCheckPointRecord(xlogreader, &ckptExtended);
+
+		/*
+		 * Find Xacts that are distributed committed from the checkpoint record and
+		 * store them such that they can utilized later during DTM recovery.
+		 */
+		XLogProcessCheckpointRecord(xlogreader);
+	}
+
 	return record;
 }
 
