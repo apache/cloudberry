@@ -100,5 +100,6 @@ extern Datum gp_truncate_error_log(PG_FUNCTION_ARGS);
 extern Datum gp_read_persistent_error_log(PG_FUNCTION_ARGS);
 extern Datum gp_truncate_persistent_error_log(PG_FUNCTION_ARGS);
 
+extern int get_sftpfile_numbers(const char *path);
 
 #endif /* CDBSREH_H */
