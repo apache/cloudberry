@@ -40,6 +40,14 @@
 #include <sys/file.h>   /* for flock */
 #include <unistd.h>
 
+#ifdef LIBSSH2
+#include <libssh2.h>
+#include <libssh2_sftp.h>
+#endif
+
+#include <arpa/inet.h>
+#include <net/if.h>
+
 #ifdef WIN32
 #include <io.h>
 #define snprintf _snprintf
@@ -145,6 +153,47 @@ writewinpipe(gfile_t* fd, void* ptr, size_t size)
 
 	return i;
 }
+
+#ifdef LIBSSH2
+static ssize_t
+sftp_read(gfile_t *fd, void *ptr, size_t size)
+{
+	ssize_t i = 0;
+	do
+		i = libssh2_sftp_read(fd->sftp_handle, ptr, size);
+	while (i < 0 && errno == EINTR);
+
+	if (i < 0)
+		gfile_printf_then_putc_newline("i is %ld", i);
+
+	if (i > 0)
+		fd->compressed_position += i;
+	return i;
+}
+
+static int
+sftp_close(gfile_t *fd)
+{
+	if (fd->sftp_handle)
+		libssh2_sftp_close(fd->sftp_handle);
+	if (fd->sftp_session)
+		libssh2_sftp_shutdown(fd->sftp_session);
+	if (fd->session)
+	{
+		libssh2_session_disconnect(fd->session, "Normal Shutdown");
+		libssh2_session_free(fd->session);
+	}
+	
+#ifdef WIN32
+	closesocket(fd->sock);
+#else
+	close(fd->sock);
+#endif
+	fd->sock = -1;
+	libssh2_exit();
+	return 0;
+}
+#endif
 
 #ifdef HAVE_LIBBZ2
 static void *
@@ -1334,29 +1383,128 @@ gfile_close(gfile_t*fd)
 			{
 				fd->close(fd);
 			}
-
-			if (fd->is_win_pipe)
+#ifdef LIBSSH2
+			if (fd->is_sftp)
 			{
-				fd->close(fd);
+				sftp_close(fd);
 			}
+#endif
 			else
 			{
-				if(fd->held_pipe_lock)
+				if (fd->is_win_pipe)
 				{
-#ifndef WIN32
-					flock (fd->fd.filefd, LOCK_UN);
-#endif
+					fd->close(fd);
 				}
-				ret = close_filefd(fd->fd.filefd);
-				if (ret == -1)
-					ret = 1;
+				else
+				{
+					if(fd->held_pipe_lock)
+					{
+#ifndef WIN32
+						flock (fd->fd.filefd, LOCK_UN);
+#endif
+					}
+					ret = close_filefd(fd->fd.filefd);
+					if (ret == -1)
+						ret = 1;
+				}
 			}
+			
 		} 
 		fd->read = 0;
 		fd->close = 0;
 	}
 	return ret;
 }
+
+#ifdef LIBSSH2
+int gfile_open_sftp(gfile_t *fd, const char *fpath, const char *sftp_uname, const char *sftp_passwd, const char *sftp_hostaddr,
+					const char *sftp_port, int flags, int *response_code, const char **response_string, struct gpfxdist_t *transform)
+{
+	const char *s = strrchr(fpath, '.');
+
+	//struct stat sta;
+	LIBSSH2_SFTP_ATTRIBUTES sta;
+	memset(&sta, 0, sizeof(sta));
+	memset(fd, 0, sizeof *fd);
+	fd->is_sftp = TRUE;
+
+	int ans = sftp_open(fd, fpath, sftp_uname, sftp_passwd, sftp_hostaddr, sftp_port);
+	if (ans == 0)
+	{
+		gfile_printf_then_putc_newline("looks like a ftp handle");
+		gfile_printf_then_putc_newline("path is %s", fpath);
+	}
+	else
+	{
+		gfile_printf_then_putc_newline("failed open a  ftp handle, please check sftp-information: ip, port, passwd and filename");
+		if (ans == -2)
+		{
+			sftp_free(fd);
+		}
+		return 1;
+	}
+
+	if (flags == GFILE_OPEN_FOR_READ)
+	{
+		if (0 != libssh2_sftp_stat(fd->sftp_session, fpath, &sta))
+		{
+			gfile_printf_then_putc_newline("libssh2 libssh2_sftp_stat failed");
+			return 1;
+		}
+	}
+
+	fd->compressed_size = sta.filesize;
+
+	fd->read = sftp_read;
+	fd->close = sftp_close;
+
+	/*
+	 * delegate remaining setup work to an appropriate open routine
+	 * or return an error if we can't handle the type
+	 */
+	if (s && strcasecmp(s, ".gz") == 0)
+	{
+#ifndef HAVE_LIBZ
+		gfile_printf_then_putc_newline(".gz not supported");
+#else
+		/*
+		 * flag used by function gfile close
+		 */
+		fd->compression = GZ_COMPRESSION;
+
+		if (flags != GFILE_OPEN_FOR_READ)
+		{
+			fd->is_write = TRUE;
+		}
+
+		return gz_file_open(fd);
+#endif
+	}
+	else if (s && strcasecmp(s, ".bz2") == 0)
+	{
+#ifndef HAVE_LIBBZ2
+		gfile_printf_then_putc_newline(".bz2 not supported");
+#else
+		fd->compression = BZ_COMPRESSION;
+		if (flags != GFILE_OPEN_FOR_READ)
+			gfile_printf_then_putc_newline(".bz2 not yet supported for writable tables");
+
+		return bz_file_open(fd);
+#endif
+	}
+	else if (s && strcasecmp(s, ".z") == 0)
+		gfile_printf_then_putc_newline("gfile compression .z file is not supported");
+	else if (s && strcasecmp(s, ".zip") == 0)
+		gfile_printf_then_putc_newline("gfile compression zip is not supported");
+	else
+		return 0;
+
+	*response_code = 415;
+	*response_string = "Unsupported File Type";
+
+	return 1;
+}
+#endif
 
 ssize_t 
 gfile_read(gfile_t *fd, void *ptr, size_t len)
@@ -1407,3 +1555,108 @@ off_t gfile_get_compressed_position(gfile_t *fd)
 {
 	return fd->compressed_position;
 }
+
+#ifdef LIBSSH2
+int sftp_open(gfile_t *fd, const char *fpath, const char *sftp_uname, const char *sftp_passwd, const char *sftp_hostaddr,
+			 const char *sftp_port)
+{
+	int rc;
+	int auth_pw = 0;
+	char *userauthlist;
+	uint16_t port;
+	unsigned long hostaddr;
+	struct sockaddr_in sin;
+
+	hostaddr = inet_addr(sftp_hostaddr);
+
+	sscanf(sftp_port, "%hu", &port);
+
+	rc = libssh2_init(0);
+
+	if (rc != 0)
+	{
+		gfile_printf_then_putc_newline("libssh2 initialization failed (%d)\n", rc);
+		return -1;
+	}
+	
+	fd->sock = -1;
+
+	fd->sock = socket(AF_INET, SOCK_STREAM, 0);
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons(port);
+	sin.sin_addr.s_addr = hostaddr;
+
+	if (connect(fd->sock, (struct sockaddr *)(&sin),
+				sizeof(struct sockaddr_in)) != 0)
+	{
+		gfile_printf_then_putc_newline("failed to connect!\n");
+		return -1;
+	}
+
+	fd->session = libssh2_session_init();
+	if (!fd->session)
+		return -1;
+
+	/* Since we have set non-blocking, tell libssh2 we are blocking */
+	libssh2_session_set_blocking(fd->session, 1);
+
+	/* ... start it up. This will trade welcome banners, exchange keys,
+     * and setup crypto, compression, and MAC layers
+     */
+	rc = libssh2_session_handshake(fd->session, fd->sock);
+	if (rc)
+	{
+		gfile_printf_then_putc_newline("Failure establishing SSH session: %d\n", rc);
+		return -1;
+	}
+
+	/* check what authentication methods are available */
+	userauthlist = libssh2_userauth_list(fd->session, sftp_uname, strlen(sftp_uname));
+	if (strstr(userauthlist, "password") != NULL)
+	{
+		auth_pw |= 1;
+	}
+
+	if (auth_pw & 1)
+	{
+		if (libssh2_userauth_password(fd->session, sftp_uname, sftp_passwd))
+		{
+			gfile_printf_then_putc_newline("Authentication by password failed.\n");
+			return -2;
+		}
+	}
+
+	gfile_printf_then_putc_newline("libssh2_sftp_init()!\n");
+	fd->sftp_session = libssh2_sftp_init(fd->session);
+
+	if (!(fd->sftp_session))
+	{
+		gfile_printf_then_putc_newline("Unable to init SFTP session\n");
+		return -2;
+	}
+
+	fd->sftp_handle =
+		libssh2_sftp_open(fd->sftp_session, fpath, LIBSSH2_FXF_READ, 0);
+	if (!(fd->sftp_handle))
+	{
+		gfile_printf_then_putc_newline("Unable to open file with SFTP: %ld\n",
+									   libssh2_sftp_last_error(fd->sftp_session));
+		return -2;
+	}
+
+	return 0;
+}
+void sftp_free(gfile_t *fd)
+{
+	libssh2_session_disconnect(fd->session, "Normal Shutdown");
+	libssh2_session_free(fd->session);
+
+#ifdef WIN32
+	closesocket(fd->sock);
+#else
+	close(fd->sock);
+#endif
+	fd->sock = -1;
+	libssh2_exit();
+}
+#endif
