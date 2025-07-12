@@ -113,6 +113,7 @@ OBJS        = CDecorrelator.o \
               CXformPushGbBelowJoin.o \
               CXformPushGbDedupBelowJoin.o \
               CXformPushGbWithHavingBelowJoin.o \
+              CXformPushPartialAggBelowJoin.o \
               CXformRemoveSubqDistinct.o \
               CXformResult.o \
               CXformRightOuterJoin2HashJoin.o \

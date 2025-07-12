@@ -243,6 +243,7 @@ CXformFactory::Instantiate()
 	Add(GPOS_NEW(m_mp) CXformPushGbWithHavingBelowJoin(m_mp));
 	Add(GPOS_NEW(m_mp) CXformPushGbBelowUnion(m_mp));
 	Add(GPOS_NEW(m_mp) CXformPushGbBelowUnionAll(m_mp));
+	Add(GPOS_NEW(m_mp) CXformPushPartialAggBelowJoin(m_mp));
 	Add(GPOS_NEW(m_mp) CXformSplitGbAgg(m_mp));
 	Add(GPOS_NEW(m_mp) CXformSplitGbAggDedup(m_mp));
 	Add(GPOS_NEW(m_mp) CXformSplitDQA(m_mp));
