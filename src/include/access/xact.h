@@ -294,7 +294,7 @@ typedef struct xl_xact_relfilenodes
 typedef struct xl_xact_relfilelocators
 {
 	int			nrels;			/* number of relations */
-	RelFileLocator xlocators[FLEXIBLE_ARRAY_MEMBER];
+	RelFileNodePendingDelete xlocators[FLEXIBLE_ARRAY_MEMBER];
 } xl_xact_relfilelocators;
 #define MinSizeOfXactRelfileLocators offsetof(xl_xact_relfilelocators, xlocators)
 
@@ -420,8 +420,7 @@ typedef struct xl_xact_parsed_commit
 	TransactionId *subxacts;
 
 	int			nrels;
-	RelFileNodePendingDelete *xnodes;
-	RelFileLocator *xlocators;
+	RelFileNodePendingDelete *xlocators;
 
 	int			nstats;
 	xl_xact_stats_item *stats;
@@ -435,8 +434,7 @@ typedef struct xl_xact_parsed_commit
 	TransactionId twophase_xid; /* only for 2PC */
 	char		twophase_gid[GIDSIZE];	/* only for 2PC */
 	int			nabortrels;		/* only for 2PC */
-	RelFileNodePendingDelete *abortnodes;	/* only for 2PC */
-	RelFileLocator *abortlocators;	/* only for 2PC */
+	RelFileNodePendingDelete *abortlocators;	/* only for 2PC */
 	int			nabortstats;	/* only for 2PC */
 	xl_xact_stats_item *abortstats; /* only for 2PC */
 

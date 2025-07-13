@@ -26,18 +26,12 @@ smgr_desc(StringInfo buf, XLogReaderState *record)
 	if (info == XLOG_SMGR_CREATE)
 	{
 		xl_smgr_create *xlrec = (xl_smgr_create *) rec;
-<<<<<<< HEAD
-		char	   *path = relpathperm(xlrec->rnode, xlrec->forkNum);
+		char	   *path = relpathperm(xlrec->rlocator, xlrec->forkNum);
 #ifndef FRONTEND
 		appendStringInfo(buf, "%s; smgr: %s", path, smgr_get_name(xlrec->impl));
 #else
 		appendStringInfo(buf, "%s; smgr: %s", path, xlrec->impl == SMGR_MD ? "heap" : (xlrec->impl == SMGR_AO ? "ao" : "unknown"));
 #endif
-=======
-		char	   *path = relpathperm(xlrec->rlocator, xlrec->forkNum);
-
-		appendStringInfoString(buf, path);
->>>>>>> REL_16_9
 		pfree(path);
 	}
 	else if (info == XLOG_SMGR_TRUNCATE)

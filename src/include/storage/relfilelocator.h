@@ -62,6 +62,21 @@ typedef struct RelFileLocator
 } RelFileLocator;
 
 /*
+ * Augmenting a relfilenode with a SMGR implementation identifier provides a
+ * way to make optimal decisions in smgr and md layer. This is purposefully
+ * kept out of RelFileNode for performance concerns where RelFileNode used in
+ * a hotpath for BufferTag hashing. The isTempRelation flag is necessary to
+ * support file-system removal of temporary relations on a two-phase
+ * commit/abort.
+ */
+typedef struct RelFileNodePendingDelete
+{
+	RelFileLocator node;
+	int smgr_which; /* which SMGR implementation to use */
+	bool isTempRelation;
+} RelFileNodePendingDelete;
+
+/*
  * Augmenting a relfilelocator with the backend ID provides all the information
  * we need to locate the physical storage.  The backend ID is InvalidBackendId
  * for regular relations (those accessible to more than one backend), or the

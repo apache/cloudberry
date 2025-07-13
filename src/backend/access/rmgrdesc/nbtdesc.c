@@ -101,12 +101,8 @@ btree_desc(StringInfo buf, XLogReaderState *record)
 			{
 				xl_btree_insert *xlrec = (xl_btree_insert *) rec;
 
-<<<<<<< HEAD
-				appendStringInfo(buf, "off %u", xlrec->offnum);
-				out_insert(buf, info, record);
-=======
 				appendStringInfo(buf, "off: %u", xlrec->offnum);
->>>>>>> REL_16_9
+				out_insert(buf, info, record);
 				break;
 			}
 		case XLOG_BTREE_SPLIT_L:
@@ -142,11 +138,6 @@ btree_desc(StringInfo buf, XLogReaderState *record)
 			{
 				xl_btree_delete *xlrec = (xl_btree_delete *) rec;
 
-<<<<<<< HEAD
-				appendStringInfo(buf, "latestRemovedXid %u; ndeleted %u; nupdated %u",
-								 xlrec->latestRemovedXid, xlrec->ndeleted, xlrec->nupdated);
-				out_delete(buf, record);
-=======
 				appendStringInfo(buf, "snapshotConflictHorizon: %u, ndeleted: %u, nupdated: %u",
 								 xlrec->snapshotConflictHorizon,
 								 xlrec->ndeleted, xlrec->nupdated);
@@ -154,7 +145,7 @@ btree_desc(StringInfo buf, XLogReaderState *record)
 				if (XLogRecHasBlockData(record, 0))
 					delvacuum_desc(buf, XLogRecGetBlockData(record, 0, NULL),
 								   xlrec->ndeleted, xlrec->nupdated);
->>>>>>> REL_16_9
+				out_delete(buf, record);
 				break;
 			}
 		case XLOG_BTREE_MARK_PAGE_HALFDEAD:

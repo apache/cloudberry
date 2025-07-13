@@ -16,11 +16,8 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
-<<<<<<< HEAD
 #include "storage/dbdirnode.h"
-=======
 #include "replication/origin.h"
->>>>>>> REL_16_9
 #include "storage/sinval.h"
 #include "storage/standbydefs.h"
 #include "utils/timestamp.h"
@@ -84,12 +81,8 @@ ParseCommitRecord(uint8 info, xl_xact_commit *xlrec, xl_xact_parsed_commit *pars
 		parsed->nrels = xl_rellocators->nrels;
 		parsed->xlocators = xl_rellocators->xlocators;
 
-<<<<<<< HEAD
-		data += MinSizeOfXactRelfilenodes;
-		data += xl_relfilenodes->nrels * sizeof(RelFileNodePendingDelete);
-=======
 		data += MinSizeOfXactRelfileLocators;
-		data += xl_rellocators->nrels * sizeof(RelFileLocator);
+		data += xl_rellocators->nrels * sizeof(RelFileNodePendingDelete);
 	}
 
 	if (parsed->xinfo & XACT_XINFO_HAS_DROPPED_STATS)
@@ -101,7 +94,6 @@ ParseCommitRecord(uint8 info, xl_xact_commit *xlrec, xl_xact_parsed_commit *pars
 
 		data += MinSizeOfXactStatsItems;
 		data += xl_drops->nitems * sizeof(xl_xact_stats_item);
->>>>>>> REL_16_9
 	}
 
 	if (parsed->xinfo & XACT_XINFO_HAS_INVALS)
@@ -213,9 +205,8 @@ ParseAbortRecord(uint8 info, xl_xact_abort *xlrec, xl_xact_parsed_abort *parsed)
 		parsed->nrels = xl_rellocator->nrels;
 		parsed->xlocators = xl_rellocator->xlocators;
 
-<<<<<<< HEAD
-		data += MinSizeOfXactRelfilenodes;
-		data += xl_relfilenodes->nrels * sizeof(RelFileNodePendingDelete);
+		data += MinSizeOfXactRelfileLocators;
+		data += xl_rellocator->nrels * sizeof(RelFileNodePendingDelete);
 	}
 
 	if (parsed->xinfo & XACT_XINFO_HAS_DELDBS)
@@ -227,9 +218,6 @@ ParseAbortRecord(uint8 info, xl_xact_abort *xlrec, xl_xact_parsed_abort *parsed)
 
 		data += MinSizeOfXactDelDbs;
 		data += xl_deldbs->ndeldbs * sizeof(DbDirNode);
-=======
-		data += MinSizeOfXactRelfileLocators;
-		data += xl_rellocator->nrels * sizeof(RelFileLocator);
 	}
 
 	if (parsed->xinfo & XACT_XINFO_HAS_DROPPED_STATS)
@@ -241,7 +229,6 @@ ParseAbortRecord(uint8 info, xl_xact_abort *xlrec, xl_xact_parsed_abort *parsed)
 
 		data += MinSizeOfXactStatsItems;
 		data += xl_drops->nitems * sizeof(xl_xact_stats_item);
->>>>>>> REL_16_9
 	}
 
 	if (parsed->xinfo & XACT_XINFO_HAS_TWOPHASE)
@@ -304,13 +291,6 @@ ParsePrepareRecord(uint8 info, xl_xact_prepare *xlrec, xl_xact_parsed_prepare *p
 	parsed->subxacts = (TransactionId *) bufptr;
 	bufptr += MAXALIGN(xlrec->nsubxacts * sizeof(TransactionId));
 
-<<<<<<< HEAD
-	parsed->xnodes = (RelFileNodePendingDelete *) bufptr;
-	bufptr += MAXALIGN(xlrec->ncommitrels * sizeof(RelFileNode));
-
-	parsed->abortnodes = (RelFileNodePendingDelete *) bufptr;
-	bufptr += MAXALIGN(xlrec->nabortrels * sizeof(RelFileNode));
-=======
 	parsed->xlocators = (RelFileLocator *) bufptr;
 	bufptr += MAXALIGN(xlrec->ncommitrels * sizeof(RelFileLocator));
 
@@ -322,7 +302,6 @@ ParsePrepareRecord(uint8 info, xl_xact_prepare *xlrec, xl_xact_parsed_prepare *p
 
 	parsed->abortstats = (xl_xact_stats_item *) bufptr;
 	bufptr += MAXALIGN(xlrec->nabortstats * sizeof(xl_xact_stats_item));
->>>>>>> REL_16_9
 
 	parsed->msgs = (SharedInvalidationMessage *) bufptr;
 	bufptr += MAXALIGN(xlrec->ninvalmsgs * sizeof(SharedInvalidationMessage));
@@ -330,11 +309,7 @@ ParsePrepareRecord(uint8 info, xl_xact_prepare *xlrec, xl_xact_parsed_prepare *p
 
 static void
 xact_desc_relations(StringInfo buf, char *label, int nrels,
-<<<<<<< HEAD
-					RelFileNodePendingDelete *xnodes)
-=======
-					RelFileLocator *xlocators)
->>>>>>> REL_16_9
+					RelFileNodePendingDelete *xlocators)
 {
 	int			i;
 
@@ -343,15 +318,11 @@ xact_desc_relations(StringInfo buf, char *label, int nrels,
 		appendStringInfo(buf, "; %s:", label);
 		for (i = 0; i < nrels; i++)
 		{
-<<<<<<< HEAD
-			BackendId  backendId = xnodes[i].isTempRelation ?
+			BackendId  backendId = xlocators[i].isTempRelation ?
 								  TempRelBackendId : InvalidBackendId;
-			char	   *path = relpathbackend(xnodes[i].node,
+			char	   *path = relpathbackend(xlocators[i].node,
 											  backendId,
 											  MAIN_FORKNUM);
-=======
-			char	   *path = relpathperm(xlocators[i], MAIN_FORKNUM);
->>>>>>> REL_16_9
 
 			appendStringInfo(buf, " %s", path);
 			pfree(path);
@@ -412,7 +383,9 @@ xact_desc_commit(StringInfo buf, uint8 info, xl_xact_commit *xlrec, RepOriginId 
 							   parsed.tsId,
 							   XactCompletionRelcacheInitFileInval(parsed.xinfo));
 
-<<<<<<< HEAD
+	if (XactCompletionApplyFeedback(parsed.xinfo))
+		appendStringInfoString(buf, "; apply_feedback");
+
 	if (parsed.ndeldbs > 0)
 	{
 		appendStringInfoString(buf, "; deldbs:");
@@ -427,10 +400,6 @@ xact_desc_commit(StringInfo buf, uint8 info, xl_xact_commit *xlrec, RepOriginId 
 	}
 	if (xlrec->tablespace_oid_to_delete_on_commit != InvalidOid)
 		appendStringInfo(buf, "; tablespace_oid_to_delete_on_commit: %u", xlrec->tablespace_oid_to_delete_on_commit);
-=======
-	if (XactCompletionApplyFeedback(parsed.xinfo))
-		appendStringInfoString(buf, "; apply_feedback");
->>>>>>> REL_16_9
 
 	if (XactCompletionForceSyncCommit(parsed.xinfo))
 		appendStringInfoString(buf, "; sync");
@@ -481,23 +450,6 @@ xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec, RepOriginId or
 
 	xact_desc_relations(buf, "rels", parsed.nrels, parsed.xlocators);
 	xact_desc_subxacts(buf, parsed.nsubxacts, parsed.subxacts);
-<<<<<<< HEAD
-
-	if (parsed.ndeldbs > 0)
-	{
-		appendStringInfoString(buf, "; deldbs:");
-		for (int i = 0; i < parsed.ndeldbs; i++)
-		{
-			char *path =
-					 GetDatabasePath(parsed.deldbs[i].database, parsed.deldbs[i].tablespace);
-
-			appendStringInfo(buf, " %s", path);
-			pfree(path);
-		}
-	}
-	if (xlrec->tablespace_oid_to_delete_on_abort != InvalidOid)
-		appendStringInfo(buf, "; tablespace_oid_to_delete_on_abort: %u", xlrec->tablespace_oid_to_delete_on_abort);
-=======
 
 	if (parsed.xinfo & XACT_XINFO_HAS_ORIGIN)
 	{
@@ -508,6 +460,23 @@ xact_desc_abort(StringInfo buf, uint8 info, xl_xact_abort *xlrec, RepOriginId or
 	}
 
 	xact_desc_stats(buf, "", parsed.nstats, parsed.stats);
+
+
+	if (parsed.ndeldbs > 0)
+	{
+		appendStringInfoString(buf, "; deldbs:");
+		for (int i = 0; i < parsed.ndeldbs; i++)
+		{
+			char *path =
+					GetDatabasePath(parsed.deldbs[i].database, parsed.deldbs[i].tablespace);
+
+			appendStringInfo(buf, " %s", path);
+			pfree(path);
+		}
+	}
+	if (xlrec->tablespace_oid_to_delete_on_abort != InvalidOid)
+		appendStringInfo(buf, "; tablespace_oid_to_delete_on_abort: %u", xlrec->tablespace_oid_to_delete_on_abort);
+
 }
 
 static void
@@ -539,7 +508,6 @@ xact_desc_prepare(StringInfo buf, uint8 info, xl_xact_prepare *xlrec, RepOriginI
 						 origin_id,
 						 LSN_FORMAT_ARGS(parsed.origin_lsn),
 						 timestamptz_to_str(parsed.origin_timestamp));
->>>>>>> REL_16_9
 }
 
 static void
@@ -597,15 +565,10 @@ xact_desc(StringInfo buf, XLogReaderState *record)
 	}
 	else if (info == XLOG_XACT_PREPARE)
 	{
-<<<<<<< HEAD
-		TwoPhaseFileHeader *tpfh = (TwoPhaseFileHeader*) rec;
-		xact_desc_prepare(buf, XLogRecGetInfo(record), tpfh);
-=======
 		xl_xact_prepare *xlrec = (xl_xact_prepare *) rec;
 
 		xact_desc_prepare(buf, XLogRecGetInfo(record), xlrec,
 						  XLogRecGetOrigin(record));
->>>>>>> REL_16_9
 	}
 	else if (info == XLOG_XACT_ASSIGNMENT)
 	{
