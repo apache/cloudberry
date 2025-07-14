@@ -710,7 +710,16 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 
 			parallel_workers = Max(parallel_workers, path->parallel_workers);
 		}
+#if 0
+		/*
+		 * CBDB_PARALLEL:
+		 * Unlike upstream, this scenario can occur when there are paths with
+		 * parallel_workers set to 0, but have subpaths with parallel_workers > 0.
+		 * This is a valid case that allows our Cloudberry
+		 * to maximize parallel execution where possible.
+		 */
 		Assert(parallel_workers > 0);
+#endif
 
 		/*
 		 * If the use of parallel append is permitted, always request at least
@@ -726,7 +735,12 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 			parallel_workers = Min(parallel_workers,
 								   max_parallel_workers_per_gather);
 		}
+#if 0
+		/*
+		 * See above comments.
+		 */
 		Assert(parallel_workers > 0);
+#endif
 
 		ppath = (Path *)
 			create_append_path(root, result_rel, NIL, partial_pathlist,
