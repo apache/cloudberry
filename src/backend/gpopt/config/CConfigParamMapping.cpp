@@ -561,6 +561,12 @@ CConfigParamMapping::PackConfigParamInBitset(
 			GPOPT_DISABLE_XFORM_TF(CXform::ExfRightOuterJoin2HashJoin));
 	}
 
+	if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_FIRST_KEY) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSFirstKey);
+	} else if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_MINIMAL_LEN_KEY) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSMinimalLenKey);
+	}
+
 	return traceflag_bitset;
 }
 
