@@ -29,15 +29,15 @@ static void update_ignored_users(const char *new_guc_ignored_users) {
       std::make_unique<std::unordered_set<std::string>>();
   if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
     /* Need a modifiable copy of string */
-    char *rawstring = gpdb::pstrdup(new_guc_ignored_users);
+    char *rawstring = ya_gpdb::pstrdup(new_guc_ignored_users);
     List *elemlist;
     ListCell *l;
 
     /* Parse string into list of identifiers */
-    if (!gpdb::split_identifier_string(rawstring, ',', &elemlist)) {
+    if (!ya_gpdb::split_identifier_string(rawstring, ',', &elemlist)) {
       /* syntax error in list */
-      gpdb::pfree(rawstring);
-      gpdb::list_free(elemlist);
+      ya_gpdb::pfree(rawstring);
+      ya_gpdb::list_free(elemlist);
       ereport(
           LOG,
           (errcode(ERRCODE_SYNTAX_ERROR),
@@ -48,8 +48,8 @@ static void update_ignored_users(const char *new_guc_ignored_users) {
     foreach (l, elemlist) {
       new_ignored_users_set->insert((char *)lfirst(l));
     }
-    gpdb::pfree(rawstring);
-    gpdb::list_free(elemlist);
+    ya_gpdb::pfree(rawstring);
+    ya_gpdb::list_free(elemlist);
   }
   ignored_users_set = std::move(new_ignored_users_set);
 }

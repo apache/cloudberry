@@ -44,7 +44,7 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
       if (connect(sockfd, (sockaddr *)&address, sizeof(address)) != -1) {
         auto data_size = req.ByteSize();
         auto total_size = data_size + sizeof(uint32_t);
-        uint8_t *buf = (uint8_t *)gpdb::palloc(total_size);
+        uint8_t *buf = (uint8_t *)ya_gpdb::palloc(total_size);
         uint32_t *size_payload = (uint32_t *)buf;
         *size_payload = data_size;
         req.SerializeWithCachedSizesToArray(buf + sizeof(uint32_t));
@@ -67,7 +67,7 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
         } else {
           YagpStat::report_send(total_size);
         }
-        gpdb::pfree(buf);
+        ya_gpdb::pfree(buf);
       } else {
         // log the error and go on
         log_tracing_failure(req, event);
