@@ -229,7 +229,7 @@ Datum yagp_functions_get(FunctionCallInfo fcinfo) {
   values[3] = Int64GetDatum(stats.failed_connects);
   values[4] = Int64GetDatum(stats.failed_other);
   values[5] = Int32GetDatum(stats.max_message_size);
-  HeapTuple tuple = gpdb::heap_form_tuple(tupdesc, values, nulls);
+  HeapTuple tuple = ya_gpdb::heap_form_tuple(tupdesc, values, nulls);
   Datum result = HeapTupleGetDatum(tuple);
   PG_RETURN_DATUM(result);
 }
