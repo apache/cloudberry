@@ -1,6 +1,8 @@
 #pragma once
 
+#include <memory>
 #include <unordered_map>
+#include <tuple>
 
 #define typeid __typeid
 extern "C" {
@@ -11,11 +13,74 @@ extern "C" {
 }
 #undef typeid
 
+#include "memory/gpdbwrappers.h"
+
 class UDSConnector;
 struct QueryDesc;
 namespace yagpcc {
 class SetQueryReq;
 }
+
+#include <cstdint>
+
+struct QueryKey {
+  int tmid;
+  int ssid;
+  int ccnt;
+  int nesting_level;
+  uintptr_t query_desc_addr;
+
+  bool operator==(const QueryKey &other) const {
+    return std::tie(tmid, ssid, ccnt, nesting_level, query_desc_addr) ==
+           std::tie(other.tmid, other.ssid, other.ccnt, other.nesting_level,
+                    other.query_desc_addr);
+  }
+
+  static void register_qkey(QueryDesc *query_desc, size_t nesting_level) {
+    query_desc->yagp_query_key =
+        (YagpQueryKey *)ya_gpdb::palloc0(sizeof(YagpQueryKey));
+    int32 tmid;
+    gpmon_gettmid(&tmid);
+    query_desc->yagp_query_key->tmid = tmid;
+    query_desc->yagp_query_key->ssid = gp_session_id;
+    query_desc->yagp_query_key->ccnt = gp_command_count;
+    query_desc->yagp_query_key->nesting_level = nesting_level;
+    query_desc->yagp_query_key->query_desc_addr = (uintptr_t)query_desc;
+  }
+
+  static QueryKey from_qdesc(QueryDesc *query_desc) {
+    return {
+        .tmid = query_desc->yagp_query_key->tmid,
+        .ssid = query_desc->yagp_query_key->ssid,
+        .ccnt = query_desc->yagp_query_key->ccnt,
+        .nesting_level = query_desc->yagp_query_key->nesting_level,
+        .query_desc_addr = query_desc->yagp_query_key->query_desc_addr,
+    };
+  }
+};
+
+// https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+template <class T> inline void hash_combine(std::size_t &seed, const T &v) {
+  std::hash<T> hasher;
+  seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+namespace std {
+template <> struct hash<QueryKey> {
+  size_t operator()(const QueryKey &k) const noexcept {
+    size_t seed = hash<uint32_t>{}(k.tmid);
+    hash_combine(seed, k.ssid);
+    hash_combine(seed, k.ccnt);
+    hash_combine(seed, k.nesting_level);
+    uintptr_t addr = k.query_desc_addr;
+    if constexpr (SIZE_MAX < UINTPTR_MAX) {
+      addr %= SIZE_MAX;
+    }
+    hash_combine(seed, addr);
+    return seed;
+  }
+};
+} // namespace std
 
 class EventSender {
 public:
@@ -31,30 +96,25 @@ public:
   ~EventSender();
 
 private:
-  enum QueryState { UNKNOWN, SUBMIT, START, END, DONE };
+  enum QueryState { SUBMIT, START, END, DONE };
 
   struct QueryItem {
-    QueryState state = QueryState::UNKNOWN;
-    yagpcc::SetQueryReq *message = nullptr;
+    std::unique_ptr<yagpcc::SetQueryReq> message;
+    QueryState state;
 
-    QueryItem(QueryState st, yagpcc::SetQueryReq *msg);
+    explicit QueryItem(QueryState st);
   };
 
-  struct pair_hash {
-    std::size_t operator()(const std::pair<int, int> &p) const {
-      auto h1 = std::hash<int>{}(p.first);
-      auto h2 = std::hash<int>{}(p.second);
-      return h1 ^ h2;
-    }
-  };
-
-  void update_query_state(QueryDesc *query_desc, QueryItem *query,
-                          QueryState new_state, bool success = true);
-  QueryItem *get_query_message(QueryDesc *query_desc);
+  void update_query_state(QueryItem &query, QueryState new_state,
+                          bool success = true);
+  QueryItem &get_query(QueryDesc *query_desc);
+  void submit_query(QueryDesc *query_desc);
   void collect_query_submit(QueryDesc *query_desc);
+  void report_query_done(QueryDesc *query_desc, QueryItem &query,
+                         QueryMetricsStatus status);
   void collect_query_done(QueryDesc *query_desc, QueryMetricsStatus status);
-  void cleanup_messages();
   void update_nested_counters(QueryDesc *query_desc);
+  bool qdesc_submitted(QueryDesc *query_desc);
 
   UDSConnector *connector = nullptr;
   int nesting_level = 0;
@@ -63,5 +123,5 @@ private:
 #ifdef IC_TEARDOWN_HOOK
   ICStatistics ic_statistics;
 #endif
-  std::unordered_map<std::pair<int, int>, QueryItem, pair_hash> query_msgs;
+  std::unordered_map<QueryKey, QueryItem> queries;
 };
