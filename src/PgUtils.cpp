@@ -9,26 +9,26 @@ extern "C" {
 
 std::string *get_user_name() {
   const char *username =
-      gpdb::get_config_option("session_authorization", false, false);
+      ya_gpdb::get_config_option("session_authorization", false, false);
   // username is not to be freed
   return username ? new std::string(username) : nullptr;
 }
 
 std::string *get_db_name() {
-  char *dbname = gpdb::get_database_name(MyDatabaseId);
+  char *dbname = ya_gpdb::get_database_name(MyDatabaseId);
   std::string *result = nullptr;
   if (dbname) {
     result = new std::string(dbname);
-    gpdb::pfree(dbname);
+    ya_gpdb::pfree(dbname);
   }
   return result;
 }
 
 std::string *get_rg_name() {
-  auto groupId = gpdb::get_rg_id_by_session_id(MySessionState->sessionId);
+  auto groupId = ya_gpdb::get_rg_id_by_session_id(MySessionState->sessionId);
   if (!OidIsValid(groupId))
     return nullptr;
-  char *rgname = gpdb::get_rg_name_for_id(groupId);
+  char *rgname = ya_gpdb::get_rg_name_for_id(groupId);
   if (rgname == nullptr)
     return nullptr;
   return new std::string(rgname);

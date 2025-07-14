@@ -16,7 +16,7 @@ extern "C" {
 #include <utility>
 #include <string>
 
-namespace gpdb {
+namespace ya_gpdb {
 namespace detail {
 
 template <bool Throws, typename Func, typename... Args>
@@ -128,4 +128,4 @@ const char *get_config_option(const char *name, bool missing_ok,
 void list_free(List *list) noexcept;
 Oid get_rg_id_by_session_id(int session_id);
 
-} // namespace gpdb
+} // namespace ya_gpdb
