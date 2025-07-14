@@ -58,21 +58,21 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
                           ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
                           : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
     MemoryContext oldcxt =
-        gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
-    ExplainState es = gpdb::get_explain_state(query_desc, true);
+        ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
+    ExplainState es = ya_gpdb::get_explain_state(query_desc, true);
     if (es.str) {
       *qi->mutable_plan_text() = char_to_trimmed_str(es.str->data, es.str->len,
                                                      Config::max_plan_size());
-      StringInfo norm_plan = gpdb::gen_normplan(es.str->data);
+      StringInfo norm_plan = ya_gpdb::gen_normplan(es.str->data);
       *qi->mutable_template_plan_text() = char_to_trimmed_str(
           norm_plan->data, norm_plan->len, Config::max_plan_size());
       qi->set_plan_id(
           hash_any((unsigned char *)norm_plan->data, norm_plan->len));
       qi->set_query_id(query_desc->plannedstmt->queryId);
-      gpdb::pfree(es.str->data);
-      gpdb::pfree(norm_plan->data);
+      ya_gpdb::pfree(es.str->data);
+      ya_gpdb::pfree(norm_plan->data);
     }
-    gpdb::mem_ctx_switch_to(oldcxt);
+    ya_gpdb::mem_ctx_switch_to(oldcxt);
   }
 }
 
@@ -82,7 +82,7 @@ void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
     *qi->mutable_query_text() = char_to_trimmed_str(
         query_desc->sourceText, strlen(query_desc->sourceText),
         Config::max_text_size());
-    char *norm_query = gpdb::gen_normquery(query_desc->sourceText);
+    char *norm_query = ya_gpdb::gen_normquery(query_desc->sourceText);
     *qi->mutable_template_query_text() = char_to_trimmed_str(
         norm_query, strlen(norm_query), Config::max_text_size());
   }
@@ -234,10 +234,10 @@ void set_analyze_plan_text_json(QueryDesc *query_desc,
     return;
   }
   MemoryContext oldcxt =
-      gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
-  ExplainState es = gpdb::get_analyze_state_json(
+      ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
+  ExplainState es = ya_gpdb::get_analyze_state_json(
       query_desc, query_desc->instrument_options && Config::enable_analyze());
-  gpdb::mem_ctx_switch_to(oldcxt);
+  ya_gpdb::mem_ctx_switch_to(oldcxt);
   if (es.str) {
     // Remove last line break.
     if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
@@ -251,6 +251,6 @@ void set_analyze_plan_text_json(QueryDesc *query_desc,
     auto trimmed_analyze =
         char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
     req->mutable_query_info()->set_analyze_text(trimmed_analyze);
-    gpdb::pfree(es.str->data);
+    ya_gpdb::pfree(es.str->data);
   }
 }
