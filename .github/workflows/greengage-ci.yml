@@ -6,6 +6,7 @@ env:
 
 on:
   push:
+    branches: ['main']  # Trigger on push to main (after merged PR)
     tags: ['6.*']   # Trigger on tags for versioned releases
   pull_request:
     branches: ['*'] # Trigger on pull requests for all branches
@@ -29,6 +30,7 @@ jobs:
 
   behave-tests:
     needs: build  # Wait for build to complete
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: true
       matrix:
@@ -46,6 +48,7 @@ jobs:
 
   regression-tests:
     needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: true
       matrix:
@@ -63,6 +66,7 @@ jobs:
 
   orca-tests:
     needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: true
       matrix:
@@ -80,6 +84,7 @@ jobs:
 
   resgroup-tests:
     needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: true
       matrix:
@@ -96,7 +101,8 @@ jobs:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   upload:
-    needs: [behave-tests, regression-tests, orca-tests, resgroup-tests]  # Wait for all tests
+    if: github.event_name == 'push'  # For push to main or tags
+    needs: build  # For push (main or tags)
     strategy:
       fail-fast: true
       matrix:
