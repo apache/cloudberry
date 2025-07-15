@@ -16,27 +16,104 @@ extern "C" {
 #include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 }
 
-void *ya_gpdb::palloc(Size size) { return detail::wrap_throw(::palloc, size); }
+namespace {
 
-void *ya_gpdb::palloc0(Size size) { return detail::wrap_throw(::palloc0, size); }
+template <bool Throws, typename Func, typename... Args>
+auto wrap(Func &&func, Args &&...args) noexcept(!Throws)
+    -> decltype(func(std::forward<Args>(args)...)) {
 
-char *ya_gpdb::pstrdup(const char *str) {
-  return detail::wrap_throw(::pstrdup, str);
+  using RetType = decltype(func(std::forward<Args>(args)...));
+
+  // Empty struct for void return type.
+  struct VoidResult {};
+  using ResultHolder = std::conditional_t<std::is_void_v<RetType>, VoidResult,
+                                          std::optional<RetType>>;
+
+  bool success;
+  ErrorData *edata;
+  ResultHolder result_holder;
+
+  PG_TRY();
+  {
+    if constexpr (!std::is_void_v<RetType>) {
+      result_holder.emplace(func(std::forward<Args>(args)...));
+    } else {
+      func(std::forward<Args>(args)...);
+    }
+    edata = NULL;
+    success = true;
+  }
+  PG_CATCH();
+  {
+    MemoryContext oldctx = MemoryContextSwitchTo(TopMemoryContext);
+    edata = CopyErrorData();
+    MemoryContextSwitchTo(oldctx);
+    FlushErrorState();
+    success = false;
+  }
+  PG_END_TRY();
+
+  if (!success) {
+    std::string err;
+    if (edata && edata->message) {
+      err = std::string(edata->message);
+    } else {
+      err = "Unknown error occurred";
+    }
+
+    if (edata) {
+      FreeErrorData(edata);
+    }
+
+    if constexpr (Throws) {
+      throw std::runtime_error(err);
+    }
+
+    if constexpr (!std::is_void_v<RetType>) {
+      return RetType{};
+    } else {
+      return;
+    }
+  }
+
+  if constexpr (!std::is_void_v<RetType>) {
+    return *std::move(result_holder);
+  } else {
+    return;
+  }
 }
 
+template <typename Func, typename... Args>
+auto wrap_throw(Func &&func, Args &&...args)
+    -> decltype(func(std::forward<Args>(args)...)) {
+  return wrap<true>(std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+template <typename Func, typename... Args>
+auto wrap_noexcept(Func &&func, Args &&...args) noexcept
+    -> decltype(func(std::forward<Args>(args)...)) {
+  return wrap<false>(std::forward<Func>(func), std::forward<Args>(args)...);
+}
+} // namespace
+
+void *ya_gpdb::palloc(Size size) { return wrap_throw(::palloc, size); }
+
+void *ya_gpdb::palloc0(Size size) { return wrap_throw(::palloc0, size); }
+
+char *ya_gpdb::pstrdup(const char *str) { return wrap_throw(::pstrdup, str); }
+
 char *ya_gpdb::get_database_name(Oid dbid) noexcept {
-  return detail::wrap_noexcept(::get_database_name, dbid);
+  return wrap_noexcept(::get_database_name, dbid);
 }
 
 bool ya_gpdb::split_identifier_string(char *rawstring, char separator,
-                                   List **namelist) noexcept {
-  return detail::wrap_noexcept(SplitIdentifierString, rawstring, separator,
-                               namelist);
+                                      List **namelist) noexcept {
+  return wrap_noexcept(SplitIdentifierString, rawstring, separator, namelist);
 }
 
 ExplainState ya_gpdb::get_explain_state(QueryDesc *query_desc,
-                                     bool costs) noexcept {
-  return detail::wrap_noexcept([&]() {
+                                        bool costs) noexcept {
+  return wrap_noexcept([&]() {
     ExplainState es;
     ExplainInitState(&es);
     es.costs = costs;
@@ -50,8 +127,8 @@ ExplainState ya_gpdb::get_explain_state(QueryDesc *query_desc,
 }
 
 ExplainState ya_gpdb::get_analyze_state_json(QueryDesc *query_desc,
-                                          bool analyze) noexcept {
-  return detail::wrap_noexcept([&]() {
+                                             bool analyze) noexcept {
+  return wrap_noexcept([&]() {
     ExplainState es;
     ExplainInitState(&es);
     es.analyze = analyze;
@@ -71,16 +148,16 @@ ExplainState ya_gpdb::get_analyze_state_json(QueryDesc *query_desc,
 }
 
 Instrumentation *ya_gpdb::instr_alloc(size_t n, int instrument_options) {
-  return detail::wrap_throw(InstrAlloc, n, instrument_options);
+  return wrap_throw(InstrAlloc, n, instrument_options);
 }
 
 HeapTuple ya_gpdb::heap_form_tuple(TupleDesc tupleDescriptor, Datum *values,
-                                bool *isnull) {
+                                   bool *isnull) {
   if (!tupleDescriptor || !values || !isnull)
     throw std::runtime_error(
         "Invalid input parameters for heap tuple formation");
 
-  return detail::wrap_throw(::heap_form_tuple, tupleDescriptor, values, isnull);
+  return wrap_throw(::heap_form_tuple, tupleDescriptor, values, isnull);
 }
 
 void ya_gpdb::pfree(void *pointer) noexcept {
@@ -88,7 +165,7 @@ void ya_gpdb::pfree(void *pointer) noexcept {
   if (!pointer)
     return;
 
-  detail::wrap_noexcept(::pfree, pointer);
+  wrap_noexcept(::pfree, pointer);
 }
 
 MemoryContext ya_gpdb::mem_ctx_switch_to(MemoryContext context) noexcept {
@@ -96,53 +173,51 @@ MemoryContext ya_gpdb::mem_ctx_switch_to(MemoryContext context) noexcept {
 }
 
 const char *ya_gpdb::get_config_option(const char *name, bool missing_ok,
-                                    bool restrict_superuser) noexcept {
+                                       bool restrict_superuser) noexcept {
   if (!name)
     return nullptr;
 
-  return detail::wrap_noexcept(GetConfigOption, name, missing_ok,
-                               restrict_superuser);
+  return wrap_noexcept(GetConfigOption, name, missing_ok, restrict_superuser);
 }
 
 void ya_gpdb::list_free(List *list) noexcept {
   if (!list)
     return;
 
-  detail::wrap_noexcept(::list_free, list);
+  wrap_noexcept(::list_free, list);
 }
 
 CdbExplain_ShowStatCtx *
 ya_gpdb::cdbexplain_showExecStatsBegin(QueryDesc *query_desc,
-                                    instr_time starttime) {
+                                       instr_time starttime) {
   if (!query_desc)
     throw std::runtime_error("Invalid query descriptor");
 
-  return detail::wrap_throw(::cdbexplain_showExecStatsBegin, query_desc,
-                            starttime);
+  return wrap_throw(::cdbexplain_showExecStatsBegin, query_desc, starttime);
 }
 
 void ya_gpdb::instr_end_loop(Instrumentation *instr) {
   if (!instr)
     throw std::runtime_error("Invalid instrumentation pointer");
 
-  detail::wrap_throw(::InstrEndLoop, instr);
+  wrap_throw(::InstrEndLoop, instr);
 }
 
 char *ya_gpdb::gen_normquery(const char *query) {
-  return detail::wrap_throw(::gen_normquery, query);
+  return wrap_throw(::gen_normquery, query);
 }
 
 StringInfo ya_gpdb::gen_normplan(const char *exec_plan) {
   if (!exec_plan)
     throw std::runtime_error("Invalid execution plan string");
 
-  return detail::wrap_throw(::gen_normplan, exec_plan);
+  return wrap_throw(::gen_normplan, exec_plan);
 }
 
 char *ya_gpdb::get_rg_name_for_id(Oid group_id) {
-  return detail::wrap_throw(GetResGroupNameForId, group_id);
+  return wrap_throw(GetResGroupNameForId, group_id);
 }
 
 Oid ya_gpdb::get_rg_id_by_session_id(int session_id) {
-  return detail::wrap_throw(ResGroupGetGroupIdBySessionId, session_id);
+  return wrap_throw(ResGroupGetGroupIdBySessionId, session_id);
 }
