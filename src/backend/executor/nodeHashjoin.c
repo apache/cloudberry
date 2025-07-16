@@ -2341,6 +2341,18 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	if (!IsA(te->expr, Var))
 		return false;
 
+	if (IsA(node, DynamicSeqScanState))
+	{
+		*lattno = te->resno;
+		return true;
+	}
+
+	/*
+	 * seqscan is a special case, it's targetlist is a projection of the
+	 * relation's attributes. so we need to find the attribute number of the
+	 * column in the relation, because PassByBloomFilter runs before
+	 * projection in seqscan.
+	 */
 	var = castNode(Var, te->expr);
 
 	/* system column is not allowed */
