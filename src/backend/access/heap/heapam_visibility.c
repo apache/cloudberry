@@ -1909,16 +1909,11 @@ HeapTupleSatisfiesHistoricMVCC(Relation relation, HeapTuple htup, Snapshot snaps
  *	if so, the indicated buffer is marked dirty.
  */
 bool
-<<<<<<< HEAD
 HeapTupleSatisfiesVisibility(Relation relation, HeapTuple tup, Snapshot snapshot, Buffer buffer)
-=======
-HeapTupleSatisfiesVisibility(HeapTuple htup, Snapshot snapshot, Buffer buffer)
->>>>>>> REL_16_9
 {
 	switch (snapshot->snapshot_type)
 	{
 		case SNAPSHOT_MVCC:
-<<<<<<< HEAD
 			return HeapTupleSatisfiesMVCC(relation, tup, snapshot, buffer);
 			break;
 		case SNAPSHOT_SELF:
@@ -1939,21 +1934,6 @@ HeapTupleSatisfiesVisibility(HeapTuple htup, Snapshot snapshot, Buffer buffer)
 		case SNAPSHOT_NON_VACUUMABLE:
 			return HeapTupleSatisfiesNonVacuumable(relation, tup, snapshot, buffer);
 			break;
-=======
-			return HeapTupleSatisfiesMVCC(htup, snapshot, buffer);
-		case SNAPSHOT_SELF:
-			return HeapTupleSatisfiesSelf(htup, snapshot, buffer);
-		case SNAPSHOT_ANY:
-			return HeapTupleSatisfiesAny(htup, snapshot, buffer);
-		case SNAPSHOT_TOAST:
-			return HeapTupleSatisfiesToast(htup, snapshot, buffer);
-		case SNAPSHOT_DIRTY:
-			return HeapTupleSatisfiesDirty(htup, snapshot, buffer);
-		case SNAPSHOT_HISTORIC_MVCC:
-			return HeapTupleSatisfiesHistoricMVCC(htup, snapshot, buffer);
-		case SNAPSHOT_NON_VACUUMABLE:
-			return HeapTupleSatisfiesNonVacuumable(htup, snapshot, buffer);
->>>>>>> REL_16_9
 	}
 
 	return false;				/* keep compiler quiet */

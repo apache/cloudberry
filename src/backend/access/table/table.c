@@ -25,15 +25,12 @@
 #include "access/table.h"
 #include "storage/lmgr.h"
 
-<<<<<<< HEAD
 #include "catalog/namespace.h"
 #include "cdb/cdbvars.h"
 #include "utils/faultinjector.h"
 #include "utils/guc.h"
 
-=======
 static inline void validate_relation_kind(Relation r);
->>>>>>> REL_16_9
 
 /* ----------------
  *		table_open - open a table relation by relation OID
@@ -135,9 +132,6 @@ table_close(Relation relation, LOCKMODE lockmode)
 {
 	relation_close(relation, lockmode);
 }
-
-<<<<<<< HEAD
-
 
 /*
  * CdbTryOpenTable -- Opens a table with a specified lock mode.
@@ -253,7 +247,7 @@ CdbOpenTable(Oid relid, LOCKMODE reqmode, bool *lockUpgraded)
 	return rel;
 
 }                                       /* CdbOpenTable */
-=======
+
 /* ----------------
  *		validate_relation_kind - check the relation's kind
  *
@@ -272,4 +266,3 @@ validate_relation_kind(Relation r)
 						RelationGetRelationName(r)),
 				 errdetail_relkind_not_supported(r->rd_rel->relkind)));
 }
->>>>>>> REL_16_9

@@ -69,15 +69,9 @@ typedef struct
 
 	/*
 	 * Tuple visibility is only computed once for each tuple, for correctness
-<<<<<<< HEAD
-	 * and efficiency reasons; see comment in heap_page_prune() for
-	 * details. This is of type int8[,] intead of HTSV_Result[], so we can use
-	 * -1 to indicate no visibility has been computed, e.g. for LP_DEAD items.
-=======
 	 * and efficiency reasons; see comment in heap_page_prune() for details.
 	 * This is of type int8[], instead of HTSV_Result[], so we can use -1 to
 	 * indicate no visibility has been computed, e.g. for LP_DEAD items.
->>>>>>> REL_16_9
 	 *
 	 * Same indexing as ->marked.
 	 */
@@ -85,11 +79,7 @@ typedef struct
 } PruneState;
 
 /* Local functions */
-<<<<<<< HEAD
 static HTSV_Result heap_prune_satisfies_vacuum(Relation relation, PruneState *prstate,
-=======
-static HTSV_Result heap_prune_satisfies_vacuum(PruneState *prstate,
->>>>>>> REL_16_9
 											   HeapTuple tup,
 											   Buffer buffer);
 static int	heap_prune_chain(Buffer buffer,
@@ -355,11 +345,7 @@ heap_page_prune(Relation relation, Buffer buffer,
 		htup = (HeapTupleHeader) PageGetItem(page, itemid);
 		tup.t_data = htup;
 		tup.t_len = ItemIdGetLength(itemid);
-<<<<<<< HEAD
-		ItemPointerSet(&(tup.t_self), BufferGetBlockNumber(buffer), offnum);
-=======
 		ItemPointerSet(&(tup.t_self), blockno, offnum);
->>>>>>> REL_16_9
 
 		/*
 		 * Set the offset number so that we can display it along with any
@@ -368,11 +354,7 @@ heap_page_prune(Relation relation, Buffer buffer,
 		if (off_loc)
 			*off_loc = offnum;
 
-<<<<<<< HEAD
 		prstate.htsv[offnum] = heap_prune_satisfies_vacuum(relation, &prstate, &tup,
-=======
-		prstate.htsv[offnum] = heap_prune_satisfies_vacuum(&prstate, &tup,
->>>>>>> REL_16_9
 														   buffer);
 	}
 
@@ -609,8 +591,6 @@ heap_prune_satisfies_vacuum(Relation relation,PruneState *prstate, HeapTuple tup
  * chain.  We also prune any RECENTLY_DEAD tuples preceding a DEAD tuple.
  * This is OK because a RECENTLY_DEAD tuple preceding a DEAD tuple is really
  * DEAD, our visibility test is just too coarse to detect it.
-<<<<<<< HEAD
-=======
  *
  * In general, pruning must never leave behind a DEAD tuple that still has
  * tuple storage.  VACUUM isn't prepared to deal with that case.  That's why
@@ -618,7 +598,6 @@ heap_prune_satisfies_vacuum(Relation relation,PruneState *prstate, HeapTuple tup
  * in the interim) when it sees a newly DEAD tuple that we initially saw as
  * in-progress.  Retrying pruning like this can only happen when an inserting
  * transaction concurrently aborts.
->>>>>>> REL_16_9
  *
  * The root line pointer is redirected to the tuple immediately after the
  * latest DEAD tuple.  If all tuples in the chain are DEAD, the root line

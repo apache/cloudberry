@@ -162,59 +162,35 @@ spgbuildempty(Relation index)
 	/*
 	 * Initialize the meta page and root pages
 	 */
-<<<<<<< HEAD
-	PageEncryptInplace(page, INIT_FORKNUM,
-					   SPGIST_METAPAGE_BLKNO);
-	PageSetChecksumInplace(page, SPGIST_METAPAGE_BLKNO);
-	smgrwrite(index->rd_smgr, INIT_FORKNUM, SPGIST_METAPAGE_BLKNO,
-			  (char *) page, true);
-	log_newpage(&index->rd_smgr->smgr_rnode.node, INIT_FORKNUM,
-				SPGIST_METAPAGE_BLKNO, page, true);
-=======
 	metabuffer = ReadBufferExtended(index, INIT_FORKNUM, P_NEW, RBM_NORMAL, NULL);
 	LockBuffer(metabuffer, BUFFER_LOCK_EXCLUSIVE);
 	rootbuffer = ReadBufferExtended(index, INIT_FORKNUM, P_NEW, RBM_NORMAL, NULL);
 	LockBuffer(rootbuffer, BUFFER_LOCK_EXCLUSIVE);
 	nullbuffer = ReadBufferExtended(index, INIT_FORKNUM, P_NEW, RBM_NORMAL, NULL);
 	LockBuffer(nullbuffer, BUFFER_LOCK_EXCLUSIVE);
->>>>>>> REL_16_9
 
 	Assert(BufferGetBlockNumber(metabuffer) == SPGIST_METAPAGE_BLKNO);
 	Assert(BufferGetBlockNumber(rootbuffer) == SPGIST_ROOT_BLKNO);
 	Assert(BufferGetBlockNumber(nullbuffer) == SPGIST_NULL_BLKNO);
 
-<<<<<<< HEAD
-	PageEncryptInplace(page, INIT_FORKNUM,
-					   SPGIST_ROOT_BLKNO);
-	PageSetChecksumInplace(page, SPGIST_ROOT_BLKNO);
-	smgrwrite(index->rd_smgr, INIT_FORKNUM, SPGIST_ROOT_BLKNO,
-			  (char *) page, true);
-	log_newpage(&index->rd_smgr->smgr_rnode.node, INIT_FORKNUM,
-				SPGIST_ROOT_BLKNO, page, true);
-=======
 	START_CRIT_SECTION();
->>>>>>> REL_16_9
 
 	SpGistInitMetapage(BufferGetPage(metabuffer));
+	PageEncryptInplace(BufferGetPage(metabuffer), INIT_FORKNUM,
+					   SPGIST_METAPAGE_BLKNO);
 	MarkBufferDirty(metabuffer);
 	SpGistInitBuffer(rootbuffer, SPGIST_LEAF);
+	PageEncryptInplace(BufferGetPage(rootbuffer), INIT_FORKNUM,
+					   SPGIST_ROOT_BLKNO);
 	MarkBufferDirty(rootbuffer);
 	SpGistInitBuffer(nullbuffer, SPGIST_LEAF | SPGIST_NULLS);
+	PageEncryptInplace(BufferGetPage(nullbuffer), INIT_FORKNUM,
+					   SPGIST_NULL_BLKNO);
 	MarkBufferDirty(nullbuffer);
 
-<<<<<<< HEAD
-	PageEncryptInplace(page, INIT_FORKNUM,
-					   SPGIST_NULL_BLKNO);
-	PageSetChecksumInplace(page, SPGIST_NULL_BLKNO);
-	smgrwrite(index->rd_smgr, INIT_FORKNUM, SPGIST_NULL_BLKNO,
-			  (char *) page, true);
-	log_newpage(&index->rd_smgr->smgr_rnode.node, INIT_FORKNUM,
-				SPGIST_NULL_BLKNO, page, true);
-=======
 	log_newpage_buffer(metabuffer, true);
 	log_newpage_buffer(rootbuffer, true);
 	log_newpage_buffer(nullbuffer, true);
->>>>>>> REL_16_9
 
 	END_CRIT_SECTION();
 
