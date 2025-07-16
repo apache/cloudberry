@@ -1,5 +1,5 @@
 override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
-override CXXFLAGS = -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++14 -Iinclude -Isrc/protos -Isrc -DGPBUILD
+override CXXFLAGS = -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++17 -Iinclude -Isrc/protos -Isrc -DGPBUILD
 COMMON_CPP_FLAGS := -Isrc -Iinclude -Isrc/stat_statements_parser
 PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
 SHLIB_LINK += -lprotobuf -lpthread -lstdc++
@@ -30,6 +30,7 @@ OBJS			:=	$(PG_STAT_OBJS)						\
 					$(SRC_DIR)/UDSConnector.o			\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\
+					$(SRC_DIR)/memory/gpdbwrappers.o		\
 					$(SRC_DIR)/yagp_hooks_collector.o
 EXTRA_CLEAN     := $(GEN_DIR)
 DATA			:= $(wildcard sql/*--*.sql)

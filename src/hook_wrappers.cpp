@@ -7,10 +7,10 @@ extern "C" {
 #include "utils/elog.h"
 #include "utils/builtins.h"
 #include "utils/metrics_utils.h"
-#include "cdb/cdbexplain.h"
 #include "cdb/cdbvars.h"
 #include "cdb/ml_ipc.h"
 #include "tcop/utility.h"
+#include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 }
 #undef typeid
 
@@ -18,7 +18,7 @@ extern "C" {
 #include "YagpStat.h"
 #include "EventSender.h"
 #include "hook_wrappers.h"
-#include "stat_statements_parser/pg_stat_statements_ya_parser.h"
+#include "memory/gpdbwrappers.h"
 
 static ExecutorStart_hook_type previous_ExecutorStart_hook = nullptr;
 static ExecutorRun_hook_type previous_ExecutorRun_hook = nullptr;
@@ -229,7 +229,7 @@ Datum yagp_functions_get(FunctionCallInfo fcinfo) {
   values[3] = Int64GetDatum(stats.failed_connects);
   values[4] = Int64GetDatum(stats.failed_other);
   values[5] = Int32GetDatum(stats.max_message_size);
-  HeapTuple tuple = heap_form_tuple(tupdesc, values, nulls);
+  HeapTuple tuple = ya_gpdb::heap_form_tuple(tupdesc, values, nulls);
   Datum result = HeapTupleGetDatum(tuple);
   PG_RETURN_DATUM(result);
 }

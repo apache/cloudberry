@@ -2,6 +2,7 @@
 #include "PgUtils.h"
 #include "ProcStats.h"
 #include "Config.h"
+#include "memory/gpdbwrappers.h"
 
 #define typeid __typeid
 #define operator __operator
@@ -15,10 +16,7 @@ extern "C" {
 #ifdef IC_TEARDOWN_HOOK
 #include "cdb/ic_udpifc.h"
 #endif
-#include "gpmon/gpmon.h"
 #include "utils/workfile_mgr.h"
-
-#include "stat_statements_parser/pg_stat_statements_ya_parser.h"
 }
 #undef typeid
 #undef operator
@@ -60,18 +58,21 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
                           ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
                           : yagpcc::PlanGenerator::PLAN_GENERATOR_PLANNER);
     MemoryContext oldcxt =
-        MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
-    auto es = get_explain_state(query_desc, true);
-    MemoryContextSwitchTo(oldcxt);
-    *qi->mutable_plan_text() =
-        char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
-    StringInfo norm_plan = gen_normplan(es.str->data);
-    *qi->mutable_template_plan_text() = char_to_trimmed_str(
-        norm_plan->data, norm_plan->len, Config::max_plan_size());
-    qi->set_plan_id(hash_any((unsigned char *)norm_plan->data, norm_plan->len));
-    qi->set_query_id(query_desc->plannedstmt->queryId);
-    pfree(es.str->data);
-    pfree(norm_plan->data);
+        ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
+    ExplainState es = ya_gpdb::get_explain_state(query_desc, true);
+    if (es.str) {
+      *qi->mutable_plan_text() = char_to_trimmed_str(es.str->data, es.str->len,
+                                                     Config::max_plan_size());
+      StringInfo norm_plan = ya_gpdb::gen_normplan(es.str->data);
+      *qi->mutable_template_plan_text() = char_to_trimmed_str(
+          norm_plan->data, norm_plan->len, Config::max_plan_size());
+      qi->set_plan_id(
+          hash_any((unsigned char *)norm_plan->data, norm_plan->len));
+      qi->set_query_id(query_desc->plannedstmt->queryId);
+      ya_gpdb::pfree(es.str->data);
+      ya_gpdb::pfree(norm_plan->data);
+    }
+    ya_gpdb::mem_ctx_switch_to(oldcxt);
   }
 }
 
@@ -81,7 +82,7 @@ void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
     *qi->mutable_query_text() = char_to_trimmed_str(
         query_desc->sourceText, strlen(query_desc->sourceText),
         Config::max_text_size());
-    char *norm_query = gen_normquery(query_desc->sourceText);
+    char *norm_query = ya_gpdb::gen_normquery(query_desc->sourceText);
     *qi->mutable_template_query_text() = char_to_trimmed_str(
         norm_query, strlen(norm_query), Config::max_text_size());
   }
@@ -233,23 +234,23 @@ void set_analyze_plan_text_json(QueryDesc *query_desc,
     return;
   }
   MemoryContext oldcxt =
-      MemoryContextSwitchTo(query_desc->estate->es_query_cxt);
-
-  ExplainState es = get_analyze_state_json(
+      ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
+  ExplainState es = ya_gpdb::get_analyze_state_json(
       query_desc, query_desc->instrument_options && Config::enable_analyze());
-  // Remove last line break.
-  if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
-    es.str->data[--es.str->len] = '\0';
+  ya_gpdb::mem_ctx_switch_to(oldcxt);
+  if (es.str) {
+    // Remove last line break.
+    if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
+      es.str->data[--es.str->len] = '\0';
+    }
+    // Convert JSON array to JSON object.
+    if (es.str->len > 0) {
+      es.str->data[0] = '{';
+      es.str->data[es.str->len - 1] = '}';
+    }
+    auto trimmed_analyze =
+        char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
+    req->mutable_query_info()->set_analyze_text(trimmed_analyze);
+    ya_gpdb::pfree(es.str->data);
   }
-  // Convert JSON array to JSON object.
-  if (es.str->len > 0) {
-    es.str->data[0] = '{';
-    es.str->data[es.str->len - 1] = '}';
-  }
-  auto trimmed_analyze =
-      char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
-  req->mutable_query_info()->set_analyze_text(trimmed_analyze);
-
-  pfree(es.str->data);
-  MemoryContextSwitchTo(oldcxt);
 }
