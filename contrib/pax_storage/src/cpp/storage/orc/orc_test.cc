@@ -40,7 +40,7 @@
 #include "storage/local_file_system.h"
 #include "storage/filter/pax_filter.h"
 #include "storage/toast/pax_toast.h"
-#include "stub.h"
+#include "cpp-stub/src/stub.h"
 
 namespace pax::tests {
 

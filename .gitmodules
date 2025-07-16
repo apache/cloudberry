@@ -11,9 +11,6 @@
 [submodule "contrib/pax_storage/src/cpp/contrib/googlebench"]
 	path = contrib/pax_storage/src/cpp/contrib/googlebench
 	url = https://github.com/google/benchmark.git
-[submodule "contrib/pax_storage/src/cpp/contrib/cpp-stub"]
-	path = contrib/pax_storage/src/cpp/contrib/cpp-stub
-	url = https://github.com/coolxv/cpp-stub.git
 [submodule "dependency/yyjson"]
 	path = dependency/yyjson
 	url = https://github.com/ibireme/yyjson.git
