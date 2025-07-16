@@ -984,6 +984,7 @@ typedef struct DatumStreamTypeInfo
 	int32		typid;			/* type id */
 	char		align;			/* Align */
 	bool		byval;			/* if it is a by value type */
+	char		typstorage;		/* plain or normal varlena types*/
 }	DatumStreamTypeInfo;
 
 #define MAXREPEAT_COUNT 0x3FFFFFFF

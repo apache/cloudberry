@@ -6,16 +6,17 @@
     create table r (r1 int, r2 int) distributed by (r2);
     create table s (s1 int, s2 int) distributed by (s2);
     explain select * from r where r2 > 8 and exists (select 1 from s where r2=s2 and r1=s1 and s1>99);
-                                      QUERY PLAN
-    ------------------------------------------------------------------------------
-     Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
-       ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=8)
-             Hash Cond: ((r.r2 = s.s2) AND (r.r1 = s.s1))
-             ->  Seq Scan on r  (cost=0.00..431.00 rows=1 width=8)
-                   Filter: ((r1 > 99) AND (r2 > 8))
-             ->  Hash  (cost=431.00..431.00 rows=1 width=8)
-                   ->  Seq Scan on s  (cost=0.00..431.00 rows=1 width=8)
-                         Filter: ((s1 > 99) AND (s2 > 8))
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
+   ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=8)
+         Hash Cond: ((r.r2 = s.s2) AND (r.r1 = s.s1))
+         ->  Seq Scan on r  (cost=0.00..431.00 rows=1 width=8)
+               Filter: ((r1 > 99) AND (r2 > 8))
+         ->  Hash  (cost=431.00..431.00 rows=1 width=8)
+               ->  Result  (cost=0.00..431.00 rows=1 width=8)
+                     ->  Seq Scan on s  (cost=0.00..431.00 rows=1 width=8)
+                           Filter: ((s1 > 99) AND (s2 > 8))
     		]]>
     </dxl:Comment>
   <dxl:Thread Id="0">
@@ -349,7 +350,7 @@
         </dxl:LogicalGet>
       </dxl:LogicalSelect>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="192">
+    <dxl:Plan Id="0" SpaceSize="112">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="862.000984" Rows="1.000000" Width="8"/>

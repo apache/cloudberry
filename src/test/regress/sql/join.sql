@@ -1762,3 +1762,18 @@ update xx1 set x2 = f1 from xx1, lateral (select * from int4_tbl where f1 = x1) 
 delete from xx1 using (select * from int4_tbl where f1 = x1) ss;
 delete from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss;
 delete from xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
+
+-- Test for not adding unnecessary materialization during merge join
+-- start_ignore
+drop table if exists t;
+-- end_ignore
+create table t (a int);
+set enable_hashjoin = off;
+set enable_mergejoin = on;
+set work_mem = 64;
+explain (costs off)
+select * from t, t tt where t.a = tt.a;
+drop table t;
+reset enable_hashjoin;
+reset enable_mergejoin;
+reset work_mem;

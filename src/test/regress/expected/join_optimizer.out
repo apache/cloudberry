@@ -2481,49 +2481,34 @@ where not exists (
               ) a1 on t3.c2 = a1.c1
   where t1.c1 = t2.c2
 );
-                                                                   QUERY PLAN                                                                   
-------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice7; segments: 3)
-   ->  Result
-         Filter: (COALESCE((count((count()))), '0'::bigint) = '0'::bigint)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Hash Anti Join
+   Hash Cond: (tt4x.c1 = tt4x_1.c2)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on tt4x
+   ->  Hash
          ->  Result
                ->  Hash Left Join
-                     Hash Cond: (tt4x.c1 = tt4x_1.c2)
-                     ->  Seq Scan on tt4x
+                     Hash Cond: (tt4x_2.c2 = tt4x_4.c1)
+                     ->  Gather Motion 3:1  (slice3; segments: 3)
+                           ->  Hash Left Join
+                                 Hash Cond: (tt4x_1.c3 = tt4x_2.c1)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: tt4x_1.c3
+                                       ->  Seq Scan on tt4x tt4x_1
+                                 ->  Hash
+                                       ->  Seq Scan on tt4x tt4x_2
                      ->  Hash
-                           ->  Result
-                                 ->  GroupAggregate
-                                       Group Key: tt4x_1.c2
-                                       ->  Sort
-                                             Sort Key: tt4x_1.c2
-                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)
-                                                   Hash Key: tt4x_1.c2
-                                                   ->  Result
-                                                         ->  GroupAggregate
-                                                               Group Key: tt4x_1.c2
-                                                               ->  Sort
-                                                                     Sort Key: tt4x_1.c2
-                                                                     ->  Redistribute Motion 1:3  (slice5)
-                                                                           ->  Hash Left Join
-                                                                                 Hash Cond: (tt4x_2.c2 = tt4x_4.c1)
-                                                                                 ->  Gather Motion 3:1  (slice2; segments: 3)
-                                                                                       ->  Hash Left Join
-                                                                                             Hash Cond: (tt4x_1.c3 = tt4x_2.c1)
-                                                                                             ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                                                                                                   Hash Key: tt4x_1.c3
-                                                                                                   ->  Seq Scan on tt4x tt4x_1
-                                                                                             ->  Hash
-                                                                                                   ->  Seq Scan on tt4x tt4x_2
-                                                                                 ->  Hash
-                                                                                       ->  Hash Left Join
-                                                                                             Hash Cond: (tt4x_3.c2 = tt4x_4.c1)
-                                                                                             ->  Gather Motion 3:1  (slice3; segments: 3)
-                                                                                                   ->  Seq Scan on tt4x tt4x_3
-                                                                                             ->  Hash
-                                                                                                   ->  Gather Motion 3:1  (slice4; segments: 3)
-                                                                                                         ->  Seq Scan on tt4x tt4x_4
+                           ->  Hash Left Join
+                                 Hash Cond: (tt4x_3.c2 = tt4x_4.c1)
+                                 ->  Gather Motion 3:1  (slice4; segments: 3)
+                                       ->  Seq Scan on tt4x tt4x_3
+                                 ->  Hash
+                                       ->  Gather Motion 3:1  (slice5; segments: 3)
+                                             ->  Seq Scan on tt4x tt4x_4
  Optimizer: Pivotal Optimizer (GPORCA)
-(40 rows)
+(25 rows)
 
 --
 -- regression test for problems of the sort depicted in bug #3494
@@ -5809,3 +5794,27 @@ ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
 HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+-- Test for not adding unnecessary materialization during merge join
+create table t (a int);
+set enable_hashjoin = off;
+set enable_mergejoin = on;
+set work_mem = 64;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
+explain (costs off)
+select * from t, t tt where t.a = tt.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (t.a = t_1.a)
+         ->  Seq Scan on t
+         ->  Hash
+               ->  Seq Scan on t t_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+drop table t;
+reset enable_hashjoin;
+reset enable_mergejoin;
+reset work_mem;
+WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.

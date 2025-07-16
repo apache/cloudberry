@@ -78,6 +78,7 @@ RUN wget https://ftp.postgresql.org/pub/dev/pg_bsd_indent-1.3.tar.gz && \
     rm -r pg_bsd_indent*
 
 WORKDIR /home/gpadmin
+ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 FROM base as build
 
@@ -88,7 +89,6 @@ RUN mkdir /home/gpadmin/bin_gpdb
 ENV TARGET_OS_VERSION=7
 ENV TARGET_OS=centos
 ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" 
 
 # Compile with running mocking tests
 RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
