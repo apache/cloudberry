@@ -17,7 +17,6 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-<<<<<<< HEAD
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
@@ -25,20 +24,11 @@ AC_INIT([Apache Cloudberry], [2.0.0-devel], [dev@cloudberry.apache.org], [], [ht
 [PG_PACKAGE_VERSION=14.4]
 AC_SUBST(PG_PACKAGE_VERSION)
 
-dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
-dnl Untested combinations of 'autoconf' and PostgreSQL versions are not
-dnl recommended.  You can remove the check from 'configure.in' but it is then
-dnl your responsibility whether the result works or not.])])
-AC_COPYRIGHT([Copyright (c) 1996-2021, PostgreSQL Global Development Group])
-=======
-AC_INIT([PostgreSQL], [16.9], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
-
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
 recommended.  You can remove the check from 'configure.ac' but it is then
 your responsibility whether the result works or not.])])
 AC_COPYRIGHT([Copyright (c) 1996-2023, PostgreSQL Global Development Group])
->>>>>>> REL_16_9
 AC_CONFIG_SRCDIR([src/backend/access/common/heaptuple.c])
 AC_CONFIG_AUX_DIR(config)
 AC_PREFIX_DEFAULT(/usr/local/cbdb)
@@ -636,27 +626,12 @@ if test "$GCC" = yes -a "$ICC" = no; then
     CFLAGS="$CFLAGS -Wno-unused-command-line-argument"
   fi
   # Remove clang 12+'s compound-token-split-by-macro, as this causes a lot
-<<<<<<< HEAD
-  # of warnings when building plperl because of Perl.  Like previously, test
-  # for the positive form and add the negative form
-=======
   # of warnings when building plperl because of usages in the Perl headers.
->>>>>>> REL_16_9
   NOT_THE_CFLAGS=""
   PGAC_PROG_CC_VAR_OPT(NOT_THE_CFLAGS, [-Wcompound-token-split-by-macro])
   if test -n "$NOT_THE_CFLAGS"; then
     CFLAGS="$CFLAGS -Wno-compound-token-split-by-macro"
   fi
-<<<<<<< HEAD
-  # Similarly remove clang 15+'s deprecated-non-prototype, as it warns about
-  # tree-walking APIs that we can't reasonably change in the back branches.
-  NOT_THE_CFLAGS=""
-  PGAC_PROG_CC_VAR_OPT(NOT_THE_CFLAGS, [-Wdeprecated-non-prototype])
-  if test -n "$NOT_THE_CFLAGS"; then
-    CFLAGS="$CFLAGS -Wno-deprecated-non-prototype"
-  fi
-=======
->>>>>>> REL_16_9
   # Similarly disable useless truncation warnings from gcc 8+
   NOT_THE_CFLAGS=""
   PGAC_PROG_CC_VAR_OPT(NOT_THE_CFLAGS, [-Wformat-truncation])
@@ -744,8 +719,6 @@ if test "$with_llvm" = yes ; then
   PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, BITCODE_CFLAGS, [-fexcess-precision=standard])
   PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANGXX, BITCODE_CXXFLAGS, [-fexcess-precision=standard])
 
-<<<<<<< HEAD
-=======
   PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, BITCODE_CFLAGS, [-Xclang -no-opaque-pointers])
   PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANGXX, BITCODE_CXXFLAGS, [-Xclang -no-opaque-pointers])
 
@@ -756,7 +729,6 @@ if test "$with_llvm" = yes ; then
   PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANG, BITCODE_CFLAGS, [-mno-outline-atomics])
   PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANG, BITCODE_CXXFLAGS, [-mno-outline-atomics])
 
->>>>>>> REL_16_9
   NOT_THE_CFLAGS=""
   PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, NOT_THE_CFLAGS, [-Wunused-command-line-argument])
   if test -n "$NOT_THE_CFLAGS"; then
@@ -768,14 +740,6 @@ if test "$with_llvm" = yes ; then
     BITCODE_CFLAGS="$BITCODE_CFLAGS -Wno-compound-token-split-by-macro"
   fi
   NOT_THE_CFLAGS=""
-<<<<<<< HEAD
-  PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, NOT_THE_CFLAGS, [-Wdeprecated-non-prototype])
-  if test -n "$NOT_THE_CFLAGS"; then
-    BITCODE_CFLAGS="$BITCODE_CFLAGS -Wno-deprecated-non-prototype"
-  fi
-  NOT_THE_CFLAGS=""
-=======
->>>>>>> REL_16_9
   PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, NOT_THE_CFLAGS, [-Wformat-truncation])
   if test -n "$NOT_THE_CFLAGS"; then
     BITCODE_CFLAGS="$BITCODE_CFLAGS -Wno-format-truncation"
@@ -1369,35 +1333,36 @@ if test "$with_lz4" = yes; then
   done
 fi
 
-#
-<<<<<<< HEAD
-# bzip2
-#
-PGAC_ARG_BOOL(with, libbz2, yes,
-              [do not use bzip2])
-AC_SUBST(with_libbz2)
-
-#
-# zstd
-#
-AC_MSG_CHECKING([whether to build with ZSTD support])
-PGAC_ARG_BOOL(with, zstd, yes, [do not build with Zstandard],
-              [AC_DEFINE([USE_ZSTD], 1, [Define to build with zstd support. (--with-zstd)])])
-=======
 # ZSTD
 #
 AC_MSG_CHECKING([whether to build with ZSTD support])
 PGAC_ARG_BOOL(with, zstd, no, [build with ZSTD support],
               [AC_DEFINE([USE_ZSTD], 1, [Define to 1 to build with ZSTD support. (--with-zstd)])])
->>>>>>> REL_16_9
 AC_MSG_RESULT([$with_zstd])
 AC_SUBST(with_zstd)
 
 if test "$with_zstd" = yes; then
-<<<<<<< HEAD
-  dnl zstd_errors.h was renamed from error_public.h in v1.4.0
-  PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0])
+  PKG_CHECK_MODULES(ZSTD, libzstd >= 1.4.0)
+  # We only care about -I, -D, and -L switches;
+  # note that -lzstd will be added by AC_CHECK_LIB below.
+  for pgac_option in $ZSTD_CFLAGS; do
+    case $pgac_option in
+      -I*|-D*) CPPFLAGS="$CPPFLAGS $pgac_option";;
+    esac
+  done
+  for pgac_option in $ZSTD_LIBS; do
+    case $pgac_option in
+      -L*) LDFLAGS="$LDFLAGS $pgac_option";;
+    esac
+  done
 fi
+
+#
+# bzip2
+#
+PGAC_ARG_BOOL(with, libbz2, yes,
+              [do not use bzip2])
+AC_SUBST(with_libbz2)
 
 #
 # quicklz
@@ -1440,46 +1405,6 @@ PGAC_ARG_REQ(with, apr-config,
 AC_SUBST(with_apr_config)
 
 #
-# Elf
-#
-
-# Assume system is ELF if it predefines __ELF__ as 1,
-# otherwise believe host_os based default.
-case $host_os in
-    freebsd1*|freebsd2*) elf=no;;
-    freebsd3*|freebsd4*) elf=yes;;
-esac
-
-AC_EGREP_CPP(yes,
-[#if __ELF__
-  yes
-#endif
-],
-[ELF_SYS=true],
-[if test "X$elf" = "Xyes" ; then
-  ELF_SYS=true
-else
-  ELF_SYS=
-fi])
-AC_SUBST(ELF_SYS)
-
-=======
-  PKG_CHECK_MODULES(ZSTD, libzstd >= 1.4.0)
-  # We only care about -I, -D, and -L switches;
-  # note that -lzstd will be added by AC_CHECK_LIB below.
-  for pgac_option in $ZSTD_CFLAGS; do
-    case $pgac_option in
-      -I*|-D*) CPPFLAGS="$CPPFLAGS $pgac_option";;
-    esac
-  done
-  for pgac_option in $ZSTD_LIBS; do
-    case $pgac_option in
-      -L*) LDFLAGS="$LDFLAGS $pgac_option";;
-    esac
-  done
-fi
->>>>>>> REL_16_9
-#
 # Assignments
 #
 
@@ -1489,16 +1414,9 @@ LDFLAGS="$LDFLAGS $LIBDIRS"
 AC_ARG_VAR(LDFLAGS_EX, [extra linker flags for linking executables only])
 AC_ARG_VAR(LDFLAGS_SL, [extra linker flags for linking shared libraries only])
 
-<<<<<<< HEAD
 AC_MSG_NOTICE([using CPPFLAGS=$CPPFLAGS])
 AC_MSG_NOTICE([using LDFLAGS=$LDFLAGS])
 
-PGAC_PROG_LD
-AC_SUBST(LD)
-AC_SUBST(with_gnu_ld)
-AC_PROG_RANLIB
-=======
->>>>>>> REL_16_9
 PGAC_CHECK_STRIP
 AC_CHECK_TOOL(AR, ar, ar)
 if test "$PORTNAME" = "win32"; then
@@ -1840,13 +1758,10 @@ if test "$with_lz4" = yes ; then
   AC_CHECK_LIB(lz4, LZ4_compress_default, [], [AC_MSG_ERROR([library 'lz4' is required for LZ4 support])])
 fi
 
-<<<<<<< HEAD
-=======
 if test "$with_zstd" = yes ; then
   AC_CHECK_LIB(zstd, ZSTD_compress, [], [AC_MSG_ERROR([library 'zstd' is required for ZSTD support])])
 fi
 
->>>>>>> REL_16_9
 # Note: We can test for libldap_r only after we know PTHREAD_LIBS;
 # also, on AIX, we may need to have openssl in LIBS for this step.
 if test "$with_ldap" = yes ; then
@@ -1946,52 +1861,15 @@ AC_CHECK_HEADERS(m4_normalize([
 	sys/personality.h
 	sys/prctl.h
 	sys/procctl.h
-<<<<<<< HEAD
-	sys/pstat.h
-	sys/resource.h
-	sys/select.h
-	sys/sem.h
-	sys/shm.h
-	sys/signalfd.h
-	sys/sockio.h
-	sys/tas.h
-	sys/uio.h
-	sys/un.h
-=======
 	sys/signalfd.h
 	sys/ucred.h
->>>>>>> REL_16_9
 	termios.h
 	ucred.h
 ]))
 
-<<<<<<< HEAD
 # GPDB additions.
 AC_CHECK_HEADERS([ execinfo.h ])
 
-# On BSD, test for net/if.h will fail unless sys/socket.h
-# is included first.
-AC_CHECK_HEADERS(net/if.h, [], [],
-[AC_INCLUDES_DEFAULT
-#include <sys/socket.h>
-])
-
-# On OpenBSD, test for sys/ucred.h will fail unless sys/param.h
-# is included first.
-AC_CHECK_HEADERS(sys/ucred.h, [], [],
-[AC_INCLUDES_DEFAULT
-#include <sys/param.h>
-])
-
-# At least on IRIX, test for netinet/tcp.h will fail unless
-# netinet/in.h is included first.
-AC_CHECK_HEADERS(netinet/tcp.h, [], [],
-[AC_INCLUDES_DEFAULT
-#include <netinet/in.h>
-])
-
-=======
->>>>>>> REL_16_9
 if expr x"$pgac_cv_check_readline" : 'x-lreadline' >/dev/null ; then
   AC_CHECK_HEADERS(readline/readline.h, [],
         [AC_CHECK_HEADERS(readline.h, [],
@@ -2048,7 +1926,6 @@ failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-zlib to disable zlib support.])])
 fi
 
-<<<<<<< HEAD
 # Check for bzlib.h
 if test "$with_libbz2" = yes ; then
   AC_CHECK_HEADER(bzlib.h, [], [AC_MSG_ERROR([header file <bzlib.h> is required for bzip2 support])], [])
@@ -2064,9 +1941,7 @@ if test "$enable_external_fts" = yes; then
 AC_CHECK_HEADER(jansson.h, [], [AC_MSG_ERROR([header file <jansson.h> is required for ETCD support])])
 fi
 
-=======
 PGAC_PATH_PROGS(LZ4, lz4)
->>>>>>> REL_16_9
 if test "$with_lz4" = yes; then
   AC_CHECK_HEADER(lz4.h, [], [AC_MSG_ERROR([lz4.h header file is required for LZ4])])
 fi
@@ -2370,11 +2245,8 @@ LIBS=`echo "$LIBS" | sed -e 's/-ledit//g' -e 's/-lreadline//g'`
 
 AC_CHECK_FUNCS(m4_normalize([
 	backtrace_symbols
-<<<<<<< HEAD
 	cbrt
 	clock_gettime
-=======
->>>>>>> REL_16_9
 	copyfile
 	getifaddrs
 	getpeerucred
@@ -2437,10 +2309,7 @@ AC_CHECK_DECLS([strlcat, strlcpy, strnlen])
 # won't handle deployment target restrictions on macOS
 AC_CHECK_DECLS([preadv], [], [AC_LIBOBJ(preadv)], [#include <sys/uio.h>])
 AC_CHECK_DECLS([pwritev], [], [AC_LIBOBJ(pwritev)], [#include <sys/uio.h>])
-<<<<<<< HEAD
-=======
 AC_CHECK_DECLS([strchrnul], [], [], [#include <string.h>])
->>>>>>> REL_16_9
 
 # This is probably only present on macOS, but may as well check always
 AC_CHECK_DECLS(F_FULLFSYNC, [], [], [#include <fcntl.h>])
@@ -2451,13 +2320,6 @@ AC_REPLACE_FUNCS(m4_normalize([
 	getpeereid
 	inet_aton
 	mkdtemp
-<<<<<<< HEAD
-	pread
-	pwrite
-	random
-	srandom
-=======
->>>>>>> REL_16_9
 	strlcat
 	strlcpy
 	strnlen
@@ -2545,25 +2407,6 @@ if test x"$pgac_cv_var_int_optreset" = x"yes"; then
   AC_DEFINE(HAVE_INT_OPTRESET, 1, [Define to 1 if you have the global variable 'int optreset'.])
 fi
 
-<<<<<<< HEAD
-AC_CHECK_FUNCS([strtoll __strtoll strtoq], [break])
-AC_CHECK_FUNCS([strtoull __strtoull strtouq], [break])
-# strto[u]ll may exist but not be declared
-AC_CHECK_DECLS([strtoll, strtoull])
-
-AC_CACHE_CHECK([for builtin locking functions], pgac_cv_gcc_int_atomics,
-[AC_TRY_LINK([],
-  [int lock = 0;
-   __sync_lock_test_and_set(&lock, 1);
-   __sync_lock_release(&lock);],
-  [pgac_cv_gcc_int_atomics="yes"],
-  [pgac_cv_gcc_int_atomics="no"])])
-if test x"$pgac_cv_gcc_int_atomics" = x"yes"; then
-  AC_DEFINE(HAVE_GCC_INT_ATOMICS, 1, [Define to 1 if you have __sync_lock_test_and_set(int *) and friends.])
-fi
-
-=======
->>>>>>> REL_16_9
 if test "$with_icu" = yes; then
   ac_save_CPPFLAGS=$CPPFLAGS
   CPPFLAGS="$ICU_CFLAGS $CPPFLAGS"
@@ -2990,10 +2833,7 @@ if test "$enable_tap_tests" = yes; then
   # AX_PROG_PERL_MODULES here, but prove might be part of a different Perl
   # installation than perl, eg on MSys, so we have to check using prove.
   AC_MSG_CHECKING(for Perl modules required for TAP tests)
-<<<<<<< HEAD
-=======
   __CONFIG_HOST_OS__=$host_os; export __CONFIG_HOST_OS__
->>>>>>> REL_16_9
   [modulestderr=`"$PROVE" "$srcdir/config/check_modules.pl" 2>&1 >/dev/null`]
   if test $? -eq 0; then
     # log the module version details, but don't show them interactively
@@ -3026,7 +2866,6 @@ else
   PGAC_PROG_CC_LDFLAGS_OPT([-Wl,--as-needed], $link_test_func)
 fi
 
-<<<<<<< HEAD
 # Many of the autoconf tests produce warnings, or even compiler errors, on
 # purpose as they run through the conftest programs. So, treating warning as
 # error should be last step after all autoconf checks are performed, otherwise
@@ -3072,13 +2911,12 @@ AC_DEFINE_UNQUOTED(GP_VERSION,
 [GP_MAJORVERSION=`expr "$GP_VERSION" : '\([0-9][0-9]*\)'`]
 AC_SUBST(GP_MAJORVERSION)
 AC_DEFINE_UNQUOTED(GP_MAJORVERSION, "$GP_MAJORVERSION", [Cloudberry major version as a string])
-=======
+
 # For linkers that understand --export-dynamic, add that to the LDFLAGS_EX_BE
 # (backend specific ldflags). One some platforms this will always fail (e.g.,
 # windows), but on others it depends on the choice of linker (e.g., solaris).
 PGAC_PROG_CC_LD_VARFLAGS_OPT(LDFLAGS_EX_BE, [-Wl,--export-dynamic], $link_test_func)
 AC_SUBST(LDFLAGS_EX_BE)
->>>>>>> REL_16_9
 
 # Create compiler version string
 if test x"$GCC" = x"yes" ; then
@@ -3192,16 +3030,14 @@ AC_CONFIG_HEADERS([src/interfaces/ecpg/include/ecpg_config.h],
                   [echo >src/interfaces/ecpg/include/stamp-h])
 
 AC_OUTPUT
-<<<<<<< HEAD
-# The configure args contain '-Wl,-rpath,\$$ORIGIN`, when it falls
-# as a C literal string, it's invalid, so converting `\` to `\\`
-# to be correct for C program.
-sed -i '/define CONFIGURE_ARGS/s,\([[^\\]]\)\\\$\$,\1\\\\$$,g' src/include/pg_config.h
-=======
 
 # Ensure that any meson build directories would reconfigure and see that
 # there's a conflicting in-tree build and can error out.
 if test "$vpath_build" = "no"; then
   touch meson.build
 fi
->>>>>>> REL_16_9
+
+# The configure args contain '-Wl,-rpath,\$$ORIGIN`, when it falls
+# as a C literal string, it's invalid, so converting `\` to `\\`
+# to be correct for C program.
+sed -i '/define CONFIGURE_ARGS/s,\([[^\\]]\)\\\$\$,\1\\\\$$,g' src/include/pg_config.h
