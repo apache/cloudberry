@@ -326,6 +326,7 @@ gpdb::Float4FromDatum(Datum d)
 	return 0;
 }
 
+// TODO(jiaqizho): remove the GP_WRAP_START if current function won't longjump
 float8
 gpdb::Float8FromDatum(Datum d)
 {

@@ -165,6 +165,13 @@ public:
 		return (COperator::EgbaggtypeGlobal == m_egbaggtype);
 	}
 
+	// is a local aggregate?
+	BOOL
+	FLocal() const
+	{
+		return (COperator::EgbaggtypeLocal == m_egbaggtype);
+	}
+
 	// minimal grouping columns accessor
 	CColRefArray *
 	PdrgpcrMinimal() const
@@ -255,7 +262,7 @@ public:
 	static IStatistics *PstatsDerive(CMemoryPool *mp, IStatistics *child_stats,
 									 CColRefArray *pdrgpcrGroupingCols,
 									 ULongPtrArray *pdrgpulComputedCols,
-									 CBitSet *keys);
+									 CBitSet *keys, BOOL isLocal);
 
 	// print group by aggregate type
 	static IOstream &OsPrintGbAggType(IOstream &os,

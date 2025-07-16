@@ -91,7 +91,8 @@ CProjectStatsProcessor::CalcProjStats(
 				proj_col_histogram = GPOS_NEW(mp)
 					CHistogram(mp, proj_col_bucket, is_well_defined, null_freq,
 							   CHistogram::DefaultNDVRemain,
-							   CHistogram::DefaultNDVFreqRemain);
+							   CHistogram::DefaultNDVFreqRemain,
+							   CHistogram::DefaultNDVBySegments);
 			}
 
 			histograms_new->Insert(GPOS_NEW(mp) ULONG(colid),
