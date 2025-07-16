@@ -242,12 +242,12 @@ ANALYZE;
 SET optimizer TO on;
 
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
-SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
 
 SET gp_enable_runtime_filter_pushdown TO on;
 
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
-SELECT * FROM t1, t2 WHERE t1.c2 = t2.c2;
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
 
 RESET gp_enable_runtime_filter_pushdown;
 
