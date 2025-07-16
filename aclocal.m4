@@ -1,8 +1,4 @@
 dnl aclocal.m4
-<<<<<<< HEAD
-m4_include([config/ac_func_accept_argtypes.m4])
-=======
->>>>>>> REL_16_9
 m4_include([config/ax_pthread.m4])
 m4_include([config/c-compiler.m4])
 m4_include([config/cxx-compiler.m4])

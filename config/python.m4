@@ -40,13 +40,8 @@ python_majorversion=`echo "$python_fullversion" | sed '[s/^\([0-9]*\).*/\1/]'`
 python_minorversion=`echo "$python_fullversion" | sed '[s/^[0-9]*\.\([0-9]*\).*/\1/]'`
 python_version=`echo "$python_fullversion" | sed '[s/^\([0-9]*\.[0-9]*\).*/\1/]'`
 # Reject unsupported Python versions as soon as practical.
-<<<<<<< HEAD
-if test "$python_majorversion" -lt 3 -a "$python_minorversion" -lt 7; then
-  AC_MSG_ERROR([Python version $python_version is too old (version 2.7 or later is required)])
-=======
 if test "$python_majorversion" -lt 3; then
   AC_MSG_ERROR([Python version $python_version is too old (version 3 or later is required)])
->>>>>>> REL_16_9
 fi
 
 AC_MSG_CHECKING([for Python sysconfig module])
