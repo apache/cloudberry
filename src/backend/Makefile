@@ -64,12 +64,9 @@ LIBS := $(filter-out -lpgport -lpgcommon, $(LIBS)) $(LDAP_LIBS_BE) $(ICU_LIBS)
 
 # The backend doesn't need everything that's in LIBS, however
 LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))
-<<<<<<< HEAD
 
 # Cloudberry uses threads in the backend
 LIBS := $(LIBS) -lpthread
-=======
->>>>>>> REL_16_9
 
 ifeq ($(with_systemd),yes)
 LIBS += -lsystemd
@@ -96,13 +93,9 @@ postgres: main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a $(
 	  $(top_builddir)/src/common/libpgcommon_srv.a $(LIBS) -o $@
 
 else
-postgres: $(OBJS)
-<<<<<<< HEAD
-	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) $(LIBS) -o $@
+postgres: $(OBJS)=
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LIBS) -o $@
 endif
-=======
-	$(CC) $(CFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LIBS) -o $@
->>>>>>> REL_16_9
 
 endif
 endif
@@ -111,11 +104,7 @@ endif
 ifeq ($(PORTNAME), cygwin)
 
 postgres: $(OBJS)
-<<<<<<< HEAD
-	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) -Wl,--stack,$(WIN32_STACK_RLIMIT) -Wl,--export-all-symbols -Wl,--out-implib=libpostgres.a $(LIBS) -o $@
-=======
-	$(CC) $(CFLAGS) $(call expand_subsys,$^) $(LDFLAGS) -Wl,--stack,$(WIN32_STACK_RLIMIT) -Wl,--export-all-symbols -Wl,--out-implib=libpostgres.a $(LIBS) -o $@
->>>>>>> REL_16_9
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) -Wl,--stack,$(WIN32_STACK_RLIMIT) -Wl,--export-all-symbols -Wl,--out-implib=libpostgres.a $(LIBS) -o $@
 
 # libpostgres.a is actually built in the preceding rule, but we need this to
 # ensure it's newer than postgres; see notes in src/backend/parser/Makefile
@@ -128,11 +117,7 @@ ifeq ($(PORTNAME), win32)
 LIBS += -lsecur32
 
 postgres: $(OBJS) $(WIN32RES)
-<<<<<<< HEAD
-	$(CXX) $(CXXFLAGS) $(call expand_subsys,$(OBJS)) $(WIN32RES) $(LDFLAGS) $(LDFLAGS_EX) -Wl,--stack=$(WIN32_STACK_RLIMIT) -Wl,--export-all-symbols -Wl,--out-implib=libpostgres.a $(LIBS) -o $@$(X)
-=======
-	$(CC) $(CFLAGS) $(call expand_subsys,$(OBJS)) $(WIN32RES) $(LDFLAGS) -Wl,--stack=$(WIN32_STACK_RLIMIT) -Wl,--export-all-symbols -Wl,--out-implib=libpostgres.a $(LIBS) -o $@$(X)
->>>>>>> REL_16_9
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$(OBJS)) $(WIN32RES) $(LDFLAGS) -Wl,--stack=$(WIN32_STACK_RLIMIT) -Wl,--export-all-symbols -Wl,--out-implib=libpostgres.a $(LIBS) -o $@$(X)
 
 # libpostgres.a is actually built in the preceding rule, but we need this to
 # ensure it's newer than postgres; see notes in src/backend/parser/Makefile
@@ -144,11 +129,7 @@ endif # win32
 ifeq ($(PORTNAME), aix)
 
 postgres: $(POSTGRES_IMP)
-<<<<<<< HEAD
-	$(CXX) $(CXXFLAGS) $(call expand_subsys,$(OBJS)) $(LDFLAGS) $(LDFLAGS_EX) -Wl,-bE:$(top_builddir)/src/backend/$(POSTGRES_IMP) $(LIBS) -Wl,-brtllib -o $@
-=======
-	$(CC) $(CFLAGS) $(call expand_subsys,$(OBJS)) $(LDFLAGS) -Wl,-bE:$(top_builddir)/src/backend/$(POSTGRES_IMP) $(LIBS) -Wl,-brtllib -o $@
->>>>>>> REL_16_9
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$(OBJS)) $(LDFLAGS) -Wl,-bE:$(top_builddir)/src/backend/$(POSTGRES_IMP) $(LIBS) -Wl,-brtllib -o $@
 
 # Linking to a single .o with -r is a lot faster than building a .a or passing
 # all objects to MKLDEXPORT.
@@ -166,14 +147,6 @@ endif # aix
 $(top_builddir)/src/port/libpgport_srv.a: | submake-libpgport
 
 
-<<<<<<< HEAD
-# The postgres.o target is needed by the rule in Makefile.global that
-# creates the exports file when MAKE_EXPORTS = true.
-postgres.o: $(OBJS)
-	$(CXX) $(LDREL) $(call expand_subsys,$^) $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@
-
-=======
->>>>>>> REL_16_9
 # The following targets are specified in make commands that appear in
 # the make files in our subdirectories. Note that it's important we
 # match the dependencies shown in the subdirectory makefiles!
@@ -291,18 +264,9 @@ endif
 
 install-bin: postgres $(POSTGRES_IMP) installdirs
 	$(INSTALL_PROGRAM) postgres$(X) '$(DESTDIR)$(bindir)/postgres$(X)'
-<<<<<<< HEAD
 ifeq ($(enable_shared_postgres_backend),yes)
 	$(INSTALL_PROGRAM) libpostgres.so '$(DESTDIR)$(libdir)/libpostgres.so'
 endif
-ifneq ($(PORTNAME), win32)
-	@rm -f $(DESTDIR)$(bindir)/postmaster$(X)
-	ln -s postgres$(X) $(DESTDIR)$(bindir)/postmaster$(X)
-else
-	$(INSTALL_PROGRAM) postgres$(X) '$(DESTDIR)$(bindir)/postmaster$(X)'
-endif
-=======
->>>>>>> REL_16_9
 ifeq ($(MAKE_EXPORTS), true)
 	$(INSTALL_DATA) $(POSTGRES_IMP) '$(DESTDIR)$(pkglibdir)/$(POSTGRES_IMP)'
 	$(INSTALL_PROGRAM) $(MKLDEXPORT) '$(DESTDIR)$(pgxsdir)/$(MKLDEXPORT_DIR)/mkldexport.sh'
@@ -332,14 +296,10 @@ endif
 ##########################################################################
 
 uninstall:
-<<<<<<< HEAD
 	rm -f $(DESTDIR)$(bindir)/postgres$(X) $(DESTDIR)$(bindir)/postmaster $(DESTDIR)$(bindir)/cdbsyncmaster
 ifeq ($(enable_shared_postgres_backend),yes)
 	rm -f $(DESTDIR)$(bindir)/postgres$(X) $(DESTDIR)$(libdir)/libpostgres.so $(DESTDIR)$(bindir)/postmaster $(DESTDIR)$(bindir)/cdbsyncmaster
 endif
-=======
-	rm -f '$(DESTDIR)$(bindir)/postgres$(X)'
->>>>>>> REL_16_9
 ifeq ($(MAKE_EXPORTS), true)
 	rm -f '$(DESTDIR)$(pkglibdir)/$(POSTGRES_IMP)'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(MKLDEXPORT_DIR)/mkldexport.sh'
@@ -420,8 +380,4 @@ maintainer-clean: distclean
 # are up to date.  It saves the time of doing all the submakes.
 .PHONY: quick
 quick: $(OBJS)
-<<<<<<< HEAD
-	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) $(LIBS) -o postgres
-=======
-	$(CC) $(CFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LIBS) -o postgres
->>>>>>> REL_16_9
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LIBS) -o postgres

@@ -503,12 +503,6 @@ ifeq ($(enable_tap_tests),yes)
 
 ifndef PGXS
 define prove_installcheck
-<<<<<<< HEAD
-rm -rf '$(CURDIR)'/tmp_check
-$(MKDIR_P) '$(CURDIR)'/tmp_check
-cd $(srcdir) && \
-   TESTDIR='$(CURDIR)' PATH="$(bindir):$(CURDIR):$$PATH" \
-=======
 echo "# +++ tap install-check in $(subdir) +++" && \
 rm -rf '$(CURDIR)'/tmp_check && \
 $(MKDIR_P) '$(CURDIR)'/tmp_check && \
@@ -516,20 +510,12 @@ cd $(srcdir) && \
    TESTLOGDIR='$(CURDIR)/tmp_check/log' \
    TESTDATADIR='$(CURDIR)/tmp_check' \
    PATH="$(bindir):$(CURDIR):$$PATH" \
->>>>>>> REL_16_9
    PGPORT='6$(DEF_PGPORT)' top_builddir='$(CURDIR)/$(top_builddir)' \
    PG_REGRESS='$(CURDIR)/$(top_builddir)/src/test/regress/pg_regress' \
    $(PROVE) $(PG_PROVE_FLAGS) $(PROVE_FLAGS) $(if $(PROVE_TESTS),$(PROVE_TESTS),t/*.pl)
 endef
 else # PGXS case
 define prove_installcheck
-<<<<<<< HEAD
-rm -rf '$(CURDIR)'/tmp_check
-$(MKDIR_P) '$(CURDIR)'/tmp_check
-cd $(srcdir) && \
-   TESTDIR='$(CURDIR)' PATH="$(bindir):$(CURDIR):$$PATH" \
-   PGPORT='6$(DEF_PGPORT)' top_builddir='$(top_builddir)' \
-=======
 echo "# +++ tap install-check in $(subdir) +++" && \
 rm -rf '$(CURDIR)'/tmp_check && \
 $(MKDIR_P) '$(CURDIR)'/tmp_check && \
@@ -538,19 +524,12 @@ cd $(srcdir) && \
    TESTDATADIR='$(CURDIR)/tmp_check' \
    PATH="$(bindir):$(CURDIR):$$PATH" \
    PGPORT='6$(DEF_PGPORT)' \
->>>>>>> REL_16_9
    PG_REGRESS='$(top_builddir)/src/test/regress/pg_regress' \
    $(PROVE) $(PG_PROVE_FLAGS) $(PROVE_FLAGS) $(if $(PROVE_TESTS),$(PROVE_TESTS),t/*.pl)
 endef
 endif # PGXS
 
 define prove_check
-<<<<<<< HEAD
-rm -rf '$(CURDIR)'/tmp_check
-$(MKDIR_P) '$(CURDIR)'/tmp_check
-cd $(srcdir) && \
-   TESTDIR='$(CURDIR)' $(with_temp_install) PGPORT='6$(DEF_PGPORT)' \
-=======
 echo "# +++ tap check in $(subdir) +++" && \
 rm -rf '$(CURDIR)'/tmp_check && \
 $(MKDIR_P) '$(CURDIR)'/tmp_check && \
@@ -559,7 +538,6 @@ cd $(srcdir) && \
    TESTDATADIR='$(CURDIR)/tmp_check' \
    $(with_temp_install) \
    PGPORT='6$(DEF_PGPORT)' top_builddir='$(CURDIR)/$(top_builddir)' \
->>>>>>> REL_16_9
    PG_REGRESS='$(CURDIR)/$(top_builddir)/src/test/regress/pg_regress' \
    $(PROVE) $(PG_PROVE_FLAGS) $(PROVE_FLAGS) $(if $(PROVE_TESTS),$(PROVE_TESTS),t/*.pl)
 endef
@@ -780,11 +758,8 @@ pg_regress_locale_flags = $(if $(ENCODING),--encoding=$(ENCODING)) $(NOLOCALE)
 pg_regress_clean_files = results/ regression.diffs regression.out tmp_check/ tmp_check_iso/ log/ output_iso/ tests_using_faultinjector.txt
 
 pg_regress_check = \
-<<<<<<< HEAD
     $(faultinjector_prep) \
-=======
     echo "\# +++ regress check in $(subdir) +++" && \
->>>>>>> REL_16_9
     $(with_temp_install) \
     $(top_builddir)/src/test/regress/pg_regress \
     --temp-instance=./tmp_check \
@@ -793,22 +768,16 @@ pg_regress_check = \
     $(TEMP_CONF) \
     $(pg_regress_locale_flags) $(EXTRA_REGRESS_OPTS) $(FAULTINJECTOR_OPTS)
 pg_regress_installcheck = \
-<<<<<<< HEAD
     $(faultinjector_prep) \
-=======
     echo "\# +++ regress install-check in $(subdir) +++" && \
->>>>>>> REL_16_9
     $(top_builddir)/src/test/regress/pg_regress \
     --inputdir=$(srcdir) \
     --bindir='$(bindir)' \
     $(pg_regress_locale_flags) $(EXTRA_REGRESS_OPTS) $(FAULTINJECTOR_OPTS)
 
 pg_isolation_regress_check = \
-<<<<<<< HEAD
     $(faultinjector_prep) \
-=======
     echo "\# +++ isolation check in $(subdir) +++" && \
->>>>>>> REL_16_9
     $(with_temp_install) \
     $(top_builddir)/src/test/isolation/pg_isolation_regress \
     --temp-instance=./tmp_check_iso \
@@ -817,11 +786,8 @@ pg_isolation_regress_check = \
     $(TEMP_CONF) \
     $(pg_regress_locale_flags) $(EXTRA_REGRESS_OPTS) $(FAULTINJECTOR_OPTS)
 pg_isolation_regress_installcheck = \
-<<<<<<< HEAD
     $(faultinjector_prep) \
-=======
     echo "\# +++ isolation install-check in $(subdir) +++" && \
->>>>>>> REL_16_9
     $(top_builddir)/src/test/isolation/pg_isolation_regress \
     --inputdir=$(srcdir) --outputdir=output_iso \
     --bindir='$(bindir)' \
