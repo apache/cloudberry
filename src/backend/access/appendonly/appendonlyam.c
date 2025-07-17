@@ -1132,6 +1132,12 @@ appendonly_locate_target_segment(AppendOnlyScanDesc scan, int64 targrow)
 		if (rowcount <= 0)
 			continue;
 
+		if (scan->aos_segfile_arr[i]->state == AOSEG_STATE_AWAITING_DROP)
+		{
+			/* skip this segment, it is awaiting drop */
+			continue;
+		}
+
 		if (scan->segfirstrow + rowcount - 1 >= targrow)
 		{
 			/* found the target segment */

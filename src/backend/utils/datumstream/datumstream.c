@@ -876,6 +876,7 @@ datumstreamread_close_file(DatumStreamRead * ds)
 {
 	AppendOnlyStorageRead_CloseFile(&ds->ao_read);
 
+	ds->blockRowCount = 0;
 	ds->need_close_file = false;
 }
 

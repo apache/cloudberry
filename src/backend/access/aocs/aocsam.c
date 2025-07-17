@@ -478,8 +478,8 @@ aocs_blkdirscan_init(AOCSScanDesc scan)
 	if (scan->aocsfetch == NULL)
 	{
 		int natts = RelationGetNumberOfAttributes(scan->rs_base.rs_rd);
-		scan->proj = palloc(natts * sizeof(*scan->proj));
-		MemSet(scan->proj, true, natts * sizeof(*scan->proj));
+		scan->proj = palloc(natts * sizeof(bool));
+		MemSet(scan->proj, true, natts * sizeof(bool));
 
 		scan->aocsfetch = aocs_fetch_init(scan->rs_base.rs_rd,
 										  scan->rs_base.rs_snapshot,
@@ -662,10 +662,9 @@ aocs_beginscan_internal(Relation relation,
 							   AccessShareLock,
 							   appendOnlyMetaDataSnapshot);
 
-		if ((flags & SO_TYPE_ANALYZE) != 0)
+		if ((flags & SO_TYPE_ANALYZE) != 0 && OidIsValid(blkdirrelid))
 		{
-			if (OidIsValid(blkdirrelid))
-				aocs_blkdirscan_init(scan);
+			aocs_blkdirscan_init(scan);
 		}
 	}
 
@@ -751,6 +750,12 @@ aocs_locate_target_segment(AOCSScanDesc scan, int64 targrow)
 		rowcount = scan->seginfo[i]->total_tupcount;
 		if (rowcount <= 0)
 			continue;
+
+		if (scan->seginfo[i]->state == AOSEG_STATE_AWAITING_DROP)
+		{
+			/* skip this segment, it is awaiting drop */
+			continue;
+		}
 
 		if (scan->segfirstrow + rowcount - 1 >= targrow)
 		{
