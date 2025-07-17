@@ -24,4 +24,4 @@ An extension for collecting greenplum query execution metrics and reporting them
 -   **Nested Queries:** When `yagpcc.report_nested_queries` is `false`, only top-level queries are reported from the coordinator and segments, when `true`, both top-level and nested queries are reported from the coordinator, from segments collected as aggregates.
 -   **Data Destination:** All collected data is sent to a Unix Domain Socket. Configure the path with `yagpcc.uds_path`.
 -   **User Filtering:** To exclude activity from certain roles, add them to the comma-separated list in `yagpcc.ignored_users_list`.
-
+-   **Trimming plans:** Query texts and execution plans are trimmed based on `yagpcc.max_text_size` and `yagpcc.max_plan_size` (default: 1024KB). For now, it is not recommended to set these GUCs higher than 1024KB.
