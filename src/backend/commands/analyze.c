@@ -358,16 +358,11 @@ analyze_rel_internal(Oid relid, RangeVar *relation,
 		onerel->rd_rel->relkind == RELKIND_MATVIEW ||
 		onerel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
 	{
-		/* Regular table, so we'll use the regular row acquisition function */
-		if (onerel->rd_tableam)
-			acquirefunc = onerel->rd_tableam->relation_acquire_sample_rows;
-
 		/*
 		 * If the TableAmRoutine's gp_acquire_sample_rows_func if NULL, we use
 		 * gp_acquire_sample_rows_func as default.
 		 */
-		if (acquirefunc == NULL)
-			acquirefunc = gp_acquire_sample_rows_func;
+		acquirefunc = gp_acquire_sample_rows_func;
 
 		/* Also get regular table's size */
 		relpages = AcquireNumberOfBlocks(onerel);
@@ -1716,8 +1711,24 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * the relation should not be an AO/CO table.
 	 */
 	Assert(!RelationIsAppendOptimized(onerel));
+	if (RelationIsPax(onerel))
+	{
+		/* PAX use non-fixed block layout */
+		BlockNumber pages;
+		double		tuples;
+		double		allvisfrac;
+		int32		attr_widths;
 
-	totalblocks = RelationGetNumberOfBlocks(onerel);
+		table_relation_estimate_size(onerel,	&attr_widths, &pages,
+									&tuples, &allvisfrac);
+
+		if (tuples > UINT_MAX)
+			tuples = UINT_MAX;
+
+		totalblocks = (BlockNumber)tuples;
+	}
+	else
+		totalblocks = RelationGetNumberOfBlocks(onerel);
 
 	/* Need a cutoff xmin for HeapTupleSatisfiesVacuum */
 	OldestXmin = GetOldestNonRemovableTransactionId(onerel);
@@ -2055,16 +2066,8 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 			childrel->rd_rel->relkind == RELKIND_MATVIEW ||
 			childrel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
 		{
-			/* Regular table, so use the regular row acquisition function */
-			if (childrel->rd_tableam)
-				acquirefunc = childrel->rd_tableam->relation_acquire_sample_rows;
-
-			/*
-			 * If the TableAmRoutine's relation_acquire_sample_rows if NULL, we use
-			 * relation_acquire_sample_rows as default.
-			 */
-			if (acquirefunc == NULL)
-				acquirefunc = gp_acquire_sample_rows_func;
+			/* use relation_acquire_sample_rows as default. */
+			acquirefunc = gp_acquire_sample_rows_func;
 
 			relpages = AcquireNumberOfBlocks(childrel);
 		}
