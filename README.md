@@ -25,4 +25,3 @@ An extension for collecting greenplum query execution metrics and reporting them
 -   **Data Destination:** All collected data is sent to a Unix Domain Socket. Configure the path with `yagpcc.uds_path`.
 -   **User Filtering:** To exclude activity from certain roles, add them to the comma-separated list in `yagpcc.ignored_users_list`.
 -   **Trimming plans:** Query texts and execution plans are trimmed based on `yagpcc.max_text_size` and `yagpcc.max_plan_size` (default: 1024KB). For now, it is not recommended to set these GUCs higher than 1024KB.
--   
