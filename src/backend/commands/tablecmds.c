@@ -1129,15 +1129,17 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * legitimately error out, it is prefered to call it before updating the
 	 * catalog in heap_create_with_catalog().
 	 *
-	 * For RELKIND_PARTITIONED_TABLE, let the transformation of attribute
-	 * encoding happen. We don't store it for parent partition in
-	 * pg_attribute_encoding table. Transformed encoding will be used to
-	 * create child partition create stmts, hence avoid marking it NIL as
-	 * well.
+	 * For RELKIND_PARTITIONED_TABLE, we will create a list of encodings
+	 * for the root partition to add to pg_attribute_encoding which includes
+	 * explicitly specified column encodings and values picked from defaults
+	 * We will also transform the stmt->attr_encodings to be passed down to
+	 * create child partition create stmts which would only include explicitly
+	 * specified column encodings from the current root partition
 	 *
 	 * This is done in dispatcher (and in utility mode). In QE, we receive
 	 * the already-processed options from the QD.
 	 */
+
 	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
 		 relkind == RELKIND_DIRECTORY_TABLE ||
 		 (relkind == RELKIND_PARTITIONED_TABLE && OidIsValid(accessMethodId))) &&
@@ -1336,7 +1338,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		cooked_constraints = list_concat(cooked_constraints, newCookedDefaults);
 	}
 
-	if (relkind == RELKIND_PARTITIONED_TABLE && rel->rd_rel->relam == AO_COLUMN_TABLE_AM_OID)
+	if (relkind == RELKIND_PARTITIONED_TABLE && RelationIsAoCols(rel))
 	{
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(rel->rd_rel->relam);
 		List *part_attr_encodings =
@@ -1349,11 +1351,11 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 									false,
 									accessMethodId != AO_COLUMN_TABLE_AM_OID
 									&& !stmt->partbound && !stmt->partspec
-									/* errorOnEncodingClause */, true);
+									/* errorOnEncodingClause */, true /* appendonly */);
 
 		AddRelationAttributeEncodings(rel, part_attr_encodings);
 	}
-	else if (stmt->attr_encodings && (relkind != RELKIND_PARTITIONED_TABLE))
+	else if (stmt->attr_encodings && RelationIsAoCols(rel))
 		AddRelationAttributeEncodings(rel, stmt->attr_encodings);
 
 	/*
