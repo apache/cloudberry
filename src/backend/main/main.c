@@ -252,16 +252,10 @@ main(int argc, char *argv[])
 	else if (argc > 1 && strcmp(argv[1], "--describe-config") == 0)
 		GucInfoMain();
 	else if (argc > 1 && strcmp(argv[1], "--single") == 0)
-<<<<<<< HEAD
-		PostgresMain(argc, argv,
-					 NULL,		/* no dbname */
-					 strdup(get_user_name_or_exit(progname)));	/* does not return */
-	else if (argc > 1 && strcmp(argv[1], "--ext-main") == 0)
-	    CallExtMain(argc, argv, false);
-=======
 		PostgresSingleUserMain(argc, argv,
 							   strdup(get_user_name_or_exit(progname)));
->>>>>>> REL_16_9
+	else if (argc > 1 && strcmp(argv[1], "--ext-main") == 0)
+		CallExtMain(argc, argv, false);
 	else
 		PostmasterMain(argc, argv);
 	/* the functions above should not return */
@@ -450,11 +444,7 @@ help(const char *progname)
 	printf(_("  DBNAME             database name (mandatory argument in bootstrapping mode)\n"));
  	printf(_("  -K LEN             enable cluster file encryption with specified key bit length\n"));
 	printf(_("  -r FILENAME        send stdout and stderr to given file\n"));
-<<<<<<< HEAD
-	printf(_("  -x NUM             internal use\n"));
  	printf(_("  -u DATADIR         copy encryption keys from datadir\n"));
-=======
->>>>>>> REL_16_9
 
 	printf(_("\nPlease read the documentation for the complete list of run-time\n"
 			 "configuration settings and how to set them on the command line or in\n"
