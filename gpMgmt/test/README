@@ -5,7 +5,7 @@ if they are not already installed on your machine.
 
 To run behave:
 
-source greenplum_path.sh
+source greengage_path.sh
 cd gpMgmt
 
 "make -f Makefile.behave behave" will run all the integration tests.

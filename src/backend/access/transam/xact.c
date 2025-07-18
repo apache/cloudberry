@@ -2326,7 +2326,7 @@ StartTransaction(void)
 	/*
 	 * Transactions may be started while recovery is in progress, if
 	 * hot standby is enabled.  This mode is not supported in
-	 * Greenplum yet.
+	 * Greengage yet.
 	 */
 	AssertImply(DistributedTransactionContext != DTX_CONTEXT_LOCAL_ONLY,
 				!s->startedInRecovery);
@@ -5213,7 +5213,7 @@ AbortOutOfAnyTransaction(void)
 	AtAbort_Memory();
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Some QEs might already be in Abort State, they still need
 	 * to reset Extension related global vars, so we invoke them
 	 * here (not AbortTransction).

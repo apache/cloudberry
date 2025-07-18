@@ -1,6 +1,6 @@
 COMMAND NAME: gppkg
 
-Installs Greenplum Database extensions such as 
+Installs Greengage Database extensions such as 
 pgcrypto, PL/R, PL/Java, PL/Perl, MADlib and PostGIS, 
 along with their dependencies, across an entire cluster.
 
@@ -22,19 +22,19 @@ gppkg --version
 *****************************************************
 DESCRIPTION
 *****************************************************
-The Greenplum Package Manager (gppkg) utility installs 
-Greenplum Database extensions, including any dependencies,
+The Greengage Package Manager (gppkg) utility installs 
+Greengage Database extensions, including any dependencies,
 on all hosts across a cluster. It will also automatically 
 install database extensions on new hosts in the case of 
 system expansion and segment recovery.
 
 First, download one or more of the available packages 
 from the EMC Download Center (https://emc.subscribenet.com)
-then copy it to the master host. Use the Greenplum 
+then copy it to the master host. Use the Greengage 
 Package Manager to install each package using the 
 options described below.
 
-NOTE: After a major upgrade to Greenplum Database, you must 
+NOTE: After a major upgrade to Greengage Database, you must 
 download and install all extensions again.
 
 The following packages are available for download from the
@@ -46,7 +46,7 @@ EMC Download Center.
 * MADlib
 * Pgcrypto
 
-Note that Greenplum Package Manager installation files for extension 
+Note that Greengage Package Manager installation files for extension 
 packages may release outside of standard Database release cycles. 
 Therefore, for the latest install and configuration information 
 regarding any supported database package/extension, go to the Support 
@@ -87,7 +87,7 @@ Options
 --migrate <GPHOME_1> <GPHOME_2>
 
  Migrates packages from a separate $GPHOME. Carries over 
- packages from one version of Greenplum Database to another.
+ packages from one version of Greengage Database to another.
  For example: 
    gppkg --migrate /usr/local/greenplum-db-4.2.0.1 
    /usr/local/greenplum-db-4.2.1.0

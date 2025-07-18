@@ -14,7 +14,7 @@
 
 #include <signal.h>
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 LogOpts		log_opts;
 

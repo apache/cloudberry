@@ -12,7 +12,7 @@
 #----------------------------------------------------------------------
 
 
-# In Greenplum, we have added extra columns to some catalog tables. To avoid
+# In Greengage, we have added extra columns to some catalog tables. To avoid
 # having to change every single DATA row in those header files, which would
 # create massive merge conflicts when merging with upstream, the extra
 # columns are marked with GPDB_COLUMN_DEFAULT() lines in the header files,

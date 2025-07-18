@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 When a table is joined with itself, we should assume independence and should not damp predicates, even when the underlying table is the same. In the below example, we should expect 1-5 rows, not ~100 rows.
 

@@ -53,7 +53,7 @@ LIBS := $(filter-out -lpgport -lpgcommon, $(LIBS)) $(LDAP_LIBS_BE)
 # The backend doesn't need everything that's in LIBS, however
 LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))
 
-# Greenplum uses threads in the backend
+# Greengage uses threads in the backend
 LIBS := $(LIBS) -lpthread
 
 ##########################################################################

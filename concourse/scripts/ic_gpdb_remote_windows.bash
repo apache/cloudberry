@@ -148,7 +148,7 @@ function gpadmin_run_tests(){
     export REMOTE_PORT
     export REMOTE_USER
     source ./gpdb_src/gpAux/gpdemo/gpdemo-env.sh
-    source /usr/local/greenplum-db-devel/greenplum_path.sh
+    source /usr/local/greengage-db-devel/greengage_path.sh
     configure_gpdb_ssl_kerberos
     time import_remote_key
     time run_remote_test
@@ -175,7 +175,7 @@ function _main() {
     cp bin_gpdb_clients_windows/*.msi bin_gpdb_clients_windows_rc/
     pushd bin_gpdb_clients_windows_rc
         VERSION=$(cat ../bin_gpdb_clients_windows/version)
-        mv greenplum-clients-x86_64.msi "greenplum-clients-${VERSION}-x86_64.msi"
+        mv greengage-clients-x86_64.msi "greengage-clients-${VERSION}-x86_64.msi"
     popd
 }
 

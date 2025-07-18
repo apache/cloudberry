@@ -1189,15 +1189,15 @@ inheritance_planner(PlannerInfo *root)
 	bool		locus_ok = TRUE;
 
 	/*
-	 * Greenplum specific behavior
-	 * Greenplum has a special path to handle semjoin,
+	 * Greengage specific behavior
+	 * Greengage has a special path to handle semjoin,
 	 * planner might add unique_row_id path to first inner join
 	 * and then de-duplicate. The logic is added into
-	 * Greenplum long before, but when merging more code from
+	 * Greengage long before, but when merging more code from
 	 * upstream, the old logic does not consider new paths,
 	 * there are two relevant issues:
-	 * https://github.com/greenplum-db/gpdb/issues/3719
-	 * https://github.com/greenplum-db/gpdb/issues/12402
+	 * https://github.com/GreengageDB/greengage/issues/3719
+	 * https://github.com/GreengageDB/greengage/issues/12402
 	 *
 	 * issue-12402 is that while creating a plan for the second append rel,
 	 * it will add pseudo column in rtable of subroot, however, do not

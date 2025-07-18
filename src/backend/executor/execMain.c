@@ -135,8 +135,8 @@ ExecutorEnd_hook_type ExecutorEnd_hook = NULL;
 ExecutorCheckPerms_hook_type ExecutorCheckPerms_hook = NULL;
 
 /*
- * Greenplum specific code:
- *   Greenplum introduces auto_stats for a long time, please refer to
+ * Greengage specific code:
+ *   Greengage introduces auto_stats for a long time, please refer to
  *   https://groups.google.com/a/greenplum.org/g/gpdb-dev/c/bAyw2KBP6yE/m/hmoWikrPAgAJ
  *   for details and decision of auto_stats.
  *
@@ -821,7 +821,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * queryDesc->ddesc->oidAssignments be set, these OIDs are
 			 * also dispatched to QEs.
 			 *
-			 * For details please see github issue https://github.com/greenplum-db/gpdb/issues/10760
+			 * For details please see github issue https://github.com/GreengageDB/greengage/issues/10760
 			 */
 			List *toplevelOidCache = NIL;
 			if (queryDesc->ddesc != NULL)
@@ -1021,7 +1021,7 @@ ExecutorRun(QueryDesc *queryDesc,
 			ScanDirection direction, long count)
 {
 	/*
-	 * Greenplum specific code:
+	 * Greengage specific code:
 	 * auto_stats() needs to know if it is inside procedure call so
 	 * we maintain executor_run_nesting_level here. See detailed comments
 	 * at the definition of the static variable executor_run_nesting_level.
@@ -2493,7 +2493,7 @@ CheckValidResultRel(Relation resultRel, CmdType operation)
 			 * get here anyway, it's not worth great exertion to get).
 			 */
 			/*
-			 * GPDB_91_MERGE_FIXME: In Greenplum, views are treated as non
+			 * GPDB_91_MERGE_FIXME: In Greengage, views are treated as non
 			 * partitioned relations, gp_distribution_policy contains no entry
 			 * for views.  Consequently, flow of a ModifyTable node for a view
 			 * is determined such that it is not dispatched to segments.
@@ -2509,7 +2509,7 @@ CheckValidResultRel(Relation resultRel, CmdType operation)
 					(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 					 errmsg("cannot change view \"%s\"",
 							RelationGetRelationName(resultRel)),
-					 errhint("changing views is not supported in Greenplum")));
+					 errhint("changing views is not supported in Greengage")));
 
 			switch (operation)
 			{
@@ -3831,7 +3831,7 @@ EvalPlanQual(EState *estate, EPQState *epqstate,
 
 	Assert(rti > 0);
 
-	/* Greenplum specific check */
+	/* Greengage specific check */
 	check_epq_safe_on_qes(subPlan);
 
 	/*
@@ -4521,8 +4521,8 @@ EvalPlanQualStart(EPQState *epqstate, EState *parentestate, Plan *planTree)
 		PlanState  *subplanstate;
 
 		/*
-		 * Greenplum specific check
-		 * See Issue https://github.com/greenplum-db/gpdb/issues/12902 for details.
+		 * Greengage specific check
+		 * See Issue https://github.com/GreengageDB/greengage/issues/12902 for details.
 		 */
 		check_epq_safe_on_qes(subplan);
 
@@ -5534,7 +5534,7 @@ check_epq_safe_on_qes(Plan *plan)
 {
 	Assert(!IS_QUERY_DISPATCHER());
 	/*
-	 * Greenplum cannot create gang in QEs so it does not support
+	 * Greengage cannot create gang in QEs so it does not support
 	 * EvalPlanQual that subplan contain motions. This can happen
 	 * in two cases:
 	 *   1. GDD is enabled, so update|delete can be concurrently executing
@@ -5555,7 +5555,7 @@ check_epq_safe_on_qes(Plan *plan)
 }
 
 /*
- * Greenplum specific code:
+ * Greengage specific code:
  * For details, see comments at the definition of static var executor_run_nesting_level
  */
 bool

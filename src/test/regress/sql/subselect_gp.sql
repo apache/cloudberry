@@ -941,7 +941,7 @@ LANGUAGE plpgsql NO SQL;
 SELECT a, b FROM foo f WHERE EXISTS (SELECT 1 FROM foo f1 WHERE f.b=f1.b AND f1.c > (SELECT my_lookup('a')));
 -- When creating a plan with subplan in ParallelizeSubplan, use the top-level flow
 -- for the corresponding slice instead of the containing the plan node's flow.
--- This related to issue: https://github.com/greenplum-db/gpdb/issues/12371
+-- This related to issue: https://github.com/GreengageDB/greengage/issues/12371
 create table extra_flow_dist(a int, b int, c date);
 create table extra_flow_dist1(a int, b int);
 
@@ -1079,7 +1079,7 @@ explain (costs off) select * from (select
    from im() x) run_dt, extra_flow_dist1
 where dt < '2010-01-01'::date;
 
--- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/greenplum-db/gpdb/issues/12656.
+-- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/GreengageDB/greengage/issues/12656.
 -- For EXISTS SubLink, we don’t need to care about the data deduplication problem, we can delete DISTINCT ON clause and
 -- ORDER BY clause with confidence, because we only care about whether the data exists.
 -- But for ANY SubLink, wo can't do this, because we not only care about the existence of data, but also the content of
@@ -1233,7 +1233,7 @@ SELECT c FROM t0;
 
 --
 -- Test case for ORCA semi join with random table
--- See https://github.com/greenplum-db/gpdb/issues/16611
+-- See https://github.com/GreengageDB/greengage/issues/16611
 --
 --- case for random distribute 
 create table table_left (l1 int, l2 int) distributed by (l1);

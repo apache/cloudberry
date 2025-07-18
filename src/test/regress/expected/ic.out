@@ -460,7 +460,7 @@ drop table if exists ic_test_1;
 NOTICE:  table "ic_test_1" does not exist, skipping
 --end_ignore
 create table ic_test_1 as select i as c1, i as c2 from generate_series(1, 100000) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 begin;
 declare ic_test_cursor_c1 cursor for select * from ic_test_1;
@@ -503,7 +503,7 @@ SELECT gp_inject_fault('interconnect_setup_palloc', 'reset', 1);
 -- Test sender QE errors out when setup outgoing connection, the receiver QE is waiting,
 -- at this time, QD should be able to process the error and cancel the receiver QE.
 CREATE TABLE test_ic_error(a INT, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT gp_inject_fault('interconnect_setup_palloc', 'error', 2);
  gp_inject_fault 
@@ -547,7 +547,7 @@ SELECT * FROM y LIMIT 10;
 DROP TABLE recursive_table_ic;
 -- Test QD can notice the errors in QEs for initplan
 CREATE TABLE qe_errors_ic (a INT, b INT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO qe_errors_ic SELECT i, i FROM generate_series(1, 10) i;
 SELECT count(*) FROM qe_errors_ic

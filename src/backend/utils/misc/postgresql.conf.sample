@@ -62,13 +62,13 @@
 					# (change requires restart)
 
 #port = 5432				# sets the database listener port for 
-      					# a Greenplum instance. The master and 
+      					# a Greengage instance. The master and 
 					# each segment has its own port number. 
-# note: Port numbers for the Greenplum system must also be changed in the
-# gp_configuration catalog. See the Greenplum Database Administrator Guide 
+# note: Port numbers for the Greengage system must also be changed in the
+# gp_configuration catalog. See the Greengage Database Administrator Guide 
 # for instructions!
 #
-# WARNING: YOU MUST SHUT DOWN YOUR GREENPLUM SYSTEM BEFORE CHANGING 
+# WARNING: YOU MUST SHUT DOWN YOUR GREENGAGE SYSTEM BEFORE CHANGING 
 # THE PORT NUMBER IN THIS FILE.
 
 #max_connections = 200			# (change requires restart)
@@ -605,11 +605,11 @@ max_appendonly_tables = 10000 # Maximum number of append only tables that can
 
 
 #---------------------------------------------------------------------------
-# GREENPLUM ARRAY CONFIGURATION
+# GREENGAGE ARRAY CONFIGURATION
 #---------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------
-# GREENPLUM ARRAY TUNING
+# GREENGAGE ARRAY TUNING
 #---------------------------------------------------------------------------
 
 # - Interconnect -

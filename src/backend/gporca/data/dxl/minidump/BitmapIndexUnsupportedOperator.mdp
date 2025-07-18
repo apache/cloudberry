@@ -20,7 +20,7 @@ undefined for Bitmap Index Scan. ORCA should find a plan transforming
 (c4 != 't') to (c4 = 'f')
 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

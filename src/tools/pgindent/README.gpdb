@@ -1,4 +1,4 @@
-pgindent'ing Greenplum Code
+pgindent'ing Greengage Code
 ============================
 On upstream Postgres, pgindent is run before major releases to maintain a
 uniform layout style across the codebase. However, pgindent is not run as
@@ -29,9 +29,9 @@ PURE GPDB CODE:
 For these files, using the latest pgindent binaries seems to make the most sense.
 It has been run on certain GPDB-only directories, such as
 `src/backend/access/appendonly` and `src/backend/cdb`:
-https://github.com/greenplum-db/gpdb/pull/3384
-https://github.com/greenplum-db/gpdb/pull/3400
-https://github.com/greenplum-db/gpdb/pull/3423
+https://github.com/GreengageDB/greengage/pull/3384
+https://github.com/GreengageDB/greengage/pull/3400
+https://github.com/GreengageDB/greengage/pull/3423
 
 OTHER CODE:
 

@@ -22,9 +22,9 @@ DESCRIPTION
 
 The gpperfmon_install utility automates the steps required 
 to enable the performance monitor data collection agents. You 
-must be the Greenplum Database administrative user (gpadmin) to run this
-utility. Use the --port option to supply the port of the Greenplum
-Database master instance. If using the --enable option, Greenplum
+must be the Greengage Database administrative user (gpadmin) to run this
+utility. Use the --port option to supply the port of the Greengage
+Database master instance. If using the --enable option, Greengage
 Database must be restarted after the utility completes.
 
 When run without the --enable option, the utility just creates the
@@ -33,7 +33,7 @@ data). When run with the --enable option, the utility also runs the
 following additional tasks necessary to enable the performance monitor 
 data collection agents:
 
-1. Creates the gpmon superuser role in Greenplum Database. 
+1. Creates the gpmon superuser role in Greengage Database. 
    The performance monitor data collection agents require this 
    role to connect to the database and write their data. The 
    gpmon superuser role uses MD5-encrypted password authentication 
@@ -62,7 +62,7 @@ data collection agents:
 4. Sets the server configuration parameters for performance monitor. 
    The following parameters must be enabled for the data collection 
    agents to begin collecting data. The utility sets the following 
-   parameters in the Greenplum Database postgresql.conf configuration
+   parameters in the Greengage Database postgresql.conf configuration
    files: 
       gp_enable_gpperfmon=on (in all postgresql.conf files)
       gpperfmon_port=8888 (in the master postgresql.conf file)
@@ -91,7 +91,7 @@ OPTIONS
 
 --port <gpdb_port>
 
-  Required. Specifies the connection port of the Greenplum Database 
+  Required. Specifies the connection port of the Greengage Database 
   master.
 
 

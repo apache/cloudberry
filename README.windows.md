@@ -114,8 +114,8 @@ nmake install NODEBUG=1
 # Build steps
 
 Replace <path\to\gpdb> with real location of your gpdb source code.
-We will install client package to C:\greenplum-db-devel. If you want another location,
-make sure you've replaced C:\greenplum-db-devel in the following scripts.
+We will install client package to C:\greengage-db-devel. If you want another location,
+make sure you've replaced C:\greengage-db-devel in the following scripts.
 
 
 1. Create config.pl at src/tools/msvc. If you don't build with these supports, it's ok to skip this step.
@@ -128,14 +128,14 @@ echo print "our \$config = {gss => 'c:/dep', openssl => 'c:/dep', zlib => 'c:/de
 ```
 cd <path\to\gpdb>\src\tools\msvc
 build client
-install C:\greenplum-db-devel client
+install C:\greengage-db-devel client
 ```
 
 3. Build gpfdist
 ```
 cd <path\to\gpdb>\src\bin\gpfdist
 cd build
-cmake -DCMAKE_PREFIX_PATH:PATH=C:\ext -DCMAKE_INSTALL_PREFIX:PATH=C:\greenplum-db-devel -G "Visual Studio 15 2017 Win64" ..
+cmake -DCMAKE_PREFIX_PATH:PATH=C:\ext -DCMAKE_INSTALL_PREFIX:PATH=C:\greengage-db-devel -G "Visual Studio 15 2017 Win64" ..
 cmake --build . --config Release --target ALL_BUILD
 cmake --build . --config Release --target INSTALL
 ```
@@ -145,7 +145,7 @@ cmake --build . --config Release --target INSTALL
 cd <path\to\gpdb>\gpMgmt\bin\pythonSrc\PyGreSQL-4.0
 mkdir build
 cd build
-cmake -DCMAKE_PREFIX_PATH=C:\greenplum-db-devel -DCMAKE_INSTALL_PREFIX:PATH=C:\greenplum-db-devel -G "Visual Studio 15 2017 Win64" ..
+cmake -DCMAKE_PREFIX_PATH=C:\greengage-db-devel -DCMAKE_INSTALL_PREFIX:PATH=C:\greengage-db-devel -G "Visual Studio 15 2017 Win64" ..
 cmake --build . --config Release --target ALL_BUILD
 cmake --build . --config Release --target INSTALL
 ```

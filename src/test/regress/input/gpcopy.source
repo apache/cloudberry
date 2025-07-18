@@ -1,5 +1,5 @@
 --
--- This test suite tests COPY code that is unique to greenplum db.
+-- This test suite tests COPY code that is unique to greengage db.
 --
 
 --
@@ -1447,7 +1447,7 @@ COPY foo FROM PROGRAM '/usr/bin/env bash -c ''echo -E database in COPY FROM: $GP
 
 select * from foo;
 
--- Test for Issue: https://github.com/greenplum-db/gpdb/issues/12700
+-- Test for Issue: https://github.com/GreengageDB/greengage/issues/12700
 -- When under planner, to set a plan's flow based on path's locus and
 -- the locus is hashed, it will try to verify that each distkey in locus
 -- is in plan's targetlist andalso is hashable. Previously, hashable-test

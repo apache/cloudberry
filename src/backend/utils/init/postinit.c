@@ -884,7 +884,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * don't allow them to consume the reserved slots, which are intended for
 	 * interactive use.
 	 *
-	 * In Greenplum, there is a concept of restricted mode where
+	 * In Greengage, there is a concept of restricted mode where
 	 * superuser_reserved_connections is set equal to max_connections making
 	 * it so only superusers can connect. Changes made in restricted mode need
 	 * to be replicated to the standby master. We currently only support one
@@ -909,7 +909,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		/*
 		 * must have authenticated as a replication role
 		 *
-		 * In Greenplum, this code path is overloaded for handling FTS messages
+		 * In Greengage, this code path is overloaded for handling FTS messages
 		 * on primary as well as mirror.
 		 * has_rolreplication() performs a syscache lookup,
 		 * which cannot happen on mirror/standby.
@@ -1185,7 +1185,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		ereport(FATAL,
 				(errcode(ERRCODE_CANNOT_CONNECT_NOW),
 				 errmsg("connections to primary segments are not allowed"),
-				 errdetail("This database instance is running as a primary segment in a Greenplum cluster and does not permit direct connections."),
+				 errdetail("This database instance is running as a primary segment in a Greengage cluster and does not permit direct connections."),
 				 errhint("To force a connection anyway (dangerous!), use utility mode.")));
 	}
 
@@ -1458,7 +1458,7 @@ static void
 GpParallelRetrieveCursorCheckTimeoutHandler(void)
 {
 	/*
-	 * issue: https://github.com/greenplum-db/gpdb/issues/15143
+	 * issue: https://github.com/GreengageDB/greengage/issues/15143
 	 *
 	 * handle errors of parallel retrieve cursor's non-root slices
 	 */

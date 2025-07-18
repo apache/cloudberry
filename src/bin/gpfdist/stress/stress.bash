@@ -38,9 +38,9 @@ function create_database() {
     psql -c "create table $TABLE_2 $STRUCTURE_2 $PRI_KEY2;" $DBNAME
     psql -c "create table $TABLE_3 $STRUCTURE_3 $PRI_KEY3;" $DBNAME
 
-    $MOCKD_PATH greenplum -u gpadmin -d $DBNAME -n $ROW1 -t $TABLE_1 -p $PGPORT
-    $MOCKD_PATH greenplum -u gpadmin -d $DBNAME -n $ROW2 -t $TABLE_2 -p $PGPORT
-    $MOCKD_PATH greenplum -u gpadmin -d $DBNAME -n $ROW3 -t $TABLE_3 -p $PGPORT
+    $MOCKD_PATH greengage -u gpadmin -d $DBNAME -n $ROW1 -t $TABLE_1 -p $PGPORT
+    $MOCKD_PATH greengage -u gpadmin -d $DBNAME -n $ROW2 -t $TABLE_2 -p $PGPORT
+    $MOCKD_PATH greengage -u gpadmin -d $DBNAME -n $ROW3 -t $TABLE_3 -p $PGPORT
 
     touch ./$FILE_1
     psql -c "create external table $EX_RT1 $STRUCTURE_1 location ('gpfdist://127.0.0.1:8080/$FILE_1') format 'text';" $DBNAME

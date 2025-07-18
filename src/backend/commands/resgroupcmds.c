@@ -993,7 +993,7 @@ checkResgroupCapConflicts(ResGroupCaps *caps)
 				(errcode(ERRCODE_GP_FEATURE_NOT_CONFIGURED),
 				 errmsg("cgroup is not properly configured for the 'cgroup' memory auditor"),
 				 errhint("Extra cgroup configurations are required to enable this feature, "
-						 "please refer to the Greenplum Documentation for details")));
+						 "please refer to the Greengage Documentation for details")));
 	}
 }
 

@@ -353,7 +353,7 @@ class PgBaseBackup(Command):
                     cmd_tokens.append('-E')
                     cmd_tokens.append(path)
 
-        # This is needed to handle Greenplum tablespaces
+        # This is needed to handle Greengage tablespaces
         cmd_tokens.append('--target-gp-dbid')
         cmd_tokens.append(str(target_gp_dbid))
 

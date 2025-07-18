@@ -27,7 +27,7 @@ docker pull pivotaldata/gpdb-dev:ubuntu18
 
 Clone GPDB repo
 ```
-git clone https://github.com/greenplum-db/gpdb.git
+git clone https://github.com/GreengageDB/greengage.git
 cd gpdb
 ```
 Use docker image based on gpdb/src/tools/docker/centos7
@@ -42,17 +42,17 @@ Inside docker
 ./configure --enable-debug --with-perl --with-python --with-libxml --disable-orca --prefix=/usr/local/gpdb
 make -j4
 
-# Install Greenplum binaries (to /usr/local/gpdb)
+# Install Greengage binaries (to /usr/local/gpdb)
 make install
 
 # Create a single node demo cluster with three segments
-source /usr/local/gpdb/greenplum_path.sh
+source /usr/local/gpdb/greengage_path.sh
 make create-demo-cluster
 source ./gpAux/gpdemo/gpdemo-env.sh
 
 # Create and use a test database
-createdb greenplum
-psql -d greenplum
+createdb greengage
+psql -d greengage
 ```
 
 # Docker container with Open source version of GPDB database running

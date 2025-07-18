@@ -6,12 +6,12 @@ SUBDIRS= sbin bin doc
 
 $(recurse)
 
-generate_greenplum_path_file:
+generate_greengage_path_file:
 	mkdir -p $(DESTDIR)$(prefix)
 	unset LIBPATH; \
-	bin/generate-greenplum-path.sh > $(DESTDIR)$(prefix)/greenplum_path.sh
+	bin/generate-greengage-path.sh > $(DESTDIR)$(prefix)/greengage_path.sh
 
-install: generate_greenplum_path_file
+install: generate_greengage_path_file
 	mkdir -p $(DESTDIR)$(prefix)/lib/python
 
 	# Setup /lib/python contents

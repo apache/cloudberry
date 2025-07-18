@@ -1,4 +1,4 @@
-Summary:        Cryptographic functions for Greenplum Database 
+Summary:        Cryptographic functions for Greengage Database 
 License:        PostgreSQL License        
 Name:           pgcrypto
 Version:        %{pgcrypto_ver}
@@ -10,7 +10,7 @@ AutoProv:       no
 Provides:       pgcrypto = %{pgcrypto_ver} 
 
 %description
-The Pgcrypto package provides cryptographic functions for the Greenplum Database.
+The Pgcrypto package provides cryptographic functions for the Greengage Database.
 
 %install
 mkdir -p %{buildroot}/temp

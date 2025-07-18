@@ -25,7 +25,7 @@
 
 -- kill the script to release port and execute query again (should successfully)
 -- Note: different from 7x here, we have to restart cluster (no need in 7x)
--- because 6x's icproxy code doesn't align with 7x: https://github.com/greenplum-db/gpdb/issues/14485
+-- because 6x's icproxy code doesn't align with 7x: https://github.com/GreengageDB/greengage/issues/14485
 !\retcode ps aux | grep SimpleHTTPServer | grep -v grep | awk '{print $2}' | xargs kill;
 !\retcode sleep 2 && gpstop -ari > /dev/null;
 

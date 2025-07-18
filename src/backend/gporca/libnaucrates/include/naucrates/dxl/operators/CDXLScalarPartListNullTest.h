@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 Pivotal, Inc.
 //
 //	Class for representing DXL Part list null test expressions

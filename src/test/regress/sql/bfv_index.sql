@@ -37,7 +37,7 @@ update pg_index set indisvalid=false where indrelid='bfv_tab1_with_invalid_index
 reset allow_system_table_mods;
 explain select * from bfv_tab1_with_invalid_index where unique1>42;
 -- Cannot currently upgrade table with invalid index
--- (see https://github.com/greenplum-db/gpdb/issues/10805).
+-- (see https://github.com/GreengageDB/greengage/issues/10805).
 drop table bfv_tab1_with_invalid_index;
 
 reset gp_enable_relsize_collection;
@@ -341,7 +341,7 @@ EXPLAIN SELECT c, a FROM table_with_reversed_index WHERE a > 5;
 SELECT c, a FROM table_with_reversed_index WHERE a > 5;
 --
 -- test query with set-returning-functions in targetlists and query plan use Index Only Scan
--- issue: https://github.com/greenplum-db/gpdb/issues/11307
+-- issue: https://github.com/GreengageDB/greengage/issues/11307
 --
 EXPLAIN SELECT a, generate_series(0,1) FROM table_with_reversed_index WHERE a > 5;
 SELECT a, generate_series(0,1) FROM table_with_reversed_index WHERE a > 5;

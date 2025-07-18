@@ -545,8 +545,8 @@ ensure_tablespace_directory_is_empty(const Oid tablespace_oid,
  *
  * Be careful to check that the tablespace is empty.
  *
- * The way drop tablespace is handled in Greenplum is slightly
- * different than upstream Postgres. In Greenplum, due to 2 phase commit,
+ * The way drop tablespace is handled in Greengage is slightly
+ * different than upstream Postgres. In Greengage, due to 2 phase commit,
  * there is a small window after the dispatch of Drop Tablespace command
  * to the QE's and before the QE acquires the TablespaceCreateLock lock,
  * in which a table could be created in the tablespace which is currently

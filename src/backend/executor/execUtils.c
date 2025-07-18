@@ -225,7 +225,7 @@ CreateExecutorState(void)
  * This can be called in any memory context ... so long as it's not one
  * of the ones to be freed.
  *
- * In Greenplum, this also clears the PartitionState, even though that's a
+ * In Greengage, this also clears the PartitionState, even though that's a
  * non-memory resource, as that can be allocated for expression evaluation even
  * when there is no Plan.
  * ----------------

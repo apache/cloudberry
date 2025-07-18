@@ -38,7 +38,7 @@
                          ->  Table Scan on t4  (cost=0.00..431.00 rows=4 width=8)
      Settings:  optimizer_join_order=query
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

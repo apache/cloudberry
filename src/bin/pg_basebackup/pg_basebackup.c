@@ -278,7 +278,7 @@ usage(void)
 	printf(_("  -E, --exclude          exclude path names\n"));
 	printf(_("      --exclude-from=FILE\n"
 			 "                         get path names to exclude from FILE\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
@@ -1781,7 +1781,7 @@ syncTargetDirectory(const char *argv0)
 
 	/* locate initdb binary */
 	if ((ret = find_other_exec(argv0, "initdb",
-							   "initdb (Greenplum Database) " PG_VERSION "\n",
+							   "initdb (Greengage Database) " PG_VERSION "\n",
 							   exec_path)) < 0)
 	{
 		char        full_path[MAXPGPATH];
@@ -1877,7 +1877,7 @@ BaseBackup(const char *argv0)
 		disconnect_and_exit(1);
 
 	/*
-	 * Greenplum only: create replication slot.  This replication slot is used
+	 * Greengage only: create replication slot.  This replication slot is used
 	 * for primary/mirror and master/standby WAL replication.
 	 */
 	if (replication_slot)

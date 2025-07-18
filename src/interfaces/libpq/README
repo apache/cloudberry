@@ -2,7 +2,7 @@ src/interfaces/libpq/README
 
 This directory contains the C version of Libpq, the POSTGRES frontend library.
 
-==== Greenplum specific ====
+==== Greengage specific ====
 
 libpq is also used by QD to QEs communications, backend, check the macro FRONTEND.
 

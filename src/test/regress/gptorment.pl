@@ -139,7 +139,7 @@ Jeffrey I Cohen
 Portions Copyright (c) 2008-2010 GreenPlum.  All rights reserved.
 Portions Copyright (c) 2012-Present Pivotal Software, Inc.
 
-Address bug reports and comments to: bugs@greenplum.org
+Address bug reports and comments to: bugs@greengagedb.org
 
 
 =cut
@@ -339,7 +339,7 @@ BEGIN {
         #
         #    version
         # --------------
-        # PostgreSQL 8.2.5 (Greenplum Database...
+        # PostgreSQL 8.2.5 (Greengage Database...
         #
         my @l3 = split(/\n/, $tabdef, 3);
 

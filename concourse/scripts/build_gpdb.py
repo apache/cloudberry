@@ -10,7 +10,7 @@ import sys
 
 from builds.GpBuild import GpBuild
 
-INSTALL_DIR = "/usr/local/greenplum-db-devel"
+INSTALL_DIR = "/usr/local/greengage-db-devel"
 
 def create_gpadmin_user():
     status = subprocess.call("gpdb_src/concourse/scripts/setup_gpadmin_user.bash")

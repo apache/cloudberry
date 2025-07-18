@@ -1,5 +1,5 @@
 --
--- Test foreign-data wrapper and server management. Greenplum MPP specific
+-- Test foreign-data wrapper and server management. Greengage MPP specific
 --
 
 -- start_ignore

@@ -2428,7 +2428,7 @@ transformGroupClause(ParseState *pstate, List *grouplist,
 		node = (Node*)lfirst(l);
 
 		/*
-		 * The following is backported to Greenplum 6 to make it align with upstream.
+		 * The following is backported to Greengage 6 to make it align with upstream.
 		 * Arbitrarily cap the size of CUBE, which has exponential growth
 		 */
 		if (node != NULL &&

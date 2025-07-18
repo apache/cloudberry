@@ -14,7 +14,7 @@
 -- saved next tid. But actually `PAGE_NEXT` now contains words used to belong in `PAGE_FULL`.
 -- This causes the real next tid less than the expected next tid. But our scan keeps increasing
 -- the wrong tid. And then this leads to a wrong result.
--- This related to issue: https://github.com/greenplum-db/gpdb/issues/11308
+-- This related to issue: https://github.com/GreengageDB/greengage/issues/11308
 --
 
 -- Setup fault injectors
@@ -186,7 +186,7 @@ SELECT count(*) FROM bmupdate WHERE id >= 97 and id <= 99 and gp_segment_id = 0;
 
 -- Regression test, when large amount of inserts concurrent inserts happen,
 -- querying the table shouldn't take along time.
--- This test is from https://github.com/greenplum-db/gpdb/issues/15389
+-- This test is from https://github.com/GreengageDB/greengage/issues/15389
 DROP TABLE IF EXISTS bug.let_me_out;
 DROP SCHEMA IF EXISTS bug;
 CREATE SCHEMA bug;

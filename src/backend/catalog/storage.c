@@ -400,8 +400,8 @@ smgrDoPendingDeletes(bool isCommit)
  * Note that the list does not include anything scheduled for termination
  * by upper-level transactions.
  *
- * Greenplum-specific notes: We *do* include temporary relations in the returned
- * list. Because unlike in Upstream Postgres, Greenplum two-phase commits can
+ * Greengage-specific notes: We *do* include temporary relations in the returned
+ * list. Because unlike in Upstream Postgres, Greengage two-phase commits can
  * involve temporary tables, which necessitates including the temporary
  * relations in the two-phase state files (PREPARE xlog record). Otherwise the
  * relation files won't get unlink(2)'d, or the shared buffers won't be
@@ -420,7 +420,7 @@ smgrGetPendingDeletes(bool forCommit, RelFileNodePendingDelete **ptr)
 	{
 		if (pending->nestLevel >= nestLevel && pending->atCommit == forCommit
 			/*
-			 * Greenplum allows transactions that access temporary tables to be
+			 * Greengage allows transactions that access temporary tables to be
 			 * prepared.
 			 */
 			/* && pending->relnode.backend == InvalidBackendId) */

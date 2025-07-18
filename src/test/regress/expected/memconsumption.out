@@ -4,7 +4,7 @@ create schema memconsumption;
 set search_path to memconsumption;
 -- end_ignore
 create table test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t1 (a int, b int, c int) distributed by (a);
 set explain_memory_verbosity=detail;
@@ -127,7 +127,7 @@ SELECT count(*) + argument FROM pg_class;
 $$ LANGUAGE SQL STRICT VOLATILE;
 -- Create a table with tuples only on one segement
 CREATE TABLE all_tuples_on_seg0(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO all_tuples_on_seg0 VALUES (2), (2), (2);
 SELECT gp_segment_id, count(*) FROM all_tuples_on_seg0 GROUP BY 1;

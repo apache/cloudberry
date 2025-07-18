@@ -11,7 +11,7 @@ set gp_selectivity_damping_for_joins = off;
 set allow_system_table_mods = true;
 
 -- 
--- Greenplum Database Statistics Dump
+-- Greengage Database Statistics Dump
 -- Copyright (C) 2007  Greenplum Inc.
 -- 
 -- Database: tpch500
@@ -21,7 +21,7 @@ set allow_system_table_mods = true;
 -- Version:  PostgreSQL 8.2.4 (Greenplum Database Release-3_1_0_0-alpha1-branch build 1896) on i386-pc-solaris2.10, compiled by GCC gcc.exe (GCC) 4.1.1 compiled on Sep 25 2007 10:48:21
 -- 
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 
 SET client_encoding = 'SQL_ASCII';
@@ -1764,7 +1764,7 @@ INSERT INTO pg_statistic VALUES (
 	NULL::varchar[]);
 
 -- 
--- Greenplum Database Statistics Dump complete
+-- Greengage Database Statistics Dump complete
 -- 
 
 

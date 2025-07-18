@@ -42,7 +42,7 @@ insert into direct_test_type_date values (8,8,true,8,8,'2008-08-08',8.8);
 insert into direct_test_type_numeric values (8,8,true,8,8,'2008-08-08',8.8);
 insert into direct_test_type_bit values('1');
 insert into direct_test_type_bpchar values('abs');
-insert into direct_test_type_bytea values('greenplum');
+insert into direct_test_type_bytea values('greengage');
 insert into direct_test_type_cidr values('68.44.55.111');
 insert into direct_test_type_inet values('68.44.55.111');
 insert into direct_test_type_macaddr values('12:34:56:78:90:ab');
@@ -65,7 +65,7 @@ select * from direct_test_type_date where date1 = '2008-08-08';
 select * from direct_test_type_numeric where numeric1 = 8.8;
 select * from direct_test_type_bit where x = '1';
 select * from direct_test_type_bpchar where x = 'abs';
-select * from direct_test_type_bytea where x = 'greenplum';
+select * from direct_test_type_bytea where x = 'greengage';
 
 -- TODO: this currently not directly dispatched (AGL-1246)
 select * from direct_test_type_cidr where x = '68.44.55.111';

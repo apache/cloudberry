@@ -21,7 +21,7 @@ try:
 
     import platform
 except ImportError, ex:
-    sys.exit('Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(ex))
+    sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(ex))
 
 logger = gplog.get_default_logger()
 
@@ -88,7 +88,7 @@ class GpPkgProgram:
     @staticmethod
     def create_parser():
         parser = OptParser(option_class=OptChecker,
-            description="Greenplum Package Manager",
+            description="Greengage Package Manager",
             version='%prog version $Revision: #1 $')
         parser.setHelp([])
 

@@ -12,7 +12,7 @@ CREATE TABLE jazz(e int, f int);
 // This should return 0, not NULL
 SELECT (SELECT jazz.count FROM (SELECT count(*) FROM bar GROUP BY c LIMIT 1) AS bar, (SELECT count(*) FROM jazz WHERE e = a) AS jazz) FROM foo;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -41,12 +41,12 @@ curl https://bootstrap.pypa.io/get-pip.py | sudo python
 sudo pip install --upgrade setuptools wheel pip psutil
 
 # configure and build
-git clone https://github.com/greenplum-db/gpdb.git
+git clone https://github.com/GreengageDB/greengage.git
 cd gpdb
 ./configure --with-openssl --with-libxml --with-libxslt --with-python --with-perl
 make
 sudo make install
-. /usr/local/gpdb/greenplum_path.sh
+. /usr/local/gpdb/greengage_path.sh
 
 # create init system file with update values
 cp $GPHOME/docs/cli_help/gpconfigs/gpinitsystem_test .

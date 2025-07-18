@@ -13,7 +13,7 @@ set optimizer_enable_tablescan = off;
 explain select * from t where (c1 = 10 and c5 < 20) or (c2 = '4' and c5> 100);
 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

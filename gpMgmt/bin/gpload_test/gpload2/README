@@ -2,8 +2,8 @@ The remote tests is intended to be run for remote server,
 which means you are compiling loader package on local
 machine but GPDB server is located on a separate machine.
 
-To run this test, first source greenplum_path.sh in
-greenplum-db-devel, not the greenplum-loaders-devel,
+To run this test, first source greengage_path.sh in
+greengage-db-devel, not the greengage-loaders-devel,
 because loader package don't have the necessary diff tools.
 
 Then setup necessary environment variables.

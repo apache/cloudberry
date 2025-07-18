@@ -76,9 +76,9 @@ PYGRESQL_DIR=PyGreSQL-$(PYGRESQL_VERSION)
 
 pygresql:
 	@echo "--- PyGreSQL"
-	if [ ! -f $(DESTDIR)$(prefix)/greenplum_path.sh ]; then \
+	if [ ! -f $(DESTDIR)$(prefix)/greengage_path.sh ]; then \
 		unset LIBPATH; \
-		./generate-greenplum-path.sh > $(DESTDIR)$(prefix)/greenplum_path.sh ; \
+		./generate-greengage-path.sh > $(DESTDIR)$(prefix)/greengage_path.sh ; \
 	fi
 	PATH=$(bindir):$$PATH && \
 	if [ `uname -s` = 'OpenBSD' ]; then \
@@ -216,7 +216,7 @@ unitdevel:
 
 .PHONY: installcheck-bash
 installcheck-bash:
-	./test-generate-greenplum-path.bash
+	./test-generate-greengage-path.bash
 	./test/suite.bash
 
 .PHONY: installcheck

@@ -6,7 +6,7 @@
  * src/include/catalog/pg_proc_gp.h
  *
  * NOTES
- *    This file contains additional Greenplum-added entries into pg_proc,
+ *    This file contains additional Greengage-added entries into pg_proc,
  *    on top of the upstream entries from pg_proc.h
  *
  *	  The contents of this file are generated from pg_proc.sql by
@@ -208,7 +208,7 @@ DATA(insert OID = 6013 ( array_sum  PGNSP PGUID 12 1 0 0 0 t f f f f f i 1 0 100
 DESCR("array sum aggregate");
 
 
-/* Greenplum Analytic functions */
+/* Greengage Analytic functions */
 /* int2_matrix_accum(_int8, _int2) => _int8 */
 DATA(insert OID = 6212 ( int2_matrix_accum  PGNSP PGUID 12 1 0 0 0 f f f f f f i 2 0 1016 "1016 1005" _null_ _null_ _null_ _null_ matrix_add _null_ _null_ _null_ n a ));
 DESCR("perform matrix addition on two conformable matrices");
@@ -270,7 +270,7 @@ DESCR("pivot sum aggregate");
 
 /* 3241-324? reserved for unpivot, see pivot.c  */
 
-/* Greenplum MPP exposed internally-defined functions.  */
+/* Greengage MPP exposed internally-defined functions.  */
 /* gp_pgdatabase() => SETOF record */
 DATA(insert OID = 6007 ( gp_pgdatabase  PGNSP PGUID 12 1 1000 0 0 f f f f f t v 0 0 2249 "" _null_ _null_ _null_ _null_ gp_pgdatabase__ _null_ _null_ _null_ n a ));
 DESCR("view mpp pgdatabase state");

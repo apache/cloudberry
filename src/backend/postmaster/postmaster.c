@@ -2667,7 +2667,7 @@ retry1:
 					 errmsg("sorry, too many clients already")));
 			break;
 		case CAC_WAITBACKUP:
-			/* Greenplum does not currently use WAITBACKUP state. */
+			/* Greengage does not currently use WAITBACKUP state. */
 			Assert(port->canAcceptConnections != CAC_WAITBACKUP);
 			break;
 		case CAC_MIRROR_READY:

@@ -25,7 +25,7 @@ try:
     from yaml.scanner import ScannerError
 except ImportError, ex:
     sys.exit(
-        'Operation: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(ex))
+        'Operation: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(ex))
 
 logger = gplog.get_default_logger()
 
@@ -33,7 +33,7 @@ logger = gplog.get_default_logger()
 def dereference_symlink(path):
     """
     MPP-15429: rpm is funky with symlinks...
-    During an rpm -e invocation, rpm mucks with the /usr/local/greenplum-db symlink.
+    During an rpm -e invocation, rpm mucks with the /usr/local/greengage-db symlink.
     From strace output, it appears that rpm tries to rmdir any directories it may have created during
     package installation. And, in the case of our GPHOME symlink, rpm will actually try to unlink it.
     To avoid this scenario, we perform all rpm actions against the "symlink dereferenced" $GPHOME.
@@ -157,7 +157,7 @@ class Gppkg:
             version         The version of the gppkg
             architecture    The architecture for which the package is built
             os              The operating system for which the package is built
-            gpdbversion     The Greenplum Database version for which package is built
+            gpdbversion     The Greengage Database version for which package is built
             description     A short description for the package
             abspath         This is the absolute path where the package sits on the host
             preinstall      The cluster level preinstallation hooks
@@ -416,15 +416,15 @@ class IsVersionCompatible(Operation):
         gpdb_version = self._get_gpdb_version()
         required_gpdb_version = gppkg.gpdbversion
 
-        logger.debug('Greenplum Database Version = %s' % gpdb_version)
-        logger.debug('Required Greenplum Database version = %s' % required_gpdb_version)
+        logger.debug('Greengage Database Version = %s' % gpdb_version)
+        logger.debug('Required Greengage Database version = %s' % required_gpdb_version)
 
         if gpdb_version is None:
-            logger.error('Could not determine Greenplum Database version')
+            logger.error('Could not determine Greengage Database version')
             return False
 
         if not required_gpdb_version.isVersionRelease(gpdb_version):
-            logger.error('%s requires Greenplum Database version %s' % (gppkg.pkgname, required_gpdb_version))
+            logger.error('%s requires Greengage Database version %s' % (gppkg.pkgname, required_gpdb_version))
             return False
 
         return True

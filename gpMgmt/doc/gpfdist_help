@@ -1,6 +1,6 @@
 COMMAND NAME: gpfdist
 
-Serves data files to or writes data files out from Greenplum Database 
+Serves data files to or writes data files out from Greengage Database 
 segments. 
 
 *****************************************************
@@ -19,15 +19,15 @@ gpfdist [-? | --help] | --version
 DESCRIPTION
 *****************************************************
 
-gpfdist is Greenplum's parallel file distribution program. It is used 
+gpfdist is Greengage's parallel file distribution program. It is used 
 by readable external tables and gpload to serve external table files to 
-all Greenplum Database segments in parallel. It is used by writable 
-external tables to accept output streams from Greenplum Database 
+all Greengage Database segments in parallel. It is used by writable 
+external tables to accept output streams from Greengage Database 
 segments in parallel and write them out to a file. 
 
 In order for gpfdist to be used by an external table, the LOCATION 
 clause of the external table definition must specify the external table 
-data using the gpfdist:// protocol (see the Greenplum Database command 
+data using the gpfdist:// protocol (see the Greengage Database command 
 CREATE EXTERNAL TABLE). 
 
 NOTE: If the --ssl option is specified to enable SSL security, create 
@@ -39,7 +39,7 @@ offering the best performance as well as easier administration of
 external tables. 
 
 For readable external tables, gpfdist parses and serves data files 
-evenly to all the segment instances in the Greenplum Database system 
+evenly to all the segment instances in the Greengage Database system 
 when users SELECT from the external table. For writable external tables, 
 gpfdist accepts parallel output streams from the segments when users 
 INSERT into the external table, and writes to an output file. 
@@ -54,7 +54,7 @@ Windows platforms, and writable external tables do not support
 compression on any platforms. 
 
 Most likely, you will want to run gpfdist on your ETL machines rather 
-than the hosts where Greenplum Database is installed. To install gpfdist 
+than the hosts where Greengage Database is installed. To install gpfdist 
 on another host, simply copy the utility over to that host and add 
 gpfdist to your $PATH. 
 
@@ -89,7 +89,7 @@ OPTIONS
 
 -t <timeout> 
 
- Sets the time allowed for Greenplum Database to establish a connection 
+ Sets the time allowed for Greengage Database to establish a connection 
  to a gpfdist process. Default is 5 seconds. Allowed values are 2 to 600 
  seconds. May need to be increased on systems with a lot of network 
  traffic. 
@@ -113,13 +113,13 @@ OPTIONS
 
 -w <time> 
 
- Sets the number of seconds that Greenplum Database delays before closing 
+ Sets the number of seconds that Greengage Database delays before closing 
  a target file such as a named pipe. The default value is 0, no delay. 
  The maximum value is 600 seconds, 10 minutes. 
 
- For a Greenplum Database with multiple segments, there might be a delay 
+ For a Greengage Database with multiple segments, there might be a delay 
  between segments when writing data from different segments to the file. 
- You can specify a time to wait before Greenplum Database closes the file 
+ You can specify a time to wait before Greengage Database closes the file 
  to ensure all the data is written to the file.
 
 -k <time>
@@ -135,7 +135,7 @@ OPTIONS
  Adds SSL encryption to data transferred with gpfdist. After executing 
  gpfdist with the --ssl <certificate_path> option, the only way to load 
  data from this file server is with the gpfdists protocol. For 
- information on the gpfdists protocol, see the "Greenplum Database 
+ information on the gpfdists protocol, see the "Greengage Database 
  Administrator Guide". 
 
  The location specified in certificate_path must contain the following 
@@ -207,12 +207,12 @@ OPTIONS
 RUNNING GPFDIST AS A WINDOWS SERVICE
 *****************************************************
 
-Greenplum Loaders allow gpfdist to run as a Windows Service. 
+Greengage Loaders allow gpfdist to run as a Windows Service. 
 
 Follow the instructions below to download, register and activate gpfdist 
 as a service: 
 
-1. Update your Greenplum Loader package to the latest version. This 
+1. Update your Greengage Loader package to the latest version. This 
    package is available from the EMC Download Center. 
    (https://emc.subscribenet.com)
 
@@ -288,7 +288,7 @@ SEE ALSO
 
 CREATE EXTERNAL TABLE, gpload 
 
-See the "Greenplum Database Reference Guide" for information 
+See the "Greengage Database Reference Guide" for information 
 about CREATE EXTERNAL TABLE. 
 
 

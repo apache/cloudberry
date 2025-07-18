@@ -651,7 +651,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 		 * make it correct when shared scan is in subplan, then an assert
 		 * (or panic) error will happen in init_tuplestore_state().
 		 *
-		 * See github issue: https://github.com/greenplum-db/gpdb/issues/12701
+		 * See github issue: https://github.com/GreengageDB/greengage/issues/12701
 		 */
 		config->gp_cte_sharing = false;
 	}

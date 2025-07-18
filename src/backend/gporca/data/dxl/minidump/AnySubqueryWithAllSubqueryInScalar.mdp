@@ -6,7 +6,7 @@
      EXPLAIN SELECT * FROM foo where
      (SELECT 2 FROM foo where a not in (select c from t1) limit 1)  IN (SELECT 1 as b1 FROM bar);
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

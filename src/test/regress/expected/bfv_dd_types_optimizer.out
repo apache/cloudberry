@@ -89,7 +89,7 @@ INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGL
 insert into direct_test_type_bpchar values('abs');
 INFO:  (slice 0) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
-insert into direct_test_type_bytea values('greenplum');
+insert into direct_test_type_bytea values('greengage');
 INFO:  (slice 0) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 insert into direct_test_type_cidr values('68.44.55.111');
@@ -161,11 +161,11 @@ INFO:  (slice 1) Dispatch command to SINGLE content
  abs
 (1 row)
 
-select * from direct_test_type_bytea where x = 'greenplum';
+select * from direct_test_type_bytea where x = 'greengage';
 INFO:  (slice 1) Dispatch command to SINGLE content
           x           
 ----------------------
- \x677265656e706c756d
+ \x677265656e67616765
 (1 row)
 
 -- TODO: this currently not directly dispatched (AGL-1246)

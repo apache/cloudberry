@@ -248,7 +248,7 @@ DETAIL:  Feature not supported: DML not enabled
 
 set optimizer_enable_dml=on;
 create table foo(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo select i%100, i%100 from generate_series(1,10000)i;
 set optimizer_enable_hashagg = on;
@@ -299,7 +299,7 @@ CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');
 CREATE TABLE partition_key_dropped(a int, b bug_status) PARTITION BY LIST(b)
 ( PARTITION p1 VALUES ('new'),
   PARTITION p2 VALUES ('open'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "partition_key_dropped_1_prt_p1" for table "partition_key_dropped"
 NOTICE:  CREATE TABLE will create partition "partition_key_dropped_1_prt_p2" for table "partition_key_dropped"

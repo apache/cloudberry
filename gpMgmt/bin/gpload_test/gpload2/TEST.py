@@ -54,7 +54,7 @@ def getPortMasterOnly(host = 'localhost',master_value = None,
     master_pattern = "Context:\s*-1\s*Value:\s*\d+"
     command = "gpconfig -s %s" % ( "port" )
 
-    cmd = "source %s/greenplum_path.sh; export MASTER_DATA_DIRECTORY=%s; export PGPORT=%s; %s" \
+    cmd = "source %s/greengage_path.sh; export MASTER_DATA_DIRECTORY=%s; export PGPORT=%s; %s" \
            % (gphome, mdd, port, command)
 
     (ok,out) = run(cmd)

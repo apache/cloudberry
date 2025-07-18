@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2011 EMC Corp.
 //
 //	@filename:
@@ -81,7 +81,7 @@ CSystemId CTestUtils::m_sysidDefault(IMDId::EmdidGeneral,
 
 // XSD path
 const CHAR *CTestUtils::m_szXSDPath =
-	"http://greenplum.com/dxl/2010/12/ dxl.xsd";
+	"http://greengagedb.org/dxl/2010/12/ dxl.xsd";
 
 // metadata file
 const CHAR *CTestUtils::m_szMDFileName = "../data/dxl/metadata/md.xml";

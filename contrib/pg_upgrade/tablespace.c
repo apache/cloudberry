@@ -10,8 +10,8 @@
 #include "postgres_fe.h"
 
 #include "pg_upgrade.h"
-#include "greenplum/old_tablespace_file_gp.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/old_tablespace_file_gp.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 #include <sys/types.h>
 

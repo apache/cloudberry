@@ -144,7 +144,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_restore (Greenplum Database) " PG_VERSION);
+			puts("pg_restore (Greengage Database) " PG_VERSION);
 			exit_nicely(0);
 		}
 	}
@@ -502,5 +502,5 @@ usage(const char *progname)
 			 "The options -I, -n, -P, -t, -T, and --section can be combined and specified\n"
 			 "multiple times to select multiple objects.\n"));
 	printf(_("\nIf no input file name is supplied, then standard input is used.\n\n"));
-	printf(_("Report bugs to <bugs@greenplum.org>.\n"));
+	printf(_("Report bugs to <bugs@greengagedb.org>.\n"));
 }

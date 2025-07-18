@@ -4,21 +4,21 @@
 create schema bfv_joins;
 set search_path='bfv_joins';
 create table x (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into x values (generate_series(1,10), generate_series(1,10), generate_series(1,10));
 create table y (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into y (select * from x);
 CREATE TABLE t1 (a int, b int, c int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t2 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t3 (a int not null, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t1 VALUES (1,1,1),(2,1,2),(3,NULL,3);
 INSERT INTO t2 VALUES (2,3);
@@ -29,23 +29,23 @@ END
 $$ LANGUAGE plpgsql;
 create table z(x int) distributed by (x);
 CREATE TABLE bfv_joins_foo AS SELECT i as a, i+1 as b from generate_series(1,10)i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bfv_joins_bar AS SELECT i as c, i+1 as d from generate_series(1,10)i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t AS SELECT bfv_joins_foo.a,bfv_joins_foo.b,bfv_joins_bar.d FROM bfv_joins_foo,bfv_joins_bar WHERE bfv_joins_foo.a = bfv_joins_bar.d;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION my_equality(a int, b int) RETURNS BOOL
     AS $$ SELECT $1 < $2 $$
     LANGUAGE SQL;
 create table x_non_part (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into x_non_part select i%3, i, i from generate_series(1,10) i;
 create table x_part (e int, f int, g int) partition by range(e) (start(1) end(5) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "x_part_1_prt_extra" for table "x_part"
 NOTICE:  CREATE TABLE will create partition "x_part_1_prt_2" for table "x_part"
@@ -3230,7 +3230,7 @@ partition by range (wk_id) (
   start (1::smallint) END (20::smallint) inclusive every (1),
   default partition dflt
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp25537_facttable1_1_prt_dflt" for table "mpp25537_facttable1"
 NOTICE:  CREATE TABLE will create partition "mpp25537_facttable1_1_prt_2" for table "mpp25537_facttable1"
@@ -3257,14 +3257,14 @@ CREATE TABLE mpp25537_dimdate (
   wk_id smallint,
   col2 date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'wk_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'wk_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp25537_dimdate select col1, current_date - col1 from (select generate_series(1,20,2) col1) a;
 CREATE TABLE mpp25537_dimtabl1 (
   id integer,
   col2 integer
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp25537_dimtabl1 select col1, col1 from (select generate_series(1,20,3) col1) a;
 CREATE INDEX idx_mpp25537_facttable1 on mpp25537_facttable1 (id);
@@ -3412,10 +3412,10 @@ EXPLAIN (costs off) SELECT * FROM coercejoin a, coercejoin b WHERE a.a::numeric=
 -- Test NLJ with join conds on distr keys using equality, IS DISTINCT FROM & IS NOT DISTINCT FROM exprs
 --
 create table nlj1 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table nlj2 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into nlj1 values (1, 1), (NULL, NULL);
 insert into nlj2 values (1, 5), (NULL, 6);
@@ -3506,16 +3506,16 @@ reset enable_hashjoin; reset enable_mergejoin; reset enable_nestloop;
 -- was rescannable, if the NestLoop was used on the inner side of another
 -- NestLoop.
 --
--- See https://github.com/greenplum-db/gpdb/issues/6769.
+-- See https://github.com/GreengageDB/greengage/issues/6769.
 --
 create table a (i int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table b (i int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table c (i int4, j int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into a select g from generate_series(1,1) g;
 insert into b select g from generate_series(1,1) g;
@@ -3593,7 +3593,7 @@ select * from a, b, c where b.i = a.i and (a.i + b.i) = c.j;
 -- outerParams. Previously, we do not handle this case correct and forgot
 -- to set the Params for nestloop in econtext. The outer Param is a compound
 -- data type instead of simple integer, it will lead to PANIC.
--- See Github Issue: https://github.com/greenplum-db/gpdb/issues/9679
+-- See Github Issue: https://github.com/GreengageDB/greengage/issues/9679
 -- for details.
 create type mytype_prefetch_params as (x int, y int);
 alter table b add column mt_col mytype_prefetch_params;
@@ -3701,9 +3701,9 @@ EXPLAIN SELECT a, b FROM gp_float1 JOIN gp_float2 ON a = c AND b = float8 '3.0' 
  Optimizer: Postgres query optimizer
 (10 rows)
 
--- The following case is to test Greenplum specific plan
+-- The following case is to test Greengage specific plan
 -- unique row id plan works correctly  with merge append path.
--- See Github issue: https://github.com/greenplum-db/gpdb/issues/9427
+-- See Github issue: https://github.com/GreengageDB/greengage/issues/9427
 set optimizer = off;
 create table t_9427(a int, b int, c int)
 partition by range (a)
@@ -3713,7 +3713,7 @@ partition by range (a)
         DEFAULT PARTITION default_part
 )
 ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "t_9427_1_prt_default_part" for table "t_9427"
 NOTICE:  CREATE TABLE will create partition "t_9427_1_prt_p1" for table "t_9427"
@@ -4059,7 +4059,7 @@ join baz on varchar_3=text_any;
 
 --
 -- Test case for Hash Join rescan after squelched without hashtable built
--- See https://github.com/greenplum-db/gpdb/pull/15590
+-- See https://github.com/GreengageDB/greengage/pull/15590
 --
 --- Lateral Join
 reset enable_hashjoin;
@@ -4175,7 +4175,7 @@ drop type if exists mt;
 NOTICE:  type "mt" does not exist, skipping
 create type mt as (x int, y int);
 create table t1 (a int, b mt);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2 (a int, b mt) distributed replicated;
 insert into t1 select i, '(1,1)' from generate_series(1, 1)i;

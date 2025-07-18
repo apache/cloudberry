@@ -24,14 +24,14 @@ MAIN_VERSION = [6,99,99]    # version number for main
 #============================================================
 class GpVersion:
     '''
-    The gpversion class is an abstraction of a given Greenplum release 
+    The gpversion class is an abstraction of a given Greengage release 
     version.  It exists in order to facilitate version comparisons,
     formating, printing, etc.
     
       x = GpVersion([3,2,0,4]) => Greenplum 3.2.0.4
       x = GpVersion('3.2')     => Greenplum 3.2 dev
       x = GpVersion('3.2 build dev') => Greenplum 3.2 dev
-      x = GpVersion('main')    => Greenplum main 
+      x = GpVersion('main')    => Greengage main 
       x.major()                => Major release, eg "3.2"
       x.isrelease('3.2')       => Major version comparison
     '''
@@ -88,10 +88,10 @@ class GpVersion:
             # There are several version formats that we anticipate receiving:
             #
             # Versions from "postgres --gp-version":
-            #    ".* (Greenplum Database) <VERSION> build <BUILD>"
+            #    ".* (Greengage Database) <VERSION> build <BUILD>"
             #
             # Version from sql "select version()"
-            #    ".* (Greenplum Database <VERSION> build <BUILD>) .*"
+            #    ".* (Greengage Database <VERSION> build <BUILD>) .*"
             #
             # Versions from python code:
             #    "<VERSION>"
@@ -99,7 +99,7 @@ class GpVersion:
             #
             if isinstance(v, str):
                 # See if it matches one of the two the long formats
-                regex = r"\(Greenplum Database\)? ([^ ]+) build ([^ )]+)"
+                regex = r"\(Greengage Database\)? ([^ ]+) build ([^ )]+)"
                 m = re.search(regex, v)
                 if m:
                     (v, self.build) = m.groups()   # (version, build)
@@ -179,7 +179,7 @@ class GpVersion:
 
         # If part of the conversion process above failed, throw an error,
         except Exception as e:
-            raise StandardError("Unrecognised Greenplum Version '%s' due to %s" %
+            raise StandardError("Unrecognised Greengage Version '%s' due to %s" %
                                 (str(version), str(e)))
 
     #------------------------------------------------------------

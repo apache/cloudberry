@@ -226,7 +226,7 @@ EXPLAIN SELECT id, property AS "Property" FROM GistTable3
 --     Test UNIQUE indexes and primary keys on geometric data types.
 --     It turns out that columns with the geometric data types (at least
 --     box, polygon, and circle, and probably any others) can't be part of
---     a distribution key.  And since Greenplum allows unique indexes only on
+--     a distribution key.  And since Greengage allows unique indexes only on
 --     columns that are part of the distribution key, GiST indexes cannot
 --     be unique.  And of course since primary keys rely on unique indexes,
 --     if we can't have unique GiST indexes, then we can't have primary

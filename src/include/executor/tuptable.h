@@ -396,7 +396,7 @@ extern TupleTableSlot *ExecStoreMinimalTuple(MemTuple mtup,
 
 /*
  * Some external libraries such as redis_fdw are using this API, which is
- * changed in Greenplum. Added it back.
+ * changed in Greengage. Added it back.
  */
 static inline TupleTableSlot *ExecStoreTuple(HeapTuple tuple,
 			TupleTableSlot *slot, Buffer buffer, bool shouldFree)

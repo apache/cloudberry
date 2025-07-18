@@ -51,8 +51,8 @@
  * on that day.  (Hopefully we'll never commit ten independent sets of
  * catalog changes on the same day...)
  *
- * For Greenplum, use 3 as the first digit, to distinguish PostgreSQL
- * catalog versions from Greenplum.
+ * For Greengage, use 3 as the first digit, to distinguish PostgreSQL
+ * catalog versions from Greengage.
  */
 
 /*							3yyymmddN */

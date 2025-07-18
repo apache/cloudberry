@@ -10,14 +10,14 @@ OBJS = check.o controldata.o dump.o exec.o file.o function.o info.o \
        option.o parallel.o pg_upgrade.o relfilenode.o server.o \
        tablespace.o util.o version.o version_old_8_3.o $(WIN32RES)
 
-# Source files specific to Greenplum
-OBJS += greenplum/version_gp.o \
-		greenplum/check_gp.o greenplum/reporting.o \
-		greenplum/aomd_filehandler.o greenplum/option_gp.o \
-		greenplum/controldata_gp.o greenplum/frozenxids_gp.o \
-		greenplum/old_tablespace_file_contents.o greenplum/old_tablespace_file_parser.o \
-		greenplum/tablespace_gp.o greenplum/info_gp.o greenplum/old_tablespace_file_gp.o \
-		greenplum/server_gp.o greenplum/greenplum_cluster_info.o
+# Source files specific to Greengage
+OBJS += greengage/version_gp.o \
+		greengage/check_gp.o greengage/reporting.o \
+		greengage/aomd_filehandler.o greengage/option_gp.o \
+		greengage/controldata_gp.o greengage/frozenxids_gp.o \
+		greengage/old_tablespace_file_contents.o greengage/old_tablespace_file_parser.o \
+		greengage/tablespace_gp.o greengage/info_gp.o greengage/old_tablespace_file_gp.o \
+		greengage/server_gp.o greengage/greengage_cluster_info.o
 
 PG_CPPFLAGS  = -DFRONTEND -DDLSUFFIX=\"$(DLSUFFIX)\" -I$(srcdir) -I$(libpq_srcdir)
 PG_LIBS = $(libpq_pgport)
@@ -39,7 +39,7 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
-greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
+greengage/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
 	rm -f $@ && $(LN_S) ../$< $@
 
 check: test_gpdb.sh all

@@ -29,6 +29,6 @@ openssl-0.9.8g
 !gpMgmt/*.gz
 *.tar
 .zip
-!greenplum/extensions/gpfdist/ext/zlib-1.2.3.zip
+!greengage/extensions/gpfdist/ext/zlib-1.2.3.zip
 
 !expected/*.out

@@ -1,17 +1,17 @@
-The Greenplum Partner Connector (GPPC) is a Greenplum Database extension
-that lets you create a Greenplum Database user-defined function (UDF)
+The Greengage Partner Connector (GPPC) is a Greengage Database extension
+that lets you create a Greengage Database user-defined function (UDF)
 written in C/C++.
 
-Take GPPC as a wrapper that links the C/C++ UDF and Greenplum Database.
+Take GPPC as a wrapper that links the C/C++ UDF and Greengage Database.
 You can define a UDF with with the GPPC API, and GPPC translates the UDF
-to Greenplum Database compatible UDFs. This lets the GPCC UDF work on
+to Greengage Database compatible UDFs. This lets the GPCC UDF work on
 different GPDB platforms, for example, different version of GPDB,
 without the need to recompile or modify the GPCC UDF.
 
 GPPC supports UDFs written in C/C++ and is similar to the Postgres UDFs written
 in C.
 
-In a Greenplum Database UDF:
+In a Greengage Database UDF:
 
 ```
 PG_FUNCTION_INFO_V1(int2mulfunc);
@@ -44,7 +44,7 @@ GppcDatum int2mulfunc(GPPC_FUNCTION_ARGS)
 ### Usage
 
 1. Compile the UDF as a dynamic library (with include "gppc.h")  and
-place it in a location accessible to Greenplum Database. For example,
+place it in a location accessible to Greengage Database. For example,
 $libdir
 
 2. Define a GPPC function in the database. For example:
@@ -85,12 +85,12 @@ GppcDatum textcopyfunc(GPPC_FUNCTION_ARGS)
 }
 ```
 
-### To create a GPPC UDF in Greenplum Database:
+### To create a GPPC UDF in Greengage Database:
 
 Copy the code for the function into a text file named textcopy.c.
 
 Run `make` and `make install` to create a dynamic library textcopy.so
-and install the library into Greenplum Database. In the Makefile, we
+and install the library into Greengage Database. In the Makefile, we
 need to link the GPPC and may use PGXS to compile. E.g. we can add the
 following option into Makefile
 
@@ -128,7 +128,7 @@ Notes:
    macros.
 3. Memory must be allocated or freed with the GPPC wrapped functions (for
    example. GppcAlloc(), GppcAlloc0(), GppcRealloc(), and GppcFree()).
-4. The UDF cannot use Greenplum Database C language UDF API or macros.
+4. The UDF cannot use Greengage Database C language UDF API or macros.
 5. The GPPC API and macros can be found in gppc.h located in
 `$GPDB_INSTALLED_DIR/include/gppc.h`
 
@@ -199,10 +199,10 @@ SELECT * FROM transform(
 ```
 
 The more examples of using GPCC table function are listed in
-https://github.com/greenplum-db/gpdb/tree/master/src/interfaces/gppc/test/tabfunc_gppc_demo
+https://github.com/GreengageDB/greengage/tree/master/src/interfaces/gppc/test/tabfunc_gppc_demo
 
 ### Reference
 https://www.postgresql.org/docs/devel/xfunc-c.html
-https://github.com/greenplum-db/gpdb/blob/master/src/include/gppc.h  
-https://github.com/greenplum-db/gpdb/tree/master/src/interfaces/gppc/test/gppc_demo  
-https://github.com/greenplum-db/gpdb/tree/master/src/interfaces/gppc/test/tabfunc_gppc_demo
+https://github.com/GreengageDB/greengage/blob/master/src/include/gppc.h  
+https://github.com/GreengageDB/greengage/tree/master/src/interfaces/gppc/test/gppc_demo  
+https://github.com/GreengageDB/greengage/tree/master/src/interfaces/gppc/test/tabfunc_gppc_demo

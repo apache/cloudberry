@@ -332,7 +332,7 @@ drop table t5370_2;
 --         ->  Seq Scan on int4_tbl a
 --         ->  Seq Scan on int4_tbl b
 --```
--- Greenplum will raise an Assert Fail.
+-- Greengage will raise an Assert Fail.
 -- We force adding a material node for
 -- merge full join on true.
 drop table if exists t6215;
@@ -351,7 +351,7 @@ drop table t6215;
 -- This tripped an assertion while deciding the locus for the joins.
 -- The code was failing to handle join between SingleQE and Hash correctly,
 -- when there were join order restricitions. (see
--- https://github.com/greenplum-db/gpdb/issues/6643
+-- https://github.com/GreengageDB/greengage/issues/6643
 --
 select a.f1, b.f1, t.thousand, t.tenthous from
   (select sum(f1) as f1 from int4_tbl i4b) b
@@ -505,7 +505,7 @@ select * from t1_lateral_limit as t1 cross join lateral
 -- The best solution may be to walk the query to and do some static analysis
 -- to find out which rel has to be gathered and materialized. But it is complicated
 -- to do so and this seems less efficient. I believe in future we should do big
--- refactor to make greenplum support lateral well so now, let's just make sure
+-- refactor to make greengage support lateral well so now, let's just make sure
 -- we will not panic.
 explain (costs off) select * from t1_lateral_limit as t1 cross join lateral
 ((select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1) union all select 1)s;
@@ -522,7 +522,7 @@ select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
 
 -- The following case is from Github Issue
--- https://github.com/greenplum-db/gpdb/issues/8860
+-- https://github.com/GreengageDB/greengage/issues/8860
 -- It is the same issue as the above test suite.
 create table t_mylog_issue_8860 (myid int, log_date timestamptz );
 insert into  t_mylog_issue_8860 values (1,timestamptz '2000-01-02 03:04'),(1,timestamptz '2000-01-02 03:04'-'1 hour'::interval);
@@ -540,7 +540,7 @@ inner join lateral
  from t_mylog_issue_8860 where myid = ml1.myid and log_date > ml1.log_date order by log_date asc limit 1) ml2
 on true;
 
--- Github Issue: https://github.com/greenplum-db/gpdb/issues/9733
+-- Github Issue: https://github.com/GreengageDB/greengage/issues/9733
 -- Previously in the function bring_to_outer_query and
 -- bring_to_singleQE it depends on the path->param_info field
 -- to determine if the path contains outerParams. This is not
@@ -584,13 +584,13 @@ reset enable_bitmapscan;
 
 -- Test targetlist contains placeholder var
 -- When creating a redistributed motion with hash keys,
--- Greenplum planner will invoke `cdbpullup_findEclassInTargetList`.
+-- Greengage planner will invoke `cdbpullup_findEclassInTargetList`.
 -- The following test case contains non-strict function `coalesce`
 -- in the subquery at nullable-side of outerjoin and thus will
 -- have PlaceHolderVar in targetlist. The case is to test if
 -- function `cdbpullup_findEclassInTargetList` handles PlaceHolderVar
 -- correct.
--- See github issue: https://github.com/greenplum-db/gpdb/issues/10315
+-- See github issue: https://github.com/GreengageDB/greengage/issues/10315
 create table t_issue_10315 ( id1 int, id2 int );
 
 insert into t_issue_10315 select i,i from generate_series(1, 2)i;
@@ -612,7 +612,7 @@ drop table t_issue_10315;
 -- and another side refers to a replicate table, we do not create index plan
 -- in the subplan though this is kind of aggressive (Defintely there exists room
 -- for optimization) but let's make sure the correctness of these cases at first.
--- https://github.com/greenplum-db/gpdb/issues/8648
+-- https://github.com/GreengageDB/greengage/issues/8648
 --
 set enable_seqscan = 0;
 
@@ -846,7 +846,7 @@ drop table if exists repli_t3_pk;
 drop table if exists repli_t4_pk;
 
 -- Test lateral join when subquery contains limit and where clause
--- Greenplum cannot pass params across motion so one need to prevent
+-- Greengage cannot pass params across motion so one need to prevent
 -- the bottom scan node from appending to its targetlist outer relation
 -- refs. Otherwise it may lead to segfault at the exectution stage.
 

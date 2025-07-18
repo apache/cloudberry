@@ -25,9 +25,9 @@ CREATE
 -- start_ignore
 20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Starting gpstop with args: -u
 20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Gathering information and validating the environment...
-20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Obtaining Greenplum Master catalog information
+20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Obtaining Greengage Master catalog information
 20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Obtaining Segment details from master...
-20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.7.1+dev.62.g140d8966aa build dev'
+20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.7.1+dev.62.g140d8966aa build dev'
 20200522:10:14:16:048903 gpstop:host67:pguo-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -106,9 +106,9 @@ DROP
 -- start_ignore
 20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Starting gpstop with args: -u
 20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Gathering information and validating the environment...
-20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Obtaining Greenplum Master catalog information
+20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Obtaining Greengage Master catalog information
 20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Obtaining Segment details from master...
-20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.7.1+dev.62.g140d8966aa build dev'
+20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.7.1+dev.62.g140d8966aa build dev'
 20200522:10:14:24:049265 gpstop:host67:pguo-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """
-gpcheckperf -- Check the hardware for Greenplum Database
+gpcheckperf -- Check the hardware for Greengage Database
 
 Usage: gpcheckperf <options>
 
     --version  : print version information
     -d segdir  : where segdir is a directory on which to test I/O performance.
                  Multiple -d flags may be specified for multiple directories
-                 on each host. These will typically be your Greenplum primary
+                 on each host. These will typically be your Greengage primary
                  (and/or mirror) data directories.
                  e.g. -d /dbfast1 -d /dbfast2
     -?         : print this help text

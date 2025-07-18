@@ -96,7 +96,7 @@ EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM generate_series(1, 10);
 EXPLAIN (FORMAT XML, COSTS OFF) SELECT * FROM generate_series(1, 10);
 
 -- Test for an old bug in printing Sequence nodes in JSON/XML format
--- (https://github.com/greenplum-db/gpdb/issues/9410)
+-- (https://github.com/GreengageDB/greengage/issues/9410)
 CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EVERY(1));
 EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;
 

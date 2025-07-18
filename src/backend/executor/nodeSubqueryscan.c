@@ -78,7 +78,7 @@ SubqueryNext(SubqueryScanState *node)
 		 * While the slot is heaptuple, we get ctid from heap->t_selt, an assert in
 		 * slot_getsysattr is tirgged.
 		 * if cdb_want_ctid, we transform virtual slot to heaptuple, then do slot_set_ctid_from_fake.
-		 * details please see https://github.com/greenplum-db/gpdb/issues/12512
+		 * details please see https://github.com/GreengageDB/greengage/issues/12512
 		 */
 		HeapTuple       tuple = ExecFetchSlotHeapTuple(slot);
 		slot->PRIVATE_tts_heaptuple = tuple;

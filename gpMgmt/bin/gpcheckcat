@@ -205,7 +205,7 @@ def getversion():
     db = connect()
     curs = db.query('''
     select regexp_replace(version(),
-       E'.*PostgreSQL [^ ]+ .Greenplum Database ([1-9]+.[0-9]+|main).*',
+       E'.*PostgreSQL [^ ]+ .Greengage Database ([1-9]+.[0-9]+|main).*',
        E'\\\\1') as ver;''')
 
     row = curs.getresult()[0]
@@ -4615,8 +4615,8 @@ def main():
         sys.exit(GV.retcode)
 
     GV.version = getversion()
-    if GV.version < "4.0":
-        myprint("Error: only Greenplum database version >= 4.0 are supported\n")
+    if GV.version < "6.0":
+        myprint("Error: only Greengage database version >= 6.0 are supported\n")
         sys.exit(GV.retcode)
 
     check_test_subset_parameter_count()

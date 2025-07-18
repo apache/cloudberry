@@ -98,7 +98,7 @@ jobs:
             REMOTE=$(cut -d, -f2 gporca-commits-to-test/gpdb_remote_info.txt)
             git clone -b $BRANCH --single-branch $REMOTE gpdb_src &&
             cd gpdb_src &&
-            git fetch https://github.com/greenplum-db/gpdb.git --tags &&
+            git fetch https://github.com/GreengageDB/greengage.git --tags &&
             git submodule update --init --recursive
         inputs: [{ name: gporca-commits-to-test }]
         outputs: [{ name: gpdb_src }]

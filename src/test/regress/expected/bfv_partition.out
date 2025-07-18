@@ -11,7 +11,7 @@ partition by range (f2)
   end (date '2001-01-01'::timestamp) EXCLUSIVE
   every ('1 month'::interval)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "timestamp_month_rangep_startincl_1_prt_1" for table "timestamp_month_rangep_startincl"
 NOTICE:  CREATE TABLE will create partition "timestamp_month_rangep_startincl_1_prt_2" for table "timestamp_month_rangep_startincl"
@@ -32,7 +32,7 @@ partition by range (f2)
   end (date '2001-01-01'::timestamp) INCLUSIVE
   every ('1 month'::interval)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "timestamp_month_rangep_startexcl_1_prt_1" for table "timestamp_month_rangep_startexcl"
 NOTICE:  CREATE TABLE will create partition "timestamp_month_rangep_startexcl_1_prt_2" for table "timestamp_month_rangep_startexcl"
@@ -55,7 +55,7 @@ partition by list (f2)
   partition jan4 values ('2000-01-04'::timestamp),
   partition jan5 values ('2000-01-05'::timestamp)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "timestamp_month_listp_1_prt_jan1" for table "timestamp_month_listp"
 NOTICE:  CREATE TABLE will create partition "timestamp_month_listp_1_prt_jan2" for table "timestamp_month_listp"
@@ -432,7 +432,7 @@ alter table pt_1_prt_1 set distributed randomly;
 ERROR:  can't set the distribution policy of "pt_1_prt_1"
 HINT:  Distribution policy can be set for an entire partitioned table, not for one of its leaf parts or an interior branch.
 create table t(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pt select g%10, g%2 + 1, g*2 from generate_series(1,20) g;
 insert into pt values(1,1,3);
@@ -492,7 +492,7 @@ select a, count(*) from pt where a<2 group by a;
 --
 -- SETUP
 CREATE TABLE foo (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
@@ -505,7 +505,7 @@ PARTITION BY RANGE (b)
   START (1) END (10) ,
   START (10) END (20)
 ); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_1" for table "bar"
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_1_2_prt_1" for table "bar_1_prt_1"
@@ -529,7 +529,7 @@ DROP TABLE IF EXISTS foo, bar;
 --
 -- SETUP
 CREATE TABLE foo (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
@@ -542,7 +542,7 @@ PARTITION BY RANGE (b)
   START (1) END (10) WITH (appendonly=true),
   START (10) END (20)
 ); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_1" for table "bar"
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_1_2_prt_1" for table "bar_1_prt_1"
@@ -566,7 +566,7 @@ DROP TABLE IF EXISTS foo, bar;
 --
 -- SETUP
 CREATE TABLE foo (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bar (b int, c int) WITH (appendonly=true)
 PARTITION BY RANGE (b)
@@ -579,7 +579,7 @@ PARTITION BY RANGE (b)
   START (1) END (10),
   START (10) END (20)
 ); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_1" for table "bar"
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_1_2_prt_1" for table "bar_1_prt_1"
@@ -615,7 +615,7 @@ CREATE TABLE mpp3263 (
         string4         name
 ) partition by range (unique1)
 ( partition aa start (0) end (1000) every (500), default partition default_part );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3263_1_prt_default_part" for table "mpp3263"
 NOTICE:  CREATE TABLE will create partition "mpp3263_1_prt_aa_1" for table "mpp3263"
@@ -639,7 +639,7 @@ subpartition template (
 ( partition pst values ('PST'),
   partition est values ('EST')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3541_1_prt_pst" for table "mpp3541"
 ERROR:  invalid use of LIST boundary specification in partition "male" of type RANGE (at depth 2)
@@ -655,7 +655,7 @@ subpartition template (
 ( partition pst values ('PST'),
   partition est values ('EST')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid use of LIST boundary specification in partition "pst" of type RANGE
 LINE 8: ( partition pst values ('PST'),
@@ -670,7 +670,7 @@ subpartition template (
 ( partition pst values ('PST'),
   partition est values ('EST')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid use of LIST boundary specification in partition "pst" of type RANGE
 LINE 8: ( partition pst values ('PST'),
@@ -682,7 +682,7 @@ partition by range (f1)
   partition "New York" start (time with time zone '00:00 EST') end (time with time zone '23:00 EST') EVERY (INTERVAL '1 hour')
 );
 NOTICE:  identifier "mpp3542_000000000011111111112222222222333333333344444444445555555555556666666666777777777788888888889999999999" will be truncated to "mpp3542_0000000000111111111122222222223333333333444444444455555"
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  starting value of partition "Los Angeles_1" overlaps previous range
 LINE 4:   partition "Los Angeles" start (time with time zone '00:00 ...
@@ -703,7 +703,7 @@ ERROR:  relation "mpp3542_000000000011111111112222222222333333333344444444445555
 alter table  mpp3542_0000000000111111111122222222223333333333444444444455555 rename to m; 
 ERROR:  relation "mpp3542_0000000000111111111122222222223333333333444444444455555" does not exist
 create table mpp3466 (i int) partition by range(i) (start(1) end(10) every(2), default partition f);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3466_1_prt_f" for table "mpp3466"
 NOTICE:  CREATE TABLE will create partition "mpp3466_1_prt_2" for table "mpp3466"
@@ -853,7 +853,7 @@ drop table mpp3058;
 ERROR:  table "mpp3058" does not exist
 create table mpp3607 (aa int, bb int) partition by range (bb)
 (partition foo start(2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3607_1_prt_foo" for table "mpp3607"
 alter table mpp3607 add partition baz end (3); -- Expected Overlaps
@@ -901,7 +901,7 @@ drop table mpp3607;
 CREATE TABLE mpp3632(a int, b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int)
 partition by range (a)
 ( partition aa start (1) end (10) every (1) );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3632_1_prt_aa_1" for table "mpp3632"
 NOTICE:  CREATE TABLE will create partition "mpp3632_1_prt_aa_2" for table "mpp3632"
@@ -928,7 +928,7 @@ NOTICE:  CREATE TABLE will create partition "mpp3632_1_prt_a6" for table "mpp363
 drop table mpp3632;
 create table mpp3671 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8), default partition default_part);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3671_1_prt_a" for table "mpp3671"
 NOTICE:  CREATE TABLE will create partition "mpp3671_1_prt_b" for table "mpp3671"
@@ -941,7 +941,7 @@ NOTICE:  CREATE TABLE will create partition "mpp3671_1_prt_f1a" for table "mpp36
 NOTICE:  CREATE TABLE will create partition "mpp3671_1_prt_f1b" for table "mpp3671"
 drop table mpp3671;
 create table mpp3639 (i int) partition by range(i) (start(0) exclusive end(100) inclusive every(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3639_1_prt_1" for table "mpp3639"
 NOTICE:  CREATE TABLE will create partition "mpp3639_1_prt_2" for table "mpp3639"
@@ -1264,7 +1264,7 @@ select * from mpp3639 order by i;
 drop table mpp3639;
 create table mpp3588 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3588_1_prt_a" for table "mpp3588"
 NOTICE:  CREATE TABLE will create partition "mpp3588_1_prt_b" for table "mpp3588"
@@ -1304,7 +1304,7 @@ NOTICE:  CREATE TABLE will create partition "mpp3681_1_prt_def" for table "mpp36
 drop table mpp3681;
 -- MPP-3593
 create table mpp3593 (i int) partition by range(i) (start(1) end(100) every(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3593_1_prt_1" for table "mpp3593"
 NOTICE:  CREATE TABLE will create partition "mpp3593_1_prt_2" for table "mpp3593"
@@ -1362,7 +1362,7 @@ NOTICE:  CREATE TABLE will create partition "mpp3742_1_prt_default_part" for tab
 drop table mpp3742;
 create table mpp3597 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8), default partition default_part);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3597_1_prt_a" for table "mpp3597"
 NOTICE:  CREATE TABLE will create partition "mpp3597_1_prt_b" for table "mpp3597"
@@ -1382,7 +1382,7 @@ select * from mpp3597_1_prt_default_part where i=NULL; -- No NULL values
 
 drop table mpp3597;
 create table mpp3594 (i date) partition by range(i) (start('2008-07-01') end('2009-01-01') every(interval '1 month'), default partition default_part);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3594_1_prt_default_part" for table "mpp3594"
 NOTICE:  CREATE TABLE will create partition "mpp3594_1_prt_2" for table "mpp3594"
@@ -1446,7 +1446,7 @@ ps_supplycost numeric, ps_comment character varying(199) )
 PARTITION BY RANGE(ps_supplycost)
 subpartition by range (ps_supplycost)
 (default partition foo (default subpartition bar));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3988_1_prt_foo" for table "mpp3988"
 NOTICE:  CREATE TABLE will create partition "mpp3988_1_prt_foo_2_prt_bar" for table "mpp3988_1_prt_foo"
@@ -1471,7 +1471,7 @@ CREATE TABLE mpp3816 (
 	startDate       date		
 ) partition by range (startDate)
 ( start ('2007-06-01') end ('2008-01-01') every (interval '1 month'), default partition default_part );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3816_1_prt_default_part" for table "mpp3816"
 NOTICE:  CREATE TABLE will create partition "mpp3816_1_prt_2" for table "mpp3816"
@@ -1498,9 +1498,9 @@ CREATE TABLE mpp3762_weather (
         prcp      real,
         date      date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE TABLE mpp3762_cities_partition (
         city     varchar(80) primary key,
         location point
@@ -1514,7 +1514,7 @@ CREATE TABLE mpp3762_weather_partition (
         prcp      real,
         date      date
 ) partition by range(date) ( start('2008-01-01') end ('2009-01-01') every (interval '1 month'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3762_weather_partition_1_prt_1" for table "mpp3762_weather_partition"
 NOTICE:  CREATE TABLE will create partition "mpp3762_weather_partition_1_prt_2" for table "mpp3762_weather_partition"
@@ -1528,7 +1528,7 @@ NOTICE:  CREATE TABLE will create partition "mpp3762_weather_partition_1_prt_9" 
 NOTICE:  CREATE TABLE will create partition "mpp3762_weather_partition_1_prt_10" for table "mpp3762_weather_partition"
 NOTICE:  CREATE TABLE will create partition "mpp3762_weather_partition_1_prt_11" for table "mpp3762_weather_partition"
 NOTICE:  CREATE TABLE will create partition "mpp3762_weather_partition_1_prt_12" for table "mpp3762_weather_partition"
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 drop table mpp3762_cities, mpp3762_weather cascade;
 drop table mpp3762_cities_partition, mpp3762_weather_partition cascade;
 create table mpp3754a ( i int, d date, primary key (d)) partition by range(d) ( start ('2008-01-01')  inclusive end ('2008-12-01')  exclusive every (interval '1 month'));
@@ -1637,7 +1637,7 @@ CREATE TABLE mpp3641a (
         string4         name
 ) partition by range (unique1)
 ( partition aa start (0) end (500) every (100), default partition default_part );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3641a_1_prt_default_part" for table "mpp3641a"
 NOTICE:  CREATE TABLE will create partition "mpp3641a_1_prt_aa_1" for table "mpp3641a"
@@ -1665,7 +1665,7 @@ CREATE TABLE mpp3641b (
 ) partition by range (unique1)
 subpartition by range (unique2) subpartition template ( start (0) end (500) every (100) )
 ( start (0) end (500) every (100));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3641b_1_prt_1" for table "mpp3641b"
 NOTICE:  CREATE TABLE will create partition "mpp3641b_1_prt_1_2_prt_1" for table "mpp3641b_1_prt_1"
@@ -2079,7 +2079,7 @@ create table rgs.mpp4604(
 	partition p1 start (date '2008-10-14') end (date '2008-10-15'),
 	partition p2 end (date '2008-11-01')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp4604_1_prt_p1" for table "mpp4604"
 NOTICE:  CREATE TABLE will create partition "mpp4604_1_prt_p2" for table "mpp4604"
@@ -2111,7 +2111,7 @@ CREATE TABLE mpp3817 (
 	startDate       date		
 ) partition by range (startDate)
 ( start ('2007-01-01') end ('2008-01-01') every (interval '1 month'), default partition default_part );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3817_1_prt_default_part" for table "mpp3817"
 NOTICE:  CREATE TABLE will create partition "mpp3817_1_prt_2" for table "mpp3817"
@@ -2223,7 +2223,7 @@ partition by range (n_regionkey)
 (
 partition p1 start('0') end('1') inclusive, partition p2 start('1') end('5') inclusive
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_nationkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_nationkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  starting value of partition "p2" overlaps previous range
 LINE 9: ...on p1 start('0') end('1') inclusive, partition p2 start('1')...
@@ -2306,7 +2306,7 @@ partition by range (f1)
   partition pst start (time with time zone '00:00 PST') end (time with time zone '23:00 PST') EVERY (INTERVAL '1 hour'),
   partition est start (time with time zone '00:00 EST') end (time with time zone '23:00 EST') EVERY (INTERVAL '1 hour')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  starting value of partition "pst_1" overlaps previous range
 LINE 4:   partition pst start (time with time zone '00:00 PST') end ...
@@ -2694,14 +2694,14 @@ start (date '2003-01-01'),
 start (date '2004-01-01'),
 start (date '2005-01-01')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot coerce partition parameter to column type "integer"
 LINE 6: start (date '2001-01-01'),
                     ^
 set optimizer_analyze_root_partition=on;
 create table mpp3487 (i int) partition by range (i) (start(1) end(10) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp3487_1_prt_1" for table "mpp3487"
 NOTICE:  CREATE TABLE will create partition "mpp3487_1_prt_2" for table "mpp3487"
@@ -3578,7 +3578,7 @@ select * from pg_partition_templates where schemaname='qa147' and tablename='sal
 set gp_autostats_mode=on_change;
 set gp_autostats_on_change_threshold=100;
 create table mpp5427 (i int) partition by range (i) (start(1) end(10000000) every(100000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp5427_1_prt_1" for table "mpp5427"
 NOTICE:  CREATE TABLE will create partition "mpp5427_1_prt_2" for table "mpp5427"
@@ -3728,7 +3728,7 @@ select * from pg_stats where tablename like 'mpp5427%';
 drop table mpp5427;
 -- MPP-5524
 create table mpp5524 (a int, b int, c int, d int) partition by range(d) (start(1) end(20) every(5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp5524_1_prt_1" for table "mpp5524"
 NOTICE:  CREATE TABLE will create partition "mpp5524_1_prt_2" for table "mpp5524"
@@ -3746,7 +3746,7 @@ insert into mpp5524 select i, i+1, i+2, i+3 from generate_series(1, 10) i;
 drop table mpp5524;
 CREATE TABLE fff_main (id int, rank int, year int, gender char(1), count int)
  partition by range (year) ( start (2001) end (2006) every ('1'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "fff_main_1_prt_1" for table "fff_main"
 NOTICE:  CREATE TABLE will create partition "fff_main_1_prt_2" for table "fff_main"
@@ -3818,7 +3818,7 @@ subpartition template
 ( partition aa start (0) end (300) every(100),
   default partition def
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "partsupp_def_1_prt_def" for table "partsupp_def"
 NOTICE:  CREATE TABLE will create partition "partsupp_def_1_prt_def_2_prt_subdef" for table "partsupp_def_1_prt_def"
@@ -3872,7 +3872,7 @@ subpartition template
 )
 ( partition aa start (0) end (300) every(100)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "partsupp_def2_1_prt_aa_1" for table "partsupp_def2"
 NOTICE:  CREATE TABLE will create partition "partsupp_def2_1_prt_aa_1_2_prt_subdef" for table "partsupp_def2_1_prt_aa_1"
@@ -3944,7 +3944,7 @@ CREATE TABLE mpp6612 (
         string4         name
 ) partition by range (unique1)
 ( partition aa start (0) end (1000) every (500), default partition default_part );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp6612_1_prt_default_part" for table "mpp6612"
 NOTICE:  CREATE TABLE will create partition "mpp6612_1_prt_aa_1" for table "mpp6612"
@@ -4063,7 +4063,7 @@ partition y2008 start (date '2008-01-01') end (date '2008-12-05')
 (
   subpartition dec start (date '2008-12-01') end (date '2008-12-05') (start (date '2008-12-01') end (date '2008-12-05') every (interval '1 day'))
 ));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aaa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aaa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "mpp4048_1_prt_y2008" for table "mpp4048"
 NOTICE:  CREATE TABLE will create partition "mpp4048_1_prt_y2008_2_prt_dec" for table "mpp4048_1_prt_y2008"
@@ -4193,7 +4193,7 @@ set search_path=bfv_partition,partition_999;
 create table partition_cleanup1 (a int, b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int)
 partition by range (a)
 ( partition aa start (1) end (5) every (1) );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "partition_cleanup1_1_prt_aa_1" for table "partition_cleanup1"
 NOTICE:  CREATE TABLE will create partition "partition_cleanup1_1_prt_aa_2" for table "partition_cleanup1"
@@ -4203,7 +4203,7 @@ CREATE TABLE partition_999.partition_cleanup2(a int, b int, c int, d int, e int,
 partition by range (a)
 subpartition by range (b) subpartition template ( start (1) end (5) every (1))
 ( partition aa start (1) end (5) every (1) );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "partition_cleanup2_1_prt_aa_1" for table "partition_cleanup2"
 NOTICE:  CREATE TABLE will create partition "partition_cleanup2_1_prt_aa_1_2_prt_1" for table "partition_cleanup2_1_prt_aa_1"
@@ -4297,7 +4297,7 @@ and datname = current_database();
 -- to bug where functions cached plan was scribbled during this
 -- process.
 CREATE TABLE grant_test (f1 int) PARTITION BY RANGE (f1) (START (2018) END (2020) EVERY (1), DEFAULT PARTITION extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "grant_test_1_prt_extra" for table "grant_test"
 NOTICE:  CREATE TABLE will create partition "grant_test_1_prt_2" for table "grant_test"
@@ -4338,7 +4338,7 @@ PARTITION BY LIST (b) (
     partition t_list_1 VALUES ('2020-06-01', '2020-07-01', '2020-08-01'),
     partition t_list_2 VALUES ('2020-09-01', '2020-10-01', '2020-11-01')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "t_list_1_prt_t_list_1" for table "t_list"
 NOTICE:  CREATE TABLE will create partition "t_list_1_prt_t_list_2" for table "t_list"
@@ -4351,7 +4351,7 @@ CREATE TABLE t_range (a int, b timestamp)
 PARTITION BY RANGE (b) (
     START ('2020-06-01') END ('2020-07-31') EVERY (interval '1 month')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "t_range_1_prt_1" for table "t_range"
 NOTICE:  CREATE TABLE will create partition "t_range_1_prt_2" for table "t_range"
@@ -4369,7 +4369,7 @@ PARTITION BY LIST (b1, b2) (
         ('2020-08-01', '2020-08-01'),
         ('2020-09-01', '2020-09-01'))
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "t_multilist_1_prt_t_multilist_1" for table "t_multilist"
 NOTICE:  CREATE TABLE will create partition "t_multilist_1_prt_t_multilist_2" for table "t_multilist"
@@ -4379,12 +4379,12 @@ FROM generate_series(1, 1000),
      generate_series('2020-06-01', '2020-09-01', interval '1 month') ts;
 ANALYZE t_multilist;
 CREATE TABLE t_inner_to_join (b date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t_inner_to_join VALUES ('2020-07-01');
 ANALYZE t_inner_to_join;
 CREATE TABLE t_inner_to_multijoin (b1 date, b2 date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t_inner_to_multijoin VALUES ('2020-07-01', '2020-07-01');
 ANALYZE t_inner_to_multijoin;

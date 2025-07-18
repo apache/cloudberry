@@ -36,7 +36,7 @@ WHERE tt.event_ts >= tq.ets AND
       tt.event_ts < tq.end_ts  AND tq.sym = 'SYM'::text;
 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="3" PlanSamples="1" CostThreshold="1"/>

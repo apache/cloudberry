@@ -252,7 +252,7 @@ drop tablespace testspace;
 drop table ao_ul_ts_table;
 drop table aoco_ul_ts_table;
 drop tablespace ul_testspace;
--- Greenplum tablespaces have the option to define tablespace location for specific segments
+-- Greengage tablespaces have the option to define tablespace location for specific segments
 CREATE TABLESPACE testspace_otherloc LOCATION '@testtablespace@' WITH (content9999='@testtablespace@_otherloc'); -- should fail
 ERROR:  segment content ID 9999 does not exist
 HINT:  Segment content IDs can be found in gp_segment_configuration table.

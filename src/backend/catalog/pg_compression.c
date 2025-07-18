@@ -389,35 +389,35 @@ zlib_validator(PG_FUNCTION_ARGS)
 Datum
 zlib_constructor(PG_FUNCTION_ARGS)
 {
-	elog(ERROR, "libz compression is not supported in this build of Greenplum");
+	elog(ERROR, "libz compression is not supported in this build of Greengage");
 	PG_RETURN_VOID();
 }
 
 Datum
 zlib_destructor(PG_FUNCTION_ARGS)
 {
-	elog(ERROR, "libz compression is not supported in this build of Greenplum");
+	elog(ERROR, "libz compression is not supported in this build of Greengage");
 	PG_RETURN_VOID();
 }
 
 Datum
 zlib_compress(PG_FUNCTION_ARGS)
 {
-	elog(ERROR, "libz compression is not supported in this build of Greenplum");
+	elog(ERROR, "libz compression is not supported in this build of Greengage");
 	PG_RETURN_VOID();
 }
 
 Datum
 zlib_decompress(PG_FUNCTION_ARGS)
 {
-	elog(ERROR, "libz compression is not supported in this build of Greenplum");
+	elog(ERROR, "libz compression is not supported in this build of Greengage");
 	PG_RETURN_VOID();
 }
 
 Datum
 zlib_validator(PG_FUNCTION_ARGS)
 {
-	elog(ERROR, "libz compression is not supported in this build of Greenplum");
+	elog(ERROR, "libz compression is not supported in this build of Greengage");
 	PG_RETURN_VOID();
 }
 #endif

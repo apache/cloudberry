@@ -28,7 +28,7 @@ CDebugCounter class, see file ../libgpos/include/gpos/common/CDebugCounter.h
 try:
 	from gppylib.db import dbconn
 except ImportError, e:
-	sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh to set PYTHONPATH. '
+	sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh to set PYTHONPATH. '
 			 'Detail: ' + str(e))
 
 glob_use_sql = False

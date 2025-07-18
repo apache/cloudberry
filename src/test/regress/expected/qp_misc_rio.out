@@ -102,7 +102,7 @@ CASE WHEN (i % 6 = 0) THEN '00'
      WHEN (i % 6 = 3) THEN '33'
      WHEN (i % 6 = 4) THEN '44'
      WHEN (i % 6 = 5) THEN '55' END AS s5 FROM testtable0000;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'spend' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'spend' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW testtable0002
 AS SELECT testtable0001.*,
@@ -305,7 +305,7 @@ create table parts (
     partnum     text,
     cost        float8
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'partnum' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'partnum' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table shipped (
     ttype       char(2),
@@ -313,7 +313,7 @@ create table shipped (
     partnum     text,
     value       float8
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ttype' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ttype' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view shipped_view as
     select * from shipped where ttype = 'wt';
@@ -544,7 +544,7 @@ SELECT lead(x) OVER (wx) FROM (SELECT 1 AS x, 2 AS y, 3 AS z) s WINDOW w AS (PAR
 -- Test: 33
 -- ----------------------------------------------------------------------
 create table ccdd1 (a, b) as (select 1, 1 union select 1, 1 union select 1, 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from ccdd1;
  a | b 
@@ -620,7 +620,7 @@ CREATE TABLE emp (
     empname           text NOT NULL,
     salary            integer
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'empname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'empname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Create a trigger function process_emp_audit()
 begin;
@@ -654,7 +654,7 @@ CREATE TABLE my_emp (
     empname           text NOT NULL,
     salary            integer
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'empname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'empname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Create trigger using the trigger function process_emp_audit(),
 -- which the current user does NOT have EXECUTE permission
@@ -698,7 +698,7 @@ RESET ROLE;
 -- Test: row_number() in subquery, with grouping in outer query
 -- ----------------------------------------------------------------------
 create table bfv_legacy_mpp2(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bfv_legacy_mpp2 values (generate_series(1,10));
 select  median(a), avg(a)

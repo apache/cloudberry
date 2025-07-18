@@ -8,7 +8,7 @@ with x as (select a a1, a a2, b from foo)
 select * from (select * from x where a1 = 3 and a2 = 3) as x1, (select * from x where a1 = 5 and a2 = 5) as x2 
 where x1.b = x2.b;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

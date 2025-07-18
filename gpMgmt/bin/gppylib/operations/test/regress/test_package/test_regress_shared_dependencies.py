@@ -80,7 +80,7 @@ class SharedDependenciesTestCase(GppkgTestCase):
         #when a higher version is already installed will be of the form
         #gppkg:fips1:subraa4-[INFO]:-Starting gppkg with args: --install test-1.0-Linux-x86_64.gppkg
         #gppkg:fips1:subraa4-[INFO]:-Installing package test-1.0-Linux-x86_64.gppkg
-        #gppkg:fips1:subraa4-[INFO]:-Validating rpm installation cmdStr='rpm --test -i /data/abhijits/greenplum/.tmp/dep-1-1.x86_64.rpm /data/abhijits/greenplum/.tmp/shared-1-1.x86_64.rpm /data/abhijits/greenplum/.tmp/test-1-1.x86_64.rpm --dbpath /data/abhijits/greenplum/share/packages/database --prefix /data/abhijits/greenplum'
+        #gppkg:fips1:subraa4-[INFO]:-Validating rpm installation cmdStr='rpm --test -i /data/abhijits/greengage/.tmp/dep-1-1.x86_64.rpm /data/abhijits/greengage/.tmp/shared-1-1.x86_64.rpm /data/abhijits/greengage/.tmp/test-1-1.x86_64.rpm --dbpath /data/abhijits/greengage/share/packages/database --prefix /data/abhijits/greengage'
         #gppkg:fips1:subraa4-[INFO]:-Exception = 'shared-2-1.x86_64.rpm'
         #gppkg:fips1:subraa4-[INFO]:-Exception = 'shared-2-1.x86_64.rpm'
         #gppkg:fips1:subraa4-[CRITICAL]:-gppkg failed. (Reason=''shared-2-1.x86_64.rpm'') exiting...

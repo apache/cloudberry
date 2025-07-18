@@ -123,7 +123,7 @@ cleanDemo(){
     ##
 
     (export MASTER_DATA_DIRECTORY=$QDDIR/${SEG_PREFIX}-1;
-     source ${GPHOME}/greenplum_path.sh;
+     source ${GPHOME}/greengage_path.sh;
      gpstop -a)
 
     ##
@@ -185,8 +185,8 @@ done
 if [ -z "${GPHOME}" ]; then
     echo "FATAL: The GPHOME environment variable is not set."
     echo ""
-    echo "  You can set it by sourcing the greenplum_path.sh"
-    echo "  file in your Greenplum installation directory."
+    echo "  You can set it by sourcing the greengage_path.sh"
+    echo "  file in your Greengage installation directory."
     echo ""
     exit 1
 fi
@@ -203,13 +203,13 @@ EOF
 
 if [ "${WITH_MIRRORS}" == "true" ]; then
 cat <<-EOF
-	  This is a demo of the Greenplum Database system.  We will create
+	  This is a demo of the Greengage Database system.  We will create
 	  a cluster installation with master and `expr 2 \* ${NUM_PRIMARY_MIRROR_PAIRS}` segment instances
 	  (${NUM_PRIMARY_MIRROR_PAIRS} primary & ${NUM_PRIMARY_MIRROR_PAIRS} mirror).
 EOF
 elif [ "${WITH_MIRRORS}" == "false" ]; then
 cat <<-EOF
-	  This is a MIRRORLESS demo of the Greenplum Database system.  We will create
+	  This is a MIRRORLESS demo of the Greengage Database system.  We will create
 	  a cluster installation with master and ${NUM_PRIMARY_MIRROR_PAIRS} segment instances.
 EOF
 fi
@@ -236,17 +236,17 @@ GPPATH=`find -H $GPHOME -name gpstart| tail -1`
 RETVAL=$?
 
 if [ "$RETVAL" -ne 0 ]; then
-    echo "Error attempting to find Greenplum executables in $GPHOME"
+    echo "Error attempting to find Greengage executables in $GPHOME"
     exit 1
 fi
 
 if [ ! -x "$GPPATH" ]; then
-    echo "No executables found for Greenplum installation in $GPHOME"
+    echo "No executables found for Greengage installation in $GPHOME"
     exit 1
 fi
 GPPATH=`dirname $GPPATH`
 if [ ! -x $GPPATH/gpinitsystem ]; then
-    echo "No mgmt executables found for Greenplum installation in $GPPATH"
+    echo "No mgmt executables found for Greengage installation in $GPPATH"
     exit 1
 fi
 
@@ -320,7 +320,7 @@ cat >> $CLUSTER_CONFIG <<-EOF
 	# This names the data directories for the Segment Instances and the Entry Postmaster
 	SEG_PREFIX=$SEG_PREFIX
 	
-	# This is the port at which to contact the resulting Greenplum database, e.g.
+	# This is the port at which to contact the resulting Greengage database, e.g.
 	#   psql -p \$PORT_BASE -d template1
 	PORT_BASE=${DEMO_PORT_BASE}
 	

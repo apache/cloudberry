@@ -2,7 +2,7 @@
 
 destroy_gpdb() {
     # Setup environment
-    source /usr/local/greenplum-db-devel/greenplum_path.sh;
+    source /usr/local/greengage-db-devel/greengage_path.sh;
     export PGPORT=5432;
     export MASTER_DATA_DIRECTORY=/data/gpdata/coordinator/gpseg-1;
 

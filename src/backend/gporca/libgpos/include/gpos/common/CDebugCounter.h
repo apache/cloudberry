@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------
- *	Greenplum Database
+ *	Greengage Database
  *	Copyright (c) 2019 Pivotal Software, Inc.
  *
  *	@filename:

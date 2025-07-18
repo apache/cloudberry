@@ -29,7 +29,7 @@ function create_github_release_metadata(){
     # Prepare for the gpdb github release
     echo "${GPDB_RELEASE_TAG}" > "release_artifacts/name"
     echo "${GPDB_RELEASE_TAG}" > "release_artifacts/tag"
-    echo "Greenplum-db version: ${GPDB_RELEASE_TAG}" > "release_artifacts/body"
+    echo "Greengage-db version: ${GPDB_RELEASE_TAG}" > "release_artifacts/body"
 }
 
 function _main(){

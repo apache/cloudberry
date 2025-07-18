@@ -8,9 +8,9 @@
 \! gpstop -rai
 20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Starting gpstop with args: -rai
 20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Gathering information and validating the environment...
-20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Obtaining Segment details from master...
-20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 5.6.1+dev.26.g8353723c5c build dev'
+20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 5.6.1+dev.26.g8353723c5c build dev'
 20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-There are 1 connections to the database
 20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20180409:14:08:41:031194 gpstop:nyu-vm-centos:gpadmin-[INFO]:-Master host=nyu-vm-centos

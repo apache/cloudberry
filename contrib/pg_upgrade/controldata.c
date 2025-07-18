@@ -10,7 +10,7 @@
 #include "postgres_fe.h"
 
 #include "pg_upgrade.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 #include <ctype.h>
 

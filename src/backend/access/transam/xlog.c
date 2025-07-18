@@ -10017,7 +10017,7 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 	 * Calculate how many segments are kept by slots first, adjusting for
 	 * max_slot_wal_keep_size.
 	 *
-	 * Greenplum: coordinator needs a different way to determine the keep
+	 * Greengage: coordinator needs a different way to determine the keep
 	 * point as replication slot is not created there.
 	 */
 	keep = IS_QUERY_DISPATCHER() ?

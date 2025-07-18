@@ -1127,7 +1127,7 @@ try_relation_open(Oid relationId, LOCKMODE lockmode, bool noWait)
 		else
 		{
 			/*
-			 * noWait is a Greenplum addition to the open_relation code
+			 * noWait is a Greengage addition to the open_relation code
 			 * basically to support INSERT ... FOR UPDATE NOWAIT.  Our NoWait
 			 * handling needs to be more tolerant of failed locks than standard
 			 * postgres largely due to the fact that we have to promote certain
@@ -3333,9 +3333,9 @@ l1:
 
 	/*
 	 * Signal that this delete is actually part of a move to another segment.
-	 * In Greenplum, we do not indicate this flag in WAL record.  This is
+	 * In Greengage, we do not indicate this flag in WAL record.  This is
 	 * because in a stable branch (6X), we are not allowed to change WAL
-	 * format.  Greenplum 6X does not support hot standby, so this flag need
+	 * format.  Greengage 6X does not support hot standby, so this flag need
 	 * not be propagated to mirrors and it can be treated just like hint bits.
 	 */
 	if (isSplitUpdate)
@@ -5911,7 +5911,7 @@ l4:
 
 next:
 		/* if we find the end of update chain, we're done. */
-		/* XXX: is this dead code in Greenplumn? */
+		/* XXX: is this dead code in Greengage? */
 		if (mytup.t_data->t_infomask & HEAP_XMAX_INVALID ||
 			HeapTupleHeaderIndicatesMovedPartitions(mytup.t_data) ||
 			ItemPointerEquals(&mytup.t_self, &mytup.t_data->t_ctid) ||
@@ -9447,7 +9447,7 @@ heap_mask(char *pagedata, BlockNumber blkno)
 			 * important information that needs to be in-sync between primary
 			 * and standby, and thus is WAL logged.
 			 *
-			 * Greenplum 6X: we need to mask ctid changes due to tuple having
+			 * Greengage 6X: we need to mask ctid changes due to tuple having
 			 * moved to another segment, because that change is not WAL
 			 * logged.  During replay of a heap delete WAL record, the ctid is
 			 * set to self.  Do the same to a tuple if it was deleted as part

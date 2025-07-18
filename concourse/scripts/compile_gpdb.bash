@@ -14,8 +14,8 @@ function prep_env() {
 	GPDB_BIN_FILENAME=${GPDB_BIN_FILENAME:="bin_gpdb.tar.gz"}
 	GPDB_CL_FILENAME=${GPDB_CL_FILENAME:="bin_gpdb_clients.tar.gz"}
 
-	GREENPLUM_INSTALL_DIR=/usr/local/greenplum-db-devel
-	GREENPLUM_CL_INSTALL_DIR=/usr/local/greenplum-clients-devel
+	GREENGAGE_INSTALL_DIR=/usr/local/greengage-db-devel
+	GREENGAGE_CL_INSTALL_DIR=/usr/local/greengage-clients-devel
 
 	mkdir -p "${GPDB_ARTIFACTS_DIR}"
 
@@ -73,24 +73,24 @@ function build_gpdb() {
 function git_info() {
 	pushd ${GPDB_SRC_PATH}
 	if [[ -d .git ]]; then
-		"${CWDIR}/git_info.bash" | tee ${GREENPLUM_INSTALL_DIR}/etc/git-info.json
+		"${CWDIR}/git_info.bash" | tee ${GREENGAGE_INSTALL_DIR}/etc/git-info.json
 
 		PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
 
-		cat >${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt <<-EOF
+		cat >${GREENGAGE_INSTALL_DIR}/etc/git-current-changelog.txt <<-EOF
 			======================================================================
 			Git log since previous release tag (${PREV_TAG})
 			----------------------------------------------------------------------
 		EOF
 
-		git log --abbrev-commit --date=relative "${PREV_TAG}..HEAD" >>${GREENPLUM_INSTALL_DIR}/etc/git-current-changelog.txt
+		git log --abbrev-commit --date=relative "${PREV_TAG}..HEAD" >>${GREENGAGE_INSTALL_DIR}/etc/git-current-changelog.txt
 	fi
 	popd
 }
 
 function unittest_check_gpdb() {
 	pushd ${GPDB_SRC_PATH}
-	source ${GREENPLUM_INSTALL_DIR}/greenplum_path.sh
+	source ${GREENGAGE_INSTALL_DIR}/greengage_path.sh
 	make GPROOT=/usr/local -s unittest-check
 	popd
 }
@@ -98,7 +98,7 @@ function unittest_check_gpdb() {
 
 function include_dependencies() {
 
-	mkdir -p ${GREENPLUM_INSTALL_DIR}/{lib,include}
+	mkdir -p ${GREENGAGE_INSTALL_DIR}/{lib,include}
 	declare -a library_search_path header_search_path vendored_headers vendored_libs
 
 	header_search_path=( /usr/local/include/ /usr/include/ )
@@ -124,11 +124,11 @@ function include_dependencies() {
 
 
 	# Vendor shared libraries - follow symlinks
-	for path in "${library_search_path[@]}"; do if [[ -d "${path}" ]] ; then for lib in "${vendored_libs[@]}"; do find -L $path -name $lib -exec cp -avn '{}' ${GREENPLUM_INSTALL_DIR}/lib \;; done; fi; done;
+	for path in "${library_search_path[@]}"; do if [[ -d "${path}" ]] ; then for lib in "${vendored_libs[@]}"; do find -L $path -name $lib -exec cp -avn '{}' ${GREENGAGE_INSTALL_DIR}/lib \;; done; fi; done;
 	# Vendor headers - follow symlinks
-	for path in "${header_search_path[@]}"; do if [[ -d "${path}" ]] ; then for header in "${vendored_headers[@]}"; do find -L $path -name $header -exec cp -avn '{}' ${GREENPLUM_INSTALL_DIR}/include \;; done; fi; done
+	for path in "${header_search_path[@]}"; do if [[ -d "${path}" ]] ; then for header in "${vendored_headers[@]}"; do find -L $path -name $header -exec cp -avn '{}' ${GREENGAGE_INSTALL_DIR}/include \;; done; fi; done
 	# vendor pkgconfig files
-	for path in "${library_search_path[@]}"; do if [[ -d "${path}/pkgconfig" ]]; then for pkg in "${pkgconfigs[@]}"; do find -L "$path"/pkgconfig/ -name "$pkg" -exec cp -avn '{}' "${GREENPLUM_INSTALL_DIR}/lib/pkgconfig" \;; done; fi; done
+	for path in "${library_search_path[@]}"; do if [[ -d "${path}/pkgconfig" ]]; then for pkg in "${pkgconfigs[@]}"; do find -L "$path"/pkgconfig/ -name "$pkg" -exec cp -avn '{}' "${GREENGAGE_INSTALL_DIR}/lib/pkgconfig" \;; done; fi; done
 }
 
 function export_gpdb() {
@@ -139,7 +139,7 @@ function export_gpdb() {
 	local server_build
 	server_build="${GPDB_ARTIFACTS_DIR}/server-build-${server_version}-${BLD_ARCH}${RC_BUILD_TYPE_GCS}.tar.gz"
 
-	pushd ${GREENPLUM_INSTALL_DIR}
+	pushd ${GREENGAGE_INSTALL_DIR}
 	chmod -R 755 .
 	# Remove python bytecode
 	find . -type f \( -iname \*.pyc -o -iname \*.pyo \) -delete
@@ -151,26 +151,26 @@ function export_gpdb() {
 
 function export_gpdb_extensions() {
 	pushd ${GPDB_SRC_PATH}/gpAux
-	if ls greenplum-*zip* 1>/dev/null 2>&1; then
-		chmod 755 greenplum-*zip*
-		cp greenplum-*zip* "${GPDB_ARTIFACTS_DIR}/"
+	if ls greengage-*zip* 1>/dev/null 2>&1; then
+		chmod 755 greengage-*zip*
+		cp greengage-*zip* "${GPDB_ARTIFACTS_DIR}/"
 	fi
 	popd
 }
 
 function export_gpdb_clients() {
 	TARBALL="${GPDB_ARTIFACTS_DIR}/${GPDB_CL_FILENAME}"
-	pushd ${GREENPLUM_CL_INSTALL_DIR}
-	source ./greenplum_clients_path.sh
+	pushd ${GREENGAGE_CL_INSTALL_DIR}
+	source ./greengage_clients_path.sh
 	mkdir -p bin/ext/gppylib
-	cp ${GREENPLUM_INSTALL_DIR}/lib/python/gppylib/__init__.py ./bin/ext/gppylib
-	cp ${GREENPLUM_INSTALL_DIR}/lib/python/gppylib/gpversion.py ./bin/ext/gppylib
-	if ls ${GREENPLUM_INSTALL_DIR}/lib/libzstd* 1> /dev/null 2>&1; then
-	  cp ${GREENPLUM_INSTALL_DIR}/lib/libzstd* ./lib/
+	cp ${GREENGAGE_INSTALL_DIR}/lib/python/gppylib/__init__.py ./bin/ext/gppylib
+	cp ${GREENGAGE_INSTALL_DIR}/lib/python/gppylib/gpversion.py ./bin/ext/gppylib
+	if ls ${GREENGAGE_INSTALL_DIR}/lib/libzstd* 1> /dev/null 2>&1; then
+	  cp ${GREENGAGE_INSTALL_DIR}/lib/libzstd* ./lib/
 	fi
-	# GPHOME_LOADERS and greenplum_loaders_path.sh are still requried by some users
-	# So link greenplum_loaders_path.sh to greenplum_clients_path.sh for compatible
-	ln -sf greenplum_clients_path.sh greenplum_loaders_path.sh
+	# GPHOME_LOADERS and greengage_loaders_path.sh are still requried by some users
+	# So link greengage_loaders_path.sh to greengage_clients_path.sh for compatible
+	ln -sf greengage_clients_path.sh greengage_loaders_path.sh
 	chmod -R 755 .
 	tar -czf "${TARBALL}" ./*
 	popd

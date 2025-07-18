@@ -201,7 +201,7 @@ Where column_reference_storage_directive is:
    a column constraint is only a notational convenience for use when the
    constraint only affects one column.    For more information, search for 
    
-   "Column-level Compression" in the Greenplum Database Administrator Guide.
+   "Column-level Compression" in the Greengage Database Administrator Guide.
   </para>
 
   <para>

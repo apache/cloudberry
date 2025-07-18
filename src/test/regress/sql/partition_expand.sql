@@ -523,7 +523,7 @@ select localoid::regclass, policytype, numsegments, distkey, distclass
 drop table t_random_subpartition;
 
 -- Test relcache when exec `ALTER TABLE xxx EXPAND PARTITION PREPARE`
--- https://github.com/greenplum-db/gpdb/pull/12935
+-- https://github.com/GreengageDB/greengage/pull/12935
 create table partition_test_c3cd20(i int) distributed by (i) partition by range(i) (start(0) end(10001) every(1000)) ;
 begin;
 ALTER TABLE partition_test_c3cd20 EXPAND PARTITION PREPARE;

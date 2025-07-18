@@ -112,9 +112,9 @@ CLOSE
 -- start_ignore
 20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Starting gpstop with args: -u
 20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Gathering information and validating the environment...
-20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.14885.ga86b597 build dev'
+20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.14885.ga86b597 build dev'
 20210729:16:19:41:030829 gpstop:lhlgpdb7:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -168,9 +168,9 @@ DROP
 -- start_ignore
 20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Starting gpstop with args: -u
 20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Gathering information and validating the environment...
-20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.14885.ga86b597 build dev'
+20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.14885.ga86b597 build dev'
 20210729:16:23:43:000702 gpstop:lhlgpdb7:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

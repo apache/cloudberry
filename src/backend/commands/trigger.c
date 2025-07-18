@@ -171,13 +171,13 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	else if (rel->rd_rel->relkind == RELKIND_VIEW)
 	{
 		/*
-		 * Greenplum cannot support INSTEAD OF triggers, see merge fixme in
+		 * Greengage cannot support INSTEAD OF triggers, see merge fixme in
 		 * CheckValidResultRel().
 		 */
 		if (stmt->timing == TRIGGER_TYPE_INSTEAD)
 			ereport(ERROR,
 					(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-					 errmsg("INSTEAD OF triggers are not supported in Greenplum")));
+					 errmsg("INSTEAD OF triggers are not supported in Greengage")));
 
 		/*
 		 * Views can have INSTEAD OF triggers (which we check below are
@@ -589,7 +589,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	values[Anum_pg_trigger_tgtype - 1] = Int16GetDatum(tgtype);
 	
 	/*
-	 * Special for Greenplum Database: Ignore foreign keys for now. Create
+	 * Special for Greengage Database: Ignore foreign keys for now. Create
 	 * the triggers to back them as 'disabled'.
 	 */
 	char		tgenabled = TRIGGER_FIRES_ON_ORIGIN;

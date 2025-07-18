@@ -32,16 +32,16 @@ Following instructions are for Centos/RHEL/Fedora as example.
 The python-devel is not required here because it is provided by Anaconda.
 
 ## Download and build GPDB
-	git clone https://github.com/greenplum-db/gpdb.git
+	git clone https://github.com/GreengageDB/greengage.git
 	cd gpdb
-	./configure --prefix=`pwd`/greenplumdb  --with-gssapi --with-pgport=5432 --with-perl --with-python --with-openssl  --with-libxml --enable-cassert --enable-debug --enable-depend
+	./configure --prefix=`pwd`/greengagedb  --with-gssapi --with-pgport=5432 --with-perl --with-python --with-openssl  --with-libxml --enable-cassert --enable-debug --enable-depend
 	make install
 
 Make sure "--with-python" parameter exists. Because the default Python is the Anaconda Python, It's done.
 
 ## Test link path of Python
 In following example, Anaconda is installed to /home/gpadmin/miniconda.
-    ldd greenplumdb/lib/postgresql/plpython.so
+    ldd greengagedb/lib/postgresql/plpython.so
 	...
 	libpython2.7.so.1.0 => /home/gpadmin/miniconda/lib/libpython2.7.so.1.0 (0x00007f1f3c40c000)
 	...

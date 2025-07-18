@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2018 Pivotal, Inc.
 //
 //	Implementation of inner / left outer index apply operator

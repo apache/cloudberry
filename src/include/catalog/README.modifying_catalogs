@@ -35,7 +35,7 @@ pg_proc.sql file with SQL-like definitions to generate them:
 CREATE FUNCTION int2eq(int2, int2) RETURNS bool LANGUAGE internal IMMUTABLE STRICT AS 'int2eq' WITH (OID=63, DESCRIPTION="equal");
 
 When catullus.pl is run, it converts these SQL statements to DATA
-macros and updates the contents of pg_proc_gp.h.  In Greenplum, all functions
+macros and updates the contents of pg_proc_gp.h.  In Greengage, all functions
 inherited from PostgreSQL are in pg_proc.h, like in PostgreSQL, but additional
 lines are kept in pg_proc_gp.h, which is generated from pg_proc.sql.
 
@@ -59,7 +59,7 @@ key" references in a table with a FOREIGN_KEY line. Those declarations
 are only used by gpcheckcat, they are not used for anything by the
 server itself.
 
-For example, the Greenplum resource queue capability table is a shared
+For example, the Greengage resource queue capability table is a shared
 table with a unique index and two subsidiary indexes.  It also has a
 foreign key relationship with pg_resqueue and pg_resourcetype.  The
 FOREIGN_KEY definition is:

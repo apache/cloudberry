@@ -5,7 +5,7 @@ CREATE TABLE bar (a int, b int);
 CREATE INDEX idx on foo using btree (a);
 select * from bar, (select * from foo where foo.a in (select h.a from bar h, bar j where h.a < j.b)) n where bar.a=n.a;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

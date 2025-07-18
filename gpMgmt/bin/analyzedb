@@ -35,7 +35,7 @@ try:
     from pygresql import pg
 
 except ImportError, e:
-    sys.exit('Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 EXECNAME = 'analyzedb'
 STATEFILE_DIR = 'db_analyze'

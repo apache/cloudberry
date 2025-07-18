@@ -1,4 +1,4 @@
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2020 VMware Inc.
 
 #include "gpopt/base/CDistributionSpecReplicated.h"

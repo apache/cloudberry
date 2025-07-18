@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 if [ ! -z "$GPHOME" ]; then
-    . $GPHOME/greenplum_path.sh
+    . $GPHOME/greengage_path.sh
 fi
 if [ ! -z "$GPHOME_LOADERS" ]; then
-    . $GPHOME_LOADERS/greenplum_loaders_path.sh
+    . $GPHOME_LOADERS/greengage_loaders_path.sh
 fi
 
 exec gpload.py $*

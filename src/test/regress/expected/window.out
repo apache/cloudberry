@@ -7,7 +7,7 @@ CREATE TEMPORARY TABLE empsalary (
     salary int,
     enroll_date date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'depname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'depname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO empsalary VALUES
 ('develop', 10, 5200, '2007-08-01'),
@@ -1435,7 +1435,7 @@ CREATE AGGREGATE sum_int_randomrestart (int4)
 -- non-volatile WITH clause. The list of values below was created by running
 -- the original subquery using random() once, and copying the result here.
 --
--- See https://github.com/greenplum-db/gpdb/issues/1349
+-- See https://github.com/GreengageDB/greengage/issues/1349
 WITH
 vs (i, v) AS (
 VALUES

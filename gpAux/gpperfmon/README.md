@@ -2,7 +2,7 @@
 
 gpperfmon tracks a variety of queries, statistics, system properties, and metrics.
 
-Find more information about the architecture on [the wiki page](https://github.com/greenplum-db/gpdb/wiki/Gpperfmon-Overview)
+Find more information about the architecture on [the wiki page](https://github.com/GreengageDB/greengage/wiki/Gpperfmon-Overview)
 
 ## Libraries Required
 

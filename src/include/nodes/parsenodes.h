@@ -102,7 +102,7 @@ typedef uint32 AclMode;			/* a bitmask of privilege bits */
  * also contains the query, which also requires a different query
  * plan.
  * In postgres, we don't need to make a different query plan for the
- * query in the utility stament. But in greenplum, we need to. So we
+ * query in the utility stament. But in greengage, we need to. So we
  * use a field to indicate whether the query is contained in utitily
  * statemnt, and the type of utitily statemnt.
  */

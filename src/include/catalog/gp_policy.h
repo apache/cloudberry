@@ -104,7 +104,7 @@ typedef enum GpPolicyType
 } GpPolicyType;
 
 /*
- * GpPolicy represents a Greenplum DB data distribution policy. The ptype field
+ * GpPolicy represents a Greengage DB data distribution policy. The ptype field
  * is always significant.  Other fields may be specific to a particular
  * type.
  *

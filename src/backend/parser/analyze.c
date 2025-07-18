@@ -435,7 +435,7 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 
@@ -536,7 +536,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 
@@ -2197,7 +2197,7 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	}
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Coerce the UNKNOWN type for target entries to its right type here.
 	 */
 	fixup_unknown_vars_in_setop(pstate, sostmt);
@@ -3021,7 +3021,7 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 

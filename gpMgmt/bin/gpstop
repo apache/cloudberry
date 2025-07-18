@@ -37,7 +37,7 @@ try:
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
     from contextlib import closing
 except ImportError, e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 DEFAULT_NUM_WORKERS = 64
 logger = get_default_logger()
@@ -193,7 +193,7 @@ class GpStop:
 
                 if self.interactive:
                     self._summarize_actions(segs)
-                    if not userinput.ask_yesno(None, "\nContinue with Greenplum instance shutdown", 'N'):
+                    if not userinput.ask_yesno(None, "\nContinue with Greengage instance shutdown", 'N'):
                         raise UserAbortedException()
 
                 try:
@@ -387,7 +387,7 @@ class GpStop:
     ######
     def _check_version(self):
         self.gpversion = gp.GpVersion.local('local GP software version check', self.gphome)
-        logger.info("Greenplum Version: '%s'" % self.gpversion)
+        logger.info("Greengage Version: '%s'" % self.gpversion)
 
     ######
     def _read_postgresqlconf(self):
@@ -419,11 +419,11 @@ class GpStop:
             pass
         else:
             raise ExceptionNoStackTraceNeeded(
-                'postmaster.pid file does not exist.  is Greenplum instance already stopped?')
+                'postmaster.pid file does not exist.  is Greengage instance already stopped?')
 
     ######
     def _build_gparray(self):
-        logger.info("Obtaining Greenplum Master catalog information")
+        logger.info("Obtaining Greengage Master catalog information")
 
         logger.info("Obtaining Segment details from master...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
@@ -431,7 +431,7 @@ class GpStop:
 
     def _handle_shutdown_state(self):
         """
-        Handle the scenario where the Greenplum database is in shutting down state.
+        Handle the scenario where the Greengage database is in shutting down state.
         """
         # Check if gpstop is called with -u option
         if self.sighup:
@@ -460,7 +460,7 @@ class GpStop:
 
     def _is_db_shutting_down(self):
         """
-        Check if the Greenplum database is in the process of shutting down.
+        Check if the Greengage database is in the process of shutting down.
         Returns True if the database is shutting down.
         """
         try:
@@ -944,7 +944,7 @@ class GpStop:
         logger.info("--------------------------------------------")
 
         tabLog = TableLogger(logger=logger).setWarnWithArrows(True)
-        tabLog.info(["Master Greenplum instance process active PID", "= %s" % self.pid])
+        tabLog.info(["Master Greengage instance process active PID", "= %s" % self.pid])
         tabLog.info(["Database", "= %s" % self.dburl.pgdb])
         tabLog.info(["Master port", "= %s" % self.port])
         tabLog.info(["Master directory", "= %s" % self.master_datadir])
@@ -998,13 +998,13 @@ class GpStop:
                          help='set the method of shutdown')
 
         addTo.add_option('-r', '--restart', action='store_true',
-                         help='Restart Greenplum Database instance after successful gpstop.')
+                         help='Restart Greengage Database instance after successful gpstop.')
         addTo.add_option('-m', '--master_only', action='store_true',
                          help='stop master instance started in maintenance mode')
         addTo.add_option('-y', dest="stop_standby", action='store_false', default=True,
                          help='Do not stop the standby master process.')
         addTo.add_option('-u', dest="request_sighup", action='store_true',
-                         help="upload new master postgresql.conf settings, does not stop Greenplum array," \
+                         help="upload new master postgresql.conf settings, does not stop Greengage array," \
                               "issues a signal to the master segment postmaster process to reload")
 
         addTo.add_option('-B', '--parallel', type="int", default=DEFAULT_NUM_WORKERS, metavar="<parallel_processes>",

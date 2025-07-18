@@ -142,7 +142,7 @@ def launchProcess(host, workdir):
     if not gphome:
         raise Exception('Environment Variable GPHOME not set')
 
-    py_string = 'source ' + os.path.join(gphome, 'greenplum_path.sh') + '; '
+    py_string = 'source ' + os.path.join(gphome, 'greengage_path.sh') + '; '
 
     # Now let's just quick check the host as to whether the python version is >= 2.6
     try:

@@ -2,7 +2,7 @@
 set -e
 set -u
 
-source /usr/local/greenplum-db-devel/greenplum_path.sh
+source /usr/local/greengage-db-devel/greengage_path.sh
 source ./gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
 # launch the cluster when necessary

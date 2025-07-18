@@ -72,7 +72,7 @@ function download() {
         scp -P "${REMOTE_PORT}" -q "${REMOTE_USER}"@"${REMOTE_HOST}":"${WORK_DIR}/*.msi" ./
         scp -P "${REMOTE_PORT}" -q "${REMOTE_USER}"@"${REMOTE_HOST}":"${WORK_DIR}/*.exe" ./
         echo "${GPDB_VERSION}" > version
-        tar cvzf greenplum-clients-x86_64.tar.gz *
+        tar cvzf greengage-clients-x86_64.tar.gz *
     popd
 }
 

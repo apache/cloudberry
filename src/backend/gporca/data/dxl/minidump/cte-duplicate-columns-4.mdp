@@ -5,7 +5,7 @@ insert into foo select i, i from  generate_series(1,100) i;
 
 with x as (select a a1, a a2, b from foo) select * from x where a1 = 1 and a2 = 2;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

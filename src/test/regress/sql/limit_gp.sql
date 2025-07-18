@@ -37,7 +37,7 @@ select * from generate_series(1,10) g limit count(*);
 create table t_volatile_limit (i int4);
 create table t_volatile_limit_1 (a int, b int) distributed randomly;
 
--- Greenplum may generate two-stage limit plan to improve performance.
+-- Greengage may generate two-stage limit plan to improve performance.
 -- But for limit clause contains volatile functions, if we push them down
 -- below the final gather motion, those volatile functions will be evaluated
 -- many times. For such cases, we should not push down the limit.

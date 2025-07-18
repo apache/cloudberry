@@ -1179,7 +1179,7 @@ init_sequence(Oid relid, SeqTable *p_elm, Relation *p_rel)
 
 /*
  * GPDB: init_sequence_internal() mostly resembles upstream init_sequence().
- * However, in Greenplum we manage dispatcher and executor sequence ranges
+ * However, in Greengage we manage dispatcher and executor sequence ranges
  * separately.
  */
 static void

@@ -545,7 +545,7 @@ However launching so many proxy bgworkers might not be a good idea.
 
 ## Proxy-Proxy Communication
 
-In a Greenplum cluster there is one master segment and N primary segments,
+In a Greengage cluster there is one master segment and N primary segments,
 there is a connection between every two of them, all these connections make the
 proxy network.  In current implementation the proxy-proxy communication is via
 TCP, but it is possible to switch to something like QUIC or udpifc.

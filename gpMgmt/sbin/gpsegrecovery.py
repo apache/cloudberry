@@ -162,7 +162,7 @@ class DifferentialRecovery(Command):
                 1. pg_start_backup() is executed in exclusive mode only by differential recovery which creates
                    backup_label on primary.
                 2. So It's safe to copy backup_label file to mirror knowing that it is created by differential recovery 
-                   as no other greenplum utility executes pg_start_backup() in exclusive mode at present.
+                   as no other greengage utility executes pg_start_backup() in exclusive mode at present.
 
             4. In future we will have to add backup_label in rsync_exclude_list if pg_start_backup needs be started in
                non-exclusive mode for differential recovery.

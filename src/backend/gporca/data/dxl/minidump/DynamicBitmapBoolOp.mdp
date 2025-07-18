@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:Stacktrace>1    0x000000000163e81d gpos::CException::Raise + 113
 2    0x00000000027660d5 gpopt::CEngine::PexprExtractPlan + 975

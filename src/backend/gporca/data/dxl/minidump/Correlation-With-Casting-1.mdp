@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <!--
 SQL:
 create table q68t792_temp(u_vtgnr varchar(6), u_zj varchar(2), u_folio varchar(2)) distributed by (u_vtgnr, u_zj, u_folio);

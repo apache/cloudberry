@@ -397,7 +397,7 @@ reset optimizer;
 
 --
 -- Test append different numsegments tables work well
--- See Github issue: https://github.com/greenplum-db/gpdb/issues/12146
+-- See Github issue: https://github.com/GreengageDB/greengage/issues/12146
 --
 create table t1_12146 (a int, b int) distributed by (a);
 create table t2_12146 (a int, b int) distributed by (a);

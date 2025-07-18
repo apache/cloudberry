@@ -1163,8 +1163,8 @@ DefineIndex(Oid relationId,
 	}
 
 	/*
-	 * FIXME: concurrent index build needs additional work in Greenplum.  The
-	 * feature is disabled in Greenplum until this work is done.  In upstream,
+	 * FIXME: concurrent index build needs additional work in Greengage.  The
+	 * feature is disabled in Greengage until this work is done.  In upstream,
 	 * concurrent index build is accomplished in three steps.  Each step is
 	 * performed in its own transaction.  In GPDB, each step must be performed
 	 * in its own distributed transaction.  Today, we only support dispatching

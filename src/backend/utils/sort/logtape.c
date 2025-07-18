@@ -3,7 +3,7 @@
  * logtape.c
  *	  Management of "logical tapes" within temporary files.
  *
- * This is the greenplum logtape implementation.  The original postgres logtape
+ * This is the greengage logtape implementation.  The original postgres logtape
  * impl is unnecessarily complex and it prevents many perfomanace optmizations.
  */
 

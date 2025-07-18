@@ -294,7 +294,7 @@ BufFileCreateNamedTemp(const char *fileName, bool interXact, workfile_set *work_
 	 * recurisve problem. One such senario is the buf-file of snapshot that passed
 	 * to cursors's reader gang. We do not need to put that small file in temp
 	 * tablespace.
-	 * See Issue https://github.com/greenplum-db/gpdb/issues/12871 for details.
+	 * See Issue https://github.com/GreengageDB/greengage/issues/12871 for details.
 	 */
 	if (!GetForceDefaultTableSpaceVal() && !interXact)
 		PrepareTempTablespaces();

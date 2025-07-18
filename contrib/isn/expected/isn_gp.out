@@ -11,7 +11,7 @@ CREATE TABLE pt(id ISBN) PARTITION BY RANGE (id)
     PARTITION pt_2 START ('0-14-121930-0!') END ('0-393-04002-X'),
     PARTITION pt_3 START ('0-393-04002-X') END ('2-205-00876-5!')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "pt_1_prt_pt_1" for table "pt"
 NOTICE:  CREATE TABLE will create partition "pt_1_prt_pt_2" for table "pt"

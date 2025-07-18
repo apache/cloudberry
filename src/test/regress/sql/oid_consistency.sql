@@ -430,7 +430,7 @@ create trigger troid_trigger after insert on trigger_oid for each row execute pr
 
 select verify('trigger_oid');
 
--- Case for Issue: https://github.com/greenplum-db/gpdb/issues/14465
+-- Case for Issue: https://github.com/GreengageDB/greengage/issues/14465
 create function func_fail_14465(int) returns int
   immutable language plpgsql as $$
   begin

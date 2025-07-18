@@ -36,7 +36,7 @@ set optimizer_nestloop_factor=1;
 
 select * from A,B where exists (select * from C where C.j = A.j and B.i not in (select C.i from C where C.i != 10));
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

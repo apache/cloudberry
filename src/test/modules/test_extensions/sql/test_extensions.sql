@@ -75,7 +75,7 @@ ALTER EXTENSION test_ext_cine UPDATE TO '1.1';
 
 
 --
--- Test cases from Issue: https://github.com/greenplum-db/gpdb/issues/6716
+-- Test cases from Issue: https://github.com/GreengageDB/greengage/issues/6716
 --
 drop extension if exists gp_inject_fault;
 create schema issue6716;
@@ -85,7 +85,7 @@ select issue6716.gp_inject_fault('issue6716', 'reset', 1);
 drop extension gp_inject_fault;
 
 --
--- Another test cases for problem https://github.com/greenplum-db/gpdb/issues/6716.
+-- Another test cases for problem https://github.com/GreengageDB/greengage/issues/6716.
 -- Segments of gpdb builed with `--enable-cassert` stops with error like
 -- FailedAssertion(""!(stack->state == GUC_SAVE)" at next cases. At gpdb builed
 -- without `--enable-cassert` segments won't stop with errors, but there may be

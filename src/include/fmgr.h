@@ -420,7 +420,7 @@ typedef struct
 typedef enum {
 	PgMagicProductNone		   = 0,
 	PgMagicProductPostgres	   = 1,
-	PgMagicProductGreenplum	   = 2180,     /* 'GPDB' cast to an integer */
+	PgMagicProductGreengage	   = 2180,     /* 'GPDB' cast to an integer */
 } Pg_magic_product_code;
 
 /* The header version to force recompilation of third party libraries */
@@ -436,7 +436,7 @@ typedef enum {
 	NAMEDATALEN, \
 	FLOAT4PASSBYVAL, \
 	FLOAT8PASSBYVAL, \
-	PgMagicProductGreenplum, \
+	PgMagicProductGreengage, \
 	GP_HEADER_VERSION_NUM, \
 }
 

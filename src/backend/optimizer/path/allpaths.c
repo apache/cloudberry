@@ -456,7 +456,7 @@ bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel, List *outer_quals)
 
 			/*
 			 * param_info cannot cover the case that an index path's orderbyclauses
-			 * See github issue: https://github.com/greenplum-db/gpdb/issues/9733
+			 * See github issue: https://github.com/GreengageDB/greengage/issues/9733
 			 */
 			if (IsA(origpath, IndexPath))
 			{
@@ -594,7 +594,7 @@ set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	}
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Change the path in pathlist if it is a general or segmentgeneral
 	 * path that contains volatile restrictions.
 	 */

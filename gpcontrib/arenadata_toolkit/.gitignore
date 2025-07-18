@@ -1,8 +1,0 @@
-# Generated subdirectories and files
-/expected/adb_get_relfilenodes_test.out
-/expected/tablespace_location.out
-/sql/adb_get_relfilenodes_test.sql
-/sql/tablespace_location.sql
-/results/
-regression.diffs
-regression.out

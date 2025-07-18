@@ -1,7 +1,7 @@
 COMMAND NAME: gpconfig
 
 Sets server configuration parameters on all segments within 
-a Greenplum Database system.
+a Greengage Database system.
 
 *****************************************************
 SYNOPSIS
@@ -23,7 +23,7 @@ DESCRIPTION
 
 The gpconfig utility allows you to set, unset, or view configuration 
 parameters from the postgresql.conf files of all instances (master, 
-segments, and mirrors) in your Greenplum Database system. When setting 
+segments, and mirrors) in your Greengage Database system. When setting 
 a parameter, you can also specify a different value for the master if 
 necessary. For example, parameters such as max_connections require 
 a different setting on the master than what is used for the segments. 
@@ -45,7 +45,7 @@ and later add it back (set a new value), there will be two instances
 of the parameter; one that is commented out, and one that is enabled 
 and inserted at the bottom of the postgresql.conf file.
 
-After setting a parameter, you must restart your Greenplum Database 
+After setting a parameter, you must restart your Greengage Database 
 system or reload the postgresql.conf files in order for the change 
 to take effect. Whether you require a restart or a reload depends on 
 the parameter. See the Server Configuration Parameters reference for 
@@ -55,7 +55,7 @@ To show the currently set values for a parameter across the system,
 use the -s option.
 
 gpconfig uses the following environment variables to connect to 
-the Greenplum Database master instance and obtain system 
+the Greengage Database master instance and obtain system 
 configuration information: 
   * PGHOST
   * PGPORT
@@ -108,7 +108,7 @@ Lists all configuration parameters supported by the gpconfig utility.
 -s | --show <param_name>
 
 Shows the value for a configuration parameter used on all instances 
-(master and segments) in the Greenplum Database system. If there 
+(master and segments) in the Greengage Database system. If there 
 is a discrepancy in a parameter value between segment instances, 
 the gpconfig utility displays an error message.
 
@@ -124,7 +124,7 @@ to take effect.
 --file
 
 For a configuration parameter, shows the value from the postgresql.conf
-file on all instances (master and segments) in the Greenplum Database
+file on all instances (master and segments) in the Greengage Database
 system. If there is a discrepancy in a parameter value between segment
 instances, the gpconfig utility displays a warning message. Must be
 specified with the -s option.
@@ -142,7 +142,7 @@ postgresql.conf files on all instances (master and segments). It
 then compares these file values with the corresponding database values,
 where the database values represent current running settings, and
 the file values represent what will be used upon the next restart
-of Greenplum. In the case where all segments have consistent values,
+of Greengage. In the case where all segments have consistent values,
 the report from --file-compare will summarize results. In the case
 where any inconsistencies are found, --file-compare will detail the
 values from all segments.

@@ -10,12 +10,12 @@ function setup_gpadmin_user() {
 }
 
 function install_gpdb_clients() {
-	mkdir -p /usr/local/greenplum-clients-devel
-	tar -xzf bin_gpdb_clients/bin_gpdb_clients.tar.gz -C /usr/local/greenplum-clients-devel
-	pushd /usr/local/greenplum-clients-devel
-	source /usr/local/greenplum-clients-devel/greenplum_clients_path.sh
+	mkdir -p /usr/local/greengage-clients-devel
+	tar -xzf bin_gpdb_clients/bin_gpdb_clients.tar.gz -C /usr/local/greengage-clients-devel
+	pushd /usr/local/greengage-clients-devel
+	source /usr/local/greengage-clients-devel/greengage_clients_path.sh
 	psql --version
-	chown -R gpadmin:gpadmin /usr/local/greenplum-clients-devel
+	chown -R gpadmin:gpadmin /usr/local/greengage-clients-devel
 	popd
 }
 
@@ -53,9 +53,9 @@ function gen_env() {
 		    exit 1
 		}
 
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
-		# greenplum_clients_path.sh gets it path via `pwd`, cd to workaround this issue.
-		cd /usr/local/greenplum-clients-devel && source /usr/local/greenplum-clients-devel/greenplum_clients_path.sh
+		source /usr/local/greengage-db-devel/greengage_path.sh
+		# greengage_clients_path.sh gets it path via `pwd`, cd to workaround this issue.
+		cd /usr/local/greengage-clients-devel && source /usr/local/greengage-clients-devel/greengage_clients_path.sh
 
 		source "\${1}/gpdb_src/gpAux/gpdemo/gpdemo-env.sh"
 

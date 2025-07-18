@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2011 EMC Corp.
 //
 //	@filename:
@@ -18,7 +18,7 @@ using namespace gpdxl;
 // static member definitions
 
 const WCHAR *CDXLSections::m_wszDocumentHeader = GPOS_WSZ_LIT(
-	"<?xml version=\"1.0\" encoding=\"UTF-8\"?><dxl:DXLMessage xmlns:dxl=\"http://greenplum.com/dxl/2010/12/\">");
+	"<?xml version=\"1.0\" encoding=\"UTF-8\"?><dxl:DXLMessage xmlns:dxl=\"http://greengagedb.org/dxl/2010/12/\">");
 
 const WCHAR *CDXLSections::m_wszDocumentFooter =
 	GPOS_WSZ_LIT("</dxl:DXLMessage>");

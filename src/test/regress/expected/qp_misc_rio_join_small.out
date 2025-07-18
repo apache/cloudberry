@@ -6,7 +6,7 @@ NOTICE:  table "my_tq_agg_small" does not exist, skipping
 drop index if exists my_tt_agg_small_event_ts_ix;
 NOTICE:  index "my_tt_agg_small_event_ts_ix" does not exist, skipping
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = off;
@@ -31,10 +31,10 @@ CREATE TABLE my_tt_agg_small (
 --
 COPY my_tt_agg_small (symbol, event_ts, trade_price, trade_volume) FROM stdin;
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 --
 -- Name: my_tq_agg_small; Type: TABLE; Schema: public; Tablespace: 
@@ -55,7 +55,7 @@ COPY my_tq_agg_small (ets, sym, bid_price, ask_price, end_ts) FROM stdin;
 --
 CREATE INDEX my_tq_agg_small_ets_end_ts_ix ON my_tq_agg_small USING btree (ets, end_ts);
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 set enable_hashjoin=off;
 create index my_tt_agg_small_event_ts_ix on my_tt_agg_small(event_ts);

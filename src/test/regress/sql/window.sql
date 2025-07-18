@@ -524,7 +524,7 @@ CREATE AGGREGATE sum_int_randomrestart (int4)
 -- non-volatile WITH clause. The list of values below was created by running
 -- the original subquery using random() once, and copying the result here.
 --
--- See https://github.com/greenplum-db/gpdb/issues/1349
+-- See https://github.com/GreengageDB/greengage/issues/1349
 WITH
 vs (i, v) AS (
 VALUES

@@ -17,7 +17,7 @@
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
 
-#include "greenplum/greenplum_cluster_info.h"
+#include "greengage/greengage_cluster_info.h"
 
 /* Use port in the private/dynamic port number range */
 #define DEF_PGUPORT			50432
@@ -311,7 +311,7 @@ typedef struct
 	Oid			role_count;		/* number of roles defined in the cluster */
 	const char *tablespace_suffix;		/* directory specification */
 
-	GreenplumClusterInfo *greenplum_cluster_info;
+	GreengageClusterInfo *greengage_cluster_info;
 } ClusterInfo;
 
 /*
@@ -497,7 +497,7 @@ __attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
 /* version.c */
 #if 0
 /*
- * In Greenplum, large objects are not supported, so the below
+ * In Greengage, large objects are not supported, so the below
  * code is not required
  */
 void new_9_0_populate_pg_largeobject_metadata(ClusterInfo *cluster,

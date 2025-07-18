@@ -107,7 +107,7 @@ result to STDOUT.  This change to the log facilitates diff comparison,
 since unORDERed query output does not have a guaranteed order.  Note
 that for diff to work correctly, statements that do use ORDER BY must
 have a fully-specified order.  The utility gpdiff.pl invokes atmsort
-in order to compare the Greenplum test results against standard
+in order to compare the Greengage test results against standard
 PostgreSQL.
 
 The log content must look something like:
@@ -318,7 +318,7 @@ Jeffrey I Cohen
 
 Copyright (c) 2007, 2008, 2009 GreenPlum.  All rights reserved.  
 
-Address bug reports and comments to: bugs@greenplum.org
+Address bug reports and comments to: bugs@greengagedb.org
 
 
 =cut

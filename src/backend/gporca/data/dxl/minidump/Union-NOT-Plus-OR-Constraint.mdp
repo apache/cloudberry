@@ -4,7 +4,7 @@ create table tb ( f1 smallint, f2 integer, f3 integer )  DISTRIBUTED RANDOMLY;
 
 explain SELECT a.f3 FROM tb a JOIN tb b ON a.f1 = b.f1 AND NOT ( a.f2 = 0 OR a.f3 = 0 ) UNION SELECT 1 ad_nr ;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:Stacktrace/>
     <dxl:OptimizerConfig>

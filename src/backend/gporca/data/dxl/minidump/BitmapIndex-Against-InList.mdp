@@ -4,7 +4,7 @@ CREATE TABLE btree_test as SELECT * FROM generate_series(1,1000000) as a distrib
 CREATE INDEX bitmap_index ON bitmap_test USING BITMAP(a);
 SELECT * FROM bitmap_test WHERE a in (1, 47);
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

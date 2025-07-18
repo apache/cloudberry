@@ -1,9 +1,9 @@
 -- Test Mark/Restore in Material Node
 create table spilltest1 (a integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table spilltest2 (a integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into spilltest1 select a from generate_series(1,400000) a;
 insert into spilltest2 select a from generate_series(1,400000) a;
@@ -17,7 +17,7 @@ select t1.a as t1a, t2.a as t2a
 from (select a from spilltest1 group by a) t1,
      (select a from spilltest2 group by a) t2
 where t1.a = t2.a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 't1a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 't1a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- check that the result looks sane
 select count(*), sum(t1a), sum(t2a), sum(t1a - t2a) from spilltestresult1;
@@ -28,7 +28,7 @@ select count(*), sum(t1a), sum(t2a), sum(t1a - t2a) from spilltestresult1;
 
 -- Test Hash Aggregation when the work mem is too small for the hash table
 create table spilltest (a integer, b integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into spilltest select a, a%25 from generate_series(1,8000) a;
 analyze spilltest;
@@ -98,7 +98,7 @@ select b,count(*) from spilltest group by b;
 -- Test Hash Join when the work mem is too small for the hash table
 drop table if exists spilltest;
 create table spilltest (a integer, b integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into spilltest select a, a%25 from generate_series(1,800000) a;
 analyze spilltest; -- We have to do an analyze to force a hash join
@@ -108,7 +108,7 @@ set enable_hashjoin=on;
 set statement_mem=10000;
 create temporary table spilltestresult2 as
 select t1.a as t1a, t1.b as t1b, t2.a as t2a, t2.b as t2b from spilltest t1, spilltest t2 where t1.a = t2.a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 't1a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 't1a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- check that the result looks sane
 select count(*), sum(t1a), sum(t2a), sum(t2a), sum(t2b), sum(t1a * t1b) from spilltestresult2;

@@ -598,7 +598,7 @@ select x.aa/100 aaa, x.c, y.c from cte1 x join cte1 y on x.aa=y.aa;
 
 select from t2_ncols union select * from t2_ncols;
 
--- Issue https://github.com/greenplum-db/gpdb/issues/12031, extra junk tagrget entry added
+-- Issue https://github.com/GreengageDB/greengage/issues/12031, extra junk tagrget entry added
 -- on the Subquery Scan node when we compare the hashExprs and the targetlist of the scan plan.
 -- And if it appears under the Append node, with Motion node on top of the Subquery Scan node,
 -- it'll cause the mismatch of the target lists for these nodes, generate wrong result.
@@ -637,7 +637,7 @@ select b.model2, f.model, f.last_build_date::date + interval '1year' <= '2021-07
 reset optimizer;
 
 -- Test when fixing up unkown type for union statement and the var is from outer
--- subquery. See Github Issue https://github.com/greenplum-db/gpdb/issues/12407
+-- subquery. See Github Issue https://github.com/GreengageDB/greengage/issues/12407
 -- for details.
 create table t_issue_12407(a int, b int, c varchar(32));
 create table t1_issue_12407(a int, b int, c int);

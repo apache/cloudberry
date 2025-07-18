@@ -9,7 +9,7 @@ Fault Tolerance Service (FTS):
    probe process is running on the Gp_entry_postmaster (master node)
    only. It starts as a background worker process managed by the
    BackgroundWorker structure. (see
-   src/include/postmaster/bgworker.h).  Greenplum sets up a group of
+   src/include/postmaster/bgworker.h).  Greengage sets up a group of
    GP background processes through an array structure PMAuxProcList. A
    entry in that struct represents a GP background process.
 

@@ -330,7 +330,7 @@ read_words(Relation rel, Buffer lovBuffer, OffsetNumber lovOffset,
 		 * new words.
 		 * Since the page is full, so it'll rearrange the words and move
 		 * the unfit words to next bitmap page.
-		 * This related to issue: https://github.com/greenplum-db/gpdb/issues/11308.
+		 * This related to issue: https://github.com/GreengageDB/greengage/issues/11308.
 		 */
 		totalTidsInPage = GET_NUM_BITS(bitmap->cwords, bitmap->hwords,
 									   bo->bm_hrl_words_used);

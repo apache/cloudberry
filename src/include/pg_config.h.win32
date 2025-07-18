@@ -649,13 +649,13 @@
 #define MEMSET_LOOP_LIMIT 1024
 
 /* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "support@greenplum.com"
+#define PACKAGE_BUGREPORT "support@greengagedb.org"
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "Greenplum Database"
+#define PACKAGE_NAME "Greengage Database"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Greenplum Database 6.0.0-alpha"
+#define PACKAGE_STRING "Greengage Database 6.0.0-alpha"
 
 /* Define to the version of this package. */
 #define PACKAGE_VERSION "9.4.26"
@@ -673,7 +673,7 @@
 #define PG_VERSION_NUM 90426
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "greenplum"
+#define PACKAGE_TARNAME "greengage"
 
 /* Define to the name of the default PostgreSQL service principal in Kerberos.
    (--with-krb-srvnam=NAME) */

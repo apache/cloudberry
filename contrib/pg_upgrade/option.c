@@ -13,7 +13,7 @@
 #include "getopt_long.h"
 
 #include "pg_upgrade.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 #include <time.h>
 #include <sys/types.h>
@@ -56,8 +56,8 @@ parseCommandLine(int argc, char *argv[])
 		{"socketdir", required_argument, NULL, 's'},
 		{"verbose", no_argument, NULL, 'v'},
 
-		/* Greenplum specific parameters */
-		GREENPLUM_OPTIONS
+		/* Greengage specific parameters */
+		GREENGAGE_OPTIONS
 
 		{NULL, 0, NULL, 0}
 	};
@@ -78,7 +78,7 @@ parseCommandLine(int argc, char *argv[])
 
 	os_user_effective_id = get_user_info(&os_info.user);
 
-	initialize_greenplum_user_options();
+	initialize_greengage_user_options();
 
 	/* we override just the database user name;  we got the OS id above */
 	if (getenv("PGUSER"))
@@ -197,7 +197,7 @@ parseCommandLine(int argc, char *argv[])
 				break;
 
 			default:
-				if (!process_greenplum_option(option))
+				if (!process_greengage_option(option))
 					pg_fatal("Try \"%s --help\" for more information.\n",
 							 os_info.progname);
 				break;
@@ -245,14 +245,14 @@ parseCommandLine(int argc, char *argv[])
 	check_required_directory(&user_opts.socketdir, "PGSOCKETDIR", true,
 							 "-s", "sockets will be created");
 
-	validate_greenplum_options();
+	validate_greengage_options();
 }
 
 
 static void
 usage(void)
 {
-	printf(_("pg_upgrade upgrades a Greenplum cluster to a different major version.\n\
+	printf(_("pg_upgrade upgrades a Greengage cluster to a different major version.\n\
 \nUsage:\n\
   pg_upgrade [OPTION]...\n\
 \n\
@@ -289,7 +289,7 @@ When you run pg_upgrade, you must provide the following information:\n\
 \n\
 For example:\n\
   pg_upgrade -d oldCluster/data -D newCluster/data -b oldCluster/bin -B newCluster/bin\n\
-or\n"), old_cluster.port, new_cluster.port, os_info.user, GREENPLUM_USAGE);
+or\n"), old_cluster.port, new_cluster.port, os_info.user, GREENGAGE_USAGE);
 #ifndef WIN32
 	printf(_("\
   $ export PGDATAOLD=oldCluster/data\n\
@@ -305,7 +305,7 @@ or\n"), old_cluster.port, new_cluster.port, os_info.user, GREENPLUM_USAGE);
   C:\\> set PGBINNEW=newCluster/bin\n\
   C:\\> pg_upgrade\n"));
 #endif
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 

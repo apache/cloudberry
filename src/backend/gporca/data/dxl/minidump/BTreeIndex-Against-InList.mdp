@@ -5,7 +5,7 @@ CREATE TABLE test as SELECT * FROM generate_series(1,1000000) as a distributed r
 CREATE INDEX test_index ON test(a);
 SELECT * FROM test WHERE a in (1, 47);
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

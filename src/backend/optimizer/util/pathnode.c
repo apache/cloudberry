@@ -1047,11 +1047,11 @@ create_index_path(PlannerInfo *root,
 			   *indexqualcols;
 
 	/*
-	 * Greenplum specific behavior
-	 * Greenplum has a specical path to handle semjoin,
+	 * Greengage specific behavior
+	 * Greengage has a specical path to handle semjoin,
 	 * planner might add unique_row_id path to first inner join
 	 * and then de-duplicate. The logic is added into
-	 * Greenplum long before, but when merging more code from
+	 * Greengage long before, but when merging more code from
 	 * upstream, the old logic does not consider new paths,
 	 * for indexonly path, the var should be changed to the Index's,
 	 * maybe we should enhance the old logic in cdbpath_dedup_fixup,
@@ -2831,9 +2831,9 @@ create_tablefunction_path(PlannerInfo *root, RelOptInfo *rel,
 	Assert(rte->rtekind == RTE_TABLEFUNCTION);
 
 	/*
-	 * Greenplum specific behavior
+	 * Greengage specific behavior
 	 *
-	 * Greenplum has a special path to handle semjoin, the planner might add a
+	 * Greengage has a special path to handle semjoin, the planner might add a
 	 * unique_row_id path to the first inner join and then de-duplicate.
 	 *
 	 * Table function scan has no corresponding dedup workflow. Here we
@@ -3326,7 +3326,7 @@ create_nestloop_path(PlannerInfo *root,
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * If we find the join locus is general or segmentgeneral,
 	 * we should check the joinqual, if it contains volatile functions
 	 * we have to turn the join path to singleQE.

@@ -31,7 +31,7 @@ Go to the directory in your machine where you want to check out the GPDB code,
 and clone the GPDB code by typing the following into a terminal window.
 
 ```shell
-git clone https://github.com/greenplum-db/gpdb.git
+git clone https://github.com/GreengageDB/greengage.git
 ```
 
 ##3: Setup and start the virtual machine
@@ -97,7 +97,7 @@ will be isolated from the host.
 That's it - GPDB is built, up and running.  Before you can open a psql connection, run the following:
 ```shell
 # setup the environment
-source /usr/local/gpdb/greenplum_path.sh
+source /usr/local/gpdb/greengage_path.sh
 source ~/gpdb/gpAux/gpdemo/gpdemo-env.sh
 
 # create a database to interact with (you only need to do this once)

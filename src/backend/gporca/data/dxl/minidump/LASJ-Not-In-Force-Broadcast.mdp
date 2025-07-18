@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
       Objective: When a broadcast is under a LASJ not-in, we can generate 2 potential plans,
       gather to the coordinator and do the LASJ, or broadcast the inner side and do the LASJ

@@ -5,7 +5,7 @@ Functions and operators that emulate a subset of functions and packages from the
 There is a associated Google group - https://groups.google.com/forum/?hl=en#!forum/orafce-general
 
 This package is documented in the `Oracle Compatibility Functions' 
-section of the Greenplum Database Administrator's Guide.
+section of the Greengage Database Administrator's Guide.
 
 == Oracle functions and Oracle packages
 

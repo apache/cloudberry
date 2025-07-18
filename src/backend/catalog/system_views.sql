@@ -1371,7 +1371,7 @@ LANGUAGE INTERNAL
 STRICT IMMUTABLE
 AS 'make_interval';
 
--- pg_tablespace_location wrapper functions to see Greenplum cluster-wide tablespace locations
+-- pg_tablespace_location wrapper functions to see Greengage cluster-wide tablespace locations
 CREATE FUNCTION gp_tablespace_segment_location (IN tblspc_oid oid, OUT gp_segment_id int, OUT tblspc_loc text)
 AS 'SELECT pg_catalog.gp_execution_segment() as gp_segment_id, * FROM pg_catalog.pg_tablespace_location($1)'
 LANGUAGE SQL EXECUTE ON ALL SEGMENTS;

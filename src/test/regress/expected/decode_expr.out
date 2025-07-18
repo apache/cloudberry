@@ -588,7 +588,7 @@ CREATE TABLE office1
     country text,
     phone text
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'locid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'locid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function get_area_code(phone text) returns text as
 $$
@@ -601,7 +601,7 @@ begin
 end;
 $$ language plpgsql NO SQL;
 insert into office1(locid, company_name, address1, address2, city, state, zip, country, phone) values
- (100, 'Greenplum', '1900 S. Norfolk St.', 'Suite 125', 'San Mateo', 'CA', '94403', 'USA', '650-111-1111'),
+ (100, 'Greengage', '1900 S. Norfolk St.', 'Suite 125', 'San Mateo', 'CA', '94403', 'USA', '650-111-1111'),
  (200, 'Dairy Farm', '100 Meadow Lane', null, 'Stockton', 'CA', '95210', 'USA', '209-222-2000'),
  (300, 'Not Just a Database', '1900 S. Norfolk St.', 'Suite 224', 'San Mateo', 'CA', '94403', 'USA', '650-111-3000'),
  (400, 'EMC Corporation', '176 South Street', null, 'Santa Clara', 'CA', '95123', 'USA', '408-444-4000'),
@@ -611,7 +611,7 @@ insert into office1(locid, company_name, address1, address2, city, state, zip, c
 select locid, company_name, phone from office1 order by locid, phone;
  locid |    company_name     |    phone     
 -------+---------------------+--------------
-   100 | Greenplum           | 650-111-1111
+   100 | Greengage           | 650-111-1111
    200 | Dairy Farm          | 209-222-2000
    300 | Not Just a Database | 650-111-3000
    400 | EMC Corporation     | 408-444-4000
@@ -630,7 +630,7 @@ from office1
 order by locid, phone;
  locid |    company_name     |    phone     | south_bay | peninsula | sf 
 -------+---------------------+--------------+-----------+-----------+----
-   100 | Greenplum           | 650-111-1111 |           | Y         | N
+   100 | Greengage           | 650-111-1111 |           | Y         | N
    200 | Dairy Farm          | 209-222-2000 |           | N         | N
    300 | Not Just a Database | 650-111-3000 |           | Y         | N
    400 | EMC Corporation     | 408-444-4000 | Y         | N         | N
@@ -651,7 +651,7 @@ from office1
 order by locid, phone;
  locid |    company_name     |    phone     | south_bay | peninsula | sf 
 -------+---------------------+--------------+-----------+-----------+----
-   100 | Greenplum           | 650-111-1111 |           | Y         | N
+   100 | Greengage           | 650-111-1111 |           | Y         | N
    200 | Dairy Farm          | 209-222-2000 |           | N         | N
    300 | Not Just a Database | 650-111-3000 |           | Y         | N
    400 | EMC Corporation     | 408-444-4000 | Y         | N         | N
@@ -1051,7 +1051,7 @@ create table locations
    bus_name text,
    country_code char(2)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'locid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'locid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into locations(locid, bus_name, country_code) values
   (1000, 'Test Solutions', 'CN'),

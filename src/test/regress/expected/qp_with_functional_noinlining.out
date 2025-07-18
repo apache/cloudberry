@@ -1373,7 +1373,7 @@ SELECT * FROM newfoo;
 DROP TABLE newfoo;
 -- @description test28a: CTE with AO/CO tables
 -- FIXME: This deadlocks with gp_cte_sharing=on, so disable that temporarily.
--- See https://github.com/greenplum-db/gpdb/issues/1967
+-- See https://github.com/GreengageDB/greengage/issues/1967
 begin;
 set local gp_cte_sharing=off;
 WITH v AS (SELECT a, b FROM foo_ao WHERE b < 5),

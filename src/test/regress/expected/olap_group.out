@@ -1775,7 +1775,7 @@ select count(*) from sale group by rollup((cn,vn),(pn,dt));
 
 -- Distinguish grouping value NULLs from summarization NULLs --
 create table olap_tmp_for_group (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into olap_tmp_for_group values (1,1,1),(1,2,1),(1,2,1),(2,1,1),(2,2,1);
 --start_equiv
@@ -6063,7 +6063,7 @@ select sum((select prc from sale where cn = s.cn and vn = s.vn and pn = s.pn)) f
 -- end MPP-14021
 -- Test COUNT in a subquery
 create table prod_agg (sale integer, prod varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'sale' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'sale' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into prod_agg values
   (100, 'shirts'),
@@ -6072,7 +6072,7 @@ insert into prod_agg values
   (400, 'caps'),
   (450, 'hats');
 create table cust_agg (cusname varchar, sale integer, prod varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cusname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cusname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into cust_agg values
   ('aryan', 100, 'shirts'),
@@ -6128,7 +6128,7 @@ select x,y,count(*), grouping(x,y) from generate_series(1,2) x, generate_series(
 (9 rows)
 
 create table test_gsets (i int, n numeric);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_gsets values (0, 0), (0, 1), (0,2);
 select i,n,count(*), grouping(i), grouping(n), grouping(i,n) from test_gsets group by grouping sets((), (i,n)) having n is null;
@@ -6144,7 +6144,7 @@ select x, y, count(*), grouping(x,y) from generate_series(1,1) x, generate_serie
 (1 row)
 
 -- test repeat node
--- Greenplum uses repeat node in plan to handle the case
+-- Greengage uses repeat node in plan to handle the case
 -- that duplicated groups in grouping sets. we have some
 -- bugs causing duplicated repeat node and wrong result.
 -- Fix it and add some tests.
@@ -6197,10 +6197,10 @@ reset gp_eager_one_phase_agg;
 drop table repeat_node_sale;
 -- GROUPING SETS meets subplan [issue 8342]
 create table foo_gset(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar_gset(b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo_gset select i from generate_series(1,10)i;
 insert into bar_gset select i from generate_series(1,10)i;
@@ -6258,7 +6258,7 @@ drop table foo_gset;
 create table t_cube_12_limit(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int,
                              c8 int, c9 int, c10 int, c11 int, c12 int, c13 int, c14 int,
 			     c15 int, c16 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, sum(c16) from t_cube_12_limit
 group by cube(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13), c14, c15;

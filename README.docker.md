@@ -16,9 +16,9 @@ After installing, in Docker preferences, you may want to increase the CPUs/memor
 
 Note that the -v switch is used to mount the OS X’s gpdb folder into the container. The privileged and seccomp flags are used to allow gdb to work in Docker.
 
-To make Greenplum accessible outside of the docker container use the -p switch (add before the -i switch) in the run command with the following: `127.0.0.1:<port_on_local_machine>:<greenplum_port_in_docker>`
+To make Greengage accessible outside of the docker container use the -p switch (add before the -i switch) in the run command with the following: `127.0.0.1:<port_on_local_machine>:<greengage_port_in_docker>`
 
-This will proxy connections / requests made to the `<port_on_local_machine>` across to `<greenplum_port_in_docker>` which will allow Greenplum within docker to receive them.
+This will proxy connections / requests made to the `<port_on_local_machine>` across to `<greengage_port_in_docker>` which will allow Greengage within docker to receive them.
 
 ```bash
 docker run -t -v ~/workspace/gpdb:/home/gpadmin/gpdb_src --privileged --security-opt seccomp:unconfined -i gcr.io/data-gpdb-public-images/gpdb6-centos7-build:latest bash
@@ -116,7 +116,7 @@ Follow the below steps. If you are unable to psql in, try increasing your CPU an
 su - gpadmin
 rm -rf /tmp/.s*  #kill leftover lock files in case docker shutdown ungracefully
 cd ~/gpdb_src/gpAux/gpdemo
-source ~/gpdb_install/greenplum_path.sh
+source ~/gpdb_install/greengage_path.sh
 make cluster
 source gpdemo-env.sh
 psql postgres
@@ -126,9 +126,9 @@ Assuming that `gpdemo-env.sh` has been sourced, modify the `pg_hba.conf` file lo
 
 `host all gpadmin 0.0.0.0 trust`
 
-This instructs Greenplum within docker to trust all connections from the local machine, like that from an SQL editor.
+This instructs Greengage within docker to trust all connections from the local machine, like that from an SQL editor.
 
-Then run `gpstop -au` to reload the Greenplum cluster's config so that the changes in `pg_hba.conf` take effect.
+Then run `gpstop -au` to reload the Greengage cluster's config so that the changes in `pg_hba.conf` take effect.
 
 ### Running Regression Tests
 

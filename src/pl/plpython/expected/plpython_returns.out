@@ -13,12 +13,12 @@
 -- the SELECT clause and the FROM clause since these are different
 -- execution paths.
 --
--- Greenplum has another distinction regarding whether the function
+-- Greengage has another distinction regarding whether the function
 -- is run on the master or the segment.  So we additionally run
 -- every function as a SELECT clause function over a table with
 -- a single row.
 --  
--- Because Greenplum is slow at reporting errors from segments
+-- Because Greengage is slow at reporting errors from segments
 -- we only execute against gp_single_row for the statements that
 -- should succeed, or where we expect different results (executing SQL)
 \set VERBOSITY terse

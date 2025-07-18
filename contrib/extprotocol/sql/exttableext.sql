@@ -22,7 +22,7 @@ SET search_path TO 'exttableext';
     CREATE READABLE EXTERNAL TABLE exttabtest_r(like exttabtest)
         LOCATION('demoprot://exttabtest.txt') 
     FORMAT 'text'
-    OPTIONS (database 'greenplum', foo 'bar');
+    OPTIONS (database 'greengage', foo 'bar');
 
     -- Checking pg_exttable for new created RET and WET
     select urilocation,fmttype,fmtopts,encoding,writable from pg_exttable 

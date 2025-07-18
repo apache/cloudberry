@@ -1,6 +1,6 @@
 COMMAND NAME: gpreload
 
-Reloads Greenplum Database table data sorting the data 
+Reloads Greengage Database table data sorting the data 
 based on specified columns. 
 
 *****************************************************
@@ -69,7 +69,7 @@ OPTIONS
 
 -p <port> 
 
- The Greenplum Database master port. If not specified, the value of the 
+ The Greengage Database master port. If not specified, the value of the 
  PGPORT environment variable is used. If the value is not available, an 
  error is returned. 
 
@@ -77,7 +77,7 @@ OPTIONS
 {-t | --table-file } <path_to_file> 
 
  The location and name of file containing list of schema qualified table 
- names to reload and the column names to reorder from the Greenplum 
+ names to reload and the column names to reorder from the Greengage 
  Database. Only user defined tables are supported. Views or system 
  catalog tables are not supported. 
 
@@ -135,5 +135,5 @@ listed in the file data-tables.txt.
 SEE ALSO
 *****************************************************
 
-The CREATE TABLE command in the "Greenplum Database Reference Guide."
+The CREATE TABLE command in the "Greengage Database Reference Guide."
 

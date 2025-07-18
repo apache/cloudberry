@@ -1153,7 +1153,7 @@ typedef struct SubPlanState
 	FmgrInfo   *cur_eq_funcs;	/* equality functions for LHS vs. table */
 	void	   *ts_pos;
 	GenericTupStore *ts_state;
-	bool        prefetch_subplan_done; /* Greenplum specific */
+	bool        prefetch_subplan_done; /* Greengage specific */
 } SubPlanState;
 
 /* ----------------
@@ -2278,7 +2278,7 @@ typedef struct DynamicSeqScanState
 	 * many many times thus leads to mem leak. We cache the scan state
 	 * to avoid such leak.
 
-	 * See Github Issue: https://github.com/greenplum-db/gpdb/issues/12533.
+	 * See Github Issue: https://github.com/GreengageDB/greengage/issues/12533.
 	 *
 	 * The key in ss_table is table oid, the value is a pointer
 	 * to the scanstate (stored as void *).

@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2018 Pivotal, Inc.
 //---------------------------------------------------------------------------
 #ifndef GPOPT_CConstTblGetTest_H

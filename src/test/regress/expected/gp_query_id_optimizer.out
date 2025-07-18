@@ -1221,7 +1221,7 @@ where role = 'p'; | QUERY ID: 8
 \c
 create table t (i int);
 NOTICE:  START ProcessUtility | Q: create table t (i int); | QUERY ID: 2
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  END ProcessUtility | Q: create table t (i int); | QUERY ID: 2
 insert into t values(0);

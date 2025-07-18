@@ -16,13 +16,13 @@ class WorkerPoolTestCase(unittest.TestCase):
         self.subject = RemoteExecutionContext("myhost", "my_stdin")
         cmd = Command("dummy name", "echo 'foo'")
         self.subject.execute(cmd)
-        self.assertIn(". %s/greenplum_path.sh;" % GPHOME, cmd.cmdStr)
+        self.assertIn(". %s/greengage_path.sh;" % GPHOME, cmd.cmdStr)
 
     def test_RemoteExecutionContext_uses_provided_gphome_when_set(self):
         self.subject = RemoteExecutionContext(targetHost="myhost", stdin="my_stdin", gphome="other/gphome")
         cmd = Command("dummy name", "echo 'foo'")
         self.subject.execute(cmd)
-        self.assertIn(". other/gphome/greenplum_path.sh;", cmd.cmdStr)
+        self.assertIn(". other/gphome/greengage_path.sh;", cmd.cmdStr)
 
     def test_LocalExecutionContext_uses_no_environment(self):
         self.subject = LocalExecutionContext(None)
@@ -52,4 +52,4 @@ class WorkerPoolTestCase(unittest.TestCase):
         cmd.propagate_env_map['bar'] = 1
         self.subject.execute(cmd)
         self.assertEquals("bar=1 && foo=1 && ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 localhost "
-                          "\". gphome/greenplum_path.sh; bar=1 && foo=1 && ls /tmp\"", cmd.cmdStr)
+                          "\". gphome/greengage_path.sh; bar=1 && foo=1 && ls /tmp\"", cmd.cmdStr)

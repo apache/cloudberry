@@ -256,7 +256,7 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 		 * old-cluster table we haven't seen yet.
 		 */
 		/*
-		 * In Greenplum, partitioned tables are created in a single CREATE
+		 * In Greengage, partitioned tables are created in a single CREATE
 		 * TABLE statement instead of each member table individually. The
 		 * Oid preassignments are all done before the CREATE TABLE, so we
 		 * can't use and reset a single oid variable, but instead we use them

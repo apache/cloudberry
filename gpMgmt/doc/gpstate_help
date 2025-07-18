@@ -1,6 +1,6 @@
 COMMAND NAME: gpstate
 
-Shows the status of a running Greenplum Database system.
+Shows the status of a running Greengage Database system.
 
 
 *****************************************************
@@ -19,11 +19,11 @@ DESCRIPTION
 *****************************************************
 
 The gpstate utility displays information about a running 
-Greenplum Database instance. There is additional information 
-you may want to know about a Greenplum Database system, since 
+Greengage Database instance. There is additional information 
+you may want to know about a Greengage Database system, since 
 it is comprised of multiple PostgreSQL database instances (segments) 
 spanning multiple machines. The gpstate utility provides 
-additional status information for a Greenplum Database system, 
+additional status information for a Greengage Database system, 
 such as:
 * Which segments are down.
 * Master and segment configuration information (hosts,
@@ -39,7 +39,7 @@ OPTIONS
 -b (brief status)
 
   Optional. Display a brief summary of the state of the 
-  Greenplum Database system. This is the default option.
+  Greengage Database system. This is the default option.
 
 
 -B <parallel_processes>
@@ -78,9 +78,9 @@ OPTIONS
   Display details of the standby master host if configured.
 
 
--i (show Greenplum Database version)
+-i (show Greengage Database version)
   
-  Display the Greenplum Database software version information 
+  Display the Greengage Database software version information 
   for each instance.
 
 
@@ -97,7 +97,7 @@ OPTIONS
 
 -p (show ports)
 
-  List the port numbers used throughout the Greenplum Database 
+  List the port numbers used throughout the Greengage Database 
   system.
 
 
@@ -122,7 +122,7 @@ OPTIONS
 -s (detailed status)
 
   Optional. Displays detailed status information for the 
-  Greenplum Database system.
+  Greengage Database system.
 
 
 -v (verbose output)
@@ -155,18 +155,18 @@ MASTER OUTPUT DATA
 * Master current role - dispatch = regular operating mode
                         utility = maintenance mode 
 
-* Greenplum array configuration type - Standard = one NIC per host 
+* Greengage array configuration type - Standard = one NIC per host 
                                        Multi-Home = multiple NICs per host
 
-* Greenplum initsystem version - version of Greenplum Database when 
+* Greengage initsystem version - version of Greengage Database when 
                                  system was first initialized
 
-* Greenplum current version - current version of Greenplum Database
+* Greengage current version - current version of Greengage Database
 
-* Postgres version - version of PostgreSQL that Greenplum Database 
+* Postgres version - version of PostgreSQL that Greengage Database 
                      is based on
 
-* Greenplum mirroring status - physical mirroring, SAN or none
+* Greengage mirroring status - physical mirroring, SAN or none
 
 * Master standby - host name of the standby master
 
@@ -213,7 +213,7 @@ SEGMENT OUTPUT DATA
 * Master reports status as - segment status as reported in the system catalog:
                            Up or Down
 
-* Database status - status of Greenplum Database to incoming requests:
+* Database status - status of Greengage Database to incoming requests:
                 Up, Down, or Suspended. A Suspended state means database 
                 activity is temporarily paused while a segment transitions from 
                 one state to another.
@@ -222,7 +222,7 @@ SEGMENT OUTPUT DATA
 EXAMPLES
 *****************************************************
 
-Show detailed status information of a Greenplum Database system:
+Show detailed status information of a Greengage Database system:
 
    gpstate -s
 
@@ -247,7 +247,7 @@ Show details of any current gpexpand:
    gpstate -x
 
 
-Display the Greenplum software version information:
+Display the Greengage software version information:
 
    gpstate -i
 

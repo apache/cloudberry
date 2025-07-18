@@ -404,7 +404,7 @@ DROP TABLE dtm_plpg_foo;
 BEGIN;
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 CREATE TABLE dtm_plpg_foo (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO dtm_plpg_foo VALUES (0, 1);
 DECLARE c1 NO SCROLL CURSOR FOR SELECT b FROM dtm_plpg_foo;
@@ -420,7 +420,7 @@ DROP TABLE dtm_plpg_foo;
 BEGIN;
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 CREATE TABLE dtm_plpg_foo (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO dtm_plpg_foo VALUES (0, 1);
 UPDATE dtm_plpg_foo SET b = 2;
@@ -437,7 +437,7 @@ DROP TABLE dtm_plpg_foo;
 BEGIN;
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 CREATE TABLE dtm_plpg_foo (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO dtm_plpg_foo VALUES (0, 1);
 UPDATE dtm_plpg_foo SET b = 2;
@@ -458,7 +458,7 @@ DROP TABLE dtm_plpg_foo;
 BEGIN;
 CREATE TABLE dtm_plpg_foo (C_CUSTKEY INTEGER, C_NAME VARCHAR(25), C_ADDRESS VARCHAR(40))
 partition by range (c_custkey) (partition p1 start(0) end(100000) every(1000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_1" for table "dtm_plpg_foo"
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_2" for table "dtm_plpg_foo"
@@ -566,7 +566,7 @@ BEGIN;
 DROP TABLE dtm_plpg_foo;
 CREATE TABLE dtm_plpg_foo (C_CUSTKEY INTEGER, C_NAME VARCHAR(25), C_ADDRESS VARCHAR(40))
 partition by range (c_custkey) (partition p1 start(0) end(100000) every(1000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_1" for table "dtm_plpg_foo"
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_2" for table "dtm_plpg_foo"
@@ -680,7 +680,7 @@ BEGIN;
 DROP TABLE dtm_plpg_foo;
 CREATE TABLE dtm_plpg_foo (C_CUSTKEY INTEGER, C_NAME VARCHAR(25), C_ADDRESS VARCHAR(40))
 partition by range (c_custkey) (partition p1 start(0) end(100000) every(1000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_1" for table "dtm_plpg_foo"
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_2" for table "dtm_plpg_foo"
@@ -795,7 +795,7 @@ BEGIN;
 DROP TABLE dtm_plpg_foo;
 CREATE TABLE dtm_plpg_foo (C_CUSTKEY INTEGER, C_NAME VARCHAR(25), C_ADDRESS VARCHAR(40))
 partition by range (c_custkey) (partition p1 start(0) end(100000) every(1000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_1" for table "dtm_plpg_foo"
 NOTICE:  CREATE TABLE will create partition "dtm_plpg_foo_1_prt_p1_2" for table "dtm_plpg_foo"
@@ -933,7 +933,7 @@ CREATE OR REPLACE function parse_arr (p_array text)
 	END; 
 $dbvis$ LANGUAGE plpgsql;
 CREATE TABLE test_parse_arr (a bigserial, b int[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_parse_arr (b)
 	SELECT parse_arr(x) FROM 
@@ -969,7 +969,7 @@ CREATE TABLE source_table
 id int,
 created text
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into source_table select generate_series(1,10), '2015-01-06'::date;
 insert into source_table values (11, '0000-00-00');
@@ -980,7 +980,7 @@ CREATE TABLE dest_table
 id int,
 created timestamp with time zone
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dest_table select nextval('test_seq'::regclass), date_converter(created) from source_table;
 select count(1) from dest_table;
@@ -995,7 +995,7 @@ RESET gp_enable_slow_writer_testmode;
 -- If it's in reader, it was messing up relcache previously.
 --
 create table stran_foo(a, b) as values(1, 10), (2, 20);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function stran_func(a int) returns int as $$
 declare
@@ -1011,7 +1011,7 @@ begin
 end;
 $$ language plpgsql;
 create table stran_tt as select stran_func(b) from stran_foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'stran_func' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'stran_func' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --
 -- Check quoting when dispatching savepoints. (Not really PL/pgSQL related,
@@ -1019,7 +1019,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 --
 BEGIN;
 CREATE TEMPORARY TABLE savepointtest (t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO savepointtest VALUES ('before savepoints');
 SAVEPOINT "evil""savepoint1";

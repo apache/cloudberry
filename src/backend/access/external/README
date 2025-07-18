@@ -1,4 +1,4 @@
-External Scan in Greenplum Database
+External Scan in Greengage Database
 ===================================
 
 External scan is used to scan a special kind of database tables called "external

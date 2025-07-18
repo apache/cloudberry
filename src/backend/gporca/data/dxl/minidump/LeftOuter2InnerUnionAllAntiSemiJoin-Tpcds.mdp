@@ -10,7 +10,7 @@ with v1 as (select ss_item_sk from store_sales, store),
 select * from v2 left outer join v1 on v2.i_item_sk = v1.ss_item_sk limit 5;
 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

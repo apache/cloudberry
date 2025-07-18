@@ -28,7 +28,7 @@ use IO::File;
 # than changing the parser to handle both cases.
 #
 # Parse_node:
-#   InitPlan entries in greenplum are in separate slices sometimes, so
+#   InitPlan entries in greengage are in separate slices sometimes, so
 #   explain.pl prefixes them with an arrow (and adds a fake cost) to make them
 #   look like a top-level execution node.  Again, this technique was easier
 #   than modifying the parser to special case InitPlan.

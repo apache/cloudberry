@@ -232,7 +232,7 @@ def stop_primary(context, content_id):
     # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
     # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
     subprocess.check_call(['ssh', seg_host,
-                           'source %s/greenplum_path.sh && pg_ctl stop -m fast -D %s' % (
+                           'source %s/greengage_path.sh && pg_ctl stop -m fast -D %s' % (
                                pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg_data_dir))
                            ])
 

@@ -233,7 +233,7 @@ ROLLBACK;
 
 -- make sure refresh mat view will dispatch oid at the final
 -- execution of the mat view's body query. See Github Issue
--- https://github.com/greenplum-db/gpdb/issues/11956 for details.
+-- https://github.com/GreengageDB/greengage/issues/11956 for details.
 
 create table t_github_issue_11956(a int, b int) distributed randomly;
 insert into t_github_issue_11956 values (1, 1);
@@ -255,7 +255,7 @@ drop materialized view mat_view_github_issue_11956;
 drop table t_github_issue_11956;
 
 -- test REFRESH MATERIALIZED VIEW on AO table with index
--- more details could be found at https://github.com/greenplum-db/gpdb/issues/16447
+-- more details could be found at https://github.com/GreengageDB/greengage/issues/16447
 CREATE TABLE base_table (idn character varying(10) NOT NULL);
 INSERT INTO base_table select i from generate_series(1, 5000) i;
 CREATE MATERIALIZED VIEW base_view WITH (APPENDONLY=true) AS SELECT tt1.idn AS idn_ban FROM base_table tt1;

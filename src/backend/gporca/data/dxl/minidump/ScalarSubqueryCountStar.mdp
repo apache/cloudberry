@@ -4,7 +4,7 @@ CREATE TEMP TABLE foo (a, b) AS SELECT i,i FROM generate_series(1,1) AS t(i) DIS
 CREATE TEMP TABLE bar (c int, d int);
 EXPLAIN SELECT (SELECT COUNT(*) FROM bar GROUP BY c LIMIT 1) FROM foo;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

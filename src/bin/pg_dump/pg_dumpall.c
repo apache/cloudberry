@@ -266,7 +266,7 @@ main(int argc, char *argv[])
 				break;
 
 			/*
-			 * Both Greenplum and PostgreSQL have used -r but for different
+			 * Both Greengage and PostgreSQL have used -r but for different
 			 * options, disallow the short option entirely to avoid confusion
 			 * and require the use of long options for the conflicting pair.
 			 */
@@ -504,7 +504,7 @@ main(int argc, char *argv[])
 	if (quote_all_identifiers)
 		executeCommand(conn, "SET quote_all_identifiers = true");
 
-	fprintf(OPF,"--\n-- Greenplum Database cluster dump\n--\n\n");
+	fprintf(OPF,"--\n-- Greengage Database cluster dump\n--\n\n");
 	if (verbose)
 		dumpTimestamp("Started on");
 
@@ -529,7 +529,7 @@ main(int argc, char *argv[])
 	if (binary_upgrade)
 	{
 		/*
-		 * Greenplum doesn't allow altering system catalogs without
+		 * Greengage doesn't allow altering system catalogs without
 		 * setting the allow_system_table_mods GUC first.
 		 */
 		fprintf(OPF, "SET allow_system_table_mods = true;\n");
@@ -655,8 +655,8 @@ help(void)
 	printf(_("  --use-set-session-authorization\n"
 			 "                               use SET SESSION AUTHORIZATION commands instead of\n"
 			 "                               ALTER OWNER commands to set ownership\n"));
-	printf(_("  --gp-syntax                  dump with Greenplum Database syntax (default if gpdb)\n"));
-	printf(_("  --no-gp-syntax               dump without Greenplum Database syntax (default if postgresql)\n"));
+	printf(_("  --gp-syntax                  dump with Greengage Database syntax (default if gpdb)\n"));
+	printf(_("  --no-gp-syntax               dump without Greengage Database syntax (default if postgresql)\n"));
 
 	printf(_("\nConnection options:\n"));
 	printf(_("  -d, --dbname=CONNSTR     connect using connection string\n"));
@@ -670,7 +670,7 @@ help(void)
 
 	printf(_("\nIf -f/--file is not used, then the SQL script will be written to the standard\n"
 			 "output.\n\n"));
-	printf(_("Report bugs to <bugs@greenplum.org>.\n"));
+	printf(_("Report bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
@@ -1089,7 +1089,7 @@ dumpRoles(PGconn *conn)
 	 * Query to select role info get resqueue if version support it get
 	 * external table auth on gpfdist, gpfdists and http if version support it get
 	 *
-	 * Support for gphdfs was removed in Greenplum 6
+	 * Support for gphdfs was removed in Greengage 6
 	 */
 
 	/* note: rolconfig is dumped later */
@@ -1448,7 +1448,7 @@ dumpTablespaces(PGconn *conn)
 	 * Get all tablespaces execpt built-in ones (named pg_xxx)
 	 *
 	 * [FIXME] the queries need to be slightly different if the backend isn't
-	 * Greenplum, and the dump format should vary depending on if the dump is
+	 * Greengage, and the dump format should vary depending on if the dump is
 	 * --gp-syntax or --no-gp-syntax.
 	 */
 	if (server_version < GPDB6_MAJOR_PGVERSION)

@@ -5,7 +5,7 @@ ALTER TABLE ColumnMapping DROP COLUMN dropme;
 
 EXPLAIN SELECT id FROM ColumnMapping;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Metadata SystemIds="0.GPDB">
     <dxl:RelationStatistics Mdid="2.359942.1.1" Name="columnmapping" Rows="0.000000" EmptyRelation="true"/>
     <dxl:Relation Mdid="6.359942.1.1" Name="columnmapping" IsTemporary="true" HasOids="false" StorageType="Heap" DistributionPolicy="Hash" DistributionColumns="1" Keys="" NumberLeafPartitions="0">

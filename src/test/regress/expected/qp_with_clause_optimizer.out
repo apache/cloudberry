@@ -9729,7 +9729,7 @@ drop table if exists tbl87;
 NOTICE:  table "tbl87" does not exist, skipping
 -- end_ignore
 create table tbl87(code char(3), n numeric);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'code' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'code' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tbl87 values ('abc',1);
 insert into tbl87 values ('xyz',2);  
@@ -9791,11 +9791,11 @@ NOTICE:  table "manager" does not exist, skipping
 --end_ignore
 -------------------------------------------------------------------------------------------------------------------------------
 CREATE TABLE foo (key INTEGER, value INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i % 10 from generate_series(1, 100) i;
 CREATE TABLE bar(bar_key INTEGER, bar_value INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'bar_key' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'bar_key' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bar SELECT i, i % 5 FROM generate_series(1, 1000) i;
 SET enable_hashjoin = OFF;
@@ -10700,11 +10700,11 @@ SET gp_cte_sharing = ON;
 --     ORDER BY 1, 2 DESC LIMIT 100;
 -------------------------------------------------------------------------------------------------------------------------------
 CREATE TABLE emp (ename CHARACTER VARYING(50), empno INTEGER, mgr INTEGER, deptno INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ename' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ename' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO emp SELECT i || 'NAME', i, i%6, i%16 FROM generate_series(1, 100) i;
 CREATE TABLE manager (dept_mgr_no INTEGER);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dept_mgr_no' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dept_mgr_no' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO manager SELECT i FROM generate_series(1, 100) i;
 SET enable_hashjoin = OFF;
@@ -11162,10 +11162,10 @@ ORDER BY 1, 2, 3, 4 DESC LIMIT 25;
 set gp_cte_sharing=on;
 -- start_ignore
 CREATE TABLE car (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE zoo (c int, d int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into car select i, (i+1) from generate_series(1,10) i;
 insert into zoo values (4,4);

@@ -475,7 +475,7 @@ class GpSystemStateProgram:
         """
         hostNameToResults = self.__fetchAllSegmentData(gpArray)
 
-        logger.info("Greenplum instance status summary")
+        logger.info("Greengage instance status summary")
 
         # master summary info
         tabLog = TableLogger().setWarnWithArrows(True)
@@ -926,15 +926,15 @@ class GpSystemStateProgram:
         tabLog.info(["Master port", "= %d" % master.getSegmentPort()])
 
         tabLog.info(["Master current role", "= %s" % qdRole])
-        tabLog.info(["Greenplum initsystem version", "= %s" % initDbVersion])
+        tabLog.info(["Greengage initsystem version", "= %s" % initDbVersion])
 
         if statusFetchWarning is None:
             if masterData[gp.SEGMENT_STATUS__GET_VERSION] is None:
-                tabLog.warn(["Greenplum current version", "= Unknown"])
+                tabLog.warn(["Greengage current version", "= Unknown"])
             else:
-                tabLog.info(["Greenplum current version", "= %s" % masterData[gp.SEGMENT_STATUS__GET_VERSION]])
+                tabLog.info(["Greengage current version", "= %s" % masterData[gp.SEGMENT_STATUS__GET_VERSION]])
         else:
-            tabLog.warn(["Greenplum current version", "= Error fetching data: %s" % statusFetchWarning])
+            tabLog.warn(["Greengage current version", "= Error fetching data: %s" % statusFetchWarning])
         tabLog.info(["Postgres version", "= %s" % pgVersion])
 
         self.__appendStandbySummary(hostNameToResults, gpArray.standbyMaster, tabLog)
@@ -1333,7 +1333,7 @@ class GpSystemStateProgram:
 
         exitCode = 0
 
-        logger.info("-Quick Greenplum database status from Master instance only")
+        logger.info("-Quick Greengage database status from Master instance only")
         logger.info( "----------------------------------------------------------")
 
         segments = [seg for seg in gpArray.getDbList() if seg.isSegmentQE()]

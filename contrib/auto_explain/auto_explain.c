@@ -52,7 +52,7 @@ static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 
 /*
- * Greenplum specific behavior:
+ * Greengage specific behavior:
  *   segment QEs will not init this extension. But for entryDB, which
  *   is forked from QD, all hooks of auto_explain have already existed
  *   in it, need to add a condition to disable auto_explain.
@@ -80,9 +80,9 @@ void
 _PG_init(void)
 {
 	/*
-	 * Greenplum specific behavior
+	 * Greengage specific behavior
 	 * Only run auto_explain on the Query Dispatcher node, normally we should
-	 * test Gp_role here (we do this for master branch), however, in Greenplum 6
+	 * test Gp_role here (we do this for master branch), however, in Greengage 6
 	 * all postmaster processes will have Gp_role with the value GP_ROLE_DISPATCH,
 	 * new QEs will set Gp_role when the receive dispatch from QD.
 	 */

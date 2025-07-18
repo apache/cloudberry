@@ -133,12 +133,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_resetxlog (Greenplum Database) " PG_VERSION);
+			puts("pg_resetxlog (Greengage Database) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("pg_resetxlog (Greenplum Database) " GP_VERSION);
+			puts("pg_resetxlog (Greengage Database) " GP_VERSION);
 			exit(0);
 		}
 	}
@@ -535,7 +535,7 @@ AcceptWarning(void)
 	/* initialize response to empty string. */
 	response[0] = 0;
 
-	printf(_("WARNING: Do not use this on Greenplum. %s might cause data loss\n"
+	printf(_("WARNING: Do not use this on Greengage. %s might cause data loss\n"
 			"and render system irrecoverable. Do you wish to proceed? [yes/no] "), progname);
 
 	/* Reading up to 4 letters instead of just 3 to ensure something like
@@ -1503,6 +1503,6 @@ usage(void)
 	printf(_("  --system-identifier=ID\n"
 			 "                   set database system identifier\n"));
 	printf(_("  -?, --help       show this help, then exit\n"));
-	printf(_("  --gp-version    output Greenplum version information, then exit\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("  --gp-version    output Greengage version information, then exit\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }

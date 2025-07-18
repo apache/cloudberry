@@ -1204,7 +1204,7 @@ DROP OWNED BY regress_sro_user;
 DROP ROLE regress_sro_user;
 
 
--- Test sandbox escape with CVE-2020-25695 on Greenplum.
+-- Test sandbox escape with CVE-2020-25695 on Greengage.
 --
 -- The idea of CVE-2020-25695 is to make superuser fire a defered
 -- trigger with security invoker function that executes some malicious

@@ -155,7 +155,7 @@ static bool tlist_matches_coltypelist(List *tlist, List *coltypelist);
 static bool contain_grouping_clause_walker(Node *node, void *context);
 
 /*
- * Greenplum specific functions
+ * Greengage specific functions
  */
 static bool should_eval_stable_functions(PlannerInfo *root);
 
@@ -5721,20 +5721,20 @@ bool is_builtin_true_equality_between_same_type(int opno)
 /**
  * Returns true if the equality operator with the given opno
  *   values is an equality operator, with same type on both sides
- *  (unlike int24 equality) AND the type being compare is greenplum hashable
+ *  (unlike int24 equality) AND the type being compare is greengage hashable
  *
  *
  * Note that this function is conservative with regard to when it returns true:
- *   it is okay to have some greenplum hashtable types that don't have entries here
+ *   it is okay to have some greengage hashtable types that don't have entries here
  *   (this function may return false even if this is a comparison between
- *        a greenplum hashable type and itself
+ *        a greengage hashable type and itself
  *
  * Note also that i think it might be possible for this to return true even
- *   if the operands of the operator are not themselves greenplum hashable,
+ *   if the operands of the operator are not themselves greengage hashable,
  *   because of type conversion or something.  I'm not 100% sure on that.
  */
 bool
-is_builtin_greenplum_hashable_equality_between_same_type(int opno)
+is_builtin_greengage_hashable_equality_between_same_type(int opno)
 {
     switch(opno)
     {
@@ -5771,7 +5771,7 @@ is_builtin_greenplum_hashable_equality_between_same_type(int opno)
             return true;
 
 /*
-        these types are greenplum hashable but haven't checked the semantics of these types function
+        these types are greengage hashable but haven't checked the semantics of these types function
         case ACLITEMOID:
         case ANYARRAYOID: 
         case INT2VECTOROID: 

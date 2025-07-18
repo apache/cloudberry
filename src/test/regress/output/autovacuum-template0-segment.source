@@ -8,9 +8,9 @@ language C;
 \! gpstop -au
 20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Starting gpstop with args: -au
 20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Gathering information and validating the environment...
-20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Obtaining Greenplum Master catalog information
+20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Obtaining Greengage Master catalog information
 20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Obtaining Segment details from master...
-20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.11.1+dev.22.gcf4e9dbf19 build dev'
+20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.11.1+dev.22.gcf4e9dbf19 build dev'
 20201009:19:05:12:034666 gpstop:gpdb6:zhanyi-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
 -- Autovacuum should take care of anti-XID wraparounds of 'template0'. Because
@@ -106,8 +106,8 @@ select age(datfrozenxid) > 200 * 1000000 from gp_dist_random('pg_database') wher
 \! gpstop -au
 20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Starting gpstop with args: -au
 20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Gathering information and validating the environment...
-20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Obtaining Greenplum Master catalog information
+20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Obtaining Greengage Master catalog information
 20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Obtaining Segment details from master...
-20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.11.1+dev.22.gcf4e9dbf19 build dev'
+20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.11.1+dev.22.gcf4e9dbf19 build dev'
 20201009:19:06:19:035047 gpstop:gpdb6:zhanyi-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore

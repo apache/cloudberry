@@ -1,6 +1,6 @@
 --
 -- We cannot ensure that these warnings will appear for all users because they
--- depend on where their greenplum source directory is located. Therefore, ignore
+-- depend on where their greengage source directory is located. Therefore, ignore
 -- these errors. They are tested in the main regress suite also.
 --
 -- start_matchignore

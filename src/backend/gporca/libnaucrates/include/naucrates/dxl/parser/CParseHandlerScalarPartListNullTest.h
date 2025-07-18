@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 Pivotal Inc.
 //
 //	SAX parse handler class for parsing scalar part list null test

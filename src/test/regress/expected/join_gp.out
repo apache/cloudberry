@@ -34,7 +34,7 @@ select * from nhtest a join nhtest b using (i);
 (2 rows)
 
 create temp table l(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into l values (1), (1), (2);
 select * from l l1 join l l2 on l1.a = l2.a left join l l3 on l1.a = l3.a and l1.a = 2 order by 1,2,3;
@@ -220,7 +220,7 @@ select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c w
 -- Result node to do projection of the hash expression, as Append is not
 -- projection-capable)
 create table part4_tbl (f1 int4) partition by range (f1) (start(-1000000) end (1000000) every (1000000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "part4_tbl_1_prt_1" for table "part4_tbl"
 NOTICE:  CREATE TABLE will create partition "part4_tbl_1_prt_2" for table "part4_tbl"
@@ -355,7 +355,7 @@ create table dept
 	pid int,
 	name char(40)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dept values(3, 0, 'root');
 insert into dept values(4, 3, '2<-1');
@@ -550,7 +550,7 @@ drop table t5370_2;
 --         ->  Seq Scan on int4_tbl a
 --         ->  Seq Scan on int4_tbl b
 --```
--- Greenplum will raise an Assert Fail.
+-- Greengage will raise an Assert Fail.
 -- We force adding a material node for
 -- merge full join on true.
 drop table if exists t6215;
@@ -588,7 +588,7 @@ drop table t6215;
 -- This tripped an assertion while deciding the locus for the joins.
 -- The code was failing to handle join between SingleQE and Hash correctly,
 -- when there were join order restricitions. (see
--- https://github.com/greenplum-db/gpdb/issues/6643
+-- https://github.com/GreengageDB/greengage/issues/6643
 --
 select a.f1, b.f1, t.thousand, t.tenthous from
   (select sum(f1) as f1 from int4_tbl i4b) b
@@ -1015,7 +1015,7 @@ select * from t1_lateral_limit as t1 cross join lateral
 -- The best solution may be to walk the query to and do some static analysis
 -- to find out which rel has to be gathered and materialized. But it is complicated
 -- to do so and this seems less efficient. I believe in future we should do big
--- refactor to make greenplum support lateral well so now, let's just make sure
+-- refactor to make greengage support lateral well so now, let's just make sure
 -- we will not panic.
 explain (costs off) select * from t1_lateral_limit as t1 cross join lateral
 ((select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1) union all select 1)s;
@@ -1077,7 +1077,7 @@ select * from t1_lateral_limit t1 cross join lateral
 (4 rows)
 
 -- The following case is from Github Issue
--- https://github.com/greenplum-db/gpdb/issues/8860
+-- https://github.com/GreengageDB/greengage/issues/8860
 -- It is the same issue as the above test suite.
 create table t_mylog_issue_8860 (myid int, log_date timestamptz );
 insert into  t_mylog_issue_8860 values (1,timestamptz '2000-01-02 03:04'),(1,timestamptz '2000-01-02 03:04'-'1 hour'::interval);
@@ -1116,7 +1116,7 @@ on true;
     1 | Sun Jan 02 02:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
 (2 rows)
 
--- Github Issue: https://github.com/greenplum-db/gpdb/issues/9733
+-- Github Issue: https://github.com/GreengageDB/greengage/issues/9733
 -- Previously in the function bring_to_outer_query and
 -- bring_to_singleQE it depends on the path->param_info field
 -- to determine if the path contains outerParams. This is not
@@ -1201,15 +1201,15 @@ cross join lateral
 reset enable_bitmapscan;
 -- Test targetlist contains placeholder var
 -- When creating a redistributed motion with hash keys,
--- Greenplum planner will invoke `cdbpullup_findEclassInTargetList`.
+-- Greengage planner will invoke `cdbpullup_findEclassInTargetList`.
 -- The following test case contains non-strict function `coalesce`
 -- in the subquery at nullable-side of outerjoin and thus will
 -- have PlaceHolderVar in targetlist. The case is to test if
 -- function `cdbpullup_findEclassInTargetList` handles PlaceHolderVar
 -- correct.
--- See github issue: https://github.com/greenplum-db/gpdb/issues/10315
+-- See github issue: https://github.com/GreengageDB/greengage/issues/10315
 create table t_issue_10315 ( id1 int, id2 int );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t_issue_10315 select i,i from generate_series(1, 2)i;
 insert into t_issue_10315 select i,null from generate_series(1, 2)i;
@@ -1245,12 +1245,12 @@ drop table t_issue_10315;
 -- and another side refers to a replicate table, we do not create index plan
 -- in the subplan though this is kind of aggressive (Defintely there exists room
 -- for optimization) but let's make sure the correctness of these cases at first.
--- https://github.com/greenplum-db/gpdb/issues/8648
+-- https://github.com/GreengageDB/greengage/issues/8648
 --
 set enable_seqscan = 0;
 create table rep_tbl (tablename text, explanation text) distributed replicated;
 create table dis_tbl (relname text, tablename text, explanation text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'relname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'relname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into rep_tbl values ('pg_class', 'contains all relations');
 create index on rep_tbl (tablename);
@@ -1358,10 +1358,10 @@ drop table dis_tbl;
 reset enable_seqscan;
 -- test for indexonly scan with dedup semi join
 create table t1_dedupsemi_indexonly(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2_dedupsemi_indexonly(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1_dedupsemi_indexonly select i,i from generate_series(1, 100)i;
 insert into t2_dedupsemi_indexonly select i,i from generate_series(1, 4)i;
@@ -1942,7 +1942,7 @@ drop table if exists repli_t2_pk;
 drop table if exists repli_t3_pk;
 drop table if exists repli_t4_pk;
 -- Test lateral join when subquery contains limit and where clause
--- Greenplum cannot pass params across motion so one need to prevent
+-- Greengage cannot pass params across motion so one need to prevent
 -- the bottom scan node from appending to its targetlist outer relation
 -- refs. Otherwise it may lead to segfault at the exectution stage.
 --start_ignore

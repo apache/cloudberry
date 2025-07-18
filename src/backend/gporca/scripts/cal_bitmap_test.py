@@ -31,7 +31,7 @@ import sys
 try:
     from gppylib.db import dbconn
 except ImportError, e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants
 # -----------------------------------------------------------------------------
@@ -352,7 +352,7 @@ def select_version(conn):
     rows = curs.fetchall()
     for row in rows:
         log_output(row[0])
-        glob_gpdb_major_version = int(re.sub(".*Greenplum Database ([0-9]*)\..*", "\\1", row[0]))
+        glob_gpdb_major_version = int(re.sub(".*Greengage Database ([0-9]*)\..*", "\\1", row[0]))
         log_output("GPDB major version is %d" % glob_gpdb_major_version)
 
     log_output("Backend pid:")

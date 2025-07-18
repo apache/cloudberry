@@ -1,6 +1,6 @@
 COMMAND NAME: gpstop
 
-Stops or restarts a Greenplum Database system.
+Stops or restarts a Greengage Database system.
 
 
 *****************************************************
@@ -31,13 +31,13 @@ DESCRIPTION
 *****************************************************
 
 The gpstop utility is used to stop the database servers that 
-comprise a Greenplum Database system. When you stop a Greenplum 
+comprise a Greengage Database system. When you stop a Greengage 
 Database system, you are actually stopping several postgres 
 database server processes at once (the master and all of the 
 segment instances). The gpstop utility handles the shutdown 
 of the individual instances. Each instance is shutdown in parallel. 
 
-By default, you are not allowed to shut down Greenplum Database 
+By default, you are not allowed to shut down Greengage Database 
 if there are any client connections to the database. Use 
 the -M fast option to roll back and terminate any connections 
 before shutting down. If there are any transactions in progress, 
@@ -95,7 +95,7 @@ OPTIONS
 
 -m
 
- Optional. Shuts down a Greenplum master instance that was 
+ Optional. Shuts down a Greengage master instance that was 
  started in maintenance mode.
 
 
@@ -143,7 +143,7 @@ OPTIONS
  shutdown in the specified number of seconds, gpstop displays 
  a message indicating that one or more segments are still in 
  the process of shutting down and that you cannot restart 
- Greenplum Database until the segment instance(s) are stopped. 
+ Greengage Database until the segment instance(s) are stopped. 
  This option is useful in situations where gpstop is executed 
  and there are very large transactions that need to rollback. 
  These large transactions can take over a minute to rollback 
@@ -154,7 +154,7 @@ OPTIONS
 
  This option reloads the pg_hba.conf files of the master and 
  segments and the runtime parameters of the postgresql.conf files 
- but does not shutdown the Greenplum Database array. Use this 
+ but does not shutdown the Greengage Database array. Use this 
  option to make new configuration settings active after editing 
  postgresql.conf or pg_hba.conf. Note that this only applies to 
  configuration parameters that are designated as runtime parameters.
@@ -186,12 +186,12 @@ OPTIONS
 EXAMPLES
 *****************************************************
 
-Stop a Greenplum Database system in smart mode:
+Stop a Greengage Database system in smart mode:
 
   gpstop
 
 
-Stop a Greenplum Database system in fast mode:
+Stop a Greengage Database system in fast mode:
 
   gpstop -M fast
 
@@ -214,7 +214,7 @@ other hosts up:
 
 Reload the postgresql.conf and pg_hba.conf files after 
 making runtime configuration parameter changes but do not 
-shutdown the Greenplum Database array:
+shutdown the Greengage Database array:
 
   gpstop -u
 

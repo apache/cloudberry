@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * autostats.h
- *	  header file for Greenplum auto-analyze functions
+ *	  header file for Greengage auto-analyze functions
  *
  *
  * Portions Copyright (c) 2005-2015, Greenplum inc

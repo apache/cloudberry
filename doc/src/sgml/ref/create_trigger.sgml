@@ -16,7 +16,7 @@ PostgreSQL documentation
 
  <refnamediv>
   <refname>CREATE TRIGGER</refname>
-  <refpurpose>define a new trigger (user-defined triggers are not fully supported in Greenplum Database)</refpurpose>
+  <refpurpose>define a new trigger (user-defined triggers are not fully supported in Greengage Database)</refpurpose>
  </refnamediv>
 
  <refsynopsisdiv>

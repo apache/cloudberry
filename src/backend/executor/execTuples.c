@@ -776,7 +776,7 @@ ExecFetchSlotMemTuple(TupleTableSlot *slot)
  *		virtual, but in any case we need a private copy for heap_insert
  *		to scribble on.
  *
- *		Greenplum: this function is quite different from upstream because
+ *		Greengage: this function is quite different from upstream because
  *		the TupleTableSlot, HeapTuple and Memory/Minimal tuple differ.
  * --------------------------------
  */

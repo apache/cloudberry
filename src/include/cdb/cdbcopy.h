@@ -3,7 +3,7 @@
  * cdbcopy.h
  *	 Definitions and API functions for cdbcopy.c
  *	 These are functions that are used by the backend
- *	 COPY command in Greenplum Database.
+ *	 COPY command in Greengage Database.
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.

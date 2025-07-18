@@ -14,7 +14,7 @@
 ALLOW_EXCEPTIONS;
 
 static char  VERSION[] =
-	"Greenplum Map/Reduce Driver 1.00b2";
+	"Greengage Map/Reduce Driver 1.00b2";
 
 static char *wordchars =
 	"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
@@ -498,7 +498,7 @@ void check_version(PGconn *conn)
 	PGresult *result;
 
 	result = PQexec(conn, "select (regexp_matches(version(), "
-					"E'\\\\(Greenplum Database ([^)]+)\\\\)'))[1]");
+					"E'\\\\(Greengage Database ([^)]+)\\\\)'))[1]");
 
 	if (PQresultStatus(result) == PGRES_TUPLES_OK && PQntuples(result) == 1)
 	{
@@ -526,7 +526,7 @@ void check_version(PGconn *conn)
 	else
 	{
 		fprintf(stderr, "%s", PQerrorMessage(conn));
-		XRAISE(MAPRED_SQL_ERROR, "Unable to determine Greenplum version\n");
+		XRAISE(MAPRED_SQL_ERROR, "Unable to determine Greengage version\n");
 	}
 
 	PQclear(result);

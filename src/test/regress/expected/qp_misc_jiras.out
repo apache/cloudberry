@@ -4,7 +4,7 @@ set optimizer_print_missing_stats = off;
 create schema qp_misc_jiras;
 -- Test that "INSERT INTO SELECT * FROM <external table>" works.
 create table qp_misc_jiras.tbl3301_foo (c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create external web table qp_misc_jiras.tbl3301_bar(like qp_misc_jiras.tbl3301_foo) execute 'echo 1' on master format 'csv';
 insert into qp_misc_jiras.tbl3301_foo select * from qp_misc_jiras.tbl3301_bar;
@@ -16,7 +16,7 @@ select * from qp_misc_jiras.tbl3301_foo;
 
 -- Test that altering the datatype of an indexed column works
 create table qp_misc_jiras.tbl1318(dummy integer, aa text not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dummy' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dummy' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index tbl1318_daa on qp_misc_jiras.tbl1318(dummy,aa);
 alter table qp_misc_jiras.tbl1318 alter column aa type integer using bit_length(aa);
@@ -32,7 +32,7 @@ drop table qp_misc_jiras.tbl1318;
 -- Test for the upstream bug with combocids:
 -- https://www.postgresql.org/message-id/48B87164.4050802%40soe.ucsc.edu
 CREATE TABLE qp_misc_jiras.tbl3403_tab(a INT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 begin;
 INSERT INTO qp_misc_jiras.tbl3403_tab VALUES(1);
@@ -70,7 +70,7 @@ SELECT a FROM qp_misc_jiras.tbl3403_tab ORDER BY a;
 drop table qp_misc_jiras.tbl3403_tab;
 -- Check that CTAS chooses a sensible distribution key.
 create table qp_misc_jiras.tbl2788 as select * from generate_series(1, 1000);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d qp_misc_jiras.tbl2788;
      Table "qp_misc_jiras.tbl2788"
@@ -122,7 +122,7 @@ ORDER BY 1,2;
 
 drop view qp_misc_jiras.tbl_2517_view;
 create table qp_misc_jiras.tbl3511 (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl3511 values (1),(2),(3),(4),(5);
 select * FROM qp_misc_jiras.tbl3511 where i = (select distinct max(i) from qp_misc_jiras.tbl3511);
@@ -393,7 +393,7 @@ CREATE TABLE qp_misc_jiras.satelliteupdatelog (
     idadvertiser integer,
     CONSTRAINT satelliteupdatelog_id_xor CHECK ((((((idrep IS NOT NULL) AND (idaffiliate IS NULL)) AND (idadvertiser IS NULL)) OR (((idrep IS NULL) AND (idaffiliate IS NOT NULL)) AND (idadvertiser IS NULL))) OR (((idrep IS NULL) AND (idaffiliate IS NULL)) AND (idadvertiser IS NOT NULL))))
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE SEQUENCE qp_misc_jiras.satelliteupdatelog_id_seq
     INCREMENT BY 1
@@ -411,11 +411,11 @@ CREATE TABLE qp_misc_jiras.satelliteupdatelogkey (
     columnname character varying NOT NULL,
     value character varying
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'idsatelliteupdatelog' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'idsatelliteupdatelog' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ONLY qp_misc_jiras.satelliteupdatelogkey ADD CONSTRAINT satelliteupdatelogkey_pk PRIMARY KEY (idsatelliteupdatelog, columnname);
 ALTER TABLE ONLY qp_misc_jiras.satelliteupdatelogkey ADD CONSTRAINT satelliteupdatelogkey_idsatelliteupdatelog_fk FOREIGN KEY (idsatelliteupdatelog) REFERENCES qp_misc_jiras.satelliteupdatelog(id);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE TABLE qp_misc_jiras.satellite (
     id integer NOT NULL,
     name character varying NOT NULL,
@@ -424,7 +424,7 @@ CREATE TABLE qp_misc_jiras.satellite (
     enabled boolean NOT NULL,
     isnewsatellite boolean NOT NULL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE SEQUENCE qp_misc_jiras.satellite_id_seq
     INCREMENT BY 1
@@ -440,14 +440,14 @@ CREATE TABLE qp_misc_jiras.satelliteupdatelogserver (
     completed timestamp without time zone,
     failurereason character varying
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'idsatelliteupdatelog' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'idsatelliteupdatelog' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ONLY qp_misc_jiras.satelliteupdatelogserver ADD CONSTRAINT satelliteupdatelogserver_pk PRIMARY KEY (idsatelliteupdatelog, idsatellite); 
 CREATE INDEX fki_satelliteupdatelogserver_idsatelliteupdatelog_fk ON qp_misc_jiras.satelliteupdatelogserver USING btree (idsatelliteupdatelog);
 ALTER TABLE ONLY qp_misc_jiras.satelliteupdatelogserver ADD CONSTRAINT satelliteupdatelogserver_idsatellite_fk FOREIGN KEY (idsatellite) REFERENCES qp_misc_jiras.satellite(id);
 ERROR:  there is no unique constraint matching given keys for referenced table "satellite"
 ALTER TABLE ONLY qp_misc_jiras.satelliteupdatelogserver ADD CONSTRAINT satelliteupdatelogserver_idsatelliteupdatelog_fk FOREIGN KEY (idsatelliteupdatelog) REFERENCES qp_misc_jiras.satelliteupdatelog(id);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 SELECT /* gptest */ s.id, s.action, s.type, sk.columnName AS "columnName", sk.value
 FROM qp_misc_jiras.satelliteUpdateLog AS s
 LEFT JOIN qp_misc_jiras.satelliteUpdateLogKey AS sk ON s.id = sk.idSatelliteUpdateLog
@@ -470,14 +470,14 @@ drop table qp_misc_jiras.satelliteupdatelogkey cascade;
 drop table qp_misc_jiras.satellite cascade;
 drop table qp_misc_jiras.satelliteupdatelogserver cascade;
 create table qp_misc_jiras.tbl3183_t1 (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl3183_t1 values (1), (1);
 select * into qp_misc_jiras.tbl3183_t2 from qp_misc_jiras.tbl3183_t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * into qp_misc_jiras.tbl3183_t3 from qp_misc_jiras.tbl3183_t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select i from (select i from qp_misc_jiras.tbl3183_t2 union all select i from qp_misc_jiras.tbl3183_t3) tmpt where i in (select i from qp_misc_jiras.tbl3183_t2 union all select i from qp_misc_jiras.tbl3183_t3);
  i 
@@ -499,7 +499,7 @@ partition by range(b)
         partition p3 start('2009-01-01'),
 	default partition def_part
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "tbl5028_part_test_1_prt_def_part" for table "tbl5028_part_test"
 NOTICE:  CREATE TABLE will create partition "tbl5028_part_test_1_prt_p1" for table "tbl5028_part_test"
@@ -629,7 +629,7 @@ subpartition by range (c_acctbal) subpartition template (start('-999.99') end('1
 (
 partition p1 start('0') end('25') every (12)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_custkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "tbl5151_customer_1_prt_p1_1" for table "tbl5151_customer"
 NOTICE:  CREATE TABLE will create partition "tbl5151_customer_1_prt_p1_1_2_prt_1" for table "tbl5151_customer_1_prt_p1_1"
@@ -667,7 +667,7 @@ alter table qp_misc_jiras.tbl2945_test alter a type bigint;
 ERROR:  cannot alter type of a column used in a distribution policy
 drop table qp_misc_jiras.tbl2945_test;
 create table qp_misc_jiras.tbl5219_test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl5219_test select i, i%10 from generate_series(0, 99) i;
 select case when 1=2 then rank() over(partition by j order by i) end from qp_misc_jiras.tbl5219_test;
@@ -818,7 +818,7 @@ select * from qp_misc_jiras.tbl3286_ext_hostname,gp_configuration;
 -- end_ignore
 drop external web table qp_misc_jiras.tbl3286_ext_hostname;
 create table qp_misc_jiras.tbl5305_test(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl5305_test select i,i+1 from generate_series(1,1000)i;
 begin;
@@ -1040,7 +1040,7 @@ fetch 1 from c; -- should give one row
 (1 row)
 
 fetch backward 100 from c; -- should error out. we currently don't support this
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 rollback;
 drop table qp_misc_jiras.tbl5305_test;
 create external web table qp_misc_jiras.tbl_3739_foo (a text) execute E'' ON SEGMENT 0 FORMAT 'CSV';
@@ -1263,7 +1263,7 @@ ERROR:  GROUPING SETS / ROLLUP / CUBE columns ambiguous
 drop table qp_misc_jiras.tbl4896_sale;
 drop table qp_misc_jiras.tbl4896_customer;
 create table qp_misc_jiras.tbl4703_test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl4703_test select i, i%10 from generate_series(0, 9999) i;
 create index test_j on qp_misc_jiras.tbl4703_test(j);
@@ -1278,7 +1278,7 @@ select count(*) from qp_misc_jiras.tbl4703_test where j = 5 or j = 10; --shouldn
 
 drop table qp_misc_jiras.tbl4703_test;
 create table qp_misc_jiras.tbl_694_1(c1 int, b1 box);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from qp_misc_jiras.tbl_694_1;
  c1 | b1 
@@ -1367,7 +1367,7 @@ select x.b from ( ( select 'a' as a ) xx join (select 'a' as b) yy on a = b ) x 
 (1 row)
 
 create table qp_misc_jiras.tbl6027_test (i int, j bigint, k int, l int, m int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl6027_test select i, i%100, i%123, i%234, i%345 from generate_series(1, 500) i;
 select j, sum(k), row_number() over (partition by j order by sum(k)) from qp_misc_jiras.tbl6027_test group by j order by j limit 10; -- order 1
@@ -1439,7 +1439,7 @@ nrdps_adr_sgng character(30),
 nrdps_adr_twmd character(30),
 udrtk_gu_arecd character(10)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cls_yymm' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cls_yymm' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE qp_misc_jiras.m_ccr_cvr_nds_t99
 (
@@ -1464,7 +1464,7 @@ nds_mgb character(3),
 nds_lgb character(2)
 )
 WITH (OIDS=FALSE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cls_yymm' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cls_yymm' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE qp_misc_jiras.ins_cr_nds_dt
 (
@@ -1497,7 +1497,7 @@ mdf_dthms timestamp(0) without time zone NOT NULL,
 load_dthms timestamp(0) without time zone 
 )
 WITH (OIDS=FALSE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'plyno' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'plyno' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE qp_misc_jiras.ins_cr_nds_mstr
 (
@@ -1543,7 +1543,7 @@ frc_nds_cas_flgcd character(10),
 load_dthms timestamp(0) without time zone 
 )
 WITH (OIDS=FALSE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'plyno' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'plyno' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT CLS_YYMM
 ,PLYNO
@@ -1638,7 +1638,7 @@ WHERE T.SQ = 1
 drop table qp_misc_jiras.ins_cr_nds_dt, qp_misc_jiras.ins_cr_nds_mstr, qp_misc_jiras.m_ccr_cvr_nds_t99, qp_misc_jiras.m_ccr_mthy_cr_nds_t00;
 set gp_select_invisible=false;
 create table qp_misc_jiras.tbl6448 (x "char");
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl6448 values ('a');
 select x from qp_misc_jiras.tbl6448;
@@ -1712,7 +1712,7 @@ WHERE c.relname ~ '^(qp_misc_jiras_foo)$';
 
 -- previously supported query
 create table qp_misc_jiras_bar (t int, d int, g int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras_bar values(1,2,3);
 insert into qp_misc_jiras_bar values(4,5,6);
@@ -1726,17 +1726,17 @@ select a.t from qp_misc_jiras_bar a where d in(select d from qp_misc_jiras_bar b
 -- Various AO/CO util functions
 -- ctas from one storage type to another
 create table qp_misc_jiras.tbl7126_ao (a int, b text, c date) with (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl7126_ao select i, 'abcd'||i, '1981-10-02' from generate_series(1,100000)i;
 create table qp_misc_jiras.tbl7126_ao_zlib3 with (appendonly=true, compresstype = zlib, compresslevel=3 ) as select * from qp_misc_jiras.tbl7126_ao;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table qp_misc_jiras.tbl7126_co with (appendonly=true,orientation=column) as select * from qp_misc_jiras.tbl7126_ao_zlib3;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table qp_misc_jiras.tbl7126_co_zlib3  with (appendonly=true,orientation=column, compresstype=zlib, compresslevel=3) as select * from qp_misc_jiras.tbl7126_co;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- selects
 select count(*) from qp_misc_jiras.tbl7126_ao;
@@ -1894,11 +1894,11 @@ contentaccesslabels_date timestamp without time zone,
 event_description varchar,
 visitor_state varchar,
 contentaccess_applicationid varchar) with (appendonly=true); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'visitor_timestamp' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'visitor_timestamp' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy pre_visitor_ca_event_ao from STDIN with delimiter '~' null '';
 create table pre_visitor_ca_event_cao with (appendonly=true,orientation=column) as select * from pre_visitor_ca_event_ao;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'visitor_timestamp' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'visitor_timestamp' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select count(*) from pre_visitor_ca_event_ao;
  count 
@@ -1915,7 +1915,7 @@ select count(*) from pre_visitor_ca_event_cao;
 drop table pre_visitor_ca_event_ao;
 drop table pre_visitor_ca_event_cao;
 create table qp_misc_jiras.tbl6701_test(i int[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl6701_test values('{1,2,3}');
 select i from qp_misc_jiras.tbl6701_test;
@@ -1938,7 +1938,7 @@ select name,category from pg_settings where name like 'gp_enable_predicate_propa
 (1 row)
 
 create table qp_misc_jiras.tbl7161_co(a int, b varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl7161_co (a, b) select i, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' || i from generate_series(0, 0) i;
 select count(*) from qp_misc_jiras.tbl7161_co;
@@ -2096,7 +2096,7 @@ select count(*) from qp_misc_jiras.tbl7161_co;
 
 drop table qp_misc_jiras.tbl7161_co;
 select i, j into qp_misc_jiras.tbl6535_table from generate_series(1, 200) i, generate_series(1, 201) j;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl6535_table select * from qp_misc_jiras.tbl6535_table ;
 insert into qp_misc_jiras.tbl6535_table select * from qp_misc_jiras.tbl6535_table ;
@@ -2119,7 +2119,7 @@ select count(distinct i), count(distinct j) from qp_misc_jiras.tbl6535_table;
 
 drop table qp_misc_jiras.tbl6535_table;
 create table statement_timeout_test(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into statement_timeout_test select i,i+1 from generate_series(1,10000)i;
 prepare prestmt as select * from statement_timeout_test s1, statement_timeout_test s2, statement_timeout_test s3, statement_timeout_test s4, statement_timeout_test s5;
@@ -2131,13 +2131,13 @@ reset statement_timeout;
 set gp_autostats_mode=none;
 -- Test for an old bug with ANALYZE (analyze code has been rewritten since).
 create table qp_misc_jiras.tbl_6934(x inet);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl_6934 select (i%200 || '.' || i%11 || '.' || i%11 || '.' || i%100)::inet from generate_series(1,40000) i;
 analyze qp_misc_jiras.tbl_6934; 
 drop table qp_misc_jiras.tbl_6934;
 create table qp_misc_jiras.tbl7286_test (i int, d date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl7286_test select i%10, '2009/01/01'::date + (i || ' days')::interval from generate_series(0, 99999) i;
 set gp_enable_agg_distinct=off;
@@ -2152,7 +2152,7 @@ select count(distinct d) from qp_misc_jiras.tbl7286_test;
 
 drop table qp_misc_jiras.tbl7286_test;
 create table qp_misc_jiras.tbl7381_test (i int, t text, d date, ti time with time zone);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table qp_misc_jiras.tbl7381_test alter column t set storage external;
 insert into qp_misc_jiras.tbl7381_test select i, '0123456789' || i, current_date, current_time from generate_series(0, 999) i;
@@ -2166,7 +2166,7 @@ select max(length(t)) from qp_misc_jiras.tbl7381_test;
 (1 row)
 
 create table qp_misc_jiras.tbl7381_test1 (i int, t text, d date, ti time with time zone);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table qp_misc_jiras.tbl7381_test1 alter column t set storage extended;
 insert into qp_misc_jiras.tbl7381_test1 select i,t,current_date, current_time from qp_misc_jiras.tbl7381_test;
@@ -2180,10 +2180,10 @@ drop table qp_misc_jiras.tbl7381_test;
 drop table qp_misc_jiras.tbl7381_test1;
 set gp_autostats_mode=none;
 create table qp_misc_jiras.tbl7404_t1(x text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table qp_misc_jiras.tbl7404_t2(x text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl7404_t1 select ('foo'|| i::text) from generate_series(1,2) i;
 insert into qp_misc_jiras.tbl7404_t2 select x from qp_misc_jiras.tbl7404_t1;
@@ -2346,7 +2346,7 @@ SELECT * FROM qp_misc_jiras.one_of_every_data_type ORDER BY id,serial_col;
 -- Clean up.
 DROP TABLE IF EXISTS qp_misc_jiras.one_of_every_data_type; 
 create table qp_misc_jiras.tbl7553_test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl7553_test values(1,2);
 explain select i as a, i as b from qp_misc_jiras.tbl7553_test group by grouping sets( (a, b), (a));
@@ -2417,7 +2417,7 @@ create table qp_misc_jiras.tbl7268_foo (a varchar(15), b varchar(15)) distribute
 Distributed by: (b)
 
 create table qp_misc_jiras.tbl7268_bar as select * from qp_misc_jiras.tbl7268_foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d qp_misc_jiras.tbl7268_bar; 
      Table "qp_misc_jiras.tbl7268_bar"
@@ -2439,7 +2439,7 @@ Table "qp_misc_jiras.tbl7268_foo"
 Distributed by: (b)
 
 create table qp_misc_jiras.tbl7268_bar as select * from qp_misc_jiras.tbl7268_foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d qp_misc_jiras.tbl7268_bar; 
 Table "qp_misc_jiras.tbl7268_bar"
@@ -2461,7 +2461,7 @@ create table qp_misc_jiras.tbl7268_foo (a varchar(15), b int) distributed by (b)
 Distributed by: (b)
 
 create table qp_misc_jiras.tbl7268_bar as select * from qp_misc_jiras.tbl7268_foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d qp_misc_jiras.tbl7268_bar; 
      Table "qp_misc_jiras.tbl7268_bar"
@@ -2483,7 +2483,7 @@ create table qp_misc_jiras.tbl7268_foo (a int, b varchar(15)) distributed by (b)
 Distributed by: (b)
 
 create table qp_misc_jiras.tbl7268_bar as select * from qp_misc_jiras.tbl7268_foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d qp_misc_jiras.tbl7268_bar; 
      Table "qp_misc_jiras.tbl7268_bar"
@@ -2509,16 +2509,16 @@ drop table if exists qp_misc_jiras.tbl6775_bar;
 --
 set optimizer_segments=3;
 create table qp_misc_jiras.sample as select generate_series(1,1000);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table qp_misc_jiras.fim1 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.fim1 values(100);
 insert into qp_misc_jiras.fim1 values(200);
 insert into qp_misc_jiras.fim1 values(300);
 create table qp_misc_jiras.pg_foo(x int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.pg_foo values(111);
 insert into qp_misc_jiras.pg_foo values(222);
@@ -2534,7 +2534,7 @@ $$
 language plpgsql;
 drop table if exists qp_misc_jiras.bar;
 create table qp_misc_jiras.bar(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function func2(int) returns int as $$
 declare
@@ -2571,7 +2571,7 @@ select gp_segment_id, a, func3(a) from qp_misc_jiras.fim1; -- we allow this
 --
 drop table if exists qp_misc_jiras.fim1;
 create table qp_misc_jiras.fim1 (a int, chldrn_id varchar(50)) ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.fim1 values (1,'1~9');
 insert into qp_misc_jiras.fim1 values (2,'2~9');
@@ -2750,7 +2750,7 @@ set statement_timeout=0;
 set gp_interconnect_setup_timeout=7200;
 -- end_ignore
 CREATE TABLE qp_misc_jiras.inet_ip_pairs (saddr inet, daddr inet, instance_count int8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'saddr' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'saddr' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM pg_indexes WHERE tablename='inet_ip_pairs';
  schemaname | tablename | indexname | tablespace | indexdef 
@@ -2786,10 +2786,10 @@ set gp_autostats_mode=none;
 create table qp_misc_jiras.tbl_7498_t1(x int, y text) distributed by (x);
 insert into qp_misc_jiras.tbl_7498_t1 select x, 'foo' from generate_series(1,70000) x;
 create table qp_misc_jiras.tbl_7498_t2 as select * from qp_misc_jiras.tbl_7498_t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table qp_misc_jiras.tbl_7498_t3 as select * from qp_misc_jiras.tbl_7498_t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table qp_misc_jiras.tbl_7498_t2;
 drop table if exists qp_misc_jiras.tbl_7498_t1, qp_misc_jiras.tbl_7498_t2, qp_misc_jiras.tbl_7498_t3 cascade;
@@ -2797,10 +2797,10 @@ NOTICE:  table "tbl_7498_t2" does not exist, skipping
 create table qp_misc_jiras.tbl_7498_t1(x int, y text) distributed by (x);
 insert into qp_misc_jiras.tbl_7498_t1 select x, 'foo' from generate_series(1,70000) x;
 create table qp_misc_jiras.tbl_7498_t2 as select * from qp_misc_jiras.tbl_7498_t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table qp_misc_jiras.tbl_7498_t3 as select * from qp_misc_jiras.tbl_7498_t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- clean up all the test tables
 -- start_ignore
@@ -2874,7 +2874,7 @@ CREATE TABLE mustan.test(
 	id int,
 	d date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- end_ignore
 	
@@ -2988,7 +2988,7 @@ select * from mustan.f7( '20080102' );--
 
 -- start_ignore
 create table qp_misc_jiras.tbl5994_test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- end_ignore
 insert into qp_misc_jiras.tbl5994_test select i, i%1000 from generate_series(1, 100000) i;
@@ -3126,7 +3126,7 @@ select reltablespace from pg_class where oid = (select reltoastrelid from pg_cla
 drop table qp_misc_jiras.tbl_8205;
 -- create sample table
 create table qp_misc_jiras.tbl2976(x int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.tbl2976 select generate_series(1,1000);
 -- test cases
@@ -3152,7 +3152,7 @@ PARTITION BY RANGE(b)
 (START (1::double precision) END (100::double precision)
 EVERY ((20)::double precision),
 PARTITION p1 START (100::double precision) END (150::double precision));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "tbl8258_1_prt_1" for table "tbl8258"
 NOTICE:  CREATE TABLE will create partition "tbl8258_1_prt_2" for table "tbl8258"
@@ -3439,7 +3439,7 @@ DROP AGGREGATE "median"(numeric);
 DROP AGGREGATE median2(numeric);
 -- end_ignore
 create table qp_misc_jiras.tbl7285_axg (id int, time timestamp) partition by range (time) (start ('2009-01-01 00:00:00'::timestamp without time zone) end ('2009-01-03 00:00:00'::timestamp without time zone) every ('1 day'::interval));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "tbl7285_axg_1_prt_1" for table "tbl7285_axg"
 NOTICE:  CREATE TABLE will create partition "tbl7285_axg_1_prt_2" for table "tbl7285_axg"
@@ -3479,12 +3479,12 @@ select * from pg_catalog.get_ao_distribution('qp_misc_jiras.tbl9706aoc'::regclas
 (2 rows)
 
 create table qp_misc_jiras.bmap2 (a varchar, b varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.bmap2 values ('1', NULL);
 create index bmap2_index on qp_misc_jiras.bmap2 using bitmap (a, b);
 create table qp_misc_jiras.badbitmapindex (x int, y int, z int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.badbitmapindex values (0,0,0);
 insert into qp_misc_jiras.badbitmapindex values (0,0,NULL);
@@ -3719,7 +3719,7 @@ set enable_seqscan=off;
 -- Heap table. TidScan should be used.
 --
 create table qp_misc_jiras.test_heap (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.test_heap values (0, 0);
 explain select  * from qp_misc_jiras.test_heap where ctid='(0,1)' and gp_segment_id >= 0;
@@ -3743,7 +3743,7 @@ select  * from qp_misc_jiras.test_heap where ctid='(0,1)' and gp_segment_id >= 0
 -- AO table. TidScan should not be used.
 --
 create table qp_misc_jiras.test_ao (i int, j int) with (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.test_ao values (0, 0);
 explain select  * from qp_misc_jiras.test_ao where ctid='(33554432,2)' and gp_segment_id >= 0;
@@ -3766,7 +3766,7 @@ select  * from qp_misc_jiras.test_ao where ctid='(33554432,2)' and gp_segment_id
 -- CO table. TidScan should not be used.
 --
 create table qp_misc_jiras.test_co (i int, j int) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.test_co values (0, 0);
 explain select  * from qp_misc_jiras.test_co where ctid='(33554432,2)' and gp_segment_id >= 0;
@@ -3814,19 +3814,19 @@ create schema schema1;
 create schema schema2;
 create schema schema3;
 create table schema1.foo1 (i int) partition by range(i)  (start(1) end(2) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "foo1_1_prt_1" for table "foo1"
 create table schema2.foo2 (i int) partition by range(i)  (start(1) end(2) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "foo2_1_prt_1" for table "foo2"
 create table schema2.foo3 (i int) partition by range(i)  (start(1) end(2) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "foo3_1_prt_1" for table "foo3"
 create table schema3.foo4 (i int) partition by range(i)  (start(1) end(2) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "foo4_1_prt_1" for table "foo4"
 set statement_mem='1900MB';
@@ -3899,11 +3899,11 @@ NOTICE:  drop cascades to table schema3.foo4
 	output should be fine.
 	*/
 create table qp_misc_jiras.r(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.r select generate_series(1,1000), generate_series(1,1000);
 create table qp_misc_jiras.s(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into qp_misc_jiras.s select generate_series(1,1000), generate_series(1,1000);
 analyze qp_misc_jiras.r;
@@ -4036,7 +4036,7 @@ select to_timestamp('15:12:02.020.001230', 'HH24:MI:SS.MS.US');
 
 reset TIMEZONE;
 create table qp_misc_jiras.tbl13409_test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --Hangs when given an invalid value for reorganize
 alter table qp_misc_jiras.tbl13409_test set with (reorganize=foo) distributed by (j);
@@ -4549,7 +4549,7 @@ reset gp_enable_relsize_collection;
 -- orca should estimate more than 1 row
 -- even for real small frequency
 create table epsilon_test (b smallint);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set allow_system_table_mods=on;
 UPDATE pg_class

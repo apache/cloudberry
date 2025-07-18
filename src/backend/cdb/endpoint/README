@@ -1,6 +1,6 @@
 src/backend/cdb/endpoint/README
 
-With the size of Greenplum cluster increasing, the performance bottleneck on
+With the size of Greengage cluster increasing, the performance bottleneck on
 the coordinator node becomes more and more obvious.
 
 The parallel retrieve cursor feature is designed to reduce the heavy burdens of
@@ -20,7 +20,7 @@ Parallel retrieve cursor has similar declaration and syntax as normal cursor
 does. However, some cursor operations are not supported in parallel retrieve
 cursor(e.g. MOVE).
 
-#NOTE: Orca doesn't support PARALLEL RETRIEVE CURSOR for now. Greenplum would
+#NOTE: Orca doesn't support PARALLEL RETRIEVE CURSOR for now. Greengage would
 fall back to postgres optimizer automatically.
 
 Endpoint

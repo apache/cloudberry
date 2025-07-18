@@ -1039,7 +1039,7 @@ RecycleGang(Gang *gp, bool forceDestroy)
 	 * Thus, we hold off interrupts until the gang is fully cleaned here to prevent
 	 * throwing an ERROR here.
 	 *
-	 * details See github issue: https://github.com/greenplum-db/gpdb/issues/13393
+	 * details See github issue: https://github.com/GreengageDB/greengage/issues/13393
 	 */
 	HOLD_INTERRUPTS();
 	/*

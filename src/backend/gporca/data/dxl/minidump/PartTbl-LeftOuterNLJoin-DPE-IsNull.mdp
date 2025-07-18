@@ -8,7 +8,7 @@ select disable_xform('CXformLeftOuterJoin2HashJoin');
 
 select * from t2 left outer join t1 on t1.b = t2.d where t1.b is null; 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -20,7 +20,7 @@ INSERT INTO foo2 VALUES
   (2, 22),
   (1, 111);
 
--- In Greenplum we do not support functions which call SQL from the segments
+-- In Greengage we do not support functions which call SQL from the segments
 -- for this reason we have rewritten this test to use plpgsql functions rather
 -- than SQL language functions.
 set optimizer_segments = 3;
@@ -356,7 +356,7 @@ DROP TABLE foo;
 
 -- Rescan tests --
 --   see rangefuncs.sql
---   Removed in greenplum, can't execute sql on segments
+--   Removed in greengage, can't execute sql on segments
 
 --
 -- Test cases involving OUT parameters

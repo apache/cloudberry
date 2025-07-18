@@ -7,7 +7,7 @@ CREATE TEMP TABLE ColumnMapping (dropme int, id int NOT NULL) DISTRIBUTED BY (id
 ALTER TABLE ColumnMapping DROP COLUMN dropme;
 EXPLAIN INSERT INTO ColumnMapping VALUES (NULL);
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:OptimizerConfig>
     <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>
     <dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.010000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/>

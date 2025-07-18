@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
 <dxl:Comment><![CDATA[
           This mdp is testing, replicate as derived distribution when we have replicated
           inner and universal replicated as outer. Due to this Motion Gather node is

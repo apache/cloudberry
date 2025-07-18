@@ -1,7 +1,7 @@
 import subprocess
 import os
 
-INSTALL_DIR="/usr/local/greenplum-db-devel"
+INSTALL_DIR="/usr/local/greengage-db-devel"
 
 def fail_on_error(status):
     import sys
@@ -38,7 +38,7 @@ class GpBuild:
         if no_mirrors:
             NO_MIRROR_STRING="NUM_PRIMARY_MIRROR_PAIRS=1 WITH_MIRRORS=false"
         return subprocess.call([
-            "runuser gpadmin -c \"source {0}/greenplum_path.sh \
+            "runuser gpadmin -c \"source {0}/greengage_path.sh \
             && {1} make {2} create-demo-cluster DEFAULT_QD_MAX_CONNECT=150\"".format(install_dir, self.source_gcc_env_cmd, NO_MIRROR_STRING)],
             cwd="gpdb_src/gpAux/gpdemo", shell=True)
 
@@ -57,9 +57,9 @@ class GpBuild:
 
         source_env_cmd = ''
         if dbexists:
-            source_env_cmd='source {0}/greenplum_path.sh && source ~/.bash_profile && source gpdb_src/gpAux/gpdemo/gpdemo-env.sh'.format(INSTALL_DIR)
+            source_env_cmd='source {0}/greengage_path.sh && source ~/.bash_profile && source gpdb_src/gpAux/gpdemo/gpdemo-env.sh'.format(INSTALL_DIR)
         else:
-            source_env_cmd = "source {0}/greenplum_path.sh && source gpdb_src/gpAux/gpdemo/gpdemo-env.sh".format(INSTALL_DIR)
+            source_env_cmd = "source {0}/greengage_path.sh && source gpdb_src/gpAux/gpdemo/gpdemo-env.sh".format(INSTALL_DIR)
             status = self.create_demo_cluster(INSTALL_DIR, True)
             fail_on_error(status)
             status = self._run_gpdb_command("createdb", source_env_cmd=source_env_cmd)

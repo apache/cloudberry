@@ -813,7 +813,7 @@ flatten_join_alias_vars(PlannerInfo *root, Node *node)
 	 * parse tree's rtable using list_nth. When the rtable is huge,
 	 * performance is poor. Here we cache the rtable list into array
 	 * to achieve random access to speed up a lot when rtable is huge.
-	 * See Github issue https://github.com/greenplum-db/gpdb/issues/11379
+	 * See Github issue https://github.com/GreengageDB/greengage/issues/11379
 	 * for details.
 	 */
 	context.root_parse_rtable_arrray = rtable_to_array(root->parse->rtable);

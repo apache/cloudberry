@@ -62,7 +62,7 @@ ifdef DEPENDENT_RPMS
 		cp $${dep_rpm} gppkg/deps; \
 	done
 endif
-	source $(INSTLOC)/greenplum_path.sh && gppkg --build gppkg 
+	source $(INSTLOC)/greengage_path.sh && gppkg --build gppkg 
 	rm -rf gppkg
 
 clean:
@@ -74,6 +74,6 @@ ifdef EXTRA_CLEAN
 endif
 
 install: $(TARGET_GPPKG)
-	source $(INSTLOC)/greenplum_path.sh && gppkg -i $(TARGET_GPPKG)
+	source $(INSTLOC)/greengage_path.sh && gppkg -i $(TARGET_GPPKG)
 
 .PHONY: install clean

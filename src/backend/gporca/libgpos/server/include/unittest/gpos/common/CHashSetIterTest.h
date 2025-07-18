@@ -1,4 +1,4 @@
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 Pivotal Software, Inc
 
 #ifndef GPOS_CHashSetIterTest_H

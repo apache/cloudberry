@@ -9,7 +9,7 @@ analyze t2;
 analyze t3;
 explain analyze insert into t1 select t2.a,t3.b from t2, t3 where t2.a = t3.a;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

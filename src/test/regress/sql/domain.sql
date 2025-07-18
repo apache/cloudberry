@@ -589,7 +589,7 @@ drop domain testdomain1;
 
 --
 -- Create Domain will dispatch collation
--- See github issue: https://github.com/greenplum-db/gpdb/issues/12015
+-- See github issue: https://github.com/GreengageDB/greengage/issues/12015
 --
 
 create domain testdomain_issue_12015 as text collate "C";
@@ -610,7 +610,7 @@ from
 -- ORCA shouldn't fail for data corruption while translating query to DXL
 -- for a constant domain value of the following text related types:
 -- char, bpchar, name.
--- github issue: https://github.com/greenplum-db/gpdb/issues/14155
+-- github issue: https://github.com/GreengageDB/greengage/issues/14155
 --
 
 create temp table test_table_14155(txtime timestamptz default now(), user_role text);

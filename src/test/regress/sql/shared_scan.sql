@@ -99,7 +99,7 @@ $$;
 -- This should only ERROR and should not SIGSEGV
 SELECT col_mismatch_func2();
 
--- https://github.com/greenplum-db/gpdb/issues/12701
+-- https://github.com/GreengageDB/greengage/issues/12701
 -- Disable cte sharing in subquery
 drop table if exists pk_list;
 create table pk_list (id int, schema_name varchar, table_name varchar) distributed by (id);

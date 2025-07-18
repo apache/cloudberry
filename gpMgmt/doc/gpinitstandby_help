@@ -1,6 +1,6 @@
 COMMAND NAME: gpinitstandby
 
-Adds and/or initializes a standby master host for a Greenplum Database system.
+Adds and/or initializes a standby master host for a Greengage Database system.
 
 
 *****************************************************
@@ -19,28 +19,28 @@ DESCRIPTION
 *****************************************************
 
 The gpinitstandby utility adds a backup, standby master host to your 
-Greenplum Database system. If your system has an existing standby master 
+Greengage Database system. If your system has an existing standby master 
 host configured, use the -r option to remove it before adding the new 
 standby master host. 
 
-Before running this utility, make sure that the Greenplum Database 
+Before running this utility, make sure that the Greengage Database 
 software is installed on the standby master host and that you have 
 exchanged SSH keys between the hosts. It is recommended that the master 
 port is set to the same port number on the master host and the backup 
 master host. 
 
-See the Greenplum Database Installation Guide for instructions. This 
+See the Greengage Database Installation Guide for instructions. This 
 utility should be run on the currently active primary master host. 
 
 The utility performs the following steps: 
 
-* Updates the Greenplum Database system catalog to remove the existing 
+* Updates the Greengage Database system catalog to remove the existing 
   standby master host information (if the -r option is supplied) 
 
-* Updates the Greenplum Database system catalog to add the new standby 
+* Updates the Greengage Database system catalog to add the new standby 
   master host information 
 
-* Edits the pg_hba.conf file of the Greenplum Database master to allow 
+* Edits the pg_hba.conf file of the Greengage Database master to allow 
   access from the newly added standby master. 
 
 * Sets up the standby master instance on the alternate master host 
@@ -59,7 +59,7 @@ standby master, the replicated logs are used to reconstruct the state of
 the master host at the time of the last successfully committed 
 transaction. 
 
-The activated standby master effectively becomes the Greenplum Database 
+The activated standby master effectively becomes the Greengage Database 
 master, accepting client connections on the master port and performing 
 normal master operations such as SQL command processing and workload 
 management. 
@@ -86,17 +86,17 @@ OPTIONS
 
 -n
 
- Specify this option to start a Greenplum Database standby master that 
+ Specify this option to start a Greengage Database standby master that 
  has been configured but has stopped for some reason. 
 
 
 -P <port> 
 
- This option specifies the port that is used by the Greenplum Database 
+ This option specifies the port that is used by the Greengage Database 
  standby master. The default is the same port used by the active 
- Greenplum Database master. 
+ Greengage Database master. 
 
- If the Greenplum Database standby master is on the same host as the 
+ If the Greengage Database standby master is on the same host as the 
  active master, the ports must be different. If the ports are the same 
  for the active and standby master and the host is the same, the utility 
  returns an error. (See also -S.)
@@ -119,7 +119,7 @@ OPTIONS
 
 -r
 
- Removes the currently configured standby master host from your Greenplum 
+ Removes the currently configured standby master host from your Greengage 
  Database system. 
 
 
@@ -146,7 +146,7 @@ OPTIONS
 EXAMPLES
 *****************************************************
 
-Add a standby master host to your Greenplum Database system and start 
+Add a standby master host to your Greengage Database system and start 
 the synchronization process: 
 
 gpinitstandby -s host09 
@@ -159,18 +159,18 @@ gpinitstandby -n
 NOTE: Do not specify the -n and -s options in the same command. 
 
 
-Add a standby master host to your Greenplum Database system specifying a 
+Add a standby master host to your Greengage Database system specifying a 
 different port: 
 
 gpinitstandby -s myhost -P 2222 
 
-If you specify the same host name as the active Greenplum Database 
-master, the installed Greenplum Database software that is used as a 
-standby master must be in a separate location from the active Greenplum 
+If you specify the same host name as the active Greengage Database 
+master, the installed Greengage Database software that is used as a 
+standby master must be in a separate location from the active Greengage 
 Database master.
 
 
-Remove the existing standby master from your Greenplum system 
+Remove the existing standby master from your Greengage system 
 configuration: 
 
 gpinitstandby -r 

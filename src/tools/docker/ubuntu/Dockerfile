@@ -80,6 +80,6 @@ RUN locale-gen en_US.UTF-8 && \
     echo "gpadmin:password" | chpasswd 2> /dev/null && \
     { ssh-keyscan localhost; ssh-keyscan 0.0.0.0; } >> /home/gpadmin/.ssh/known_hosts && \
     chown -R gpadmin:gpadmin /home/gpadmin && \
-    mkdir /usr/local/greenplum-db-devel && \
-    chown gpadmin:gpadmin /usr/local/greenplum-db-devel
+    mkdir /usr/local/greengage-db-devel && \
+    chown gpadmin:gpadmin /usr/local/greengage-db-devel
 

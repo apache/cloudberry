@@ -11,7 +11,7 @@
 
 #include "mb/pg_wchar.h"
 #include "pg_upgrade.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static void set_locale_and_encoding(ClusterInfo *cluster);
 static void check_new_cluster_is_empty(void);
@@ -83,7 +83,7 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 
 	set_locale_and_encoding(&old_cluster);
 
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 		generate_old_tablespaces_file(&old_cluster);
 
 	/* Extract a list of databases and tables from the old cluster */
@@ -97,7 +97,7 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	if (GET_MAJOR_VERSION(old_cluster.major_version) < 901)
 		set_old_cluster_chkpnt_oldstxid();
 
-	if (!user_opts.check || is_greenplum_dispatcher_mode())
+	if (!user_opts.check || is_greengage_dispatcher_mode())
 		init_tablespaces();
 
 	get_loadable_libraries();
@@ -119,15 +119,15 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	check_for_isn_and_int8_passing_mismatch(&old_cluster);
 
 	/*
-	 * Check for various Greenplum failure cases. Since the target coordinator
+	 * Check for various Greengage failure cases. Since the target coordinator
 	 * segment's catalog is later copied over to instantiate the target
-	 * primary segments and none of the Greenplum upgrade checks are strictly
+	 * primary segments and none of the Greengage upgrade checks are strictly
 	 * required to be run against the source cluster primary segments, only
-	 * run the Greenplum upgrade checks against the source coordinator
+	 * run the Greengage upgrade checks against the source coordinator
 	 * segment.
 	 */
-	if (is_greenplum_dispatcher_mode())
-		check_greenplum();
+	if (is_greengage_dispatcher_mode())
+		check_greengage();
 
 	if (GET_MAJOR_VERSION(old_cluster.major_version) == 904 &&
 		old_cluster.controldata.cat_ver < JSONB_FORMAT_CHANGE_CAT_VER)
@@ -162,7 +162,7 @@ dump_old_cluster: /* GPDB: Don't skip checks that output scripts. */
 	 * While not a check option, we do this now because this is the only time
 	 * the old server is running.
 	 */
-	if (!user_opts.check && is_greenplum_dispatcher_mode())
+	if (!user_opts.check && is_greengage_dispatcher_mode())
 		generate_old_dump();
 
 	if (!live_check)
@@ -205,13 +205,13 @@ check_new_cluster(void)
 	 * users might match users defined in the old cluster and generate an
 	 * error during pg_dump restore.
  	 *
- 	 * However, in Greenplum, if we are upgrading a segment, its users have
+ 	 * However, in Greengage, if we are upgrading a segment, its users have
 	 * already been replicated to it from the master via gpupgrade.  Hence,
 	 * we only need to do this check for the QD.  In other words, the
-	 * Greenplum cluster upgrade scheme will overwrite the QE's schema
+	 * Greengage cluster upgrade scheme will overwrite the QE's schema
  	 * with the QD's schema, making this check inappropriate for a QE upgrade.
 	 */
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		if (new_cluster.role_count != 1)
 			pg_fatal("Only the install user can be defined in the new cluster.\n");
@@ -361,7 +361,7 @@ check_cluster_versions(void)
 
 	/* Only current PG version is supported as a target */
 	if (GET_MAJOR_VERSION(new_cluster.major_version) != GET_MAJOR_VERSION(PG_VERSION_NUM))
-		pg_fatal("This utility can only upgrade to Greenplum version %s.\n",
+		pg_fatal("This utility can only upgrade to Greengage version %s.\n",
 				 PG_MAJORVERSION);
 
 	/*
@@ -370,7 +370,7 @@ check_cluster_versions(void)
 	 * older versions.
 	 */
 	if (old_cluster.major_version > new_cluster.major_version)
-		pg_fatal("This utility cannot be used to downgrade to older major Greenplum versions.\n");
+		pg_fatal("This utility cannot be used to downgrade to older major Greengage versions.\n");
 
 	/* new binary versions */
 	get_bin_version(&new_cluster);
@@ -577,7 +577,7 @@ check_new_cluster_is_empty(void)
 	 * place from the QD at this point, so the cluster cannot be tested for
 	 * being empty.
 	 */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		return;
 
 	for (dbnum = 0; dbnum < new_cluster.dbarr.ndbs; dbnum++)

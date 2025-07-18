@@ -1,6 +1,6 @@
 COMMAND NAME: gpmapreduce
 
-Runs Greenplum MapReduce jobs as defined in a YAML specification document.
+Runs Greengage MapReduce jobs as defined in a YAML specification document.
 
 
 *****************************************************
@@ -30,10 +30,10 @@ The following are required prior to running this program:
 
 * You must have your MapReduce job defined in a YAML file.
 
-* You must be a Greenplum Database superuser to run MapReduce jobs 
+* You must be a Greengage Database superuser to run MapReduce jobs 
   written in untrusted Perl or Python.
 
-* You must be a Greenplum Database superuser to run MapReduce jobs 
+* You must be a Greengage Database superuser to run MapReduce jobs 
   with EXEC and FILE inputs.
 
 * Non-superuser roles must be granted external table permissions
@@ -45,14 +45,14 @@ DESCRIPTION
 
 MapReduce is a programming model developed by Google for 
 processing and generating large data sets on an array of commodity 
-servers. Greenplum MapReduce allows programmers who are familiar 
+servers. Greengage MapReduce allows programmers who are familiar 
 with the MapReduce paradigm to write map and reduce functions and 
-submit them to the Greenplum Database parallel engine for processing.
+submit them to the Greengage Database parallel engine for processing.
 
-In order for Greenplum to be able to process MapReduce functions, 
+In order for Greengage to be able to process MapReduce functions, 
 the functions need to be defined in a YAML document, which is then 
-passed to the Greenplum MapReduce program, gpmapreduce, for execution 
-by the Greenplum Database parallel engine. The Greenplum system takes 
+passed to the Greengage MapReduce program, gpmapreduce, for execution 
+by the Greengage Database parallel engine. The Greengage system takes 
 care of the details of distributing the input data, executing the 
 program across a set of machines, handling machine failures, 
 and managing the required inter-machine communication.
@@ -65,8 +65,8 @@ OPTIONS
 
 -f <yaml_file>
 
-Required. The YAML file that contains the Greenplum MapReduce 
-job definitions. See the Greenplum Database Administrator Guide
+Required. The YAML file that contains the Greengage MapReduce 
+job definitions. See the Greengage Database Administrator Guide
 for more information about creating YAML documents.
 
 
@@ -103,14 +103,14 @@ if no variable name is specified.
 
 -h <host> | --host <host>
 
-Specifies the host name of the machine on which the Greenplum 
+Specifies the host name of the machine on which the Greengage 
 master database server is running. If not specified, reads 
 from the environment variable PGHOST or defaults to localhost.
 
 
 -p <port> | --port <port>
 
-Specifies the TCP port on which the Greenplum master database 
+Specifies the TCP port on which the Greengage master database 
 server is listening for connections. If not specified, reads 
 from the environment variable PGPORT or defaults to 5432.
 
@@ -140,5 +140,5 @@ gpmapreduce -f my_yaml.txt
 SEE ALSO
 *****************************************************
 
-"Greenplum MapReduce YAML Specification" in the 
-Greenplum Database Administrator Guide
+"Greengage MapReduce YAML Specification" in the 
+Greengage Database Administrator Guide

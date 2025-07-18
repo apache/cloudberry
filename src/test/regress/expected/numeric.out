@@ -1461,7 +1461,7 @@ ERROR:  value overflows numeric format
 -- Test window sum agg on numeric with ndigits > 34
 --
 CREATE TABLE test_win_sum_agg_numeric (c1 numeric, c2 text, c3 date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_win_sum_agg_numeric VALUES ('100014942160023011133842548958242367825725430241610707803699732053545063989664069666352137812280875129584842270112562758099895079.16', 'test', '20200112');
 INSERT INTO test_win_sum_agg_numeric VALUES ('21.91', 'test', '20200113');

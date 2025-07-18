@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  * cdbendpoint.h
- *	  Functions supporting the Greenplum Endpoint PARALLEL RETRIEVE CURSOR.
+ *	  Functions supporting the Greengage Endpoint PARALLEL RETRIEVE CURSOR.
  *
  * The PARALLEL RETRIEVE CURSOR is introduced to reduce the heavy burdens of
  * the coordinator node. If possible it will not gather the result, but keep

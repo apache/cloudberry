@@ -1,7 +1,7 @@
 include: helpers/server_helpers.sql;
 
 -- Try to verify that a session fatal due to OOM should have no effect on other sessions.
--- Report on https://github.com/greenplum-db/gpdb/issues/12399
+-- Report on https://github.com/GreengageDB/greengage/issues/12399
 
 -- Because the number of errors reported to master can depend on ic types (i.e. ic-tcp and ic-proxy have one 
 -- additional error from the backend on seg0 which is trying to tear down TCP connection), we have to ignore
@@ -30,7 +30,7 @@ create extension if not exists gp_inject_fault;
 select gp_inject_fault('make_dispatch_result_error', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
 
 -- Test for dispatch is interrupted at the send process of shared query
--- https://github.com/greenplum-db/gpdb/pull/16920
+-- https://github.com/GreengageDB/greengage/pull/16920
 -- If no PR-16920, you will get a warning like (memory context is broken):
 -- WARNING:  problem in alloc set Dispatch Context: detected write past chunk end in block XXX, chunk YYY
 1: create table tpr16920(i int);
@@ -44,7 +44,7 @@ select gp_inject_fault('make_dispatch_result_error', 'reset', dbid) from gp_segm
 2q:
 
 --
--- Test for issue https://github.com/greenplum-db/gpdb/issues/12703
+-- Test for issue https://github.com/GreengageDB/greengage/issues/12703
 --
 
 -- Case for cdbgang_createGang_async

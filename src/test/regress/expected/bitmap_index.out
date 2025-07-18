@@ -2,7 +2,7 @@ SET enable_seqscan = OFF;
 SET enable_indexscan = ON;
 SET enable_bitmapscan = ON;
 create table bm_test (i int, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bm_test select i % 10, (i % 10)::text  from generate_series(1, 100) i;
 create index bm_test_idx on bm_test using bitmap (i);
@@ -219,7 +219,7 @@ drop table bm_test;
 create table bm_test (i2 int2, i4 int4, i8 int8, f4 float4, f8 float8,
 	n numeric(10, 3), t1 varchar(3), t2 char(3), t3 text, a int[2],
 	ip inet, b bytea, t timestamp, d date, g bool);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bm_test values(1, 1, 1, 1.0, 1.0, 1000.333, '1', '1', '1',
     array[1, 3], '127.0.0.1', E'\001', '2007-01-01 01:01:01',
@@ -464,7 +464,7 @@ drop table bm_test;
 drop table bm_test2;
 drop table bm_test3;
 create table bm_test (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bm_test values (0, 0), (0, 0), (0, 1), (1,0), (1,0), (1,1);
 create index bm_test_j on bm_test using bitmap(j);
@@ -494,7 +494,7 @@ select * from bm_test where j = 1;
 drop table bm_test;
 -- MPP-3232
 create table bm_test (i int,j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bm_test values (1, 1), (1, 2);
 create index bm_test_j on bm_test using bitmap(j);
@@ -544,7 +544,7 @@ drop table ijk;
 -- test bitmaps with NULL and non-NULL values (MPP-8461)
 --
 create table bmap_test (x int, y int, z int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bmap_test values (1,NULL,NULL);
 insert into bmap_test values (NULL,1,NULL);
@@ -603,7 +603,7 @@ set enable_seqscan=off;
 set enable_indexscan=on;
 set optimizer_enable_bitmapscan=on;
 create unlogged table unlogged_test(c1 int); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into unlogged_test select * from generate_series(1,1000);
 CREATE INDEX unlogged_test_idx ON unlogged_test USING BITMAP (c1);
@@ -699,7 +699,7 @@ DROP TABLE bm_test_update;
 -- do not forget to remove the flag when we use it, otherwise we will
 -- get an wrong value.
 CREATE TABLE bm_test_reindex(c1 int, c2 int) WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX bm_test_reindex_idx ON bm_test_reindex USING bitmap(c2);
 INSERT INTO bm_test_reindex SELECT 1,i FROM generate_series(1, 65537)i;
@@ -868,11 +868,11 @@ explain (analyze, verbose) select * from test_bmsparse where type > 500;
 
 DROP TABLE test_bmsparse;
 -- test the scenario that we need read the same batch words many times
--- more detials can be found at https://github.com/greenplum-db/gpdb/issues/13446
+-- more detials can be found at https://github.com/GreengageDB/greengage/issues/13446
 SET enable_seqscan = OFF;
 SET enable_bitmapscan = OFF;
 create table foo_13446(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index idx_13446 on foo_13446 using bitmap(b);
 insert into foo_13446 select 1, 1 from generate_series(0, 16384);
@@ -887,7 +887,7 @@ select count(*) from foo_13446 where b = 1;
 drop table foo_13446;
 -- test bitmap index scan when using NULL array-condition as index key
 create table foo(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index foo_i on foo using bitmap(a);
 explain (verbose on, costs off) select * from foo where a = any(null::int[]);
@@ -928,7 +928,7 @@ SET enable_bitmapscan = ON;
 drop table if exists bm_test;
 NOTICE:  table "bm_test" does not exist, skipping
 create table bm_test(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- insert some data into a one segment
 insert into bm_test values (1, 1);

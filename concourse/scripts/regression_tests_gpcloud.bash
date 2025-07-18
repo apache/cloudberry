@@ -3,15 +3,15 @@
 set -exo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-GPDB_INSTALL_DIR="/usr/local/greenplum-db-devel"
+GPDB_INSTALL_DIR="/usr/local/greengage-db-devel"
 
 function gen_local_regression_script(){
 cat > /home/gpadmin/run_regression_test.sh <<-EOF
 set -exo pipefail
-INSTALL_DIR=/usr/local/greenplum-db-devel
+INSTALL_DIR=/usr/local/greengage-db-devel
 GPDB_SRC_DIR=\${1}/gpdb_src
 
-source \$INSTALL_DIR/greenplum_path.sh
+source \$INSTALL_DIR/greengage_path.sh
 
 cd "\${GPDB_SRC_DIR}/gpAux"
 source gpdemo/gpdemo-env.sh
@@ -37,7 +37,7 @@ function setup_gpadmin_user() {
 }
 
 function make_cluster() {
-  PYTHONPATH=${SCRIPT_DIR}:${PYTHONPATH} ${GPDB_INSTALL_DIR}/ext/python/bin/python2 -c "from builds.GpBuild import GpBuild; GpBuild(\"planner\").create_demo_cluster(install_dir='/usr/local/greenplum-db-devel')"
+  PYTHONPATH=${SCRIPT_DIR}:${PYTHONPATH} ${GPDB_INSTALL_DIR}/ext/python/bin/python2 -c "from builds.GpBuild import GpBuild; GpBuild(\"planner\").create_demo_cluster(install_dir='/usr/local/greengage-db-devel')"
 }
 
 function configure_with_planner() {
@@ -47,8 +47,8 @@ function configure_with_planner() {
 function copy_gpdb_bits_to_gphome() {
   mkdir -p ${GPDB_INSTALL_DIR}
   tar -xzf bin_gpdb/*.tar.gz -C ${GPDB_INSTALL_DIR}
-  # make sure to correct the path inside of greenplum-path.sh
-  sed -i "s#GPHOME=.*#GPHOME=$GPDB_INSTALL_DIR#g" ${GPDB_INSTALL_DIR}/greenplum_path.sh
+  # make sure to correct the path inside of greengage-path.sh
+  sed -i "s#GPHOME=.*#GPHOME=$GPDB_INSTALL_DIR#g" ${GPDB_INSTALL_DIR}/greengage_path.sh
 }
 
 function _main() {

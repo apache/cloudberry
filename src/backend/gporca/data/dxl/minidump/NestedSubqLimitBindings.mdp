@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
 <dxl:Comment><![CDATA[
 
 Objective: Orca should generate a plan reasonably fast when `optimizer_xform_bind_threshold` is set to 100. By default, this query will take much longer since it generates many more groups.

@@ -88,7 +88,7 @@ postgres.shdescription: postgres.bki
 schemapg.h: postgres.bki
 	touch $@
 
-# In Greenplum, contents of the pg_proc catalog is in two files, pg_proc.h
+# In Greengage, contents of the pg_proc catalog is in two files, pg_proc.h
 # and pg_proc_gp.h. Combine them into a single file, so that genbki.pl can
 # process it.
 pg_proc_combined.h: $(top_srcdir)/src/include/catalog/pg_proc.h $(top_srcdir)/src/include/catalog/pg_proc_gp.h

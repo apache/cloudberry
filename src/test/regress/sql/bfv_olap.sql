@@ -314,7 +314,7 @@ drop table mpp23240;
 
 
 --
--- Test for the bug reported at https://github.com/greenplum-db/gpdb/issues/2236
+-- Test for the bug reported at https://github.com/GreengageDB/greengage/issues/2236
 --
 create table test1 (x int, y int, z double precision);
 insert into test1 select a, b, a*10 + b from generate_series(1, 5) a, generate_series(1, 5) b;
@@ -350,7 +350,7 @@ GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
 
 --
 -- Another ROLLUP query, that hit a bug in setting up the planner-generated
--- subquery's targetlist. (https://github.com/greenplum-db/gpdb/issues/6754)
+-- subquery's targetlist. (https://github.com/GreengageDB/greengage/issues/6754)
 --
 SELECT sale.vn, rank() over (partition by sale.vn)
 FROM vendor, sale
@@ -386,7 +386,7 @@ GROUP BY ROLLUP((qty)) order by 1;
 --
 -- Test a query with window function over an aggregate, and a subquery.
 --
--- Github Issue https://github.com/greenplum-db/gpdb/issues/10143
+-- Github Issue https://github.com/GreengageDB/greengage/issues/10143
 create table t1_github_issue_10143(
   base_ym varchar(6),
   code varchar(5),

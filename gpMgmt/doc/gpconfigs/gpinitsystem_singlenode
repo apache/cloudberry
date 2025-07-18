@@ -1,7 +1,7 @@
 # FILE NAME: gpinitsystem_singlenode
 
 # A configuration file is needed by the gpinitsystem utility.
-# This sample file initializes a Greenplum Database Single Node
+# This sample file initializes a Greengage Database Single Node
 # Edition (SNE) system with one master and  two segment instances 
 # on the local host. This file is referenced when you run gpinitsystem. 
 
@@ -16,7 +16,7 @@ ARRAY_NAME="GPDB SINGLENODE"
 
 
 # This specifies the file that contains the list of segment host names 
-# that comprise the Greenplum system. For a single-node system, this
+# that comprise the Greengage system. For a single-node system, this
 # file contains the local OS-configured hostname (as output by the 
 # hostname command). If the file does not reside in the same 
 # directory where the gpinitsystem utility is executed, specify 
@@ -27,7 +27,7 @@ MACHINE_LIST_FILE=./hostlist_singlenode
 
 # This specifies a prefix that will be used to name the data directories 
 # of the master and segment instances. The naming convention for data 
-# directories in a Greenplum Database system is SEG_PREFIX<number> 
+# directories in a Greengage Database system is SEG_PREFIX<number> 
 # where <number> starts with 0 for segment instances and the master 
 # is always -1. So for example, if you choose the prefix gpsne, your 
 # master instance data directory would be named gpsne-1, and the segment 
@@ -60,13 +60,13 @@ PORT_BASE=6000
 declare -a DATA_DIRECTORY=(/gpdata1 /gpdata2)
 
 
-# The OS-configured hostname of the Greenplum Database master instance.
+# The OS-configured hostname of the Greengage Database master instance.
 
 MASTER_HOSTNAME=hostname_of_machine
 
 
 # The location where the data directory will be created on the  
-# Greenplum master host. 
+# Greengage master host. 
 # You must make sure that the user who runs gpinitsystem
 # has permissions to write to this directory. You may want to 
 # create this directory on the master host before running 
@@ -77,7 +77,7 @@ MASTER_DIRECTORY=/gpmaster
 
 # The port number for the master instance. This is the port number 
 # that users and client connections will use when accessing the 
-# Greenplum Database system.
+# Greengage Database system.
 
 MASTER_PORT=5432
 
@@ -94,12 +94,12 @@ TRUSTED_SHELL=ssh
 # checkpoints, in log file segments (each segment is normally 16 
 # megabytes). This will set the checkpoint_segments parameter 
 # in the postgresql.conf file for each segment instance in the 
-# Greenplum Database system.
+# Greengage Database system.
 
 CHECK_POINT_SEGMENTS=8
 
 
-# The character set encoding to use. Greenplum supports the 
+# The character set encoding to use. Greengage supports the 
 # same character sets as PostgreSQL. See 'Character Set Support'
 # in the PostgreSQL documentation for allowed character sets.
 # Should correspond to the OS locale specified with the 

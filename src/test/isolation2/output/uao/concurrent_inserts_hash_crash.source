@@ -69,9 +69,9 @@ END
 ! gpstop -rai;
 20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Starting gpstop with args: -rai
 20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Gathering information and validating the environment...
-20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Obtaining Segment details from master...
-20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.26.1+dev.13.gdae0ccc40b build dev'
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.26.1+dev.13.gdae0ccc40b build dev'
 20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20240126:14:59:07:030520 gpstop:dev:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process

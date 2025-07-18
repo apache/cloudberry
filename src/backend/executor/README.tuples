@@ -36,7 +36,7 @@ What different representations do we have?
    - optimization to avoid copying data for projections, etc.
 
  * MemTuple
-   - Greenplum addition: similar to MinimalTuple but "CPU" optimized
+   - Greengage addition: similar to MinimalTuple but "CPU" optimized
 
 TupleTableSlot
 --------------
@@ -92,7 +92,7 @@ Tuples that need to be copied anywhere (e.g. Motion, or DML) must be
 
 MemTuple
 
-In Greenplum, MemTuple replaces the MinimalTuple.  MemTuple is also a
+In Greengage, MemTuple replaces the MinimalTuple.  MemTuple is also a
 serialized tuple format.  The main design goal is to reduce CPU usage so that
 getting to a certain column does not require decoding of the columns preceding
 it.

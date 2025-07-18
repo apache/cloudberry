@@ -2,7 +2,7 @@
  *
  * cdbpartindex.c
  *	Provides utility routines to support indexes over partitioned tables
- *	within Greenplum Database.
+ *	within Greengage Database.
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.

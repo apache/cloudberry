@@ -6,7 +6,7 @@ create table t_prepare_lockmode(c1 int, c2 int) distributed by (c1);
 prepare myupdate as update t_prepare_lockmode set c2 = $1;
 
 show gp_enable_global_deadlock_detector;
--- See github issue: https://github.com/greenplum-db/gpdb/issues/9446
+-- See github issue: https://github.com/GreengageDB/greengage/issues/9446
 -- Previously, when executing prepare statement, the lock mode is
 -- determined by the function CondUpgradeRelLock. However, it did not
 -- consider the GUC gp_enable_global_deadlock_detector's value. When

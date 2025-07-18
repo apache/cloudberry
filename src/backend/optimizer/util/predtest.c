@@ -2199,7 +2199,7 @@ ProcessOrClauseForPossibleValues( PredIterInfoData *clauseInfo, Node *clause, No
  *
  * Get the possible values of variable, as determined by the given qualification clause
  *
- * Note that only variables whose type is greenplumDbHashtable will return an actual finite set of values.  All others
+ * Note that only variables whose type is greengageDbHashtable will return an actual finite set of values.  All others
  *    will go to the default behavior -- return that any value is possible
  *
  * Note that if there are two variables to check, you must call this twice.  This then means that

@@ -260,7 +260,7 @@ CREATE TABLE numerictable(
 	b numeric(3),
 	c numeric
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT numericfunc1(1000);
  numericfunc1 
@@ -552,7 +552,7 @@ SELECT spifunc1($$select i, i * 2 from generate_series(1, 10)i order by 1; selec
 -- access table
 DROP TABLE IF EXISTS spi_test CASCADE;
 CREATE TABLE spi_test (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO spi_test (SELECT a, 'foo'||a FROM generate_series(1, 10) a);
 SELECT spifunc1($$select * from spi_test order by a limit 5$$, 2);
@@ -596,7 +596,7 @@ SELECT spifunc1($$select (
 
 -- DDL: create table
 SELECT spifunc1($$create table spi_test2 (a int, b text)$$, 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "create table spi_test2 (a int, b text)"
  spifunc1 
@@ -695,7 +695,7 @@ SELECT spifunc5a($$SELECT * FROM spi_test ORDER BY 1$$, 2, 0);
 -- SPI GppcSPIExec select into table
 DROP TABLE IF EXISTS spi_test3;
 SELECT spifunc6($$select i, 'foo'||i into spi_test3 from generate_series(10,15) i$$,0,0);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "select i, 'foo'||i into spi_test3 from generate_series(10,15) i"
  spifunc6 
@@ -717,7 +717,7 @@ SELECT * FROM spi_test3 ORDER BY 1;
 -- SPI GppcSPIExec CTAS
 DROP TABLE IF EXISTS spi_test4;
 SELECT spifunc6($$create table spi_test4 as select i, 'foo'||i from generate_series(1,10) i$$,0,0);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "create table spi_test4 as select i, 'foo'||i from generate_series(1,10) i"
  spifunc6 

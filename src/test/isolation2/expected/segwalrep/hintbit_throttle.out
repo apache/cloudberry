@@ -124,9 +124,9 @@ SELECT wait_until_all_segments_synchronized();
 -- start_ignore
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Starting gpstop with args: -u
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Gathering information and validating the environment...
-20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Obtaining Segment details from coordinator...
-20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.1+dev.82.g0281df93bb6 build dev'
+20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.1+dev.82.g0281df93bb6 build dev'
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -221,9 +221,9 @@ select content, role, preferred_role, mode, status from gp_segment_configuration
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Read from postgresql.conf port=7000
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Read from postgresql.conf max_connections=150
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: $GPHOME/bin/postgres --gp-version
-20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.1+dev.82.g0281df93bb6 build dev'
+20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.1+dev.82.g0281df93bb6 build dev'
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Connecting to db template1 on host localhost
-20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 12.12 (Greenplum Database 7.0.0-beta.1+dev.82.g0281df93bb6 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.3.0-1ubuntu1~22.04) 11.3.0, 64-bit compiled on Apr 27 2023 17:48:22 (with assert checking) Bhuvnesh C.'
+20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[INFO]:-coordinator Greengage Version: 'PostgreSQL 12.12 (Greengage Database 7.0.0-beta.1+dev.82.g0281df93bb6 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.3.0-1ubuntu1~22.04) 11.3.0, 64-bit compiled on Apr 27 2023 17:48:22 (with assert checking) Bhuvnesh C.'
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[INFO]:-Obtaining Segment details from coordinator...
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Connecting to db template1 on host localhost
 20230428:13:32:53:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Validating configuration...
@@ -247,7 +247,7 @@ select content, role, preferred_role, mode, status from gp_segment_configuration
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Adding cmd to work_queue: $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] got cmd: $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1
-20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: run pg_controldata cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greenplum_path.sh; $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1"'  had result: cmd had rc=0 completed=True halted=False
+20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: run pg_controldata cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greengage_path.sh; $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1"'  had result: cmd had rc=0 completed=True halted=False
   stdout='pg_control version number:            12010700
 Catalog version number:               302304041
 Database system identifier:           7227176750494621446
@@ -305,7 +305,7 @@ Mock authentication nonce:            e3a5af22bfbe2ac44c969f4724f7c7a50599226317
   stderr=''
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] got cmd: $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1
-20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: run pg_controldata cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greenplum_path.sh; $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1"'  had result: cmd had rc=0 completed=True halted=False
+20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: run pg_controldata cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greengage_path.sh; $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1"'  had result: cmd had rc=0 completed=True halted=False
   stdout='pg_control version number:            12010700
 Catalog version number:               302304041
 Database system identifier:           7227176750494621446
@@ -478,7 +478,7 @@ Mock authentication nonce:            e3a5af22bfbe2ac44c969f4724f7c7a50599226317
 stderr: 
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: $GPHOME/bin/pg_controldata /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[INFO]:-Greenplum instance recovery parameters
+20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[INFO]:-Greengage instance recovery parameters
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[INFO]:----------------------------------------------------------
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[INFO]:-Recovery type              = Standard
 20230428:13:32:54:1967876 gprecoverseg:station6:pivotal-[INFO]:----------------------------------------------------------
@@ -575,7 +575,7 @@ host replication pivotal 2601:647:4800:c740:3259:5e67:ae0d:643f/128 trust
 host replication pivotal 2601:647:4800:c740:7cd8:f44e:3889:509e/128 trust
 host replication pivotal 2601:647:4800:c740:40d4:7879:8a:dc04/128 trust
 host replication pivotal 2601:647:4800:c740:c21a:83b2:8a4a:33bd/128 trust'
-20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: Update pg_hba.conf cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greenplum_path.sh; $GPHOME/sbin/seg_update_pg_hba.py --data-dir /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1 --entries '
+20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: Update pg_hba.conf cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greengage_path.sh; $GPHOME/sbin/seg_update_pg_hba.py --data-dir /home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1 --entries '
 host replication pivotal samehost trust
 host all pivotal 10.0.0.234/32 trust
 host all pivotal 172.17.0.1/32 trust
@@ -616,7 +616,7 @@ host replication pivotal 2601:647:4800:c740:c21a:83b2:8a4a:33bd/128 trust'"'  ha
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Adding cmd to work_queue: $GPHOME/sbin/gpsegsetuprecovery.py -c '[{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] got cmd: $GPHOME/sbin/gpsegsetuprecovery.py -c '[{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: $GPHOME/sbin/gpsegsetuprecovery.py -c '[{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite
-20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: Run validation checks and setup data directories for recovery cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greenplum_path.sh; $GPHOME/sbin/gpsegsetuprecovery.py -c '[{\"target_datadir\": \"/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1\", \"target_port\": 7006, \"target_segment_dbid\": 6, \"source_hostname\": \"station6\", \"source_port\": 7003, \"is_full_recovery\": false, \"progress_file\": \"/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out\"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite"'  had result: cmd had rc=0 completed=True halted=False
+20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker0] finished cmd: Run validation checks and setup data directories for recovery cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greengage_path.sh; $GPHOME/sbin/gpsegsetuprecovery.py -c '[{\"target_datadir\": \"/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1\", \"target_port\": 7006, \"target_segment_dbid\": 6, \"source_hostname\": \"station6\", \"source_port\": 7003, \"is_full_recovery\": false, \"progress_file\": \"/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out\"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite"'  had result: cmd had rc=0 completed=True halted=False
   stdout='20230428:13:32:55:1968258 gpsegsetuprecovery.py:station6:pivotal-[INFO]:-Starting recovery with args: -c [{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}] -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite
 20230428:13:32:55:1968258 gpsegsetuprecovery.py:station6:pivotal-[DEBUG]:-WorkerPool() initialized with 1 workers
 20230428:13:32:55:1968258 gpsegsetuprecovery.py:station6:pivotal-[DEBUG]:-Adding cmd to work_queue: 
@@ -655,7 +655,7 @@ host replication pivotal 2601:647:4800:c740:c21a:83b2:8a4a:33bd/128 trust'"'  ha
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Generating configuration backout scripts
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/log/gp_era - read_gp_era
-20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-parse: # Greenplum Database era.
+20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-parse: # Greengage Database era.
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-parse: # Do not change the contents of this file.
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-parse: era = 84f970d55cff544c_230428131001
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-match era: 84f970d55cff544c_230428131001
@@ -663,7 +663,7 @@ host replication pivotal 2601:647:4800:c740:c21a:83b2:8a4a:33bd/128 trust'"'  ha
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Adding cmd to work_queue: $GPHOME/sbin/gpsegrecovery.py -c '[{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite --era=84f970d55cff544c_230428131001
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker1] got cmd: $GPHOME/sbin/gpsegrecovery.py -c '[{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite --era=84f970d55cff544c_230428131001
 20230428:13:32:55:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: $GPHOME/sbin/gpsegrecovery.py -c '[{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite --era=84f970d55cff544c_230428131001
-20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker1] finished cmd: Recover segments cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greenplum_path.sh; $GPHOME/sbin/gpsegrecovery.py -c '[{\"target_datadir\": \"/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1\", \"target_port\": 7006, \"target_segment_dbid\": 6, \"source_hostname\": \"station6\", \"source_port\": 7003, \"is_full_recovery\": false, \"progress_file\": \"/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out\"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite --era=84f970d55cff544c_230428131001"'  had result: cmd had rc=0 completed=True halted=False
+20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker1] finished cmd: Recover segments cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greengage_path.sh; $GPHOME/sbin/gpsegrecovery.py -c '[{\"target_datadir\": \"/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1\", \"target_port\": 7006, \"target_segment_dbid\": 6, \"source_hostname\": \"station6\", \"source_port\": 7003, \"is_full_recovery\": false, \"progress_file\": \"/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out\"}]' -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite --era=84f970d55cff544c_230428131001"'  had result: cmd had rc=0 completed=True halted=False
   stdout='20230428:13:32:56:1968306 gpsegrecovery.py:station6:pivotal-[INFO]:-Starting recovery with args: -c [{"target_datadir": "/home/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1", "target_port": 7006, "target_segment_dbid": 6, "source_hostname": "station6", "source_port": 7003, "is_full_recovery": false, "progress_file": "/home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"}] -l /home/pivotal/gpAdminLogs -v -b 64 --force-overwrite --era=84f970d55cff544c_230428131001
 20230428:13:32:56:1968306 gpsegrecovery.py:station6:pivotal-[DEBUG]:-WorkerPool() initialized with 1 workers
 20230428:13:32:56:1968306 gpsegrecovery.py:station6:pivotal-[DEBUG]:-Adding cmd to work_queue: 
@@ -689,7 +689,7 @@ station6 (dbid 6): skipping pg_rewind on mirror as standby.signal is present
 20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Adding cmd to work_queue: rm -f /home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out
 20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker2] got cmd: rm -f /home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out
 20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-Running Command: rm -f /home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out
-20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker2] finished cmd: remove file cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greenplum_path.sh; rm -f /home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"'  had result: cmd had rc=0 completed=True halted=False
+20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[DEBUG]:-[worker2] finished cmd: remove file cmdStr='ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 station6 ". /usr/local/gpdb/greengage_path.sh; rm -f /home/pivotal/gpAdminLogs/pg_rewind.20230428_133255.dbid6.out"'  had result: cmd had rc=0 completed=True halted=False
   stdout=''
   stderr=''
 20230428:13:32:56:1967876 gprecoverseg:station6:pivotal-[INFO]:-Triggering FTS probe

@@ -670,7 +670,7 @@ drop table foo_p;
 -- Same as above, but the input is ordered so that the inserts to the heap
 -- partition happen first. Had a bug related flushing the multi-insert
 -- buffers in that scenario at one point.
--- (https://github.com/greenplum-db/gpdb/issues/6678
+-- (https://github.com/GreengageDB/greengage/issues/6678
 create table mixed_ao_part(distkey int, partkey int)
 with (appendonly=true) distributed by(distkey)
 partition by range(partkey) (
@@ -1402,7 +1402,7 @@ alter table k split default partition start(10) end(20);
 drop table k;
 
 -- Test default partiton check inside split into cause
--- See: https://github.com/greenplum-db/gpdb/issues/14186
+-- See: https://github.com/GreengageDB/greengage/issues/14186
 DROP TABLE IF EXISTS issue_14186;
 CREATE TABLE issue_14186 (id int, date date, name_ text)
 WITH (appendonly=true, compresstype=zlib, compresslevel=5)
@@ -2224,7 +2224,7 @@ alter table it add primary key(i);
 select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
 -- FIXME: dropping a primary key doesn't currently work correctly. It doesn't
 -- drop the key on the partitions, only the parent. See
--- https://github.com/greenplum-db/gpdb/issues/3750
+-- https://github.com/GreengageDB/greengage/issues/3750
 --
 -- alter table it add primary key(i);
 -- select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
@@ -4081,7 +4081,7 @@ select typname from pg_type where typarray = '_xchg_tab1'::regtype;
 -- Test partition table with ACL.
 -- We grant default SELECT permission to a new user, this new user should be
 -- able to SELECT from any partition table we create later.
--- (https://github.com/greenplum-db/gpdb/issues/9524)
+-- (https://github.com/GreengageDB/greengage/issues/9524)
 DROP TABLE IF EXISTS public.t_part_acl;
 DROP ROLE IF EXISTS user_prt_acl;
 
@@ -4114,7 +4114,7 @@ DROP ROLE user_prt_acl;
 -- test DynamicSeqScan & DynamicBitmapHeapScan as Nestloop inner correct
 -- we modify some code of Executor to fix memleak issue, this is added to
 -- test that pattern plan still execute well.
--- See issue https://github.com/greenplum-db/gpdb/issues/12533.
+-- See issue https://github.com/GreengageDB/greengage/issues/12533.
 create table t1_12533 (a int, b int, c text, d int)
 distributed randomly
 partition by range(a)
@@ -4262,9 +4262,9 @@ alter table tbl_default_distribution exchange partition for (rank(2)) with table
 -- Test that we are able to partition a table by custom created data types.
 --
 -- Create data types and operators under spefic schema.
--- Historically, Greenplum hardcoded the operators search_path when looking up operators for partitioned tables. However, at the moment that the partitioned table is defined,
+-- Historically, Greengage hardcoded the operators search_path when looking up operators for partitioned tables. However, at the moment that the partitioned table is defined,
 -- the opclass used for defining the partitioned table has been recorded in the parclass column of pg_catalog.pg_partition table. We should retrieve operators according to
--- parclass just like the behavior Greenplum 7 or PostgreSQL.
+-- parclass just like the behavior Greengage 7 or PostgreSQL.
 create schema part_op_test;
 set search_path = 'part_op_test';
 create type myint;

@@ -395,7 +395,7 @@ ALTER TABLE tmp3 add constraint tmpconstr foreign key(a) references tmp2(b) matc
 ERROR:  column "b" referenced in foreign key constraint does not exist
 -- Try (and fail) to add constraint due to invalid data
 ALTER TABLE tmp3 add constraint tmpconstr foreign key (a) references tmp2 match full;
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 -- Delete one row, add the constraint again -- should fail
 DELETE FROM tmp3 where a=5;
 ALTER TABLE tmp3 add constraint tmpconstr foreign key (a) references tmp2 match full;
@@ -585,7 +585,7 @@ DROP TABLE FKTABLE;
 -- because int=int8 exists and is a member of the integer opfamily
 CREATE TEMP TABLE FKTABLE (ftest1 int8);
 ALTER TABLE FKTABLE ADD FOREIGN KEY(ftest1) references pktable;
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 -- Check it actually works
 INSERT INTO FKTABLE VALUES(42);		-- should succeed
 INSERT INTO FKTABLE VALUES(43);		-- should fail
@@ -605,7 +605,7 @@ CREATE TEMP TABLE PKTABLE (ptest1 numeric PRIMARY KEY);
 INSERT INTO PKTABLE VALUES(42);
 CREATE TEMP TABLE FKTABLE (ftest1 int);
 ALTER TABLE FKTABLE ADD FOREIGN KEY(ftest1) references pktable;
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 -- Check it actually works
 INSERT INTO FKTABLE VALUES(42);		-- should succeed
 INSERT INTO FKTABLE VALUES(43);		-- should fail
@@ -854,7 +854,7 @@ insert into atacc1 select i from generate_series(3,10)i;
 alter table atacc1 add constraint atacc_oid1 unique(oid);
 ERROR:  cannot create unique index on system column
 -- try to create duplicates via alter table using - should fail
--- this errors out in Greenplum for a different reason: we don't support
+-- this errors out in Greengage for a different reason: we don't support
 -- SET DATA TYPE on an indexed column yet
 alter table atacc1 alter column test type integer using 0;
 ERROR:  cannot alter column with primary key or unique constraint
@@ -2416,7 +2416,7 @@ select * from my_locks order by 1;
 
 commit;
 begin; alter table alterlock set (toast.autovacuum_enabled = off);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 select * from my_locks order by 1;
   relname  |    max_lockmode     
 -----------+---------------------
@@ -2426,7 +2426,7 @@ select * from my_locks order by 1;
 
 commit;
 begin; alter table alterlock set (autovacuum_enabled = off);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 select * from my_locks order by 1;
   relname  |    max_lockmode     
 -----------+---------------------
@@ -2479,7 +2479,7 @@ select * from my_locks order by 1;
 (0 rows)
 
 alter table alterlock2 add foreign key (f1) references alterlock (f1);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 select * from my_locks order by 1;
   relname   |    max_lockmode     
 ------------+---------------------
@@ -2491,7 +2491,7 @@ rollback;
 begin;
 alter table alterlock2
 add constraint alterlock2nv foreign key (f1) references alterlock (f1) NOT VALID;
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 select * from my_locks order by 1;
   relname   |    max_lockmode     
 ------------+---------------------
@@ -3000,7 +3000,7 @@ CREATE TABLE test_part (
           PARTITION p2017 START ('2017-01-01'::date) END ('2018-01-01'::date) WITH (appendonly=false ),
           DEFAULT PARTITION p_overflow  WITH (appendonly=false )
           );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'field_part' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'field_part' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "test_part_1_prt_p_overflow" for table "test_part"
 NOTICE:  CREATE TABLE will create partition "test_part_1_prt_p2017" for table "test_part"

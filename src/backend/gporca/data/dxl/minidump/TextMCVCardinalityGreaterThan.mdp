@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
    <dxl:Comment><![CDATA[
         CREATE TABLE text_table(a text);
         INSERT INTO text_table SELECT 'a' || (i % 10) FROM generate_series(1, 1000) i;

@@ -34,7 +34,7 @@ try:
     from gppylib.utils import TableLogger
     from gppylib.gp_era import GpEraFile
 except ImportError, e:
-    sys.exit('Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 logger = get_default_logger()
 
@@ -96,7 +96,7 @@ class GpStart:
                 logger.warning("****************************************************************************")
                 logger.warning("Master-only start requested. If a standby master is configured, this command")
                 logger.warning("may lead to a split-brain condition and possible unrecoverable data loss.")
-                logger.warning("Maintenance mode should only be used with direction from Greenplum Support.")
+                logger.warning("Maintenance mode should only be used with direction from Greengage Support.")
                 logger.warning("****************************************************************************")
                 if self.interactive:
                     if not userinput.ask_yesno(None, "\nContinue with master-only startup", 'N'):
@@ -146,7 +146,7 @@ class GpStart:
 
         if self.interactive:
             self._summarize_actions(segmentsToStart)
-            if not userinput.ask_yesno(None, "\nContinue with Greenplum instance startup", 'N'):
+            if not userinput.ask_yesno(None, "\nContinue with Greengage instance startup", 'N'):
                 raise UserAbortedException()
 
         try:
@@ -201,13 +201,13 @@ class GpStart:
     ######
     def _check_version(self):
         self.gpversion = gp.GpVersion.local('local GP software version check', self.gphome)
-        logger.info("Greenplum Binary Version: '%s'" % self.gpversion)
+        logger.info("Greengage Binary Version: '%s'" % self.gpversion)
 
-        # It would be nice to work out the catalog version => greenplum version
+        # It would be nice to work out the catalog version => greengage version
         # calculation so that we can print out nicer error messages when
         # version doesn't match.
         bin_catversion = gp.GpCatVersion.local('local GP software catalag version check', self.gphome)
-        logger.info("Greenplum Catalog Version: '%s'" % bin_catversion)
+        logger.info("Greengage Catalog Version: '%s'" % bin_catversion)
 
         dir_catversion = gp.GpCatVersionDirectory.local('local GP directory catalog version check', self.master_datadir)
 
@@ -417,7 +417,7 @@ class GpStart:
                 logger.fatal("Failed to start Master instance in admin mode")
             cmd.validate()
 
-        logger.info("Obtaining Greenplum Master catalog information")
+        logger.info("Obtaining Greengage Master catalog information")
 
         logger.info("Obtaining Segment details from master...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')

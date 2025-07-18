@@ -184,7 +184,7 @@ CREATE or REPLACE FUNCTION concat_text (text, text) RETURNS text AS '
 	END;
 ' LANGUAGE 'plpgsql';
 
-select concat_text('Green','plum');
+select concat_text('Green','gage');
 
 CREATE or REPLACE FUNCTION sales_tax(subtotal real) RETURNS real AS $$
 BEGIN

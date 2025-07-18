@@ -43,8 +43,8 @@
 #include <langinfo.h>
 #endif
 
-#include "greenplum/old_tablespace_file_parser_observer.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/old_tablespace_file_parser_observer.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static void prepare_new_cluster(void);
 static void prepare_new_databases(void);
@@ -205,7 +205,7 @@ main(int argc, char **argv)
 	/* -- NEW -- */
 	start_postmaster(&new_cluster, true);
 
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		prepare_new_databases();
 
@@ -240,7 +240,7 @@ main(int argc, char **argv)
 	 * xmin of the tuples will not be higher than relfrozenxid for the relation.
 	 * Otherwise, vacuuming those tables once data is copied/linked will error out.
 	 */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		update_db_xids();
 
 	stop_postmaster(false);
@@ -263,7 +263,7 @@ main(int argc, char **argv)
 	 * need to fix the tuple's xmin to ensure they are lower than the
 	 * relfrozenxid. Otherwise subsequent vacuums may fail.
 	 */
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		start_postmaster(&new_cluster, true);
 
@@ -274,7 +274,7 @@ main(int argc, char **argv)
 	}
 
 	/* For non-master segments, uniquify the system identifier. */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		reset_system_identifier();
 
 	prep_status("Sync data directory to disk");
@@ -538,7 +538,7 @@ prepare_new_cluster(void)
 	 * AO tables can't be analyzed because their aoseg tuple counts don't match
 	 * those on disk. We therefore skip this step for segments.
 	 */
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		prep_status("Analyzing all rows in the new cluster");
 		exec_prog(UTILITY_LOG_FILE, NULL, true, true,

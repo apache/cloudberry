@@ -22,7 +22,7 @@ day' day AS dt FROM GENERATE_SERIES(1, 10) AS i) AS t;
 
 EXPLAIN SELECT * FROM date_parts WHERE year BETWEEN 2002 AND 2003;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

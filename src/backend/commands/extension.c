@@ -3231,7 +3231,7 @@ read_whole_file(const char *filename, int *length)
 }
 
 /*
- * This function is Greenplum specific. In Greenplum, Create Extension
+ * This function is Greengage specific. In Greengage, Create Extension
  * will first create the catalog entry (this will dispatch to QEs also),
  * then to create object (like UDFs). Those second-stage operations
  * will reply on themselves' MPP exeuction (like CreateFunction) so no

@@ -4,7 +4,7 @@
  *	  Public API to GPDB tuple sorting routines.
  *
  * NOTES
- *    This file contains additional Greenplum-added entries into tuplesort.h,
+ *    This file contains additional Greengage-added entries into tuplesort.h,
  *    on top of the upstream entries from tuplesort.h:
  *    - Support for reader-writer tuplesort
  *

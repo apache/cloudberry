@@ -30,7 +30,7 @@ allow_system_table_mods ignore_system_indexes post_auth_delay \
 max_function_args max_index_keys max_identifier_length block_size \
 server_version_num config_file"
 
-## greenplum db additions to the ignored list
+## greengage db additions to the ignored list
 INTENTIONALLY_NOT_INCLUDED="$INTENTIONALLY_NOT_INCLUDED geqo \
 gp_enable_agg_distinct gp_enable_preunique mpp_enable_explain_allstat \
 mpp_enable_motion_deadlock_sanity mpp_is_primary mpp_is_writer \

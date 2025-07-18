@@ -123,7 +123,7 @@ drop table t2_github_issue_10760;
 reset optimizer;
 
 -- CTAS with no data will not lead to catalog inconsistent
--- See github issue: https://github.com/greenplum-db/gpdb/issues/11999
+-- See github issue: https://github.com/GreengageDB/greengage/issues/11999
 create or replace function mv_action_select_issue_11999() returns bool language sql as
 'declare c cursor for select 1/0; select true';
 
@@ -163,7 +163,7 @@ refresh materialized view sro_mv_issue_11999;
 
 
 -- CTAS into AOCS table with not crash
--- See github issue: https://github.com/greenplum-db/gpdb/issues/12936
+-- See github issue: https://github.com/GreengageDB/greengage/issues/12936
 
 set gp_default_storage_options to 'appendonly=true,blocksize=32768,compresstype=zstd,compresslevel=1,checksum=true,orientation=column';
 CREATE TABLE test_issue_12936 AS (SELECT 'test' as test) WITH NO DATA;

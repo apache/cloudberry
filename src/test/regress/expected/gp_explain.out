@@ -33,7 +33,7 @@ $$ language plpgsql;
 -- Test explain_memory_verbosity option
 -- 
 CREATE TABLE explaintest (id int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO explaintest SELECT generate_series(1, 10);
 EXPLAIN ANALYZE SELECT * FROM explaintest;
@@ -233,7 +233,7 @@ explain (format json, costs off) SELECT * FROM dummy_ext_tab;
 
 -- Seq Scan on an append-only table
 CREATE TEMP TABLE dummy_aotab (x int4) WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain (format yaml, costs off) SELECT * FROM dummy_aotab;
                  QUERY PLAN                
@@ -492,10 +492,10 @@ reset search_path;
 -- rethrow error before print explain info.
 create extension if not exists gp_inject_fault;
 create table sort_error_test1(tc1 int, tc2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tc1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tc1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table sort_error_test2(tc1 int, tc2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tc1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tc1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into sort_error_test1 select i,i from generate_series(1,20) i;
 select gp_inject_fault('explain_analyze_sort_error', 'error', dbid)
@@ -538,7 +538,7 @@ DROP TABLE t1;
 -- When optimizer_enable_table_alias is off, table aliases are not supported.
 set optimizer_enable_table_alias=off;
 create table foo_alias (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo_alias select generate_series(1,10);
 explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;

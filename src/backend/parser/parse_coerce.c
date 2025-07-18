@@ -438,7 +438,7 @@ coerce_type(ParseState *pstate, Node *node,
 			 * do unknownout(Var)
 			 *
 			 * always supplying COERCE_IMPLICIT_CAST here, set it as an
-			 * implicit cast to hide this Greenplum hack, because the explicit
+			 * implicit cast to hide this Greengage hack, because the explicit
 			 * cast would be dumped but not able to be loaded, for like a cast
 			 * unknown::cstring::date
 			 */
@@ -774,10 +774,10 @@ fixup_unknown_vars_in_targetlist(ParseState *pstate, List *targetlist)
  * Fix up the unknown Vars in the subquery specified by rtr. The new
  * types and typemods are given.
  *
- * Greenplum Specific Logic:
+ * Greengage Specific Logic:
  *   this function's call chain is
  *    fixup_unknown_vars_in_RangeTblRef <-- fixup_unknown_vars_in_setop <-- transformSetOperationStmt
- *   the whole bunch of code is added by Greenplum and it is only used during
+ *   the whole bunch of code is added by Greengage and it is only used during
  *   parse-analyze Set Operation Statement.
  */
 static void
@@ -813,7 +813,7 @@ fixup_unknown_vars_in_RangeTblRef(ParseState *pstate, RangeTblRef *rtr,
 			 * We are now in Q's context, q1 is parse-analyzed in a sub parse-state of
 			 * Q's and that sub parse-state is free-ed when finishing. So we have to
 			 * pass -1 as levelsup to the following function coerce_unknown_var.
-			 * See Github Issue https://github.com/greenplum-db/gpdb/issues/12407
+			 * See Github Issue https://github.com/GreengageDB/greengage/issues/12407
 			 * for details.
 			 */
 			tle->expr = (Expr *)coerce_unknown_var(pstate, (Var *)tle->expr,
@@ -829,7 +829,7 @@ fixup_unknown_vars_in_RangeTblRef(ParseState *pstate, RangeTblRef *rtr,
 }
 
 /*
- * Greenplum specific function.
+ * Greengage specific function.
  * Fix up the unknown Vars in all subqueries in a SetOperationStmt.
  */
 void

@@ -544,7 +544,7 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 						ereport(NOTICE,
 								(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 								 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) "
-										"named '%s' as the Greenplum Database data distribution key for this "
+										"named '%s' as the Greengage Database data distribution key for this "
 										"table. ", columnsbuf.data),
 								 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
 										 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));

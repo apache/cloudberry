@@ -1,7 +1,7 @@
 2017-11-10 02:46:20|INFO|gpload session started 2017-11-10 02:46:20
 2017-11-10 02:46:20|WARN|ERROR_TABLE is not supported. We will set LOG_ERRORS and REUSE_TABLES to True for compatibility.
 2017-11-10 02:46:20|INFO|setting schema 'public' for table 'csvtable'
-2017-11-10 02:46:20|INFO|started gpfdist -p 8081 -P 8082 -f "/usr/local/greenplum-db-devel/bin/gpload_test/gpload2/data_file.csv" -t 30
+2017-11-10 02:46:20|INFO|started gpfdist -p 8081 -P 8082 -f "/usr/local/greengage-db-devel/bin/gpload_test/gpload2/data_file.csv" -t 30
 2017-11-10 02:46:20|INFO|did not find an external table to reuse. creating ext_gpload_reusable_54fd9764_c5c1_11e7_b31f_0242ac110003
 2017-11-10 02:46:20|WARN|5000 bad rows
 2017-11-10 02:46:20|WARN|Please use following query to access the detailed error
@@ -14,7 +14,7 @@
 2017-11-10 02:46:20|INFO|gpload session started 2017-11-10 02:46:20
 2017-11-10 02:46:20|WARN|ERROR_TABLE is not supported. We will set LOG_ERRORS and REUSE_TABLES to True for compatibility.
 2017-11-10 02:46:20|INFO|setting schema 'public' for table 'csvtable'
-2017-11-10 02:46:20|INFO|started gpfdist -p 8081 -P 8082 -f "/usr/local/greenplum-db-devel/bin/gpload_test/gpload2/data_file.csv" -t 30
+2017-11-10 02:46:20|INFO|started gpfdist -p 8081 -P 8082 -f "/usr/local/greengage-db-devel/bin/gpload_test/gpload2/data_file.csv" -t 30
 2017-11-10 02:46:20|INFO|reusing external table ext_gpload_reusable_54fd9764_c5c1_11e7_b31f_0242ac110003
 2017-11-10 02:46:21|WARN|5000 bad rows
 2017-11-10 02:46:21|WARN|Please use following query to access the detailed error

@@ -4,7 +4,7 @@
      create table b (j int); 
      explain select b.j from b where j in (select rank() over (order by a.i) from a  where a.i = b.j) order by b.j;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

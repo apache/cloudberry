@@ -14,7 +14,7 @@ gp-concourse-cluster-provisioner-git-branch: main
 gp-concourse-cluster-provisioner-git-remote: git@github.com:pivotal/gp-concourse-cluster-provisioner.git
 gcs-bucket: pivotal-gpdb-concourse-resources-prod
 gcs-bucket-intermediates: pivotal-gpdb-concourse-resources-intermediates-prod
-gcs-bucket-for-oss: greenplum-database-concourse-resources-prod
+gcs-bucket-for-oss: greengage-database-concourse-resources-prod
 ########## MADLIB #############
 madlib-git-branch: master
 madlib-git-tag-filter: rel/*
@@ -23,7 +23,7 @@ madlib-ci-git-remote: git@github.com:Pivotal-DataFabric/madlib-ci.git
 madlib-ci-tag-filter: rel/v1*
 # Originally from gp-continuous-integration/secrets/gpdb_6X_STABLE-ci-secrets.prod.yml
 gpdb-git-branch: 6X_STABLE
-gpdb-git-remote: https://github.com/greenplum-db/gpdb.git
+gpdb-git-remote: https://github.com/GreengageDB/greengage.git
 rc-build-type: debug
 rc-build-type-gcs: ".debug"
 reduced-frequency-trigger-start-rhel8: 0:00 AM

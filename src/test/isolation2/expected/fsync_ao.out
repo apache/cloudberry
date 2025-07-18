@@ -29,9 +29,9 @@
 -- start_ignore
 20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Starting gpstop with args: -u
 20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Gathering information and validating the environment...
-20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Obtaining Greenplum Master catalog information
+20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Obtaining Greengage Master catalog information
 20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Obtaining Segment details from master...
-20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
+20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
 20191204:17:12:58:024772 gpstop:asimmac:apraveen-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -222,9 +222,9 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration where
 -- start_ignore
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Starting gpstop with args: -u
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Gathering information and validating the environment...
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Greenplum Master catalog information
+20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Greengage Master catalog information
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Segment details from master...
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
+20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
 20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

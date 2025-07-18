@@ -2,13 +2,13 @@
  *
  * @file gppc.h
  *
- * @brief Greenplum Partner Connector main header
+ * @brief Greengage Partner Connector main header
  *
- * This header contains prototypes for libgppc -- the Greenplum Database Partner
+ * This header contains prototypes for libgppc -- the Greengage Database Partner
  * Connector.
  *
  * The most common use of the GPPC is to write user defined functions which do
- * not need to be recompiled from one Greenplum Database release to the next.
+ * not need to be recompiled from one Greengage Database release to the next.
  *
  * Those user defined functions usually have the following form:
  *
@@ -1891,7 +1891,7 @@ GppcTupleDesc GppcTFInputDesc(GppcFcinfo info, int argno, bool *iserror);
  */
 /**
  * \brief Report level used in GppcReport().
- * \sa Greenplum Administrator Guide
+ * \sa Greengage Administrator Guide
  */
 typedef enum GppcReportLevel
 {

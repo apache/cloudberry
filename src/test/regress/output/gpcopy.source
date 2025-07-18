@@ -1,5 +1,5 @@
 --
--- This test suite tests COPY code that is unique to greenplum db.
+-- This test suite tests COPY code that is unique to greengage db.
 --
 --
 -- Test copying from program, simulating an exit condition in the child process
@@ -11,7 +11,7 @@
 -- and downstream assertion failures, related to PGPROC release and init.
 --
 CREATE TABLE exit_in_child(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT gp_inject_fault('popen_with_stderr_in_child',
                        'exit_no_callbacks', '', '', '', 1, 1, /* exit code */ 1, dbid)
@@ -166,7 +166,7 @@ DROP TABLE copy_regression_default3;
 -- COPY with OIDS
 -- ######################################################
 CREATE TABLE copy_regression_oids(a text) WITH OIDS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  OIDS=TRUE is not recommended for user-created tables
 HINT:  Use OIDS=FALSE to prevent wrap-around of the OID counter.
@@ -699,7 +699,7 @@ COPY segment_reject_limit TO '/tmp/segment_reject_limit<SEGID>.csv' on segment;
 DROP TABLE IF EXISTS segment_reject_limit_from;
 NOTICE:  table "segment_reject_limit_from" does not exist, skipping
 CREATE TABLE segment_reject_limit_from (a int,b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY segment_reject_limit_from from '/tmp/segment_reject_limit<SEGID>.csv' on segment log errors segment reject limit 2 rows;
 ERROR:  segment reject limit reached, aborting operation
@@ -804,7 +804,7 @@ ERROR:  COPY single row error handling only available using COPY FROM
 DROP TABLE IF EXISTS test_first_segment_reject_limit;
 NOTICE:  table "test_first_segment_reject_limit" does not exist, skipping
 CREATE TABLE test_first_segment_reject_limit (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET gp_initial_bad_row_limit = 2;
 COPY test_first_segment_reject_limit FROM STDIN WITH DELIMITER '|' segment reject limit 20;
@@ -1335,7 +1335,7 @@ SELECT COUNT(*) FROM COPY_ON_SEGMENT_CHECK_DISTKEY_PARTIONED;
 
 --COPY FROM partition table mulitple attributes
 CREATE TABLE COPY_FROM_PARTITION_TABLE (a text ,b int) PARTITION BY range(b) (START (0) END (10) EVERY(5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "copy_from_partition_table_1_prt_1" for table "copy_from_partition_table"
 NOTICE:  CREATE TABLE will create partition "copy_from_partition_table_1_prt_2" for table "copy_from_partition_table"
@@ -1469,7 +1469,7 @@ DROP TABLE IF EXISTS COPY_TO_PROGRAM_ERROR;
 DROP TABLE IF EXISTS COPY_FROM_PROGRAM_ERROR;
 -- end_ignore
 CREATE TABLE COPY_TO_PROGRAM_ERROR(dir text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dir' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dir' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY COPY_TO_PROGRAM_ERROR TO PROGRAM 'echo && echo "error" >&2 && exit 255';
 ERROR:  command error message: error
@@ -1478,7 +1478,7 @@ ERROR:  command error message: error  (seg0 127.0.0.1:25432 pid=23338)
 COPY (SELECT * FROM COPY_TO_PROGRAM_ERROR) TO PROGRAM 'echo <SEGID>&& echo "error" >&2 && exit 255' on segment;
 ERROR:  command error message: error  (seg0 127.0.0.1:25432 pid=23338)
 CREATE TABLE COPY_FROM_PROGRAM_ERROR(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY COPY_FROM_PROGRAM_ERROR FROM PROGRAM 'echo 1; echo "error" >&2 && exit 255';
 ERROR:  command error message: error
@@ -1536,7 +1536,7 @@ SET gp_enable_segment_copy_checking=on;
 -- gp_replica_check tool is enabled.
 BEGIN;
 CREATE TABLE copy_from_same_txn(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY copy_from_same_txn FROM stdin;
 COMMIT;
@@ -1678,7 +1678,7 @@ unknown
 copy (select generate_series(1, 10)) to '/tmp/a';
 COPY 10
 create temp table t (id int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE
 copy t from '/tmp/a';
@@ -1782,7 +1782,7 @@ select * from foo;
  database in COPY TO: funny copy"db'with\\quotes
 (3 rows)
 
--- Test for Issue: https://github.com/greenplum-db/gpdb/issues/12700
+-- Test for Issue: https://github.com/GreengageDB/greengage/issues/12700
 -- When under planner, to set a plan's flow based on path's locus and
 -- the locus is hashed, it will try to verify that each distkey in locus
 -- is in plan's targetlist andalso is hashable. Previously, hashable-test

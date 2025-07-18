@@ -167,7 +167,7 @@ transformWithClause(ParseState *pstate, WithClause *withClause)
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("only one modifying WITH clause allowed per query"),
-						 errdetail("Greenplum Database currently only support CTEs with one writable clause."),
+						 errdetail("Greengage Database currently only support CTEs with one writable clause."),
 						 errhint("Rewrite the query to only include one writable CTE clause.")));
 
 			pstate->p_hasModifyingCTE = true;
@@ -1106,7 +1106,7 @@ checkWindowFuncInRecursiveTerm(SelectStmt *stmt, CteState *cstate)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("window functions in the target list of a recursive query is not supported in Greenplum"),
+				 errmsg("window functions in the target list of a recursive query is not supported in Greengage"),
 				 parser_errposition(cstate->pstate,
 									exprLocation((Node *) context.func))));
 	}

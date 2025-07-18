@@ -103,11 +103,11 @@ server closed the connection unexpectedly
 !\retcode gprecoverseg -a;
 -- start_ignore
 20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-Starting gprecoverseg with args: -a
-20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.5441.g9dc261e1f2 build dev'
-20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-master Greenplum Version: 'PostgreSQL 9.6beta4 (Greenplum Database 7.0.0-alpha.0+dev.5441.g9dc261e1f2 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 6.2.0, 64-bit compiled on Jan 23 2020 07:13:04'
+20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5441.g9dc261e1f2 build dev'
+20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-master Greengage Version: 'PostgreSQL 9.6beta4 (Greengage Database 7.0.0-alpha.0+dev.5441.g9dc261e1f2 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 6.2.0, 64-bit compiled on Jan 23 2020 07:13:04'
 20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-Obtaining Segment details from master...
 20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg
-20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-Greengage instance recovery parameters
 20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:----------------------------------------------------------
 20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:-Recovery type              = Standard
 20200123:08:12:02:395970 gprecoverseg:09c5497cf854:gpadmin-[INFO]:----------------------------------------------------------

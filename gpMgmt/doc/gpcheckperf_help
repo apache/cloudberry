@@ -44,14 +44,14 @@ and runs the following performance tests:
   memory bandwidth (in MB/s). This tests that your system is not 
   limited in performance by the memory bandwidth of the system in 
   relation to the computational performance of the CPU. In applications 
-  where the data set is large (as in Greenplum Database), low memory 
+  where the data set is large (as in Greengage Database), low memory 
   bandwidth is a major performance issue. If memory bandwidth is 
   significantly lower than the theoretical bandwidth of the CPU, 
   then it can cause the CPU to spend significant amounts of time 
   waiting for data to arrive from system memory.
 
 * Network Performance Test (gpnetbench) - To test network performance 
- (and thereby the performance of the Greenplum Database interconnect), 
+ (and thereby the performance of the Greengage Database interconnect), 
   the utility runs a network benchmark program that transfers a 5 
   second stream of data from the current host to each remote host 
   included in the test. The data is transferred in parallel to each 
@@ -85,7 +85,7 @@ and exchange public keys between hosts if you have not done so
 already.
 
 Note that gpcheckperf calls to gpssh and gpscp, so these 
-Greenplum utilities must also be in your $PATH.
+Greengage utilities must also be in your $PATH.
 
 *****************************************************
 OPTIONS
@@ -94,7 +94,7 @@ OPTIONS
 -B <block_size>
 
 Specifies the block size (in KB or MB) to use for disk I/O test. 
-The default is 32KB, which is the same as the Greenplum Database 
+The default is 32KB, which is the same as the Greengage Database 
 page size. The maximum block size is 1 MB.
 
 --buffersize <kbytes>
@@ -164,9 +164,9 @@ page size. The maximum block size is 1 MB.
 --netperf
 
  Specifies that the netperf binary should be used to perform the 
- network test instead of the Greenplum network test. To use this 
+ network test instead of the Greengage network test. To use this 
  option, you must download netperf from www.netperf.org and install 
- it into $GPHOME/bin/lib on all Greenplum hosts (master and segments).
+ it into $GPHOME/bin/lib on all Greengage hosts (master and segments).
 
 
 -r ds{n|N|M}
@@ -179,8 +179,8 @@ page size. The maximum block size is 1 MB.
     how long (in seconds) to run the network test. To use the parallel 
    (N) mode, you must run the test on an even number of hosts. If you 
    would rather use netperf (www.netperf.org) instead of the 
-   Greenplum network test, you can download it and install it into 
-   $GPHOME/bin/lib on all Greenplum hosts (master and segments). 
+   Greengage network test, you can download it and install it into 
+   $GPHOME/bin/lib on all Greengage hosts (master and segments). 
    You would then specify the optional --netperf option to use the 
    netperf binary instead of the default gpnetbench* utilities.
 
@@ -239,8 +239,8 @@ $ gpcheckperf -f hostfile_gpchecknet_ic2 -r N -d /tmp
 
 
 Run the same test as above, but use netperf instead of the 
-Greenplum network test (note that netperf must be installed 
-in $GPHOME/bin/lib on all Greenplum hosts):
+Greengage network test (note that netperf must be installed 
+in $GPHOME/bin/lib on all Greengage hosts):
 
 
 $ gpcheckperf -f hostfile_gpchecknet_ic1 -r N --netperf -d /tmp

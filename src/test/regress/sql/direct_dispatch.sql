@@ -402,7 +402,7 @@ explain (costs off) select gp_segment_id, id from t_test_dd_via_segid where gp_s
 
 explain (costs off) select gp_segment_id, id from t_test_dd_via_segid where gp_segment_id=1 or gp_segment_id=2 or gp_segment_id=3;
 
--- https://github.com/greenplum-db/gpdb/issues/14887
+-- https://github.com/GreengageDB/greengage/issues/14887
 -- If opno of clause does not belong to opfamily of distributed key,
 -- do not use direct dispatch to resolve wrong result
 create table t_14887(a varchar);

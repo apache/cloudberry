@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------
  *
  * regress_gp.c
- *	 Greenplum specific code for various C-language functions defined as
+ *	 Greengage specific code for various C-language functions defined as
  *	 part of the regression tests.
  *
  * Portions Copyright (c) 1996-2009, PostgreSQL Global Development Group

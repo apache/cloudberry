@@ -10,7 +10,7 @@ insert into uav3 select i%100,i%100 from generate_series(1,100000) i;
 create view uav as select * from uav1 union all select * from uav2 union all select * from uav3;
 explain select id from uav group by id;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

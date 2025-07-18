@@ -1568,7 +1568,7 @@ ExecInitMergeJoin(MergeJoin *node, EState *estate, int eflags)
 
 	mergestate->prefetch_inner = node->join.prefetch_inner;
 
-	/* Greenplum specific: see comments in ExecInitNestLoop */
+	/* Greengage specific: see comments in ExecInitNestLoop */
 	mergestate->prefetch_joinqual = false;
 	mergestate->prefetch_qual = false;
 

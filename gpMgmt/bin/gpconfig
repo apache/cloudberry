@@ -34,7 +34,7 @@ try:
     from gpconfig_modules.parse_guc_metadata import ParseGuc
 except ImportError as err:
     sys.exit('Cannot import modules.  Please check that you have sourced '
-             'greenplum_path.sh.  Detail: ' + str(err))
+             'greengage_path.sh.  Detail: ' + str(err))
 
 EXECNAME = os.path.split(__file__)[-1]
 

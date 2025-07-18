@@ -6,7 +6,7 @@ alter table pt2_1_prt_2 set distributed randomly;
 create index pt2_idx on pt2(k);
 explain select i, count(j) from pt2  where k=5 group by i;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -494,9 +494,9 @@ ERROR:  canceling statement due to user request
 ! gpstop -rai;
 20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Starting gpstop with args: -rai
 20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Gathering information and validating the environment...
-20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Greenplum Master catalog information
+20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Greengage Master catalog information
 20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Segment details from master...
-20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.13.0+dev.34.gb0932fd788 build dev'
+20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.13.0+dev.34.gb0932fd788 build dev'
 20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Master segment instance directory=/home/huanzhang/workspace/gpdb6/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20210405:09:27:22:015397 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Attempting forceful termination of any leftover master process
@@ -920,9 +920,9 @@ ERROR:  canceling statement due to user request
 ! gpstop -rai;
 20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Starting gpstop with args: -rai
 20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Gathering information and validating the environment...
-20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Greenplum Master catalog information
+20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Greengage Master catalog information
 20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Segment details from master...
-20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.13.0+dev.34.gb0932fd788 build dev'
+20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.13.0+dev.34.gb0932fd788 build dev'
 20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Master segment instance directory=/home/huanzhang/workspace/gpdb6/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20210405:09:28:23:017985 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Attempting forceful termination of any leftover master process

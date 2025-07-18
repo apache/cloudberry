@@ -1,6 +1,6 @@
 /* 
  * memprot.c
- *		Memory allocation under greenplum memory allocation.
+ *		Memory allocation under greengage memory allocation.
  * 
  * Copyright(c) 2008, Greenplum Inc.
  * 

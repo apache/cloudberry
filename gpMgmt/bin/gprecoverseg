@@ -2,7 +2,7 @@
 """
 gprecoverseg
 
-Recovers Greenplum segment instances that are marked as invalid, 
+Recovers Greengage segment instances that are marked as invalid, 
 if mirroring is configured and operational.
 """
 

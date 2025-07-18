@@ -7,7 +7,7 @@ analyze ROOTPARTITION partitioned_table;
 
 EXPLAIN SELECT pk from partitioned_table WHERE a > (select d from other_table where c = a) and pk < 12;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

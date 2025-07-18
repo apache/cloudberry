@@ -727,7 +727,7 @@ SELECT cursor_to_xmlschema('xc'::refcursor, false, true, '');
 (1 row)
 
 MOVE BACKWARD ALL IN xc;
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 SELECT cursor_to_xml('xc'::refcursor, 5, true, false, '');
 ERROR:  portal "xc" cannot be run
 SELECT cursor_to_xmlschema('xc'::refcursor, true, false, '');

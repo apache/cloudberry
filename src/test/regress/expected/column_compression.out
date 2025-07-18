@@ -15,7 +15,7 @@ create table ccddl (
 	j int,
 	default column encoding (compresstype=zlib)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -139,7 +139,7 @@ create table ccddl (
 	j int,
 	default column encoding (compresstype=zlib, compresslevel=5)
 ) with (appendonly=true, orientation=column, oids=false);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -154,7 +154,7 @@ create table ccddl (
 	j int,
 	default column encoding (compresstype=zlib)
 ) with (appendonly=true, orientation=column, fillfactor=11);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -286,7 +286,7 @@ create table ccddl (
 	j int encoding (compresstype=RLE_TYPE),
 	default column encoding (compresstype=zlib)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                       attoptions                        
@@ -303,7 +303,7 @@ create table ccddl (
 	default column encoding (compresstype=zlib),
 	column j encoding (compresstype=RLE_TYPE)
 ) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                       attoptions                        
@@ -319,7 +319,7 @@ create table ccddl (
 	i int,
 	j text encoding (compresstype=zlib, blocksize=65536, compresslevel=1)
 )  with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -356,7 +356,7 @@ drop table ccddl;
 create table ccddl (i int, j int encoding(compresstype=zlib), column i encoding
 (compresstype=zlib), default column encoding (compresstype=RLE_TYPE)) with
 (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -369,7 +369,7 @@ drop table ccddl;
 -- WITH (..., compresstype=<type>) should act as a default clause
 create table ccddl (i int, j int) with(appendonly = true, orientation = column,
 compresstype=zlib);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -382,7 +382,7 @@ drop table ccddl;
 -- Mix case for compresstype since it should be case insensitive
 create table ccddl (i int, j int encoding (COMPRESSTYPE="ZlIb"))
 	with(appendonly = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -394,7 +394,7 @@ execute ccddlcheck;
 drop table ccddl;
 -- CREATE TABLE (LIKE) WITH (...) must honour the directives in the WITH clause.
 create table ccddl (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddl_co(LIKE ccddl)
   with (appendonly = true, orientation=column);
@@ -430,20 +430,20 @@ create table ccddl (i int encoding (compresstype=zlib))
 ERROR:  ENCODING clause only supported with column oriented tables
 -- can't add encoding to a non-CO table
 create table ccddl (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add column j int encoding (compresstype=zlib);
 ERROR:  ENCODING clause not supported on non column orientated table
 drop table ccddl;
 create table ccddl (i int) with (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add column j int encoding (compresstype=zlib);
 ERROR:  ENCODING clause not supported on non column orientated table
 drop table ccddl;
 -- check that we validate the encoding clause for add column
 create table ccddl (i int) with (appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ccddl add column j int encoding(compresstype=yawn);
 ERROR:  unknown compresstype "yawn"
@@ -457,7 +457,7 @@ drop table ccddl;
 -- encoding clause has higher precedence than WITH clause
 create table ccddl (i int encoding(compresstype=RLE_TYPE)) with(compresstype=zlib,
 appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                       attoptions                        
@@ -481,7 +481,7 @@ ERROR:  unrecognized parameter "ahhhh"
 -- column compression
 create table ccddlparent (i int encoding (compresstype=zlib))
 with (appendonly = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddlchild (j int encoding (compresstype=zlib))
 inherits(ccddlparent) with (appendonly = true, orientation = column);
@@ -489,7 +489,7 @@ ERROR:  INHERITS clause cannot be used with column oriented tables
 drop table ccddlparent cascade;
 -- Conflict between default and with, in the LIKE case
 create table ccddl (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddl_co (like ccddl, 
 					   default column encoding(compresstype=RLE_TYPE)) 
@@ -500,7 +500,7 @@ drop table ccddl;
 create table ccddl (a, b)
 with (appendonly=true, orientation=column, compresstype=zlib) as
 select 1, 1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 execute ccddlcheck;
  relname | attnum |                     attoptions                      
@@ -513,7 +513,7 @@ drop table ccddl;
 -- encoding clause has higher precedence than WITH clause even in the LIKE case.
 -- (this change the behavior of MPP-15120) 
 create table ccddl (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ccddl_co (like ccddl, column i encoding(compresstype=RLE_TYPE))
 with (appendonly=true, orientation=column, compresstype=zlib);
@@ -540,7 +540,7 @@ partition by range(j)
  column i encoding(compresstype=zlib),
  column j encoding(compresstype=RLE_TYPE)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -677,7 +677,7 @@ partition by range(j)
 (partition p1 start(1) end(10),
  partition p2 start(10) end(20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1059,7 +1059,7 @@ column l encoding(compresstype=zlib))
 (partition p1 start(1) end(10),
 partition p2 start(10) end(20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1138,7 +1138,7 @@ subpartition sp1 values(1, 2, 3, 4, 5))
 (partition p1 start(1) end(10),
 partition p2 start(10) end(20)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1169,7 +1169,7 @@ create table ccddl (i int encoding (compresstype=zlib))
 with (appendonly = true, orientation=column)
 partition by range(i)
 (partition p1 start(1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 execute ccddlcheck;
@@ -1201,7 +1201,7 @@ subpartition template (subpartition sp1 start(1) end(20),
 	column i encoding (compresstype=zlib),
 	column j encoding (compresstype=RLE_TYPE))
 (partition p1 start(1) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1_2_prt_sp1" for table "ccddl_1_prt_p1"
@@ -1432,7 +1432,7 @@ create table ccddl (
 		column i encoding (blocksize=65536),
 		default column encoding (compresstype=RLE_TYPE)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1476,7 +1476,7 @@ partition by range(i) subpartition by range(j)
 		 default column encoding (compresstype=RLE_TYPE)
 		)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1519,7 +1519,7 @@ WITH (appendonly=true, orientation=column)
 		        COLUMN c3 ENCODING (compresstype=zlib),
 				COLUMN c2 ENCODING (compresstype=RLE_TYPE)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_1" for table "ccddl"
 execute ccddlcheck;
@@ -1546,7 +1546,7 @@ create table ccddl
 		partition p2 start(2) end(3),
 		default column encoding (compresstype=zlib)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1568,7 +1568,7 @@ partition by list(b)
 (partition s_abc values ('abc')
 	with (appendonly=true, orientation=column, compresstype=zlib,
 		  compresslevel=1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_s_abc" for table "ccddl"
 alter table ccddl add partition "s_xyz" values ('xyz')
@@ -1595,7 +1595,7 @@ create table ccddl (i int, d date, j int)
   	subpartition template (subpartition sp1 values(1),
 						   default column encoding (compresstype=zlib))
   (start('2010-01-01') end('2010-01-05') every('1 day'::interval));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_2" for table "ccddl"
@@ -1656,13 +1656,13 @@ drop table ccddl;
 -- Make sure we validate the storage directives
 create table gg (i int, k int) with (appendonly=true, orientation=column)
 partition by range(k) (partition p1 start(1) end(2), column i encoding(a=b));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter "a"
 create table gg (i int, k int) with (appendonly=true, orientation=column)
 partition by range(k) (partition p1 start(1) end(2), column i
 encoding(compresstype=sdf2sdf));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unknown compresstype "sdf2sdf"
 -- We don't support partition element specific encoding clauses in subpartition
@@ -1672,7 +1672,7 @@ create table a (i int, j int) with (appendonly=true, orientation=column)
       subpartition template(start(1) end(10) default column encoding (compresstype=zlib),
                             start(10) end(20))
 (partition p1 start(1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "a_1_prt_p1" for table "a"
 ERROR:  partition specific ENCODING clause not supported in SUBPARTITION TEMPLATE
@@ -1686,7 +1686,7 @@ partition by range(a1)
 		start(1) end(1000) every(500),
 		COLUMN a1 ENCODING (compresstype=zlib,compresslevel=4,blocksize=32768)
 	);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_2" for table "ccddl"
@@ -1905,7 +1905,7 @@ deallocate ccddlcheck;
 -----------------------------------------------------------------------
 -- RLE_TYPE is not supported 
 create table ccddl (i int) with(appendonly = true, compresstype = rle_type);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  rle_type cannot be used with Append Only relations row orientation
 -----------------------------------------------------------------------
@@ -1929,7 +1929,7 @@ CREATE TABLE ccddl (
   , partition p4 start('32') end('33')
   , partition p5 start('33') WITH (appendonly=true, checksum=true, blocksize=819200, compresslevel=8)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p2" for table "ccddl"
@@ -1987,7 +1987,7 @@ partition by range(i) subpartition by range(j)
 		  column j encoding (blocksize=65536)
 		)
 	(partition p1 start(1) end (2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1" for table "ccddl"
 NOTICE:  CREATE TABLE will create partition "ccddl_1_prt_p1_2_prt_sp1" for table "ccddl_1_prt_p1"
@@ -2087,7 +2087,7 @@ SET enable_seqscan TO ON;
 ------------------------------------------------------------------------------
 -- dummy table to help create the scenario
 CREATE TABLE ao_from_table(a INT, arr DOUBLE PRECISION[]) WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- insert data to create large content header for CO table
 INSERT INTO ao_from_table
@@ -2099,7 +2099,7 @@ INSERT INTO ao_from_table SELECT 1,'{0.1}' FROM generate_series(1, 17000)i;
 CREATE TABLE co_large_and_bulk_content(a INT,
                      arr DOUBLE PRECISION[] ENCODING (compresstype=RLE_TYPE,compresslevel=3,blocksize=8192))
                      WITH (appendonly=true, orientation=column, compresstype=RLE_TYPE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO co_large_and_bulk_content SELECT * FROM ao_from_table;
 -- can't do count(*) as CO optimizes to read only first column

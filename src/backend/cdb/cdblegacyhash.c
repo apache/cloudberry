@@ -147,7 +147,7 @@ get_legacy_cdbhash_opclass_for_base_type(Oid orig_typid)
 	 *
 	 * NOTE: We don't support array types, even though GPDB 5 used to implement
 	 * hashing for them. The reason is that the hash function for those was
-	 * actually broken, see https://github.com/greenplum-db/gpdb/issues/5467.
+	 * actually broken, see https://github.com/GreengageDB/greengage/issues/5467.
 	 */
 	switch (typid)
 	{

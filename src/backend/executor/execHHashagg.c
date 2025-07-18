@@ -2,7 +2,7 @@
  * execHHashagg.c
  *		GPDB additions to support hybrid hash aggregation algorithm.
  *		This file could be merged into nodeAgg.c.  The separation is
- *		only to help isolate Greenplum Database-only code from future merges with
+ *		only to help isolate Greengage Database-only code from future merges with
  *		PG code.  Note, however, that nodeAgg.c is also modified to
  *		make use of this code.
  *

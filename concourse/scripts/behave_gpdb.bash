@@ -9,7 +9,7 @@ function gen_env(){
     cat > /opt/run_test.sh <<-EOF
 		set -ex
 
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
+		source /usr/local/greengage-db-devel/greengage_path.sh
 
 		cd "\${1}/gpdb_src/gpAux"
 		source gpdemo/gpdemo-env.sh
@@ -28,8 +28,8 @@ function gen_env(){
 }
 
 function setup_behave() {
-    dep_dir="${1:-/opt/greenplum-db-test-deps}"
-    [[ -f /usr/local/greenplum-db-devel/ext/python/bin/behave ]] || cp -a ${dep_dir}/behave/* /usr/local/greenplum-db-devel/ext/python
+    dep_dir="${1:-/opt/greengage-db-test-deps}"
+    [[ -f /usr/local/greengage-db-devel/ext/python/bin/behave ]] || cp -a ${dep_dir}/behave/* /usr/local/greengage-db-devel/ext/python
 }
 
 function _main() {
@@ -44,7 +44,7 @@ function _main() {
     time ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash
 
     # Run inside a subshell so it does not pollute the environment after
-    # sourcing greenplum_path
+    # sourcing greengage_path
     time (make_cluster)
 
 

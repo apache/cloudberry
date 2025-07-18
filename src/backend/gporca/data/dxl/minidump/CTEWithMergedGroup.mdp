@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
  <dxl:Comment><![CDATA[
    Objective: When a group contains a CTE consumer, its m_fCTEConsumer property should be set to true. If this group's expressions are merged into another group, this property should be set in the target group. If it is not set, the CTE consumer may not request necessary columns from the CTE producer and ORCA will fail to generate a plan.
 

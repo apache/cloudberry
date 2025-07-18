@@ -25,7 +25,7 @@ use GPTest qw(print_version);
 
 =head1 NAME
 
-B<gpdiff.pl> - GreenPlum diff
+B<gpdiff.pl> - Greengage diff
 
 =head1 SYNOPSIS
 
@@ -94,9 +94,9 @@ specify multiple initialization files, use multiple gpd_init arguments, eg:
 =head1 DESCRIPTION
 
 gpdiff compares files using diff after processing them with atmsort.pm.
-This comparison is designed to ignore certain Greenplum-specific
+This comparison is designed to ignore certain Greengage-specific
 informational messages, as well as handle the cases where query output
-order may differ for a multi-segment Greenplum database versus a
+order may differ for a multi-segment Greengage database versus a
 single PostgreSQL instance.  Type "atmsort.pl --man" for more details.
 gpdiff is invoked by pg_regress as part of "make installcheck-world".
 In this case the diff options are something like:
@@ -127,7 +127,7 @@ Jeffrey I Cohen
 Portions Copyright (c) 2007, 2008, 2009 GreenPlum.  All rights reserved.
 Portions Copyright (c) 2012-Present Pivotal Software, Inc.
 
-Address bug reports and comments to: bugs@greenplum.org
+Address bug reports and comments to: bugs@greengagedb.org
 
 
 =cut

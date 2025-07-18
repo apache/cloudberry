@@ -4,7 +4,7 @@
  *	  the Postgres statistics generator
  *
  *
- * There are a few things in Greenplum that make this more complicated
+ * There are a few things in Greengage that make this more complicated
  * than in upstream:
  *
  * AO tables
@@ -21,7 +21,7 @@
  * Dispatching
  * -----------
  *
- * Greenplum is an MPP system, so we need to collect the statistics from
+ * Greengage is an MPP system, so we need to collect the statistics from
  * all the segments. The segment servers don't keep statistics (unless you
  * connect to a segment in utility node and run ANALYZE directly), and
  * the orchestration of ANALYZE happens in the dispatcher. The high
@@ -2054,7 +2054,7 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 	 * child but no longer does.  In that case, we can clear the
 	 * relhassubclass field so as not to make the same mistake again later.
 	 * (This is safe because we hold ShareUpdateExclusiveLock.)
-	 * Please refer to https://github.com/greenplum-db/gpdb/issues/14644
+	 * Please refer to https://github.com/GreengageDB/greengage/issues/14644
 	 */
 	if (list_length(tableOIDs) < 2)
 	{

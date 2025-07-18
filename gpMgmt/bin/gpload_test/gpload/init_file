@@ -68,8 +68,8 @@ s/\(*[\d+\.\d+\.\d+\.\d+\.\/\d+]*\)//g
 -- s/(trying to run gpfdist.*)/GP_IGNORE: $1/
 -- m/ /
 -- s/failed to start gpfdist.*/FAILED_GPFDIST/
--- m/Is the Greenplum Database running on port /
--- s/Is the Greenplum Database running on port.+/Is the Greenplum Database running on port PORT_NUMBER?/
+-- m/Is the Greengage Database running on port /
+-- s/Is the Greengage Database running on port.+/Is the Greengage Database running on port PORT_NUMBER?/
 -- m/ /
 -- s/\w+\.c:\d+\]/FILE:LINE]/
 -- m/temp_staging_gpload/

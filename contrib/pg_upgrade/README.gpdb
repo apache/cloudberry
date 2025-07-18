@@ -1,16 +1,16 @@
-The Greenplum pg_upgrade code is based on pg_upgrade from 9.3 and has
-been extended to work with Greenplum. This README is intended to document the
+The Greengage pg_upgrade code is based on pg_upgrade from 9.3 and has
+been extended to work with Greengage. This README is intended to document the
 changes that have been done.
 
 Operation of pg_upgrade remains unchanged as are the available command line
-parameters. Upgrading a Greenplum cluster with pg_upgrade is done by first
+parameters. Upgrading a Greengage cluster with pg_upgrade is done by first
 upgrading the QD and then the QEs.
 
 
-Distributed Greenplum upgrades
+Distributed Greengage upgrades
 ------------------------------
 
-Greenplum requires that all Oids are synchronized between the QD and the QEs,
+Greengage requires that all Oids are synchronized between the QD and the QEs,
 so the upgrade must maintain this invariant.  Further, the upgrade must do as
 much as it can in parallel to ensure the cluster is upgraded with as little
 downtime as possible.  To satisfy both requirements, the upgrade process is
@@ -36,7 +36,7 @@ that indexes must be dropped and recreated as part of the upgrade to ensure
 correct results.
 
 
-Testing Greenplum pg_upgrade
+Testing Greengage pg_upgrade
 ----------------------------
 
 There is a testrunner script in contrib/pg_upgrade which runs a full upgrade of
@@ -45,7 +45,7 @@ to test upgrades by running as the final step of ICW. The test can be invoked
 by "make installcheck" in the contrib/pg_upgrade directory.
 
 The testscript also has a "smoketest" option which only tests upgrading a
-single node.  This is *not* a test of an actual Greenplum cluster upgrade,
+single node.  This is *not* a test of an actual Greengage cluster upgrade,
 but a test of the Oid synchronization required to handle a node upgrade. The
 intention is for this to be a quick test that all objects are handled by
 pg_upgrade; upgrade testing still requires the full run across all

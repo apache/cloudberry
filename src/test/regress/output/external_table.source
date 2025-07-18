@@ -73,8 +73,8 @@ select * from check_env;
                                                                                                                                                                                                                                       x                                                                                                                                                                                                                                      
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  CLICOLOR=1
- DYLD_LIBRARY_PATH=/Users/@curusername@/greenplum-db-devel/lib:/Users/@curusername@/greenplum-db-devel/ext/python/lib:/opt/gcc_infrastructure/lib:/Users/@curusername@/greenplum-perfmon-web-4.0.1.0/lib:/Users/@curusername@/greenplum-db-devel/lib:/Users/@curusername@/greenplum-db-devel/ext/python/lib:
- GPHOME=/Users/@curusername@/greenplum-db-devel
+ DYLD_LIBRARY_PATH=/Users/@curusername@/greengage-db-devel/lib:/Users/@curusername@/greengage-db-devel/ext/python/lib:/opt/gcc_infrastructure/lib:/Users/@curusername@/greengage-perfmon-web-4.0.1.0/lib:/Users/@curusername@/greengage-db-devel/lib:/Users/@curusername@/greengage-db-devel/ext/python/lib:
+ GPHOME=/Users/@curusername@/greengage-db-devel
  GPROOT=/Users/@curusername@
  GP_CID=0
  GP_DATABASE=regression
@@ -86,8 +86,8 @@ select * from check_env;
  GP_QUERY_STRING=select * from check_env;
  GP_SEGMENT_COUNT=2
  GP_SEGMENT_ID=0
- GP_SEG_DATADIR=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0
- GP_SEG_PG_CONF=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0/postgresql.conf
+ GP_SEG_DATADIR=/Users/@curusername@/greengage-db-data/dbfast1/gpseg0
+ GP_SEG_PG_CONF=/Users/@curusername@/greengage-db-data/dbfast1/gpseg0/postgresql.conf
  GP_SEG_PORT=50000
  GP_SESSION_ID=438
  GP_SN=1
@@ -106,16 +106,16 @@ select * from check_env;
  LC_TIME=C
  LOGNAME=@curusername@
  MAIL=/var/mail/@curusername@
- MASTER_DATA_DIRECTORY=//Users/@curusername@/greenplum-master/gpseg-1
- OPENSSL_CONF=/Users/@curusername@/greenplum-db-devel/etc/openssl.cnf
+ MASTER_DATA_DIRECTORY=//Users/@curusername@/greengage-master/gpseg-1
+ OPENSSL_CONF=/Users/@curusername@/greengage-db-devel/etc/openssl.cnf
  P4CONFIG=.p4config
- PATH=/Users/@curusername@/greenplum-db-devel/bin:/Users/@curusername@/greenplum-db-devel/ext/python/bin:/Users/@curusername@/greenplum-db-devel/bin:/Users/@curusername@/greenplum-db-devel/ext/python/bin:/opt/gcc-4.4.2/bin:/Users/@curusername@/Workdir/mybin:/Users/@curusername@/greenplum-perfmon-web-4.0.1.0/bin:/Users/@curusername@/greenplum-db-devel/bin:/Users/@curusername@/greenplum-db-devel/ext/python/bin:/Users/@curusername@/greenplum-db-devel/bin:/Users/@curusername@/greenplum-db-devel/ext/python/bin:/usr/bin:/bin:/usr/sbin:/sbin
- PGDATA=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0
+ PATH=/Users/@curusername@/greengage-db-devel/bin:/Users/@curusername@/greengage-db-devel/ext/python/bin:/Users/@curusername@/greengage-db-devel/bin:/Users/@curusername@/greengage-db-devel/ext/python/bin:/opt/gcc-4.4.2/bin:/Users/@curusername@/Workdir/mybin:/Users/@curusername@/greengage-perfmon-web-4.0.1.0/bin:/Users/@curusername@/greengage-db-devel/bin:/Users/@curusername@/greengage-db-devel/ext/python/bin:/Users/@curusername@/greengage-db-devel/bin:/Users/@curusername@/greengage-db-devel/ext/python/bin:/usr/bin:/bin:/usr/sbin:/sbin
+ PGDATA=/Users/@curusername@/greengage-db-data/dbfast1/gpseg0
  PGHOST=127.0.0.1
- PGSYSCONFDIR=/Users/@curusername@/greenplum-db-devel/etc/postgresql
- PWD=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0
- PYTHONHOME=/Users/@curusername@/greenplum-db-devel/ext/python
- PYTHONPATH=/Users/@curusername@/greenplum-db-devel/lib/python
+ PGSYSCONFDIR=/Users/@curusername@/greengage-db-devel/etc/postgresql
+ PWD=/Users/@curusername@/greengage-db-data/dbfast1/gpseg0
+ PYTHONHOME=/Users/@curusername@/greengage-db-devel/ext/python
+ PYTHONPATH=/Users/@curusername@/greengage-db-devel/lib/python
  SHELL=/bin/bash
  SHLVL=4
  SSH_CLIENT=127.0.0.1 50658 22
@@ -375,7 +375,7 @@ CREATE TRUSTED PROTOCOL demoprot_non_superuser (readfunc = 'read_from_file', wri
 ERROR:  must be superuser to create an external protocol
 RESET ROLE;
 -- Test pg_exttable's encoding: QE's encoding should be consistent with QD
--- GitHub Issue #9727: https://github.com/greenplum-db/gpdb/issues/9727
+-- GitHub Issue #9727: https://github.com/GreengageDB/greengage/issues/9727
 SET client_encoding = 'ISO-8859-1';
 CREATE EXTERNAL TABLE issue_9727 (d varchar(20)) location ('gpfdist://9727/d.dat') format 'csv' (DELIMITER '|');
 SELECT encoding from pg_exttable where urilocation='{gpfdist://9727:8080/d.dat}';
@@ -395,7 +395,7 @@ SELECT encoding from gp_dist_random('pg_exttable') where urilocation='{gpfdist:/
 DROP EXTERNAL TABLE issue_9727;
 RESET client_encoding;
 -- Test "DROP OWNED BY" when everything of the protocol is granted to some user.
--- GitHub Issue #12748: https://github.com/greenplum-db/gpdb/issues/12748
+-- GitHub Issue #12748: https://github.com/GreengageDB/greengage/issues/12748
 CREATE TRUSTED PROTOCOL dummy_protocol_issue_12748 (readfunc = 'read_from_file', writefunc = 'write_to_file');
 CREATE ROLE test_role_issue_12748;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
@@ -410,7 +410,7 @@ create external table public.issue_1025 (a int) location ('file://@hostname@@abs
 -- Expect: success
 \! pg_dump -s -c -t public.issue_1025 regression
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 
 SET gp_default_storage_options = '';
@@ -444,7 +444,7 @@ ENCODING 'UTF8';
 ALTER EXTERNAL TABLE public.issue_1025 OWNER TO @curusername@;
 
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 
 -- End of pg_dump output
@@ -833,7 +833,7 @@ CREATE EXTERNAL TABLE exttab_basic_6( i int, j text )
 LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE TABLE exttab_ctas_1 as SELECT * FROM exttab_basic_6;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  found 6 data formatting errors (6 or more input rows), rejected related input data
 -- CTAS should go through fine
@@ -868,7 +868,7 @@ LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT '
 LOG ERRORS SEGMENT REJECT LIMIT 5;
 -- CTAS should fail
 CREATE TABLE exttab_ctas_2 AS select * from exttab_basic_7;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12121)
@@ -1820,7 +1820,7 @@ SELECT * FROM gp_read_error_log('exttab_udfs_2')
 DROP TABLE IF EXISTS exttab_udfs_insert_1;
 NOTICE:  table "exttab_udfs_insert_1" does not exist, skipping
 CREATE TABLE exttab_udfs_insert_1(a boolean);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT gp_truncate_error_log('exttab_udfs_1');
  gp_truncate_error_log 
@@ -2023,7 +2023,7 @@ SELECT gp_truncate_error_log('exttab_udfs_2');
 (1 row)
 
 CREATE TABLE exttab_udfs_ctas_2 AS SELECT * FROM exttab_udfs_func2();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'exttab_udfs_func2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'exttab_udfs_func2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 CONTEXT:  SQL statement "INSERT INTO exttab_udfs_insert_2
@@ -2213,7 +2213,7 @@ SELECT * FROM gp_read_error_log('exttab_views_2')
 DROP TABLE IF EXISTS exttab_views_insert_1;
 NOTICE:  table "exttab_views_insert_1" does not exist, skipping
 CREATE TABLE exttab_views_insert_1 (i int, j int, k text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT gp_truncate_error_log('exttab_views_1');
  gp_truncate_error_log 
@@ -2267,7 +2267,7 @@ SELECT gp_truncate_error_log('exttab_views_2');
 
 -- Should fail
 CREATE TABLE exttab_views_ctas_1 AS SELECT * FROM exttab_views_3 where length(j) < 100;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12322)
@@ -2305,7 +2305,7 @@ SELECT gp_truncate_error_log('exttab_views_2');
 
 -- Should fail here
 CREATE TABLE exttab_views_ctas_1 AS SELECT * FROM exttab_views_3;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  segment reject limit reached, aborting operation
 DETAIL:  Last error was: invalid input syntax for integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12313)
@@ -2733,7 +2733,7 @@ LOG ERRORS SEGMENT REJECT LIMIT 10;
 DROP TABLE IF EXISTS test_ext_heap_join;
 NOTICE:  table "test_ext_heap_join" does not exist, skipping
 CREATE TABLE test_ext_heap_join( i int, j text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Turn off stats
 SET gp_autostats_mode = 'NONE';

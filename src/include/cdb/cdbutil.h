@@ -120,7 +120,7 @@ typedef enum SegmentType
 }SegmentType;
 
 /*
- * performs all necessary setup required for initializing Greenplum Database components.
+ * performs all necessary setup required for initializing Greengage Database components.
  *
  * This includes cdblink_setup() and initializing the Motion Layer.
  *
@@ -129,8 +129,8 @@ extern void cdb_setup(void);
 
 
 /*
- * performs all necessary cleanup required when cleaning up Greenplum Database components
- * when disabling Greenplum Database functionality.
+ * performs all necessary cleanup required when cleaning up Greengage Database components
+ * when disabling Greengage Database functionality.
  *
  */
 extern void cdb_cleanup(int code, Datum arg  __attribute__((unused)) );

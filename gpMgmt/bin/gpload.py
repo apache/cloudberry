@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# gpload - load file(s) into Greenplum Database
+# gpload - load file(s) into Greengage Database
 # Copyright Greenplum 2008
 
 '''gpload [options] -f configuration file
@@ -1696,13 +1696,13 @@ class gpload:
                     srcfile = None
                     if os.environ.get('GPHOME_LOADERS'):
                         srcfile = os.path.join(os.environ.get('GPHOME_LOADERS'),
-                                           'greenplum_loaders_path.sh')
+                                           'greengage_loaders_path.sh')
                     elif os.environ.get('GPHOME'):
                         srcfile = os.path.join(os.environ.get('GPHOME'),
-                                           'greenplum_path.sh')
+                                           'greengage_path.sh')
 
                     if (not (srcfile and os.path.exists(srcfile))):
-                        self.log(self.ERROR, 'cannot find greenplum environment ' +
+                        self.log(self.ERROR, 'cannot find greengage environment ' +
                                     'file: environment misconfigured')
 
                     cmd = 'source %s ; exec ' % srcfile
@@ -1859,7 +1859,7 @@ class gpload:
                 self.setup_connection(recurse)
             else:
                 self.log(self.ERROR, "could not connect to database: %s. Is " \
-                    "the Greenplum Database running on port %i?" % (errorMessage,
+                    "the Greengage Database running on port %i?" % (errorMessage,
                     self.options.p))
 
     def add_quote_if_not(self, col):
@@ -2624,7 +2624,7 @@ class gpload:
         resultList = self.db.query(sql.encode('utf-8')).getresult()
         if len(resultList) > 0:
             self.log(self.WARN, """Old style, reusable tables named "temp_gpload_reusable_*" from a previous versions were found.
-                         Greenplum recommends running "DROP TABLE temp_gpload_reusable_..." on each table. This only needs to be done once.""")
+                         Greengage recommends running "DROP TABLE temp_gpload_reusable_..." on each table. This only needs to be done once.""")
 		
         # If the 'reuse tables' option was specified we now try to find an
         # already existing staging table in the catalog which will match

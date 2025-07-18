@@ -3,6 +3,6 @@ Requirements:
 	- A "C" compiler
 
 To install:
-	- Make sure that you have the Greenplum binary distribution in your path
+	- Make sure that you have the Greengage binary distribution in your path
 	- type 'make install'
 	- create the extension in psql using: `CREATE EXTENSION gp_sparse_vector;`

@@ -113,7 +113,7 @@ insert into trigger_test values(1,'insert');
 CREATE VIEW trigger_test_view AS SELECT * FROM trigger_test;
 
 --start_ignore
--- INSTEAD OF triggers are not yet supported in Greenplum
+-- INSTEAD OF triggers are not yet supported in Greengage
 CREATE TRIGGER show_trigger_data_trig
 INSTEAD OF INSERT OR UPDATE OR DELETE ON trigger_test_view
 FOR EACH ROW EXECUTE PROCEDURE trigger_data(24,'skidoo view');

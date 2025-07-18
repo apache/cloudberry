@@ -1,4 +1,4 @@
--- TEST 1: Fix Github issue https://github.com/greenplum-db/gpdb/issues/9208
+-- TEST 1: Fix Github issue https://github.com/GreengageDB/greengage/issues/9208
 1: create schema sync_np1;
 1: create schema sync_np2;
 1: CREATE OR REPLACE FUNCTION public.segment_setting(guc text)
@@ -24,7 +24,7 @@
 2: drop schema sync_np2;
 2q:
 
--- TEST 2: Fix Github issue https://github.com/greenplum-db/gpdb/issues/685
+-- TEST 2: Fix Github issue https://github.com/GreengageDB/greengage/issues/685
 -- `gp_select_invisible` is default to false. SET command will dispatch
 -- the GUC's `reset_val` and changed value to the created Gang. If the QE(s)
 -- use the incorrect `reset_val`, its value will be inconsistent with the QD's,

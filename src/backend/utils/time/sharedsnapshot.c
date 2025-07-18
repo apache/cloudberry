@@ -9,7 +9,7 @@
  * IDENTIFICATION
  *	  src/backend/utils/time/sharedsnapshot.c
  *
- * In Greenplum, as part of slice plans, many postgres processes (qExecs, QE)
+ * In Greengage, as part of slice plans, many postgres processes (qExecs, QE)
  * running on a single segment database as part of the same user's SQL
  * statement. All of the qExecs that belong to a particular user on a
  * particular segment database need to have consistent visibility. Idea used
@@ -19,9 +19,9 @@
  * are called a SegMate process group.
  *
  * A SegMate process group is a QE (Query Executor) Writer process and 0, 1 or
- * more QE Reader processes. Greenplum needed to invent a SegMate sharing
+ * more QE Reader processes. Greengage needed to invent a SegMate sharing
  * mechanism because in Postgres there is only 1 backend and most needed
- * information is simply available in private memory. With Greenplum session
+ * information is simply available in private memory. With Greengage session
  * parallelism on database instances, we need to have a way to share
  * not-yet-committed session information among the SegMates. This information
  * includes transaction snapshots, sub-transaction status, so-called combo-cid
@@ -652,7 +652,7 @@ dumpSharedLocalSnapshot_forCursor(void)
 
 	/*
 	 * Force using default tablespace instead of any temp tablespaces,
-	 * Refer to Issue: https://github.com/greenplum-db/gpdb/issues/12871.
+	 * Refer to Issue: https://github.com/GreengageDB/greengage/issues/12871.
 	 */
 	f = BufFileCreateNamedTemp_ForceDefaultSpace(fname,
 												 false /* interXact */,
@@ -852,7 +852,7 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 	 * invalidate catalog snapshot so that next time it will get
 	 * a new catalog snapshot containing the correct command id.
 	 *
-	 * See Issue https://github.com/greenplum-db/gpdb/issues/12871#issuecomment-982627753
+	 * See Issue https://github.com/GreengageDB/greengage/issues/12871#issuecomment-982627753
 	 * for details.
 	 */
 	InvalidateCatalogSnapshot();

@@ -4,7 +4,7 @@
  * This program is to test whether exetend-queries properly work with FOREIGN
  * TABLEs at transaction commit.
  *
- * See https://github.com/greenplum-db/gpdb/issues/10918
+ * See https://github.com/GreengageDB/greengage/issues/10918
  */
 
 #include <stdio.h>

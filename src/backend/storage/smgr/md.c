@@ -515,7 +515,7 @@ mdunlinkfork(RelFileNodeBackend rnode, ForkNumber forkNum, bool isRedo, char rel
 	if (isRedo || forkNum != MAIN_FORKNUM || RelFileNodeBackendIsTemp(rnode))
 	{
 /*
- * GPDB: Temp tables use shared buffers in Greenplum. As a result, simple unlink
+ * GPDB: Temp tables use shared buffers in Greengage. As a result, simple unlink
  * is not enough to return disk space to the OS immediately, because the files
  * of a temp relation can still be opened by the bg writer process. To fix this
  * problem, in GPDB we skip the check if the relation is temp or not, so files
@@ -575,7 +575,7 @@ mdunlinkfork(RelFileNodeBackend rnode, ForkNumber forkNum, bool isRedo, char rel
 		{
 			sprintf(segpath, "%s.%u", path, segno);
 /*
- * GPDB: Temp tables use shared buffers in Greenplum. As a result, simple unlink
+ * GPDB: Temp tables use shared buffers in Greengage. As a result, simple unlink
  * is not enough to return disk space to the OS immediately, because the files
  * of a temp relation can still be opened by the bg writer process. To fix this
  * problem, in GPDB we skip the check if the relation is temp or not, so files

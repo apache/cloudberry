@@ -2,7 +2,7 @@
  *
  * autostats.c
  *
- * Greenplum auto-analyze code
+ * Greengage auto-analyze code
  *
  *
  * Portions Copyright (c) 2005-2015, Greenplum inc

@@ -40,7 +40,7 @@ installcheck: gpdiff.pl gpstringsubs.pl
 	python2 -m pip install lxml
 
 	@cd gpload && ./TEST.py
-	@export PYTHONPATH=$PYTHONPATH:/usr/lib/python2.7/site-packages/:/usr/lib64/python2.7/site-packages/:/usr/local/greenplum-db-devel/lib/python\
+	@export PYTHONPATH=$PYTHONPATH:/usr/lib/python2.7/site-packages/:/usr/lib64/python2.7/site-packages/:/usr/local/greengage-db-devel/lib/python\
 	&& cd gpload2 && python2 -m pytest TEST_local_*
 endif
 

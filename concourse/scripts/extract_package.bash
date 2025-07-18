@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
 extract_rpm_to_tar () {
-    rpm2cpio gpdb_package/greenplum-db-*.rpm | cpio -idvm
+    rpm2cpio gpdb_package/greengage-db-*.rpm | cpio -idvm
 
     local tarball="${PWD}/gpdb_artifacts/bin_gpdb.tar.gz"
-    pushd usr/local/greenplum-db-*
+    pushd usr/local/greengage-db-*
         tar czf "${tarball}" ./*
     popd
 }
 extract_deb_to_tar () {
-  ar -x gpdb_package/greenplum-db-*.deb
+  ar -x gpdb_package/greengage-db-*.deb
   tar -xf data.tar.xz
   local tarball="${PWD}/gpdb_artifacts/bin_gpdb.tar.gz"
-  pushd usr/local/greenplum-db-*
+  pushd usr/local/greengage-db-*
       tar czf "${tarball}" ./*
   popd
 }

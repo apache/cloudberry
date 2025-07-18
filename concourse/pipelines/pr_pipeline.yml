@@ -17,7 +17,7 @@ resources:
 - name: gpdb_pr
   type: pull-request
   source:
-    repository: greenplum-db/gpdb
+    repository: GreengageDB/greengage
     base_branch: "6X_STABLE"
     access_token: ((gpdb-git-access-token))
     disable_forks: true
@@ -89,7 +89,7 @@ jobs:
           - |
             git clone gpdb_pr gpdb_src &&
             cd gpdb_src &&
-            git fetch https://github.com/greenplum-db/gpdb.git --tags &&
+            git fetch https://github.com/GreengageDB/greengage.git --tags &&
             git submodule update --init --recursive
         inputs: [{ name: gpdb_pr }]
         outputs: [{ name: gpdb_src }]
@@ -181,7 +181,7 @@ jobs:
           - |
             git clone gpdb_pr gpdb_src &&
             cd gpdb_src &&
-            git fetch https://github.com/greenplum-db/gpdb.git --tags &&
+            git fetch https://github.com/GreengageDB/greengage.git --tags &&
             git submodule update --init --recursive
         inputs: [{ name: gpdb_pr }]
         outputs: [{ name: gpdb_src }]

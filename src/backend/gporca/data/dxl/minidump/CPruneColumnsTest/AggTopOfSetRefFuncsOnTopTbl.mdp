@@ -6,7 +6,7 @@ insert into foo values (1, 'a|b');
 insert into foo values (2, 'c|d|e');
 select count(*) from (select unnest(string_to_array(c, '|')) i, d from foo) t;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

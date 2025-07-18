@@ -133,7 +133,7 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
 	SQL query against external data without requiring that data to first be loaded 
 	into the database. External tables provide an easy way to perform basic extraction, 
 	transformation, and loading (ETL) tasks that are common in data warehousing. 
-	External table files are read in parallel by the Greenplum Database segment instances, 
+	External table files are read in parallel by the Greengage Database segment instances, 
 	so they also provide a means for fast data loading. External tables should not be used 
 	for frequently queried tables.
   </para>
@@ -141,7 +141,7 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
   <para>
 	You may specify multiple external data sources or URIs (uniform resource identifiers) 
 	with the <literal>LOCATION</literal> clause — up to the number of primary segment instances 
-	in your Greenplum Database array. Each URI points to an external data file or other data 
+	in your Greengage Database array. Each URI points to an external data file or other data 
 	source. These URIs do not need to exist prior to defining an external table (<command>CREATE EXTERNAL TABLE</command> 
 	does not validate the URIs specified). However you will get an error if they cannot be found 
 	when querying the external table.
@@ -155,20 +155,20 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
   
   <para>
 	gpfdist — If using the <literal>gpfdist://</literal> protocol, you must have the 
-	Greenplum file distribution program (<literal>gpfdist</literal>) running on the host where the external 
+	Greengage file distribution program (<literal>gpfdist</literal>) running on the host where the external 
 	data files reside. This program points to a given directory on the file host and 
-	serves external data files to all Greenplum Database segments in parallel. 
+	serves external data files to all Greengage Database segments in parallel. 
 	All primary segments access the external file(s) in parallel regardless of how 
 	many URIs you specify when defining the external table. <literal>gpfdist</literal> 
-	is located in <literal>$GPHOME/bin<literal> on your Greenplum Database master host. 
+	is located in <literal>$GPHOME/bin<literal> on your Greengage Database master host. 
   </para>
   
   <para>
     file — If using the <literal>file://</literal> protocol the external data file(s) 
-	must reside on a segment host in a location accessible by the Greenplum super user 
+	must reside on a segment host in a location accessible by the Greengage super user 
 	(gpadmin). The number of URIs specified corresponds to the number of segment 
 	instances that will work in parallel to access the external table. So for 
-	example, if you have a Greenplum Database system with 8 primary segments and 
+	example, if you have a Greengage Database system with 8 primary segments and 
 	you specify 2 external files, only 2 of the 8 segments will access the external 
 	table in parallel at query time. The number of external files per segment host 
 	cannot exceed the number of primary segment instances on that host. For example, 
@@ -180,10 +180,10 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
   
   <para>
     http — If using the <literal>http://</literal> protocol the external data file(s) 
-	must reside on a web server that is accessible by the Greenplum segment hosts. 
+	must reside on a web server that is accessible by the Greengage segment hosts. 
 	The number of URIs specified corresponds to the number of segment instances 
 	that will work in parallel to access the external table. So for example, 
-	if you have a Greenplum Database system with 8 primary segments and you specify 2 
+	if you have a Greengage Database system with 8 primary segments and you specify 2 
 	external files, only 2 of the 8 segments will access the external table in 
 	parallel at query time.
 	</para>
@@ -194,7 +194,7 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
 	or comma separated values (CSV) format. If the data in the file does not 
 	use the default column delimiter, escape character, null string and so on, 
 	you must specify the additional formatting options so that the data in 
-	the external file is read correctly by Greenplum Database.
+	the external file is read correctly by Greengage Database.
 </para>
 
 </refsect1>
@@ -372,7 +372,7 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
 
   <para>
   Start the gpfdist file server program in the background on the 
-  Greenplum master host on port 8081 serving files from 
+  Greengage master host on port 8081 serving files from 
   directory /home/staging:
 
   <programlisting>
@@ -414,7 +414,7 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
   <title id="SQL-CREATEEXTERNALTABLE-compatibility-title">Compatibility</title>
 
   <para>
-   The <command>CREATE EXTERNAL TABLE</command> is a Greenplum Database extension. 
+   The <command>CREATE EXTERNAL TABLE</command> is a Greengage Database extension. 
    The <acronym>SQL</acronym> standard makes no provisions for external tables.
   </para>
  </refsect1>

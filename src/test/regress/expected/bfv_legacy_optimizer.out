@@ -38,7 +38,7 @@ language plpythonu;
 --
 -- SETUP
 CREATE TABLE bfv_legacy_t1(c1 int, c2 varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bfv_legacy_t1 select generate_series(1,1000), 'aaa';
 INSERT INTO bfv_legacy_t1 select generate_series(1001,2000), 'bbb';
@@ -77,11 +77,11 @@ create table bfv_s (
     c_p       text,
     c_v       float8
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_t' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c_t' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bfv_s (c_o, c_p, c_v) values (0, 1, 1234.56);
 create table bfv_int4_tbl (f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bfv_int4_tbl values(123456), (-2147483647), (0), (-123456), (2147483647);
 update bfv_s set c_v = 11

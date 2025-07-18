@@ -1983,7 +1983,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 
 	/*
 	 * Support for true serializable isolation is not yet implemented in
-	 * Greenplum.  See merge fixme in assign_XactIsoLevel().
+	 * Greengage.  See merge fixme in assign_XactIsoLevel().
 	 */
 	Assert(XactIsoLevel < XACT_SERIALIZABLE);
 

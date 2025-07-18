@@ -25,7 +25,7 @@ typedef struct SegmentDatabaseDescriptor
 	/*
 	 * Points to the SegmentDatabaseInfo structure describing the
 	 * parameters for this segment database.  Information in this structure is
-	 * obtained from the Greenplum administrative schema tables.
+	 * obtained from the Greengage administrative schema tables.
 	 */
 	struct CdbComponentDatabaseInfo *segment_database_info;
 	

@@ -12,7 +12,7 @@ CREATE INDEX complete_idx_cd on foo USING btree (c, d);
 ANALYZE foo_1_prt_p2;
 EXPLAIN SELECT * FROM foo_1_prt_p2 WHERE c > 10 AND d > 13;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

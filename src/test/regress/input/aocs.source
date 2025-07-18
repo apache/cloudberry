@@ -620,7 +620,7 @@ from gp_segment_configuration where role = 'p' and content = 0;
 
 
 -- test truncate ao table in current transaction and sub-transaction
--- more details can look at https://github.com/greenplum-db/gpdb/issues/13699
+-- more details can look at https://github.com/GreengageDB/greengage/issues/13699
 
 -- should success, create and truncate ao table in the same transaction;
 begin;

@@ -16,7 +16,7 @@
 
 #if 0
 /*
- * In Greenplum, large objects are not supported, so the below
+ * In Greengage, large objects are not supported, so the below
  * code is not required
  */
 /*

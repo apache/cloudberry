@@ -1,6 +1,6 @@
 COMMAND NAME: gpaddmirrors
 
-Adds mirror segments to a Greenplum Database system that was 
+Adds mirror segments to a Greengage Database system that was 
 initially configured without mirroring.
 
 
@@ -29,13 +29,13 @@ gpaddmirrors --version
 DESCRIPTION
 *****************************************************
 The gpaddmirrors utility configures mirror segment instances for an 
-existing Greenplum Database system that was initially configured with 
+existing Greengage Database system that was initially configured with 
 primary segment instances only. The utility will create the mirror 
 instances and begin the online replication process between the primary 
 and mirror segment instances. Once all mirrors are synchronized with 
-their primaries, your Greenplum Database system is fully data redundant.
+their primaries, your Greengage Database system is fully data redundant.
 
-IMPORTANT: During the online replication process, Greenplum Database 
+IMPORTANT: During the online replication process, Greengage Database 
 should be in a quiescent state, workloads and other queries should not 
 be running. 
 
@@ -82,7 +82,7 @@ mirror segment configuration. For example, run the following query:
    ORDER BY dbid;
 
 If creating your mirrors on alternate mirror hosts, the new 
-mirror segment hosts must be pre-installed with the Greenplum 
+mirror segment hosts must be pre-installed with the Greengage 
 Database software and configured exactly the same as the 
 existing primary segment hosts. 
 
@@ -178,7 +178,7 @@ Valid values: 1-128
  Spreads the mirror segments across the available hosts. The 
  default is to group a set of mirror segments together on an 
  alternate host from their primary segment set. Mirror spreading 
- will place each mirror on a different host within the Greenplum 
+ will place each mirror on a different host within the Greengage 
  Database array. Spreading is only allowed if there is a sufficient 
  number of hosts in the array (number of hosts is greater than 
  or equal to the number of segment instances per host).
@@ -208,7 +208,7 @@ Valid values: 1-128
 EXAMPLES
 *****************************************************
 
-Add mirroring to an existing Greenplum Database system using 
+Add mirroring to an existing Greengage Database system using 
 the same set of hosts as your primary data. Calculate the mirror 
 database ports by adding 100 to the current primary segment port
 numbers:
@@ -216,7 +216,7 @@ numbers:
   $ gpaddmirrors -p 100
 
 
-Add mirroring to an existing Greenplum Database system using a 
+Add mirroring to an existing Greengage Database system using a 
 different set of hosts from your primary data:
 
 $ gpaddmirrors -i mirror_config_file

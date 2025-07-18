@@ -29,7 +29,7 @@ explain select * from R1 inner join S1 on a = b union all select * from R2 inner
  Optimizer status: PQO version 2.53.0
 (16 rows)
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

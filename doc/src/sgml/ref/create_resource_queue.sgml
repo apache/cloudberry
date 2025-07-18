@@ -42,7 +42,7 @@ where queue_attribute is:
 
   <para>
    <command>CREATE RESOURCE QUEUE</command> create a new resource queue 
-   for Greenplum Database workload management. A resource queue must have 
+   for Greengage Database workload management. A resource queue must have 
    either an ACTIVE_STATEMENTS or a MAX_COST value (or it can have both). 
    Only a superuser can create a resource queue.
   </para>
@@ -59,7 +59,7 @@ where queue_attribute is:
    Resource queues with a MAX_COST threshold set a maximum limit on the total 
    cost of queries that can be executed by roles assigned to that queue. Cost 
    is measured in the estimated total cost for the query as determined by the 
-   Greenplum Database query planner (as shown in the EXPLAIN output for a query). 
+   Greengage Database query planner (as shown in the EXPLAIN output for a query). 
    Therefore, an administrator must be familiar with the queries typically executed 
    on the system in order to set an appropriate cost threshold for a queue. Cost is 
    measured in units of disk page fetches; 1.0 equals one sequential disk page read. 
@@ -95,7 +95,7 @@ where queue_attribute is:
   </para>
  
   <para>
-   Greenplum recommends that MEMORY_LIMIT be used in conjunction with ACTIVE_STATEMENTS 
+   Greengage recommends that MEMORY_LIMIT be used in conjunction with ACTIVE_STATEMENTS 
    rather than with MAX_COST. The default amount of memory allotted per query on 
    statement-based queues is: MEMORY_LIMIT / ACTIVE_STATEMENTS. The default amount 
    of memory allotted per query on cost-based queues is: 
@@ -274,7 +274,7 @@ CREATE RESOURCE QUEUE myqueue WITH (ACTIVE_STATEMENTS=30, MAX_COST=5000.00);
 
   <para>
    There is no <command>CREATE RESOURCE QUEUE</command> in the SQL standard.
-   Resource scheduling is a feature of Greenplum Database.
+   Resource scheduling is a feature of Greengage Database.
   </para>
    </refsect1>
 

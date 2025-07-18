@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * faultinjector.c
- *	  GP Fault Injectors are used for Greenplum internal testing only.
+ *	  GP Fault Injectors are used for Greengage internal testing only.
  * 
  * Fault injectors are used for fine control during testing. They allow a
  * developer to create deterministic tests for scenarios that are hard to

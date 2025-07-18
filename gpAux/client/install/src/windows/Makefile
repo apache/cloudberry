@@ -7,7 +7,7 @@ ifeq "$(VERSION_FOR_MSI)" ""
 VERSION_FOR_MSI=0.0.0.0
 endif
 
-PACKAGE=greenplum-clients
+PACKAGE=greengage-clients
 NAME=${PACKAGE}-${VERSION}
 MSI=../../${NAME}-WinXP-x86_32.msi
 SRCDIR=../../${PACKAGE}-devel
@@ -28,7 +28,7 @@ TIMESTAMP_SERVER=http://timestamp.verisign.com/scripts/timestamp.dll
 #For scp copy of msi
 SCP_USER=build
 SCP_HOST=intranet
-SCP_PATH=/var/www/html/internal-builds/greenplum-db/rc/${VERSION}
+SCP_PATH=/var/www/html/internal-builds/greengage-db/rc/${VERSION}
 SCP_DEST=${SCP_USER}@${SCP_HOST}:${SCP_PATH}
 
 default: msi sign

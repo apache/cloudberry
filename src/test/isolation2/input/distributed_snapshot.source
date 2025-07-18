@@ -95,7 +95,7 @@ DROP TABLE distributed_snapshot_test3;
 
 -- The following test cases are to test that QEs can get
 -- latest distribute snapshot to scan normal tables (not catalog).
--- Greenplum tests the visibility of heap tuples firstly using
+-- Greengage tests the visibility of heap tuples firstly using
 -- distributed snapshot. Distributed snapshot is generated on
 -- QD and then dispatched to QEs. Some utility statement needs
 -- to work under latest snapshot when executing, so that they
@@ -117,7 +117,7 @@ DROP TABLE distributed_snapshot_test3;
 -- the second Alter Table or Alter Domain statements continues with
 -- the distributed snapshot that txn1 does not commit yet, it will
 -- see no tuples in the new heap!
--- See Github issue https://github.com/greenplum-db/gpdb/issues/10216
+-- See Github issue https://github.com/GreengageDB/greengage/issues/10216
 
 -- Now this has been fixed, the following cases are tests to check this.
 

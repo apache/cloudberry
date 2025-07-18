@@ -26,7 +26,7 @@ inner join pg_namespace nsp on c.relnamespace = nsp.oid
 inner join pg_class toastc on toastc.oid = c.reltoastrelid
 inner join pg_namespace toastnsp on toastc.relnamespace = toastnsp.oid
 where c.oid = 'wmt_toast_issue_temp'::regclass;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'nspname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'nspname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- there should be exactly one temp table with that name.
 select count(*) from temp_nspnames;
@@ -71,7 +71,7 @@ insert into tn_a values (1), (2);
 insert into tn_a_tmp values(1);
 create or replace function fun(sql text, a oid) returns bigint AS 'return plpy.execute(sql).nrows() + a' language plpythonu stable;
 create table tn_a_new as with c as (select fun('select * from tn_a_tmp', s.id) from tn_a s) select 1 from c;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table tn_a;
 drop table tn_a_tmp;
@@ -92,7 +92,7 @@ select a.id, b.id from tn_b_a a, tn_b_b b where a.id = b.a_id order by 1, 2;
 create temp table tn_b_temp(a int) distributed replicated;
 insert into tn_b_temp values(1);
 create table tn_b_new as with c as (select fun('select * from tn_b_temp', s.id) from tn_b_b s) select 1 from c;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table tn_b_a;
 drop table tn_b_b;
@@ -103,7 +103,7 @@ drop function fun(sql text, a oid);
 \c
 create or replace function errored_udf() returns int[] as 'BEGIN RAISE EXCEPTION ''AAA''; END' language plpgsql;
 create table n as select from generate_series(1, 10);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select count(*) from n n1, n n2; -- boot reader gang
  count 
@@ -112,11 +112,11 @@ select count(*) from n n1, n n2; -- boot reader gang
 (1 row)
 
 create temp table nn as select errored_udf() from n;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'errored_udf' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'errored_udf' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  AAA  (seg2 slice1 127.0.0.1:6004 pid=350024)
 create temp table nnn as select * from generate_series(1, 10); -- check if reader do the rollback. should OK
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'generate_series' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select count(*) from nnn n1, nnn n2; -- check if reader can read temp table. should OK
  count 

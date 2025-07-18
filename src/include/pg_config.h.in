@@ -97,13 +97,13 @@
 /* Define to 1 to build ORCA for MacOS (GPOS_Darwin=1) */
 #undef GPOS_Darwin
 
-/* Greenplum major version as a string */
+/* Greengage major version as a string */
 #undef GP_MAJORVERSION
 
-/* A string containing the Greenplum version number */
+/* A string containing the Greengage version number */
 #undef GP_VERSION
 
-/* Greenplum version as a number */
+/* Greengage version as a number */
 #undef GP_VERSION_NUM
 
 /* Define to 1 if you have the `append_history' function. */
@@ -875,7 +875,7 @@
    compilations where static inline functions are defined but not called. */
 #undef PG_USE_INLINE
 
-/* Postgres version Greenplum Database is based on */
+/* Postgres version Greengage Database is based on */
 #undef PG_VERSION
 
 /* PostgreSQL version as a number */
@@ -978,7 +978,7 @@
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES
 
-/* Define to 1 to build with Greenplum ORCA optimizer. (--enable-orca) */
+/* Define to 1 to build with Greengage ORCA optimizer. (--enable-orca) */
 #undef USE_ORCA
 
 /* Define to build with OpenSSL support. (--with-openssl) */

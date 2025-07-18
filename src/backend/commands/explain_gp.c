@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * explain_gp.c
- *	  Functions supporting the Greenplum extensions to EXPLAIN ANALYZE
+ *	  Functions supporting the Greengage extensions to EXPLAIN ANALYZE
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
@@ -1927,7 +1927,7 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
  *			External API wrapper for cdbexplain_showExecStatsEnd
  *
  * This is an externally exposed wrapper for cdbexplain_showExecStatsEnd such
- * that extensions, such as auto_explain, can leverage the Greenplum specific
+ * that extensions, such as auto_explain, can leverage the Greengage specific
  * parts of the EXPLAIN machinery.
  */
 void

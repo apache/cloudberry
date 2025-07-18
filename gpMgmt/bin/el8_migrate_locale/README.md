@@ -19,10 +19,10 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --host HOST           Greenplum Database hostname
-  --port PORT           Greenplum Database port
-  --dbname DBNAME       Greenplum Database database name
-  --user USER           Greenplum Database user name
+  --host HOST           Greengage Database hostname
+  --port PORT           Greengage Database port
+  --dbname DBNAME       Greengage Database database name
+  --user USER           Greengage Database user name
   --verbose             Print more info
 ```
 ```

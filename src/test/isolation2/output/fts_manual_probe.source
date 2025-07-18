@@ -58,9 +58,9 @@ CREATE
 -- start_ignore
 20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Starting gpstop with args: -u
 20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Gathering information and validating the environment...
-20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Obtaining Greenplum Master catalog information
+20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Obtaining Greengage Master catalog information
 20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Obtaining Segment details from master...
-20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.575.g59811832fc build dev'
+20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.575.g59811832fc build dev'
 20190730:11:15:27:045929 gpstop:office-5-75:dkrieger-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -276,9 +276,9 @@ select * from get_raw_stats;
 -- start_ignore
 20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Starting gpstop with args: -u
 20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Gathering information and validating the environment...
-20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Obtaining Greenplum Master catalog information
+20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Obtaining Greengage Master catalog information
 20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Obtaining Segment details from master...
-20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.575.g59811832fc build dev'
+20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.575.g59811832fc build dev'
 20190730:11:15:35:046018 gpstop:office-5-75:dkrieger-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

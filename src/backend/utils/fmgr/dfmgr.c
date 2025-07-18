@@ -310,8 +310,8 @@ get_magic_product(const Pg_magic_struct *module_magic_data)
 		case PgMagicProductPostgres:
 			return "PostgreSQL";
 
-		case PgMagicProductGreenplum:
-			return "Greenplum";
+		case PgMagicProductGreengage:
+			return "Greengage";
 
 		/* Handle Unrecognized product codes */
 		default:

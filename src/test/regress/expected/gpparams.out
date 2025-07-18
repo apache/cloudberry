@@ -33,7 +33,7 @@ CREATE TABLE in_crm (
     date_inserted date,
     last_call_date timestamp without time zone
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'alias_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'alias_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --
 -- Name: in_product; Type: TABLE; Schema: public; Owner: gpadmin; Tablespace: 
@@ -64,7 +64,7 @@ CREATE TABLE module_targets (
     alias_id integer NOT NULL,
     target smallint
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'mod_job_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'mod_job_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --
 -- Data for Name: in_crm; Type: TABLE DATA; Schema: public; Owner: gpadmin

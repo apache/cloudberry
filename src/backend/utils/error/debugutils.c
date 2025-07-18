@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * debugutils.c
- *	  Routines for debugging Greenplum DB
+ *	  Routines for debugging Greengage DB
  * 
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.

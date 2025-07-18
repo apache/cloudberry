@@ -261,7 +261,7 @@ Jeffrey I Cohen
 Portions Copyright (c) 2012, 2013 Greenplum.  All rights reserved.
 Portions Copyright (c) 2012-Present Pivotal Software, Inc.
 
-Address bug reports and comments to: bugs@greenplum.org
+Address bug reports and comments to: bugs@greengagedb.org
 
 =cut
 # SLZY_POD_HDR_END
@@ -372,9 +372,9 @@ BEGIN {
 	$glob_glob->{_sleazy_properties} = {};
 	$glob_glob->{_sleazy_properties}->{version} = '9';
 	$glob_glob->{_sleazy_properties}->{AUTHORNAME} = 'Jeffrey I Cohen';
-	$glob_glob->{_sleazy_properties}->{BUGEMAIL} = 'Address bug reports and comments to: jcohen@greenplum.com';
+	$glob_glob->{_sleazy_properties}->{BUGEMAIL} = 'Address bug reports and comments to: bugs@greengagedb.org';
 	$glob_glob->{_sleazy_properties}->{COPYDATES} = '2012, 2013';
-	$glob_glob->{_sleazy_properties}->{COPYHOLDER} = 'Greenplum';
+	$glob_glob->{_sleazy_properties}->{COPYHOLDER} = 'Greengage';
 	$glob_glob->{_sleazy_properties}->{slzy_date} = '1360011781';
 	$glob_glob->{_sleazy_properties}->{slzy_argv_str} = $slzy_argv_str;
 	
@@ -1704,9 +1704,9 @@ if (0)
    "long" : "$toplong",
    "properties" : {
       "AUTHORNAME" : "Jeffrey I Cohen",
-      "BUGEMAIL" : "Address bug reports and comments to: jcohen@greenplum.com",
+      "BUGEMAIL" : "Address bug reports and comments to: bugs@greengagedb.org",
       "COPYDATES" : "2012, 2013",
-      "COPYHOLDER" : "Greenplum",
+      "COPYHOLDER" : "Greengage",
       "slzy_date" : 1360011781
    },
    "short" : "an easy way to go",

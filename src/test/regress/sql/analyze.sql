@@ -462,7 +462,7 @@ drop table test_tr;
 
 --
 -- Test with both a dropped column and an oversized column
--- (github issue https://github.com/greenplum-db/gpdb/issues/9503)
+-- (github issue https://github.com/GreengageDB/greengage/issues/9503)
 --
 create table analyze_dropped_col (a text, b text, c text, d text);
 insert into analyze_dropped_col values('a','bbb', repeat('x', 5000), 'dddd');

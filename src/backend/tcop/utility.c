@@ -510,7 +510,7 @@ standard_ProcessUtility(Node *parsetree,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("PREPARE TRANSACTION is not yet supported in Greenplum Database")));
+									errmsg("PREPARE TRANSACTION is not yet supported in Greengage Database")));
 
 						}
 						PreventCommandDuringRecovery("PREPARE TRANSACTION");
@@ -526,7 +526,7 @@ standard_ProcessUtility(Node *parsetree,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("COMMIT PREPARED is not yet supported in Greenplum Database")));
+									errmsg("COMMIT PREPARED is not yet supported in Greengage Database")));
 						}
 						PreventTransactionChain(isTopLevel, "COMMIT PREPARED");
 						PreventCommandDuringRecovery("COMMIT PREPARED");
@@ -537,7 +537,7 @@ standard_ProcessUtility(Node *parsetree,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("ROLLBACK PREPARED is not yet supported in Greenplum Database")));
+									errmsg("ROLLBACK PREPARED is not yet supported in Greengage Database")));
 						}
 						PreventTransactionChain(isTopLevel, "ROLLBACK PREPARED");
 						PreventCommandDuringRecovery("ROLLBACK PREPARED");
@@ -1281,7 +1281,7 @@ ProcessUtilitySlow(Node *parsetree,
 							else
 							{
 								/*
-								 * Greenplum specific behavior
+								 * Greengage specific behavior
 								 * If intoQuery field is set, it means this is Create Matview.
 								 * To keep catalog consistent, QEs should also store the viewquery.
 								 * The call chain is:

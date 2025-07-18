@@ -37,10 +37,10 @@ usage(const char *progname)
 	printf(_("\nOptions:\n"));
 	printf(_("  -V, --version  output version information, then exit\n"));
 	printf(_("  -?, --help     show this help, then exit\n"));
-	printf(_("  --gp-version   output Greenplum version information, then exit\n"));
+	printf(_("  --gp-version   output Greengage version information, then exit\n"));
 	printf(_("\nIf no data directory (DATADIR) is specified, "
 			 "the environment variable PGDATA\nis used.\n\n"));
-	printf(_("Report bugs to <bugs@greenplum.org>.\n"));
+	printf(_("Report bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
@@ -115,12 +115,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_controldata (Greenplum Database) " PG_VERSION);
+			puts("pg_controldata (Greengage Database) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("pg_controldata (Greenplum Database) " GP_VERSION);
+			puts("pg_controldata (Greengage Database) " GP_VERSION);
 			exit(0);
 		}
 

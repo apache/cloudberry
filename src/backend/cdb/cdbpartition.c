@@ -2,7 +2,7 @@
  *
  * cdbpartition.c
  *	  Provides utility routines to support sharding via partitioning
- *	  within Greenplum Database.
+ *	  within Greengage Database.
  *
  *    Many items are just extensions of tablecmds.c.
  *

@@ -276,7 +276,7 @@ GetLatestSnapshot(void)
 		return GetTransactionSnapshot();
 
 	/*
-	 * Greenplum specific behavior
+	 * Greengage specific behavior
 	 * On QEs, we cannot create a latest global snapshot. However, this function
 	 * is called mainly in executor, for example some alter table statements that
 	 * need to rewrite a new heap will invoke this and scan the old heap via the
@@ -292,7 +292,7 @@ GetLatestSnapshot(void)
 	 * So they have to use the latest snapshot to scan the old table no matter
 	 * what is the isolation level of the transaction.
 	 *
-	 * See github issue: https://github.com/greenplum-db/gpdb/issues/10216
+	 * See github issue: https://github.com/GreengageDB/greengage/issues/10216
 	 */
 	dtxctx = Gp_role == GP_ROLE_DISPATCH ? DistributedTransactionContext : DTX_CONTEXT_LOCAL_ONLY;
 	SecondarySnapshot = GetSnapshotData(&SecondarySnapshotData, dtxctx);

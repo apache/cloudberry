@@ -191,7 +191,7 @@ def parseCmdLine():
 def isOrcaPresent(versionString):
     if 'HAWQ' in versionString:
         return True
-    match = re.search('(?<=Greenplum Database )[0-9.]+', versionString)
+    match = re.search('(?<=Greengage Database )[0-9.]+', versionString)
     if match and len(match.group()):
         return LooseVersion(match.group()) >= LooseVersion('4.3')
     # No HAWQ and we can't find the GPDB Version
@@ -237,7 +237,7 @@ def main():
         with closing(connection.cursor()) as cursor:
             num_segments = get_num_segments(cursor)
 
-    sys.stdout.writelines(['\n-- Greenplum database Statistics Dump',
+    sys.stdout.writelines(['\n-- Greengage database Statistics Dump',
                            '\n-- Copyright (C) 2007 - 2014 Pivotal'
                            '\n-- Database: ' + db,
                            '\n-- Num Segments: ' + str(num_segments),

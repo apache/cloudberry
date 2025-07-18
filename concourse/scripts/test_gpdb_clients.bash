@@ -12,7 +12,7 @@ prepare() {
 }
 
 run_test() {
-	cd "${GPDB_CLIENTS_HOME}" && source greenplum_clients_path.sh
+	cd "${GPDB_CLIENTS_HOME}" && source greengage_clients_path.sh
 
 	psql --version
 	gpfdist --version

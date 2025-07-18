@@ -23,7 +23,7 @@ fi
 #Install xerces-c library
 if [ ! -d ~/workspace/gp-xerces ] ; then
 	echo "INFO: xerces is not installed, Installing...." 
-        git clone https://github.com/greenplum-db/gp-xerces.git -v ~/workspace/gp-xerces
+        git clone https://github.com/GreengageDB/gp-xerces.git -v ~/workspace/gp-xerces
         mkdir ~/workspace/gp-xerces/build 
         cd ~/workspace/gp-xerces/build
         ~/workspace/gp-xerces/configure --prefix=/usr/local
@@ -141,7 +141,7 @@ ln -s /opt/homebrew/opt/openssl@1.0//lib/* /usr/local/lib/
 cat << EOF
 ===============================================================================
 INFO :
-Please source /usr/local/gpdb/greenplum_path.sh after compiling database, then
+Please source /usr/local/gpdb/greengage_path.sh after compiling database, then
 pip install --user -r python-dependencies.txt
 ===============================================================================
 EOF

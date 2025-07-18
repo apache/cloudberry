@@ -2,7 +2,7 @@
  *
  * cdbpublic.h
  *
- *		Greenplum specific structures and typedefs exposed to the
+ *		Greengage specific structures and typedefs exposed to the
  *      outside world.
  *
  *      This is a non-ideal solution, consider alternatives before

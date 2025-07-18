@@ -6,7 +6,7 @@ DROP TABLE IF EXISTS test_hashagg_off;
 -- end_ignore
 
 -- Test Orca properly removes duplicates in DQA
--- (https://github.com/greenplum-db/gpdb/issues/14993)
+-- (https://github.com/GreengageDB/greengage/issues/14993)
 
 CREATE TABLE test_src_tbl AS
 WITH cte1 AS (

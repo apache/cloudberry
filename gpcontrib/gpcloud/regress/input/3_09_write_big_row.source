@@ -18,7 +18,7 @@ INSERT INTO s3write_bigrow_write VALUES (DEFAULT,
 -- INSERT INTO s3write_bigrow_write VALUES (DEFAULT,
 --   repeat('Pack my box with five dozen liquor jugs.', 1024 * 1024 * 5));
 
--- Total 320MB, CRASH!! Report on https://github.com/greenplum-db/gpdb/issues/1090
+-- Total 320MB, CRASH!! Report on https://github.com/GreengageDB/greengage/issues/1090
 -- INSERT INTO s3write_bigrow_write VALUES (DEFAULT,
 --   repeat('Pack my box with five dozen liquor jugs.', 1024 * 1024 * 8));
 

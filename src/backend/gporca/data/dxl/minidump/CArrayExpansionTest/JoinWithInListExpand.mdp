@@ -6,7 +6,7 @@ insert into foo select i, i%10 from generate_series(1,100) i;
 insert into bar select i, i%10 from generate_series(1,100) i;
 select a,b from foo, bar where foo.a in (1,2,3,4,5,6) and foo.a = bar.c;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

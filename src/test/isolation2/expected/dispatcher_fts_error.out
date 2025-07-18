@@ -35,9 +35,9 @@ CREATE
 -- start_ignore
 20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Starting gpstop with args: -u
 20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Gathering information and validating the environment...
-20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
-20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
+20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
 20180920:05:00:22:030314 gpstop:gpdbvm:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 . 
 
@@ -172,11 +172,11 @@ END
 !\retcode gprecoverseg -aF;
 -- start_ignore
 20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF
-20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
-20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Greenplum Version: 'PostgreSQL 9.2beta2 (Greenplum Database 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Sep 20 2018 03:50:32 (with assert checking)'
+20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
+20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Greengage Version: 'PostgreSQL 9.2beta2 (Greengage Database 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Sep 20 2018 03:50:32 (with assert checking)'
 20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
 20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg
-20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Greengage instance recovery parameters
 20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
 20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Recovery type              = Standard
 20180920:05:00:25:030437 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
@@ -225,10 +225,10 @@ DO
 !\retcode gprecoverseg -ar;
 -- start_ignore
 20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Starting gprecoverseg with args: -ar
-20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
-20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Greenplum Version: 'PostgreSQL 9.2beta2 (Greenplum Database 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Sep 20 2018 03:50:32 (with assert checking)'
+20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
+20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Greengage Version: 'PostgreSQL 9.2beta2 (Greengage Database 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Sep 20 2018 03:50:32 (with assert checking)'
 20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
-20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Greengage instance recovery parameters
 20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
 20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Recovery type              = Rebalance
 20180920:05:00:31:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
@@ -256,11 +256,11 @@ DO
 20180920:05:00:32:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Triggering segment reconfiguration
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Starting segment synchronization
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-=============================START ANOTHER RECOVER=========================================
-20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
-20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Greenplum Version: 'PostgreSQL 9.2beta2 (Greenplum Database 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Sep 20 2018 03:50:32 (with assert checking)'
+20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
+20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-master Greengage Version: 'PostgreSQL 9.2beta2 (Greengage Database 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-16), 64-bit compiled on Sep 20 2018 03:50:32 (with assert checking)'
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg
-20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Greengage instance recovery parameters
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:-Recovery type              = Standard
 20180920:05:00:34:030745 gprecoverseg:gpdbvm:gpadmin-[INFO]:----------------------------------------------------------
@@ -341,9 +341,9 @@ select count(*) from gp_segment_configuration where status = 'd';
 -- start_ignore
 20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Starting gpstop with args: -u
 20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Gathering information and validating the environment...
-20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Obtaining Segment details from master...
-20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
+20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.0.0-alpha.0+dev.9598.gc5dfd9c build dev-oss'
 20180920:05:00:43:031440 gpstop:gpdbvm:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 . 
 

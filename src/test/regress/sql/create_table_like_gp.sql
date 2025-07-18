@@ -64,7 +64,7 @@ $$;
 
 
 -- TEMP TABLE WITH COMMENTS
--- More details can be found at https://github.com/greenplum-db/gpdb/issues/14649
+-- More details can be found at https://github.com/GreengageDB/greengage/issues/14649
 CREATE TABLE t_comments_a (a integer);
 COMMENT ON COLUMN t_comments_a.a IS 'Airflow';
 CREATE TEMPORARY TABLE t_comments_b (LIKE t_comments_a INCLUDING COMMENTS);

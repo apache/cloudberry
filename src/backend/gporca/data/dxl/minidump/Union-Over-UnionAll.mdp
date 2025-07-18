@@ -5,7 +5,7 @@ create table foo_hashed(a int, b int) distributed by (a);
 insert into foo_hashed select i%3, i from generate_series(1,10) i;
 select a from foo_hashed union all select b from foo_hashed union select 1 from foo_hashed ;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

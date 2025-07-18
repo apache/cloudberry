@@ -1,6 +1,6 @@
 -- Additional GPDB-added tests for UNION
 create temp table t_union1 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select distinct a, null::integer as c from t_union1 union select a, b from t_union1;
  a | c 
@@ -95,7 +95,7 @@ select pg_typeof(a) from(select 1 x, 'foo' a union
 (1 row)
 
 CREATE TABLE union_ctas (a, b) AS SELECT 1, 2 UNION SELECT 1, 1 UNION SELECT 1, 1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM union_ctas;
  a | b 
@@ -107,10 +107,10 @@ SELECT * FROM union_ctas;
 DROP TABLE union_ctas;
 -- MPP-21075: push quals below union
 CREATE TABLE union_quals1 (a, b) AS SELECT i, i%2 from generate_series(1,10) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE union_quals2 (a, b) AS SELECT i%2, i from generate_series(1,10) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM (SELECT a, b from union_quals1 UNION SELECT b, a from union_quals2) as foo(a,b) where a > b order by a;
  a  | b 
@@ -216,7 +216,7 @@ select distinct a from (select  distinct 'A' from (select 'C' from (select disti
 -- on a single QE.
 --
 CREATE TABLE test1 (id int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test1 values (1);
 CREATE EXTERNAL WEB TABLE test2 (id int) EXECUTE 'echo 2' ON MASTER FORMAT 'csv';
@@ -329,7 +329,7 @@ INSERT INTO T_a1 SELECT i, i%5 from generate_series(1,10) i;
 CREATE TABLE T_b2 (b1 int, b2 int) DISTRIBUTED BY(b2);
 INSERT INTO T_b2 SELECT i, i%5 from generate_series(1,20) i;
 CREATE TABLE T_random (c1 int, c2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO T_random SELECT i, i%5 from generate_series(1,30) i;
 --start_ignore
@@ -2033,7 +2033,7 @@ select from t2_ncols union select * from t2_ncols;
 ERROR:  each UNION query must have the same number of columns
 LINE 1: select from t2_ncols union select * from t2_ncols;
                                           ^
--- Issue https://github.com/greenplum-db/gpdb/issues/12031, extra junk tagrget entry added
+-- Issue https://github.com/GreengageDB/greengage/issues/12031, extra junk tagrget entry added
 -- on the Subquery Scan node when we compare the hashExprs and the targetlist of the scan plan.
 -- And if it appears under the Append node, with Motion node on top of the Subquery Scan node,
 -- it'll cause the mismatch of the target lists for these nodes, generate wrong result.
@@ -2048,7 +2048,7 @@ CREATE TABLE junkt1 (model character varying(16), last_build_date timestamp) DIS
 -- target entry before
 CREATE TABLE junkt2(model character varying(12), last_build_date timestamp) DISTRIBUTED BY (model);
 create table junkt3 (model2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'model2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'model2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into junkt3 values ('WF2598042001');
 insert into junkt1 values('WF2598042001','2020/3/6 3:43:08 PM');
@@ -2100,16 +2100,16 @@ select b.model2, f.model, f.last_build_date::date + interval '1year' <= '2021-07
 
 reset optimizer;
 -- Test when fixing up unkown type for union statement and the var is from outer
--- subquery. See Github Issue https://github.com/greenplum-db/gpdb/issues/12407
+-- subquery. See Github Issue https://github.com/GreengageDB/greengage/issues/12407
 -- for details.
 create table t_issue_12407(a int, b int, c varchar(32));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t1_issue_12407(a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2_issue_12407(a int, b int, c text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t_issue_12407 select i,i,i::varchar(32) from generate_series(1, 10)i;
 insert into t1_issue_12407 select i,i,i from generate_series(1, 10)i;

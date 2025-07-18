@@ -5,7 +5,7 @@ Schema: TPC-DS Heap Partitioned 10TB
 
 select * from customer_address, store where customer_address.ca_county::text = store.s_county::text
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

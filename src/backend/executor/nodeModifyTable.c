@@ -102,7 +102,7 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
 		if (!attr->attisdropped)
 		{
 			/*
-			 * GPDB: Greenplum tooling performs updates to pg_statistic catalog
+			 * GPDB: Greengage tooling performs updates to pg_statistic catalog
 			 * for debugging purposes. However, pg_statistic is a special table
 			 * that contains psudo types that will not fulfill the type match.
 			 * Allow check to pass in this specific case.
@@ -948,7 +948,7 @@ ldelete:;
 				 * version to update/delete is not possible.
 				 * TODO: If it occurs then most likely we work with wrong
 				 * partition. How it's possible is described in
-				 * https://github.com/greenplum-db/gpdb/pull/13860
+				 * https://github.com/GreengageDB/greengage/pull/13860
 				 */
 				if (isAORowsTable || isAOColsTable)
 					ereport(ERROR,

@@ -3429,7 +3429,7 @@ static struct config_enum ConfigureNamesEnum[] =
 
 	{
 		/*
-		 * Greenplum needs to reconcile conflict detection based
+		 * Greengage needs to reconcile conflict detection based
 		 * on predicate locks across cluster to support true
 		 * serializability.  See merge fixme in
 		 * assign_XactIsoLevel(). String guc sets the value of the
@@ -7506,7 +7506,7 @@ DispatchSetPGVariable(const char *name, List *args, bool is_local)
 		 * as a special case, we dispatch the already set time zone from the QD
 		 * with the usual SET syntax flavor (SET timezone TO <>).
 		 * Please refer to Issue: #9055 for additional detail.
-		 * #9055 - https://github.com/greenplum-db/gpdb/issues/9055
+		 * #9055 - https://github.com/GreengageDB/greengage/issues/9055
 		 */
 		if (strcmp(name, "timezone") == 0)
 			appendStringInfo(&buffer, "%s",

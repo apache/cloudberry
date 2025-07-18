@@ -2662,7 +2662,7 @@ dblink_security_check(PGconn *conn, remoteConn *rconn)
  * the environment, etc.  We don't want the postgres user's passwords
  * to be accessible to non-superusers.
  *
- * For Greenplum, dblink uses built libpq to construct conninfo, whose user is
+ * For Greengage, dblink uses built libpq to construct conninfo, whose user is
  * environment variable PGUSER, which is wrong, modifies this function to add
  * the session's username into connstr.
  *

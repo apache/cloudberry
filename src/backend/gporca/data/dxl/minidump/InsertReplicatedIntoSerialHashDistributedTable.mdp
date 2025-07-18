@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
  <dxl:Comment><![CDATA[
 Objective: Inserting from a replicated table into a hash table distributed by a
 serial column should execute on a single segment and redistribute to other

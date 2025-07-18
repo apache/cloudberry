@@ -136,9 +136,9 @@ document_contents:
     START_MAP doc_item_list END_MAP
 
     | valid_yaml_list
-      { yaml_yyerror(parser, "Greenplum MapReduce document must begin with a YAML MAPPING"); }
+      { yaml_yyerror(parser, "Greengage MapReduce document must begin with a YAML MAPPING"); }
     | scalar
-      { yaml_yyerror(parser, "Greenplum MapReduce document must begin with a YAML MAPPING"); }
+      { yaml_yyerror(parser, "Greengage MapReduce document must begin with a YAML MAPPING"); }
     ;
 
 doc_item_list:
@@ -845,7 +845,7 @@ void yaml_yyerror (mapred_parser_t *parser, char const *s)
  * our parser.  
  * 
  * The YAML library handles all of the whitespace and flow parsing very
- * cleanly, but it has no domain knowledge of the Greenplum Mapreduce
+ * cleanly, but it has no domain knowledge of the Greengage Mapreduce
  * YAML Schema.
  *
  * Coding up the YAML flow stuff in flex/bison is a pain

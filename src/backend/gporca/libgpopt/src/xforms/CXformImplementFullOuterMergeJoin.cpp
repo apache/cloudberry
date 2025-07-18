@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2019 Pivotal Software, Inc.
 
 #include "gpopt/xforms/CXformImplementFullOuterMergeJoin.h"

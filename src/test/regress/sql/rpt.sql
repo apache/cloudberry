@@ -420,7 +420,7 @@ insert into rtbl values (1, 1, 1, 'rtbl');
 
 -- The below tests used to do replicated table scan on entry db which contains empty data.
 -- So a motion node is needed to gather replicated table on entry db.
--- See issue: https://github.com/greenplum-db/gpdb/issues/11945
+-- See issue: https://github.com/GreengageDB/greengage/issues/11945
 
 -- 1. CTAS when join replicated table with catalog table
 explain (costs off) create temp table tmp as select * from pg_class c join rtbl on c.relname = rtbl.t;

@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2011 EMC Corp.
 //
 //	@filename:
@@ -8290,7 +8290,7 @@ CTranslatorExprToDXL::GetInputSegIdsArray(CExpression *pexprMotion)
 		// FIXME: If there is any 'unpaired' CTE Consumer beneath, fallback to Postgres
 		// optimizer, as reading from one segment in this case violates results of the
 		// previously made CTEProducerConsumerLocality check.
-		// Related to: https://github.com/greenplum-db/gpdb/issues/13039
+		// Related to: https://github.com/GreengageDB/greengage/issues/13039
 
 		if (CUtils::hasUnpairedCTEConsumer(m_mp, pexprChild))
 		{

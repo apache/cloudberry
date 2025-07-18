@@ -6,7 +6,7 @@ alter table pt2_1_prt_2 set distributed randomly;
 create table r(a int, b int, c int);
 explain insert into pt2 select * from r;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

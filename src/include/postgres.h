@@ -100,7 +100,7 @@ typedef struct varatt_indirect
  *
  * GPDB: In PostgreSQL VARTAG_ONDISK is set to 18 in order to match the
  * historic (VARHDRSZ_EXTERNAL + sizeof(struct varatt_external)) value of the
- * pointer datum's length. In Greenplum VARHDRSZ_EXTERNAL is two bytes longer
+ * pointer datum's length. In Greengage VARHDRSZ_EXTERNAL is two bytes longer
  * than PostgreSQL due to extra padding in varattrib_1b_e, so VARTAG_ONDISK has
  * to be set to 20.
  */
@@ -162,11 +162,11 @@ typedef struct
  * 10000000 1-byte length word, unaligned, TOAST pointer
  * 1xxxxxxx 1-byte length word, unaligned, uncompressed data (up to 126b)
  *
- * Greenplum differs from PostgreSQL here... In Postgres, they use different
+ * Greengage differs from PostgreSQL here... In Postgres, they use different
  * macros for big-endian and little-endian machines, so the length is contiguous,
  * while the 4 byte lengths are stored in native endian format.
  *
- * Greenplum stored the 4 byte varlena header in network byte order, so it always
+ * Greengage stored the 4 byte varlena header in network byte order, so it always
  * look big-endian in the tuple.   This is a bit ugly, but changing it would require
  * all our customers to initdb.
  *
@@ -314,7 +314,7 @@ typedef struct
  *	sizeof(char) == 1
  *	sizeof(short) == 2
  *
- *  Greenplum CDB:
+ *  Greengage CDB:
  *     Datum is always 8 bytes, regardless if it is 32bit or 64bit machine.
  *  so may be > sizeof(void *).
  *

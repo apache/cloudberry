@@ -136,7 +136,7 @@ static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
 static void escape_yaml(StringInfo buf, const char *str);
 
-/* Include the Greenplum EXPLAIN extensions */
+/* Include the Greengage EXPLAIN extensions */
 #include "explain_gp.c"
 
 

@@ -1,4 +1,4 @@
-Summary:        Connection pool for Greenplum Database 
+Summary:        Connection pool for Greengage Database 
 License:        BSD License        
 Name:           pgbouncer
 Version:        %{pgbouncer_ver}
@@ -10,7 +10,7 @@ AutoProv:       no
 Provides:       pgbouncer = %{pgbouncer_ver} 
 
 %description
-The Pgbouncer package provides connection pool for the Greenplum Database.
+The Pgbouncer package provides connection pool for the Greengage Database.
 
 %install
 mkdir -p %{buildroot}/temp/bin %{buildroot}/temp/lib

@@ -27,7 +27,7 @@ explain select * from foo left join bar on foo.a=bar.a left join zoo on foo.a::i
  Optimizer status: PQO version 2.53.4
 (13 rows)
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

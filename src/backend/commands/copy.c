@@ -2743,7 +2743,7 @@ CopyToDispatch(CopyState cstate)
 	/* XXX: lock all partitions */
 
 	/*
-	 * Start a COPY command in every db of every segment in Greenplum Database.
+	 * Start a COPY command in every db of every segment in Greengage Database.
 	 *
 	 * From this point in the code we need to be extra careful
 	 * about error handling. ereport() must not be called until
@@ -6469,7 +6469,7 @@ CopyReadLineText(CopyState cstate)
 
 			/*
 			* We need to recognize the EOL.
-			* Github issue: https://github.com/greenplum-db/gpdb/issues/12454
+			* Github issue: https://github.com/GreengageDB/greengage/issues/12454
 			*/
 			if(c2 == '\n')
 			{

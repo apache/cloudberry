@@ -1563,7 +1563,7 @@ heap_create_with_catalog(const char *relname,
 	 * Also not for the auxiliary heaps created for bitmap indexes or append-
 	 * only tables.
 	 *
-	 * In Greenplum, we do not create an array type for child
+	 * In Greengage, we do not create an array type for child
 	 * partitions. Child partitions are automatically named very similarly
 	 * which can cause typname collisions very easily. If there are a lot of
 	 * typname collisions, it's possible that makeArrayTypeName could fail to

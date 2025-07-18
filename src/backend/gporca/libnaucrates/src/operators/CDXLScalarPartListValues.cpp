@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 Pivotal, Inc.
 //
 //	Implementation of DXL Part List Values expression

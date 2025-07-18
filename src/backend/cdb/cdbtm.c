@@ -503,7 +503,7 @@ ClearTransactionState(TransactionId latestXid)
 	 *
 	 *
 	 * In upstream Postgres, proc->xid is cleared in ProcArrayEndTransaction.
-	 * But there would have a small window in Greenplum that allows inconsistency
+	 * But there would have a small window in Greengage that allows inconsistency
 	 * between ProcArrayEndTransaction and notifying prepared commit to segments.
 	 * In between, the master has new tuple visible while the segments are seeing
 	 * old tuples.

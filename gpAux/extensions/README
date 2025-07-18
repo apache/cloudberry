@@ -1,6 +1,6 @@
 This directory contains various server extensions and tools, for use with
-the Greenplum server. Some of them are copies of various open source
-projects, some are Greenplum-only modules.
+the Greengage server. Some of them are copies of various open source
+projects, some are Greengage-only modules.
 
 The philosophy is that each module within extensions/ can be built
 independently, without checking out the whole main repository. You should

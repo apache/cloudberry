@@ -1391,7 +1391,7 @@ typedef struct ProjectionPath
 	List	   *cdb_restrict_clauses;
 
 	/*
-	 * Greenplum specific field:
+	 * Greengage specific field:
 	 * If force is true, we always create a Result plannode.
 	 */
 	bool        force;

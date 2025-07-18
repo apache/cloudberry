@@ -1,8 +1,8 @@
-# Check the compatibility of Greenplum ABI.
+# Check the compatibility of Greengage ABI.
 
 ## Introduction
 
-We use the [`abi-dumper`](https://github.com/lvc/abi-dumper) and [`abi-compliance-checker`](https://github.com/lvc/abi-compliance-checker/) to check the Greenplum's ABI. We also use the [GitHub action](../.github/workflows/greenplum-abi-tests.yml) to automate this job.
+We use the [`abi-dumper`](https://github.com/lvc/abi-dumper) and [`abi-compliance-checker`](https://github.com/lvc/abi-compliance-checker/) to check the Greengage's ABI. We also use the [GitHub action](../.github/workflows/greengage-abi-tests.yml) to automate this job.
 
 ## Requirements
 
@@ -17,14 +17,14 @@ CFLAGS='-Og -g3 -Wno-maybe-uninitialized' ./configure --with-xxx --with-yyy --wi
 
 ## Check the ABI's compatibility
 
-Several binaries are shipped in Greenplum, e.g., `$GPHOME/bin/postgres`, `$GPHOME/lib/libpq.so`, etc. Since the `postgres` binary are referenced by many extensions, the ABI compatibility of it is the most important. The following steps illustrate how to check the ABI compatibility of the `postgres` binary.
+Several binaries are shipped in Greengage, e.g., `$GPHOME/bin/postgres`, `$GPHOME/lib/libpq.so`, etc. Since the `postgres` binary are referenced by many extensions, the ABI compatibility of it is the most important. The following steps illustrate how to check the ABI compatibility of the `postgres` binary.
 
 1. Dump the ABI information of one `postgres` binary.
    ```
    abi-dumper $GPHOME/bin/postgres -lver <version of the binary> -o <output file>
    ```
    - `<version of the binary>`: The version of the binary. You can give it some reasonable name, e.g., `6.25.3` to indicate the binary is built from '6.25.3' tag.
-   - `<output file>`: The file path for dumping the ABI information, e.g., `greenplum-6.25.3.dump`
+   - `<output file>`: The file path for dumping the ABI information, e.g., `greengage-6.25.3.dump`
    
 2. Dump the ABI information of another `postgres` binary (same as the step 1).
 
@@ -44,18 +44,18 @@ Several binaries are shipped in Greenplum, e.g., `$GPHOME/bin/postgres`, `$GPHOM
 There might be "safe ABI breaking changes", e.g., some symbol being removed and not referenced by any extensions or programs. Here are steps on how to suppress such errors.
 
 1. Add ignored symbols to `gpdb_src/.abi-check/<base version>/postgres.symbols.ignore` (one symbol per line).
-   - `<base version>`: The baseline version of Greenplum. If we want to ensure the ABI isn't broken between the `6.25.3` release and the latest `6X_STABLE`. The baseline version of Greenplum is `6.25.3`. See: [./6.25.3/postgres.symbols.ignore](./6.25.3/postgres.symbols.ignore)
+   - `<base version>`: The baseline version of Greengage. If we want to ensure the ABI isn't broken between the `6.25.3` release and the latest `6X_STABLE`. The baseline version of Greengage is `6.25.3`. See: [./6.25.3/postgres.symbols.ignore](./6.25.3/postgres.symbols.ignore)
 
 2. Add ignored types to `gpdb_src/.abi-check/<base version>/postgres.types.ignore` (one type per line).
-   - `<base version>`: The baseline version of Greenplum. If we want to ensure the ABI isn't broken between the `6.25.3` release and the latest `6X_STABLE`. The baseline version of Greenplum is `6.25.3`. See: [./6.25.3/postgres.types.ignore](./6.25.3/postgres.types.ignore)
+   - `<base version>`: The baseline version of Greengage. If we want to ensure the ABI isn't broken between the `6.25.3` release and the latest `6X_STABLE`. The baseline version of Greengage is `6.25.3`. See: [./6.25.3/postgres.types.ignore](./6.25.3/postgres.types.ignore)
 
 3. Pass these two files to `abi-compliance-checker` and it will produce a report in HTML format.
    ```
    abi-compliance-checker -skip-symbols gpdb_src/.abi-check/<base version>/postgres.symbols.ignore \
                           -skip-types   gpdb_src/.abi-check/<base version>/postgres.types.ignore \
                           -lib postgres \
-                          -old greenplum-<base version>.dump
-                          -new greenplum-new.dump
+                          -old greengage-<base version>.dump
+                          -new greengage-new.dump
    ```
    It will produce a ABI report in `./compat_reports/postgres/X_to_Y/compat_report.html`.
 

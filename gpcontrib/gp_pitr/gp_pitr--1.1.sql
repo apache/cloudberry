@@ -15,7 +15,7 @@ COMMENT ON FUNCTION gp_create_restore_point(text) IS 'Create a named restore poi
 
 REVOKE EXECUTE ON FUNCTION gp_create_restore_point(text) FROM public;
 
--- pg_switch_xlog wrapper functions to switch WAL segment files on Greenplum cluster-wide
+-- pg_switch_xlog wrapper functions to switch WAL segment files on Greengage cluster-wide
 CREATE FUNCTION gp_switch_wal(
     OUT gp_segment_id smallint, OUT pg_switch_wal pg_lsn, OUT pg_walfile_name text
 )

@@ -31,12 +31,12 @@ typedef enum
 } CdbHashReduce;
 
 /*
- * Structure that holds Greenplum Database hashing information.
+ * Structure that holds Greengage Database hashing information.
  */
 typedef struct CdbHash
 {
 	uint32		hash;			/* The result hash value							*/
-	int			numsegs;		/* number of segments in Greenplum Database used for
+	int			numsegs;		/* number of segments in Greengage Database used for
 								 * partitioning  */
 	CdbHashReduce reducealg;	/* the algorithm used for reducing to buckets		*/
 	bool		is_legacy_hash;

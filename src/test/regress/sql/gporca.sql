@@ -2623,7 +2623,7 @@ where out.b in (select coalesce(tcorr2.a, 99)
                 from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
 
 -- expect 1 row
--- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- FIXME: A process terminates during execution, see https://github.com/GreengageDB/greengage/issues/10791
 -- select *
 -- from tcorr1 out
 -- where out.b in (select coalesce(tcorr2.a, 99)
@@ -2660,7 +2660,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
 
 -- expect 1 row
--- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- FIXME: A process terminates during execution, see https://github.com/GreengageDB/greengage/issues/10791
 -- select *
 -- from tcorr1 out
 -- where out.b in (select coalesce(tcorr2.a, 99)
@@ -2674,7 +2674,7 @@ from tcorr1 out
 where out.b in (select coalesce(tcorr2.a, 99)
                 from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
 -- expect 1 row
--- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- FIXME: A process terminates during execution, see https://github.com/GreengageDB/greengage/issues/10791
 -- select *
 -- from tcorr1 out
 -- where out.b in (select coalesce(tcorr2.a, 99)
@@ -2711,7 +2711,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
 
 -- expect 1 row
--- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- FIXME: A process terminates during execution, see https://github.com/GreengageDB/greengage/issues/10791
 -- select *
 -- from tcorr1 out
 -- where out.b in (select coalesce(tcorr2.a, 99)
@@ -3400,7 +3400,7 @@ from empty_cte_tl_test
 where id in(select id from cte);
 -- Test the indexing on partitions when one partition has an index on columns with pg_attribute.attnum 1 and 2 ,
 -- while another partition has an index on a column with pg_attribute.attnum 12.
--- github issue: https://github.com/greenplum-db/gpdb/issues/6392
+-- github issue: https://github.com/GreengageDB/greengage/issues/6392
 CREATE TABLE index_confusion(
                                 a int,  -- column 1
                                 b int,  -- column 2
@@ -3526,7 +3526,7 @@ explain (costs off) select (select b from subplan_test_1 where subplan_test_1.b=
 select (select b from subplan_test_1 where subplan_test_1.b=subplan_test_2.b) from subplan_test_2;
 reset gp_max_slices;
 
--- check that ORCA plan, of the next query (the valid plan is generated after https://github.com/greenplum-db/gpdb/pull/14896 (1)),
+-- check that ORCA plan, of the next query (the valid plan is generated after https://github.com/GreengageDB/greengage/pull/14896 (1)),
 -- doesn't fallback to postgres like it was (due to https://github.com/arenadata/gpdb/pull/302 (2) which is applied above (1)).
 -- Previously there was a false-positive decision that plan contains an unpaired CTE consumer under the hazzard CPhysicalMotionRandom
 -- (from the physical plan below), but the motion doesn't contain any CTE consumer.

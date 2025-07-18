@@ -6,7 +6,7 @@ CREATE TABLE tbl2 (b int) DISTRIBUTED BY(b);
 /*We expect the HASHED NO-OP*/
 EXPLAIN SELECT xmin FROM tbl1 UNION ALL SELECT xmin FROM tbl2;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

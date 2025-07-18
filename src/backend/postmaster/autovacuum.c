@@ -2150,7 +2150,7 @@ do_autovacuum(void)
 
 			/*
 			 * GPDB_91_MERGE_FIXME: Autovacuum operates only on template0
-			 * database in Greenplum.  We expect no temp tables in template0.
+			 * database in Greengage.  We expect no temp tables in template0.
 			 * Whenever we allow autovacuum to operate on user databases, we
 			 * must deal with the logic to detect other backend's temp tables
 			 * below.

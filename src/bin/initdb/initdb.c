@@ -79,7 +79,7 @@
 extern const char *select_default_timezone(const char *share_path);
 
 /* version string we expect back from postgres */
-#define PG_VERSIONSTR "postgres (Greenplum Database) " PG_VERSION "\n"
+#define PG_VERSIONSTR "postgres (Greengage Database) " PG_VERSION "\n"
 
 
 static const char *auth_methods_host[] = {
@@ -2262,7 +2262,7 @@ setup_cdb_schema(void)
 	char	  **scriptnames = NULL;
 	int			i;
 
-	fputs(_("creating Greenplum Database schema ... "), stdout);
+	fputs(_("creating Greengage Database schema ... "), stdout);
 	fflush(stdout);
 
 	dir = opendir(cdb_init_d_dir);
@@ -3083,11 +3083,11 @@ usage(const char *progname)
 	printf(_("  -m, --formirror           only create data needed to start the backend in mirror mode\n"));
 	printf(_("\nOther options:\n"));
 	printf(_("  -V, --version             output version information, then exit\n"));
-	printf(_("      --gp-version          output Greenplum version information, then exit\n"));
+	printf(_("      --gp-version          output Greengage version information, then exit\n"));
 	printf(_("  -?, --help                show this help, then exit\n"));
 	printf(_("\nIf the data directory is not specified, the environment variable PGDATA\n"
 			 "is used.\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 static void
@@ -3764,7 +3764,7 @@ initialize_data_directory(void)
 
 		load_plpgsql();
 
-		/* sets up the Greenplum Database admin schema */
+		/* sets up the Greengage Database admin schema */
 		setup_cdb_schema();
 
 		vacuum_db();
@@ -3842,12 +3842,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("initdb (Greenplum Database) " PG_VERSION);
+			puts("initdb (Greengage Database) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("initdb (Greenplum Database) " GP_VERSION);
+			puts("initdb (Greengage Database) " GP_VERSION);
 			exit(0);
 		}
 	}

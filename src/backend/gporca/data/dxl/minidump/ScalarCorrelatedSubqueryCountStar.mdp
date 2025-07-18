@@ -4,7 +4,7 @@ CREATE TABLE foo(a, b) AS VALUES (1, 1);
 CREATE TABLE bar(c int, d int);
 EXPLAIN SELECT (SELECT count(*) FROM bar where c = a) FROM foo;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:OptimizerConfig>
     <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>
     <dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.010000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/>

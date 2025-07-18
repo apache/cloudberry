@@ -5,7 +5,7 @@ try:
     from gppylib.commands.base import Command, LOCAL, REMOTE, WorkerPool
 except ImportError, import_exception:
     sys.exit('Cannot import modules.  Please check that you have sourced' \
-             ' greenplum_path.sh.  Detail: %s' % str(import_exception))
+             ' greengage_path.sh.  Detail: %s' % str(import_exception))
 import socket
 
 class Gpfdist:
@@ -13,7 +13,7 @@ class Gpfdist:
     Gpfdist class to management create and cleanup of gpfdist instance
     """
     def __init__(self, name, directory, port, pid_file,
-                 ctxt=LOCAL, remoteHost=None, remote_source_file=os.path.join(os.environ.get('GPHOME'),'greenplum_path.sh')):
+                 ctxt=LOCAL, remoteHost=None, remote_source_file=os.path.join(os.environ.get('GPHOME'),'greengage_path.sh')):
         """  
         name: name of the command
         dir: directory for gpfdist to use as its root directory

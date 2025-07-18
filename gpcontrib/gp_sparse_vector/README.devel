@@ -6,7 +6,7 @@ There are two parts to the sparse types:
 1) an in-memory data structure and computational library for sparse data called
 SparseData.
 
-2) a Greenplum/Postgres datatype for each case, initially a sparse vector which
+2) a Greengage/Postgres datatype for each case, initially a sparse vector which
 uses only (double) as it's data
 
 Eventually there will be sparse vector support for other base types like float,

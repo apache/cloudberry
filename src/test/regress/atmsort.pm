@@ -230,7 +230,7 @@ sub init_match_subs
 
     $here_matchsubs = << 'EOF_matchsubs';
 
-# some cleanup of greenplum-specific messages
+# some cleanup of greengage-specific messages
 m/\s+\(seg.*pid.*\)/
 s/\s+\(seg.*pid.*\)//
 
@@ -353,7 +353,7 @@ m/^NOTICE:  dropping a column that is part of the distribution policy/
 
 m/^NOTICE:  table has parent\, setting distribution columns to match parent table/
 
-m/^WARNING:  referential integrity \(.*\) constraints are not supported in Greenplum Database/
+m/^WARNING:  referential integrity \(.*\) constraints are not supported in Greengage Database/
 
         # ignore notices for DROP sqlobject IF EXISTS "objectname"
         # eg NOTICE:  table "foo" does not exist, skipping

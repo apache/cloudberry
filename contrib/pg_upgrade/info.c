@@ -13,9 +13,9 @@
 
 #include "access/transam.h"
 #include "catalog/pg_class.h"
-#include "greenplum/info_gp.h"
-#include "greenplum/old_tablespace_file_gp.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/info_gp.h"
+#include "greengage/old_tablespace_file_gp.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 /* needs to be kept in sync with pg_class.h */
 #define RELSTORAGE_AOROWS      'a'
@@ -345,7 +345,7 @@ get_db_and_rel_infos(ClusterInfo *cluster)
 	/*
 	 * Reset the index state on the new cluster only.
 	 */
-	if (!is_greenplum_dispatcher_mode() && !user_opts.check && cluster == &new_cluster)
+	if (!is_greengage_dispatcher_mode() && !user_opts.check && cluster == &new_cluster)
 		reset_invalid_indexes();
 
 	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
@@ -378,7 +378,7 @@ get_db_infos(ClusterInfo *cluster)
 	int 		i_datminmxid = 0;
 
 	/*
-	 * greenplum specific indexes
+	 * greengage specific indexes
 	 */
 	int         i_tablespace_oid;
 

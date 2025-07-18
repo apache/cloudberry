@@ -363,7 +363,7 @@ with q as (select max(f1) from int4_tbl group by f1 order by f1)
 --
 -- Test case for sublinks pushed down into subselects via join alias expansion
 --
--- Greenplum note: This query will only work with ORCA. This type of query
+-- Greengage note: This query will only work with ORCA. This type of query
 -- was not supported in postgres versions prior to 8.4, and thus was never
 -- supported in the planner. After 8.4 versions, the planner works, but
 -- the plan it creates is not currently parallel safe.

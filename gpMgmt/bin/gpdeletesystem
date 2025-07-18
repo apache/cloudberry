@@ -24,7 +24,7 @@ try:
     from gppylib.operations.segment_tablespace_locations import get_tablespace_locations
 except ImportError, e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
-             'have sourced greenplum_path.sh.  Detail: ' + str(e))
+             'have sourced greengage_path.sh.  Detail: ' + str(e))
 
 EXECNAME = os.path.split(__file__)[-1]
 
@@ -142,19 +142,19 @@ def parseargs():
 # -------------------------------------------------------------------------
 def display_params(options, dburl, standby, segments, dumpDirsExist):
     global g_warnings_generated
-    logger.info('Greenplum Instance Deletion Parameters')
+    logger.info('Greengage Instance Deletion Parameters')
     logger.info('--------------------------------------')
-    logger.info('Greenplum Master hostname                  = %s' % dburl.pghost)
-    logger.info('Greenplum Master data directory            = %s' % options.master_data_dir)
-    logger.info('Greenplum Master port                      = %s' % dburl.pgport)
+    logger.info('Greengage Master hostname                  = %s' % dburl.pghost)
+    logger.info('Greengage Master data directory            = %s' % options.master_data_dir)
+    logger.info('Greengage Master port                      = %s' % dburl.pgport)
     if standby:
-        logger.info('Greenplum Master standby host              = %s' % standby.getSegmentHostName())
-        logger.info('Greenplum Master standby data directory    = %s' % standby.getSegmentDataDirectory())
-        logger.info('Greenplum Master standby port              = %s' % standby.getSegmentPort())
+        logger.info('Greengage Master standby host              = %s' % standby.getSegmentHostName())
+        logger.info('Greengage Master standby data directory    = %s' % standby.getSegmentDataDirectory())
+        logger.info('Greengage Master standby port              = %s' % standby.getSegmentPort())
     if options.force:
-        logger.info('Greenplum Force delete of dump files       = ON')
+        logger.info('Greengage Force delete of dump files       = ON')
     else:
-        logger.info('Greenplum Force delete of dump files       = OFF')
+        logger.info('Greengage Force delete of dump files       = OFF')
     logger.info('Batch size                                 = %s' % options.batch_size)
     logger.info('--------------------------------------')
     logger.info(' Segment Instance List ')
@@ -166,14 +166,14 @@ def display_params(options, dburl, standby, segments, dumpDirsExist):
         port = segdb.getSegmentPort()
         logger.info('%s:%s:%s' % (host, datadir, port))
 
-    yn = ask_yesno('', 'Continue with Greenplum instance deletion?', 'N')
+    yn = ask_yesno('', 'Continue with Greengage instance deletion?', 'N')
     if yn:
-        logger.info('FINAL WARNING, you are about to delete the Greenplum instance')
+        logger.info('FINAL WARNING, you are about to delete the Greengage instance')
         logger.info('on master host %s.' % dburl.pghost)
         if dumpDirsExist and options.force:
             logger.warn('There are database dump files, these will be DELETED if you continue!')
             g_warnings_generated = True
-        yn = ask_yesno('', 'Continue with Greenplum instance deletion?', 'N')
+        yn = ask_yesno('', 'Continue with Greengage instance deletion?', 'N')
         if not yn:
             raise GpDeleteSystemException('User canceled')
     else:

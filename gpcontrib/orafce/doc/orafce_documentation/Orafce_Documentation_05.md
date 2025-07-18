@@ -1585,7 +1585,7 @@ The following functions for making comparisons are supported:
 
 Compares values and if they match, returns a corresponding value.
 
-Note: decode is converted into a reserved word in Greenplum Database. If you want to use the Postgres two-argument decode function that decodes binary strings previously encoded to ASCII-only representation, you must invoke it by using the full schema-qualified syntax, pg_catalog.decode(), or by enclosing the function name in quotes "decode" ().
+Note: decode is converted into a reserved word in Greengage Database. If you want to use the Postgres two-argument decode function that decodes binary strings previously encoded to ASCII-only representation, you must invoke it by using the full schema-qualified syntax, pg_catalog.decode(), or by enclosing the function name in quotes "decode" ().
 
 **Syntax**
 

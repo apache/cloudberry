@@ -1528,7 +1528,7 @@ def chk_gpdb_id(username):
     path="%s/bin/initdb" % GPHOME
     if not os.access(path,os.X_OK):
         raise GpError("File permission mismatch.  The current user %s does not have sufficient"
-                      " privileges to run the Greenplum binaries and management utilities." % username )
+                      " privileges to run the Greengage binaries and management utilities." % username )
 
 
 def chk_local_db_running(datadir, port):
@@ -1576,7 +1576,7 @@ def get_lockfile_name(port):
 
 
 def get_local_db_mode(master_data_dir):
-    """ Gets the mode Greenplum is running in.
+    """ Gets the mode Greengage is running in.
         Possible return values are:
             'NORMAL'
             'RESTRICTED'
@@ -1585,7 +1585,7 @@ def get_local_db_mode(master_data_dir):
     mode = 'NORMAL'
 
     if not os.path.exists(master_data_dir + '/postmaster.pid'):
-        raise Exception('Greenplum database appears to be stopped')
+        raise Exception('Greengage database appears to be stopped')
 
     try:
         fp = open(master_data_dir + '/postmaster.opts', 'r')
@@ -1595,7 +1595,7 @@ def get_local_db_mode(master_data_dir):
         elif optline.find('gp_role=utility') > 0:
             mode = 'UTILITY'
     except OSError:
-        raise Exception('Failed to open %s.  Is Greenplum Database running?' % master_data_dir + '/postmaster.opts')
+        raise Exception('Failed to open %s.  Is Greengage Database running?' % master_data_dir + '/postmaster.opts')
     except IOError:
         raise Exception('Failed to read options from %s' % master_data_dir + '/postmaster.opts')
     finally:

@@ -161,7 +161,7 @@ drop table test;
 -- to follow the update link to fetch the new tuple. The
 -- other transaction should raise error for such case.
 -- the following case should be tested with GDD enabled.
--- See github issue: https://github.com/greenplum-db/gpdb/issues/8919
+-- See github issue: https://github.com/GreengageDB/greengage/issues/8919
 
 0:create table t_splitupdate_raise_error (a int, b int) distributed by (a);
 0:insert into t_splitupdate_raise_error values (1, 1);
@@ -200,7 +200,7 @@ drop table test;
 -- EvalPlanQualStart will init all subplans even if it does
 -- not use it. If such subplan contains Motion nodes, we should
 -- error out just like the behavior in EvalPlanQual.
--- See Issue: https://github.com/greenplum-db/gpdb/issues/12902
+-- See Issue: https://github.com/GreengageDB/greengage/issues/12902
 -- for details.
 1: create table t_epq_subplans(a int, b int);
 1: insert into t_epq_subplans values (1, 1);

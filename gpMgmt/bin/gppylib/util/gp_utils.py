@@ -2,7 +2,7 @@
 #
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
-# Greenplum DB related utility functions
+# Greengage DB related utility functions
 
 import os
 

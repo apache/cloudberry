@@ -13,7 +13,7 @@ yum -y install rpmdevtools rpmlint
 ```
 
 
-# How to Create a Greenplum Package that can be manipulated with *gppkg* 
+# How to Create a Greengage Package that can be manipulated with *gppkg* 
 
 Run the following script on Centos6 or Redhat6. The destination directory is hardcoded for simplicity.
 
@@ -32,7 +32,7 @@ Your sample package will be at:
 
 `ls /tmp/sample-gppkg/sample.gppkg`
 
-# Using Makefile to create a Greenplum Package
+# Using Makefile to create a Greengage Package
 
 To integrate build gppkg into a Makefile, it needs to include the following .mk file
 ```

@@ -40,7 +40,7 @@ ALL_PO_FILES = $(addprefix po/, $(addsuffix .po, $(AVAIL_LANGUAGES)))
 MO_FILES = $(addprefix po/, $(addsuffix .mo, $(LANGUAGES)))
 
 ifdef XGETTEXT
-XGETTEXT += -ctranslator --copyright-holder='Greenplum Projec' --msgid-bugs-address=bugs@greenplum.org --no-wrap --sort-by-file --package-name='$(CATALOG_NAME) (Greenplum)' --package-version='$(MAJORVERSION)'
+XGETTEXT += -ctranslator --copyright-holder='Greengage Projec' --msgid-bugs-address=bugs@greengagedb.org --no-wrap --sort-by-file --package-name='$(CATALOG_NAME) (Greengage)' --package-version='$(MAJORVERSION)'
 endif
 
 ifdef MSGMERGE

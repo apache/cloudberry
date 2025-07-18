@@ -12,7 +12,7 @@ explain insert into tbl_cds_buysell_orders_new (a,b,c)
   select ex.a,ex.b,ex.c from ext_tbl_cds_buysell_orders_new ex order by a;
 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

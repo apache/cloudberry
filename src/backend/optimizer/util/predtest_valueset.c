@@ -175,7 +175,7 @@ DeletePossibleValueSetData(PossibleValueSet *pvs)
 /**
  * basic operation on PossibleValueSet:  add a value to the set field of PossibleValueSet
  *
- * The caller must verify that the valueToCopy is greenplum hashable
+ * The caller must verify that the valueToCopy is greengage hashable
  */
 static void
 AddValue(PossibleValueSet *pvs, Const *valueToCopy)
@@ -383,7 +383,7 @@ TryProcessOpExprForPossibleValues(OpExpr *expr, Node *variable, Oid opfamily, Po
 	/*
 	 * if expr->opno does not belong to opfamily of distributed key,
 	 * do not use direct dispatch to avoid wrong results.
-	 * more details please refer to https://github.com/greenplum-db/gpdb/issues/14887
+	 * more details please refer to https://github.com/GreengageDB/greengage/issues/14887
 	 */
 	if (!op_in_opfamily(expr->opno, opfamily))
 	{

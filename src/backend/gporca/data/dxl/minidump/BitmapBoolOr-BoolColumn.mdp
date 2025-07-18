@@ -13,7 +13,7 @@ create index idx_t_3 on t using bitmap(c2);
 
 explain select * from t where c2 = 'HEAP' or c4 = 't' or c5 = 'f';
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

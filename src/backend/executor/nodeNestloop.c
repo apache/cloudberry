@@ -115,7 +115,7 @@ ExecNestLoop_guts(NestLoopState *node)
 	if (node->prefetch_inner)
 	{
 		/*
-		 * Prefetch inner is Greenplum specific behavior.
+		 * Prefetch inner is Greengage specific behavior.
 		 * However, inner plan may depend on outer plan as
 		 * outerParams. If so, we have to fake those params
 		 * to avoid null pointer reference issue. And because
@@ -410,7 +410,7 @@ ExecInitNestLoop(NestLoop *node, EState *estate, int eflags)
 	nlstate->prefetch_inner = node->join.prefetch_inner;
 
 	/*
-	 * Greeplum specific:
+	 * Greengage specific:
 	 * prefetch joinqual and prefetch qual are old methods
 	 * to get rid of motion deadlock. Motion nodes in joinqual
 	 * or planqual are in SubPlan expressions. Thus the motion
@@ -645,7 +645,7 @@ splitJoinQualExpr(NestLoopState *nlstate)
 				Expr          *expr   = ((ExprState *) fstate)->expr;
 
 				/*
-				 * Greenplum will pull up not-in sublink to a specific join LASJ,
+				 * Greengage will pull up not-in sublink to a specific join LASJ,
 				 * this kind of join's joinqual might contain a NULL const here,
 				 * for such case we do not need to split it. A case that can
 				 * reach here is:
@@ -654,7 +654,7 @@ splitJoinQualExpr(NestLoopState *nlstate)
 				 *   create table t2(a int not null, b int not null);
 				 *   explain  select 1 from t1 where (NULL, b) not in (select a, b from t2);
 				 *
-				 * The above SQL in Greenplum will be turned in a join whose qual contains
+				 * The above SQL in Greengage will be turned in a join whose qual contains
 				 * a bool expr (NULL = t2.a) and (t1.b = t2.b), this piece of expr will be
 				 * evaluated to (t1.b = t2.b) and NULL by the following code path:
 				 *   subquery_planner
@@ -669,7 +669,7 @@ splitJoinQualExpr(NestLoopState *nlstate)
 				 *
 				 * We do nothing here for NULL const.
 				 *
-				 * See Issue: https://github.com/greenplum-db/gpdb/issues/13212 for details.
+				 * See Issue: https://github.com/GreengageDB/greengage/issues/13212 for details.
 				 */
 				if (IsA(expr, Const) && ((Const *) expr)->constisnull)
 					continue;

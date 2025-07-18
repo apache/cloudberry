@@ -172,7 +172,7 @@ cdbdisp_resetResult(CdbDispatchResult *dispatchResult)
 	PQExpBuffer buf = dispatchResult->resultbuf;
 	/*
 	* the resultbuf may be empty due to oom, set in cdbdisp_makeResult()
- 	* Related to issue: https://github.com/greenplum-db/gpdb/issues/12399
+ 	* Related to issue: https://github.com/GreengageDB/greengage/issues/12399
 	*/
 	if (buf)
 	{

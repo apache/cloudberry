@@ -29,7 +29,7 @@ try:
     from gppylib.operations.update_pg_hba_on_segments import update_pg_hba_for_new_mirrors
 
 except ImportError, e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants
 GPDB_STOPPED = 1
@@ -337,7 +337,7 @@ try:
         gpArrayInstance = GpArray.initFromCatalog(dburl, utility=True)
     except DatabaseError, ex:
         logger.error('Failed to connect to database.  Make sure the')
-        logger.error('Greenplum instance is running, and that')
+        logger.error('Greengage instance is running, and that')
         logger.error('your environment is correct, then rerun')
         logger.error('gpmovemirrors ' + ' '.join(sys.argv[1:]))
         sys.exit(1)

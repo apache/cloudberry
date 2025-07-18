@@ -1,6 +1,6 @@
 [submodule "gpAux/extensions/pgbouncer/source"]
 	path = gpAux/extensions/pgbouncer/source
-	url = https://github.com/arenadata/pgbouncer-adb.git
+	url = https://github.com/GreengageDB/pgbouncer.git
 [submodule "gpcontrib/gpcloud/test/googletest"]
 	path = gpcontrib/gpcloud/test/googletest
 	url = https://github.com/google/googletest.git

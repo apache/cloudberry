@@ -36,9 +36,9 @@ DROP
 ! gpstop -rai;
 20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Starting gpstop with args: -rai
 20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Gathering information and validating the environment...
-20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Obtaining Segment details from master...
-20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.5622.g0cc5452d2bc build dev'
+20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5622.g0cc5452d2bc build dev'
 20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/workspace/gpdb5/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20200305:08:04:41:016472 gpstop:09c5497cf854:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process
@@ -187,9 +187,9 @@ DROP
 ! gpstop -rai;
 20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Starting gpstop with args: -rai
 20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Gathering information and validating the environment...
-20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Obtaining Segment details from master...
-20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.5622.g0cc5452d2bc build dev'
+20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5622.g0cc5452d2bc build dev'
 20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/workspace/gpdb5/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20200305:08:04:47:017053 gpstop:09c5497cf854:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process

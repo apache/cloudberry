@@ -1445,7 +1445,7 @@ RemoveLocalLock(LOCALLOCK *locallock)
  * So, we must subtract off our own locks when determining whether the
  * requested new lock conflicts with those already held.
  *
- * In Greenplum Database, the conflict is more complicated;  not only the
+ * In Greengage Database, the conflict is more complicated;  not only the
  * process itself but also other processes within the same MPP session may
  * have held conflicting locks.  We must take account  into consideration
  * those MPP session member processes to subtract off the lock mask.

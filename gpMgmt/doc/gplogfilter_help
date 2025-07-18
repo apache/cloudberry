@@ -1,6 +1,6 @@
 ﻿COMMAND NAME: gplogfilter 
 
-Searches through Greenplum Database log files for specified entries. 
+Searches through Greengage Database log files for specified entries. 
 
 ***************************************************** 
 SYNOPSIS 
@@ -18,10 +18,10 @@ gplogfilter --version
 DESCRIPTION 
 ***************************************************** 
 
-The gplogfilter utility can be used to search through a Greenplum 
+The gplogfilter utility can be used to search through a Greengage 
 Database log file for entries matching the specified criteria. If an 
 input file is not supplied, then gplogfilter will use the 
-$MASTER_DATA_DIRECTORY environment variable to locate the Greenplum 
+$MASTER_DATA_DIRECTORY environment variable to locate the Greengage 
 master log file in the standard logging location. To read from standard 
 input, use a dash (-) as the input file name. Input files may be 
 compressed using gzip. In an input file, a log entry is identified by 
@@ -32,7 +32,7 @@ once by running it through the gpssh utility. For example, to display
 the last three lines of each segment log file: 
 
  gpssh -f seg_host_file 
- => source /usr/local/greenplum-db/greenplum_path.sh 
+ => source /usr/local/greengage-db/greengage_path.sh 
  => gplogfilter -n 3 /gpdata/*/pg_log/gpdb*.csv 
 
 By default, the output of gplogfilter is sent to standard output. Use 
@@ -93,7 +93,7 @@ PATTERN MATCHING OPTIONS
  Selects specific columns from the log file. Specify the desired columns 
  as a comma-delimited string of column numbers beginning with 1, where 
  the second column from left is 2, the third is 3, and so on. See the 
- "Greenplum Database System Administrator Guide" for details about the log 
+ "Greengage Database System Administrator Guide" for details about the log 
  file format and for a list of the available columns and their associated 
  number. 
 
@@ -171,7 +171,7 @@ INPUT OPTIONS
 
  The name of the input log file(s) to search through. If an input file is 
  not supplied, gplogfilter will use the $MASTER_DATA_DIRECTORY 
- environment variable to locate the Greenplum master log file. To read 
+ environment variable to locate the Greengage master log file. To read 
  from standard input, use a dash (-) as the input file name. 
 
  
@@ -217,7 +217,7 @@ messages in the segment log files containing the string 'con6' and save
 output to a file. 
 
  gpssh -f seg_hosts_file -e 'source 
- /usr/local/greenplum-db/greenplum_path.sh ; gplogfilter -f con6 
+ /usr/local/greengage-db/greengage_path.sh ; gplogfilter -f con6 
  /gpdata/*/pg_log/gpdb*.csv' > seglog.out 
 
  

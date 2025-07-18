@@ -61,7 +61,7 @@ def suggested_git_remote():
     staging_remote = "git@github.com:pivotal/gp-gpdb-staging"
     remote = subprocess.check_output(["git", "ls-remote", "--get-url"]).decode('utf-8').rstrip()
 
-    if "greenplum-db/gpdb" in remote:
+    if "GreengageDB/greengage" in remote:
         return default_remote
 
     if "pivotal/gp-gpdb-staging" in remote:
@@ -254,9 +254,9 @@ def print_fly_commands(args, git_remote, git_branch):
         if args.os_type != default_os_type:
             pipeline_name += "_" + args.os_type
         print(gen_pipeline(args, pipeline_name, ["common_prod.yml"],
-                           "https://github.com/greenplum-db/gpdb.git", BASE_BRANCH))
+                           "https://github.com/GreengageDB/greengage.git", BASE_BRANCH))
         print(gen_pipeline(args, "%s_without_asserts" % pipeline_name, ["common_prod.yml", "without_asserts_common_prod.yml"],
-                           "https://github.com/greenplum-db/gpdb.git", BASE_BRANCH))
+                           "https://github.com/GreengageDB/greengage.git", BASE_BRANCH))
         return
 
     else:

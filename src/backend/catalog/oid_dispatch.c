@@ -4,7 +4,7 @@
  *		Functions to ensure that QD and QEs use same OIDs for catalog objects.
  *
  *
- * In Greenplum, it's important that most objects, like relations,
+ * In Greengage, it's important that most objects, like relations,
  * functions, operators, have the same OIDs in the master and all QE nodes.
  * Otherwise query plans generated in the master will not work on the QE
  * nodes, because they use the master's OIDs to refer to objects.
@@ -119,10 +119,10 @@
 
 /*
  * In upstream PostgreSQL, the below variables are set before object creation
- * in binary upgrade mode, while Greenplum use the Oid dispatcher functionality
+ * in binary upgrade mode, while Greengage use the Oid dispatcher functionality
  * for binary upgrade as well.  We do however need these for signalling the
  * TOAST code to ensure that toast tables are created in the new cluster iff
- * they exist in the old. Since Greenplum creates partitioned tables with a
+ * they exist in the old. Since Greengage creates partitioned tables with a
  * single CREATE TABLE statement, the below variables are used as reference
  * counters rather than single-use signals. The fact that Oids are defined as
  * unsigned integers is abused to keep the datatype aligned with upstream and
@@ -499,7 +499,7 @@ CreateKeyFromCatalogTuple(Relation catalogrel, HeapTuple tuple,
  * The global var dispatch_oids is only used on QD, and the global
  * var preassigned_oids is only used on QEs.
  *
- * Greenplum's MPP architecture need to make some OIDs consistent
+ * Greengage's MPP architecture need to make some OIDs consistent
  * among coordinator and segments (like table OIDs). The oid assignments
  * are generated on QD and then dispatched to QEs. A single SQL might
  * involve sever dispatch events, for example, there are some functions

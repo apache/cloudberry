@@ -12,7 +12,7 @@
 #include "fe_utils/connect.h"
 #include "pg_upgrade.h"
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static PGconn *get_db_conn(ClusterInfo *cluster, const char *db_name);
 
@@ -242,7 +242,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	else
 		version_opts = "-c gp_num_contents_in_cluster=1";
 
-	char *extra_pg_ctl_flags = greenplum_extra_pg_ctl_flags(cluster->greenplum_cluster_info);
+	char *extra_pg_ctl_flags = greengage_extra_pg_ctl_flags(cluster->greengage_cluster_info);
 
 	snprintf(cmd, sizeof(cmd),
 		  "\"%s/pg_ctl\" -w -l \"%s\" -D \"%s\" -o \"-p %d -c gp_role=utility %s%s %s%s %s %s\" start",

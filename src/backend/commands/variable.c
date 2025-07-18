@@ -589,7 +589,7 @@ assign_XactIsoLevel(const char *newval, void *extra)
 	/*
 	 * GPDB_91_MERGE_FIXME: Prior to PostgreSQL 9.1, serializable isolation was
 	 * implemented as read committed.  True serializable isolation level is
-	 * supported as of PostgreSQL 9.1.  However, Greenplum lacks the support to
+	 * supported as of PostgreSQL 9.1.  However, Greengage lacks the support to
 	 * detect serialization conflicts using predicate locks at cluster level.
 	 * Until that support is implemented, let's keep old behavior by falling
 	 * back to repeatable read. Also, for similar reasons guc
@@ -601,7 +601,7 @@ assign_XactIsoLevel(const char *newval, void *extra)
 	if (XactIsoLevel == XACT_SERIALIZABLE)
 	{
 		elog(LOG, "serializable isolation requested, falling back to "
-			 "repeatable read until serializable is supported in Greenplum");
+			 "repeatable read until serializable is supported in Greengage");
 		XactIsoLevel = XACT_REPEATABLE_READ;
 	}
 }
@@ -635,7 +635,7 @@ check_DefaultXactIsoLevel(int *newval, void **extra, GucSource source)
 	if (*newval == XACT_SERIALIZABLE)
 	{
 		elog(LOG, "default serializable isolation requested, falling back to "
-				  "repeatable read until serializable is supported in Greenplum");
+				  "repeatable read until serializable is supported in Greengage");
 		*newval = XACT_REPEATABLE_READ;
 	}
 

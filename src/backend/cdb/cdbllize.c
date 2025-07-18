@@ -97,7 +97,7 @@ static Plan *materialize_subplan(PlannerInfo *root, Plan *subplan);
  * already final.
  *
  * The result is [a copy of] the input plan with alterations to make the
- * plan suitable for execution by Greenplum Database.
+ * plan suitable for execution by Greengage Database.
  *
  *
  * TODO: Much investigation remains in the areas of
@@ -828,7 +828,7 @@ ParallelizeSubplan(SubPlan *spExpr, PlanProfile *context)
  * Function prescan_walker is the workhorse of prescan.
  *
  * The driving function, prescan(), should be called only once on a
- * plan produced by the Greenplum Database optimizer for dispatch on the QD.  There
+ * plan produced by the Greengage Database optimizer for dispatch on the QD.  There
  * are two main task performed:
  *
  * 1. Since the optimizer isn't in a position to view plan globally,
@@ -870,7 +870,7 @@ prescan_walker(Node *node, PlanProfile *context)
 		* then it either focuses or broadcasts the subplan based on the flow which describe
 		* the containing plan node's slice execution position. Actually the flow should be
 		* the top-level flow for the corresponding slice instead of the containing plan node's flow.
-		* This related to issue: https://github.com/greenplum-db/gpdb/issues/12371
+		* This related to issue: https://github.com/GreengageDB/greengage/issues/12371
 		* For example:
 		*  with run_dt as (
 		*       select

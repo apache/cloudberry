@@ -5,7 +5,7 @@ create table pt2 (i int, j int, k int) distributed by (i) partition by range(k)
 alter table pt2_1_prt_2 set distributed randomly;
 explain select i, count(j) from pt2 group by i;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -37,11 +37,11 @@ operational during resyncronization.
 
 A segment instance can fail for several reasons, such as a host failure, 
 network failure, or disk failure. When a segment instance fails, its 
-status is marked as down in the Greenplum Database system catalog, 
+status is marked as down in the Greengage Database system catalog, 
 and its mirror is activated in change tracking mode. In order to 
 bring the failed segment instance back into operation again, you 
 must first correct the problem that made it fail in the first place, 
-and then recover the segment instance in Greenplum Database 
+and then recover the segment instance in Greengage Database 
 using gprecoverseg.
 
 Segment recovery using gprecoverseg requires that you have an active 
@@ -89,13 +89,13 @@ query:
    FROM gp_segment_configuration
    ORDER BY dbid;
 
-The new recovery segment host must be pre-installed with the Greenplum 
+The new recovery segment host must be pre-installed with the Greengage 
 Database software and configured exactly the same as the existing 
 segment hosts. A spare data directory location must exist on all 
 currently configured segment hosts and have enough disk space to 
 accommodate the failed segments.
 
-The recovery process marks the segment as up again in the Greenplum 
+The recovery process marks the segment as up again in the Greengage 
 Database system catalog, and then initiates the resyncronization 
 process to bring the transactional state of the segment 
 up-to-date with the latest changes. The system is online 
@@ -235,9 +235,9 @@ edited to supply alternate recovery locations if needed.
 -p <new_recover_host>[,...]
 
 Specifies a spare host outside of the currently configured 
-Greenplum Database array on which to recover invalid segments. In 
+Greengage Database array on which to recover invalid segments. In 
 the case of multiple failed segment hosts, you can specify a 
-comma-separated list. The spare host must have the Greenplum Database 
+comma-separated list. The spare host must have the Greengage Database 
 software installed and configured, and have the same hardware and OS 
 configuration as the current segment hosts (same OS version, locales, 
 gpadmin user account, data directory locations created, ssh keys 
@@ -307,7 +307,7 @@ Recover any failed segment instances in place:
  $ gprecoverseg
 
 
-Rebalance your Greenplum Database system after a recovery by
+Rebalance your Greengage Database system after a recovery by
 resetting all segments to their preferred role. First check
 that all segments are up and synchronized.
 

@@ -506,14 +506,14 @@ resources:
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/published/gpdb6/greenplum-db-(.*)-rhel8-x86_64((rc-build-type-gcs)).rpm
+    regexp: server/published/gpdb6/greengage-db-(.*)-rhel8-x86_64((rc-build-type-gcs)).rpm
 
-- name: greenplum-database-release
+- name: greengage-database-release
   type: git
   icon: git
   source:
     branch: main
-    uri: https://github.com/greenplum-db/greenplum-database-release.git
+    uri: https://github.com/GreengageDB/greengage.git
 
 - name: license_file
   type: gcs
@@ -521,7 +521,7 @@ resources:
   source:
     bucket: ((gcs-bucket-for-oss))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: osl/released/gpdb6/open_source_license_greenplum-database-6.0.0-97773a0-(.*).txt
+    regexp: osl/released/gpdb6/open_source_license_greengage-database-6.0.0-97773a0-(.*).txt
 
 
 - name: binary_swap_gpdb_rocky8
@@ -557,7 +557,7 @@ resources:
   source:
     bucket: ((gcs-bucket-intermediates))
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: ((pipeline-name))/bin_gpdb_clients_windows/greenplum-clients-x86_64.tar.gz
+    versioned_file: ((pipeline-name))/bin_gpdb_clients_windows/greengage-clients-x86_64.tar.gz
 
 - name: terraform_windows
   type: terraform
@@ -720,7 +720,7 @@ jobs:
       - get: gpdb_package
         resource: previous_gpdb
         params:
-          globs: [greenplum-db-6*-rhel8-x86_64.rpm]
+          globs: [greengage-db-6*-rhel8-x86_64.rpm]
       - get: gpdb6-rocky8-build
   - task: generate_previous_bin_gpdb
     file: gpdb_src/concourse/tasks/extract_package.yml
@@ -809,7 +809,7 @@ jobs:
       REMOTE_KEY: ((remote_win_key_build))
   - put: bin_gpdb_clients_windows
     params:
-      file: "gpdb_artifacts/greenplum-clients-x86_64.tar.gz"
+      file: "gpdb_artifacts/greengage-clients-x86_64.tar.gz"
 
 - name: test_gpdb_clients_windows
   plan:
@@ -2885,7 +2885,7 @@ jobs:
                 pushd bin_gpdb_clients_windows
                 tar xzvf *.tar.gz
                 popd
-                cp bin_gpdb_clients_windows/greenplum-clients-x86_64.msi release_candidates/clients-rc-${gpdb_semver}-windows_x86_64${RC_BUILD_TYPE_GCS}.msi
+                cp bin_gpdb_clients_windows/greengage-clients-x86_64.msi release_candidates/clients-rc-${gpdb_semver}-windows_x86_64${RC_BUILD_TYPE_GCS}.msi
       - task: verify_gpdb_versions
         file: gpdb_src/concourse/tasks/verify_gpdb_versions.yml
       - task: tar_git_repo
@@ -2922,19 +2922,19 @@ jobs:
       - get: bin_gpdb
         passed: [gate_release_candidate_start]
       - get: gpdb6-rocky8-build
-      - get: greenplum-database-release
+      - get: greengage-database-release
       - get: license_file
   - task: create_gpdb_rpm_package_rocky8
-    file: greenplum-database-release/ci/concourse/tasks/build-gpdb-rpm.yml
+    file: greengage-database-release/ci/concourse/tasks/build-gpdb-rpm.yml
     image: gpdb6-rocky8-build
     output_mapping:
       gpdb_rpm_installer: gpdb_rpm_rocky8
     params:
       PLATFORM: rocky8
-      GPDB_NAME: greenplum-db-6
+      GPDB_NAME: greengage-db-6
       GPDB_RELEASE: 1
       GPDB_LICENSE: Pivotal Software EULA
-      GPDB_URL: https://github.com/greenplum-db/gpdb
+      GPDB_URL: https://github.com/GreengageDB/greengage
       GPDB_OSS: false
   - task: rename_rc_artifacts
     image: gpdb6-rocky8-build
@@ -2953,7 +2953,7 @@ jobs:
           - -exc
           - |
             gpdb_semver=$(gpdb_src/getversion | cut -d' ' -f1)
-            cp -v gpdb_rpm_rocky8/*.rpm renamed_gpdb_rpm_rocky8/greenplum-db-${gpdb_semver}-rhel8-x86_64${RC_BUILD_TYPE_GCS}.rpm
+            cp -v gpdb_rpm_rocky8/*.rpm renamed_gpdb_rpm_rocky8/greengage-db-${gpdb_semver}-rhel8-x86_64${RC_BUILD_TYPE_GCS}.rpm
   - in_parallel:
       steps:
       - put: gpdb_rpm_installer_rocky8

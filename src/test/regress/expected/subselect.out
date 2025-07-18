@@ -618,7 +618,7 @@ with q as (select max(f1) from int4_tbl group by f1 order by f1)
 --
 -- Test case for sublinks pushed down into subselects via join alias expansion
 --
--- Greenplum note: This query will only work with ORCA. This type of query
+-- Greengage note: This query will only work with ORCA. This type of query
 -- was not supported in postgres versions prior to 8.4, and thus was never
 -- supported in the planner. After 8.4 versions, the planner works, but
 -- the plan it creates is not currently parallel safe.
@@ -1161,13 +1161,13 @@ drop table tl3;
 drop table tl4;
 -- Check support <dxl:TestExpr> node. TestExpr present with IN queries (equivalent =ANY).
 create table t1 as select 0 as i1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2 as select 0 as i2;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t3 as select i3 from (values (0), (1)) as s(i3);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i3' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i3' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- The first query generates a DXL with <dxl:TestExpr>, the left node (inside Comparison)
 -- of which contains a deep tree and only params (see DXL in output).

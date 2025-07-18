@@ -316,7 +316,7 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 			 * Previous code just get_opfamily_member here, that is not enough, since
 			 * there are binary compatible types, e.g. varchar and text.
 			 *
-			 * See Issue: https://github.com/greenplum-db/gpdb/issues/12700 for a detailed case.
+			 * See Issue: https://github.com/GreengageDB/greengage/issues/12700 for a detailed case.
 			 */
 			Oid hash_proc;
 
@@ -587,7 +587,7 @@ cdbpullup_missingVarWalker(Node *node, void *targetlist)
 
 	/*
 	 * Should also consider PlaceHolderVar in the targetlist.
-	 * See github issue: https://github.com/greenplum-db/gpdb/issues/10315
+	 * See github issue: https://github.com/GreengageDB/greengage/issues/10315
 	 */
 	if (IsA(node, Var) || IsA(node, PlaceHolderVar))
 	{

@@ -502,7 +502,7 @@ NOTICE:  constraint "nonexistent" of domain "con" does not exist, skipping
 -- Test ALTER DOMAIN .. CONSTRAINT .. NOT VALID
 create domain things AS INT;
 CREATE TABLE thethings (id int, stuff things);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO thethings (stuff) VALUES (55);
 ALTER DOMAIN things ADD CONSTRAINT meow CHECK (VALUE < 11);
@@ -824,7 +824,7 @@ alter domain testdomain1 drop constraint unsigned_foo;
 drop domain testdomain1;
 --
 -- Create Domain will dispatch collation
--- See github issue: https://github.com/greenplum-db/gpdb/issues/12015
+-- See github issue: https://github.com/GreengageDB/greengage/issues/12015
 --
 create domain testdomain_issue_12015 as text collate "C";
 select count(distinct (typname, collname))
@@ -847,10 +847,10 @@ from
 -- ORCA shouldn't fail for data corruption while translating query to DXL
 -- for a constant domain value of the following text related types:
 -- char, bpchar, name.
--- github issue: https://github.com/greenplum-db/gpdb/issues/14155
+-- github issue: https://github.com/GreengageDB/greengage/issues/14155
 --
 create temp table test_table_14155(txtime timestamptz default now(), user_role text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtime' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtime' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create domain domainname as name;
 create function test_func_name(

@@ -1,6 +1,6 @@
 //---------------------------------------------------------------------------
 
-//  Greenplum Database
+//  Greengage Database
 //  Copyright (C) 2018 Pivotal Inc.
 //
 //  @filename:

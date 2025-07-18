@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <!--
 SQL:
 select * from x where x.i in (select last_value(y.i) over(partition by x.i order by x.j rows between x.i preceding and x.j following) from y);

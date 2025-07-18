@@ -474,7 +474,7 @@ FROM   update_gp_foo1;
 SELECT * from update_gp_foo;
 
 -- Test for update with LASJ_NOTIN
--- See Issue: https://github.com/greenplum-db/gpdb/issues/13265
+-- See Issue: https://github.com/GreengageDB/greengage/issues/13265
 create table t1_13265(a int, b int, c int, d int) distributed by (a);
 create table t2_13265(a int, b int, c int, d int) distributed by (a);
 

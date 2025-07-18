@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * gp_configuration_history.h
- *	  changes in Greenplum system configuration captured in chronological order
+ *	  changes in Greengage system configuration captured in chronological order
  *
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.

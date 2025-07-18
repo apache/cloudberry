@@ -98,7 +98,7 @@ _bitmap_get_metapage_data(Relation rel, Buffer metabuf)
 	{
 		ereport(ERROR,
 				(ERRCODE_INTERNAL_ERROR,
-				 errmsg("the disk format for \"%s\" is not valid for this version of Greenplum Database",
+				 errmsg("the disk format for \"%s\" is not valid for this version of Greengage Database",
 						RelationGetRelationName(rel)),
 				 errhint("Use REINDEX to update this index.")));
 	}
@@ -371,7 +371,7 @@ _bitmap_findnexttids(BMBatchWords *words, BMIterateResult *result,
  * to spill over to current page in the window when we (the read transaction)
  * had released the lock on the previous page and not locked the current page.
  * More details see read_words in bitmapsearch.c.
- * Related to issue: https://github.com/greenplum-db/gpdb/issues/11308
+ * Related to issue: https://github.com/GreengageDB/greengage/issues/11308
  * 2. Or when running bitmap heap scan path on bitmap index, since we always
  * try to read from a table block's start tid. See pull_stream.
  */

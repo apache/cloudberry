@@ -24,18 +24,18 @@ The client machine where gpload is executed must have the following:
 
 * Python 2.6.2 or later, pygresql (the Python interface to PostgreSQL), 
   and pyyaml. Note that Python and the required Python libraries are 
-  included with the Greenplum Database server installation, so if you have 
-  Greenplum Database installed on the machine where gpload is running, you 
+  included with the Greengage Database server installation, so if you have 
+  Greengage Database installed on the machine where gpload is running, you 
   do not need a separate Python installation. 
 
-  Note: Greenplum Loaders for Windows supports only Python 2.5 
+  Note: Greengage Loaders for Windows supports only Python 2.5 
   (available from www.python.org). 
 
 * The gpfdist parallel file distribution program installed and in your 
-  $PATH. This program is located in $GPHOME/bin of your Greenplum Database 
+  $PATH. This program is located in $GPHOME/bin of your Greengage Database 
   server installation. 
 
-* Network access to and from all hosts in your Greenplum Database array 
+* Network access to and from all hosts in your Greengage Database array 
  (master and segments). 
 
 * Network access to and from the hosts where the data to be loaded 
@@ -46,10 +46,10 @@ The client machine where gpload is executed must have the following:
 DESCRIPTION
 *****************************************************
 
-gpload is a data loading utility that acts as an interface to Greenplum 
+gpload is a data loading utility that acts as an interface to Greengage 
 Databases external table parallel loading feature. Using a load 
 specification defined in a YAML formatted control file, gpload executes 
-a load by invoking the Greenplum parallel file server (gpfdist), 
+a load by invoking the Greengage parallel file server (gpfdist), 
 creating an external table definition based on the source data defined, 
 and executing an INSERT, UPDATE or MERGE operation to load the source 
 data into the target table in the database. 
@@ -137,14 +137,14 @@ CONNECTION OPTIONS
 
 -h <hostname>
 
- Specifies the host name of the machine on which the Greenplum master 
+ Specifies the host name of the machine on which the Greengage master 
  database server is running. If not specified, reads from the load 
  control file, the environment variable $PGHOST or defaults to localhost. 
 
 
 -p <port> 
 
- Specifies the TCP port on which the Greenplum master database server is 
+ Specifies the TCP port on which the Greengage master database server is 
  listening for connections. If not specified, reads from the load control 
  file, the environment variable $PGPORT or defaults to 5432. 
 
@@ -169,7 +169,7 @@ CONTROL FILE FORMAT
 *****************************************************
 
 The gpload control file uses the YAML 1.1 document format and then 
-implements its own schema for defining the various steps of a Greenplum 
+implements its own schema for defining the various steps of a Greengage 
 Database load operation. The control file must be a valid YAML document. 
 
 The gpload program processes the control file document in order and uses 
@@ -242,7 +242,7 @@ CONTROL FILE SCHEMA ELEMENT DESCRIPTIONS
 VERSION - Optional. The version of the gpload control file 
           schema. The current version is 1.0.0.1. 
 
-DATABASE - Optional. Specifies which database in Greenplum to 
+DATABASE - Optional. Specifies which database in Greengage to 
            connect to. If not specified, defaults to $PGDATABASE 
            if set or the current system user name. You can also 
            specify the database on the command line using the -d option. 
@@ -252,11 +252,11 @@ USER - Optional. Specifies which database role to use to connect.
        You can also specify the database role on the command line using 
        the -U option. 
 
-HOST - Optional. Specifies Greenplum master host name. If not specified, 
+HOST - Optional. Specifies Greengage master host name. If not specified, 
        defaults to localhost or $PGHOST if set. You can also specify the 
        master host name on the command line using the -h option.
 
-PORT - Optional. Specifies Greenplum master port. If not specified, defaults
+PORT - Optional. Specifies Greengage master port. If not specified, defaults
        to 5432 or $PGPORT if set. You can also specify the master port on 
        the command line using the -p option.
 
@@ -266,9 +266,9 @@ GPLOAD - Required. Begins the load specification section. A GPLOAD specification
 INPUT - Required. Defines the location and the format of the input data to 
         be loaded. gpload will start one or more instances of the gpfdist file
         distribution program on the current host and create the required external
-        table definition(s) in Greenplum Database that point to the source data. 
+        table definition(s) in Greengage Database that point to the source data. 
         Note that the host from which you run gpload must be accessible over the 
-        network by all Greenplum hosts (master and segments).
+        network by all Greengage hosts (master and segments).
 
 SOURCE - Required. The SOURCE block of an INPUT specification defines the 
          location of a source file. An INPUT section can have more than one 
@@ -278,7 +278,7 @@ SOURCE - Required. The SOURCE block of an INPUT specification defines the
          specification.
          
          For more information about using the gpfdist parallel file server 
-         and single and multiple gpfdist instances, see the "Greenplum Database 
+         and single and multiple gpfdist instances, see the "Greengage Database 
          Database Administrator Guide."
 
 LOCAL_HOSTNAME - Optional. Specifies the host name or IP address of the local 
@@ -346,7 +346,7 @@ COLUMNS - Optional. Specifies the schema of the source data file(s) in the
 
 TRANSFORM - Optional. Specifies the name of the input XML transformation passed to 
             gpload. For more information about XML transformations, see the 
-            "Greenplum Database Database Administrator Guide."
+            "Greengage Database Database Administrator Guide."
 
 TRANSFORM_CONFIG - Optional. Specifies the location of the XML transformation 
                    configuration file that is specified in the TRANSFORM 
@@ -358,7 +358,7 @@ MAX_LINE_LENGTH - Optional. An integer that specifies the maximum length of
 FORMAT - Optional. Specifies the format of the source data file(s) - either plain
          text (TEXT) or comma separated values (CSV) format. Defaults to TEXT 
          if not specified. For more information about the format of the source
-         data, see the "Greenplum Database Database Administrator Guide."
+         data, see the "Greengage Database Database Administrator Guide."
 
 DELIMITER - Optional. Specifies a single ASCII character that separates columns
             within each row (line) of data. The default is a tab character in TEXT
@@ -371,7 +371,7 @@ DELIMITER - Optional. Specifies a single ASCII character that separates columns
 NEWLINE - Optional. Specifies the newline used in your data files – LF
           (Line feed, 0x0A), CR (Carriage return, 0x0D), or CRLF
           (Carriage return plus line feed, 0x0D 0x0A). If not
-          specified, a Greenplum Database segment will detect the
+          specified, a Greengage Database segment will detect the
           newline type by looking at the first row of data it receives
           and using the first newline type encountered.
 
@@ -414,12 +414,12 @@ ENCODING - Optional. Character set encoding of the source data. Specify
            number, or 'DEFAULT' to use the default client encoding. If 
            not specified, the default client encoding is used. For 
            information about supported character sets, see the 
-           "Greenplum Database Reference Guide."
+           "Greengage Database Reference Guide."
 
 ERROR_LIMIT - Optional. Enables single row error isolation mode for this
               load operation. When enabled, input rows that have format errors
               will be discarded provided that the error limit count is not 
-              reached on any Greenplum segment instance during input processing. 
+              reached on any Greengage segment instance during input processing. 
               If the error limit is not reached, all good rows will be loaded 
               and any error rows will either be discarded or logged to the table 
               specified in ERROR_TABLE. The default is to abort the load operation
@@ -429,7 +429,7 @@ ERROR_LIMIT - Optional. Enables single row error isolation mode for this
               client encoding sequences. Constraint errors, such as primary key 
               violations, will still cause the load operation to abort if 
               encountered. For information about handling load errors, see 
-              the "Greenplum Database Database Administrator Guide." 
+              the "Greengage Database Database Administrator Guide." 
 
 ERROR_TABLE - Deprecated, LOG_ERRORS is encouraged instead.
               Optional when ERROR_LIMIT is declared. Specifies an error
@@ -439,7 +439,7 @@ ERROR_TABLE - Deprecated, LOG_ERRORS is encouraged instead.
               If the error_table specified already exists, it will be used. 
               If it does not exist, it will be automatically generated.
               For more information about handling load errors, see the
-              "Greenplum Database Database Administrator Guide."
+              "Greengage Database Database Administrator Guide."
 
 LOG_ERRORS  - Optional when ERROR_LIMIT is declared. If true(default false),
               gpload would create an internal error table where rows with
@@ -447,11 +447,11 @@ LOG_ERRORS  - Optional when ERROR_LIMIT is declared. If true(default false),
               isolation mode. You can then examine this error table by using
               GPDB built-in function gp_read_error_log() to see error rows that
               were not loaded (if any). For more information about handling load
-              errors, see the "Greenplum Database Database Administrator Guide."
+              errors, see the "Greengage Database Database Administrator Guide."
               NOTE: LOG_ERRORS is not allowed to use together with ERROR_TABLE.
 
 EXTERNAL - Optional. Defines the schema of the external table database 
-           objects created by gpload. The default is to use the Greenplum 
+           objects created by gpload. The default is to use the Greengage 
            Database search_path. 
 
 SCHEMA - Required when EXTERNAL is declared. The name of the schema of 
@@ -636,5 +636,5 @@ SEE ALSO
 
 gpfdist, CREATE EXTERNAL TABLE 
 
-See the "Greenplum Database Reference Guide" for information 
+See the "Greengage Database Reference Guide" for information 
 about CREATE EXTERNAL TABLE.

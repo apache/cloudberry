@@ -4,7 +4,7 @@ create table foo (a int, b int, c int);
 insert into foo values (1,0,0),(2,0,0),(3,0,4),(4,1,1),(5,1,1),(6,1,7),(7,1,9);
 explain select b,c, count(c) over (partition by b) from (select * from foo) s;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

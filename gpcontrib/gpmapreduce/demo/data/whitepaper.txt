@@ -21,16 +21,16 @@ engine architecture: parallel dataflow.  Seen in these terms,
 MapReduce can be viewed as a new programming interface to 
 traditional data-parallel computing. 
 
-After presenting this context, we introduce Greenplum MapReduce: 
+After presenting this context, we introduce Greengage MapReduce: 
 a seamless integration of MapReduce and relational database 
 functionality unified in one massively parallel dataflow engine.   
-We describe how Greenplum allows MapReduce programs and 
+We describe how Greengage allows MapReduce programs and 
 SQL to interoperate, efficiently and flexibly processing data in  
 both standard files and database tables. 
 
 History: Three Revolutions 
 
-To understand Greenplum’s MapReduce implementation, it is 
+To understand Greengage’s MapReduce implementation, it is 
 helpful to see it in the context of three historical shifts in the 
 technology behind large-scale data management: the Relational 
 Database revolution, the rise of shared-nothing parallelism, and 
@@ -221,23 +221,23 @@ of the key features required of a DBMS.  They have a lot of "heart", but
 the body-building required to replicate a full-featured RDBMS would 
 take years. 
 
-Greenplum enters this arena from a unique direction.  Greenplum 
+Greengage enters this arena from a unique direction.  Greengage 
 began in the "heart transplant" business: its core technology effort 
 was to take PostgreSQL, the best-of-breed open-source RDBMS, and 
 insert a massively parallel dataflow engine into its core.  Based on 
-that success, Greenplum is now able to offer the first commercial  
+that success, Greengage is now able to offer the first commercial  
 implementation of MapReduce, built on that same core parallel  
-technology.  Because Greenplum’s RDBMS and MapReduce share  
+technology.  Because Greengage’s RDBMS and MapReduce share  
 the same core engine, they are uniquely interoperable. 
 
-Introducing Greenplum MapReduce 
+Introducing Greengage MapReduce 
 
-Greenplum MapReduce provides a convenient, easy-to-program  
+Greengage MapReduce provides a convenient, easy-to-program  
 platform for massive data-parallelism. It implements a harness for  
 parallel Map and Reduce functions, along with flexible data access  
 to files, database records, and system services. 
 
-Greenplum allows developers to write Map and Reduce functions in 
+Greengage allows developers to write Map and Reduce functions in 
 a variety of popular scripting languages: the list currently includes 
 Python and Perl.  Support for these popular languages includes access 
 to entire ecosystems of open-source packages via the Python Package 
@@ -246,37 +246,37 @@ includes a host of features not usually found in an RDBMS: free-text
 analysis, statistical toolkits, graph algorithms, HTML and XML parsing, 
 web connectivity (SOAP, REST, HTTP), and many more. 
 
-In terms of data access, Greenplum MapReduce provides developers 
+In terms of data access, Greengage MapReduce provides developers 
 with the familiar flexibility to access their data "where it lives": in files, 
-websites, or even via arbitrary operating system commands.  Greenplum 
+websites, or even via arbitrary operating system commands.  Greengage 
 provides this data without any of the overheads that developers often 
 associate with traditional RDBMSs: no locking, logging or distributed 
 "commit" protocols.  On the other hand, for data that does need to 
-be protected by a full-featured RDBMS, Greenplum MapReduce offers 
+be protected by a full-featured RDBMS, Greengage MapReduce offers 
 efficient native access to database records: it pushes MapReduce 
-programs down into Greenplum’s parallel database engine, without 
+programs down into Greengage’s parallel database engine, without 
 the cost of going "out-of-box" to get data from a separate DBMS over 
 narrow client interfaces. 
 
 The Power of Synergy 
 
-Greenplum is unique in offering a commercial-grade implementation 
+Greengage is unique in offering a commercial-grade implementation 
 of MapReduce, providing a robust implementation of the open interfaces 
 that enable and encourage developers to work with massive data sets. 
-But the biggest advantage of Greenplum’s implementation comes 
+But the biggest advantage of Greengage’s implementation comes 
 from its shared technology core, which unifies MapReduce and RDBMS 
 functionality within a single parallel dataflow engine. 
 
  This unique architecture allows developers to mix and match data 
-sources and programming styles.  Greenplum’s solution is also able to 
+sources and programming styles.  Greengage’s solution is also able to 
 make MapReduce programs visible to SQL queries and vice-versa.  This 
 set of features enables a number of natural design patterns that are 
-unique to Greenplum: 
+unique to Greengage: 
 
 • MapReduce programs over high-performance database tables. 
-Access to database data is trivial in Greenplum MapReduce: the 
+Access to database data is trivial in Greengage MapReduce: the 
 MapReduce program simply specifies the database table name 
-as its input.  Because Greenplum database tables are partitioned 
+as its input.  Because Greengage database tables are partitioned 
 across multiple machines, the initial Map phase is executed in 
 the database engine directly on the local partition, providing fully 
 parallel I/O with computation "pushed" to the data. By contrast, 
@@ -286,7 +286,7 @@ extra programmer code would then access a remote database
 server via a connectivity protocol like JDBC, and pull the database 
 records over to Map workers. 
 
-• SQL over external data sources.  Greenplum’s "External Table" 
+• SQL over external data sources.  Greengage’s "External Table" 
 facility allows files and data-producing programs to be registered 
 as read-only tables in the database, and queried in SQL along- 
 side database tables.  External data is accessed and converted to 
@@ -297,9 +297,9 @@ parallel process.
 
 • Durable storage of MapReduce outputs.  Many MapReduce  
 programs run for hours, and provide important analytic results.  
-Like standalone MapReduce implementations, Greenplum can 
+Like standalone MapReduce implementations, Greengage can 
 store these results in a filesystem.  But it is equally easy to store 
-the results of Greenplum MapReduce in a Greenplum database, 
+the results of Greengage MapReduce in a Greengage database, 
 with full ACID durability guarantees, and the option to subsequently 
 analyze those outputs via Business Intelligence tools, SQL queries, 
 and other enterprise analytic software designed for databases.  
@@ -307,16 +307,16 @@ Again, because the MapReduce code runs in the same engine
 as the database, writing of output tables is fully parallelized and 
 requires no remote connectivity overheads. 
 
-• Rich integration of MapReduce and SQL code.  Greenplum’s 
+• Rich integration of MapReduce and SQL code.  Greengage’s 
 unique architecture removes barriers between code written in the 
 MapReduce framework, and code written in SQL. Because  
-Greenplum MapReduce scripts can be configured to flexibly  
+Greengage MapReduce scripts can be configured to flexibly  
 access the database, they can use arbitrary SQL queries as input.  
-In the other direction, Greenplum MapReduce scripts can be 
+In the other direction, Greengage MapReduce scripts can be 
 registered as "views" in the database, and used as virtual tables 
 within SQL statements: the MapReduce job is run on the fly as 
 part of the SQL query processing, and its outputs are pipelined 
-directly into the relational query plan. Greenplum’s engine executes 
+directly into the relational query plan. Greengage’s engine executes 
 all code – SQL, Map functions, Reduce functions – on the same 
 cluster of machines where the database is stored.  This integration 
  allows SQL and MapReduce developers to share code freely with- 
@@ -340,7 +340,7 @@ set of pairs of the form (productID, keyword).
 
  MapReduce makes this easy.  We configure it to route product pages 
 (which may be in files, a database, or even on the Web) to a cluster of 
-Greenplum servers, each running a Python Map operator.  The Python 
+Greengage servers, each running a Python Map operator.  The Python 
 Map code on each node repeatedly gets a product page, splits the 
 product description text into a list of potential keywords, and then 
 loops through the resulting list and outputs(productID, keyword) 
@@ -356,8 +356,8 @@ output with a table of keywords and product categories.
 As a very different example, the New York Times used a simple MapReduce 
 program to convert years of scanned newspaper articles into digital 
 text. The approach is to use parallel dataflow to "kick off" parallel 
-computation.  To do this in Greenplum, a list of image filenames can 
-be piped into a cluster of Greenplum Map operators written in Perl.  
+computation.  To do this in Greengage, a list of image filenames can 
+be piped into a cluster of Greengage Map operators written in Perl.  
 Each Map operator uses Perl’s system command to execute an Optical 
 Character Recognition program (e.g. the open source Tesseract tool) 
 to convert the image file into text.  No Reduce phase is required; the 
@@ -368,10 +368,10 @@ Both of these examples do information extraction, transformation and
 loading, often called ETL in the data warehousing business.  Some 
 database engines advertise the ability to do ELT: loading the data into 
 the database before transforming it, to allow subsequent transformations 
-to run in SQL. Greenplum’s flexibility makes the reordering of the "L" 
+to run in SQL. Greengage’s flexibility makes the reordering of the "L" 
 phase completely fluid: data can be stored inside or outside the  
 database, and accessed in either case by massively parallel code  
-written in either MapReduce or SQL.   So Greenplum easily enables  
+written in either MapReduce or SQL.   So Greengage easily enables  
 either ETL or ELT, along with options like ET (in which the data is always 
 stored outside the database) and LET (in which the raw form of the  
 information is stored in the database.)  This is the kind of flexibility 
@@ -380,7 +380,7 @@ to interoperate with various storage and language interfaces.
 
  An important detail in handling free text is to canonicalize multiple forms of the same 
 word: e.g. "driver", "drivers", and "driving" should all be converted to "drive" so they 
-will match. Because Greenplum MapReduce provides access to Perl and Python’s 
+will match. Because Greengage MapReduce provides access to Perl and Python’s 
 open-source libraries, we can use Python’s nltk toolkit for Natural Language Processing 
 to do this task – a two-line addition to the basic Map program sketched above. 
 
@@ -394,7 +394,7 @@ parallel using MapReduce [KimballMichelsBisciglia07, ChuEtAl06].  A
 variety of sophisticated data mining and machine learning algorithms 
 have been expressed in this framework, including popular techniques 
 for classification, clustering, regression, and dimensionality reduction.  
-And in the Greenplum context, these algorithms can be flexibly combined 
+And in the Greengage context, these algorithms can be flexibly combined 
 with SQL and run over both database tables and files. 
 
 Conclusion 
@@ -408,11 +408,11 @@ mostly an artifact of the limitations of systems in the marketplace,
 but has led to significant confusion and slowed the adoption of 
 MapReduce as a programming model in traditional data-rich settings 
 in the business world. 
-Greenplum’s technical core competency is parallel data technology. 
+Greengage’s technical core competency is parallel data technology. 
 By applying that expertise to both MapReduce and SQL programs, 
-Greenplum has changed the landscape for parallel data processing, 
+Greengage has changed the landscape for parallel data processing, 
 removing arbitrary barriers between programming styles and usage 
-scenarios.  The resulting Greenplum engine is a uniquely flexible and 
+scenarios.  The resulting Greengage engine is a uniquely flexible and 
 scalable data processing system, allowing flexible combinations of 
 SQL and MapReduce, database tables and files. 
 

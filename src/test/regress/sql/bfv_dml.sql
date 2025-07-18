@@ -205,7 +205,7 @@ drop table execinsert_test;
 --
 -- Test RETURNING on a table with OIDs.
 --
--- See https://github.com/greenplum-db/gpdb/issues/8765
+-- See https://github.com/GreengageDB/greengage/issues/8765
 -- This was also coincidentally covered by the upstream tests in
 -- 'rowsecurity', but better to have an explicit test.
 --

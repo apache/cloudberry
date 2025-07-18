@@ -314,7 +314,7 @@ select count(*) from sto_uao_1;
 set gp_select_invisible=false;
 -- Select into
 select * into sto_heap_10 from sto_uao_8;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'col_int' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'col_int' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select count(*) from sto_heap_10;
  count 

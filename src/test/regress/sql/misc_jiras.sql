@@ -51,7 +51,7 @@ reset statement_mem;
 drop table misc_jiras.t1;
 drop schema misc_jiras;
 
--- test for issue https://github.com/greenplum-db/gpdb/issues/14539
+-- test for issue https://github.com/GreengageDB/greengage/issues/14539
 -- the \c command to renew the session to make sure the global var
 -- NextRecordTypmod is 0. For details please refer to the issue.
 create table t_record_type_param_dispatch (a int, b int) distributed by (a);

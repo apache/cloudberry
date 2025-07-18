@@ -14,7 +14,7 @@ insert into foo_c select i%3, i%5, i from generate_series(1,10) i;
 
 select a1, a2 from foo_a UNION ALL (select x1, x2 FROM (select b1, b2, b3 from foo_b UNION ALL select c1, c2, c3 from foo_c) x(x1, x2, x3))
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

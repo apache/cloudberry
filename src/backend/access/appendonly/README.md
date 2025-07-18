@@ -1,6 +1,6 @@
 For historical reasons, append-optimized tables are also called
 "append-only". They used to be truly append-only in previous versions
-of Greenplum, but these days they can in fact be updated and deleted
+of Greengage, but these days they can in fact be updated and deleted
 from. The segment files that store the tuples at the storage level are
 append-only - data is never in-place updated or overwritten physically -
 but from a user's point of view, the table can be updated and deleted

@@ -42,7 +42,7 @@ class GpMasterEnvironment:
         self.__gpVersion = gp.GpVersion.local('local GP software version check',self.__gpHome)
         
         if verbose:
-            logger.info("local Greenplum Version: '%s'" % self.__gpVersion)
+            logger.info("local Greengage Version: '%s'" % self.__gpVersion)
 
         # read collation settings from master
         if readFromMasterCatalog:
@@ -51,7 +51,7 @@ class GpMasterEnvironment:
 
             # MPP-13807, read/show the master's database version too
             self.__pgVersion = dbconn.execSQLForSingletonRow(conn, "select version();")[0]
-            logger.info("master Greenplum Version: '%s'" % self.__pgVersion)
+            logger.info("master Greengage Version: '%s'" % self.__pgVersion)
             conn.close()
         else:
             self.__pgVersion = None

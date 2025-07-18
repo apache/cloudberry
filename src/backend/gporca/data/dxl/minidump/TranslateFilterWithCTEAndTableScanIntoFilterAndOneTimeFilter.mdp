@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
   Objective: Filter quals which do not contain volatile functions and are not coming from the relational child
   of the filter should become one-time filter and the remaining quals should be filter. This should happen during

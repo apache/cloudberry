@@ -4,7 +4,7 @@
      create table t2(a int, b text) with (bucketnum=6) distributed by (a);
      explain analyze select * from t1,t2 where t1.a=t2.a;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

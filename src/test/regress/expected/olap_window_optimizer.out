@@ -1277,7 +1277,7 @@ SELECT count(distinct sale.pn) OVER (order by sale.pn) from sale;
 ERROR:  DISTINCT cannot be used with window specification containing an ORDER BY clause
 -- Aggregate nesting --
 create table olap_tmp_for_window(g integer, h integer, i integer, x integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'g' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'g' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into olap_tmp_for_window values 
     (9,1,1,1),
@@ -2547,7 +2547,7 @@ unbounded following) as fv from sale; --mvd 1,2->3
 
 -- Test obscure types
 create table typetest_for_window (i int[], j box, k bit, l bytea, m text[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into typetest_for_window values('{1, 2, 3}', '(1, 2), (3, 4)', '1', E'\012\001', 
 '{foo, bar}');
@@ -4140,7 +4140,7 @@ CREATE TABLE fact_test_for_window
  TIME_KEY    INTEGER  NOT NULL,
  EVENT_TYPE  text  NOT NULL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'date_key' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'date_key' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into fact_test_for_window values
   (20070101, 'W', 100, 'c'),
@@ -7555,7 +7555,7 @@ drop view v1_for_window;
 drop table if exists win_test_for_window;
 NOTICE:  table "win_test_for_window" does not exist, skipping
 create table win_test_for_window (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into win_test_for_window values (0,0), (1,null), (2, null), (3,null);
 select i,j,sum(i) over(order by j range 1 preceding) from win_test_for_window; --mvd 2->3
@@ -7653,20 +7653,20 @@ select ord, cn,vn,sum(vn) over (order by ord rows between 3 following and floor(
 -- Test use of window functions in places they shouldn't be allowed: MPP-2382
 -- CHECK constraints
 CREATE TABLE wintest_for_window (i int check (i < count(*) over (order by i)));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  could not dump unrecognized node type: 859
 WARNING:  could not dump unrecognized node type: 859
 ERROR:  cannot use window function in check constraint
 CREATE TABLE wintest_for_window (i int default count(*) over (order by i));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  could not dump unrecognized node type: 859
 WARNING:  could not dump unrecognized node type: 859
 ERROR:  cannot use window function in default expression
 -- index expression and function
 CREATE TABLE wintest_for_window (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX wintest_idx_for_window on wintest_for_window (i) where i < count(*) over (order by i);
 ERROR:  cannot use window function in index predicate
@@ -7947,7 +7947,7 @@ rank() over (partition by pn order by vn) from sale; --mvd 1,2->4
 drop table if exists test;
 NOTICE:  table "test" does not exist, skipping
 create table test (i int, j bigint, k int, l int, m int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test select i, i%100, i%123, i%234, i%345 from generate_series(1, 500) i;
 -- begin equivalent
@@ -8182,7 +8182,7 @@ select rank() over (wx)
 drop table if exists test;
 NOTICE:  table "test" does not exist, skipping
 create table test (n numeric, d date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test values (12, '2011-05-01'), (34, '2011-05-02'), (89, '2011-05-03');
 select stddev(n) over(order by d range interval '1 day' preceding), n from test;
@@ -8227,7 +8227,7 @@ select stddev(n) over(order by d range between current row and interval '1 day' 
 drop table if exists window_preds;
 NOTICE:  table "window_preds" does not exist, skipping
 create table window_preds(i int, j int, k int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into window_preds values
   (1,2,3),

@@ -96,7 +96,7 @@ PerformCursorOpen(PlannedStmt *stmt, ParamListInfo params,
 	{
 		/*ereport(ERROR,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("scrollable cursors are not yet supported in Greenplum Database")));*/
+				 errmsg("scrollable cursors are not yet supported in Greengage Database")));*/
 
 		cstmt->options -= CURSOR_OPT_SCROLL;
 	}

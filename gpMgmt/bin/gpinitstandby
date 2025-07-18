@@ -20,7 +20,7 @@ try:
     from gppylib.commands.pg import PgBaseBackup
 except ImportError, e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
-             'have sourced greenplum_path.sh.  Detail: ' + str(e))
+             'have sourced greengage_path.sh.  Detail: ' + str(e))
 
 EXECNAME = os.path.split(__file__)[-1]
 
@@ -42,19 +42,19 @@ DEFAULT_BATCH_SIZE=16
 PG_HBA_BACKUP = 'pg_hba.conf.gpinitstandby.bak'
 
 _description = """The gpinitstandby utility adds a backup master host to your
-Greenplum Database system. If your system has an existing backup
+Greengage Database system. If your system has an existing backup
 master host configured, use the -r option to remove it before adding
 the new standby master host.
 
 Before running this utility, make sure 
-that the Greenplum Database software is installed on the backup master
+that the Greengage Database software is installed on the backup master
 host and that you have exchanged SSH keys between hosts.  This utility
 should be run on the currently active primary master host.
 
 The utility will perform the following steps:
-* Update the Greenplum Database system catalog to remove the
+* Update the Greengage Database system catalog to remove the
   existing backup master host information (if the -r option is supplied)
-* Update the Greenplum Database system catalog to add the new backup
+* Update the Greengage Database system catalog to add the new backup
   master host information (use the -n option to skip this step)
 * Edit the pg_hba.conf files of the segment instances to allow access
   from the newly added standby master.
@@ -190,19 +190,19 @@ def print_summary(options, array, standby_datadir):
     if options.remove:
         logger.info('Warm master standby removal parameters')
     else:
-        logger.info('Greenplum standby master initialization parameters')
+        logger.info('Greengage standby master initialization parameters')
     logger.info('-----------------------------------------------------')
-    logger.info('Greenplum master hostname               = %s' \
+    logger.info('Greengage master hostname               = %s' \
                     % array.master.getSegmentHostName())
-    logger.info('Greenplum master data directory         = %s' \
+    logger.info('Greengage master data directory         = %s' \
                     % array.master.getSegmentDataDirectory())
-    logger.info('Greenplum master port                   = %s' \
+    logger.info('Greengage master port                   = %s' \
                     % array.master.getSegmentPort())
     if options.remove:
-        logger.info('Greenplum standby master hostname       = %s' \
+        logger.info('Greengage standby master hostname       = %s' \
                         % array.standbyMaster.getSegmentHostName())
     else:
-        logger.info('Greenplum standby master hostname       = %s' \
+        logger.info('Greengage standby master hostname       = %s' \
                         % options.standby_host)
 
     if array.standbyMaster:
@@ -212,22 +212,22 @@ def print_summary(options, array, standby_datadir):
     else:
         standby_port = array.master.getSegmentPort()
 
-    logger.info('Greenplum standby master port           = %d' \
+    logger.info('Greengage standby master port           = %d' \
                     % standby_port)
 
     if array.standbyMaster:
-        logger.info('Greenplum standby master data directory = %s' \
+        logger.info('Greengage standby master data directory = %s' \
                         % array.standbyMaster.getSegmentDataDirectory())
     else:
         if standby_datadir:
-            logger.info('Greenplum standby master data directory = %s' % standby_datadir)
+            logger.info('Greengage standby master data directory = %s' % standby_datadir)
         else:
             raise GpInitStandbyException('No data directory specified for standby master')
 
     if not options.remove and options.no_update:
-        logger.info('Greenplum update system catalog         = Off')
+        logger.info('Greengage update system catalog         = Off')
     elif not options.remove:
-        logger.info('Greenplum update system catalog         = On')
+        logger.info('Greengage update system catalog         = On')
 
     # Confirm the action
     if options.confirm:
@@ -375,10 +375,10 @@ def create_standby(options):
         # synchronization of packages. We should *not* disturb the user's attempts 
         # initialize a standby.
         try:
-            logger.info('Syncing Greenplum Database extensions to standby')
+            logger.info('Syncing Greengage Database extensions to standby')
             SyncPackages(options.standby_host).run()
         except Exception, e:
-            logger.warning('Syncing of Greenplum Database extensions has failed.')
+            logger.warning('Syncing of Greengage Database extensions has failed.')
             logger.warning('Please run gppkg --clean after successful standby initialization.')
 
         # Disable Ctrl-C

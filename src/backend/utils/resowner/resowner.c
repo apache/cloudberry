@@ -211,7 +211,7 @@ ResourceOwnerRelease(ResourceOwner owner,
 	ResourceOwner save;
 
 	/*
-	 * Greenplum: For some reason we've been calling this when the owner is NULL.
+	 * Greengage: For some reason we've been calling this when the owner is NULL.
 	 */
 	if (owner == NULL)
 	{

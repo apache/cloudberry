@@ -60,7 +60,7 @@ SUBDIRS += \
 		postgres_fdw
 endif
 
-# Greenplum-specific additions (to ease merge pain).
+# Greengage-specific additions (to ease merge pain).
 SUBDIRS += \
 		formatter \
 		formatter_fixedwidth \

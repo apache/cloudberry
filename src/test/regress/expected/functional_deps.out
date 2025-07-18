@@ -140,7 +140,7 @@ SELECT count(distinct name), price FROM products GROUP BY product_id;
 
 create table funcdep1(a int primary key, b int, c int, d int);
 create table funcdep2(a int, b int, c int, d int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into funcdep1 values(1,1,1,1);
 insert into funcdep1 values(2,1,1,1);
@@ -408,7 +408,7 @@ select count(distinct b), count(distinct c) from funcdep1 group by a;
 -- test multi primary key in group by clause
 create table mfuncdep1(a int, b int, c int, d int, e int, primary key (a, b));
 create table mfuncdep2(a2 int, b2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mfuncdep1 select i, i, i, i, i from generate_series(1, 10) i;
 insert into mfuncdep2 select i, i from generate_series(1, 10000) i;

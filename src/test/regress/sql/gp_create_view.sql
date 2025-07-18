@@ -57,7 +57,7 @@ select * from v_sourcetable2;
 
 drop view v_sourcetable2;
 
--- Greenplum divides the query if it mixes window functions with aggregate
+-- Greengage divides the query if it mixes window functions with aggregate
 -- functions or grouping, test it here because creating view has a check
 -- related to the collation assigning process which is affected by the
 -- dividing.

@@ -1,4 +1,4 @@
--- https://github.com/greenplum-db/gpdb/issues/1109
+-- https://github.com/GreengageDB/greengage/issues/1109
 --
 -- ALTER TABLE ... SET WITH (REORGANIZE = true); should always redistribute the
 -- data even with matching distribution policy

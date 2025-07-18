@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbvars.c
- *	  Provides storage areas and processing routines for Greenplum Database variables
+ *	  Provides storage areas and processing routines for Greengage Database variables
  *	  managed by GUC.
  *
  * Portions Copyright (c) 2003-2010, Greenplum inc
@@ -50,11 +50,11 @@
 
 
 
-GpRoleValue Gp_role;			/* Role paid by this Greenplum Database
+GpRoleValue Gp_role;			/* Role paid by this Greengage Database
 								 * backend */
 char	   *gp_role_string;		/* Staging area for guc.c */
 
-GpRoleValue Gp_session_role;	/* Role paid by this Greenplum Database
+GpRoleValue Gp_session_role;	/* Role paid by this Greengage Database
 								 * backend */
 char	   *gp_session_role_string; /* Staging area for guc.c */
 
@@ -256,7 +256,7 @@ int			gp_udpic_network_disable_ipv6 = 0;
 uint32		gp_interconnect_id = 0;
 
 /* --------------------------------------------------------------------------------------------------
- * Greenplum Optimizer GUCs
+ * Greengage Optimizer GUCs
  */
 
 double		gp_motion_cost_per_row = 0;
@@ -276,7 +276,7 @@ int			gp_hashagg_groups_per_bucket = 5;
 /* Analyzing aid */
 int			gp_motion_slice_noop = 0;
 
-/* Greenplum Database Experimental Feature GUCs */
+/* Greengage Database Experimental Feature GUCs */
 int			gp_distinct_grouping_sets_threshold = 32;
 bool		gp_enable_explain_allstat = FALSE;
 bool		gp_enable_motion_deadlock_sanity = FALSE;	/* planning time sanity
@@ -395,7 +395,7 @@ static GpRoleValue string_to_role(const char *string);
 
 
 /*
- * Convert a Greenplum Database role string (as for gp_session_role or gp_role) to an
+ * Convert a Greengage Database role string (as for gp_session_role or gp_role) to an
  * enum value of type GpRoleValue. Return GP_ROLE_UNDEFINED in case the
  * string is unrecognized.
  */
@@ -554,7 +554,7 @@ assign_gp_role(const char *newval, void *extra)
 		Assert(IsBackendPid(MyProcPid));
 
 		/*
-		 * In case there are problems with the Greenplum Database
+		 * In case there are problems with the Greengage Database
 		 * tables or data, we catch any error coming out of
 		 * cdblink_setup so we can set the gp_role back to what it
 		 * was.  Otherwise we may be left with inappropriate

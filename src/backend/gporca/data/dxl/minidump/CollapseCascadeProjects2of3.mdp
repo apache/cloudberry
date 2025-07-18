@@ -4,7 +4,7 @@ create table foo (a int, b int);
 insert into foo select i, i%5 from generate_series(1,100) i;
 select y.aProdb * y.aPlusb from (select x.a * x.b, x.aPlusb from (select a, b, a+b from foo) x(a,b,aPlusb)) y(aProdb, aPlusb);
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

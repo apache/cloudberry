@@ -1,5 +1,5 @@
 -- ===================================================================
--- Greenplum-specific features for postgres_fdw
+-- Greengage-specific features for postgres_fdw
 -- ===================================================================
 -- ===================================================================
 -- Create source tables and populate with data
@@ -63,7 +63,7 @@ CREATE TABLE "S 1"."GP 1" (
 	f2 text,
 	f3 text
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- ===================================================================
 -- create foreign tables

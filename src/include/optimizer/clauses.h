@@ -121,7 +121,7 @@ extern bool is_grouping_extension(CanonicalGroupingSets *grpsets);
 extern bool contain_extended_grouping(List *grp);
 
 extern bool is_builtin_true_equality_between_same_type(int opno);
-extern bool is_builtin_greenplum_hashable_equality_between_same_type(int opno);
+extern bool is_builtin_greengage_hashable_equality_between_same_type(int opno);
 
 extern bool subexpression_match(Expr *expr1, Expr *expr2);
 

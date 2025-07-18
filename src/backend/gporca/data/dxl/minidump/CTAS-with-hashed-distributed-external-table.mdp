@@ -8,7 +8,7 @@ CREATE EXTERNAL TABLE test_gpfdist_ext (a INTEGER, b TEXT, c TEXT)LOCATION('gpfd
 # Expect to have a Redistribute Motion on top of External table scan
 EXPLAIN CREATE TABLE Test AS SELECT * FROM test_gpfdist_ext DISTRIBUTED BY (a);
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

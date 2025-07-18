@@ -246,7 +246,7 @@ Jeffrey I Cohen
 Portions Copyright (c) 2006, 2007, 2008, 2009 GreenPlum.  All rights reserved.
 Portions Copyright (c) 2012-Present Pivotal Software, Inc.
 
-Address bug reports and comments to: bugs@greenplum.org
+Address bug reports and comments to: bugs@greengagedb.org
 
 
 =cut

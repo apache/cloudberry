@@ -10,7 +10,7 @@ AutoProv:       no
 Provides:       intarray = %{intarray_ver} 
 
 %description
-The intarray package provides integer array functions and GiST index support for Greenplum Database
+The intarray package provides integer array functions and GiST index support for Greengage Database
 
 %install
 mkdir -p %{buildroot}/temp

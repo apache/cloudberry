@@ -99,7 +99,7 @@ class GpVersionTestCase(unittest.TestCase):
         self.assertEqual(v_2.getVersionRelease(), "4.2")
        
     def test_case_7(self):
-        vLong = GpVersion("PostgreSQL 9.4.20 (Greenplum Database 6.0.0 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0, 64-bit compiled on Jul  8 2019 16:27:59")
+        vLong = GpVersion("PostgreSQL 9.4.20 (Greengage Database 6.0.0 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0, 64-bit compiled on Jul  8 2019 16:27:59")
         self.assertTrue(vLong.isVersionCurrentRelease() == True )
         self.assertTrue(vLong.getVersionBuild() == 'dev')
         self.assertTrue(vLong.getVersionRelease() == "6")

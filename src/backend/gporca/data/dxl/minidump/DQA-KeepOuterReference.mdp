@@ -11,7 +11,7 @@ set optimizer=on;
 == expect to see tint.c still in groupby grouping columns
 select (select distinct tint.c from tint as tt)  x from tint;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -402,7 +402,7 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 		stmt->attr_encodings = transformAttributeEncoding(stenc, stmt, &cxt);
 
 	/*
-	 * Postprocess Greenplum Database distribution columns
+	 * Postprocess Greengage Database distribution columns
 	 */
 	/* silence distro messages for partitions */
 	if (stmt->is_part_child)
@@ -2181,7 +2181,7 @@ transformDistributedBy(CreateStmtContext *cxt,
 		 * if we get here, we haven't a clue what to use for the distribution columns.
 		 * table has one or more attributes and there is still no distribution
 		 * key. pick a default one. the winner is the first attribute that is
-		 * an Greenplum Database-hashable data type.
+		 * an Greengage Database-hashable data type.
 		 */
 
 		ListCell   *columns;
@@ -2226,7 +2226,7 @@ transformDistributedBy(CreateStmtContext *cxt,
 							ereport(NOTICE,
 								(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 								 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column "
-										"named '%s' from parent table as the Greenplum Database data distribution key for this "
+										"named '%s' from parent table as the Greengage Database data distribution key for this "
 										"table. ", inhname),
 								 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
 								 		 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));
@@ -2267,7 +2267,7 @@ transformDistributedBy(CreateStmtContext *cxt,
 						ereport(NOTICE,
 							(errcode(ERRCODE_SUCCESSFUL_COMPLETION),
 							 errmsg("Table doesn't have 'DISTRIBUTED BY' clause -- Using column "
-									"named '%s' as the Greenplum Database data distribution key for this "
+									"named '%s' as the Greengage Database data distribution key for this "
 									"table. ", column->colname),
 							 errhint("The 'DISTRIBUTED BY' clause determines the distribution of data."
 							 		 " Make sure column(s) chosen are the optimal data distribution key to minimize skew.")));
@@ -4216,7 +4216,7 @@ setSchemaName(char *context_schema, char **stmt_schema_name)
 /*
  * getLikeDistributionPolicy
  *
- * For Greenplum Database distributed tables, default to
+ * For Greengage Database distributed tables, default to
  * the same distribution as the first LIKE table, unless
  * we also have INHERITS
  */

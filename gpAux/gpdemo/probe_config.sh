@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 #***********************************************************
-# Look for Greenplum executables to find path
+# Look for Greengage executables to find path
 #***********************************************************
 if [ x"$GPHOME" = x ]; then
   if [ x"$BIZHOME" = x ]; then
     echo "Neither GPHOME or BIZHOME are set.  Set one of these variables to point to the location"
-	echo "of the Greenplum installation directory."
+	echo "of the Greengage installation directory."
     echo ""
 	exit 1
   else
@@ -20,12 +20,12 @@ GPPATH=`find $GPSEARCH -name gpstart | tail -1`
 RETVAL=$?
 
 if [ "$RETVAL" -ne 0 ]; then
-  echo "Error attempting to find Greenplum executables in $GPSEARCH"
+  echo "Error attempting to find Greengage executables in $GPSEARCH"
   exit 1
 fi
 
 if [ ! -x "$GPPATH" ]; then
-  echo "No executables found for Greenplum installation in $GPSEARCH"
+  echo "No executables found for Greengage installation in $GPSEARCH"
   exit 1
 fi
 GPPATH=`dirname $GPPATH`

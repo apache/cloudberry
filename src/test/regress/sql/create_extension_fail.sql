@@ -1,6 +1,6 @@
 --
 -- Tests for return correct error from qe when create extension error
--- The issue: https://github.com/greenplum-db/gpdb/issues/11304
+-- The issue: https://github.com/GreengageDB/greengage/issues/11304
 --
 
 drop extension if exists gp_debug_numsegments;
@@ -35,7 +35,7 @@ drop table t_11304;
 select gp_inject_fault('create_function_fail', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 2;
 
 --
--- Another Test from Issue: https://github.com/greenplum-db/gpdb/issues/12713
+-- Another Test from Issue: https://github.com/GreengageDB/greengage/issues/12713
 -- Similar comments please refer above case's
 --
 create role user_12713;

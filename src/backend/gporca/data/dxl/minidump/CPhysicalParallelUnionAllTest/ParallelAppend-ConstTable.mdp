@@ -4,7 +4,7 @@
      /* we expect to see parallel append on top of constant table scan */
      SELECT 1 UNION ALL SELECT * FROM t UNION ALL SELECT * FROM t;
      -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -1,4 +1,4 @@
-<dxl:CostModelConfig CostModelType="1" SegmentsForCosting="3" xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:CostModelConfig CostModelType="1" SegmentsForCosting="3" xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
     <dxl:CostParams>
         <dxl:CostParam Name="NLJFactor" Value="1024.000000" LowerBound="1023.000000" UpperBound="1025.000000"/>
     </dxl:CostParams>

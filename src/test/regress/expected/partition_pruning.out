@@ -2443,7 +2443,7 @@ $BODY$ LANGUAGE plpgsql IMMUTABLE;
 drop table if exists mytable cascade;
 NOTICE:  table "mytable" does not exist, skipping
 create table mytable(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mytable select x, x+1 from generate_series(1, 100000) as x;
 analyze mytable;
@@ -2498,7 +2498,7 @@ language plpythonu;
 drop table if exists partprune_foo;
 NOTICE:  table "partprune_foo" does not exist, skipping
 create table partprune_foo(a int, b int, c int) partition by range (b) (start (1) end (101) every (10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "partprune_foo_1_prt_1" for table "partprune_foo"
 NOTICE:  CREATE TABLE will create partition "partprune_foo_1_prt_2" for table "partprune_foo"
@@ -3038,7 +3038,7 @@ select get_selected_parts('explain analyze select * from DATE_PARTS where month 
 create table foo(a int, b int)
 partition by list (b)
 (partition p1 values(1,3), partition p2 values(4,2), default partition other);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "foo_1_prt_p1" for table "foo"
 NOTICE:  CREATE TABLE will create partition "foo_1_prt_p2" for table "foo"
@@ -3169,7 +3169,7 @@ drop table if exists sales_exchange_part;
 NOTICE:  table "sales_exchange_part" does not exist, skipping
 create table sales_exchange_part (trans_id int, date date, amount 
 decimal(9,2), region text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'trans_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'trans_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Insert some data
 insert into sales_exchange_part values(1, '2011-01-01', 10.1, 'usa');
@@ -3284,7 +3284,7 @@ partition by list (j)
 subpartition by range (i) subpartition template (start(1) end(4) every(2))
 (partition p1 values(0.2,2.8, NULL), partition p2 values(1.7,3.1),
 partition p3 values(5.6), default partition other);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_p1" for table "bar"
 NOTICE:  CREATE TABLE will create partition "bar_1_prt_p1_2_prt_1" for table "bar_1_prt_p1"
@@ -3630,7 +3630,7 @@ CREATE TABLE issue_14982_t1 (a int, b int4) PARTITION BY LIST (b)
   PARTITION p1 VALUES (1),
   PARTITION p2 VALUES (-1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "issue_14982_t1_1_prt_p1" for table "issue_14982_t1"
 NOTICE:  CREATE TABLE will create partition "issue_14982_t1_1_prt_p2" for table "issue_14982_t1"
@@ -3639,7 +3639,7 @@ CREATE TABLE issue_14982_t2 (a int, b int8) PARTITION BY LIST (b)
   PARTITION p1 VALUES (1),
   PARTITION p2 VALUES (-1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "issue_14982_t2_1_prt_p1" for table "issue_14982_t2"
 NOTICE:  CREATE TABLE will create partition "issue_14982_t2_1_prt_p2" for table "issue_14982_t2"
@@ -3725,7 +3725,7 @@ CREATE TABLE issue_14982_t1_part_range (a int, b int4) PARTITION BY RANGE (b)
   PARTITION p1 START (-2) END (0),
   PARTITION p2 START (0)  END (2)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "issue_14982_t1_part_range_1_prt_p1" for table "issue_14982_t1_part_range"
 NOTICE:  CREATE TABLE will create partition "issue_14982_t1_part_range_1_prt_p2" for table "issue_14982_t1_part_range"
@@ -3734,7 +3734,7 @@ CREATE TABLE issue_14982_t2_part_range (a int, b int8) PARTITION BY RANGE (b)
   PARTITION p1 START (-2) END (0),
   PARTITION p2 START (0)  END (2)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "issue_14982_t2_part_range_1_prt_p1" for table "issue_14982_t2_part_range"
 NOTICE:  CREATE TABLE will create partition "issue_14982_t2_part_range_1_prt_p2" for table "issue_14982_t2_part_range"
@@ -3872,7 +3872,7 @@ SET search_path TO partition_pruning;
 -- not to perform partition pruning.
 --
 create table test(i int, j int) partition by range(j) (start (1) end(3) every(2), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "test_1_prt_extra" for table "test"
 NOTICE:  CREATE TABLE will create partition "test_1_prt_2" for table "test"
@@ -3933,7 +3933,7 @@ drop table test, test_extra_exchanged;
 -- to perform partition pruning
 --
 create table test(i int, j int) partition by range(j) (start (1) end(3) every(2), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "test_1_prt_extra" for table "test"
 NOTICE:  CREATE TABLE will create partition "test_1_prt_2" for table "test"
@@ -3959,7 +3959,7 @@ select tableoid::regclass, ctid, i, j from test;
 
 -- Create test table that will be used in delete query inside `NOT EXISTS` predicate
 create table test_in_predicate(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_in_predicate values (0, 1);
 -- We have to delete the row (0, 2) from default partition
@@ -4015,7 +4015,7 @@ drop table test, test_extra_exchanged, test_in_predicate;
 -- not to perform partition pruning
 --
 create table test(i int, j int, k int) partition by range(j) (start (1) end(3) every(2), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "test_1_prt_extra" for table "test"
 NOTICE:  CREATE TABLE will create partition "test_1_prt_2" for table "test"
@@ -4071,7 +4071,7 @@ drop table test, test_extra_exchanged;
 -- to perform partition pruning
 --
 create table test(i int, j int, k int) partition by range(j) (start (1) end(3) every(2), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "test_1_prt_extra" for table "test"
 NOTICE:  CREATE TABLE will create partition "test_1_prt_2" for table "test"
@@ -4088,7 +4088,7 @@ WARNING:  Exchanging default partition may result in unexpected query results if
 NOTICE:  exchanged partition "extra" of relation "test" with relation "test_extra_exchanged"
 -- Create test table that will be used in delete query inside `NOT EXISTS` predicate
 create table test_in_predicate(i int, j int, k int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_in_predicate values (0, 1, 0);
 -- Check tuples in partitioned table. Two tuples have the same tupleid and value in partitioning

@@ -15,7 +15,7 @@ ALTER TABLE foo ADD PARTITION p3 START(21) END(30);
 
 EXPLAIN SELECT * FROM foo_1_prt_p3 WHERE c > 10;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

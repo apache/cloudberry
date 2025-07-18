@@ -7,7 +7,7 @@ set optimizer_cte_inlining_bound=1000;
 
 explain with v as (select x,y from bar) select v1.x from v v1, v v2 where v1.x = v2.x;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

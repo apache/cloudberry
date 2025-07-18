@@ -203,7 +203,7 @@ with_apu_config	= @with_apu_config@
 with_libsigar	= @with_libsigar@
 with_gssapi	= @with_gssapi@
 enable_rpath	= @enable_rpath@
-# NLS is not supported in Greenplum, see comment documenting
+# NLS is not supported in Greengage, see comment documenting
 # this in configure.in
 # enable_nls	= @enable_nls@
 enable_debug	= @enable_debug@
@@ -485,7 +485,7 @@ endif
 # Feature settings
 
 DEF_PGPORT = @default_port@
-# NLS is not supported in Greenplum, see comment documenting
+# NLS is not supported in Greengage, see comment documenting
 # this in configure.in
 # WANTED_LANGUAGES = @WANTED_LANGUAGES@
 

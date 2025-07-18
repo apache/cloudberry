@@ -14,7 +14,7 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 --
 -- Test extended \du flags
 --
--- https://github.com/greenplum-db/gpdb/issues/1028
+-- https://github.com/GreengageDB/greengage/issues/1028
 --
 -- Problem: the cluster can be initialized with any Unix user
 --          therefore create specific test roles here, and only

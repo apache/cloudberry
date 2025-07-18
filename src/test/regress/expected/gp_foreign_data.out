@@ -1,5 +1,5 @@
 --
--- Test foreign-data wrapper and server management. Greenplum MPP specific
+-- Test foreign-data wrapper and server management. Greengage MPP specific
 --
 CREATE FOREIGN DATA WRAPPER dummy;
 COMMENT ON FOREIGN DATA WRAPPER dummy IS 'useless';

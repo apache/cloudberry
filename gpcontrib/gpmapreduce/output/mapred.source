@@ -42,7 +42,7 @@ select lanname, lanispl, lanpltrusted from pg_language;
  plpythonu | t       | f
 (6 rows)
 
--- Check environment variables that should have been set by greenplum_path.sh
+-- Check environment variables that should have been set by greengage_path.sh
 --
 -- 1) We need to check these on all segments and on the master.
 -- 2) We do this via external table rather than perl/python in case it is part
@@ -217,7 +217,7 @@ SELECT lanname, lanispl, lanpltrusted FROM pg_language WHERE lanname = 'plperlu'
 select execute( '@gpwhich_gpmapreduce@ --help' );
 execute
 ---------------------
-@gpwhich_gpmapreduce@ - Greenplum Map/Reduce Driver 1.00b2
+@gpwhich_gpmapreduce@ - Greengage Map/Reduce Driver 1.00b2
 
 Usage:
   @gpwhich_gpmapreduce@ [options] -f file.yml [dbname [username]]

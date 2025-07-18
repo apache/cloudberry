@@ -660,7 +660,7 @@ ExplainExecuteQuery(ExecuteStmt *execstmt, IntoClause *into, ExplainState *es,
 		elog(ERROR, "EXPLAIN EXECUTE does not support variable-result cached plans");
 
 	/*
-	 * In Greenplum we first need to evaluate the parameters since we pass
+	 * In Greengage we first need to evaluate the parameters since we pass
 	 * paramLI to RevalidateCachedPlanWithParams(), while PostgreSQL uses
 	 * RevalidateCachedPlan().
 	 */

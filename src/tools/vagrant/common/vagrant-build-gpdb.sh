@@ -63,12 +63,12 @@ chmod 600 ~/.ssh/authorized_keys
 
 # BUG: fix the LD_LIBRARY_PATH to find installed GPOPT libraries
 echo export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH \
-  >>/usr/local/gpdb/greenplum_path.sh
+  >>/usr/local/gpdb/greengage_path.sh
 
-# source greenplum_path in ~/.bashrc
+# source greengage_path in ~/.bashrc
 GPDEMO_ENV=${GPDB_DIR}/gpAux/gpdemo/gpdemo-env.sh
 cat <<EOF >>~/.bashrc
-source /usr/local/gpdb/greenplum_path.sh
+source /usr/local/gpdb/greengage_path.sh
 if [[ -r $GPDEMO_ENV ]]; then
   source "$GPDEMO_ENV"
 fi

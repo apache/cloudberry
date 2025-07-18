@@ -3540,7 +3540,7 @@ find_group_dependent_targets(Node *node, struct groupdep_ctx *ctx)
  *
  * We need to fill groupColIdx and groupOperators of group functional dependency
  * Var which has been added into add_list before, for generating multi-agg path later.
- * Get more details https://github.com/greenplum-db/gpdb/issues/14817
+ * Get more details https://github.com/GreengageDB/greengage/issues/14817
  */
 static void
 construct_group_dependent_targets(MppGroupContext *ctx, struct groupdep_ctx *gctx)

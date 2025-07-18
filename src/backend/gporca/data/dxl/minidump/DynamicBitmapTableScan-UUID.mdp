@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
      create table test(a uuid, b int) with(appendonly=true) partition by range(b) (start(1) end(5) every(1));
      insert into test select (i % 10 || '27e89f4-39d1-4d13-acbf-75a15639e635')::uuid, (i % 4) + 1 from generate_series(1, 100000) i;

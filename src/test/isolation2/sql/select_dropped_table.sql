@@ -3,7 +3,7 @@
 -- then other transactions do select|update|delete
 -- on that table will wait on that lock.
 
--- Greenplum has a upgrade-lock logic to avoid global
+-- Greengage has a upgrade-lock logic to avoid global
 -- deadlock, this logic is still in the code for ao-table
 -- and select-for-update cases even we have GDD now.
 -- The lock-upgrade logic is implemented by `CdbTryOpenRelation`,

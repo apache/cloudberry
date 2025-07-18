@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2010 Greenplum, Inc.
 //
 //	@filename:
@@ -469,7 +469,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenNamespaceAttr, GPOS_WSZ_LIT("xmlns")},
 		{EdxltokenNamespacePrefix, GPOS_WSZ_LIT("dxl")},
 		{EdxltokenNamespaceURI,
-		 GPOS_WSZ_LIT("http://greenplum.com/dxl/2010/12/")},
+		 GPOS_WSZ_LIT("http://greengagedb.org/dxl/2010/12/")},
 
 		{EdxltokenBracketOpenTag, GPOS_WSZ_LIT("<")},
 		{EdxltokenBracketCloseTag, GPOS_WSZ_LIT(">")},

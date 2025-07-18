@@ -271,7 +271,7 @@ class GpRecoversegTestCase(GpTestCase):
     def test_gprecoverseg_with_mirrorless(self):
         self.gpArrayMock.hasMirrors = False
         with self.assertRaisesRegexp(ExceptionNoStackTraceNeeded,
-                                    "GPDB Mirroring replication is not configured for this Greenplum Database instance."):
+                                    "GPDB Mirroring replication is not configured for this Greengage Database instance."):
             self.subject.run()
 
     def _create_gparray_with_2_primary_2_mirrors(self):

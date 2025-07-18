@@ -21,7 +21,7 @@ try:
     from multiprocessing import Process
     from gppylib.commands import unix
 except Exception, e:
-    sys.exit('Cannot import modules. Please check that you have sourced greenplum_path.sh. Detail: ' + str(e))
+    sys.exit('Cannot import modules. Please check that you have sourced greengage_path.sh. Detail: ' + str(e))
 
 def parseargs( help=False ):
     parser = OptionParser()

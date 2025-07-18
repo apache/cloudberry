@@ -12,7 +12,7 @@ CREATE INDEX idx_root_d on foo USING btree (d);
 
 EXPLAIN SELECT * FROM foo_1_prt_p1 WHERE d < 10;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

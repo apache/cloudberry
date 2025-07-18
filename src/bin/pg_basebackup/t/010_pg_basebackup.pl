@@ -32,7 +32,7 @@ configure_hba_for_replication "$tempdir/pgdata";
 system_or_bail 'pg_ctl', '-D', "$tempdir/pgdata", 'reload';
 
 command_fails(['pg_basebackup', '-D', "$tempdir/backup"],
-	'pg_basebackup fails without specifiying the target greenplum db id');
+	'pg_basebackup fails without specifiying the target greengage db id');
 
 
 #

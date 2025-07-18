@@ -9,7 +9,7 @@ CREATE DATABASE latin1db ENCODING 'latin1' TEMPLATE=template0 LC_COLLATE='C' LC_
 \c utf8db
 set client_encoding='utf8';
 CREATE TABLE enctest (t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into enctest values (chr(196)); -- Latin Capital Letter a with Diaeresis
 -- with UTF-8 as the server encoding, it should be stored as two bytes.
@@ -29,7 +29,7 @@ copy enctest to '/tmp/enctest_utf_to_latin1-2';
 -- option works correctly also in COPY FROM.
 \c latin1db
 CREATE TABLE enctest (t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set client_encoding='latin1';
 copy enctest from '/tmp/enctest_utf_to_latin1-1';

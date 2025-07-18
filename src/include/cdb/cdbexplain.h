@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbexplain.h
- *    Functions supporting the Greenplum EXPLAIN ANALYZE command
+ *    Functions supporting the Greengage EXPLAIN ANALYZE command
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.

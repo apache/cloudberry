@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Recovers Greenplum segment instances that are marked as invalid, if
+# Recovers Greengage segment instances that are marked as invalid, if
 # mirroring is configured and operational
 #
 

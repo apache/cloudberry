@@ -12,7 +12,7 @@ minirepro -?
 
 DESCRIPTION
 
-For any SQL commands, the minirepro utility generates Greenplum Database
+For any SQL commands, the minirepro utility generates Greengage Database
 information for the commands. The information can be analyzed by Pivotal
 support to perform root cause analysis.
 
@@ -28,18 +28,18 @@ to the input SQL commands.
 PARAMETERS
 
 <db-name>
-  Name of the Greenplum Database.
+  Name of the Greengage Database.
 
 -h <master-host>
-  Greenplum Database master host. Default is localhost.
+  Greengage Database master host. Default is localhost.
 
 -U <username>
-  Greenplum Database user name to log into the database and run the
+  Greengage Database user name to log into the database and run the
   SQL command. Default is the PGUSER environment variable. If PGUSER
   is not defined, OS user name running the utility is used.
 
 -p <port>
-  Port that is used to connect to Greenplum Database.
+  Port that is used to connect to Greengage Database.
   Default is the PGPORT environment variable. If PGPORT is not defined,
   the default value is 5432.
 

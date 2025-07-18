@@ -965,7 +965,7 @@ ExecProcNode(PlanState *node)
 	}
 
 	/*
-	 * Greenplum specific code.
+	 * Greengage specific code.
 	 * For historical background, please refer to the comments of
 	 * motion_sanity_walker to understand interconnect UDP deadlock.
 	 * Previous methods focus on joinqual and join node's plan qual's
@@ -974,7 +974,7 @@ ExecProcNode(PlanState *node)
 	 * See Github Issue 15719 for examples of motion deadlock involving
 	 * target list subplan.
 	 *
-	 * For SubPlan in Greenplum, most of the cases it contains material
+	 * For SubPlan in Greengage, most of the cases it contains material
 	 * over broadcast (or gather motion) to make it rescannable. So if
 	 * there is data returned by plan node, anyway, the SubPlan will
 	 * fetch all data from motion and materialize it.
@@ -1833,7 +1833,7 @@ planstate_walk_kids(PlanState *planstate,
 }	/* planstate_walk_kids */
 
 /*
- * Greenplum specific code.
+ * Greengage specific code.
  * Interconnect UDP deadlock might happen between outer plan and SubPlans.
  * This kind of deadlock in fact is not directly related to Join Plan. To
  * Get rid of this kind of deadlock, the method here is to prefetch all
@@ -1879,7 +1879,7 @@ prefetch_subplans(PlanState *node)
 }
 
 /*
- * Greenplum specific code.
+ * Greengage specific code.
  * InitPlans are separately dispatched before the main plan,
  * we don't want walk into them.
  */

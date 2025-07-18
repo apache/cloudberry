@@ -51,7 +51,7 @@ so the deadlock can be detected.
 
 ### Global Deadlock
 
-However on a distributed cluster (e.g. Greenplum DB) rows with different ids
+However on a distributed cluster (e.g. Greengage DB) rows with different ids
 are distributed to different segments, suppose rows with `id=1` are on seg 0
 and rows with `id=2` are on seg 1, then each segment only see a part of the
 graph.
@@ -71,7 +71,7 @@ This forms a global / distributed deadlock.
 
 ### Global Deadlock Prevention
 
-To prevent global deadlock, in Greenplum DB an exclusive table lock is held
+To prevent global deadlock, in Greengage DB an exclusive table lock is held
 for `UPDATE` and `DELETE` commands, so concurrent updates are actually
 disabled.
 

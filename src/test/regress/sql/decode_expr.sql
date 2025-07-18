@@ -434,7 +434,7 @@ end;
 $$ language plpgsql NO SQL;
 
 insert into office1(locid, company_name, address1, address2, city, state, zip, country, phone) values
- (100, 'Greenplum', '1900 S. Norfolk St.', 'Suite 125', 'San Mateo', 'CA', '94403', 'USA', '650-111-1111'),
+ (100, 'Greengage', '1900 S. Norfolk St.', 'Suite 125', 'San Mateo', 'CA', '94403', 'USA', '650-111-1111'),
  (200, 'Dairy Farm', '100 Meadow Lane', null, 'Stockton', 'CA', '95210', 'USA', '209-222-2000'),
  (300, 'Not Just a Database', '1900 S. Norfolk St.', 'Suite 224', 'San Mateo', 'CA', '94403', 'USA', '650-111-3000'),
  (400, 'EMC Corporation', '176 South Street', null, 'Santa Clara', 'CA', '95123', 'USA', '408-444-4000'),

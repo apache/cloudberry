@@ -32,7 +32,7 @@ class SimpleNegativeTestCase(GppkgTestCase):
         alpha_spec = GppkgSpec("alpha", "1.0", gpdb_version)
         gppkg_file = self.build(alpha_spec, A_spec)
 
-        with self.assertRaisesRegexp(ExecutionError, "requires Greenplum Database version %s" % gpdb_version):
+        with self.assertRaisesRegexp(ExecutionError, "requires Greengage Database version %s" % gpdb_version):
             self.install(gppkg_file)
 
     def test03_install_twice(self):

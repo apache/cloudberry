@@ -1,6 +1,6 @@
 
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2008 - 2010 Greenplum, Inc.
 //
 //	@filename:

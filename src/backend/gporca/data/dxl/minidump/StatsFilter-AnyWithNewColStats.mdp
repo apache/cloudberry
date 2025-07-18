@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 	  Objective: When there is a projected column in the subquery, we want to make sure the expected number of rows is correct. Newly projected columns by default
 	  are initialized with a null histogram, so we should use passed in rows instead of the null histogram to compute the expected rows. 

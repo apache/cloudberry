@@ -13,7 +13,7 @@
  *
  * For most node types, these routines are identical to the text reader
  * functions, in readfuncs.c. To avoid code duplication and merge hazards
- * (readfast.c is a Greenplum addon), most read routines borrow the source
+ * (readfast.c is a Greengage addon), most read routines borrow the source
  * definition from readfuncs.c, we just compile it with different READ_*
  * macros.
  *
@@ -1025,7 +1025,7 @@ _readCollateClause(void)
 }
 
 /*
- * Greenplum Database additions for serialization support
+ * Greengage Database additions for serialization support
  */
 #include "nodes/plannodes.h"
 

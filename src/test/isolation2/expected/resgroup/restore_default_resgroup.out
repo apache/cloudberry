@@ -15,9 +15,9 @@
 ! gpstop -rai;
 20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Starting gpstop with args: -rai
 20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Gathering information and validating the environment...
-20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
 20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Obtaining Segment details from master...
-20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 5.0.0-beta.9+dev.45.g52ba809 build dev'
+20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 5.0.0-beta.9+dev.45.g52ba809 build dev'
 20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-There are 0 connections to the database
 20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
 20170830:00:35:12:440808 gpstop:sdw6:gpadmin-[INFO]:-Master host=sdw6

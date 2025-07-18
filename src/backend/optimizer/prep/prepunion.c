@@ -449,7 +449,7 @@ generate_recursion_plan(SetOperationStmt *setOp, PlannerInfo *root,
 	/*
 	 * When building worktable scan path, its locus is set
 	 * the same as the non-recursive plan's locus. But in
-	 * Greenplum, locus may change by motion if worktable
+	 * Greengage, locus may change by motion if worktable
 	 * join with other relations. In `cdbpath_motion_for_join`,
 	 * paths contains worktable scan are set ok_replicated to false
 	 * and movable to false, so if lplan's locus does not equal to

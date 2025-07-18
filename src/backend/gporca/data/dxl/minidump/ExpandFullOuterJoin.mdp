@@ -6,7 +6,7 @@ create table s (s1 int);
 create table t (t1 int);
 select * from t full join s on t1 = s1;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:Stacktrace/>
     <dxl:TraceFlags Value="102147, 103027,103001,103032"/>

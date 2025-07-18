@@ -626,15 +626,15 @@ static Datum
 fmgr_oldstyle(PG_FUNCTION_ARGS)
 {
 	/*
-	 * V0 functions are not supported in Greenplum. The immediate reason
-	 * for that is that a Datum is always 8 bytes on Greenplum, which
+	 * V0 functions are not supported in Greengage. The immediate reason
+	 * for that is that a Datum is always 8 bytes on Greengage, which
 	 * breaks V0 functions using e.g. int arguments, on 32-bit platforms
 	 * where an int is normally 4 bytes. But this is no great loss; no-one
 	 * should be using V0 calling convention anymore anyway.
 	 */
 	ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			 errmsg("Old style C function (API version 0) are no longer supported by Greenplum")
+			 errmsg("Old style C function (API version 0) are no longer supported by Greengage")
 				));
 	return (Datum) 0; /* keep compiler quiet */
 

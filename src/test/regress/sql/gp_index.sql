@@ -1,5 +1,5 @@
 --
--- Greenplum disallows concurrent index creation. It allows concurrent index
+-- Greengage disallows concurrent index creation. It allows concurrent index
 -- drops, so we want to test for it. Though, due to this difference with
 -- upstream we can not keep the tests completely in sync and we add them here.
 -- Original tests are in create_index.sql

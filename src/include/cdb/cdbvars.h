@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbvars.h
- *	  definitions for Greenplum-specific global variables
+ *	  definitions for Greengage-specific global variables
  *
  * Portions Copyright (c) 2003-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present Pivotal Software, Inc.
@@ -23,7 +23,7 @@
 #include "catalog/gp_segment_config.h" /* MASTER_CONTENT_ID */
 
 /*
- * ----- Declarations of Greenplum-specific global variables ------
+ * ----- Declarations of Greengage-specific global variables ------
  */
 
 #define WRITER_IS_MISSING_MSG "reader could not find writer proc entry"
@@ -54,7 +54,7 @@
  * Both parameters are initialized to the same value at connection
  * time and are local to the backend process resulting from the
  * connection.	The default is dispatch which is the normal setting
- * for a user of Greenplum connecting to a node of  the Greenplum cluster.
+ * for a user of Greengage connecting to a node of  the Greengage cluster.
  * Neither parameter appears in the configuration file.
  *
  * gp_session_role
@@ -84,7 +84,7 @@
  *
  * ----------
  *
- * Greenplum Developers can access the values of these parameters via the
+ * Greengage Developers can access the values of these parameters via the
  * global variables Gp_session_role and Gp_role of type
  * GpRoleValue. For example
  *
@@ -149,7 +149,7 @@ extern bool Gp_is_writer;
 /* Parameter gp_session_id
  *
  * This run time parameter indicates a unique id to identify a particular user
- * session throughout the entire Greenplum array.
+ * session throughout the entire Greengage array.
  */
 extern int gp_session_id;
 #define InvalidGpSessionId	(-1)
@@ -565,7 +565,7 @@ extern int gp_log_fts;
 extern int gp_log_interconnect;
 
 /* --------------------------------------------------------------------------------------------------
- * Greenplum Optimizer GUCs
+ * Greengage Optimizer GUCs
  */
 
 /*
@@ -644,7 +644,7 @@ extern bool gp_selectivity_damping_sigsort;
 /*
  * "gp_enable_agg_distinct"
  *
- * May Greenplum redistribute on the argument of a lone aggregate distinct in
+ * May Greengage redistribute on the argument of a lone aggregate distinct in
  * order to use 2-phase aggregation?
  *
  * The code does uses planner estimates to decide whether to use this feature,
@@ -655,7 +655,7 @@ extern bool gp_enable_agg_distinct;
 /*
  * "gp_enable_agg_distinct_pruning"
  *
- * May Greenplum use grouping in the first phases of 3-phase aggregation to
+ * May Greengage use grouping in the first phases of 3-phase aggregation to
  * prune values from DISTINCT-qualified aggregate function arguments?
  *
  * The code uses planner estimates to decide whether to use this feature,
@@ -666,7 +666,7 @@ extern bool gp_enable_dqa_pruning;
 /*
  * "gp_eager_agg_distinct_pruning"
  *
- * Should Greenplum bias planner estimates so as to favor the use of grouping
+ * Should Greengage bias planner estimates so as to favor the use of grouping
  * in the first phases of 3-phase aggregation to prune values from DISTINCT-
  * qualified aggregate function arguments?
  *
@@ -678,7 +678,7 @@ extern bool gp_eager_dqa_pruning;
 /*
  * "gp_eager_one_phase_agg"
  *
- * Should Greenplum bias planner estimates so as to favor the use of one
+ * Should Greengage bias planner estimates so as to favor the use of one
  * phase aggregation?
  *
  * It is provided to facilitate testing and is not a tuning parameter.
@@ -688,7 +688,7 @@ extern bool gp_eager_one_phase_agg;
 /*
  * "gp_eager_two_phase_agg"
  *
- * Should Greenplum bias planner estimates so as to favor the use of two
+ * Should Greengage bias planner estimates so as to favor the use of two
  * phase aggregation?
  *
  * It is provided to facilitate testing and is not a tuning parameter.
@@ -698,7 +698,7 @@ extern bool gp_eager_two_phase_agg;
 /*
  * "gp_enable_groupext_distinct_pruning"
  *
- * Should Greenplum bias planner estimates so as to favor the use of
+ * Should Greengage bias planner estimates so as to favor the use of
  * grouping in the first phases of 3-phase aggregation to prune values
  * from DISTINCT-qualified aggregate function arguments on a grouping
  * extension query?
@@ -708,7 +708,7 @@ extern bool gp_enable_groupext_distinct_pruning;
 /*
  * "gp_enable_groupext_distinct_gather"
  *
- * Should Greenplum bias planner estimates so as to favor the use of
+ * Should Greengage bias planner estimates so as to favor the use of
  * gathering motion to gather the data into a single node to compute
  * DISTINCT-qualified aggregates on a grouping extension query?
  */
@@ -724,7 +724,7 @@ extern bool gp_enable_groupext_distinct_gather;
  */
 extern int gp_distinct_grouping_sets_threshold;
 
-/* May Greenplum apply Unique operator (and possibly a Sort) in parallel prior
+/* May Greengage apply Unique operator (and possibly a Sort) in parallel prior
  * to the collocation motion for a Unique operator?  The idea is to reduce
  * the number of rows moving over the interconnect.
  *
@@ -740,13 +740,13 @@ extern bool gp_enable_preunique;
  */
 extern bool gp_eager_preunique;
 
-/* May Greenplum dump statistics for all segments as a huge ugly string
+/* May Greengage dump statistics for all segments as a huge ugly string
  * during EXPLAIN ANALYZE?
  *
  */
 extern bool gp_enable_explain_allstat;
 
-/* May Greenplum restrict ORDER BY sorts to the first N rows if the ORDER BY
+/* May Greengage restrict ORDER BY sorts to the first N rows if the ORDER BY
  * is wrapped by a LIMIT clause (where N=OFFSET+LIMIT)?
  *
  * The code does not currently use planner estimates for this.  If enabled,
@@ -754,7 +754,7 @@ extern bool gp_enable_explain_allstat;
  */
 extern bool gp_enable_sort_limit;
 
-/* May Greenplum discard duplicate rows in sort if it is is wrapped by a
+/* May Greengage discard duplicate rows in sort if it is is wrapped by a
  * DISTINCT clause (unique aggregation operator)?
  *
  * The code does not currently use planner estimates for this.  If enabled,
@@ -762,7 +762,7 @@ extern bool gp_enable_sort_limit;
  */
 extern bool gp_enable_sort_distinct;
 
-/* Greenplum MK Sort */
+/* Greengage MK Sort */
 extern bool gp_enable_mk_sort;
 extern bool gp_enable_motion_mk_sort;
 
@@ -775,13 +775,13 @@ extern bool gp_mk_sort_check;
 
 extern bool trace_sort;
 
-/* Generic Greenplum sort flag for testing.
+/* Generic Greengage sort flag for testing.
  *
  *
  */
 extern int gp_sort_flags;
 
-/* If Greenplum is discarding duplicate rows in sort, switch back to
+/* If Greengage is discarding duplicate rows in sort, switch back to
  * standard sort if the number of distinct values exceeds max_distinct.
  * (If the number of distinct values is too large the behavior of the
  * insertion sort is inferior to the heapsort)
@@ -860,7 +860,7 @@ extern int gp_workfile_bytes_to_checksum;
 
 extern bool coredump_on_memerror;
 
-/* Greenplum resource group query_mem re-calculate on QE */
+/* Greengage resource group query_mem re-calculate on QE */
 extern bool gp_resource_group_enable_recalculate_query_mem;
 
 /*

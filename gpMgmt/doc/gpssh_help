@@ -101,7 +101,7 @@ OPTIONS
 -s
 
  Optional. If specified, before executing any commands on the target 
- host, gpssh sources the file greenplum_path.sh in the directory 
+ host, gpssh sources the file greengage_path.sh in the directory 
  specified by the $GPHOME environment variable. 
 
  This option is valid for both interactive mode and single command mode. 
@@ -151,7 +151,7 @@ environment variable MASTER_DATA_DIRECTORY. If the environment variable
 is not defined or the gpssh.conf file does not exist in the directory
 gpssh uses the default values or the values set with the -d and -t
 options. For information about the environment variable, see the
-Greenplum Database Reference Guide.
+Greengage Database Reference Guide.
 
 The gpssh.conf file is a text file that consists of a [gpssh] section
 and parameters. On a line, the # (pound sign) indicates the start of a
@@ -183,7 +183,7 @@ prompt_validation_timeout = multiplier
 sync_retry = attempts
 
  A non-negative integer that specifies the maximum number of retry attempts
- that gpssh performs to try connecting to a Greenplum Database remote host. The
+ that gpssh performs to try connecting to a Greengage Database remote host. The
  default is 3. If the value is 0, gpssh returns an error if the initial
  connection attempt fails. This parameter cannot be configured with a
  command-line option.

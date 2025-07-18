@@ -209,7 +209,7 @@ def interactive():
                 GV.session.login(GV.opt['-h'], GV.USER, GV.DELAY_BEFORE_SEND, GV.PROMPT_VALIDATION_TIMEOUT, GV.SYNC_RETRIES)
                 GV.session.echoCommand = GV.opt['-e']
             if GV.opt['-s']:
-                GV.session.executeCommand("source {0}/greenplum_path.sh".format(os.environ["GPHOME"]))
+                GV.session.executeCommand("source {0}/greengage_path.sh".format(os.environ["GPHOME"]))
             GV.session.cmdloop()
         except pexpect.EOF:
             print '\n[Unexpected EOF from some hosts...]'
@@ -263,7 +263,7 @@ def main():
                 GV.session.login(GV.opt['-h'], GV.USER, GV.DELAY_BEFORE_SEND, GV.PROMPT_VALIDATION_TIMEOUT, GV.SYNC_RETRIES)
                 GV.session.echoCommand = GV.opt['-e']
                 if GV.opt['-s']:
-                    GV.session.executeCommand("source {0}/greenplum_path.sh".format(os.environ["GPHOME"]))
+                    GV.session.executeCommand("source {0}/greengage_path.sh".format(os.environ["GPHOME"]))
                 output = GV.session.executeCommand(GV.argcmd)
                 GV.session.writeCommandOutput(output)
                 if GV.session.verbose: print '[INFO] completed successfully'

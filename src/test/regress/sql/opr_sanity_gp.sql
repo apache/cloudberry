@@ -6,7 +6,7 @@
 -- PathKey structure internally that is used to represent sort ordering, to
 -- represent the distribution columns.)
 --
---- NB: This list of datatypes should match that in IsGreenplumDbHashable
+--- NB: This list of datatypes should match that in IsGreengageDbHashable
 select * from pg_operator where oprname='=' and oprleft = oprright
 and not oprcanmerge
 and oprleft IN (

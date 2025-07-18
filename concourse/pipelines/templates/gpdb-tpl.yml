@@ -487,14 +487,14 @@ resources:
   source:
     bucket: pivotal-gpdb-concourse-resources-intermediates-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: gpdb-package-testing/deb_gpdb_ubuntu20.04/greenplum-db-6-ubuntu20.04-amd64.deb
+    versioned_file: gpdb-package-testing/deb_gpdb_ubuntu20.04/greengage-db-6-ubuntu20.04-amd64.deb
 {% elif compile_platform == "rocky9" %}
 - name: gpdb_package_rocky9
   type: gcs
   source:
     bucket: pivotal-gpdb-concourse-resources-intermediates-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: gpdb-package-testing/rpm_gpdb_rocky9/gpdb6/greenplum-db-6-rhel9-x86_64.rpm
+    versioned_file: gpdb-package-testing/rpm_gpdb_rocky9/gpdb6/greengage-db-6-rhel9-x86_64.rpm
 {% else %}
 - name: previous_gpdb
   type: pivnet
@@ -679,17 +679,17 @@ resources:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
 {% if os_type == default_os_type %}
-    regexp: server/published/gpdb6/greenplum-db-(.*)-rhel8-x86_64((rc-build-type-gcs)).rpm
+    regexp: server/published/gpdb6/greengage-db-(.*)-rhel8-x86_64((rc-build-type-gcs)).rpm
 {% else %}
-    regexp: server/published/gpdb6/greenplum-db-(.*)-[[ os_type ]]-x86_64((rc-build-type-gcs)).rpm
+    regexp: server/published/gpdb6/greengage-db-(.*)-[[ os_type ]]-x86_64((rc-build-type-gcs)).rpm
 {% endif %}
 
-- name: greenplum-database-release
+- name: greengage-database-release
   type: git
   icon: git
   source:
     branch: main
-    uri: https://github.com/greenplum-db/greenplum-database-release.git
+    uri: https://github.com/GreengageDB/greengage.git
 
 - name: license_file
   type: gcs
@@ -697,7 +697,7 @@ resources:
   source:
     bucket: ((gcs-bucket-for-oss))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: osl/released/gpdb6/open_source_license_greenplum-database-6.0.0-97773a0-(.*).txt
+    regexp: osl/released/gpdb6/open_source_license_greengage-database-6.0.0-97773a0-(.*).txt
 
 {% endif %}
 {% endif %}
@@ -742,7 +742,7 @@ resources:
   source:
     bucket: ((gcs-bucket-intermediates))
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: ((pipeline-name))/bin_gpdb_clients_windows/greenplum-clients-x86_64.tar.gz
+    versioned_file: ((pipeline-name))/bin_gpdb_clients_windows/greengage-clients-x86_64.tar.gz
 
 - name: terraform_windows
   type: terraform
@@ -979,15 +979,15 @@ jobs:
         resource: previous_gpdb
         params:
           {% if os_type == "rocky8" %}
-          globs: [greenplum-db-6*-rhel8-x86_64.rpm]
+          globs: [greengage-db-6*-rhel8-x86_64.rpm]
           {% elif os_type == "oel8" %}
-          globs: [greenplum-db-6*-rhel8-x86_64.rpm]
+          globs: [greengage-db-6*-rhel8-x86_64.rpm]
           {% elif os_type == "rhel8" %}
-          globs: [greenplum-db-6*-rhel8-x86_64.rpm]
+          globs: [greengage-db-6*-rhel8-x86_64.rpm]
           {% elif os_type == "oel7" %}
-          globs: [greenplum-db-6*-rhel7-x86_64.rpm]
+          globs: [greengage-db-6*-rhel7-x86_64.rpm]
           {% else %}
-          globs: [greenplum-db-6*-[[ dist ]]-x86_64.rpm]
+          globs: [greengage-db-6*-[[ dist ]]-x86_64.rpm]
           {% endif %}
       {% endif %}
       - get: gpdb6-[[ compile_platform ]]-build
@@ -1079,7 +1079,7 @@ jobs:
       REMOTE_KEY: ((remote_win_key_build))
   - put: bin_gpdb_clients_windows
     params:
-      file: "gpdb_artifacts/greenplum-clients-x86_64.tar.gz"
+      file: "gpdb_artifacts/greengage-clients-x86_64.tar.gz"
 
 - name: test_gpdb_clients_windows
   plan:
@@ -2544,7 +2544,7 @@ jobs:
                 pushd bin_gpdb_clients_windows
                 tar xzvf *.tar.gz
                 popd
-                cp bin_gpdb_clients_windows/greenplum-clients-x86_64.msi release_candidates/clients-rc-${gpdb_semver}-windows_x86_64${RC_BUILD_TYPE_GCS}.msi
+                cp bin_gpdb_clients_windows/greengage-clients-x86_64.msi release_candidates/clients-rc-${gpdb_semver}-windows_x86_64${RC_BUILD_TYPE_GCS}.msi
                 {% endif %}
       - task: verify_gpdb_versions
         file: gpdb_src/concourse/tasks/verify_gpdb_versions.yml
@@ -2600,19 +2600,19 @@ jobs:
         passed: [gate_release_candidate_start]
 {% endif %}
       - get: gpdb6-[[ os_type ]]-build
-      - get: greenplum-database-release
+      - get: greengage-database-release
       - get: license_file
   - task: create_gpdb_rpm_package_[[ os_type ]]
-    file: greenplum-database-release/ci/concourse/tasks/build-gpdb-rpm.yml
+    file: greengage-database-release/ci/concourse/tasks/build-gpdb-rpm.yml
     image: gpdb6-[[ os_type ]]-build
     output_mapping:
       gpdb_rpm_installer: gpdb_rpm_[[ os_type ]]
     params:
       PLATFORM: [[ rpm_platform ]]
-      GPDB_NAME: greenplum-db-6
+      GPDB_NAME: greengage-db-6
       GPDB_RELEASE: 1
       GPDB_LICENSE: Pivotal Software EULA
-      GPDB_URL: https://github.com/greenplum-db/gpdb
+      GPDB_URL: https://github.com/GreengageDB/greengage
       GPDB_OSS: false
   - task: rename_rc_artifacts
     image: gpdb6-[[ os_type ]]-build
@@ -2634,9 +2634,9 @@ jobs:
 {% if build_test_rc_rpm %}
               # Uniquely name the rpm using the github username and test branch
               # to prevent filename collisions on GCS.
-            cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greenplum-db-[[ git_username ]]-[[ git_branch ]]-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
+            cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greengage-db-[[ git_username ]]-[[ git_branch ]]-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
 {% else %}
-            cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greenplum-db-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
+            cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greengage-db-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
 {% endif %}
   - in_parallel:
       steps:

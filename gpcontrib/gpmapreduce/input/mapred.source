@@ -26,7 +26,7 @@ create language plpythonu;
 select * from pg_pltemplate;
 select lanname, lanispl, lanpltrusted from pg_language;
 
--- Check environment variables that should have been set by greenplum_path.sh
+-- Check environment variables that should have been set by greengage_path.sh
 --
 -- 1) We need to check these on all segments and on the master.
 -- 2) We do this via external table rather than perl/python in case it is part

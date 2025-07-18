@@ -226,7 +226,7 @@ UPDATE export_distributed_snapshot_test3 SET a=99 WHERE a=1;
 
 
 -- test set transaction snapshot in 6X-STABLE, more details can be found in
--- https://github.com/greenplum-db/gpdb/issues/14177
+-- https://github.com/GreengageDB/greengage/issues/14177
 
 drop table if exists fix_set_transaction_snapshot;
 create table fix_set_transaction_snapshot(a int);

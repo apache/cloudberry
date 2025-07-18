@@ -31,7 +31,7 @@ NOTICE:  resource queue required -- using default resource queue "pg_default"
 create schema tschema;
 comment on schema tschema is 'this is to test comment on schema';
 create table ttable (a int, b int, constraint testcheck check(b>0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 comment on constraint testcheck on ttable is 'this is to test comment on constraint';
 create user cm_user;
@@ -119,7 +119,7 @@ SFUNC = caql_cube_fn,
 STYPE = numeric,
 INITCOND = 0 );
 create table caql_tab(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into caql_tab values (1), (2), (3);
 select caqlcube(a) from caql_tab;
@@ -159,7 +159,7 @@ operator 4 caql_schema.>=,
 operator 5 caql_schema.>,
 function 1 caql_schema.int4_array_cmp(_int4, _int4);
 create table caql_schema.caql_tab(a int[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index caql_index on caql_schema.caql_tab(a caql_schema.caql_opclass);
 create table caql_rtree(a int, b box);
@@ -402,7 +402,7 @@ partition by list (c1) subpartition by list(c2)
                 with (appendonly=true, orientation=column, compresstype=quicklz)
         )
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  CREATE TABLE will create partition "caql_part_table_1_prt_a" for table "caql_part_table"
 NOTICE:  CREATE TABLE will create partition "caql_part_table_1_prt_a_2_prt_a1" for table "caql_part_table_1_prt_a"
@@ -525,7 +525,7 @@ create table caql_depend(a int,
   c regoperator default '=(bool, bool)',
   d regclass default 'pg_class',
   e regtype default 'bool');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- ---------------------------------------------------------------------
 -- coverage for aclchk.c

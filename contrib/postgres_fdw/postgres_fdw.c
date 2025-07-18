@@ -1674,7 +1674,7 @@ postgresIsForeignRelUpdatable(Relation rel)
 		return 0;
 
 	/*
-	 * Greenplum only supports INSERT, because UPDATE/DELETE SELECT requires
+	 * Greengage only supports INSERT, because UPDATE/DELETE SELECT requires
 	 * the hidden column gp_segment_id and the other "ModifyTable mixes
 	 * distributed and entry-only tables" issue.
 	 */

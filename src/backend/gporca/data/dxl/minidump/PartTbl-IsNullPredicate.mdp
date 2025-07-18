@@ -5,7 +5,7 @@ partition by range (b) (start(1) end(100) every (20), default partition extra);
 
 explain select * from dd_part_singlecol where a is null and b is null;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

@@ -103,7 +103,7 @@ def before_scenario(context, scenario):
         return
 
     if "concourse_cluster" in scenario.effective_tags and not hasattr(context, "concourse_cluster_created"):
-        from test.behave_utils.arenadata.fixtures import init_cluster
+        from test.behave_utils.ci.fixtures import init_cluster
         context.concourse_cluster_created = True
         return use_fixture(init_cluster, context)
 

@@ -42,7 +42,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
                                                      ->  Table Scan on tab2  (cost=0.00..431.10 rows=1665 width=4)
          ->  Table Scan on tab3  (cost=0.00..431.07 rows=3282 width=1)     
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

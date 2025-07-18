@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2018 Pivotal Software, Inc.
 //
 //	Template Class for Inner / Left Outer Index Apply

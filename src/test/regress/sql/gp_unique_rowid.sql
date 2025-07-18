@@ -6,8 +6,8 @@ create extension if not exists gp_inject_fault;
 select gp_inject_fault_infinite('low_unique_rowid_path_cost', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
 
 -- Test index only scan path not error out when semjoin.
--- Greenplum might add unique_rowid_path to handle semjoin,
--- that was introduced in Greenplum long before, and after
+-- Greengage might add unique_rowid_path to handle semjoin,
+-- that was introduced in Greengage long before, and after
 -- merging so many commits from upstream, new logic might
 -- not work well. The following cases test for this.
 create table t_indexonly_cdbdedup_1(a int, b int, c int);
@@ -24,11 +24,11 @@ reset enable_bitmapscan;
 reset enable_seqscan;
 
 -- Test append path not error out when semjoin.
--- issue1:https://github.com/greenplum-db/gpdb/issues/12402
--- issue2:https://github.com/greenplum-db/gpdb/issues/3719
+-- issue1:https://github.com/GreengageDB/greengage/issues/12402
+-- issue2:https://github.com/GreengageDB/greengage/issues/3719
 
--- Greenplum might add unique_rowid_path to handle semjoin, that
--- was introduced in Greenplum long before, and after merging so
+-- Greengage might add unique_rowid_path to handle semjoin, that
+-- was introduced in Greengage long before, and after merging so
 -- many commits from upstream, new logic might not work well.
 -- We just disallow unique_rowid_path for inheritance_planner.
 
@@ -50,7 +50,7 @@ partition by range (year) (start (2006) end (2007) every (1), default partition 
 explain (costs off ) update rank_12402 set rank = 1 where id in (select id from rank1_12402) and value in (select value from rank1_12402);
 
 -- Test for fake ctid works well
--- issue: https://github.com/greenplum-db/gpdb/issues/12512
+-- issue: https://github.com/GreengageDB/greengage/issues/12512
 -- NOTE: orca use split-update, planner use update, behavior is different when
 -- tuple is updated by self.
 

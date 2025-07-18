@@ -7,7 +7,7 @@ move krb5.ini C:\ProgramData\MIT\Kerberos5\
 set KRB5CCNAME=%USERPROFILE%\krb5cache
 set PGGSSLIB=gssapi
 
-call "C:\Program Files\Greenplum\greenplum-clients\greenplum_clients_path.bat"
+call "C:\Program Files\Greengage\greengage-clients\greengage_clients_path.bat"
 kinit -k -t gpdb-krb5.keytab user1/127.0.0.1
 klist
 set path=%path%;C:\Program Files\curl-win64-mingw\bin

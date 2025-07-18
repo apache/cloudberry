@@ -1,4 +1,4 @@
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2018 Pivotal Software, Inc.
 
 #include "naucrates/dxl/CCostModelConfigSerializer.h"

@@ -42,8 +42,8 @@ ALTER TABLE persons INHERIT stuff;
 ERROR:  cannot change inheritance of typed table
 CREATE TABLE personsx OF person_type (myname WITH OPTIONS NOT NULL); -- error
 ERROR:  column "myname" does not exist
--- This test comes from postgres, and we expect it to fail on Greenplum
--- because Greenplum does not support having two primary key / unique
+-- This test comes from postgres, and we expect it to fail on Greengage
+-- because Greengage does not support having two primary key / unique
 -- constraints with no columns in common.
 CREATE TABLE persons2 OF person_type (
     id WITH OPTIONS PRIMARY KEY,
@@ -52,7 +52,7 @@ CREATE TABLE persons2 OF person_type (
 ERROR:  UNIQUE or PRIMARY KEY definitions are incompatible with each other
 HINT:  When there are multiple PRIMARY KEY / UNIQUE constraints, they must have at least one column in common.
 \d persons2
--- These are added for Greenplum, as the previous table creation statement
+-- These are added for Greengage, as the previous table creation statement
 -- should have failed.
 CREATE TABLE gppersons1 OF person_type (
     id WITH OPTIONS PRIMARY KEY

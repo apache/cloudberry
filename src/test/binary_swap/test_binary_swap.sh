@@ -3,8 +3,8 @@
 ## ==================================================================
 ## Required: regression database generated from src/test/regress
 ##
-## Test binary swap from current Greenplum install to another
-## Greenplum install. The flow goes like this:
+## Test binary swap from current Greengage install to another
+## Greengage install. The flow goes like this:
 ##   1. Run pg_dumpall on current database
 ##   2. Start binaries provided by -b (required)
 ##   3. Run pg_dumpall on other binary and diff dumps
@@ -42,14 +42,14 @@ run_tests()
     fi
 }
 
-##  Start up a Greenplum binary using same $MASTER_DATA_DIRECTORY
+##  Start up a Greengage binary using same $MASTER_DATA_DIRECTORY
 start_binary()
 {
     BINARY_PATH=$1
     gpstop -ai
-    source $BINARY_PATH/greenplum_path.sh
+    source $BINARY_PATH/greengage_path.sh
     gpstart -a
-    echo "Select our Greenplum version just to be sure..."
+    echo "Select our Greengage version just to be sure..."
     psql -c "select version()" postgres
 }
 
@@ -57,10 +57,10 @@ usage()
 {
     appname=`basename $0`
     echo "$appname usage:"
-    echo " -b <dir>   Greenplum install path for another binary to test upgrade/downgrade from (Required User Input)"
-    echo " -c <dir>   Greenplum install path for current binary to test upgrade/downgrade to (Default: \$GPHOME)"
-    echo " -m <dir>   Greenplum Master Data Directory (Default: \$MASTER_DATA_DIRECTORY)"
-    echo " -p <port>  Greenplum Master Port (Default: \$PGPORT)"
+    echo " -b <dir>   Greengage install path for another binary to test upgrade/downgrade from (Required User Input)"
+    echo " -c <dir>   Greengage install path for current binary to test upgrade/downgrade to (Default: \$GPHOME)"
+    echo " -m <dir>   Greengage Master Data Directory (Default: \$MASTER_DATA_DIRECTORY)"
+    echo " -p <port>  Greengage Master Port (Default: \$PGPORT)"
     echo " -v <variant> Variant of the test plan (Default: '')"
     exit 0
 }
@@ -96,23 +96,23 @@ GPHOME_CURRENT=${GPHOME_CURRENT:=$GPHOME}
 MDD_CURRENT=${MDD_CURRENT:=$MASTER_DATA_DIRECTORY}
 PGPORT_CURRENT=${PGPORT_CURRENT:=$PGPORT}
 
-if [ "${GPHOME_OTHER}x" == "x" ] || ! [ -f $GPHOME_OTHER/greenplum_path.sh ]; then
-    echo "Use -b to provide a valid Greenplum install path to upgrade/downgrade from"
+if [ "${GPHOME_OTHER}x" == "x" ] || ! [ -f $GPHOME_OTHER/greengage_path.sh ]; then
+    echo "Use -b to provide a valid Greengage install path to upgrade/downgrade from"
     exit 1
 fi
 
-if [ "${GPHOME_CURRENT}x" == "x" ] || ! [ -f $GPHOME_CURRENT/greenplum_path.sh ]; then
-    echo "Use -c to provide a valid Greenplum install path to upgrade/downgrade to (Default: \$GPHOME)"
+if [ "${GPHOME_CURRENT}x" == "x" ] || ! [ -f $GPHOME_CURRENT/greengage_path.sh ]; then
+    echo "Use -c to provide a valid Greengage install path to upgrade/downgrade to (Default: \$GPHOME)"
     exit 1
 fi
 
 if [ "${MDD_CURRENT}x" == "x" ]; then
-    echo "Use -m to provide a valid Greenplum Master Data Directory (Default: \$MASTER_DATA_DIRECTORY)"
+    echo "Use -m to provide a valid Greengage Master Data Directory (Default: \$MASTER_DATA_DIRECTORY)"
     exit 1
 fi
 
 if [ "${PGPORT_CURRENT}x" == "x" ]; then
-    echo "Use -p to provide a valid Greenplum Master Port (Default: \$PGPORT)"
+    echo "Use -p to provide a valid Greengage Master Port (Default: \$PGPORT)"
     exit 1
 fi
 
@@ -123,7 +123,7 @@ if ! [ -e schedule1${VARIANT} -a \
     exit 1
 fi
 
-## Grab the Greenplum versions of each binary for display
+## Grab the Greengage versions of each binary for display
 CURRENT_VERSION=`$GPHOME_CURRENT/bin/gpstart --version | awk '{ for (i=3; i<NF; i++) printf $i " "; print $NF }'`
 OTHER_VERSION=`$GPHOME_OTHER/bin/gpstart --version | awk '{ for (i=3; i<NF; i++) printf $i " "; print $NF }'`
 
@@ -139,21 +139,21 @@ echo "=================================================="
 ## Clean our directory of any previous test output
 clean_output
 
-## Start/restart current Greenplum and do initial dump to compare against
+## Start/restart current Greengage and do initial dump to compare against
 start_binary $GPHOME_CURRENT
 run_pre_test
 run_tests schedule1${VARIANT}
 
 ## Change the binary, dump, and then compare the two dumps generated
 ## by both binaries. Then we do some inserts and dump again. We source
-## $GPHOME_CURRENT/greenplum_path.sh here after starting Greenplum
+## $GPHOME_CURRENT/greengage_path.sh here after starting Greengage
 ## with $GPHOME_OTHER to use latest pg_dumpall to prevent catching
 ## diffs due to changes made to pg_dump. The running binaries are
 ## still from $GPHOME_OTHER. Only pg_regress, pg_dumpall, psql, and
 ## gpcheckcat should be from $GPHOME_CURRENT during the pg_regress
 ## test.
 start_binary $GPHOME_OTHER
-source $GPHOME_CURRENT/greenplum_path.sh
+source $GPHOME_CURRENT/greengage_path.sh
 run_tests schedule2${VARIANT}
 
 ## Change the binary back, dump, and then compare the two new dumps

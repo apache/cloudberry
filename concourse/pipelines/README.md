@@ -92,7 +92,7 @@ fly -t prod \
     -p 6X_STABLE \
     -c ~/workspace/gpdb/concourse/pipelines/gpdb_6X_STABLE-generated.yml \
     -l ~/workspace/gpdb/concourse/vars/common_prod.yml \
-    -v gpdb-git-remote=https://github.com/greenplum-db/gpdb.git \
+    -v gpdb-git-remote=https://github.com/GreengageDB/greengage.git \
     -v gpdb-git-branch=6X_STABLE \
     -v pipeline-name=6X_STABLE
 
@@ -102,7 +102,7 @@ fly -t prod \
     -c ~/workspace/gpdb/concourse/pipelines/gpdb_6X_STABLE-generated.yml \
     -l ~/workspace/gpdb/concourse/vars/common_prod.yml \
     -l ~/workspace/gpdb/concourse/vars/without_asserts_common_prod.yml \
-    -v gpdb-git-remote=https://github.com/greenplum-db/gpdb.git \
+    -v gpdb-git-remote=https://github.com/GreengageDB/greengage.git \
     -v gpdb-git-branch=6X_STABLE \
     -v pipeline-name=6X_STABLE_without_asserts
 ```

@@ -2,9 +2,9 @@
 \! gpstop -u;
 20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Starting gpstop with args: -u
 20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Gathering information and validating the environment...
-20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Obtaining Greenplum Master catalog information
+20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Obtaining Greengage Master catalog information
 20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Obtaining Segment details from master...
-20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.487.gc712d6d8b0 build dev'
+20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.487.gc712d6d8b0 build dev'
 20190709:16:49:48:083167 gpstop:Weinan-Pivotal-Mac:wwang-[INFO]:-Signalling all postmaster processes to reload
 create language plpythonu;
 -- end_ignore
@@ -35,7 +35,7 @@ select count(*)=0 as result from
 (1 row)
 
 \! psql -d dowell -c "create table test1(a int, b text)"
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE
 \! psql -d dowell -c "insert into test1 values (1, '111'), (2, '222'), (3, '333')"

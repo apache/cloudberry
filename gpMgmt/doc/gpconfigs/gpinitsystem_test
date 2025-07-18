@@ -6,7 +6,7 @@
 #### REQUIRED PARAMETERS
 ################################################
 
-#### Name of this Greenplum system enclosed in quotes.
+#### Name of this Greengage system enclosed in quotes.
 ARRAY_NAME="Test DW"
 
 #### Naming convention for utility-generated data directories.

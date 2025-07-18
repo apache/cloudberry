@@ -3,7 +3,7 @@
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
 #
 """
-Greenplum logging facilities.
+Greengage logging facilities.
 
 This Module contains some helper functions for setting up the
 python builtin logging module.  Tools and libraries are expected
@@ -94,7 +94,7 @@ def setup_helper_tool_logging(appName, hostname, userName):
 
 def setup_tool_logging(appName, hostname, userName, logdir=None, nonuser=False):
     """
-    Returns a singleton logger for standard Greenplum tools:
+    Returns a singleton logger for standard Greengage tools:
       - Logs output to stdout
       - Logs output to a file, typically in ~/gpAdminLogs
     """
@@ -247,7 +247,7 @@ def _set_file_logging(filename):
 def _get_default_formatter():
     """
     Returns the default formatter, constructing it if needed.
-    The default formatter formats things using Greenplum standard logging:
+    The default formatter formats things using Greengage standard logging:
       <date>:<pid> <programname>:<hostname>:<username>:[LEVEL]:-message
     NOTE: internal use only
     """

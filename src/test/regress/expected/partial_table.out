@@ -61,7 +61,7 @@ analyze r2;
 --
 -- Test numsegments properity cannot be larger than the size of cluster
 create table size_sanity_check(c1 int, c2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 update gp_distribution_policy set numsegments = 10 where localoid = 'size_sanity_check'::regclass;
 select * from size_sanity_check;
@@ -619,7 +619,7 @@ select gp_debug_set_create_table_default_numsegments('full');
 (1 row)
 
 create table t as table t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1, c2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1, c2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select localoid::regclass, distkey, policytype, numsegments
 	from gp_distribution_policy where localoid in ('t'::regclass);
@@ -630,7 +630,7 @@ select localoid::regclass, distkey, policytype, numsegments
 
 drop table t;
 create table t as select * from t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1, c2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1, c2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select localoid::regclass, distkey, policytype, numsegments
 	from gp_distribution_policy where localoid in ('t'::regclass);
@@ -668,7 +668,7 @@ select localoid::regclass, distkey, policytype, numsegments
 
 drop table t;
 select * into table t from t1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1, c2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1, c2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select localoid::regclass, distkey, policytype, numsegments
 	from gp_distribution_policy where localoid in ('t'::regclass);

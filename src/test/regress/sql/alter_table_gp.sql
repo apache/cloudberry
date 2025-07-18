@@ -33,7 +33,7 @@ drop table dupconstr;
 
 --
 -- Alter datatype of column with constraint should raise meaningful error
--- See github issue: https://github.com/greenplum-db/gpdb/issues/10561
+-- See github issue: https://github.com/GreengageDB/greengage/issues/10561
 --
 create table contype (i int4 primary key, j int check (j < 100));
 alter table contype alter i type numeric; --error

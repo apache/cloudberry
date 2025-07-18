@@ -16,7 +16,7 @@ run:
 
     # ensure cluster is stopped
     ssh -n cdw "
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export MASTER_DATA_DIRECTORY='/data/gpdata/coordinator/gpseg-1'
         if [ -d \$MASTER_DATA_DIRECTORY ]; then gpstop -a; fi
     "
@@ -66,8 +66,8 @@ run:
     while read LINE; do
         host=$(echo $LINE | awk '{ print $3 }')
         ssh -n $host "sudo bash -c '
-            cp -a /opt/greenplum-db-test-deps/behave/* /usr/local/greenplum-db-devel/ext/python
-            sudo chown -R gpadmin:gpadmin /usr/local/greenplum-db-devel/ext/python
+            cp -a /opt/greengage-db-test-deps/behave/* /usr/local/greengage-db-devel/ext/python
+            sudo chown -R gpadmin:gpadmin /usr/local/greengage-db-devel/ext/python
         '"
     done <cluster_env_files/etc_hostfile
 
@@ -87,7 +87,7 @@ run:
 
     # start cluster back up
     ssh -n cdw "
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export MASTER_DATA_DIRECTORY='/data/gpdata/coordinator/gpseg-1'
         if [ -d \$MASTER_DATA_DIRECTORY ]; then gpstart -a; fi
     "

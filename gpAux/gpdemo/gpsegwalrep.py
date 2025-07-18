@@ -14,12 +14,12 @@ Example:
 ======================================================================
 
 Assumptions:
-1. Greenplum cluster was compiled with --enable-segwalrep
-2. Greenplum cluster was initialized without mirror segments.
+1. Greengage cluster was compiled with --enable-segwalrep
+2. Greengage cluster was initialized without mirror segments.
 3. Cluster is all on one host
-4. Greenplum environment is all setup (greenplum_path.sh, MASTER_DATA_DIRECTORY, PGPORT, etc.)
-5. Greenplum environment is started
-6. Greenplum environment is the same throughout tool usage
+4. Greengage environment is all setup (greengage_path.sh, MASTER_DATA_DIRECTORY, PGPORT, etc.)
+5. Greengage environment is started
+6. Greengage environment is the same throughout tool usage
 
 Assuming all of the above, you can just run the tool as so:
     ./gpsegwalrep.py [init|start|stop|destroy]
@@ -132,7 +132,7 @@ class InitMirrors():
             thread.join()
 
 class StartInstances():
-    ''' Start a greenplum segment '''
+    ''' Start a greengage segment '''
 
     def __init__(self, cluster_config, host, operation, wait=False):
         self.clusterconfig = cluster_config

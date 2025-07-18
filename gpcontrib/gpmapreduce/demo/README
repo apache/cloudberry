@@ -1,17 +1,17 @@
 **************************************************************************
-ABOUT THE GREENPLUM MAPREDUCE DEMOS
+ABOUT THE GREENGAGE MAPREDUCE DEMOS
 **************************************************************************
 
-This package contains two example programs of Greenplum MapReduce:
+This package contains two example programs of Greengage MapReduce:
 
-1. Grep - This Greenplum MapReduce program searches through web access 
+1. Grep - This Greengage MapReduce program searches through web access 
           log files and extracts the URL portion of the log.
        
           Specification File: 1_grep.yml
           Data Files: access_log, access_log2
           Outputs To: STDOUT
 
-2. Word Count - This Greenplum MapReduce program goes through a text 
+2. Word Count - This Greengage MapReduce program goes through a text 
                 document and counts the distinct words found.
 
                 Specification File: 2_wordcount.yml
@@ -24,11 +24,11 @@ This package contains two example programs of Greenplum MapReduce:
 BEFORE YOU BEGIN
 **************************************************************************
 
-1. You must be a Greenplum Database superuser (such as gpadmin) to run 
+1. You must be a Greengage Database superuser (such as gpadmin) to run 
    the MapReduce demos.
 
 
-2. Create a database to use for the Greenplum MapReduce demos:
+2. Create a database to use for the Greengage MapReduce demos:
 
     $ createdb gpmrdemo
 
@@ -40,15 +40,15 @@ BEFORE YOU BEGIN
 
 NOTE: If the CREATE LANGUAGE command does not succeed because a
       library (.so file) could not be found, you will need to make
-      sure that all hosts in your Greenplum array have a shared 
+      sure that all hosts in your Greengage array have a shared 
       Perl and Python installation. You must also make sure the
       Perl and Python libraries are findable by your runtime linker
-      on all hosts in your Greenplum Database array. Greenplum
+      on all hosts in your Greengage Database array. Greengage
       provides installer packages for Perl and Python on 
       https://emc.subscribenet.com  if you need them.
 
 
-4. On your segment hosts, create a location to put the Greenplum
+4. On your segment hosts, create a location to put the Greengage
    MapReduce demo data files. If you are running multiple segment 
    instances per segment host, you can create this location on just 
    one of your segment hosts. For example:
@@ -81,7 +81,7 @@ RUNNING DEMO 1: GREP
         - myseghost1:/home/gpadmin/gpmrdata/access_log
         - myseghost2:/home/gpadmin/gpmrdata/access_log2 
 
-3. Execute the 1_grep.yml Greenplum MapReduce job:
+3. Execute the 1_grep.yml Greengage MapReduce job:
 
     $ gpmapreduce -f 1_grep.yml gpmrdemo
 
@@ -105,7 +105,7 @@ RUNNING DEMO 2: WORD COUNT
      FILE:
         - myseghost1:/home/gpadmin/gpmrdata/whitepaper.txt 
 
-3. Execute the 2_wordcount.yml Greenplum MapReduce job:
+3. Execute the 2_wordcount.yml Greengage MapReduce job:
 
     $ gpmapreduce -f 2_wordcount.yml gpmrdemo | more
 

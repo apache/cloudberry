@@ -77,7 +77,7 @@ RESET statement_mem;
 DROP TABLE IF EXISTS test_zlib_hagg; 
 NOTICE:  table "test_zlib_hagg" does not exist, skipping
 CREATE TABLE test_zlib_hagg (i1 int, i2 int, i3 int, i4 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_zlib_hagg SELECT i,i,i,i FROM 
 	(select generate_series(1, nsegments * 300000) as i from 
@@ -113,11 +113,11 @@ select gp_inject_fault('workfile_creation_failure', 'reset', 2);
 (1 row)
 
 create table test_zlib (i int, j text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_zlib select i, i from generate_series(1,1000000) as i;
 create table test_zlib_t1(i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set statement_mem='10MB';
 create or replace function FuncA()
@@ -146,7 +146,7 @@ select gp_inject_fault('workfile_creation_failure', 'error', 2);
 (1 row)
 
 select FuncA();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "CREATE TEMP table TMP_Q_QR_INSTM_ANL_01 WITH(APPENDONLY=true,COMPRESSLEVEL=5,ORIENTATION=row,COMPRESSTYPE=zlib) on commit drop as
     SELECT t1.i from test_zlib as t1 join test_zlib as t2 on t1.i = t2.i"

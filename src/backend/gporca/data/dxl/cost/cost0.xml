@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:CostParams>
     <dxl:CostParam Name="SeqIOBandwidth" Value="4000" LowerBound="3000" UpperBound="5000"/>
   </dxl:CostParams>

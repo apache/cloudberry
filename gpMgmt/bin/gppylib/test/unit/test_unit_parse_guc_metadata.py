@@ -16,7 +16,7 @@ class TestParseGucMetadata(GpTestCase):
 
         self.subject.main()
 
-        dest_file = os.path.join(self.DEST_DIR, "share/greenplum", self.subject.DESTINATION_FILENAME)
+        dest_file = os.path.join(self.DEST_DIR, "share/greengage", self.subject.DESTINATION_FILENAME)
         with open(dest_file, 'r') as f:
             lines = f.readlines()
         self.assertIn('is_superuser\n', lines)

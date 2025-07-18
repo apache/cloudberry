@@ -71,14 +71,14 @@ run_resgroup_test() {
     local gpdb_coordinator_alias=$1
 
     ssh $gpdb_coordinator_alias bash -ex <<EOF
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export PGPORT=5432
         export MASTER_DATA_DIRECTORY=/data/gpdata/coordinator/gpseg-1
         export LDFLAGS="-L\${GPHOME}/lib"
         export CPPFLAGS="-I\${GPHOME}/include"
 
         cd /home/gpadmin/gpdb_src
-        ./configure --prefix=/usr/local/greenplum-db-devel \
+        ./configure --prefix=/usr/local/greengage-db-devel \
             --without-zlib --without-rt --without-libcurl \
             --without-libedit-preferred --without-docdir --without-readline \
             --disable-gpcloud --disable-gpfdist --disable-orca \
@@ -127,11 +127,11 @@ setup_binary_swap_test() {
         return 0
     fi
 
-    ssh $gpdb_coordinator_alias mkdir -p /tmp/local/greenplum-db-devel
-    ssh $gpdb_coordinator_alias tar -zxf - -C /tmp/local/greenplum-db-devel \
+    ssh $gpdb_coordinator_alias mkdir -p /tmp/local/greengage-db-devel
+    ssh $gpdb_coordinator_alias tar -zxf - -C /tmp/local/greengage-db-devel \
         < binary_swap_gpdb/bin_gpdb.tar.gz
     ssh $gpdb_coordinator_alias sed -i -e "s@/usr/local@/tmp/local@" \
-        /tmp/local/greenplum-db-devel/greenplum_path.sh
+        /tmp/local/greengage-db-devel/greengage_path.sh
 }
 
 run_binary_swap_test() {
@@ -143,7 +143,7 @@ run_binary_swap_test() {
 
     scp -r /tmp/build/*/binary_swap_gpdb/ $gpdb_coordinator_alias:/home/gpadmin/
     ssh $gpdb_coordinator_alias bash -ex <<EOF
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export PGPORT=5432
         export MASTER_DATA_DIRECTORY=/data/gpdata/coordinator/gpseg-1
         export BINARY_SWAP_VARIANT=_resgroup

@@ -34,7 +34,7 @@ make_item_pointer(BlockId block_id, OffsetNumber offset_number)
 
 /*
  * Postgres expects item pointers' offsets to be less than 11 bits.
- * Greenplum append-only tables allow for the full 16 bits of OffsetNumber
+ * Greengage append-only tables allow for the full 16 bits of OffsetNumber
  */
 static void
 test_compress_gin_posting_list_with_item_pointer_with_offset_larger_than_eleven_bits()

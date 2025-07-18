@@ -7,7 +7,7 @@ Expectation:
 We should have the filter b=1, a=1 under the limit. These constraints should be outside the limit as well.
 a < 2 should also be outside the limit but not below.
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

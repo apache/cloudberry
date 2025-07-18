@@ -51,7 +51,7 @@ endif
 	$(MAKE) -C gpAux/platform all
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
-	+@echo "All of Greenplum Database successfully made. Ready to install."
+	+@echo "All of Greengage Database successfully made. Ready to install."
 
 docs:
 	$(MAKE) -C doc all
@@ -104,7 +104,7 @@ endif
 	$(MAKE) -C gpAux/gpperfmon $@
 	$(MAKE) -C gpAux/platform $@
 	$(MAKE) -C gpcontrib $@
-	+@echo "Greenplum Database installation complete."
+	+@echo "Greengage Database installation complete."
 
 install-docs:
 	$(MAKE) -C doc install

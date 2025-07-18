@@ -5,7 +5,7 @@ from item, store_sales
 where ss_item_sk=i_item_sk and  i_current_price &gt;= 62::numeric AND i_current_price &lt;= 92::numeric AND (i_manufact_id = ANY (ARRAY[129, 270, 821, 423]))
 group  by item.i_item_id, item.i_item_desc, item.i_current_price;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>

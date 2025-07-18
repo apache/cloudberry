@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- Create a plain table that we can insert to, to verify after the
 -- transaction whether the transaction's effects are visible.
 CREATE TABLE dtm_testtab(id int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- throw an ERROR, just after we have broadcast the PREPARE of the
 -- transaction to segments.

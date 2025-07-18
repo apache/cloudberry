@@ -33,7 +33,7 @@ try:
     from gppylib.userinput import ask_yesno
 except ImportError, e_:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
-             'have sourced greenplum_path.sh.  Detail: ' + str(e_))
+             'have sourced greengage_path.sh.  Detail: ' + str(e_))
 
 EXECNAME = os.path.split(__file__)[-1]
 
@@ -156,7 +156,7 @@ def print_results(array, hostname, options):
     logger.info('to set this value.')
     logger.info('MASTER_PORT is now %d, if this has changed, you' % array.master.getSegmentPort())
     logger.info('may need to make additional configuration changes to allow access')
-    logger.info('to the Greenplum instance.')
+    logger.info('to the Greengage instance.')
     logger.info('Refer to the Administrator Guide for instructions on how to re-activate')
     logger.info('the master to its previous state once it becomes available.')
     logger.info('Query planner statistics must be updated on all databases')

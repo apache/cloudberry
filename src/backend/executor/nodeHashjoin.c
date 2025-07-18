@@ -608,7 +608,7 @@ ExecInitHashJoin(HashJoin *node, EState *estate, int eflags)
 	 */
 	hjstate->prefetch_inner = node->join.prefetch_inner;
 
-	/* Greenplum specific: see comments in ExecInitNestLoop */	
+	/* Greengage specific: see comments in ExecInitNestLoop */	
 	hjstate->prefetch_joinqual = false;
 	hjstate->prefetch_qual = false;
 

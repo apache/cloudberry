@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-	xmlns:dxl="http://greenplum.com/dxl/2010/12/"
-	targetNamespace="http://greenplum.com/dxl/2010/12/"
+	xmlns:dxl="http://greengagedb.org/dxl/2010/12/"
+	targetNamespace="http://greengagedb.org/dxl/2010/12/"
 	elementFormDefault="qualified">
 	
 	<xsd:element name="DXLMessage">

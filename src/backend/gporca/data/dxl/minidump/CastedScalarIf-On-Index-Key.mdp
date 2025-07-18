@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 	create table pt(a int, b varchar(10), c varchar(10), pk int) partition by range(pk) (                                                                                                                                start (1) end(5) every(1) with(tablename='prt_1', appendonly=true, orientation=column),
 			start (6) end(15) every(1) with(tablename='prt_2', appendonly=false));

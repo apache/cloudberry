@@ -1928,13 +1928,13 @@ NOTICE:  table "eager_free_s" does not exist, skipping
 drop table if exists eager_free_t;
 NOTICE:  table "eager_free_t" does not exist, skipping
 create table eager_free_r (r1 int, r2 int, r3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'r1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'r1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table eager_free_s (s1 int, s2 int, s3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table eager_free_t (t1 int, t2 int, t3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into eager_free_r select generate_series(1, 20), generate_series(1, 5), generate_series(1, 8);
 insert into eager_free_s select generate_series(1, 20), generate_series(6, 10), generate_series(1, 4);

@@ -79,10 +79,10 @@
  * format if MaxHeapTuplesPerPage changes. Better to leave some slack.
  *
  *
- * Greenplum modification:
+ * Greengage modification:
  *
- * Greenplum's append-only tables use the full 16 bit offset number range, so
- * Greenplum removes the storage optimization made by Postgres for heap tables.
+ * Greengage's append-only tables use the full 16 bit offset number range, so
+ * Greengage removes the storage optimization made by Postgres for heap tables.
  *
  */
 #define MaxHeapTuplesPerPageBits		16
@@ -97,7 +97,7 @@ itemptr_to_uint64(const ItemPointer iptr)
 
 	Assert(ItemPointerIsValid(iptr));
 	/*
-	 * Greenplum allow 16 bits for the offsetnumber, which turns the below
+	 * Greengage allow 16 bits for the offsetnumber, which turns the below
 	 * upstream assertion into an always-true comparison which generates a
 	 * compiler warning; thus we need to keep this commented out.
 	 */

@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (c) 2020-Present VMware, Inc. or its affiliates
 //---------------------------------------------------------------------------
 #ifndef GPOS_DbgPrintMixin_H

@@ -15,7 +15,7 @@ import re
 try:
     from pygresql import pg
 except ImportError, e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 class connection(object):
     def __init__(self, host, port, dbname, user):
@@ -501,10 +501,10 @@ class migrate(connection):
 
 def parseargs():
     parser = argparse.ArgumentParser(prog='el8_migrate_locale')
-    parser.add_argument('--host', type=str, help='Greenplum Database hostname')
-    parser.add_argument('--port', type=int, help='Greenplum Database port')
-    parser.add_argument('--dbname', type=str,  default='postgres', help='Greenplum Database database name')
-    parser.add_argument('--user', type=str, help='Greenplum Database user name')
+    parser.add_argument('--host', type=str, help='Greengage Database hostname')
+    parser.add_argument('--port', type=int, help='Greengage Database port')
+    parser.add_argument('--dbname', type=str,  default='postgres', help='Greengage Database database name')
+    parser.add_argument('--user', type=str, help='Greengage Database user name')
     parser.add_argument('--verbose', help="Print more info", action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO)
 
     subparsers = parser.add_subparsers(help='sub-command help', dest='cmd')

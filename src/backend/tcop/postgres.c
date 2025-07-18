@@ -490,7 +490,7 @@ SocketBackend(StringInfo inBuf)
 			}
 			break;
 
-		case 'M':				/* Greenplum Database dispatched statement from QD */
+		case 'M':				/* Greengage Database dispatched statement from QD */
 
 			doing_extended_query_message = false;
 
@@ -503,7 +503,7 @@ SocketBackend(StringInfo inBuf)
 
 			break;
 
-		case 'T':				/* Greenplum Database dispatched transaction protocol from QD */
+		case 'T':				/* Greengage Database dispatched transaction protocol from QD */
 
 			doing_extended_query_message = false;
 
@@ -577,7 +577,7 @@ SocketBackend(StringInfo inBuf)
 		case 'd':				/* copy data */
 		case 'c':				/* copy done */
 		case 'f':				/* copy fail */
-		case '?':                               /* Greenplum sequence response */
+		case '?':                               /* Greengage sequence response */
 			doing_extended_query_message = false;
 			/* these are only legal in protocol 3 */
 			if (PG_PROTOCOL_MAJOR(FrontendProtocol) < 3)
@@ -5860,7 +5860,7 @@ PostgresMain(int argc, char *argv[],
 				 * is still sending data.
 				 */
 				break;
-			case '?':                       /* Greenplum sequence response */
+			case '?':                       /* Greengage sequence response */
 				/*
 				 * Accept but ignore this message, when QE process nextval
 				 * it sends NOTIFY to QD and asks QD to send nextval back to

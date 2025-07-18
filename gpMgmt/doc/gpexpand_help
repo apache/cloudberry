@@ -1,6 +1,6 @@
 COMMAND NAME:  gpexpand
 
-Expands an existing Greenplum Database across new hosts in the array.
+Expands an existing Greengage Database across new hosts in the array.
 
 ******************************************************
 SYNOPSIS
@@ -25,22 +25,22 @@ gpexpand --version
 PREREQUISITES
 ******************************************************
 
-* You are logged in as the Greenplum Database superuser (gpadmin).
+* You are logged in as the Greengage Database superuser (gpadmin).
 
 * The new segment hosts have been installed and configured as per 
   the existing segment hosts. This involves:
 
   * Configuring the hardware and OS
-  * Installing the Greenplum software
+  * Installing the Greengage software
   * Creating the gpadmin user account
   * Exchanging SSH keys. 
 
 * Enough disk space on your segment hosts to temporarily hold a 
   copy of your largest table. 
-* When redistributing data, Greenplum Database must be running in 
-  production mode. Greenplum Database cannot be restricted mode or in 
+* When redistributing data, Greengage Database must be running in 
+  production mode. Greengage Database cannot be restricted mode or in 
   master mode. The gpstart options -R or -m cannot be specified to start 
-  Greenplum Database. 
+  Greengage Database. 
   
   
 ******************************************************

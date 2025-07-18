@@ -64,7 +64,7 @@ usage(void)
 		}
 	}
 
-	printf(_("psql is the PostgreSQL interactive terminal (Greenplum version).\n\n"));
+	printf(_("psql is the PostgreSQL interactive terminal (Greengage version).\n\n"));
 	printf(_("Usage:\n"));
 	printf(_("  psql [OPTION]... [DBNAME [USERNAME]]\n\n"));
 
@@ -133,7 +133,7 @@ usage(void)
 	printf(_("\nFor more information, type \"\\?\" (for internal commands) or \"\\help\" (for SQL\n"
 			 "commands) from within psql, or consult the psql section in the PostgreSQL\n"
 			 "documentation.\n\n"));
-	printf(_("Report bugs to <bugs@greenplum.org>.\n"));
+	printf(_("Report bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
@@ -433,7 +433,7 @@ void
 print_copyright(void)
 {
 	puts(
-		 "Greenplum Database version of PostgreSQL Database Management System\n"
+		 "Greengage Database version of PostgreSQL Database Management System\n"
 		 "Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group\n\n"
 		 "Portions Copyright (c) 2014-Present Pivotal Software, Inc.\n\n"
 		 "Portions Copyright (c) 2011-2014 EMC\n\n"

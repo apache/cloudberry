@@ -43,7 +43,7 @@ WHERE tt.event_ts &gt;= tq.ets AND
       tt.event_ts &lt; tq.end_ts;
 
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="1" PlanSamples="1" CostThreshold="1"/>

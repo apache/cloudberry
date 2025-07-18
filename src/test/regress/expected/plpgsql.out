@@ -2315,7 +2315,7 @@ PL/pgSQL function test_variable_storage() line 8 at PERFORM
 --
 create temp table master(f1 int primary key);
 create temp table slave(f1 int references master deferrable);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 insert into master values(1);
 insert into slave values(1);
 insert into slave values(2);	-- fails
@@ -3588,7 +3588,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3605,7 +3605,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();  -- fails because of NO SCROLL specification
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3622,7 +3622,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3639,7 +3639,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3657,7 +3657,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3701,7 +3701,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 8 at FETCH
 drop function sc_test();
 -- test qualified variable names

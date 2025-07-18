@@ -1,4 +1,4 @@
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 Pivotal Inc.
 
 #include "gpopt/base/CWindowOids.h"

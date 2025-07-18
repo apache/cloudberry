@@ -5,7 +5,7 @@ this mdp expands the FOJ into a UNION expression with LOJ, LASJ and NULLS
 create table s (a int);
 select * from s full join s s1 on s.a = s1.a where s.a is null;
 -->
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Thread Id="0">
     <dxl:Stacktrace>1    0x0000000001475605 gpos::CException::Raise + 113
 2    0x0000000001d71a32 gpdxl::CDXLUtils::PphdxlParseDXLFile + 1148

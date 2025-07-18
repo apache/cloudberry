@@ -21,11 +21,11 @@ DESCRIPTION
 *****************************************************
 
 The gpssh-exkeys utility exchanges SSH keys between the specified host 
-names (or host addresses). This allows SSH connections between Greenplum 
+names (or host addresses). This allows SSH connections between Greengage 
 hosts and network interfaces without a password prompt. The utility is 
-used to initially prepare a Greenplum Database system for password-free 
+used to initially prepare a Greengage Database system for password-free 
 SSH access, and also to add additional ssh keys when expanding a 
-Greenplum Database system. 
+Greengage Database system. 
 
 To specify the hosts involved in an initial SSH key exchange, use the 
 -f option to specify a file containing a list of host names (recommended), 
@@ -33,17 +33,17 @@ or use the -h option to name single host names on the command-line. At
 least one host name (-h) or a host file is required. Note that the local 
 host is included in the key exchange by default.
 
-To specify new expansion hosts to be added to an existing Greenplum Database 
+To specify new expansion hosts to be added to an existing Greengage Database 
 system, use the -e and -x options. The -e option specifies a file containing 
 a list of existing hosts in the system that already have SSH keys. The -x 
 option specifies a file containing a list of new hosts that need to participate 
 in the SSH key exchange. 
 
-Keys are exchanged as the currently logged in user. Greenplum recommends 
+Keys are exchanged as the currently logged in user. Greengage recommends 
 performing the key exchange process twice: once as root and once as the 
-gpadmin user (the user designated to own your Greenplum Database installation). 
-The Greenplum Database management utilities require that the same non-root 
-user be created on all hosts in the Greenplum Database system, and the 
+gpadmin user (the user designated to own your Greengage Database installation). 
+The Greengage Database management utilities require that the same non-root 
+user be created on all hosts in the Greengage Database system, and the 
 utilities must be able to connect as that user to all hosts without a 
 password prompt.
 
@@ -74,7 +74,7 @@ OPTIONS
 
  When doing a system expansion, this is the name and location of a file 
  containing all configured host names and host addresses (interface names) 
- for each host in your current Greenplum system (master, standby master 
+ for each host in your current Greengage system (master, standby master 
  and segments), one name per line without blank lines or extra spaces. 
  Hosts specified in this file cannot be specified in the host file used 
  with -x. 
@@ -83,7 +83,7 @@ OPTIONS
 -f <hostfile_exkeys>
 
  Specifies the name and location of a file containing all configured host 
- names and host addresses (interface names) for each host in your Greenplum 
+ names and host addresses (interface names) for each host in your Greengage 
  system (master, standby master and segments), one name per line without 
  blank lines or extra spaces.
 
@@ -104,7 +104,7 @@ OPTIONS
 
  When doing a system expansion, this is the name and location of a file 
  containing all configured host names and host addresses (interface names) 
- for each new segment host you are adding to your Greenplum system, one 
+ for each new segment host you are adding to your Greengage system, one 
  name per line without blank lines or extra spaces. Hosts specified in 
  this file cannot be specified in the host file used with -e.
 

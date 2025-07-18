@@ -1,7 +1,7 @@
 #!/bin/bash
 set -xeo pipefail
 
-install_greenplum() {
+install_greengage() {
   local bin_gpdb=$1
   local install_dir="${2}"
 
@@ -20,11 +20,11 @@ assert_postgres_version_matches() {
   fi
 }
 
-GREENPLUM_INSTALL_DIR=/usr/local/greenplum-db-devel
+GREENGAGE_INSTALL_DIR=/usr/local/greengage-db-devel
 GPDB_SRC_SHA=$(cd gpdb_src && git rev-parse HEAD)
 
 
-install_greenplum bin_gpdb "${GREENPLUM_INSTALL_DIR}"
-assert_postgres_version_matches "$GPDB_SRC_SHA" "${GREENPLUM_INSTALL_DIR}"
+install_greengage bin_gpdb "${GREENGAGE_INSTALL_DIR}"
+assert_postgres_version_matches "$GPDB_SRC_SHA" "${GREENGAGE_INSTALL_DIR}"
 
 echo "Release Candidate SHA: ${GPDB_SRC_SHA}"

@@ -1,6 +1,6 @@
 COMMAND NAME: gpdeletesystem
 
-Deletes a Greenplum Database system that was initialized 
+Deletes a Greengage Database system that was initialized 
 using gpinitsystem.
 
 
@@ -29,7 +29,7 @@ The gpdeletesystem script will perform the following actions:
 Before running this script, you should move any backup files
 (created by gp_dump) out of the master and segment data directories.
 
-This script will not uninstall the Greenplum Database software.
+This script will not uninstall the Greengage Database software.
 
 
 *****************************************************
@@ -54,7 +54,7 @@ segment instances it needs to delete.
 -f (force)
 
 Force a delete even if backup files are found in the data directories. 
-The default is to not delete Greenplum Database instances if backup 
+The default is to not delete Greengage Database instances if backup 
 files (created by gp_dump) are present.
 
 
@@ -82,12 +82,12 @@ Displays the version, status, last updated date, and check sum of this script.
 EXAMPLES
 *****************************************************
 
-Delete a Greenplum Database system:
+Delete a Greengage Database system:
 
 gpdeletesystem -d /gpdata/gp-1
 
 
-Delete a Greenplum Database system even if backup files are present:
+Delete a Greengage Database system even if backup files are present:
 
 gpdeletesystem -d /gpdata/gp-1 -f
 

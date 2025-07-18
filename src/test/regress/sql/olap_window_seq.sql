@@ -1616,7 +1616,7 @@ explain select foo.a, sum(b) over (partition by bar.a order by bar.b) from foo, 
 
 drop table foo, bar;
 
--- Test to verify fix for https://github.com/greenplum-db/gpdb/issues/2571
+-- Test to verify fix for https://github.com/GreengageDB/greengage/issues/2571
 drop table if exists foo;
 drop table if exists bar;
 create table foo (a int, b int) distributed by (a);

@@ -26,7 +26,7 @@ function _main
     export LD_LIBRARY_PATH="${PYTHONHOME}/lib/:${LD_LIBRARY_PATH}"
     ln -s "${PYTHONHOME}"/bin/python2 /usr/bin/python
   fi
-  mkdir gpdb_src/gpAux/ext
+  mkdir -p gpdb_src/gpAux/ext
   test_orca
 }
 

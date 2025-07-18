@@ -40,7 +40,7 @@ transfer_ownership() {
     # Needed for the gpload test
     [ -f gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv ] && chown gpadmin:gpadmin gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv
     [ -d /usr/local/gpdb ] && chown -R gpadmin:gpadmin /usr/local/gpdb
-    [ -d /usr/local/greenplum-db-devel ] && chown -R gpadmin:gpadmin /usr/local/greenplum-db-devel
+    [ -d /usr/local/greengage-db-devel ] && chown -R gpadmin:gpadmin /usr/local/greengage-db-devel
     chown -R gpadmin:gpadmin /home/gpadmin
 }
 

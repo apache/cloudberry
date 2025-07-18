@@ -356,7 +356,7 @@ RestoreArchive(Archive *AHX)
 	if (ropt->filename || ropt->compression)
 		SetOutput(AH, ropt->filename, ropt->compression);
 
-	ahprintf(AH, "--\n-- Greenplum Database database dump\n--\n\n");
+	ahprintf(AH, "--\n-- Greengage Database database dump\n--\n\n");
 
 	if (AH->public.verbose)
 	{
@@ -634,7 +634,7 @@ RestoreArchive(Archive *AHX)
 	if (AH->public.verbose)
 		dumpTimestamp(AH, "Completed on", time(NULL));
 
-	ahprintf(AH, "--\n-- Greenplum Database database dump complete\n--\n\n");
+	ahprintf(AH, "--\n-- Greengage Database database dump complete\n--\n\n");
 
 	/*
 	 * Clean up & we're done.

@@ -1,7 +1,7 @@
 COMMAND NAME: gpactivatestandby 
 
 Activates a standby master host and makes it the active master for the 
-Greenplum Database system. 
+Greengage Database system. 
 
 
 *****************************************************
@@ -22,8 +22,8 @@ DESCRIPTION
 
 The gpactivatestandby utility activates a backup, standby master host 
 and brings it into operation as the active master instance for a 
-Greenplum Database system. The activated standby master effectively 
-becomes the Greenplum Database master, accepting client connections on 
+Greengage Database system. The activated standby master effectively 
+becomes the Greengage Database master, accepting client connections on 
 the master port. 
 
 When you initialize a standby master, the default is to use the same 
@@ -44,10 +44,10 @@ The utility will perform the following steps:
 * Activates the standby master to be the new active master for the 
   system 
 
-* Restarts the Greenplum Database system with the new master host 
+* Restarts the Greengage Database system with the new master host 
 
-A backup, standby Greenplum master host serves as a 'warm standby' in 
-the event of the primary Greenplum master host becoming non-operational. 
+A backup, standby Greengage master host serves as a 'warm standby' in 
+the event of the primary Greengage master host becoming non-operational. 
 The standby master is kept up to date by transaction log replication 
 processes (the walsender and walreceiver), which run on the primary 
 master and standby master hosts and keep the data between the primary 
@@ -56,7 +56,7 @@ and standby master hosts synchronized.
 If the primary master fails, the log replication process is shutdown, 
 and the standby master can be activated in its place by using the 
 gpactivatestandby utility. Upon activation of the standby master, the 
-replicated logs are used to reconstruct the state of the Greenplum 
+replicated logs are used to reconstruct the state of the Greengage 
 master host at the time of the last successfully committed transaction. 
 
 In order to use gpactivatestandby to activate a new primary master host, 
@@ -74,7 +74,7 @@ query statistics. For example:
 psql dbname -c 'ANALYZE;' 
 
 After you activate the standby master as the primary master, the 
-Greenplum Database system no longer has a standby master configured. You 
+Greengage Database system no longer has a standby master configured. You 
 might want to specify another host to be the new standby with the 
 gpinitstandby utility. 
 
@@ -134,7 +134,7 @@ EXAMPLES
 *****************************************************
 
 Activate the standby master host and make it the active master instance 
-for a Greenplum Database system (run from backup master host you are 
+for a Greengage Database system (run from backup master host you are 
 activating): 
 
 gpactivatestandby -d /gpdata 

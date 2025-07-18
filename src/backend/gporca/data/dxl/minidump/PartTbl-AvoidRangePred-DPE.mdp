@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
   Objective: Plans using DPE should not include range predicates when selecting partitions as it is very slow. However equality predicates are totally ok so only use those.  
 	  This plan should only have one partition selector with the equality predicate (<PartEqFilters>) non empty and the <PartFilters> empty. 

@@ -4,7 +4,7 @@
 ##                    |_____| |       |_____/ |_____]
 ## 
 ## ----------------------------------------------------------------------
-## Instruction for Building the Greenplum Database, PerfMon, Clients,
+## Instruction for Building the Greengage Database, PerfMon, Clients,
 ## Loaders, Connectivity and GPPkgs
 ## ======================================================================
 
@@ -23,7 +23,7 @@ You will need the following tools:
   perl        5.8.8
   tar (GNU)   1.14
 
-To build the Greenplum Database, run GNU make with the following options:
+To build the Greengage Database, run GNU make with the following options:
 
 ## --------------------
 ## For a debug build:

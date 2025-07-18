@@ -1590,7 +1590,7 @@ cdb_map_to_base_var(Var *var, List *rtable)
 		 * Per the comments of the field joinaliasvars of struct RangeTblEntry,
 		 * it might be Var or COALESCE expr or NULL pointer. For cases other than
 		 * a simple Var, return NULL is a safe choice. See Github Issue
-		 * https://github.com/greenplum-db/gpdb/issues/14858 for details.
+		 * https://github.com/GreengageDB/greengage/issues/14858 for details.
 		 */
 		if (node != NULL && IsA(node, Var))
 		{

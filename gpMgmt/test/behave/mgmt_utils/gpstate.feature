@@ -300,8 +300,8 @@ Feature: gpstate tests
             | Master data directory         = .*/demoDataDir-1       |
             | Master port                   = [0-9]+                 |
             | Master current role           = dispatch               |
-            | Greenplum initsystem version  = [0-9]+\.[0-9]+\.[0-9]+ |
-            | Greenplum current version     = PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+            | Greengage initsystem version  = [0-9]+\.[0-9]+\.[0-9]+ |
+            | Greengage current version     = PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
             | Postgres version              = [0-9]+\.[0-9]+\.[0-9]+ |
             | Master standby                =                        |
             | Standby master state          = Standby host passive   |
@@ -402,14 +402,14 @@ Feature: gpstate tests
         When the user runs "gpstate -i"
         Then gpstate output looks like
 		  | Host | Datadir                        | Port   | Version                                                                           |
-		  | \S+  | .*/qddir/demoDataDir-1         | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/standby                     | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast1/demoDataDir0        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast2/demoDataDir1        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast_mirror2/demoDataDir1 | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast3/demoDataDir2        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast_mirror3/demoDataDir2 | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/qddir/demoDataDir-1         | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/standby                     | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast1/demoDataDir0        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast2/demoDataDir1        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast_mirror2/demoDataDir1 | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast3/demoDataDir2        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast_mirror3/demoDataDir2 | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		And gpstate should print "All segments are running the same software version" to stdout
 
     Scenario: gpstate -i warns if any mirrors are marked down
@@ -419,13 +419,13 @@ Feature: gpstate tests
         When the user runs "gpstate -i"
         Then gpstate output looks like
 		  | Host | Datadir                        | Port   | Version                                                                           |
-		  | \S+  | .*/qddir/demoDataDir-1         | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/standby                     | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast1/demoDataDir0        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/qddir/demoDataDir-1         | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/standby                     | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast1/demoDataDir0        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		  | \S+  | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | unable to retrieve version                                                        |
-		  | \S+  | .*/dbfast2/demoDataDir1        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast2/demoDataDir1        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		  | \S+  | .*/dbfast_mirror2/demoDataDir1 | [0-9]+ | unable to retrieve version                                                        |
-		  | \S+  | .*/dbfast3/demoDataDir2        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast3/demoDataDir2        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		  | \S+  | .*/dbfast_mirror3/demoDataDir2 | [0-9]+ | unable to retrieve version                                                        |
 		And gpstate should print "Unable to retrieve version data from all segments" to stdout
 
@@ -437,13 +437,13 @@ Feature: gpstate tests
         When the user runs "gpstate -i"
         Then gpstate output looks like
 		  | Host | Datadir                        | Port   | Version                                                                           |
-		  | \S+  | .*/qddir/demoDataDir-1         | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/standby                     | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
-		  | \S+  | .*/dbfast1/demoDataDir0        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/qddir/demoDataDir-1         | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/standby                     | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast1/demoDataDir0        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		  | \S+  | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | unable to retrieve version                                                        |
-		  | \S+  | .*/dbfast2/demoDataDir1        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast2/demoDataDir1        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		  | \S+  | .*/dbfast_mirror2/demoDataDir1 | [0-9]+ | unable to retrieve version                                                        |
-		  | \S+  | .*/dbfast3/demoDataDir2        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greenplum Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
+		  | \S+  | .*/dbfast3/demoDataDir2        | [0-9]+ | PostgreSQL [0-9]+\.[0-9]+\.[0-9]+ \(Greengage Database [0-9]+\.[0-9]+\.[0-9]+.*\) |
 		  | \S+  | .*/dbfast_mirror3/demoDataDir2 | [0-9]+ | unable to retrieve version                                                        |
 		And gpstate should print "Unable to retrieve version data from all segments" to stdout
 

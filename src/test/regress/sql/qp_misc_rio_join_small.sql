@@ -5,7 +5,7 @@ drop index if exists my_tt_agg_small_event_ts_ix;
 
 
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 
 SET client_encoding = 'UTF8';
@@ -4042,11 +4042,11 @@ SSO             	20101126114705550	415500	200
 \.
 
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 
 --
@@ -24078,7 +24078,7 @@ CREATE INDEX my_tq_agg_small_ets_end_ts_ix ON my_tq_agg_small USING btree (ets, 
 
 
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 
 set enable_hashjoin=off;

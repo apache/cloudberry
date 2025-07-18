@@ -20,7 +20,7 @@ change a GUC.  The Makefile in gpMgmt/bin will use this parser to
 
     # hardcoded name for file looked up by gpconfig during its runtime
     DESTINATION_FILENAME = "gucs_disallowed_in_file.txt"
-    DESTINATION_DIR = "share/greenplum"
+    DESTINATION_DIR = "share/greengage"
 
     def __init__(self):
         self.disallowed_in_file_pattern = re.compile(GUCS_DISALLOWED_IN_FILE_REGEX)

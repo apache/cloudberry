@@ -156,7 +156,7 @@ static bool
 isGPDB6000OrLater(void)
 {
 	if (!gpCheckIsGP())
-		return false;		/* Not Greenplum at all. */
+		return false;		/* Not Greengage at all. */
 
 	/* GPDB 6 is based on PostgreSQL 8.4 */
 	return pset.sversion >= 80400;
@@ -3388,7 +3388,7 @@ describeRoles(const char *pattern, bool verbose)
 	int			conns;
 	const char	align = 'l';
 	char	  **attr;
-	const int   numgreenplumspecificattrs = 3;
+	const int   numgreengagespecificattrs = 3;
 
 	myopt.default_footer = false;
 
@@ -3405,7 +3405,7 @@ describeRoles(const char *pattern, bool verbose)
 				 "        JOIN pg_catalog.pg_roles b ON (m.roleid = b.oid)\n"
 						  "        WHERE m.member = r.oid) as memberof");
 
-		/* add Greenplum specific attributes */
+		/* add Greengage specific attributes */
 		appendPQExpBufferStr(&buf, "\n, r.rolcreaterextgpfd");
 		appendPQExpBufferStr(&buf, "\n, r.rolcreatewextgpfd");
 		appendPQExpBufferStr(&buf, "\n, r.rolcreaterexthttp");
@@ -3477,7 +3477,7 @@ describeRoles(const char *pattern, bool verbose)
 			add_role_attribute(&buf, _("Create DB"));
 
 
-		/* output Greenplum specific attributes */
+		/* output Greengage specific attributes */
 		if (strcmp(PQgetvalue(res, i, 9), "t") == 0)
 			add_role_attribute(&buf, _("Ext gpfdist Table"));
 
@@ -3486,15 +3486,15 @@ describeRoles(const char *pattern, bool verbose)
 
 		if (strcmp(PQgetvalue(res, i, 11), "t") == 0)
 			add_role_attribute(&buf, _("Ext http Table"));
-		/* end Greenplum specific attributes */
+		/* end Greengage specific attributes */
 
 
 		if (strcmp(PQgetvalue(res, i, 5), "t") != 0)
 			add_role_attribute(&buf, _("Cannot login"));
 
 		if (pset.sversion >= 90100)
-			/* +numgreenplumspecificattrs is due to additional Greenplum specific attributes */
-			if (strcmp(PQgetvalue(res, i, (verbose ? 10 + numgreenplumspecificattrs : 9 + numgreenplumspecificattrs)), "t") == 0)
+			/* +numgreengagespecificattrs is due to additional Greengage specific attributes */
+			if (strcmp(PQgetvalue(res, i, (verbose ? 10 + numgreengagespecificattrs : 9 + numgreengagespecificattrs)), "t") == 0)
 				add_role_attribute(&buf, _("Replication"));
 
 		conns = atoi(PQgetvalue(res, i, 6));
@@ -3527,7 +3527,7 @@ describeRoles(const char *pattern, bool verbose)
 		printTableAddCell(&cont, PQgetvalue(res, i, 8), false, false);
 
 		if (verbose && pset.sversion >= 80200)
-			printTableAddCell(&cont, PQgetvalue(res, i, 9 + numgreenplumspecificattrs), false, false);
+			printTableAddCell(&cont, PQgetvalue(res, i, 9 + numgreengagespecificattrs), false, false);
 	}
 	termPQExpBuffer(&buf);
 

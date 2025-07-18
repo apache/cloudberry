@@ -724,7 +724,7 @@ create index hash_f8_index_3 on hash_f8_heap(random) where seqno > 1000;
 -- Unfortunately this only tests about half the code paths because there are
 -- no concurrent updates happening to the table at the same time.
 --
--- Concurrent index building is not currently supported in Greenplum.
+-- Concurrent index building is not currently supported in Greengage.
 --start_ignore
 CREATE TABLE concur_heap (f1 text, f2 text, dk text) distributed by (dk);
 -- empty table
@@ -791,7 +791,7 @@ DROP TABLE concur_temp;
 
 --
 -- Try some concurrent index drops
--- Greenplum: The functionality of these tests is replicated in gp_index
+-- Greengage: The functionality of these tests is replicated in gp_index
 --
 DROP INDEX CONCURRENTLY "concur_index2";				-- works
 DROP INDEX CONCURRENTLY IF EXISTS "concur_index2";		-- notice

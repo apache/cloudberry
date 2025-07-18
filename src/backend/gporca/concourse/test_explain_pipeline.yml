@@ -83,7 +83,7 @@ resources:
     paths:
     - concourse/**
     - src/backend/gporca/concourse/**
-    uri: https://github.com/greenplum-db/gpdb
+    uri: https://github.com/GreengageDB/greengage
 
 ## resources for workload1
 - name: explain_output_((workload1))_branch
@@ -251,7 +251,7 @@ jobs:
             REMOTE=$(cut -d, -f2 gporca-commits-to-test/gpdb_remote_info.txt)
             git clone -b $BRANCH --depth 200 $REMOTE gpdb_src &&
             cd gpdb_src &&
-            git fetch https://github.com/greenplum-db/gpdb.git --tags &&
+            git fetch https://github.com/GreengageDB/greengage.git --tags &&
             git submodule update --init --recursive
         inputs: [{ name: gporca-commits-to-test }]
         outputs: [{ name: gpdb_src }]
@@ -297,7 +297,7 @@ jobs:
             REMOTE=$(cut -d, -f2 gporca-commits-to-test/gpdb_baseline_info.txt)
             git clone -b $BRANCH --depth 200 $REMOTE gpdb_src &&
             cd gpdb_src &&
-            git fetch https://github.com/greenplum-db/gpdb.git --tags &&
+            git fetch https://github.com/GreengageDB/greengage.git --tags &&
             git submodule update --init --recursive
         inputs: [{ name: gporca-commits-to-test }]
         outputs: [{ name: gpdb_src }]

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
     <dxl:Comment><![CDATA[
     Objective: There should be no motion between the join of (t1,t2) with t3. After the first join between t1 and t2, the spec of the join is
     {t1.a, t1.b} and due to equivalence {t2.a, t1.b}. And for the join between (t1,t2) and t3 since the inner join is already distributed on

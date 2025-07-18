@@ -10,7 +10,7 @@ NOTICE:  table "exttabtest_options_r" does not exist, skipping
     SELECT * FROM exttabtest_options_r
     EXCEPT ALL
     SELECT * FROM exttabtest;
-ERROR:  This is greenplum. (gpextprotocol.c:56)
+ERROR:  This is greengage. (gpextprotocol.c:56)
 CONTEXT:  External table exttabtest_options_r, file demoprot://exttabtest.txt
     DROP EXTERNAL TABLE IF EXISTS exttabtest_w;
 NOTICE:  table "exttabtest_w" does not exist, skipping
@@ -23,7 +23,7 @@ NOTICE:  table "exttabtest_r" does not exist, skipping
     CREATE READABLE EXTERNAL TABLE exttabtest_r(like exttabtest)
         LOCATION('demoprot://exttabtest.txt') 
     FORMAT 'text'
-    OPTIONS (database 'greenplum', foo 'bar');
+    OPTIONS (database 'greengage', foo 'bar');
     -- Checking pg_exttable for new created RET and WET
     select urilocation,fmttype,fmtopts,encoding,writable from pg_exttable 
     where reloid='exttabtest_r'::regclass 

@@ -679,10 +679,10 @@ CREATE or REPLACE FUNCTION concat_text (text, text) RETURNS text AS '
 		RETURN $1 || $2;
 	END;
 ' LANGUAGE 'plpgsql';
-select concat_text('Green','plum');
+select concat_text('Green','gage');
  concat_text 
 -------------
- Greenplum
+ Greengage
 (1 row)
 
 CREATE or REPLACE FUNCTION sales_tax(subtotal real) RETURNS real AS $$
@@ -959,7 +959,7 @@ drop table fun_tree;
 drop table logtable;
 drop table db;
 create table stress_source as select a from generate_series(1,100) a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table stress_table (a int primary key, b int);
 create or replace function stress_test() returns text as $body$
@@ -995,7 +995,7 @@ begin
 end;
 $body$ language plpgsql volatile;
 select bad_ddl();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "create table junk_table(a int)"
 PL/pgSQL function bad_ddl() line 3 at SQL statement
@@ -1005,7 +1005,7 @@ PL/pgSQL function bad_ddl() line 3 at SQL statement
 (1 row)
 
 select bad_ddl();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "create table junk_table(a int)"
 PL/pgSQL function bad_ddl() line 3 at SQL statement
@@ -1021,7 +1021,7 @@ begin
 end;
 $body$ language plpgsql volatile;
 select bad_ddl();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CONTEXT:  SQL statement "create table junk_table(a int)"
 PL/pgSQL function bad_ddl() line 3 at EXECUTE statement

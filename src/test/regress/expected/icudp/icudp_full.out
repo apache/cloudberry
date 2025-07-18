@@ -77,7 +77,7 @@ insert into csq_t1 values (3,4);
 insert into csq_t1 values (5,6);
 insert into csq_t1 values (7,8);
 create table csq_t2(x int,y int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into csq_t2 values(1,1);
 insert into csq_t2 values(3,9);
