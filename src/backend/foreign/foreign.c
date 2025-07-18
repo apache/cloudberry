@@ -29,15 +29,12 @@
 #include "funcapi.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
-<<<<<<< HEAD
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
-=======
 #include "tcop/tcopprot.h"
->>>>>>> REL_16_9
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
