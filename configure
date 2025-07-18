@@ -817,6 +817,8 @@ enable_faultinjector
 enable_debug_extensions
 enable_pxf
 enable_gpfdist
+LIBSSH2_LIBS
+LIBSSH2_CFLAGS
 enable_strong_random
 enable_rpath
 default_port
@@ -976,6 +978,8 @@ XML2_CFLAGS
 XML2_LIBS
 LZ4_CFLAGS
 LZ4_LIBS
+LIBSSH2_LIBS
+LIBSSH2_CFLAGS
 LDFLAGS_EX
 LDFLAGS_SL
 PERL
@@ -1724,6 +1728,10 @@ Some influential environment variables:
   XML2_LIBS   linker flags for XML2, overriding pkg-config
   LZ4_CFLAGS  C compiler flags for LZ4, overriding pkg-config
   LZ4_LIBS    linker flags for LZ4, overriding pkg-config
+  LIBSSH2_CFLAGS
+              C compiler flags for LIBSSH2, overriding pkg-config
+  LIBSSH2_LIBS
+              linker flags for LIBSSH2, overriding pkg-config
   LDFLAGS_EX  extra linker flags for linking executables only
   LDFLAGS_SL  extra linker flags for linking shared libraries only
   PERL        Perl program
@@ -15217,6 +15225,89 @@ fi
 
   LIBS="$_LIBS"
 fi
+
+#
+# LIBSSH2 
+#
+#
+if test "$enable_gpfdist" = yes; then
+  # Check libssh2 >= 1.0.0
+
+pkg_failed=no
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for libssh2 >= 1.0.0" >&5
+$as_echo_n "checking for libssh2 >= 1.0.0... " >&6; }
+
+if test -n "$LIBSSH2_CFLAGS"; then
+    pkg_cv_LIBSSH2_CFLAGS="$LIBSSH2_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libssh2 >= 1.0.0\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libssh2 >= 1.0.0") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBSSH2_CFLAGS=`$PKG_CONFIG --cflags "libssh2 >= 1.1.0" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+if test -n "$LIBSSH2_LIBS"; then
+    pkg_cv_LIBSSH2_LIBS="$LIBSSH2_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libssh2 >= 1.0.0\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libssh2 >= 1.0.0") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_LIBSSH2_LIBS=`$PKG_CONFIG --libs "libssh2 >= 1.0.0" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+
+
+
+if test $pkg_failed = yes; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
+else
+        _pkg_short_errors_supported=no
+fi
+        if test $_pkg_short_errors_supported = yes; then
+	        LIBSSH2_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "libssh2 >= 1.0.0" 2>&1`
+        else
+	        LIBSSH2_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "libssh2 >= 1.0.0" 2>&1`
+        fi
+	# Put the nasty error message in config.log where it belongs
+	echo "$LIBSSH2_PKG_ERRORS" >&5
+
+	as_fn_error $? "libssh2 >= 1.0.0 is required for gpfdist support" "$LINENO" 5
+
+elif test $pkg_failed = untried; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+	as_fn_error $? "libssh2 >= 1.0.0 is required for gpfdist support" "$LINENO" 5
+
+else
+	LIBSSH2_CFLAGS=$pkg_cv_LIBSSH2_CFLAGS
+	LIBSSH2_LIBS=$pkg_cv_LIBSSH2_LIBS
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define LIBSSH2 1" >>confdefs.h
+
+fi
+
 
 #
 # SSL Library

@@ -1095,7 +1095,7 @@ static int nextFile(fstream_t*fs)
 				return 1;
 			}
 		}
-#endif
+#else
 		else
 		{
 			if (gfile_open(&fs->fd, fs->glob.gl_pathv[fs->fidx], GFILE_OPEN_FOR_READ,
@@ -1106,7 +1106,8 @@ static int nextFile(fstream_t*fs)
 				fs->ferror = "unable to open file";
 				return 1;
 			}
-		}	
+		}
+#endif
 	}
 
 	return 0;
