@@ -38,45 +38,6 @@
  * forward declarations, up here so forward datatypes etc. are defined early
  */
 /* === regcomp.c === */
-<<<<<<< HEAD
-static void moresubs(struct vars *, int);
-static int	freev(struct vars *, int);
-static void makesearch(struct vars *, struct nfa *);
-static struct subre *parse(struct vars *, int, int, struct state *, struct state *);
-static struct subre *parsebranch(struct vars *, int, int, struct state *, struct state *, int);
-static struct subre *parseqatom(struct vars *, int, int, struct state *, struct state *, struct subre *);
-static void nonword(struct vars *, int, struct state *, struct state *);
-static void word(struct vars *, int, struct state *, struct state *);
-static void charclass(struct vars *, enum char_classes,
-					  struct state *, struct state *);
-static void charclasscomplement(struct vars *, enum char_classes,
-								struct state *, struct state *);
-static int	scannum(struct vars *);
-static void repeat(struct vars *, struct state *, struct state *, int, int);
-static void bracket(struct vars *, struct state *, struct state *);
-static void cbracket(struct vars *, struct state *, struct state *);
-static void brackpart(struct vars *, struct state *, struct state *, bool *);
-static const chr *scanplain(struct vars *);
-static void onechr(struct vars *, chr, struct state *, struct state *);
-static void optimizebracket(struct vars *, struct state *, struct state *);
-static void wordchrs(struct vars *);
-static void processlacon(struct vars *, struct state *, struct state *, int,
-						 struct state *, struct state *);
-static struct subre *subre(struct vars *, int, int, struct state *, struct state *);
-static void freesubre(struct vars *, struct subre *);
-static void freesubreandsiblings(struct vars *, struct subre *);
-static void freesrnode(struct vars *, struct subre *);
-static void optst(struct vars *, struct subre *);
-static int	numst(struct subre *, int);
-static void markst(struct subre *);
-static void cleanst(struct vars *);
-static long nfatree(struct vars *, struct subre *, FILE *);
-static long nfanode(struct vars *, struct subre *, int, FILE *);
-static int	newlacon(struct vars *, struct state *, struct state *, int);
-static void freelacons(struct subre *, int);
-static void rfree(regex_t *);
-static int	rcancelrequested(void);
-=======
 static void moresubs(struct vars *v, int wanted);
 static int	freev(struct vars *v, int err);
 static void makesearch(struct vars *v, struct nfa *nfa);
@@ -125,7 +86,6 @@ static int	newlacon(struct vars *v, struct state *begin, struct state *end,
 					 int latype);
 static void freelacons(struct subre *subs, int n);
 static void rfree(regex_t *re);
->>>>>>> REL_16_9
 static int	rstacktoodeep(void);
 
 #ifdef REG_DEBUG
@@ -1105,15 +1065,6 @@ parseqatom(struct vars *v,
 			break;
 		case BACKREF:			/* the Feature From The Black Lagoon */
 			INSIST(type != LACON, REG_ESUBREG);
-<<<<<<< HEAD
-			INSIST(v->nextvalue < v->nsubs, REG_ESUBREG);
-			INSIST(v->subs[v->nextvalue] != NULL, REG_ESUBREG);
-			NOERRN();
-			assert(v->nextvalue > 0);
-			atom = subre(v, 'b', BACKR, lp, rp);
-			NOERRN();
-=======
->>>>>>> REL_16_9
 			subno = v->nextvalue;
 			assert(subno > 0);
 			INSIST(subno < v->nsubs, REG_ESUBREG);

@@ -240,10 +240,6 @@ pg_regexec(regex_t *re,
 	{
 		/* we can store results directly in caller's array */
 		v->pmatch = pmatch;
-<<<<<<< HEAD
-	if (v->nmatch > 0)
-		zapallsubs(v->pmatch, v->nmatch);
-=======
 		/* ensure any extra entries in caller's array are filled with -1 */
 		if (nmatch > 0)
 			zapallsubs(pmatch, nmatch);
@@ -252,7 +248,6 @@ pg_regexec(regex_t *re,
 			nmatch = v->g->nsub + 1;
 		v->nmatch = nmatch;
 	}
->>>>>>> REL_16_9
 	v->details = details;
 	v->start = (chr *) string;
 	v->search_start = (chr *) string + search_start;
