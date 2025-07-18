@@ -951,10 +951,17 @@ PGAC_ARG_BOOL(enable, pax, no,
                          [Define to 1 to support PAX])])
 if test "$enable_pax" = yes; then
   # Check protobuf >= 3.5.0
-  PKG_CHECK_MODULES([PROTOBUF], [protobuf >= 3.5.0],
-    [AC_DEFINE([HAVE_PROTOBUF], [1], [Define if protobuf is available])],
+  PKG_CHECK_EXISTS([protobuf], [
+    PROTOBUF_VERSION=`$PKG_CONFIG --modversion protobuf`
+    AX_COMPARE_VERSION([$PROTOBUF_VERSION], [ge], [3.5.0], [
+      AC_DEFINE([HAVE_PROTOBUF], [1], [Define if protobuf is available])
+      AC_SUBST([PROTOBUF_VERSION])
+    ], [
+      AC_MSG_ERROR([protobuf >= 3.5.0 is required for PAX support (found $PROTOBUF_VERSION)])
+    ])
+  ], [
     [AC_MSG_ERROR([protobuf >= 3.5.0 is required for PAX support])]
-  )
+  ])
 
   # Check libzstd >= 1.4.0
   PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0],
