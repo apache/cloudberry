@@ -352,9 +352,9 @@ auth_failed(Port *port, int status, const char *logdetail)
 	  }
 	}
 
-<<<<<<< HEAD
-	cdetail = psprintf(_("Connection matched pg_hba.conf line %d: \"%s\""),
-					   port->hba->linenumber, port->hba->rawline);
+	cdetail = psprintf(_("Connection matched file \"%s\" line %d: \"%s\""),
+					   port->hba->sourcefile, port->hba->linenumber,
+					   port->hba->rawline);
 
     /*
      * Avoid leak user infomations when failed to connect database using LDAP,
@@ -367,11 +367,6 @@ auth_failed(Port *port, int status, const char *logdetail)
         logdetail = NULL;
     }
 
-=======
-	cdetail = psprintf(_("Connection matched file \"%s\" line %d: \"%s\""),
-					   port->hba->sourcefile, port->hba->linenumber,
-					   port->hba->rawline);
->>>>>>> REL_16_9
 	if (logdetail)
 		logdetail = psprintf("%s\n%s", logdetail, cdetail);
 	else
@@ -682,11 +677,7 @@ set_authn_id(Port *port, const char *id)
 		ereport(FATAL,
 				(errmsg("authentication identifier set more than once"),
 				 errdetail_log("previous identifier: \"%s\"; new identifier: \"%s\"",
-<<<<<<< HEAD
-							   port->authn_id, id)));
-=======
 							   MyClientConnectionInfo.authn_id, id)));
->>>>>>> REL_16_9
 	}
 
 	MyClientConnectionInfo.authn_id = MemoryContextStrdup(TopMemoryContext, id);
@@ -2302,19 +2293,13 @@ auth_peer(hbaPort *port)
 	 */
 	set_authn_id(port, pw->pw_name);
 
-<<<<<<< HEAD
 	/*
 	 * GPDB: check for port->hba == NULL here, because auth_peer is used
 	 * without an HBA entry in the short-circuited QD->QE authentication,
 	 * from internal_client_authentication().
 	 */
 	ret = check_usermap(port->hba ? port->hba->usermap : NULL,
-						port->user_name, port->authn_id, false);
-=======
-	ret = check_usermap(port->hba->usermap, port->user_name,
-						MyClientConnectionInfo.authn_id, false);
-
->>>>>>> REL_16_9
+						port->user_name, MyClientConnectionInfo.authn_id, false);
 	return ret;
 #else
 	/* should have failed with ENOSYS above */

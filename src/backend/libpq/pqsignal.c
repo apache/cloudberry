@@ -97,7 +97,6 @@ pqinitmask(void)
 	sigdelset(&StartupBlockSig, SIGALRM);
 #endif
 }
-<<<<<<< HEAD
 
 /*
  * Set up a postmaster signal handler for signal "signo"
@@ -138,5 +137,3 @@ pqsignal_pm(int signo, pqsigfunc func)
 		return SIG_ERR;
 	return oact.sa_handler;
 }
-=======
->>>>>>> REL_16_9

@@ -2061,13 +2061,8 @@ parse_hba_line(TokenizedAuthLine *tok_line, int elevel)
 	if (parsedline->auth_method == uaCert)
 	{
 		/*
-<<<<<<< HEAD
-		 * For auth method cert, client certificate validation is mandatory, and it implies
-		 * the level of verify-full.
-=======
 		 * For auth method cert, client certificate validation is mandatory,
 		 * and it implies the level of verify-full.
->>>>>>> REL_16_9
 		 */
 		parsedline->clientcert = clientCertFull;
 	}

@@ -22,6 +22,7 @@
 
 #include "common/percentrepl.h"
 #include "lib/stringinfo.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 
 /*
@@ -93,6 +94,19 @@ replace_percent_placeholders(const char *instr, const char *param_name, const ch
 				Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
 				sp++;
 				pg_ltoa(GpIdentity.segindex, contentid);
+			}
+			else if (sp[1] == 'R')
+			{
+				char fd_str[20];
+
+				if (terminal_fd == -1)
+					ereport(ERROR,
+							(errcode(ERRCODE_INTERNAL_ERROR),
+									errmsg("ssl_passphrase_command referenced %%R, but -R not specified")));
+				sp++;
+				snprintf(fd_str, sizeof(fd_str), "%d", terminal_fd);
+				appendStringInfoString(&result, fd_str);
+				break;
 			}
 			else
 			{

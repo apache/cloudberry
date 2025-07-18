@@ -22,13 +22,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-<<<<<<< HEAD
-#include "postmaster/postmaster.h"
-=======
 #include "common/percentrepl.h"
->>>>>>> REL_16_9
 #include "common/string.h"
 #include "libpq/libpq.h"
+#include "postmaster/postmaster.h"
 #include "storage/fd.h"
 
 /*
@@ -55,46 +52,7 @@ run_ssl_passphrase_command(const char *prompt, bool is_server_start, char *buf, 
 
 	command = replace_percent_placeholders(ssl_passphrase_command, "ssl_passphrase_command", "p", prompt);
 
-<<<<<<< HEAD
-	for (p = ssl_passphrase_command; *p; p++)
-	{
-		if (p[0] == '%')
-		{
-			switch (p[1])
-			{
-				case 'p':
-					appendStringInfoString(&command, prompt);
-					p++;
-					break;
-				case 'R':
-					{
-						char fd_str[20];
-
-						if (terminal_fd == -1)
-							ereport(ERROR,
-									(errcode(ERRCODE_INTERNAL_ERROR),
-									 errmsg("ssl_passphrase_command referenced %%R, but -R not specified")));
-						p++;
-						snprintf(fd_str, sizeof(fd_str), "%d", terminal_fd);
-						appendStringInfoString(&command, fd_str);
-						break;
-					}
-				case '%':
-					appendStringInfoChar(&command, '%');
-					p++;
-					break;
-				default:
-					appendStringInfoChar(&command, p[0]);
-			}
-		}
-		else
-			appendStringInfoChar(&command, p[0]);
-	}
-
-	fh = OpenPipeStream(command.data, "r");
-=======
 	fh = OpenPipeStream(command, "r");
->>>>>>> REL_16_9
 	if (fh == NULL)
 	{
 		ereport(loglevel,
