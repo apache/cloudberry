@@ -13,18 +13,11 @@
 #include "postgres.h"
 
 #include "access/timeline.h"
-<<<<<<< HEAD:src/backend/replication/backup_manifest.c
-#include "libpq/libpq.h"
-#include "libpq/pqformat.h"
-#include "mb/pg_wchar.h"
-#include "replication/backup_manifest.h"
-=======
 #include "backup/backup_manifest.h"
 #include "backup/basebackup_sink.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "mb/pg_wchar.h"
->>>>>>> REL_16_9:src/backend/backup/backup_manifest.c
 #include "utils/builtins.h"
 #include "utils/json.h"
 
