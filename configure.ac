@@ -225,6 +225,15 @@ PGAC_ARG_BOOL(enable, gpfdist, yes,
              [do not use gpfdist])
 AC_SUBST(enable_gpfdist)
 
+if test "$enable_gpfdist" = yes; then
+  # Check libssh2 >= 1.0.0
+  PKG_CHECK_MODULES([LIBSSH2], [libssh2 >= 1.0.0],
+    [AC_DEFINE([LIBSSH2], [1], [Define if libssh2 is available])],
+    [AC_MSG_ERROR([libssh2 >= 1.0.0 is required for gpfdist support])]
+  )
+  AC_MSG_RESULT([checking whether to build with gpfdist support ... yes])
+fi
+
 #
 # pxf
 #
@@ -1652,6 +1661,10 @@ if test "$enable_gpfdist" = yes ; then
   EVENT_LIBS=" -levent"
   AC_SUBST(EVENT_LIBS)
 
+  AC_SEARCH_LIBS(libssh2_init, [libssh2], [have_libssh2=yes; LIBSSH2_LIBS=" -lssh2"], [AC_MSG_ERROR([libssh2 is required for gpfdist])])
+  AC_SUBST(LIBSSH2_LIBS)
+  AC_SUBST(have_libssh2)
+
   AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_WARN([libyaml is not found. disabling transformations for gpfdist.])])
   AC_SUBST(YAML_LIBS)
   AC_SUBST(have_yaml)
@@ -1950,6 +1963,7 @@ if test "$enable_gpfdist" = yes; then
 
   AC_CHECK_HEADERS(yaml.h, [], [AC_MSG_WARN([header file <yaml.h> is not found. disabling transformations for gpfdist.])])
   AC_CHECK_HEADERS(event.h, [], [AC_MSG_ERROR([header file <event.h> is required for gpfdist])])
+  AC_CHECK_HEADERS(libssh2, [], [AC_MSG_ERROR([header file <libssh2.h> is required for gpfdist])])
 
   ac_save_CPPFLAGS=$CPPFLAGS
   CPPFLAGS="$apr_includes $CPPFLAGS"
