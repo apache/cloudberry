@@ -181,7 +181,7 @@ class MicroPartitionReader {
     // fetch, compression/encoding. At the same time, pax column can also be
     // used as a general interface for internal using, because it's zero copy
     // from buffer. more details in `storage/columns`
-    virtual const std::shared_ptr<PaxColumns> &GetAllColumns() const = 0;
+    virtual const std::unique_ptr<PaxColumns> &GetAllColumns() const = 0;
 
     virtual void SetVisibilityMap(
         std::shared_ptr<Bitmap8> visibility_bitmap) = 0;
