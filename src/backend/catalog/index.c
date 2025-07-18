@@ -3,13 +3,9 @@
  * index.c
  *	  code to create and destroy POSTGRES index relations
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1045,45 +1041,10 @@ index_create_internal(Relation heapRelation,
 	 */
 	if (!OidIsValid(indexRelationId))
 	{
-<<<<<<< HEAD
 		indexRelationId = GetNewOidForRelation(pg_class, ClassOidIndexId,
 											   Anum_pg_class_oid,
 											   (char *) indexRelationName,
 											   namespaceId);
-=======
-		/* Use binary-upgrade override for pg_class.oid and relfilenumber */
-		if (IsBinaryUpgrade)
-		{
-			if (!OidIsValid(binary_upgrade_next_index_pg_class_oid))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("pg_class index OID value not set when in binary upgrade mode")));
-
-			indexRelationId = binary_upgrade_next_index_pg_class_oid;
-			binary_upgrade_next_index_pg_class_oid = InvalidOid;
-
-			/* Override the index relfilenumber */
-			if ((relkind == RELKIND_INDEX) &&
-				(!RelFileNumberIsValid(binary_upgrade_next_index_pg_class_relfilenumber)))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("index relfilenumber value not set when in binary upgrade mode")));
-			relFileNumber = binary_upgrade_next_index_pg_class_relfilenumber;
-			binary_upgrade_next_index_pg_class_relfilenumber = InvalidRelFileNumber;
-
-			/*
-			 * Note that we want create_storage = true for binary upgrade. The
-			 * storage we create here will be replaced later, but we need to
-			 * have something on disk in the meanwhile.
-			 */
-			Assert(create_storage);
-		}
-		else
-		{
-			indexRelationId =
-				GetNewRelFileNumber(tableSpaceId, pg_class, relpersistence);
-		}
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -3094,7 +3055,6 @@ index_update_stats(Relation rel,
 		dirty = true;
 	}
 
-<<<<<<< HEAD
 	if (reltuples >= 0 && Gp_role != GP_ROLE_DISPATCH)
 	{
 		BlockNumber relpages;
@@ -3110,10 +3070,6 @@ index_update_stats(Relation rel,
 		else					/* don't bother for indexes */
 			relallvisible = 0;
 
-=======
-	if (update_stats)
-	{
->>>>>>> REL_16_9
 		if (rd_rel->relpages != (int32) relpages)
 		{
 			rd_rel->relpages = (int32) relpages;

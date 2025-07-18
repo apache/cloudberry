@@ -632,7 +632,6 @@ IsSharedRelation(Oid relationId)
 }
 
 /*
-<<<<<<< HEAD
  * OIDs for catalog object are normally allocated in the master, and
  * executor nodes should just use the OIDs passed by the master. But
  * there are some exceptions.
@@ -681,7 +680,8 @@ RelationNeedsSynchronizedOIDs(Relation relation)
 	}
 	return false;
 }
-=======
+
+/*
  * IsPinnedObject
  *		Given the class + OID identity of a database object, report whether
  *		it is "pinned", that is not droppable because the system requires it.
@@ -742,8 +742,6 @@ IsPinnedObject(Oid classId, Oid objectId)
 	 */
 	return true;
 }
-
->>>>>>> REL_16_9
 
 /*
  * GetNewOidWithIndex
@@ -878,7 +876,7 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 }
 
 static bool
-GpCheckRelFileCollision(RelFileNodeBackend rnode)
+GpCheckRelFileCollision(RelFileLocatorBackend rnode)
 {
 	char	   *rpath;
 	bool		collides;
@@ -912,13 +910,9 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
  * If the relfilenumber will also be used as the relation's OID, pass the
  * opened pg_class catalog, and this routine will guarantee that the result
  * is also an unused OID within pg_class.  If the result is to be used only
-<<<<<<< HEAD
- * as a relfilenode for an existing relation, pass NULL for pg_class.
+ * as a relfilenumber for an existing relation, pass NULL for pg_class.
  * (in GPDB, 'pg_class' is unused, there is a different mechanism to avoid
  * clashes, across the whole cluster.)
-=======
- * as a relfilenumber for an existing relation, pass NULL for pg_class.
->>>>>>> REL_16_9
  *
  * As with GetNewOidWithIndex(), there is some theoretical risk of a race
  * condition, but it doesn't seem worth worrying about.
@@ -929,12 +923,7 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
 RelFileNumber
 GetNewRelFileNumber(Oid reltablespace, Relation pg_class, char relpersistence)
 {
-<<<<<<< HEAD
-	RelFileNodeBackend rnode;
-=======
 	RelFileLocatorBackend rlocator;
-	char	   *rpath;
->>>>>>> REL_16_9
 	bool		collides;
 	BackendId	backend;
 
@@ -979,22 +968,10 @@ GetNewRelFileNumber(Oid reltablespace, Relation pg_class, char relpersistence)
 	{
         CHECK_FOR_INTERRUPTS();
 
-<<<<<<< HEAD
         /* Generate the Relfilenode */
-        rnode.node.relNode = GetNewSegRelfilenode();
+		rlocator.locator.relNumber = GetNewSegRelfilenode();
 
-		collides = GpCheckRelFileCollision(rnode);
-=======
-		/* Generate the OID */
-		if (pg_class)
-			rlocator.locator.relNumber = GetNewOidWithIndex(pg_class, ClassOidIndexId,
-															Anum_pg_class_oid);
-		else
-			rlocator.locator.relNumber = GetNewObjectId();
-
-		/* Check for existing file of same name */
-		rpath = relpath(rlocator, MAIN_FORKNUM);
->>>>>>> REL_16_9
+		collides = GpCheckRelFileCollision(rlocator);
 
 		if (!collides && rnode.node.spcNode != GLOBALTABLESPACE_OID)
 		{
@@ -1015,13 +992,9 @@ GetNewRelFileNumber(Oid reltablespace, Relation pg_class, char relpersistence)
 		}
 	} while (collides);
 
-<<<<<<< HEAD
-	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %u", rnode.node.relNode);
+	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %u", rlocator.locator.relNumber);
 
-	return rnode.node.relNode;
-=======
 	return rlocator.locator.relNumber;
->>>>>>> REL_16_9
 }
 
 /*

@@ -88,12 +88,9 @@
 #include "commands/taskcmds.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
-<<<<<<< HEAD
 #include "foreign/foreign.h"
-=======
 #include "funcapi.h"
 #include "miscadmin.h"
->>>>>>> REL_16_9
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteRemove.h"
@@ -1194,7 +1191,6 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 
 			if (otherDesc)
 			{
-<<<<<<< HEAD
 				if (msglevel == NOTICE && Gp_role == GP_ROLE_EXECUTE)
 				{
 					ereport(DEBUG1,
@@ -1221,25 +1217,6 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 									 objDesc, otherDesc);
 					pfree(otherDesc);
 				}
-=======
-				if (numReportedClient < MAX_REPORTED_DEPS)
-				{
-					/* separate entries with a newline */
-					if (clientdetail.len != 0)
-						appendStringInfoChar(&clientdetail, '\n');
-					appendStringInfo(&clientdetail, _("%s depends on %s"),
-									 objDesc, otherDesc);
-					numReportedClient++;
-				}
-				else
-					numNotReportedClient++;
-				/* separate entries with a newline */
-				if (logdetail.len != 0)
-					appendStringInfoChar(&logdetail, '\n');
-				appendStringInfo(&logdetail, _("%s depends on %s"),
-								 objDesc, otherDesc);
-				pfree(otherDesc);
->>>>>>> REL_16_9
 			}
 			else
 				numNotReportedClient++;
@@ -1621,7 +1598,6 @@ doDeletion(const ObjectAddress *object, int flags)
 			RemovePublicationById(object->objectId);
 			break;
 
-<<<<<<< HEAD
 		case OCLASS_SCHEMA:
 			RemoveSchemaById(object->objectId);
 			/*
@@ -1639,8 +1615,6 @@ doDeletion(const ObjectAddress *object, int flags)
 			RemoveMatviewAuxEntry(object->objectId);
 			break;
 
-=======
->>>>>>> REL_16_9
 		case OCLASS_CAST:
 		case OCLASS_COLLATION:
 		case OCLASS_CONVERSION:
@@ -1658,10 +1632,7 @@ doDeletion(const ObjectAddress *object, int flags)
 		case OCLASS_USER_MAPPING:
 		case OCLASS_DEFACL:
 		case OCLASS_EVENT_TRIGGER:
-<<<<<<< HEAD
 		case OCLASS_EXTPROTOCOL:
-=======
->>>>>>> REL_16_9
 		case OCLASS_TRANSFORM:
 		case OCLASS_ROLE_MEMBERSHIP:
 			DropObjectById(object);
@@ -1674,16 +1645,13 @@ doDeletion(const ObjectAddress *object, int flags)
 		case OCLASS_DATABASE:
 		case OCLASS_TBLSPACE:
 		case OCLASS_SUBSCRIPTION:
-<<<<<<< HEAD
 		case OCLASS_PROFILE:
 		case OCLASS_PASSWORDHISTORY:
 		case OCLASS_STORAGE_SERVER:
 		case OCLASS_STORAGE_USER_MAPPING:
 		case OCLASS_TAG:
 		case OCLASS_TAG_DESCRIPTION:
-=======
 		case OCLASS_PARAMETER_ACL:
->>>>>>> REL_16_9
 			elog(ERROR, "global objects cannot be deleted by doDeletion");
 			break;
 
@@ -3121,7 +3089,6 @@ getObjectClass(const ObjectAddress *object)
 		case EventTriggerRelationId:
 			return OCLASS_EVENT_TRIGGER;
 
-<<<<<<< HEAD
 		case ExtprotocolRelationId:
 			Assert(object->objectSubId == 0);
 			return OCLASS_EXTPROTOCOL;
@@ -3131,10 +3098,9 @@ getObjectClass(const ObjectAddress *object)
 
 		case PasswordHistoryRelationId:
 			return OCLASS_PASSWORDHISTORY;
-=======
+
 		case ParameterAclRelationId:
 			return OCLASS_PARAMETER_ACL;
->>>>>>> REL_16_9
 
 		case PolicyRelationId:
 			return OCLASS_POLICY;

@@ -49,12 +49,9 @@
 #include "catalog/pg_opclass.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_opfamily.h"
-<<<<<<< HEAD
 #include "catalog/pg_password_history.h"
-#include "catalog/pg_profile.h"
-=======
 #include "catalog/pg_parameter_acl.h"
->>>>>>> REL_16_9
+#include "catalog/pg_profile.h"
 #include "catalog/pg_policy.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_publication.h"
@@ -1169,11 +1166,8 @@ get_object_address(ObjectType objtype, Node *object,
 			case OBJECT_FDW:
 			case OBJECT_FOREIGN_SERVER:
 			case OBJECT_EVENT_TRIGGER:
-<<<<<<< HEAD
 			case OBJECT_EXTPROTOCOL:
-=======
 			case OBJECT_PARAMETER_ACL:
->>>>>>> REL_16_9
 			case OBJECT_ACCESS_METHOD:
 			case OBJECT_PUBLICATION:
 			case OBJECT_SUBSCRIPTION:
@@ -2441,11 +2435,7 @@ pg_get_object_address(PG_FUNCTION_ARGS)
 			/* FALLTHROUGH */
 		case OBJECT_DOMCONSTRAINT:
 		case OBJECT_CAST:
-<<<<<<< HEAD
-		case OBJECT_USER_MAPPING:
 		case OBJECT_STORAGE_USER_MAPPING:
-=======
->>>>>>> REL_16_9
 		case OBJECT_PUBLICATION_REL:
 		case OBJECT_DEFACL:
 		case OBJECT_TRANSFORM:
@@ -2678,49 +2668,14 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 		case OBJECT_SCHEMA:
 		case OBJECT_SUBSCRIPTION:
 		case OBJECT_TABLESPACE:
+		case OBJECT_STORAGE_SERVER:
+		case OBJECT_TAG:
 			if (!object_ownercheck(address.classId, address.objectId, roleid))
 				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
 							   strVal(object));
 			break;
 		case OBJECT_COLLATION:
 		case OBJECT_CONVERSION:
-<<<<<<< HEAD
-			if (!pg_conversion_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   NameListToString(castNode(List, object)));
-			break;
-		case OBJECT_EXTENSION:
-			if (!pg_extension_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-		case OBJECT_FDW:
-			if (!pg_foreign_data_wrapper_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-		case OBJECT_FOREIGN_SERVER:
-			if (!pg_foreign_server_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-		case OBJECT_STORAGE_SERVER:
-			if (!gp_storage_server_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-		case OBJECT_EVENT_TRIGGER:
-			if (!pg_event_trigger_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-		case OBJECT_LANGUAGE:
-			if (!pg_language_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-=======
->>>>>>> REL_16_9
 		case OBJECT_OPCLASS:
 		case OBJECT_OPFAMILY:
 		case OBJECT_STATISTIC_EXT:
@@ -2764,29 +2719,6 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 					aclcheck_error_type(ACLCHECK_NOT_OWNER, typeid);
 			}
 			break;
-<<<<<<< HEAD
-		case OBJECT_TABLESPACE:
-			if (!pg_tablespace_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   strVal((Value *) object));
-			break;
-		case OBJECT_TAG:
-			if (!pg_tag_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-				   			   strVal((Value *) object));
-			break;
-		case OBJECT_TSDICTIONARY:
-			if (!pg_ts_dict_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   NameListToString(castNode(List, object)));
-			break;
-		case OBJECT_TSCONFIGURATION:
-			if (!pg_ts_config_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
-							   NameListToString(castNode(List, object)));
-			break;
-=======
->>>>>>> REL_16_9
 		case OBJECT_ROLE:
 
 			/*
@@ -2830,21 +2762,17 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 		case OBJECT_TSPARSER:
 		case OBJECT_TSTEMPLATE:
 		case OBJECT_ACCESS_METHOD:
-<<<<<<< HEAD
+		case OBJECT_PARAMETER_ACL:
 		case OBJECT_RESQUEUE:
 		case OBJECT_RESGROUP:
-=======
-		case OBJECT_PARAMETER_ACL:
->>>>>>> REL_16_9
 			/* We treat these object types as being owned by superusers */
 			if (!superuser_arg(roleid))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						 errmsg("must be superuser")));
 			break;
-<<<<<<< HEAD
 		case OBJECT_STATISTIC_EXT:
-			if (!pg_statistics_object_ownercheck(address.objectId, roleid))
+			if (!object_ownercheck(STATEXTOID, address.objectId, roleid))
 				aclcheck_error(ACLCHECK_NOT_OWNER, objtype,
 							   NameListToString(castNode(List, object)));
 			break;
@@ -2854,7 +2782,6 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						 errmsg("must be superuser")));
-=======
 		case OBJECT_AMOP:
 		case OBJECT_AMPROC:
 		case OBJECT_DEFAULT:
@@ -2864,7 +2791,6 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 		case OBJECT_USER_MAPPING:
 			/* These are currently not supported or don't make sense here. */
 			elog(ERROR, "unsupported object type: %d", (int) objtype);
->>>>>>> REL_16_9
 			break;
 	}
 }

@@ -4644,7 +4644,6 @@ RemoveTempRelationsCallback(int code, Datum arg)
 			ObjectAddress object;
 			ObjectAddress toastobject;
 
-<<<<<<< HEAD
 			object.classId = NamespaceRelationId;
 			object.objectId = myTempNamespace;
 			object.objectSubId = 0;
@@ -4661,8 +4660,6 @@ RemoveTempRelationsCallback(int code, Datum arg)
 				 myTempNamespace); 
 		}
 
-=======
->>>>>>> REL_16_9
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 	}

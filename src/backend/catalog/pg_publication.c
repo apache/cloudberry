@@ -45,9 +45,7 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-<<<<<<< HEAD
 #include "catalog/oid_dispatch.h"
-=======
 /* Records association between publication and published table */
 typedef struct
 {
@@ -58,7 +56,6 @@ typedef struct
 
 static void publication_translate_columns(Relation targetrel, List *columns,
 										  int *natts, AttrNumber **attrs);
->>>>>>> REL_16_9
 
 /*
  * Check if relation can be in given publication and throws appropriate
@@ -153,50 +150,7 @@ is_publishable_class(Oid relid, Form_pg_class reltuple)
 }
 
 /*
-<<<<<<< HEAD
- * Filter out the partitions whose parent tables were also specified in
- * the publication.
- */
-static List *
-filter_partitions(List *relids)
-{
-	List	   *result = NIL;
-	ListCell   *lc;
-	ListCell   *lc2;
-
-	foreach(lc, relids)
-	{
-		bool		skip = false;
-		List	   *ancestors = NIL;
-		Oid			relid = lfirst_oid(lc);
-
-		if (get_rel_relispartition(relid))
-			ancestors = get_partition_ancestors(relid);
-
-		foreach(lc2, ancestors)
-		{
-			Oid			ancestor = lfirst_oid(lc2);
-
-			/* Check if the parent table exists in the published table list. */
-			if (list_member_oid(relids, ancestor))
-			{
-				skip = true;
-				break;
-			}
-		}
-
-		if (!skip)
-			result = lappend_oid(result, relid);
-	}
-
-	return result;
-}
-
-/*
- * Another variant of this, taking a Relation.
-=======
  * Another variant of is_publishable_class(), taking a Relation.
->>>>>>> REL_16_9
  */
 bool
 is_publishable_relation(Relation rel)
@@ -227,8 +181,6 @@ pg_relation_is_publishable(PG_FUNCTION_ARGS)
 }
 
 /*
-<<<<<<< HEAD
-=======
  * Returns true if the ancestor is in the list of published relations.
  * Otherwise, returns false.
  */
@@ -314,7 +266,6 @@ is_schema_publication(Oid pubid)
 }
 
 /*
->>>>>>> REL_16_9
  * Gets the relations based on the publication partition option for a specified
  * relation.
  */
@@ -350,8 +301,6 @@ GetPubPartitionOptionRelations(List *result, PublicationPartOpt pub_partopt,
 
 	return result;
 }
-<<<<<<< HEAD
-=======
 
 /*
  * Returns the relid of the topmost ancestor that is published via this
@@ -407,7 +356,6 @@ GetTopMostAncestorInPublication(Oid puboid, List *ancestors, int *ancestor_level
 
 	return topmost_relid;
 }
->>>>>>> REL_16_9
 
 /*
  * Insert new publication / relation mapping.
@@ -465,16 +413,10 @@ publication_add_relation(Oid pubid, PublicationRelInfo *pri,
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-<<<<<<< HEAD
-	prrelid = GetNewOidForPublicationRel(rel, PublicationRelObjectIndexId,
+	pubreloid = GetNewOidForPublicationRel(rel, PublicationRelObjectIndexId,
 										 Anum_pg_publication_rel_oid,
 										 relid, pubid);
-	values[Anum_pg_publication_rel_oid - 1] = ObjectIdGetDatum(prrelid);
-=======
-	pubreloid = GetNewOidWithIndex(rel, PublicationRelObjectIndexId,
-								   Anum_pg_publication_rel_oid);
 	values[Anum_pg_publication_rel_oid - 1] = ObjectIdGetDatum(pubreloid);
->>>>>>> REL_16_9
 	values[Anum_pg_publication_rel_prpubid - 1] =
 		ObjectIdGetDatum(pubid);
 	values[Anum_pg_publication_rel_prrelid - 1] =
@@ -537,8 +479,6 @@ publication_add_relation(Oid pubid, PublicationRelInfo *pri,
 											relid);
 
 	InvalidatePublicationRels(relids);
-<<<<<<< HEAD
-=======
 
 	return myself;
 }
@@ -745,7 +685,6 @@ publication_add_schema(Oid pubid, Oid schemaid, bool if_not_exists)
 	schemaRels = GetSchemaPublicationRelations(schemaid,
 											   PUBLICATION_PART_ALL);
 	InvalidatePublicationRels(schemaRels);
->>>>>>> REL_16_9
 
 	return myself;
 }
@@ -1211,29 +1150,6 @@ pg_get_publication_tables(PG_FUNCTION_ARGS)
 		 * data of the child table to be double-published on the subscriber
 		 * side.
 		 */
-<<<<<<< HEAD
-		if (publication->alltables)
-			tables = GetAllTablesPublicationRelations(publication->pubviaroot);
-		else
-		{
-			tables = GetPublicationRelations(publication->oid,
-											 publication->pubviaroot ?
-											 PUBLICATION_PART_ROOT :
-											 PUBLICATION_PART_LEAF);
-
-			/*
-			 * If the publication publishes partition changes via their
-			 * respective root partitioned tables, we must exclude partitions
-			 * in favor of including the root partitioned tables. Otherwise,
-			 * the function could return both the child and parent tables
-			 * which could cause data of the child table to be
-			 * double-published on the subscriber side.
-			 */
-			if (publication->pubviaroot)
-				tables = filter_partitions(tables);
-		}
-		funcctx->user_fctx = (void *) tables;
-=======
 		if (viaroot)
 			filter_partitions(table_infos);
 
@@ -1250,7 +1166,6 @@ pg_get_publication_tables(PG_FUNCTION_ARGS)
 
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 		funcctx->user_fctx = (void *) table_infos;
->>>>>>> REL_16_9
 
 		MemoryContextSwitchTo(oldcontext);
 	}

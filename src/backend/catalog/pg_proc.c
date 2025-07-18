@@ -41,10 +41,7 @@
 #include "parser/analyze.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
-<<<<<<< HEAD
-=======
 #include "pgstat.h"
->>>>>>> REL_16_9
 #include "rewrite/rewriteHandler.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
@@ -1100,14 +1097,8 @@ function_parse_error_transpose(const char *prosrc)
 	}
 
 	/* We can get the original query text from the active portal (hack...) */
-<<<<<<< HEAD
 	/* Assert(ActivePortal && PortalGetStatus(ActivePortal) == PORTAL_ACTIVE); */
 	queryText = ActivePortal->sourceText;
-=======
-	if (ActivePortal && ActivePortal->status == PORTAL_ACTIVE)
-	{
-		const char *queryText = ActivePortal->sourceText;
->>>>>>> REL_16_9
 
 		/* Try to locate the prosrc in the original text */
 		newerrposition = match_prosrc_to_query(prosrc, queryText,

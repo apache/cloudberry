@@ -181,11 +181,7 @@ recordMultipleDependencies(const ObjectAddress *depender,
  * of the current extension.  In the latter case we can skip checking whether
  * it is already a member of any extension.
  *
-<<<<<<< HEAD
- * Note: isReplace = true is typically used when updating a object in
-=======
  * Note: isReplace = true is typically used when updating an object in
->>>>>>> REL_16_9
  * CREATE OR REPLACE and similar commands.  We used to allow the target
  * object to not already be an extension member, instead silently absorbing
  * it into the current extension.  However, this was both error-prone
