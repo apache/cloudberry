@@ -161,9 +161,6 @@ makeWholeRowVar(RangeTblEntry *rte,
 							 InvalidOid,
 							 varlevelsup);
 			break;
-<<<<<<< HEAD
-		case RTE_TABLEFUNCTION:
-=======
 
 		case RTE_SUBQUERY:
 
@@ -212,7 +209,7 @@ makeWholeRowVar(RangeTblEntry *rte,
 							 varlevelsup);
 			break;
 
->>>>>>> REL_16_9
+		case RTE_TABLEFUNCTION:
 		case RTE_FUNCTION:
 
 			/*
@@ -882,7 +879,6 @@ makeVacuumRelation(RangeVar *relation, Oid oid, List *va_cols)
 }
 
 /*
-<<<<<<< HEAD
  * makeReindexIndexInfo
  *	  create an ReindexIndexInfo node
  */
@@ -896,7 +892,9 @@ makeReindexIndexInfo(Oid indexId, Oid tableId, Oid amId, bool safe)
 	r->amId = amId;
 	r->safe = safe;
 	return r;
-=======
+}
+
+/*
  * makeJsonFormat -
  *	  creates a JsonFormat node
  */

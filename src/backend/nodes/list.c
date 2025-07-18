@@ -974,12 +974,9 @@ list_delete_last(List *list)
  * Delete the first N cells of the list.
  *
  * The List is pfree'd if the request causes all cells to be deleted.
-<<<<<<< HEAD
-=======
  *
  * Note that this takes time proportional to the distance to the end of the
  * list, since the following entries must be moved.
->>>>>>> REL_16_9
  */
 List *
 list_delete_first_n(List *list, int n)
