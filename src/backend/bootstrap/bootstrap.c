@@ -36,15 +36,12 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "pg_getopt.h"
-<<<<<<< HEAD
 #include "pgstat.h"
 #include "postmaster/bgwriter.h"
 #include "postmaster/postmaster.h" /* TODO: verify we need this still */
 #include "postmaster/startup.h"
 #include "postmaster/walwriter.h"
 #include "replication/walreceiver.h"
-=======
->>>>>>> REL_16_9
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
 #include "storage/condition_variable.h"
@@ -235,14 +232,7 @@ BootstrapModeMain(int argc, char *argv[], bool check_only)
 	argv++;
 	argc--;
 
-<<<<<<< HEAD
-	/* If no -x argument, we are a CheckerProcess */
-	MyAuxProcType = CheckerProcess;
-
- 	while ((flag = getopt(argc, argv, "B:c:d:D:FkK:r:x:R:u:X:-:")) != -1)
-=======
-	while ((flag = getopt(argc, argv, "B:c:d:D:Fkr:X:-:")) != -1)
->>>>>>> REL_16_9
+ 	while ((flag = getopt(argc, argv, "B:c:d:D:FkK:r:R:u:X:-:")) != -1)
 	{
 		switch (flag)
 		{
@@ -318,18 +308,12 @@ BootstrapModeMain(int argc, char *argv[], bool check_only)
 			case 'r':
 				strlcpy(OutputFileName, optarg, MAXPGPATH);
 				break;
-<<<<<<< HEAD
-			case 'x':
-				MyAuxProcType = atoi(optarg);
-				break;
  			case 'R':
  				terminal_fd = atoi(optarg);
  				break;
  			case 'u':
  				bootstrap_old_key_datadir = pstrdup(optarg);
  				break;
-=======
->>>>>>> REL_16_9
 			case 'X':
 				{
 					int			WalSegSz = strtoul(optarg, NULL, 0);

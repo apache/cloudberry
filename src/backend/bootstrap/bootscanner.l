@@ -23,7 +23,6 @@
 #include "bootparse.h"
 #include "utils/guc.h"
 
-<<<<<<< HEAD
 #define unify_version(a,b,c) ((a<<16)+(b<<8)+c)
 
 #if unify_version(YY_FLEX_MAJOR_VERSION,YY_FLEX_MINOR_VERSION,YY_FLEX_SUBMINOR_VERSION) < unify_version(2,5,35)
@@ -47,11 +46,9 @@ int boot_yylex_destroy  (void);
 
 /* Not needed now that this file is compiled as part of bootparse. */
 /* #include "bootparse.h" */
-=======
 }
 
 %{
->>>>>>> REL_16_9
 
 /* LCOV_EXCL_START */
 
