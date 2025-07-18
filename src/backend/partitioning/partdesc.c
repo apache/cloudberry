@@ -272,25 +272,19 @@ retry:
 			 * tuples if the table has been dropped meanwhile.
 			 */
 			tuple = systable_getnext(scan);
-<<<<<<< HEAD
-			if (!tuple)
-				elog(ERROR, "could not find pg_class entry for oid %u", inhrelid);
-			datum = heap_getattr(tuple, Anum_pg_class_relpartbound,
-								 RelationGetDescr(pg_class), &isnull);
-			if (!isnull)
-				boundspec = stringToNode(TextDatumGetCString(datum));
-=======
-			if (HeapTupleIsValid(tuple))
+
 			{
 				Datum		datum;
 				bool		isnull;
 
+				if (!tuple)
+					elog(ERROR, "could not find pg_class entry for oid %u", inhrelid);
 				datum = heap_getattr(tuple, Anum_pg_class_relpartbound,
 									 RelationGetDescr(pg_class), &isnull);
 				if (!isnull)
 					boundspec = stringToNode(TextDatumGetCString(datum));
 			}
->>>>>>> REL_16_9
+
 			systable_endscan(scan);
 			table_close(pg_class, AccessShareLock);
 

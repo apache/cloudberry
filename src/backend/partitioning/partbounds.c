@@ -387,10 +387,7 @@ create_hash_bounds(PartitionBoundSpec **boundspecs, int nparts,
 	boundinfo->ndatums = nparts;
 	boundinfo->datums = (Datum **) palloc0(nparts * sizeof(Datum *));
 	boundinfo->kind = NULL;
-<<<<<<< HEAD
-=======
 	boundinfo->interleaved_parts = NULL;
->>>>>>> REL_16_9
 	boundinfo->nindexes = greatest_modulus;
 	boundinfo->indexes = (int *) palloc(greatest_modulus * sizeof(int));
 	for (i = 0; i < greatest_modulus; i++)
@@ -448,11 +445,7 @@ get_non_null_list_datum_count(PartitionBoundSpec **boundspecs, int nparts)
 
 		foreach(lc, boundspecs[i]->listdatums)
 		{
-<<<<<<< HEAD
-			Const	   *val = castNode(Const, lfirst(lc));
-=======
 			Const	   *val = lfirst_node(Const, lc);
->>>>>>> REL_16_9
 
 			if (!val->constisnull)
 				count++;
@@ -513,11 +506,7 @@ create_list_bounds(PartitionBoundSpec **boundspecs, int nparts,
 
 		foreach(c, spec->listdatums)
 		{
-<<<<<<< HEAD
-			Const	   *val = castNode(Const, lfirst(c));
-=======
 			Const	   *val = lfirst_node(Const, c);
->>>>>>> REL_16_9
 
 			if (!val->constisnull)
 			{
@@ -542,19 +531,12 @@ create_list_bounds(PartitionBoundSpec **boundspecs, int nparts,
 	Assert(j == ndatums);
 
 	qsort_arg(all_values, ndatums, sizeof(PartitionListValue),
-<<<<<<< HEAD
-			  qsort_partition_list_value_cmp, (void *) key);
-=======
 			  qsort_partition_list_value_cmp, key);
->>>>>>> REL_16_9
 
 	boundinfo->ndatums = ndatums;
 	boundinfo->datums = (Datum **) palloc0(ndatums * sizeof(Datum *));
 	boundinfo->kind = NULL;
-<<<<<<< HEAD
-=======
 	boundinfo->interleaved_parts = NULL;
->>>>>>> REL_16_9
 	boundinfo->nindexes = ndatums;
 	boundinfo->indexes = (int *) palloc(ndatums * sizeof(int));
 
@@ -1028,11 +1010,7 @@ partition_bounds_copy(PartitionBoundInfo src,
 	int			partnatts;
 	bool		hash_part;
 	int			natts;
-<<<<<<< HEAD
-	Datum      *boundDatums;
-=======
 	Datum	   *boundDatums;
->>>>>>> REL_16_9
 
 	dest = (PartitionBoundInfo) palloc(sizeof(PartitionBoundInfoData));
 
@@ -1049,12 +1027,6 @@ partition_bounds_copy(PartitionBoundInfo src,
 	if (src->kind != NULL)
 	{
 		PartitionRangeDatumKind *boundKinds;
-<<<<<<< HEAD
-		/* only RANGE partition should have a non-NULL kind */
-		Assert(key->strategy == PARTITION_STRATEGY_RANGE);
-		dest->kind = (PartitionRangeDatumKind **) palloc(ndatums *
-														 sizeof(PartitionRangeDatumKind *));
-=======
 
 		/* only RANGE partition should have a non-NULL kind */
 		Assert(key->strategy == PARTITION_STRATEGY_RANGE);
@@ -1062,7 +1034,6 @@ partition_bounds_copy(PartitionBoundInfo src,
 		dest->kind = (PartitionRangeDatumKind **) palloc(ndatums *
 														 sizeof(PartitionRangeDatumKind *));
 
->>>>>>> REL_16_9
 		/*
 		 * In the loop below, to save from allocating a series of small arrays
 		 * for storing the PartitionRangeDatumKind, we allocate a single chunk
@@ -1070,10 +1041,6 @@ partition_bounds_copy(PartitionBoundInfo src,
 		 */
 		boundKinds = (PartitionRangeDatumKind *) palloc(ndatums * partnatts *
 														sizeof(PartitionRangeDatumKind));
-<<<<<<< HEAD
-=======
-
->>>>>>> REL_16_9
 		for (i = 0; i < ndatums; i++)
 		{
 			dest->kind[i] = &boundKinds[i * partnatts];
@@ -3810,13 +3777,8 @@ partition_hash_bsearch(PartitionBoundInfo boundinfo,
 static int32
 qsort_partition_hbound_cmp(const void *a, const void *b)
 {
-<<<<<<< HEAD
-	PartitionHashBound *const h1 = (PartitionHashBound *const) a;
-	PartitionHashBound *const h2 = (PartitionHashBound *const) b;
-=======
 	const PartitionHashBound *h1 = (const PartitionHashBound *) a;
 	const PartitionHashBound *h2 = (const PartitionHashBound *) b;
->>>>>>> REL_16_9
 
 	return partition_hbound_cmp(h1->modulus, h1->remainder,
 								h2->modulus, h2->remainder);
@@ -3830,13 +3792,8 @@ qsort_partition_hbound_cmp(const void *a, const void *b)
 static int32
 qsort_partition_list_value_cmp(const void *a, const void *b, void *arg)
 {
-<<<<<<< HEAD
-	Datum		val1 = ((PartitionListValue *const) a)->value,
-				val2 = ((PartitionListValue *const) b)->value;
-=======
 	Datum		val1 = ((const PartitionListValue *) a)->value,
 				val2 = ((const PartitionListValue *) b)->value;
->>>>>>> REL_16_9
 	PartitionKey key = (PartitionKey) arg;
 
 	return DatumGetInt32(FunctionCall2Coll(&key->partsupfunc[0],
