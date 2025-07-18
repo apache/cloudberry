@@ -377,7 +377,7 @@ size_t PaxColumns::MeasureVecDataBuffer(
 
     // has null will generate a bitmap in current stripe
     if (column->HasNull()) {
-      auto bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
       Assert(bm);
       size_t bm_length = bm->MinimalStoredBytes(total_rows);
 
@@ -483,7 +483,7 @@ size_t PaxColumns::MeasureOrcDataBuffer(
     auto column = p_column.get();
     // has null will generate a bitmap in current stripe
     if (column->HasNull()) {
-      auto bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
       Assert(bm);
       size_t bm_length = bm->MinimalStoredBytes(column->GetRows());
       buffer_len += bm_length;
@@ -592,7 +592,7 @@ void PaxColumns::CombineVecDataBuffer() {
 
     auto column = p_column.get();
     if (column->HasNull()) {
-      auto bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
       Assert(bm);
       auto nbytes = bm->MinimalStoredBytes(column->GetRows());
       Assert(nbytes <= bm->Raw().size);
@@ -680,7 +680,7 @@ void PaxColumns::CombineOrcDataBuffer() {
 
     auto column = p_column.get();
     if (column->HasNull()) {
-      auto bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
       Assert(bm);
       auto nbytes = bm->MinimalStoredBytes(column->GetRows());
       Assert(nbytes <= bm->Raw().size);

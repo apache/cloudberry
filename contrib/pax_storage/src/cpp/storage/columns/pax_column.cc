@@ -83,7 +83,7 @@ size_t PaxColumn::GetRangeNonNullRows(size_t start_pos, size_t len) {
 
 void PaxColumn::CreateNulls(size_t cap) {
   Assert(!null_bitmap_);
-  null_bitmap_ = std::make_shared<Bitmap8>(cap);
+  null_bitmap_ = std::make_unique<Bitmap8>(cap);
   null_bitmap_->SetN(total_rows_);
 }
 
