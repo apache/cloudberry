@@ -1970,7 +1970,7 @@ gpdb::GetMVDependencies(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		return statext_dependencies_load(stat_oid, true);
+		return statext_dependencies_load(stat_oid, false, true);
 	}
 	GP_WRAP_END;
 }

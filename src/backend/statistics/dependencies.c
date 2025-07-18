@@ -354,11 +354,7 @@ statext_dependencies_build(StatsBuildData *data)
 
 	/* result */
 	MVDependencies *dependencies = NULL;
-<<<<<<< HEAD
-	MemoryContext	cxt;
-=======
 	MemoryContext cxt;
->>>>>>> REL_16_9
 
 	Assert(data->nattnums >= 2);
 
@@ -622,11 +618,7 @@ dependency_is_fully_matched(MVDependency *dependency, Bitmapset *attnums)
  *		Load the functional dependencies for the indicated pg_statistic_ext tuple
  */
 MVDependencies *
-<<<<<<< HEAD
-statext_dependencies_load(Oid mvoid, bool allow_null)
-=======
-statext_dependencies_load(Oid mvoid, bool inh)
->>>>>>> REL_16_9
+statext_dependencies_load(Oid mvoid, bool inh, bool allow_null)
 {
 	MVDependencies *result;
 	bool		isnull;
@@ -1654,11 +1646,7 @@ dependencies_clauselist_selectivity(PlannerInfo *root,
 		if (nmatched + nexprs < 2)
 			continue;
 
-<<<<<<< HEAD
-		deps = statext_dependencies_load(stat->statOid, false);
-=======
-		deps = statext_dependencies_load(stat->statOid, rte->inh);
->>>>>>> REL_16_9
+		deps = statext_dependencies_load(stat->statOid, rte->inh, false);
 
 		/*
 		 * The expressions may be represented by different attnums in the
