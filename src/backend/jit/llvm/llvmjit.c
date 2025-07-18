@@ -251,19 +251,8 @@ llvm_create_context(int jitFlags)
 static void
 llvm_release_context(JitContext *context)
 {
-<<<<<<< HEAD
 	LLVMJitContext *llvm_context = (LLVMJitContext *) context;
 	ListCell   *lc;
-=======
-	LLVMJitContext *llvm_jit_context = (LLVMJitContext *) context;
-	ListCell   *lc;
-
-	/*
-	 * Consider as cleaned up even if we skip doing so below, that way we can
-	 * verify the tracking is correct (see llvm_shutdown()).
-	 */
-	llvm_jit_context_in_use_count--;
->>>>>>> REL_16_9
 
 	/*
 	 * When this backend is exiting, don't clean up LLVM. As an error might
@@ -275,21 +264,13 @@ llvm_release_context(JitContext *context)
 
 	llvm_enter_fatal_on_oom();
 
-<<<<<<< HEAD
 	if (llvm_context->module)
-=======
-	if (llvm_jit_context->module)
->>>>>>> REL_16_9
 	{
 		LLVMDisposeModule(llvm_jit_context->module);
 		llvm_jit_context->module = NULL;
 	}
 
-<<<<<<< HEAD
 	foreach(lc, llvm_context->handles)
-=======
-	foreach(lc, llvm_jit_context->handles)
->>>>>>> REL_16_9
 	{
 		LLVMJitHandle *jit_handle = (LLVMJitHandle *) lfirst(lc);
 
@@ -319,15 +300,8 @@ llvm_release_context(JitContext *context)
 
 		pfree(jit_handle);
 	}
-<<<<<<< HEAD
 	list_free(llvm_context->handles);
 	llvm_context->handles = NIL;
-=======
-	list_free(llvm_jit_context->handles);
-	llvm_jit_context->handles = NIL;
-
-	llvm_leave_fatal_on_oom();
->>>>>>> REL_16_9
 }
 
 /*
@@ -1050,13 +1024,8 @@ llvm_shutdown(int code, Datum arg)
 	 * has occurred in the middle of LLVM code. It is not safe to call back
 	 * into LLVM (which is why a FATAL error was thrown).
 	 *
-<<<<<<< HEAD
-	 * We do need to shutdown LLVM in other shutdown cases, otherwise
-	 * e.g. profiling data won't be written out.
-=======
 	 * We do need to shutdown LLVM in other shutdown cases, otherwise e.g.
 	 * profiling data won't be written out.
->>>>>>> REL_16_9
 	 */
 	if (llvm_in_fatal_on_oom())
 	{
@@ -1064,13 +1033,6 @@ llvm_shutdown(int code, Datum arg)
 		return;
 	}
 
-<<<<<<< HEAD
-=======
-	if (llvm_jit_context_in_use_count != 0)
-		elog(PANIC, "LLVMJitContext in use count not 0 at exit (is %zu)",
-			 llvm_jit_context_in_use_count);
-
->>>>>>> REL_16_9
 #if LLVM_VERSION_MAJOR > 11
 	{
 		if (llvm_opt3_orc)
