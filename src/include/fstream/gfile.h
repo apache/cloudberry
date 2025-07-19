@@ -12,6 +12,11 @@
 #include <zstd.h>
 #endif
 
+#ifdef LIBSSH2
+#include <libssh2.h>
+#include <libssh2_sftp.h>
+#endif
+
 #ifdef WIN32
 #include <windows.h>
 #endif
@@ -57,6 +62,7 @@ typedef struct gfile_t
 	off_t compressed_size,compressed_position;
 	bool_t is_win_pipe;
 	bool_t held_pipe_lock; /* Whether held flock on pipe file, used to restrict only one reader of pipe */
+	bool_t is_sftp;
 
 	union
 	{
@@ -65,6 +71,11 @@ typedef struct gfile_t
 		HANDLE pipefd;
 #endif
 	} fd;
+
+	LIBSSH2_SESSION *session;
+	LIBSSH2_SFTP *sftp_session;
+	LIBSSH2_SFTP_HANDLE *sftp_handle;
+	int sock;
 
 	union
 	{
@@ -85,6 +96,19 @@ typedef struct gfile_t
 	struct gpfxdist_t* transform;
 } gfile_t;
 
+/* Struct of sftp info */
+typedef struct sftp_info_t sftp_info_t;
+struct sftp_info_t
+{
+	char username[32];
+	char password[64];
+	char keyfile1[64];
+	char keyfile2[64];
+	char hostaddr[64];
+	char port[16];
+	char fpath[256];
+};
+
 /*
  * MPP-13817 (support opening files without O_SYNC)
  */
@@ -103,4 +127,11 @@ void gfile_printf_then_putc_newline(const char*format,...) pg_attribute_printf(1
 void*gfile_malloc(size_t size);
 void gfile_free(void*a);
 
+#ifdef LIBSSH2
+int gfile_open_sftp(gfile_t *fd, const char *fpath, const char *sftp_uname, const char *sftp_passwd, const char *sftp_hostaddr,
+					const char *sftp_port, int flags, int *response_code, const char **response_string, struct gpfxdist_t *transform);
+extern int sftp_open(gfile_t *fd, const char *fpath, const char *sftp_uname, const char *sftp_passwd, const char *sftp_hostaddr,
+					const char *sftp_port);
+extern void sftp_free(gfile_t *fd);
+#endif
 #endif
