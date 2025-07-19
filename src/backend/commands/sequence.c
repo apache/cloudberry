@@ -3,13 +3,9 @@
  * sequence.c
  *	  PostgreSQL sequences support code.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -37,11 +33,8 @@
 #include "catalog/objectaccess.h"
 #include "catalog/pg_sequence.h"
 #include "catalog/pg_type.h"
-<<<<<<< HEAD
-#include "commands/async.h"
-=======
 #include "catalog/storage_xlog.h"
->>>>>>> REL_16_9
+#include "commands/async.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
@@ -108,13 +101,8 @@ SeqTableKey;
  */
 typedef struct SeqTableData
 {
-<<<<<<< HEAD
-	SeqTableKey	key;			/* sequence data hash key */
-	Oid 		filenode;		/* last seen relfilenode of this sequence */
-=======
-	Oid			relid;			/* pg_class OID of this sequence (hash key) */
+	SeqTableKey	key;			/* sequence data hash key *//
 	RelFileNumber filenumber;	/* last seen relfilenumber of this sequence */
->>>>>>> REL_16_9
 	LocalTransactionId lxid;	/* xact in which we last did a seq op */
 	bool		last_valid;		/* do we have a valid "last" value? */
 	int64		last;			/* value last returned by nextval */
@@ -181,7 +169,6 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 	bool		pgs_nulls[Natts_pg_sequence];
 	int			i;
 
-<<<<<<< HEAD
 	bool shouldDispatch = (Gp_role == GP_ROLE_DISPATCH &&
 						   ENABLE_DISPATCH() &&
 						   !IsBootstrapProcessingMode());
@@ -192,8 +179,6 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("unlogged sequences are not supported")));
 
-=======
->>>>>>> REL_16_9
 	/*
 	 * If if_not_exists was given and a relation with the same name already
 	 * exists, bail out. (Note: we needn't check this when not if_not_exists,
@@ -1383,11 +1368,7 @@ init_sequence_internal(Oid _relid, SeqTable *p_elm, Relation *p_rel,
 	 * discard any cached-but-unissued values.  We do not touch the currval()
 	 * state, however.
 	 */
-<<<<<<< HEAD
-	if (seqrel->rd_rel->relfilenode != elm->filenode && called_from_dispatcher)
-=======
-	if (seqrel->rd_rel->relfilenode != elm->filenumber)
->>>>>>> REL_16_9
+	if (seqrel->rd_rel->relfilenode != elm->filenumber && called_from_dispatcher)
 	{
 		elm->filenumber = seqrel->rd_rel->relfilenode;
 		elm->cached = elm->last;

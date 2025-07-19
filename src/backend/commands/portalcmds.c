@@ -9,13 +9,9 @@
  * storage management for portals (but doesn't run any queries in them).
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -518,11 +514,7 @@ PersistHoldablePortal(Portal portal)
 										NULL);
 
 		/* Fetch the result set into the tuplestore */
-<<<<<<< HEAD
-		ExecutorRun(queryDesc, direction, 0L, false);
-=======
 		ExecutorRun(queryDesc, direction, 0, false);
->>>>>>> REL_16_9
 
 		queryDesc->dest->rDestroy(queryDesc->dest);
 		queryDesc->dest = NULL;
@@ -561,7 +553,6 @@ PersistHoldablePortal(Portal portal)
 			{
 				tuplestore_rescan(portal->holdStore);
 
-<<<<<<< HEAD
 				/*
 				 * In the no-scroll case, the start of the tuplestore is exactly
 				 * where we want to be, so no repositioning is wanted.
@@ -573,18 +564,6 @@ PersistHoldablePortal(Portal portal)
 											   true))
 						elog(ERROR, "unexpected end of tuple stream");
 				}
-=======
-			/*
-			 * In the no-scroll case, the start of the tuplestore is exactly
-			 * where we want to be, so no repositioning is wanted.
-			 */
-			if (portal->cursorOptions & CURSOR_OPT_SCROLL)
-			{
-				if (!tuplestore_skiptuples(portal->holdStore,
-										   portal->portalPos,
-										   true))
-					elog(ERROR, "unexpected end of tuple stream");
->>>>>>> REL_16_9
 			}
 		}
 	}

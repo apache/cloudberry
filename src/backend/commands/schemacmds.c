@@ -3,13 +3,9 @@
  * schemacmds.c
  *	  schema creation/manipulation commands
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -78,11 +74,8 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 	AclResult	aclresult;
 	ObjectAddress address;
 	StringInfoData pathbuf;
-<<<<<<< HEAD
-	bool		shouldDispatch = (Gp_role == GP_ROLE_DISPATCH && 
+	bool		shouldDispatch = (Gp_role == GP_ROLE_DISPATCH &&
 								  !IsBootstrapProcessingMode());
-=======
->>>>>>> REL_16_9
 
 	/*
 	 * GPDB: Creation of temporary namespaces is a special case. This statement
@@ -186,7 +179,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 							schemaName)));
 			return InvalidOid;
 		}
-<<<<<<< HEAD
 	}
 
 	/* Create the schema's namespace */
@@ -246,8 +238,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 							   namespaceId,
 							   stmt->schemaname);
 		}
-=======
->>>>>>> REL_16_9
 	}
 
 	/*

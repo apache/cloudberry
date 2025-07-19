@@ -217,16 +217,6 @@ CreateStatistics(CreateStatsStmt *stmt)
 	 * Convert the expression list to a simple array of attnums, but also keep
 	 * a list of more complex expressions.  While at it, enforce some
 	 * constraints - we don't allow extended statistics on system attributes,
-<<<<<<< HEAD
-	 * and we require the data type to have less-than operator.
-	 *
-	 * There are many ways how to "mask" a simple attribute refenrece as an
-	 * expression, for example "(a+0)" etc. We can't possibly detect all of
-	 * them, but we handle at least the simple case with attribute in parens.
-	 * There'll always be a way around this, if the user is determined (like
-	 * the "(a+0)" example), but this makes it somewhat consistent with how
-	 * indexes treat attributes/expressions.
-=======
 	 * and we require the data type to have a less-than operator.
 	 *
 	 * There are many ways to "mask" a simple attribute reference as an
@@ -235,7 +225,6 @@ CreateStatistics(CreateStatsStmt *stmt)
 	 * parens. There'll always be a way around this, if the user is determined
 	 * (like the "(a+0)" example), but this makes it somewhat consistent with
 	 * how indexes treat attributes/expressions.
->>>>>>> REL_16_9
 	 */
 	foreach(cell, stmt->exprs)
 	{
@@ -276,15 +265,9 @@ CreateStatistics(CreateStatsStmt *stmt)
 			nattnums++;
 			ReleaseSysCache(atttuple);
 		}
-<<<<<<< HEAD
-		else if (IsA(selem->expr, Var))	/* column reference in parens */
-		{
-			Var *var = (Var *) selem->expr;
-=======
 		else if (IsA(selem->expr, Var)) /* column reference in parens */
 		{
 			Var		   *var = (Var *) selem->expr;
->>>>>>> REL_16_9
 			TypeCacheEntry *type;
 
 			/* Disallow use of system attributes in extended stats */
@@ -321,18 +304,11 @@ CreateStatistics(CreateStatsStmt *stmt)
 			while ((k = bms_next_member(attnums, k)) >= 0)
 			{
 				AttrNumber	attnum = k + FirstLowInvalidHeapAttributeNumber;
-<<<<<<< HEAD
-				if (attnum <= 0)
-					ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("statistics creation on system columns is not supported")));
-=======
 
 				if (attnum <= 0)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("statistics creation on system columns is not supported")));
->>>>>>> REL_16_9
 			}
 
 			/*

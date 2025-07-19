@@ -52,12 +52,11 @@
 #include "utils/pg_lsn.h"
 #include "utils/syscache.h"
 
-<<<<<<< HEAD
 #include "catalog/heap.h"
 #include "catalog/oid_dispatch.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"
-=======
+
 /*
  * Options that can be specified by the user in CREATE/ALTER SUBSCRIPTION
  * command.
@@ -104,7 +103,6 @@ typedef struct SubOpts
 	char	   *origin;
 	XLogRecPtr	lsn;
 } SubOpts;
->>>>>>> REL_16_9
 
 static List *fetch_table_list(WalReceiverConn *wrconn, List *publications);
 static void check_publications_origin(WalReceiverConn *wrconn,
@@ -207,17 +205,10 @@ parse_subscription_options(ParseState *pstate, List *stmt_options,
 			opts->slot_name = defGetString(defel);
 
 			/* Setting slot_name = NONE is treated as no slot name. */
-<<<<<<< HEAD
-			if (strcmp(*slot_name, "none") == 0)
-				*slot_name = NULL;
-			else
-				ReplicationSlotValidateName(*slot_name, ERROR);
-=======
 			if (strcmp(opts->slot_name, "none") == 0)
 				opts->slot_name = NULL;
 			else
 				ReplicationSlotValidateName(opts->slot_name, ERROR);
->>>>>>> REL_16_9
 		}
 		else if (IsSet(supported_opts, SUBOPT_COPY_DATA) &&
 				 strcmp(defel->defname, "copy_data") == 0)
@@ -851,7 +842,6 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 
 	table_close(rel, RowExclusiveLock);
 
-<<<<<<< HEAD
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
 		CdbDispatchUtilityStatement((Node *) stmt,
@@ -868,12 +858,9 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 						   "CREATE", "SUBSCRIPTION");
 	}
 
-	if (enabled)
-=======
 	pgstat_create_subscription(subid);
 
 	if (opts.enabled)
->>>>>>> REL_16_9
 		ApplyLauncherWakeupAtCommit();
 
 	ObjectAddressSet(myself, SubscriptionRelationId, subid);
@@ -1359,22 +1346,9 @@ AlterSubscription(ParseState *pstate, AlterSubscriptionStmt *stmt,
 				List	   *publist;
 				bool		isadd = stmt->kind == ALTER_SUBSCRIPTION_ADD_PUBLICATION;
 
-<<<<<<< HEAD
-				parse_subscription_options(stmt->options,
-										   NULL,	/* no "connect" */
-										   NULL, NULL,	/* no "enabled" */
-										   NULL,	/* no "create_slot" */
-										   NULL, NULL,	/* no "slot_name" */
-										   &copy_data,
-										   NULL,	/* no "synchronous_commit" */
-										   &refresh,
-										   NULL, NULL,	/* no "binary" */
-										   NULL, NULL); /* no "streaming" */
-=======
 				supported_opts = SUBOPT_REFRESH | SUBOPT_COPY_DATA;
 				parse_subscription_options(pstate, stmt->options,
 										   supported_opts, &opts);
->>>>>>> REL_16_9
 
 				publist = merge_publications(sub->publications, stmt->publication, isadd, stmt->subname);
 				values[Anum_pg_subscription_subpublications - 1] =

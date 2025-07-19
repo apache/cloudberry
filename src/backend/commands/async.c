@@ -1237,7 +1237,6 @@ Exec_UnlistenAllCommit(void)
 }
 
 /*
-<<<<<<< HEAD
  * ProcessCompletedNotifies --- nowadays this does nothing
  *
  * This routine used to send signals and handle self-notifies,
@@ -1252,8 +1251,6 @@ ProcessCompletedNotifies(void)
 }
 
 /*
-=======
->>>>>>> REL_16_9
  * Test whether we are actively listening on the given channel name.
  *
  * Note: this function is executed for every notification found in the queue.
@@ -2255,11 +2252,7 @@ asyncQueueAdvanceTail(void)
 static void
 ProcessIncomingNotify(bool flush)
 {
-<<<<<<< HEAD
 	bool		client_wait_timeout_enabled;
-=======
-	MemoryContext oldcontext;
->>>>>>> REL_16_9
 
 	/* We *must* reset the flag */
 	notifyInterruptPending = false;

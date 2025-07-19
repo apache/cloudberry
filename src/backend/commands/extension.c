@@ -895,12 +895,7 @@ extension_is_trusted(ExtensionControlFile *control)
  *
  * If from_version isn't NULL, it's an update
  *
-<<<<<<< HEAD
- * If stmt isn't NULL, it means that there already has been a Gang of type GANGTYPE_PRIMARY_WRITER,
- * and the BEGIN phase of stmt has been executed in every QE in this Gang.
-=======
  * Note: requiredSchemas must be one-for-one with the control->requires list
->>>>>>> REL_16_9
  */
 static void
 execute_extension_script(Node *stmt,
@@ -917,16 +912,13 @@ execute_extension_script(Node *stmt,
 	int			save_nestlevel;
 	StringInfoData pathbuf;
 	ListCell   *lc;
-<<<<<<< HEAD
+	ListCell   *lc2;
 	StringInfoData search_path_buffer;
 
 	AssertState(Gp_role != GP_ROLE_EXECUTE);
 	AssertImply(Gp_role == GP_ROLE_DISPATCH, stmt != NULL &&
 			(nodeTag(stmt) == T_CreateExtensionStmt || nodeTag(stmt) == T_AlterExtensionStmt) &&
 			is_begin_state(stmt));
-=======
-	ListCell   *lc2;
->>>>>>> REL_16_9
 
 	/*
 	 * Enforce superuser-ness if appropriate.  We postpone these checks until
@@ -1155,8 +1147,6 @@ execute_extension_script(Node *stmt,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("invalid character in extension \"%s\" schema: must not contain any of \"%s\"",
 								control->name, quoting_relevant_chars)));
-<<<<<<< HEAD
-=======
 		}
 
 		/*
@@ -1184,7 +1174,6 @@ execute_extension_script(Node *stmt,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("invalid character in extension \"%s\" schema: must not contain any of \"%s\"",
 								reqextname, quoting_relevant_chars)));
->>>>>>> REL_16_9
 		}
 
 		/*

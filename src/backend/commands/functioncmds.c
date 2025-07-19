@@ -1573,13 +1573,9 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 		returnsSet = false;
 	}
 
-<<<<<<< HEAD
 	validate_sql_exec_location(execLocation, returnsSet);
 
-	if (list_length(trftypes_list) > 0)
-=======
 	if (trftypes_list != NIL)
->>>>>>> REL_16_9
 	{
 		ListCell   *lc;
 		Datum	   *arr;
@@ -1717,12 +1713,9 @@ RemoveFunctionById(Oid funcOid)
 
 	table_close(relation, RowExclusiveLock);
 
-<<<<<<< HEAD
 	/* Remove anything in pg_proc_callback for this function */
 	deleteProcCallbacks(funcOid);
-=======
 	pgstat_drop_function(funcOid);
->>>>>>> REL_16_9
 
 	/*
 	 * If there's a pg_aggregate tuple, delete that too.
@@ -1918,7 +1911,6 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 								repl_val, repl_null, repl_repl);
 	}
 	/* DO NOT put more touches of procForm below here; it's now dangling. */
-<<<<<<< HEAD
 	/* GPDB_14_MERGE_FIXME: except refetch procForm from new tup? */
 
 	if (describe_item)
@@ -1977,8 +1969,6 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 							 procForm->prolang);
 	validate_sql_exec_location(exec_location,
 							   procForm->proretset);
-=======
->>>>>>> REL_16_9
 
 	/* Do the update */
 	CatalogTupleUpdate(rel, &tup->t_self, tup);
@@ -2249,9 +2239,8 @@ CreateCast(CreateCastStmt *stmt)
 			break;
 	}
 
-<<<<<<< HEAD
-	myself = CastCreate(sourcetypeid, targettypeid, funcid, castcontext,
-						castmethod, DEPENDENCY_NORMAL);
+	myself = CastCreate(sourcetypeid, targettypeid, funcid, incastid, outcastid,
+						castcontext, castmethod, DEPENDENCY_NORMAL);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -2263,10 +2252,6 @@ CreateCast(CreateCastStmt *stmt)
 									NULL);
 	}
 
-=======
-	myself = CastCreate(sourcetypeid, targettypeid, funcid, incastid, outcastid,
-						castcontext, castmethod, DEPENDENCY_NORMAL);
->>>>>>> REL_16_9
 	return myself;
 }
 

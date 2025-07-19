@@ -3,13 +3,9 @@
  * user.c
  *	  Commands for manipulating roles (formerly called users).
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/commands/user.c
@@ -46,11 +42,8 @@
 #include "storage/lmgr.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-<<<<<<< HEAD
-#include "utils/date.h"
-=======
 #include "utils/catcache.h"
->>>>>>> REL_16_9
+#include "utils/date.h"
 #include "utils/fmgroids.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
@@ -91,7 +84,6 @@ typedef enum
 #include "libpq/auth.h"
 #include "utils/resource_manager.h"
 
-<<<<<<< HEAD
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"
 
@@ -101,7 +93,7 @@ typedef struct extAuthPair
 	char	   *protocol;
 	char	   *type;
 } extAuthPair;
-=======
+
 typedef struct
 {
 	unsigned	specified;
@@ -109,7 +101,6 @@ typedef struct
 	bool		inherit;
 	bool		set;
 } GrantRoleOptions;
->>>>>>> REL_16_9
 
 #define GRANT_ROLE_SPECIFIED_ADMIN			0x0001
 #define GRANT_ROLE_SPECIFIED_INHERIT		0x0002
@@ -129,8 +120,8 @@ static void AddRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 						Oid grantorId, GrantRoleOptions *popt);
 static void DelRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 						List *memberSpecs, List *memberIds,
-<<<<<<< HEAD
-						bool admin_opt);
+						Oid grantorId, GrantRoleOptions *popt,
+						DropBehavior behavior);
 static extAuthPair *TransformExttabAuthClause(DefElem *defel);
 static void SetCreateExtTableForRole(List* allow,
 			List* disallow, bool* createrextgpfd,
@@ -145,9 +136,7 @@ static void AddRoleDenials(const char *rolename, Oid roleid,
 			List *addintervals);
 static void DelRoleDenials(const char *rolename, Oid roleid,
 			List *dropintervals);
-=======
-						Oid grantorId, GrantRoleOptions *popt,
-						DropBehavior behavior);
+
 static void check_role_membership_authorization(Oid currentUserId, Oid roleid,
 												bool is_grant);
 static Oid	check_role_grantor(Oid currentUserId, Oid roleid, Oid grantorId,
@@ -166,7 +155,6 @@ static void plan_recursive_revoke(CatCList *memlist,
 								  bool revoke_admin_option_only,
 								  DropBehavior behavior);
 static void InitGrantRoleOptions(GrantRoleOptions *popt);
->>>>>>> REL_16_9
 
 
 /* Check if current user has createrole privileges */
@@ -236,15 +224,12 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	DefElem    *dadminmembers = NULL;
 	DefElem    *dvalidUntil = NULL;
 	DefElem    *dbypassRLS = NULL;
-<<<<<<< HEAD
+	GrantRoleOptions popt;
 	DefElem    *dprofile = NULL;
 	DefElem    *daccountIsLock = NULL;
 	DefElem    *denableProfile = NULL;
 
 	now = GetCurrentTimestamp();
-=======
-	GrantRoleOptions popt;
->>>>>>> REL_16_9
 
 	/* The defaults can vary depending on the original statement type */
 	switch (stmt->stmt_type)
@@ -455,7 +440,6 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	if (dresgroup)
 		resgroup = strVal(linitial((List *) dresgroup->arg));
 	if (dbypassRLS)
-<<<<<<< HEAD
 		bypassrls = intVal(dbypassRLS->arg) != 0;
 	if (dprofile)
 		profilename = strVal(dprofile->arg);
@@ -463,6 +447,9 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 		account_is_lock = intVal(daccountIsLock->arg) != 0;
 	if (denableProfile)
 		enable_profile = intVal(denableProfile->arg) != 0;
+
+
+	bypassrls = boolVal(dbypassRLS->arg);
 
 	/*
 	 * Only the super user has the privileges of profile.
@@ -505,10 +492,6 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 	 errmsg("must be superuser to create role enable/disable profile")));
 	}
-
-=======
-		bypassrls = boolVal(dbypassRLS->arg);
->>>>>>> REL_16_9
 
 	/* Check some permissions first */
 	if (!superuser_arg(currentUserId))
@@ -1036,33 +1019,18 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	ListCell   *option;
 	char	   *rolename;
 	char	   *password = NULL;	/* user password */
-<<<<<<< HEAD
 	char	   *profilename = NULL;	/* profile name the role be attached */
-	int			issuper = -1;	/* Make the user a superuser? */
-	int			inherit = -1;	/* Auto inherit privileges? */
-	int			createrole = -1;	/* Can this user create roles? */
-	int			createdb = -1;	/* Can the user create databases? */
-	int			canlogin = -1;	/* Can this user login? */
-	int			isreplication = -1; /* Is this a replication role? */
-	int			connlimit = -1; /* maximum connections allowed */
 	bool			enable_profile = false;	/* whether user can use password profile */
 	char	   *resqueue = NULL;	/* resource queue for this role */
 	char	   *resgroup = NULL;	/* resource group for this role */
 	List	   *exttabcreate = NIL;	/* external table create privileges being added  */
 	List	   *exttabnocreate = NIL;	/* external table create privileges being removed */
-	List	   *rolemembers = NIL;	/* roles to be added/removed */
-	char	   *validUntil = NULL;	/* time the login is valid until */
-	Datum		validUntil_datum;	/* same, as timestamptz Datum */
-	bool		validUntil_null;
-	int			bypassrls = -1;
 	int			account_is_lock = -1;	/* whether the account will be locked/unlocked */
 	TimestampTz		now = 0;		/* current timestamp with time zone */
-=======
 	int			connlimit = -1; /* maximum connections allowed */
 	char	   *validUntil = NULL;	/* time the login is valid until */
 	Datum		validUntil_datum;	/* same, as timestamptz Datum */
 	bool		validUntil_null;
->>>>>>> REL_16_9
 	DefElem    *dpassword = NULL;
 	DefElem    *dresqueue = NULL;
 	DefElem    *dresgroup = NULL;
@@ -1080,7 +1048,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	DefElem    *daccountIsLock = NULL;
 	DefElem    *denableProfile = NULL;
 	Oid			roleid;
-<<<<<<< HEAD
 	bool		bWas_super = false;	/* Was the user a superuser? */
 	int			numopts = 0;
 	char	   *alter_subtype = "";	/* metadata tracking: kind of
@@ -1091,6 +1058,9 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	List	   *addintervals = NIL;		/* list of time intervals for which login should be denied */
 	List	   *dropintervals = NIL;	/* list of time intervals for which matching rules should be dropped */
 	Oid			queueid;
+
+	Oid			currentUserId = GetUserId();
+	GrantRoleOptions popt;
 
 	numopts = list_length(stmt->options);
 
@@ -1106,10 +1076,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	{
 		alter_subtype = "0 OPTIONS";
 	}
-=======
-	Oid			currentUserId = GetUserId();
-	GrantRoleOptions popt;
->>>>>>> REL_16_9
 
 	check_rolespec_name(stmt->role,
 						_("Cannot alter reserved roles."));
@@ -1294,13 +1260,10 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	}
 	if (dvalidUntil)
 		validUntil = strVal(dvalidUntil->arg);
-<<<<<<< HEAD
 	if (dresqueue)
 		resqueue = strVal(linitial((List *) dresqueue->arg));
 	if (dresgroup)
 		resgroup = strVal(linitial((List *) dresgroup->arg));
-	if (dbypassRLS)
-		bypassrls = intVal(dbypassRLS->arg);
 	if (dprofile)
 		profilename = strVal(dprofile->arg);
 	if (daccountIsLock)
@@ -1349,8 +1312,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("must be superuser to alter role enable/disable profile")));
 	}
-=======
->>>>>>> REL_16_9
 
 	/*
 	 * Scan the pg_authid relation to be certain the user exists.
@@ -1381,15 +1342,11 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	 * Most changes to a role require that you both have CREATEROLE privileges
 	 * and also ADMIN OPTION on the role.
 	 */
-<<<<<<< HEAD
 
 	bWas_super = ((Form_pg_authid) GETSTRUCT(tuple))->rolsuper;
 
-	if (authform->rolsuper || issuper >= 0)
-=======
 	if (!have_createrole_privilege() ||
 		!is_admin_of_role(GetUserId(), roleid))
->>>>>>> REL_16_9
 	{
 		/* things an unprivileged user certainly can't do */
 		if (dinherit || dcreaterole || dcreatedb || dcanlogin || dconnlimit ||
@@ -1424,29 +1381,10 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 		if (disreplication && !has_rolreplication(currentUserId))
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-<<<<<<< HEAD
-					 errmsg("must be superuser to change bypassrls attribute")));
-	}
-	else if (!have_createrole_privilege())
-	{
-		/* We already checked issuper, isreplication, and bypassrls */
-		if (!(inherit < 0 &&
-			  createrole < 0 &&
-			  createdb < 0 &&
-			  canlogin < 0 &&
-			  !dconnlimit &&
-			  !rolemembers &&
-			  !validUntil &&
-			  dpassword &&
-			  !exttabcreate &&
-			  !exttabnocreate &&
-			  roleid == GetUserId()))
-=======
 					 errmsg("permission denied to alter role"),
 					 errdetail("Only roles with the %s attribute may change the %s attribute.",
 							   "REPLICATION", "REPLICATION")));
 		if (dbypassRLS && !has_bypassrls_privilege(currentUserId))
->>>>>>> REL_16_9
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("permission denied to alter role"),
@@ -1498,12 +1436,8 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	 */
 	if (dissuper)
 	{
-<<<<<<< HEAD
 		bool isNull;
 		Oid roleResgroup;
-
-		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(issuper > 0);
-=======
 		bool		should_be_super = boolVal(dissuper->arg);
 
 		if (!should_be_super && roleid == BOOTSTRAP_SUPERUSERID)
@@ -1514,7 +1448,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 							   "SUPERUSER")));
 
 		new_record[Anum_pg_authid_rolsuper - 1] = BoolGetDatum(should_be_super);
->>>>>>> REL_16_9
 		new_record_repl[Anum_pg_authid_rolsuper - 1] = true;
 
 		roleResgroup = heap_getattr(tuple, Anum_pg_authid_rolresgroup,
@@ -1795,7 +1728,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	new_record_nulls[Anum_pg_authid_rolvaliduntil - 1] = validUntil_null;
 	new_record_repl[Anum_pg_authid_rolvaliduntil - 1] = true;
 
-<<<<<<< HEAD
 	/* profile name */
 	if (profilename)
 	{
@@ -1939,10 +1871,7 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 		}
 	}
 
-	if (bypassrls >= 0)
-=======
 	if (dbypassRLS)
->>>>>>> REL_16_9
 	{
 		new_record[Anum_pg_authid_rolbypassrls - 1] = BoolGetDatum(boolVal(dbypassRLS->arg));
 		new_record_repl[Anum_pg_authid_rolbypassrls - 1] = true;
@@ -1957,7 +1886,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 	ReleaseSysCache(tuple);
 	heap_freetuple(new_tuple);
 
-<<<<<<< HEAD
 	if (stmt->tags)
 	{
 		if (!stmt->unsettag)
@@ -1978,9 +1906,8 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 								 rolename);
 		}
 	}
-=======
+
 	InitGrantRoleOptions(&popt);
->>>>>>> REL_16_9
 
 	/*
 	 * Advance command counter so we can see new record; else tests in
@@ -1992,24 +1919,23 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 
 		CommandCounterIncrement();
 
-<<<<<<< HEAD
 	if (stmt->action == +1)		/* add members to role */
 	{
 		if (rolemembers)
 			alter_subtype = "ADD USER";
 
-		AddRoleMems(rolename, roleid,
+		AddRoleMems(currentUserId, rolename, roleid,
 					rolemembers, roleSpecsToIds(rolemembers),
-					GetUserId(), false);
+					InvalidOid, &popt);
 	}
 	else if (stmt->action == -1)	/* drop members from role */
 	{
 		if (rolemembers)
 			alter_subtype = "DROP USER";
 
-		DelRoleMems(rolename, roleid,
+		DelRoleMems(currentUserId, rolename, roleid,
 					rolemembers, roleSpecsToIds(rolemembers),
-					false);
+					InvalidOid, &popt, DROP_RESTRICT);
 	}
 
 	if (bWas_super)
@@ -2059,17 +1985,6 @@ AlterRole(ParseState *pstate, AlterRoleStmt *stmt)
 						   roleid,
 						   GetUserId(),
 						   "ALTER", alter_subtype);
-=======
-		if (stmt->action == +1) /* add members to role */
-			AddRoleMems(currentUserId, rolename, roleid,
-						rolemembers, roleSpecsToIds(rolemembers),
-						InvalidOid, &popt);
-		else if (stmt->action == -1)	/* drop members from role */
-			DelRoleMems(currentUserId, rolename, roleid,
-						rolemembers, roleSpecsToIds(rolemembers),
-						InvalidOid, &popt, DROP_RESTRICT);
-	}
->>>>>>> REL_16_9
 
 	/*
 	 * Close pg_authid, but keep lock till commit.
@@ -2347,7 +2262,6 @@ DropRole(DropRoleStmt *stmt)
 		systable_endscan(sscan);
 
 		/*
-<<<<<<< HEAD
 		 * Remove all role history passwords from pg_password_history.
 		 */
 		ScanKeyInit(&scankey,
@@ -2375,11 +2289,6 @@ DropRole(DropRoleStmt *stmt)
 		 */
 		DelRoleDenials(role, roleid, NIL);
 
-		/*
-		 * Remove any comments or security labels on this role.
-		 */
-		DeleteSharedComments(roleid, AuthIdRelationId);
-		DeleteSharedSecurityLabel(roleid, AuthIdRelationId);
 		
 		/*
 		 * Delete any tag description and associated dependencies.
@@ -2392,14 +2301,6 @@ DropRole(DropRoleStmt *stmt)
 		if (Gp_role == GP_ROLE_DISPATCH)
 			MetaTrackDropObject(AuthIdRelationId,
 								roleid);
-		/*
-		 * Remove settings for this role.
-		 */
-		DropSetting(InvalidOid, roleid);
-
-		/*
-=======
->>>>>>> REL_16_9
 		 * Advance command counter so that later iterations of this loop will
 		 * see the changes already made.  This is essential if, for example,
 		 * we are trying to drop both a role and one of its direct members ---
@@ -2738,8 +2639,7 @@ GrantRole(ParseState *pstate, GrantRoleStmt *stmt)
 		else
 			DelRoleMems(currentUserId, rolename, roleid,
 						stmt->grantee_roles, grantee_ids,
-<<<<<<< HEAD
-						stmt->admin_opt);
+						grantor, &popt, stmt->behavior);
 
 		/* MPP-6929: metadata tracking */
 		if (Gp_role == GP_ROLE_DISPATCH)
@@ -2749,10 +2649,6 @@ GrantRole(ParseState *pstate, GrantRoleStmt *stmt)
 								   "PRIVILEGE",
 								   (stmt->is_grant) ? "GRANT" : "REVOKE"
 						);
-
-=======
-						grantor, &popt, stmt->behavior);
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -2904,63 +2800,8 @@ AddRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 
 	Assert(list_length(memberSpecs) == list_length(memberIds));
 
-<<<<<<< HEAD
-	/* Skip permission check if nothing to do */
-	if (!memberIds)
-		return;
-
-	/*
-	 * Check permissions: must have createrole or admin option on the role to
-	 * be changed.  To mess with a superuser role, you gotta be superuser.
-	 */
-	if (superuser_arg(roleid))
-	{
-		if (!superuser())
-			ereport(ERROR,
-					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("must be superuser to alter superusers")));
-	}
-	else
-	{
-		if (!have_createrole_privilege() &&
-			!is_admin_of_role(grantorId, roleid))
-			ereport(ERROR,
-					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("must have admin option on role \"%s\"",
-							rolename)));
-	}
-
-	/*
-	 * The charter of pg_database_owner is to have exactly one, implicit,
-	 * situation-dependent member.  There's no technical need for this
-	 * restriction.  (One could lift it and take the further step of making
-	 * pg_database_ownercheck() equivalent to has_privs_of_role(roleid,
-	 * ROLE_PG_DATABASE_OWNER), in which case explicit, situation-independent
-	 * members could act as the owner of any database.)
-	 */
-	if (roleid == ROLE_PG_DATABASE_OWNER)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_GRANT_OPERATION),
-				 errmsg("role \"%s\" cannot have explicit members", rolename)));
-
-	/*
-	 * The role membership grantor of record has little significance at
-	 * present.  Nonetheless, inasmuch as users might look to it for a crude
-	 * audit trail, let only superusers impute the grant to a third party.
-	 *
-	 * Before lifting this restriction, give the member == role case of
-	 * is_admin_of_role() a fresh look.  Ensure that the current role cannot
-	 * use an explicit grantor specification to take advantage of the session
-	 * user's self-admin right.
-	 */
-	if (grantorId != GetUserId() && !superuser())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to set grantor")));
-=======
 	/* Validate grantor (and resolve implicit grantor if not specified). */
 	grantorId = check_role_grantor(currentUserId, roleid, grantorId, true);
->>>>>>> REL_16_9
 
 	pg_authmem_rel = table_open(AuthMemRelationId, RowExclusiveLock);
 	pg_authmem_dsc = RelationGetDescr(pg_authmem_rel);
@@ -3049,14 +2890,6 @@ AddRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 		actions = initialize_revoke_actions(memlist);
 		foreach(iditem, memberIds)
 		{
-<<<<<<< HEAD
-			if (Gp_role != GP_ROLE_EXECUTE)
-			ereport(NOTICE,
-					(errmsg("role \"%s\" is already a member of role \"%s\"",
-							get_rolespec_name(memberRole), rolename)));
-			ReleaseSysCache(authmem_tuple);
-			continue;
-=======
 			Oid			memberid = lfirst_oid(iditem);
 
 			if (memberid == BOOTSTRAP_SUPERUSERID)
@@ -3065,7 +2898,6 @@ AddRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 						 errmsg("%s option cannot be granted back to your own grantor",
 								"ADMIN")));
 			plan_member_revoke(memlist, actions, memberid);
->>>>>>> REL_16_9
 		}
 
 		/*
@@ -3673,7 +3505,6 @@ DelRoleMems(Oid currentUserId, const char *rolename, Oid roleid,
 }
 
 /*
-<<<<<<< HEAD
  * ExtractAuthIntervalClause
  *
  * Build an authInterval struct (defined above) from given input
@@ -3808,13 +3639,13 @@ AddRoleDenials(const char *rolename, Oid roleid, List *addintervals)
 static void
 DelRoleDenials(const char *rolename, Oid roleid, List *dropintervals)
 {
-	Relation    pg_auth_time_rel;
+	Relation pg_auth_time_rel;
 	ScanKeyData scankey;
 	SysScanDesc sscan;
-	ListCell	*intervalitem;
-	bool		dropped_matching_interval = false;
+	ListCell *intervalitem;
+	bool dropped_matching_interval = false;
 
-	HeapTuple 	tmp_tuple;
+	HeapTuple tmp_tuple;
 
 	pg_auth_time_rel = table_open(AuthTimeConstraintRelationId, RowExclusiveLock);
 
@@ -3829,15 +3660,17 @@ DelRoleDenials(const char *rolename, Oid roleid, List *dropintervals)
 	{
 		if (dropintervals != NIL)
 		{
-			Form_pg_auth_time_constraint obj = (Form_pg_auth_time_constraint) GETSTRUCT(tmp_tuple);
-			authInterval *interval, *existing = (authInterval *) palloc0(sizeof(authInterval));
+			Form_pg_auth_time_constraint obj = (Form_pg_auth_time_constraint) GETSTRUCT(
+					tmp_tuple);
+			authInterval *interval, *existing = (authInterval *) palloc0(
+					sizeof(authInterval));
 			existing->start.day = obj->start_day;
 			existing->start.time = obj->start_time;
 			existing->end.day = obj->end_day;
 			existing->end.time = obj->end_time;
 			foreach(intervalitem, dropintervals)
 			{
-				interval = (authInterval *)lfirst(intervalitem);
+				interval = (authInterval *) lfirst(intervalitem);
 				if (interval_overlap(existing, interval))
 				{
 					if (Gp_role == GP_ROLE_DISPATCH)
@@ -3845,9 +3678,13 @@ DelRoleDenials(const char *rolename, Oid roleid, List *dropintervals)
 								(errmsg("dropping DENY rule for \"%s\" between %s %s and %s %s",
 										rolename,
 										daysofweek[existing->start.day],
-										DatumGetCString(DirectFunctionCall1(time_out, TimeADTGetDatum(existing->start.time))),
+										DatumGetCString(DirectFunctionCall1(time_out,
+																			TimeADTGetDatum(
+																					existing->start.time))),
 										daysofweek[existing->end.day],
-										DatumGetCString(DirectFunctionCall1(time_out, TimeADTGetDatum(existing->end.time))))));
+										DatumGetCString(DirectFunctionCall1(time_out,
+																			TimeADTGetDatum(
+																					existing->end.time))))));
 					CatalogTupleDelete(pg_auth_time_rel, &tmp_tuple->t_self);
 					dropped_matching_interval = true;
 					break;
@@ -3862,7 +3699,7 @@ DelRoleDenials(const char *rolename, Oid roleid, List *dropintervals)
 	if (dropintervals && !dropped_matching_interval)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("cannot find matching DENY rules for \"%s\"", rolename)));
+						errmsg("cannot find matching DENY rules for \"%s\"", rolename)));
 
 	systable_endscan(sscan);
 
@@ -3871,7 +3708,9 @@ DelRoleDenials(const char *rolename, Oid roleid, List *dropintervals)
 	 * prevent any risk of deadlock failure while updating flat file)
 	 */
 	table_close(pg_auth_time_rel, NoLock);
-=======
+}
+
+/*
  * Check that currentUserId has permission to modify the membership list for
  * roleid. Throw an error if not.
  */
@@ -4347,5 +4186,4 @@ assign_createrole_self_grant(const char *newval, void *extra)
 		(options & GRANT_ROLE_SPECIFIED_INHERIT) != 0;
 	createrole_self_grant_options.set =
 		(options & GRANT_ROLE_SPECIFIED_SET) != 0;
->>>>>>> REL_16_9
 }

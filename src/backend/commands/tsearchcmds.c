@@ -49,17 +49,15 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-<<<<<<< HEAD
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
-=======
+
 /* Single entry of List returned by getTokenTypes() */
 typedef struct
 {
 	int			num;			/* token type number */
 	char	   *name;			/* token type name */
 } TSTokenTypeItem;
->>>>>>> REL_16_9
 
 static void MakeConfigurationMapping(AlterTSConfigurationStmt *stmt,
 									 HeapTuple tup, Relation relMap);

@@ -16,7 +16,6 @@
  * maintain a symbolic-link map in $PGDATA/pg_tblspc. The symlinks are
  * named by tablespace OIDs and point to the actual tablespace directories.
  * There is also a per-cluster version directory in each tablespace.
-<<<<<<< HEAD
  *
  * In GPDB, the "dbid" of the server is also embedded in the path, so that
  * multiple segments running on the host can use the same directory without
@@ -27,12 +26,6 @@
  *
  * The path to the tablespace looks like this:
  *          /path/to/tablespace/<dbid>/GPDB_MAJOR_CATVER/dboid/relfilenode
-=======
- * Thus the full path to an arbitrary file is
- *			$PGDATA/pg_tblspc/spcoid/PG_MAJORVER_CATVER/dboid/relfilenumber
- * e.g.
- *			$PGDATA/pg_tblspc/20981/PG_9.0_201002161/719849/83292814
->>>>>>> REL_16_9
  *
  * There are two tablespaces created at initdb time: pg_global (for shared
  * tables) and pg_default (for everything else).  For backwards compatibility
@@ -48,13 +41,9 @@
  * and munge the system catalogs of the new database.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010 Greenplum Inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -188,14 +177,10 @@ TablespaceCreateDbspace(Oid spcOid, Oid dbOid, bool isRedo)
 	Assert(OidIsValid(spcOid));
 	Assert(OidIsValid(dbOid));
 
-<<<<<<< HEAD
 	if (spcNode != DEFAULTTABLESPACE_OID && !isRedo)
 		TablespaceLockTuple(spcNode, AccessShareLock, true);
 
-	dir = GetDatabasePath(dbNode, spcNode);
-=======
 	dir = GetDatabasePath(dbOid, spcOid);
->>>>>>> REL_16_9
 
 	if (stat(dir, &st) < 0)
 	{
@@ -286,12 +271,8 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	char	   *location = NULL;
 	Oid			ownerId;
 	Datum		newOptions;
-<<<<<<< HEAD
 	List       *nonContentOptions = NIL;
 	char       *fileHandler = NULL;
-=======
-	bool		in_place;
->>>>>>> REL_16_9
 
 	/* Must be superuser */
 	if (!superuser())
@@ -446,18 +427,13 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("pg_tablespace OID value not set when in binary upgrade mode")));
 
-<<<<<<< HEAD
-	tablespaceoid = GetNewOidForTableSpace(rel, TablespaceOidIndexId,
-										   Anum_pg_tablespace_oid,
-										   stmt->tablespacename);
-=======
 		tablespaceoid = binary_upgrade_next_pg_tablespace_oid;
 		binary_upgrade_next_pg_tablespace_oid = InvalidOid;
 	}
 	else
-		tablespaceoid = GetNewOidWithIndex(rel, TablespaceOidIndexId,
-										   Anum_pg_tablespace_oid);
->>>>>>> REL_16_9
+		tablespaceoid = GetNewOidForTableSpace(rel, TablespaceOidIndexId,
+											   Anum_pg_tablespace_oid,
+											   stmt->tablespacename);
 	values[Anum_pg_tablespace_oid - 1] = ObjectIdGetDatum(tablespaceoid);
 	values[Anum_pg_tablespace_spcname - 1] =
 		DirectFunctionCall1(namein, CStringGetDatum(stmt->tablespacename));
@@ -792,49 +768,7 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 	 */
 	LWLockAcquire(TablespaceCreateLock, LW_EXCLUSIVE);
 
-<<<<<<< HEAD
 	ensure_tablespace_directory_is_empty(tablespaceoid, tablespacename);
-=======
-	/*
-	 * Try to remove the physical infrastructure.
-	 */
-	if (!destroy_tablespace_directories(tablespaceoid, false))
-	{
-		/*
-		 * Not all files deleted?  However, there can be lingering empty files
-		 * in the directories, left behind by for example DROP TABLE, that
-		 * have been scheduled for deletion at next checkpoint (see comments
-		 * in mdunlink() for details).  We could just delete them immediately,
-		 * but we can't tell them apart from important data files that we
-		 * mustn't delete.  So instead, we force a checkpoint which will clean
-		 * out any lingering files, and try again.
-		 */
-		RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_FORCE | CHECKPOINT_WAIT);
-
-		/*
-		 * On Windows, an unlinked file persists in the directory listing
-		 * until no process retains an open handle for the file.  The DDL
-		 * commands that schedule files for unlink send invalidation messages
-		 * directing other PostgreSQL processes to close the files, but
-		 * nothing guarantees they'll be processed in time.  So, we'll also
-		 * use a global barrier to ask all backends to close all files, and
-		 * wait until they're finished.
-		 */
-		LWLockRelease(TablespaceCreateLock);
-		WaitForProcSignalBarrier(EmitProcSignalBarrier(PROCSIGNAL_BARRIER_SMGRRELEASE));
-		LWLockAcquire(TablespaceCreateLock, LW_EXCLUSIVE);
-
-		/* And now try again. */
-		if (!destroy_tablespace_directories(tablespaceoid, false))
-		{
-			/* Still not empty, the files must be important then */
-			ereport(ERROR,
-					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					 errmsg("tablespace \"%s\" is not empty",
-							tablespacename)));
-		}
-	}
->>>>>>> REL_16_9
 
 	/* Record the filesystem change in XLOG */
 	{
@@ -873,7 +807,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 	/* We keep the lock on pg_tablespace until commit */
 	table_close(rel, NoLock);
-<<<<<<< HEAD
 
 	/*
 	 * If we are the QD, dispatch this DROP command to all the QEs
@@ -888,13 +821,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 									NULL);
 	}
 
-#else							/* !HAVE_SYMLINK */
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("tablespaces are not supported on this platform")));
-#endif							/* HAVE_SYMLINK */
-=======
->>>>>>> REL_16_9
 }
 
 /*
@@ -916,31 +842,9 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 		tablespaceoid, GpIdentity.dbid);
 
 	linkloc = psprintf("pg_tblspc/%u", tablespaceoid);
-<<<<<<< HEAD
 	location_with_dbid_dir = psprintf("%s/%d", location, GpIdentity.dbid);
 	location_with_version_dir = psprintf("%s/%s", location_with_dbid_dir,
 										 GP_TABLESPACE_VERSION_DIRECTORY);
-=======
-
-	/*
-	 * If we're asked to make an 'in place' tablespace, create the directory
-	 * directly where the symlink would normally go.  This is a developer-only
-	 * option for now, to facilitate regression testing.
-	 */
-	in_place = strlen(location) == 0;
-
-	if (in_place)
-	{
-		if (MakePGDirectory(linkloc) < 0 && errno != EEXIST)
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not create directory \"%s\": %m",
-							linkloc)));
-	}
-
-	location_with_version_dir = psprintf("%s/%s", in_place ? linkloc : location,
-										 TABLESPACE_VERSION_DIRECTORY);
->>>>>>> REL_16_9
 
 	/*
 	 * Attempt to coerce target directory to safe permissions.  If this fails,
@@ -964,22 +868,6 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	}
 
 	/*
-<<<<<<< HEAD
-	 * In GPDB each segment has a directory with its unique dbid under the
-	 * tablespace path. Unlike the location_with_version_dir, do not error out
-	 * if it already exists.
-	 */
-	if (stat(location_with_dbid_dir, &st) < 0) 
-	{
-		if (errno == ENOENT)
-		{
-			if (mkdir(location_with_dbid_dir, S_IRWXU) < 0)
-					ereport(ERROR,
-							(errcode_for_file_access(),
-								errmsg("could not create directory \"%s\": %m", location_with_dbid_dir)));
-		}
-		else
-=======
 	 * The creation of the version directory prevents more than one tablespace
 	 * in a single location.  This imitates TablespaceCreateDbspace(), but it
 	 * ignores concurrency and missing parent directories.  The chmod() would
@@ -994,40 +882,11 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 					 errmsg("could not stat directory \"%s\": %m",
 							location_with_version_dir)));
 		else if (MakePGDirectory(location_with_version_dir) < 0)
->>>>>>> REL_16_9
 			ereport(ERROR,
 					(errcode_for_file_access(),
 						errmsg("could not stat directory \"%s\": %m", location_with_dbid_dir)));
 
 	}
-<<<<<<< HEAD
-	else
-		ereport(DEBUG1,
-				(errmsg("directory \"%s\" already exists in tablespace",
-					location_with_dbid_dir)));
-
-	/*
-	 * The creation of the version directory prevents more than one tablespace
-	 * in a single location.  This imitates TablespaceCreateDbspace(), but it
-	 * ignores concurrency and missing parent directories.  The chmod() would
-	 * have failed in the absence of a parent.  pg_tablespace_spcname_index
-	 * prevents concurrency.
-	 */
-	if (stat(location_with_version_dir, &st) < 0)
-	{
-		if (errno != ENOENT)
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not stat directory \"%s\": %m",
-							location_with_version_dir)));
-		else if (MakePGDirectory(location_with_version_dir) < 0)
-			ereport(ERROR,
-					(errcode_for_file_access(),
-				  errmsg("could not create directory \"%s\": %m",
-						 location_with_version_dir)));
-	}
-=======
->>>>>>> REL_16_9
 	else if (!S_ISDIR(st.st_mode))
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -1048,11 +907,7 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	/*
 	 * Create the symlink under PGDATA
 	 */
-<<<<<<< HEAD
 	if (symlink(location_with_dbid_dir, linkloc) < 0)
-=======
-	if (!in_place && symlink(location, linkloc) < 0)
->>>>>>> REL_16_9
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not create symbolic link \"%s\": %m",
@@ -2174,14 +2029,9 @@ tblspc_redo(XLogReaderState *record)
 	}
 	else if (info == XLOG_TBLSPC_DROP)
 	{
-<<<<<<< HEAD
-=======
-		xl_tblspc_drop_rec *xlrec = (xl_tblspc_drop_rec *) XLogRecGetData(record);
-
 		/* Close all smgr fds in all backends. */
 		WaitForProcSignalBarrier(EmitProcSignalBarrier(PROCSIGNAL_BARRIER_SMGRRELEASE));
 
->>>>>>> REL_16_9
 		/*
 		 * We no longer remove tablespace directories while replaying
 		 * XLOG_TBLSPC_DROP. We wait until the commit for the tablespace drop

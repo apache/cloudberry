@@ -939,13 +939,10 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 		case OBJECT_DATABASE:
 		case OBJECT_TABLESPACE:
 		case OBJECT_ROLE:
-<<<<<<< HEAD
+		case OBJECT_PARAMETER_ACL:
 		case OBJECT_PROFILE:
 		case OBJECT_STORAGE_SERVER:
 		case OBJECT_STORAGE_USER_MAPPING:
-=======
-		case OBJECT_PARAMETER_ACL:
->>>>>>> REL_16_9
 			/* no support for global objects */
 			return false;
 		case OBJECT_EVENT_TRIGGER:
@@ -1030,7 +1027,8 @@ EventTriggerSupportsObjectClass(ObjectClass objclass)
 		case OCLASS_DATABASE:
 		case OCLASS_TBLSPACE:
 		case OCLASS_ROLE:
-<<<<<<< HEAD
+		case OCLASS_ROLE_MEMBERSHIP:
+		case OCLASS_PARAMETER_ACL:
 		case OCLASS_PROFILE:
 		case OCLASS_PASSWORDHISTORY:
 		case OCLASS_MATVIEW_AUX:
@@ -1038,10 +1036,6 @@ EventTriggerSupportsObjectClass(ObjectClass objclass)
 		case OCLASS_STORAGE_USER_MAPPING:
 		case OCLASS_TAG:
 		case OCLASS_TAG_DESCRIPTION:
-=======
-		case OCLASS_ROLE_MEMBERSHIP:
-		case OCLASS_PARAMETER_ACL:
->>>>>>> REL_16_9
 			/* no support for global objects */
 			return false;
 		case OCLASS_EVENT_TRIGGER:
