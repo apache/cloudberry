@@ -1011,9 +1011,10 @@ fstream_open(const char *path, const struct fstream_options *options,
 		struct gpfxdist_t* transform = (i == 0) ? options->transform : NULL;
 
 		gfile_close(&fs->fd);
-#ifdef LIBSSH2
+
 		if (is_sftp)
 		{
+#ifdef LIBSSH2
 			if (gfile_open_sftp(&fs->fd, fs->glob.gl_pathv[i], fs->glob.gl_username[i], fs->glob.gl_passwd[i],
 								fs->glob.gl_hostaddr[i], fs->glob.gl_port[i], gfile_open_flags(options->forwrite, options->usesync), response_code, response_string, transform))
 			{
@@ -1021,8 +1022,8 @@ fstream_open(const char *path, const struct fstream_options *options,
 				fstream_close(fs);
 				return 0;
 			}
-		}
 #endif
+		}
 		else
 		{
 			if (gfile_open(&fs->fd, fs->glob.gl_pathv[i], gfile_open_flags(options->forwrite, options->usesync),
@@ -1083,9 +1084,9 @@ static int nextFile(fstream_t*fs)
 	if (fs->fidx < fs->glob.gl_pathc)
 	{
 		fs->skip_header_line = fs->options.header;
-#ifdef LIBSSH2
 		if (fs->fd.is_sftp)
 		{
+#ifdef LIBSSH2
 			if (gfile_open_sftp(&fs->fd, fs->glob.gl_pathv[fs->fidx], fs->glob.gl_username[fs->fidx], fs->glob.gl_passwd[fs->fidx],
 								fs->glob.gl_hostaddr[fs->fidx], fs->glob.gl_port[fs->fidx], GFILE_OPEN_FOR_READ, &response_code, &response_string, transform))
 			{
@@ -1094,8 +1095,8 @@ static int nextFile(fstream_t*fs)
 				fs->ferror = "unable to open file";
 				return 1;
 			}
+#endif
 		}
-#else
 		else
 		{
 			if (gfile_open(&fs->fd, fs->glob.gl_pathv[fs->fidx], GFILE_OPEN_FOR_READ,
@@ -1107,7 +1108,6 @@ static int nextFile(fstream_t*fs)
 				return 1;
 			}
 		}
-#endif
 	}
 
 	return 0;

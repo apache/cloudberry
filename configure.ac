@@ -228,9 +228,9 @@ AC_SUBST(enable_gpfdist)
 if test "$enable_gpfdist" = yes; then
   # Check libssh2 >= 1.0.0
   PKG_CHECK_MODULES([LIBSSH2], [libssh2 >= 1.0.0],
-    [AC_DEFINE([LIBSSH2], [1], [Define if libssh2 is available])],
-    [AC_MSG_ERROR([libssh2 >= 1.0.0 is required for gpfdist support])]
-  )
+  [AC_DEFINE([LIBSSH2], [1], [Define if libssh2 is available])],
+  [AC_MSG_WARN([libssh2 >= 1.0.0 not found, gpfdist will build without libssh2 support])]
+)
   AC_MSG_RESULT([checking whether to build with gpfdist support ... yes])
 fi
 
