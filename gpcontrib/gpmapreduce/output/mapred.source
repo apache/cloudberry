@@ -42,7 +42,7 @@ select lanname, lanispl, lanpltrusted from pg_language;
  plpython3u | t       | f
 (6 rows)
 
--- Check environment variables that should have been set by greenplum_path.sh
+-- Check environment variables that should have been set by cloudberry-env.sh
 --
 -- 1) We need to check these on all segments and on the master.
 -- 2) We do this via external table rather than perl/python in case it is part

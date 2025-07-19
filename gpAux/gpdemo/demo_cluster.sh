@@ -120,7 +120,7 @@ cleanDemo(){
     ##
 
     (export COORDINATOR_DATA_DIRECTORY=$QDDIR/${SEG_PREFIX}-1;
-     source ${GPHOME}/greenplum_path.sh;
+     source ${GPHOME}/cloudberry-env.sh;
      gpstop -ai)
 
     ##
@@ -180,7 +180,7 @@ done
 if [ -z "${GPHOME}" ]; then
     echo "FATAL: The GPHOME environment variable is not set."
     echo ""
-    echo "  You can set it by sourcing the greenplum_path.sh"
+    echo "  You can set it by sourcing the cloudberry-env.sh"
     echo "  file in your Cloudberry installation directory."
     echo ""
     exit 1

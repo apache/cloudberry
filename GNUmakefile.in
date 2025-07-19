@@ -154,17 +154,17 @@ check-tests installcheck installcheck-parallel installcheck-tests: submake-gener
 	$(MAKE) -C src/test/regress $@
 
 check:
-	if [ ! -f $(prefix)/greenplum_path.sh ]; then \
+	if [ ! -f $(prefix)/cloudberry-env.sh ]; then \
 		$(MAKE) -C $(top_builddir) install; \
 	fi
-	. $(prefix)/greenplum_path.sh; \
+	. $(prefix)/cloudberry-env.sh; \
 	if pg_isready 1>/dev/null; then \
 	  $(MAKE) -C $(top_builddir) installcheck; \
 	else \
 	  if [ ! -f $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh ]; then \
-	    . $(prefix)/greenplum_path.sh && $(MAKE) -C $(top_builddir) create-demo-cluster; \
+	    . $(prefix)/cloudberry-env.sh && $(MAKE) -C $(top_builddir) create-demo-cluster; \
 	  fi; \
-	  . $(prefix)/greenplum_path.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
+	  . $(prefix)/cloudberry-env.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
 	fi
 
 $(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib,check)

@@ -28,8 +28,8 @@ declare -a GPPATH
 GPPATH=( $GPHOME $MPPHOME $BIZHOME )
 if [ ${#GPPATH[@]} -eq 0 ];then
 	echo "[FATAL]:-GPHOME environment variable is required to run GPDB but could not be found."
-	echo "Please set it by sourcing the  greenplum_path.sh  in your GPDB installation directory."
-	echo "Example: ''. /usr/local/gpdb/greenplum_path.sh''"
+	echo "Please set it by sourcing the cloudberry-env.sh in your GPDB installation directory."
+	echo "Example: ''. /usr/local/gpdb/cloudberry-env.sh''"
 	exit 1
 fi
 

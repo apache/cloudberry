@@ -25,7 +25,7 @@ sudo yum install -y \
     xerces-c-devel \
     zlib-devel
 
-# Needed for pygresql, or you can source greenplum_path.sh after compiling database and installing python-dependencies then
+# Needed for pygresql, or you can source cloudberry-env.sh after compiling database and installing python-dependencies then
 sudo yum install -y \
     postgresql \
     postgresql-devel

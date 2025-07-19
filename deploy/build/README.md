@@ -18,8 +18,8 @@ This guides describes how to build Apache Cloudberry from source code.
 make -j8
 make -j8 install
 
-# Bring in greenplum environment for CBDB into your running shell
-source /usr/local/cloudberry/greenplum_path.sh
+# Bring in cloudberry environment for CBDB into your running shell
+source /usr/local/cloudberry/cloudberry-env.sh
 
 # Start demo cluster
 make create-demo-cluster

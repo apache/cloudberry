@@ -37,7 +37,7 @@ try:
     from gppylib.operations.unix import CheckDir, CheckFile, MakeDir
 
 except ImportError as e:
-    sys.exit('Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('Cannot import modules.  Please check that you have sourced cloudberry-env.sh.  Detail: ' + str(e))
 
 EXECNAME = 'analyzedb'
 STATEFILE_DIR = 'db_analyze'
