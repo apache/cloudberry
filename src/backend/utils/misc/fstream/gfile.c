@@ -1383,12 +1383,13 @@ gfile_close(gfile_t*fd)
 			{
 				fd->close(fd);
 			}
-#ifdef LIBSSH2
 			if (fd->is_sftp)
 			{
+#ifdef LIBSSH2
 				sftp_close(fd);
-			}
 #endif
+			}
+
 			else
 			{
 				if (fd->is_win_pipe)
