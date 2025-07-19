@@ -55,7 +55,6 @@
 #include "utils/varlena.h"
 
 
-<<<<<<< HEAD
 #include "catalog/heap.h"
 #include "catalog/oid_dispatch.h"
 #include "cdb/cdbdisp_query.h"
@@ -63,7 +62,7 @@
 
 /* Same as MAXNUMMESSAGES in sinvaladt.c */
 #define MAX_RELCACHE_INVAL_MSGS 4096
-=======
+
 /*
  * Information used to validate the columns in the row filter expression. See
  * contain_invalid_rfcolumn_walker for details.
@@ -76,7 +75,6 @@ typedef struct rf_context
 	Oid			relid;			/* relid of the relation */
 	Oid			parentid;		/* relid of the parent relation */
 } rf_context;
->>>>>>> REL_16_9
 
 static List *OpenTableList(List *tables);
 static void CloseTableList(List *rels);
@@ -1057,10 +1055,6 @@ AlterPublicationOptions(ParseState *pstate, AlterPublicationStmt *stmt,
 		 * invalidate all partitions contained in the respective partition
 		 * trees, not just those explicitly mentioned in the publication.
 		 */
-<<<<<<< HEAD
-		List	   *relids = GetPublicationRelations(pubform->oid,
-													 PUBLICATION_PART_ALL);
-=======
 		if (root_relids == NIL)
 			relids = GetPublicationRelations(pubform->oid,
 											 PUBLICATION_PART_ALL);
@@ -1079,7 +1073,6 @@ AlterPublicationOptions(ParseState *pstate, AlterPublicationStmt *stmt,
 		schemarelids = GetAllSchemaPublicationRelations(pubform->oid,
 														PUBLICATION_PART_ALL);
 		relids = list_concat_unique_oid(relids, schemarelids);
->>>>>>> REL_16_9
 
 		InvalidatePublicationRels(relids);
 	}
@@ -1520,7 +1513,6 @@ RemovePublicationRelById(Oid proid)
 											pubrel->prrelid);
 
 	InvalidatePublicationRels(relids);
-<<<<<<< HEAD
 
 	CatalogTupleDelete(rel, &tup->t_self);
 
@@ -1557,8 +1549,6 @@ RemovePublicationById(Oid pubid)
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
 		MetaTrackDropObject(PublicationRelationId, pubid);
-=======
->>>>>>> REL_16_9
 
 	CatalogTupleDelete(rel, &tup->t_self);
 

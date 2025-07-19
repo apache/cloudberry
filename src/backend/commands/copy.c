@@ -3,13 +3,9 @@
  * copy.c
  *		Implements the COPY utility command
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -161,11 +157,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		}
 		else
 		{
-<<<<<<< HEAD
 			if (is_from && !is_member_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES) && rel->rd_rel->relkind != RELKIND_DIRECTORY_TABLE)
-=======
-			if (is_from && !has_privs_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
->>>>>>> REL_16_9
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						 errmsg("permission denied to COPY from a file"),
@@ -174,11 +166,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 						 errhint("Anyone can COPY to stdout or from stdin. "
 								 "psql's \\copy command also works for anyone.")));
 
-<<<<<<< HEAD
 			if (!is_from && !is_member_of_role(GetUserId(), ROLE_PG_WRITE_SERVER_FILES) && rel->rd_rel->relkind != RELKIND_DIRECTORY_TABLE)
-=======
-			if (!is_from && !has_privs_of_role(GetUserId(), ROLE_PG_WRITE_SERVER_FILES))
->>>>>>> REL_16_9
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						 errmsg("permission denied to COPY to a file"),
@@ -276,12 +264,8 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 		 * backwards-compatibility, we do the translation to "COPY (SELECT
 		 * ...)" variant automatically, just like PostgreSQL does for RLS.
 		 */
-<<<<<<< HEAD
 		if (check_enable_rls(rte->relid, InvalidOid, false) == RLS_ENABLED ||
 			(!is_from && rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE))
-=======
-		if (check_enable_rls(relid, InvalidOid, false) == RLS_ENABLED)
->>>>>>> REL_16_9
 		{
 			SelectStmt *select;
 			ColumnRef  *cr;
@@ -497,7 +481,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	{
 		CopyToState cstate;
 
-<<<<<<< HEAD
 		/*
 		 * GPDB_91_MERGE_FIXME: ExecutorStart() is called in BeginCopyTo,
 		 * but the TRY-CATCH block only starts here. If an error is
@@ -515,20 +498,12 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 				cstate = BeginCopyToDirectoryTable(pstate, stmt->filename, stmt->dirfilename,
 												   rel, stmt->is_program, options);
 			}
-=======
-		cstate = BeginCopyTo(pstate, rel, query, relid,
-							 stmt->filename, stmt->is_program,
-							 NULL, stmt->attlist, stmt->options);
-		*processed = DoCopyTo(cstate);	/* copy from database to file */
-		EndCopyTo(cstate);
-	}
->>>>>>> REL_16_9
 
 			else
 			{
 				cstate = BeginCopyTo(pstate, rel, query, relid,
 									 stmt->filename, stmt->is_program,
-									 stmt->attlist, options);
+									 NULL, stmt->attlist, options);
 			}
 
 			/*
@@ -998,21 +973,10 @@ ProcessCopyOptions(ParseState *pstate,
 				 errmsg("COPY delimiter cannot be \"%s\"", opts_out->delim)));
 
 	/* Check header */
-<<<<<<< HEAD
-	/*
-	 * In PostgreSQL, HEADER is not allowed in text mode either, but in GPDB,
-	 * only forbid it with BINARY.
-	 */
-	if (opts_out->binary && opts_out->header_line)
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("COPY cannot specify HEADER in BINARY mode")));
-=======
 	if (opts_out->binary && opts_out->header_line)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot specify HEADER in BINARY mode")));
->>>>>>> REL_16_9
 
 	/* Check quote */
 	if (!opts_out->csv_mode && opts_out->quote != NULL)
@@ -1095,7 +1059,6 @@ ProcessCopyOptions(ParseState *pstate,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("CSV quote character must not appear in the NULL specification")));
 
-<<<<<<< HEAD
 	if (opts_out->tags != NULL && !is_from)
 		ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1166,6 +1129,35 @@ ProcessCopyOptions(ParseState *pstate,
 								opts_out->eol_str),
 						 errhint("Valid options are: 'LF', 'CRLF' and 'CR'.")));
 		}
+	}
+
+	if (opts_out->default_print)
+	{
+		if (!is_from)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("COPY DEFAULT only available using COPY FROM")));
+
+		/* Don't allow the delimiter to appear in the default string. */
+		if (strchr(opts_out->default_print, opts_out->delim[0]) != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("COPY delimiter must not appear in the DEFAULT specification")));
+
+		/* Don't allow the CSV quote char to appear in the default string. */
+		if (opts_out->csv_mode &&
+			strchr(opts_out->default_print, opts_out->quote[0]) != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("CSV quote character must not appear in the DEFAULT specification")));
+
+		/* Don't allow the NULL and DEFAULT string to be the same */
+		if (opts_out->null_print_len == opts_out->default_print_len &&
+			strncmp(opts_out->null_print, opts_out->default_print,
+					opts_out->null_print_len) == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("NULL specification and DEFAULT specification cannot be the same")));
 	}
 }
 
@@ -1334,36 +1326,6 @@ CopyToQueryOnSegment(CopyToState cstate)
 	/* run the plan --- the dest receiver will send tuples */
 	ExecutorRun(cstate->queryDesc, ForwardScanDirection, 0L, true);
 	return 0;
-=======
-	if (opts_out->default_print)
-	{
-		if (!is_from)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("COPY DEFAULT only available using COPY FROM")));
-
-		/* Don't allow the delimiter to appear in the default string. */
-		if (strchr(opts_out->default_print, opts_out->delim[0]) != NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("COPY delimiter must not appear in the DEFAULT specification")));
-
-		/* Don't allow the CSV quote char to appear in the default string. */
-		if (opts_out->csv_mode &&
-			strchr(opts_out->default_print, opts_out->quote[0]) != NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("CSV quote character must not appear in the DEFAULT specification")));
-
-		/* Don't allow the NULL and DEFAULT string to be the same */
-		if (opts_out->null_print_len == opts_out->default_print_len &&
-			strncmp(opts_out->null_print, opts_out->default_print,
-					opts_out->null_print_len) == 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("NULL specification and DEFAULT specification cannot be the same")));
-	}
->>>>>>> REL_16_9
 }
 
 /*

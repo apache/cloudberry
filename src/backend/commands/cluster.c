@@ -6,13 +6,9 @@
  * There is hardly anything left of Paul Brown's original implementation...
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994-5, Regents of the University of California
  *
  *
@@ -40,15 +36,12 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
-<<<<<<< HEAD
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_attribute_encoding.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_tablespace.h"
-=======
 #include "catalog/partition.h"
->>>>>>> REL_16_9
 #include "catalog/pg_am.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_inherits.h"
@@ -97,7 +90,7 @@ typedef struct
 } RelToCluster;
 
 
-static void cluster_multiple_rels(List *rtcs, ClusterParams *params);
+static void cluster_multiple_rels(List *rtcs, ClusterParams *params, RangeVar *relation);
 static void rebuild_relation(Relation OldHeap, Oid indexOid, bool verbose);
 static void copy_table_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex,
 							bool verbose, bool *pSwapToastByContent,
@@ -223,41 +216,35 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 			/* close relation, keep lock till commit */
 			table_close(rel, NoLock);
 
-<<<<<<< HEAD
-		/* Do the job. */
-		/* GPDB_14_MERGE_FIXME: do we need the return value of cluster_rel to dispath ? */
-		cluster_rel(tableOid, indexOid, &params);
-
-		if (Gp_role == GP_ROLE_DISPATCH)
-		{
-			CdbDispatchUtilityStatement((Node *) stmt,
-										DF_CANCEL_ON_ERROR|
-										DF_WITH_SNAPSHOT|
-										DF_NEED_TWO_PHASE,
-										GetAssignedOidsForDispatch(),
-										NULL);
-		}
-
-		if (IS_QD_OR_SINGLENODE())
-		{
-			/*
-			 * Update view status.
-			 * In principle, CLUSTER command won't change the ligical data of
-			 * a table, it may change the physical pages by index.
-			 * But for Append Agg Plan in SERVERLESS mode, we need to fetch
-			 * delta tuples from base table which requires the ability of storage
-			 * to distint the pages instead, since latest relative materialized
-			 * view REFRESH.
-			 */
-			SetRelativeMatviewAuxStatus(tableOid,
-										MV_DATA_STATUS_UP_REORGANIZED,
-										MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
-
-		}
-=======
 			/* Do the job. */
 			cluster_rel(tableOid, indexOid, &params);
 
+			if (Gp_role == GP_ROLE_DISPATCH)
+			{
+				CdbDispatchUtilityStatement((Node *) stmt,
+											DF_CANCEL_ON_ERROR|
+											DF_WITH_SNAPSHOT|
+											DF_NEED_TWO_PHASE,
+											GetAssignedOidsForDispatch(),
+											NULL);
+			}
+
+			if (IS_QD_OR_SINGLENODE())
+			{
+				/*
+				 * Update view status.
+				 * In principle, CLUSTER command won't change the ligical data of
+				 * a table, it may change the physical pages by index.
+				 * But for Append Agg Plan in SERVERLESS mode, we need to fetch
+				 * delta tuples from base table which requires the ability of storage
+				 * to distint the pages instead, since latest relative materialized
+				 * view REFRESH.
+				 */
+				SetRelativeMatviewAuxStatus(tableOid,
+											MV_DATA_STATUS_UP_REORGANIZED,
+											MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
+
+			}
 			return;
 		}
 	}
@@ -296,7 +283,6 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 
 		/* close relation, releasing lock on parent table */
 		table_close(rel, AccessExclusiveLock);
->>>>>>> REL_16_9
 	}
 	else
 	{
@@ -305,7 +291,7 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 	}
 
 	/* Do the job. */
-	cluster_multiple_rels(rtcs, &params);
+	cluster_multiple_rels(rtcs, &params, stmt->relation);
 
 	/* Start a new transaction for the cleanup work. */
 	StartTransactionCommand();
@@ -322,49 +308,10 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
  * return.
  */
 static void
-cluster_multiple_rels(List *rtcs, ClusterParams *params)
+cluster_multiple_rels(List *rtcs, ClusterParams *params, RangeVar *relation)
 {
 	ListCell   *lc;
 
-<<<<<<< HEAD
-		/* Ok, now that we've got them all, cluster them one by one */
-		foreach(rv, rvs)
-		{
-			RelToCluster *rvtc = (RelToCluster *) lfirst(rv);
-			bool		dispatch;
-			ClusterParams cluster_params = params;
-
-			/* Start a new transaction for each relation. */
-			StartTransactionCommand();
-			/* functions in indexes may want a snapshot set */
-			PushActiveSnapshot(GetTransactionSnapshot());
-			/* Do the job. */
-			cluster_params.options |= CLUOPT_RECHECK;
-			dispatch = cluster_rel(rvtc->tableOid, rvtc->indexOid,
-						&cluster_params);
-
-			if (Gp_role == GP_ROLE_DISPATCH && dispatch)
-			{
-				stmt->relation = makeNode(RangeVar);
-				stmt->relation->schemaname = get_namespace_name(get_rel_namespace(rvtc->tableOid));
-				stmt->relation->relname = get_rel_name(rvtc->tableOid);
-				/* other fields in stmt are same */
-				CdbDispatchUtilityStatement((Node *) stmt,
-											DF_CANCEL_ON_ERROR|
-											DF_WITH_SNAPSHOT,
-											GetAssignedOidsForDispatch(),
-											NULL);
-			}
-			/* See comments above. */
-			if (IS_QD_OR_SINGLENODE())
-				SetRelativeMatviewAuxStatus(rvtc->tableOid,
-											MV_DATA_STATUS_UP_REORGANIZED,
-											MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
-
-			PopActiveSnapshot();
-			CommitTransactionCommand();
-		}
-=======
 	/* Commit to get out of starting transaction */
 	PopActiveSnapshot();
 	CommitTransactionCommand();
@@ -373,7 +320,7 @@ cluster_multiple_rels(List *rtcs, ClusterParams *params)
 	foreach(lc, rtcs)
 	{
 		RelToCluster *rtc = (RelToCluster *) lfirst(lc);
->>>>>>> REL_16_9
+		bool		dispatch;
 
 		/* Start a new transaction for each relation. */
 		StartTransactionCommand();
@@ -382,7 +329,25 @@ cluster_multiple_rels(List *rtcs, ClusterParams *params)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* Do the job. */
-		cluster_rel(rtc->tableOid, rtc->indexOid, params);
+		dispatch = cluster_rel(rtc->tableOid, rtc->indexOid, params);
+
+		if (Gp_role == GP_ROLE_DISPATCH && dispatch)
+		{
+			relation = makeNode(RangeVar);
+			relation->schemaname = get_namespace_name(get_rel_namespace(rtc->tableOid));
+			relation->relname = get_rel_name(rtc->tableOid);
+			/* other fields in stmt are same */
+			CdbDispatchUtilityStatement((Node *) stmt,
+										DF_CANCEL_ON_ERROR|
+										DF_WITH_SNAPSHOT,
+										GetAssignedOidsForDispatch(),
+										NULL);
+		}
+		/* See comments above. */
+		if (IS_QD_OR_SINGLENODE())
+			SetRelativeMatviewAuxStatus(rvtc->tableOid,
+										MV_DATA_STATUS_UP_REORGANIZED,
+										MV_DATA_STATUS_TRANSFER_DIRECTION_ALL);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
@@ -465,11 +430,7 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 	if (recheck)
 	{
 		/* Check that the user still owns the relation */
-<<<<<<< HEAD
-		if (!pg_class_ownercheck(tableOid, save_userid))
-=======
 		if (!object_ownercheck(RelationRelationId, tableOid, save_userid))
->>>>>>> REL_16_9
 		{
 			relation_close(OldHeap, AccessExclusiveLock);
 			goto out;
@@ -582,11 +543,8 @@ cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params)
 
 	/* NB: rebuild_relation does table_close() on OldHeap */
 
-<<<<<<< HEAD
 	result = true;
 
-=======
->>>>>>> REL_16_9
 out:
 	/* Roll back any GUC changes executed by index functions */
 	AtEOXact_GUC(false, save_nestlevel);
@@ -810,28 +768,20 @@ make_column_name(char *prefix, char *colname)
  * duplicates the logical structure of the OldHeap; but will have the
  * specified physical storage properties NewTableSpace, NewAccessMethod, and
  * relpersistence.
-<<<<<<< HEAD
  *
  * Specify a colprefix can create a table with different colname, incase
  * column conflict issue happens in REFRESH MATERIALIZED VIEW operation.
-=======
->>>>>>> REL_16_9
  *
  * After this, the caller should load the new heap with transferred/modified
  * data, then call finish_heap_swap to complete the operation.
  */
 Oid
-<<<<<<< HEAD
 make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
 			  char relpersistence,
 			  LOCKMODE lockmode,
 			  bool createAoBlockDirectory,
 			  bool makeCdbPolicy,
 			  char *colprefix)
-=======
-make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
-			  char relpersistence, LOCKMODE lockmode)
->>>>>>> REL_16_9
 {
 	TupleDesc	OldHeapDesc;
 	char		NewHeapName[NAMEDATALEN];
@@ -1372,15 +1322,9 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 				reltup2;
 	Form_pg_class relform1,
 				relform2;
-<<<<<<< HEAD
-	Oid relfilenode1,
-				  relfilenode2;
-	Oid swaptemp;
-=======
 	RelFileNumber relfilenumber1,
 				relfilenumber2;
 	RelFileNumber swaptemp;
->>>>>>> REL_16_9
 	char		swptmpchr;
 	Oid			relam1,
 				relam2;
@@ -1398,7 +1342,6 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		elog(ERROR, "cache lookup failed for relation %u", r2);
 	relform2 = (Form_pg_class) GETSTRUCT(reltup2);
 
-<<<<<<< HEAD
 	if (IsAccessMethodAO(relform1->relam) || IsAccessMethodAO(relform2->relam))
 		ATAOEntries(relform1, relform2, frozenXid, cutoffMulti);
 
@@ -1420,14 +1363,10 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		relform1 = (Form_pg_class) GETSTRUCT(reltup1);
 	}
 
-	relfilenode1 = relform1->relfilenode;
-	relfilenode2 = relform2->relfilenode;
-=======
 	relfilenumber1 = relform1->relfilenode;
 	relfilenumber2 = relform2->relfilenode;
 	relam1 = relform1->relam;
 	relam2 = relform2->relam;
->>>>>>> REL_16_9
 
 	if (RelFileNumberIsValid(relfilenumber1) &&
 		RelFileNumberIsValid(relfilenumber2))
@@ -1995,13 +1934,8 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 
 			/*
 			 * Reset the relrewrite for the toast. The command-counter
-<<<<<<< HEAD
-			 * increment is required here as we are about to update
-			 * the tuple that is updated as part of RenameRelationInternal.
-=======
 			 * increment is required here as we are about to update the tuple
 			 * that is updated as part of RenameRelationInternal.
->>>>>>> REL_16_9
 			 */
 			CommandCounterIncrement();
 			ResetRelRewrite(newrel->rd_rel->reltoastrelid);
