@@ -3,13 +3,9 @@
  * pquery.c
  *	  POSTGRES process query command code
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1952,18 +1948,8 @@ DoPortalRewind(Portal portal)
 	if (portal->atStart && !portal->atEnd)
 		return;
 
-<<<<<<< HEAD
-	/*
-	 * Otherwise, cursor should allow scrolling.  However, we're only going to
-	 * enforce that policy fully beginning in v15.  In older branches, insist
-	 * on this only if the portal has a holdStore.  That prevents users from
-	 * seeing that the holdStore may not have all the rows of the query.
-	 */
-	if ((portal->cursorOptions & CURSOR_OPT_NO_SCROLL) && portal->holdStore)
-=======
 	/* Otherwise, cursor must allow scrolling */
 	if (portal->cursorOptions & CURSOR_OPT_NO_SCROLL)
->>>>>>> REL_16_9
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("cursor can only scan forward"),

@@ -41,12 +41,9 @@
 #include "catalog/namespace.h"
 #include "commands/async.h"
 #include "commands/prepare.h"
-<<<<<<< HEAD
+#include "common/pg_prng.h"
 #include "crypto/bufenc.h"
 #include "crypto/kmgr.h"
-=======
-#include "common/pg_prng.h"
->>>>>>> REL_16_9
 #include "jit/jit.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
@@ -80,12 +77,9 @@
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
-<<<<<<< HEAD
 #include "utils/backend_cancel.h"
 #include "utils/faultinjector.h"
-=======
 #include "utils/guc_hooks.h"
->>>>>>> REL_16_9
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
@@ -137,7 +131,6 @@ int			PostAuthDelay = 0;
 /* Time between checks that the client is still connected. */
 int			client_connection_check_interval = 0;
 
-<<<<<<< HEAD
 /*
  * Hook for extensions, to get notified when query cancel or DIE signal is
  * received. This allows the extension to stop whatever it's doing as
@@ -156,10 +149,6 @@ cancel_pending_hook_type cancel_pending_hook = NULL;
  * Hook for query execution.
  */
 exec_simple_query_hook_type exec_simple_query_hook = NULL;
-=======
-/* flags for non-system relation kinds to restrict use */
-int			restrict_nonsystem_relation_kind;
->>>>>>> REL_16_9
 
 /* ----------------
  *		private typedefs etc
@@ -1828,17 +1817,10 @@ exec_simple_query(const char *query_string)
 		 * do any special start-of-SQL-command processing needed by the
 		 * destination.
 		 */
-<<<<<<< HEAD
 		qc.commandTag = CreateCommandTag(parsetree->stmt);
 		commandTagName = GetCommandTagName(qc.commandTag);
 
 		set_ps_display(commandTagName);
-=======
-		commandTag = CreateCommandTag(parsetree->stmt);
-		cmdtagname = GetCommandTagNameAndLen(commandTag, &cmdtaglen);
-
-		set_ps_display_with_len(cmdtagname, cmdtaglen);
->>>>>>> REL_16_9
 
 		BeginCommand(qc.commandTag, dest);
 
@@ -4472,47 +4454,6 @@ ProcessInterrupts(const char* filename, int lineno)
 		HandleParallelApplyMessages();
 }
 
-<<<<<<< HEAD
-/*
- * IA64-specific code to fetch the AR.BSP register for stack depth checks.
- *
- * We currently support gcc, icc, and HP-UX's native compiler here.
- *
- * Note: while icc accepts gcc asm blocks on x86[_64], this is not true on
- * ia64 (at least not in icc versions before 12.x).  So we have to carry a
- * separate implementation for it.
- */
-#if defined(__ia64__) || defined(__ia64)
-
-#if defined(__hpux) && !defined(__GNUC__) && !defined(__INTEL_COMPILER)
-/* Assume it's HP-UX native compiler */
-#include <ia64/sys/inline.h>
-#define ia64_get_bsp() ((char *) (_Asm_mov_from_ar(_AREG_BSP, _NO_FENCE)))
-#elif defined(__INTEL_COMPILER)
-/* icc */
-#include <asm/ia64regs.h>
-#define ia64_get_bsp() ((char *) __getReg(_IA64_REG_AR_BSP))
-#else
-/* gcc */
-static __inline__ char *
-ia64_get_bsp(void)
-{
-	char	   *ret;
-
-	/* the ;; is a "stop", seems to be required before fetching BSP */
-	__asm__ __volatile__(
-						 ";;\n"
-						 "	mov	%0=ar.bsp	\n"
-:						 "=r"(ret));
-
-	return ret;
-}
-#endif
-#endif							/* IA64 */
-
-
-=======
->>>>>>> REL_16_9
 /*
  * set_stack_base: set up reference point for stack depth checking
  *
@@ -4537,12 +4478,6 @@ set_stack_base(void)
 	stack_base_ptr = __builtin_frame_address(0);
 #else
 	stack_base_ptr = &stack_base;
-<<<<<<< HEAD
-#endif
-#if defined(__ia64__) || defined(__ia64)
-	register_stack_base_ptr = ia64_get_bsp();
-=======
->>>>>>> REL_16_9
 #endif
 
 	return old;
@@ -4915,11 +4850,7 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 	 * postmaster/postmaster.c (the option sets should not conflict) and with
 	 * the common help() function in main/main.c.
 	 */
-<<<<<<< HEAD
 	while ((flag = getopt(argc, argv, "B:bc:C:D:d:EeFf:h:ijk:lMm:N:nOPp:r:R:S:sTt:v:W:-:")) != -1)
-=======
-	while ((flag = getopt(argc, argv, "B:bC:c:D:d:EeFf:h:ijk:lN:nOPp:r:S:sTt:v:W:-:")) != -1)
->>>>>>> REL_16_9
 	{
 		switch (flag)
 		{
@@ -5210,43 +5141,15 @@ PostgresSingleUserMain(int argc, char *argv[],
 {
 	const char *dbname = NULL;
 
-<<<<<<< HEAD
-	/*
-	 * CDB: Catch program error signals.
-	 *
-	 * Save our main thread-id for comparison during signals.
-	 */
-	main_tid = pthread_self();
-
-	/* Initialize startup process environment if necessary. */
-	if (!IsUnderPostmaster)
-		InitStandaloneProcess(argv[0]);
-
-#ifndef WIN32
-	PostmasterPriority = getpriority(PRIO_PROCESS, 0);
-#endif
-
-	set_ps_display("startup");
-
-	SetProcessingMode(InitProcessing);
-=======
 	Assert(!IsUnderPostmaster);
 
 	/* Initialize startup process environment. */
 	InitStandaloneProcess(argv[0]);
->>>>>>> REL_16_9
 
 	/*
 	 * Set default values for command-line options.
 	 */
-<<<<<<< HEAD
-	EchoQuery = false;
-
-	if (!IsUnderPostmaster)
-		InitializeGUCOptions();
-=======
 	InitializeGUCOptions();
->>>>>>> REL_16_9
 
 	/*
 	 * Parse command-line options.
@@ -5264,20 +5167,6 @@ PostgresSingleUserMain(int argc, char *argv[],
 							progname)));
 	}
 
-<<<<<<< HEAD
-	/* Acquire configuration parameters, unless inherited from postmaster */
-	if (!IsUnderPostmaster)
-	{
-		if (!SelectConfigFiles(userDoption, progname))
-			proc_exit(1);
-
-        /*
-	     * Remember stand-alone backend startup time.
-         * CDB: Moved this up from below for use in error message headers.
-         */
-	    PgStartTime = GetCurrentTimestamp();
-	}
-=======
 	/* Acquire configuration parameters */
 	if (!SelectConfigFiles(userDoption, progname))
 		proc_exit(1);
@@ -5302,8 +5191,19 @@ PostgresSingleUserMain(int argc, char *argv[],
 	 */
 	process_shared_preload_libraries();
 
+	/*
+	 * process any libraries that should be preloaded at postmaster start
+	 */
+	process_shared_preload_libraries();
+
 	/* Initialize MaxBackends */
 	InitializeMaxBackends();
+
+	/*
+	 * Now that modules have been loaded, we can process any custom resource
+	 * managers specified in the wal_consistency_checking GUC.
+	 */
+	InitializeWalConsistencyChecking();
 
 	/*
 	 * Give preloaded libraries a chance to request additional shared memory.
@@ -5369,8 +5269,22 @@ PostgresMain(const char *dbname, const char *username)
 	Assert(dbname != NULL);
 	Assert(username != NULL);
 
+	/*
+	 * CDB: Catch program error signals.
+	 *
+	 * Save our main thread-id for comparison during signals.
+	 */
+	main_tid = pthread_self();
+
+#ifndef WIN32
+	PostmasterPriority = getpriority(PRIO_PROCESS, 0);
+#endif
+
+	set_ps_display("startup");
+
 	SetProcessingMode(InitProcessing);
->>>>>>> REL_16_9
+
+	EchoQuery = false;
 
 	/*
 	 * Set up signal handlers.  (InitPostmasterChild or InitStandaloneProcess
@@ -5439,41 +5353,6 @@ PostgresMain(const char *dbname, const char *username)
 #endif
 	}
 
-<<<<<<< HEAD
-	if (!IsUnderPostmaster)
-	{
-		/*
-		 * Validate we have been given a reasonable-looking DataDir (if under
-		 * postmaster, assume postmaster did this already).
-		 */
-		checkDataDir();
-
-		/* Change into DataDir (if under postmaster, was done already) */
-		ChangeToDataDir();
-
-		/*
-		 * Create lockfile for data directory.
-		 */
-		CreateDataDirLockFile(false);
-
-		/* read control file (error checking and contains config ) */
-		LocalProcessControlFile(false);
-
-		/*
-		 * process any libraries that should be preloaded at postmaster start
-		 */
-		process_shared_preload_libraries();
-
-		/* Initialize MaxBackends (if under postmaster, was done already) */
-		InitializeMaxBackends();
-
-		/*
-		 * Now that modules have been loaded, we can process any custom resource
-		 * managers specified in the wal_consistency_checking GUC.
-		 */
-		InitializeWalConsistencyChecking();
-	}
-
 	/* Early initialization */
 	BaseInit();
 
@@ -5482,7 +5361,7 @@ PostgresMain(const char *dbname, const char *username)
 		/*
 		* Initialize kmgr for cluster encryption. Since kmgr needs to attach to
 		* shared memory the initialization must be called after BaseInit().
-		* we need some information from the controlFile, 
+		* we need some information from the controlFile,
 		* so must call the InitializeKmgr after LocalProcessControlFile.
 		*/
 		InitializeKmgr();
@@ -5492,24 +5371,7 @@ PostgresMain(const char *dbname, const char *username)
 			close(terminal_fd);
 	}
 
-	/*
-	 * Create a per-backend PGPROC struct in shared memory, except in the
-	 * EXEC_BACKEND case where this was done in SubPostmasterMain. We must do
-	 * this before we can use LWLocks (and in the EXEC_BACKEND case we already
-	 * had to do some stuff with LWLocks).
-	 */
-#ifdef EXEC_BACKEND
-	if (!IsUnderPostmaster)
-		InitProcess();
-#else
-	InitProcess();
-#endif
 
-=======
-	/* Early initialization */
-	BaseInit();
-
->>>>>>> REL_16_9
 	/* We need to allow SIGINT, etc during the initial transaction */
 	sigprocmask(SIG_SETMASK, &UnBlockSig, NULL);
 
@@ -5561,20 +5423,11 @@ PostgresMain(const char *dbname, const char *username)
 		InitWalSender();
 
 	/*
-<<<<<<< HEAD
-	 * process any libraries that should be preloaded at backend start (this
-	 * likewise can't be done until GUC settings are complete)
-	 */
-	process_session_preload_libraries();
-
-	/*
 	 * DA requires these be cleared at start
 	 */
 	DtxContextInfo_Reset(&QEDtxContextInfo);
 
 	/*
-=======
->>>>>>> REL_16_9
 	 * Send this backend's cancellation info to the frontend.
 	 */
 	if (whereToSendOutput == DestRemote)
@@ -5624,10 +5477,6 @@ PostgresMain(const char *dbname, const char *username)
 	initStringInfo(&row_description_buf);
 	MemoryContextSwitchTo(TopMemoryContext);
 
-<<<<<<< HEAD
-
-=======
->>>>>>> REL_16_9
 	/*
 	 * POSTGRES main processing loop begins here
 	 *
@@ -5676,16 +5525,9 @@ PostgresMain(const char *dbname, const char *username)
 		 * query cancels from being misreported as timeouts in case we're
 		 * forgetting a timeout cancel.
 		 */
-<<<<<<< HEAD
 		disable_all_timeouts(false);
 		QueryCancelPending = false; /* second to avoid race condition */
 		QueryFinishPending = false;
-=======
-		disable_all_timeouts(false);	/* do first to avoid race condition */
-		QueryCancelPending = false;
-		idle_in_transaction_timeout_enabled = false;
-		idle_session_timeout_enabled = false;
->>>>>>> REL_16_9
 
 		/* Not reading from the client anymore. */
 		DoingCommandRead = false;
@@ -5891,11 +5733,8 @@ PostgresMain(const char *dbname, const char *username)
 			}
 			else
 			{
-<<<<<<< HEAD
-=======
 				long		stats_timeout;
 
->>>>>>> REL_16_9
 				/*
 				 * Process incoming notifies (including self-notifies), if
 				 * any, and send relevant messages to the client.  Doing it
@@ -5906,10 +5745,8 @@ PostgresMain(const char *dbname, const char *username)
 				if (notifyInterruptPending)
 					ProcessNotifyInterrupt(false);
 
-<<<<<<< HEAD
-				pgstat_report_stat(false);
 				pgstat_report_queuestat();
-=======
+
 				/*
 				 * Check if we need to report stats. If pgstat_report_stat()
 				 * decides it's too soon to flush out pending stats / lock
@@ -5936,7 +5773,6 @@ PostgresMain(const char *dbname, const char *username)
 					if (get_timeout_active(IDLE_STATS_UPDATE_TIMEOUT))
 						disable_timeout(IDLE_STATS_UPDATE_TIMEOUT, false);
 				}
->>>>>>> REL_16_9
 
 				strncat(activity, "idle", remain);
 				set_ps_display(activity);
