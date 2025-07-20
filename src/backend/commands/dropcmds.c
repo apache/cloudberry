@@ -488,14 +488,6 @@ does_not_exist_skipping(ObjectType objtype, Node *object)
 			msg = gettext_noop("publication \"%s\" does not exist, skipping");
 			name = strVal(object);
 			break;
-<<<<<<< HEAD
-		case OBJECT_EXTPROTOCOL:
-			msg = gettext_noop("protocol \"%s\" does not exist, skipping");
-			name = strVal((Value *) object);
-			break;
-		default:
-			elog(ERROR, "unrecognized object type: %d", (int) objtype);
-=======
 
 		case OBJECT_COLUMN:
 		case OBJECT_DATABASE:
@@ -514,7 +506,6 @@ does_not_exist_skipping(ObjectType objtype, Node *object)
 			 * is probably wrong or should be revisited.
 			 */
 			elog(ERROR, "unsupported object type: %d", (int) objtype);
->>>>>>> REL_16_9
 			break;
 
 		case OBJECT_AMOP:
@@ -532,7 +523,10 @@ does_not_exist_skipping(ObjectType objtype, Node *object)
 			/* These are currently not used or needed. */
 			elog(ERROR, "unsupported object type: %d", (int) objtype);
 			break;
-
+		case OBJECT_EXTPROTOCOL:
+			msg = gettext_noop("protocol \"%s\" does not exist, skipping");
+			name = strVal((Value *) object);
+			break;
 			/* no default, to let compiler warn about missing case */
 	}
 	if (!msg)

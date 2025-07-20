@@ -72,11 +72,8 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "port/pg_bswap.h"
-<<<<<<< HEAD
 #include "utils/elog.h"
-=======
 #include "utils/builtins.h"
->>>>>>> REL_16_9
 #include "utils/memutils.h"
 #include "utils/rel.h"
 
@@ -760,8 +757,6 @@ CopyReadBinaryData(CopyFromState cstate, char *dest, int nbytes)
 }
 
 /*
-<<<<<<< HEAD
-=======
  * Read raw fields in the next line for COPY FROM in text or csv mode.
  * Return false if no more lines.
  *
@@ -1066,7 +1061,6 @@ NextCopyFrom(CopyFromState cstate, ExprContext *econtext,
 }
 
 /*
->>>>>>> REL_16_9
  * Read the next input line and stash it in line_buf.
  *
  * Result is true if read was terminated by EOF, false if terminated
@@ -1206,23 +1200,12 @@ CopyReadLineText(CopyFromState cstate)
 		char		c;
 
 		/*
-<<<<<<< HEAD
-		 * Load more data if needed.  Ideally we would just force four bytes
-		 * of read-ahead and avoid the many calls to
-		 * IF_NEED_REFILL_AND_NOT_EOF_CONTINUE(), but the COPY_OLD_FE protocol
-		 * does not allow us to read too far ahead or we might read into the
-		 * next data, so we read-ahead only as far we know we can.  One
-		 * optimization would be to read-ahead four byte here if
-		 * cstate->copy_src != COPY_FRONTEND, but it hardly seems worth it,
-		 * considering the size of the buffer.
-=======
 		 * Load more data if needed.
 		 *
 		 * TODO: We could just force four bytes of read-ahead and avoid the
 		 * many calls to IF_NEED_REFILL_AND_NOT_EOF_CONTINUE().  That was
 		 * unsafe with the old v2 COPY protocol, but we don't support that
 		 * anymore.
->>>>>>> REL_16_9
 		 */
 		if (input_buf_ptr >= copy_buf_len || need_data)
 		{

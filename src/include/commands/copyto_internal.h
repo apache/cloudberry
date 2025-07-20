@@ -53,6 +53,7 @@ typedef struct CopyToStateData
 	char	   *filename;		/* filename, or NULL for STDOUT */
 	char	   *dirfilename;	/* filename of directory table, not NULL for copy directory table to */
 	bool		is_program;		/* is 'filename' a program to popen? */
+	copy_data_dest_cb data_dest_cb; /* function for writing data */
 
 	CopyFormatOptions opts;
 	Node	   *whereClause;	/* WHERE condition (or NULL) */

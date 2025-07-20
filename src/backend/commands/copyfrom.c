@@ -481,31 +481,7 @@ CopyMultiInsertBufferFlush(CopyMultiInsertInfo *miinfo,
 	TupleTableSlot **slots = buffer->slots;
 	int			i;
 
-<<<<<<< HEAD
-	/*
-	 * Print error context information correctly, if one of the operations
-	 * below fails.
-	 */
-	cstate->line_buf_valid = false;
-	save_cur_lineno = cstate->cur_lineno;
-
-	/*
-	 * table_multi_insert may leak memory, so switch to short-lived memory
-	 * context before calling it.
-	 */
-	oldcontext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
-	table_multi_insert(resultRelInfo->ri_RelationDesc,
-					   slots,
-					   nused,
-					   mycid,
-					   ti_options,
-					   buffer->bistate);
-	MemoryContextSwitchTo(oldcontext);
-
-	for (i = 0; i < nused; i++)
-=======
 	if (resultRelInfo->ri_FdwRoutine)
->>>>>>> REL_16_9
 	{
 		int			batch_size = resultRelInfo->ri_BatchSize;
 		int			sent = 0;
@@ -692,7 +668,6 @@ CopyMultiInsertBufferCleanup(CopyMultiInsertInfo *miinfo,
 	for (i = 0; i < MAX_BUFFERED_TUPLES && buffer->slots[i] != NULL; i++)
 		ExecDropSingleTupleTableSlot(buffer->slots[i]);
 
-<<<<<<< HEAD
 	if (RelationIsNonblockRelation(buffer->resultRelInfo->ri_RelationDesc))
 	{
 		/*
@@ -706,13 +681,9 @@ CopyMultiInsertBufferCleanup(CopyMultiInsertInfo *miinfo,
 		return;
 	}
 
-	table_finish_bulk_insert(buffer->resultRelInfo->ri_RelationDesc,
-							 miinfo->ti_options);
-=======
 	if (resultRelInfo->ri_FdwRoutine == NULL)
 		table_finish_bulk_insert(resultRelInfo->ri_RelationDesc,
 								 miinfo->ti_options);
->>>>>>> REL_16_9
 
 	pfree(buffer);
 }
@@ -2931,18 +2902,7 @@ BeginCopyFrom(ParseState *pstate,
 	else
 	{
 		cstate->need_transcoding = true;
-<<<<<<< HEAD
 		cstate->conversion_proc = FindDefaultConversionProc(cstate->file_encoding, GetDatabaseEncoding());
-=======
-		cstate->conversion_proc = FindDefaultConversionProc(cstate->file_encoding,
-															GetDatabaseEncoding());
-		if (!OidIsValid(cstate->conversion_proc))
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_FUNCTION),
-					 errmsg("default conversion function for encoding \"%s\" to \"%s\" does not exist",
-							pg_encoding_to_char(cstate->file_encoding),
-							pg_encoding_to_char(GetDatabaseEncoding()))));
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -2959,7 +2919,6 @@ BeginCopyFrom(ParseState *pstate,
 
 	cstate->whereClause = whereClause;
 
-<<<<<<< HEAD
 	/*
 	 * Determine the mode
 	 */
@@ -2981,13 +2940,6 @@ BeginCopyFrom(ParseState *pstate,
 		cstate->dispatch_mode = COPY_EXECUTOR;
 	else
 		cstate->dispatch_mode = COPY_DIRECT;
-
-	MemoryContextSwitchTo(oldcontext);
-
-	oldcontext = MemoryContextSwitchTo(cstate->copycontext);
-
-=======
->>>>>>> REL_16_9
 	/* Initialize state variables */
 	// cstate->eol_type = EOL_UNKNOWN; /* GPDB: don't overwrite value set in ProcessCopyOptions */
 	cstate->cur_relname = RelationGetRelationName(cstate->rel);

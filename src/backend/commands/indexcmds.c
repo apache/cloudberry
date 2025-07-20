@@ -3,13 +3,9 @@
  * indexcmds.c
  *	  POSTGRES define and remove index code.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -35,11 +31,8 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
-<<<<<<< HEAD
 #include "catalog/pg_directory_table.h"
-=======
 #include "catalog/pg_database.h"
->>>>>>> REL_16_9
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_opclass.h"
@@ -124,16 +117,9 @@ static void RangeVarCallbackForReindexIndex(const RangeVar *relation,
 											Oid relId, Oid oldRelId, void *arg);
 static Oid	ReindexTable(ReindexStmt *stmt, ReindexParams *params,
 						 bool isTopLevel);
-<<<<<<< HEAD
 static void ReindexMultipleTables(ReindexStmt *stmt, ReindexParams *params);
 static void reindex_error_callback(void *args);
 static void ReindexPartitions(ReindexStmt *stmt, Oid relid, ReindexParams *params,
-=======
-static void ReindexMultipleTables(const char *objectName,
-								  ReindexObjectType objectKind, ReindexParams *params);
-static void reindex_error_callback(void *arg);
-static void ReindexPartitions(Oid relid, ReindexParams *params,
->>>>>>> REL_16_9
 							  bool isTopLevel);
 static void ReindexMultipleInternal(ReindexStmt *stmt, List *relids,
 									ReindexParams *params);
@@ -765,7 +751,7 @@ DefineIndex(Oid relationId,
 	LockRelId	heaprelid;
 	LOCKTAG		heaplocktag;
 	LOCKMODE	lockmode;
-<<<<<<< HEAD
+	Snapshot	snapshot;
 	Oid			root_save_userid;
 	int			root_save_sec_context;
 	int			root_save_nestlevel;
@@ -785,12 +771,6 @@ DefineIndex(Oid relationId,
 		 */
 		shouldDispatch = false;
 	}
-=======
-	Snapshot	snapshot;
-	Oid			root_save_userid;
-	int			root_save_sec_context;
-	int			root_save_nestlevel;
->>>>>>> REL_16_9
 
 	root_save_nestlevel = NewGUCNestLevel();
 
@@ -992,13 +972,8 @@ DefineIndex(Oid relationId,
 	{
 		AclResult	aclresult;
 
-<<<<<<< HEAD
-		aclresult = pg_namespace_aclcheck(namespaceId, root_save_userid,
-										  ACL_CREATE);
-=======
 		aclresult = object_aclcheck(NamespaceRelationId, namespaceId, root_save_userid,
 									ACL_CREATE);
->>>>>>> REL_16_9
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_SCHEMA,
 						   get_namespace_name(namespaceId));
@@ -1041,13 +1016,8 @@ DefineIndex(Oid relationId,
 	{
 		AclResult	aclresult;
 
-<<<<<<< HEAD
-		aclresult = pg_tablespace_aclcheck(tablespaceId, root_save_userid,
-										   ACL_CREATE);
-=======
 		aclresult = object_aclcheck(TableSpaceRelationId, tablespaceId, root_save_userid,
 									ACL_CREATE);
->>>>>>> REL_16_9
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_TABLESPACE,
 						   get_tablespace_name(tablespaceId));
@@ -1656,7 +1626,6 @@ DefineIndex(Oid relationId,
 	}
 
 	/*
-<<<<<<< HEAD
 	 * Create tag description.
 	 */
 	if (stmt->tags)
@@ -1685,12 +1654,7 @@ DefineIndex(Oid relationId,
 	 * some index function changed a behavior-affecting GUC, e.g. xmloption,
 	 * that affects subsequent steps.  This improves bug-compatibility with
 	 * older PostgreSQL versions.  They did the AtEOXact_GUC() here for the
-	 * purpose of clearing the above default_tablespace change.
-=======
-	 * Roll back any GUC changes executed by index functions, and keep
-	 * subsequent changes local to this command.  This is essential if some
-	 * index function changed a behavior-affecting GUC, e.g. search_path.
->>>>>>> REL_16_9
+	 * purpose of clearing the above default_tablespace change
 	 */
 	AtEOXact_GUC(false, root_save_nestlevel);
 	root_save_nestlevel = NewGUCNestLevel();
@@ -1964,36 +1928,16 @@ DefineIndex(Oid relationId,
 					Assert(GetUserId() == child_save_userid);
 					SetUserIdAndSecContext(root_save_userid,
 										   root_save_sec_context);
-<<<<<<< HEAD
 					DefineIndex(childRelid, childStmt,
-								InvalidOid, /* no predefined OID */
-								indexRelationId,	/* this is our child */
-								createdConstraintId,
-								is_alter_table, check_rights, check_not_in_use,
-								skip_build, quiet);
+							InvalidOid, /* no predefined OID */
+							indexRelationId,	/* this is our child */
+							createdConstraintId,
+							-1,
+							is_alter_table, check_rights,
+							check_not_in_use,
+							skip_build, quiet);
 					SetUserIdAndSecContext(child_save_userid,
 										   child_save_sec_context);
-=======
-					childAddr =
-						DefineIndex(childRelid, childStmt,
-									InvalidOid, /* no predefined OID */
-									indexRelationId,	/* this is our child */
-									createdConstraintId,
-									-1,
-									is_alter_table, check_rights,
-									check_not_in_use,
-									skip_build, quiet);
-					SetUserIdAndSecContext(child_save_userid,
-										   child_save_sec_context);
-
-					/*
-					 * Check if the index just created is valid or not, as it
-					 * could be possible that it has been switched as invalid
-					 * when recursing across multiple partition levels.
-					 */
-					if (!get_index_isvalid(childAddr.objectId))
-						invalidate_parent = true;
->>>>>>> REL_16_9
 				}
 
 				free_attrmap(attmap);
@@ -2067,7 +2011,6 @@ DefineIndex(Oid relationId,
 		return address;
 	}
 
-<<<<<<< HEAD
 	stmt->idxname = indexRelationName;
 	if (shouldDispatch)
 	{
@@ -2091,12 +2034,6 @@ DefineIndex(Oid relationId,
 	SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
 
 	if (!concurrent || Gp_role == GP_ROLE_EXECUTE)
-=======
-	AtEOXact_GUC(false, root_save_nestlevel);
-	SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
-
-	if (!concurrent)
->>>>>>> REL_16_9
 	{
 		/* Close the heap and we're done, in the non-concurrent case */
 		table_close(rel, NoLock);
@@ -3647,11 +3584,7 @@ ReindexMultipleTables(ReindexStmt *stmt, ReindexParams *params)
 	bool		concurrent_warning = false;
 	bool		tablespace_warning = false;
 
-<<<<<<< HEAD
 	Assert(Gp_role != GP_ROLE_EXECUTE);
-	AssertArg(objectName);
-=======
->>>>>>> REL_16_9
 	Assert(objectKind == REINDEX_OBJECT_SCHEMA ||
 		   objectKind == REINDEX_OBJECT_SYSTEM ||
 		   objectKind == REINDEX_OBJECT_DATABASE);
@@ -4275,14 +4208,8 @@ ReindexRelationConcurrently(ReindexStmt *stmt, Oid relationOid, ReindexParams *p
 						{
 							ReindexIndexInfo *idx;
 
-<<<<<<< HEAD
 							/* Save the list of relation OIDs in private context */
 							oldcontext = MemoryContextSwitchTo(private_context);
-=======
-						idx = palloc_object(ReindexIndexInfo);
-						idx->indexId = cellOid;
-						/* other fields set later */
->>>>>>> REL_16_9
 
 							idx = makeNode(ReindexIndexInfo);
 							idx->indexId = cellOid;
@@ -4332,18 +4259,11 @@ ReindexRelationConcurrently(ReindexStmt *stmt, Oid relationOid, ReindexParams *p
 							{
 								ReindexIndexInfo *idx;
 
-<<<<<<< HEAD
 								/*
 								* Save the list of relation OIDs in private
 								* context
 								*/
 								oldcontext = MemoryContextSwitchTo(private_context);
-=======
-							idx = palloc_object(ReindexIndexInfo);
-							idx->indexId = cellOid;
-							indexIds = lappend(indexIds, idx);
-							/* other fields set later */
->>>>>>> REL_16_9
 
 								idx = makeNode(ReindexIndexInfo);
 								idx->indexId = cellOid;
@@ -4430,11 +4350,7 @@ ReindexRelationConcurrently(ReindexStmt *stmt, Oid relationOid, ReindexParams *p
 				 * Save the list of relation OIDs in private context.  Note
 				 * that invalid indexes are allowed here.
 				 */
-<<<<<<< HEAD
 				idx = makeNode(ReindexIndexInfo);
-=======
-				idx = palloc_object(ReindexIndexInfo);
->>>>>>> REL_16_9
 				idx->indexId = relationOid;
 				indexIds = lappend(indexIds, idx);
 				/* other fields set later */
@@ -4944,11 +4860,7 @@ reindex_concurrently_create_indexes(MemoryContext oldcontext,
 		 */
 		oldcontext = MemoryContextSwitchTo(private_context);
 
-<<<<<<< HEAD
 		newidx = makeNode(ReindexIndexInfo);
-=======
-		newidx = palloc_object(ReindexIndexInfo);
->>>>>>> REL_16_9
 		newidx->indexId = newIndexId;
 		newidx->safe = idx->safe;
 		newidx->tableId = idx->tableId;
@@ -4964,13 +4876,8 @@ reindex_concurrently_create_indexes(MemoryContext oldcontext,
 		 */
 		lockrelid = palloc_object(LockRelId);
 		*lockrelid = indexRel->rd_lockInfo.lockRelId;
-<<<<<<< HEAD
 		*relationLocks = lappend(*relationLocks, lockrelid);
 		lockrelid = palloc(sizeof(*lockrelid));
-=======
-		relationLocks = lappend(relationLocks, lockrelid);
-		lockrelid = palloc_object(LockRelId);
->>>>>>> REL_16_9
 		*lockrelid = newIndexRel->rd_lockInfo.lockRelId;
 		*relationLocks = lappend(*relationLocks, lockrelid);
 

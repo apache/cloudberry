@@ -63,12 +63,10 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 	CachedPlanSource *plansource;
 	Oid		   *argtypes = NULL;
 	int			nargs;
+	Query	   *query;
 	List	   *query_list;
-<<<<<<< HEAD
-	int			i;
+ 	int			i;
 	NodeTag		srctag;  /* GPDB */
-=======
->>>>>>> REL_16_9
 
 	/*
 	 * Disallow empty-string statement name (conflicts with protocol-level
@@ -121,7 +119,6 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 	 * information about unknown parameters to be deduced from context.
 	 * Rewrite the query. The result could be 0, 1, or many queries.
 	 */
-<<<<<<< HEAD
 	query = parse_analyze_varparams(rawstmt, pstate->p_sourcetext,
 									&argtypes, &nargs);
 
@@ -166,10 +163,6 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 
 	/* Rewrite the query. The result could be 0, 1, or many queries. */
 	query_list = QueryRewrite(query);
-=======
-	query_list = pg_analyze_and_rewrite_varparams(rawstmt, pstate->p_sourcetext,
-												  &argtypes, &nargs, NULL);
->>>>>>> REL_16_9
 
 	/* Finish filling in the CachedPlanSource */
 	CompleteCachedPlan(plansource,

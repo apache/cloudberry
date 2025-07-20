@@ -24,12 +24,9 @@
 #include "access/xlog.h"
 #include "access/xlogprefetcher.h"
 #include "catalog/pg_authid.h"
-<<<<<<< HEAD
 #include "cdb/cdbvars.h"
 #include "commands/variable.h"
-=======
 #include "common/string.h"
->>>>>>> REL_16_9
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"

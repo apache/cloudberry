@@ -3,7 +3,6 @@
  * analyze.c
  *	  the Postgres statistics generator
  *
-<<<<<<< HEAD
  *
  * There are a few things in Cloudberry that make this more complicated
  * than in upstream:
@@ -54,10 +53,7 @@
  *
  * TODO: explain how this works.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -187,17 +183,15 @@ static void compute_index_stats(Relation onerel, double totalrows,
 								HeapTuple *rows, int numrows,
 								MemoryContext col_context);
 static VacAttrStats *examine_attribute(Relation onerel, int attnum,
-<<<<<<< HEAD
 									   Node *index_expr, int elevel);
 static int acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
-=======
-									   Node *index_expr);
+										  HeapTuple *rows, int targrows,
+										  double *totalrows, double *totaldeadrows);
 static int	acquire_sample_rows(Relation onerel, int elevel,
 								HeapTuple *rows, int targrows,
 								double *totalrows, double *totaldeadrows);
 static int	compare_rows(const void *a, const void *b, void *arg);
 static int	acquire_inherited_sample_rows(Relation onerel, int elevel,
->>>>>>> REL_16_9
 										  HeapTuple *rows, int targrows,
 										  double *totalrows, double *totaldeadrows);
 static BlockNumber acquire_index_number_of_blocks(Relation indexrel, Relation tablerel);
@@ -628,11 +622,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 */
 	if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
-<<<<<<< HEAD
-		List *idxs = RelationGetIndexList(onerel);
-=======
 		List	   *idxs = RelationGetIndexList(onerel);
->>>>>>> REL_16_9
 
 		Irel = NULL;
 		nindexes = 0;
@@ -1014,14 +1004,11 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			MemoryContextResetAndDeleteChildren(col_context);
 		}
 
-<<<<<<< HEAD
 		/*
 		 * Datums exceeding WIDTH_THRESHOLD are masked as NULL in the sample, and
 		 * are used as is to evaluate index statistics. It is less likely to have
 		 * indexes on very wide columns, so the effect will be minimal.
 		 */
-=======
->>>>>>> REL_16_9
 		if (nindexes > 0)
 			compute_index_stats(onerel, totalrows,
 								indexdata, nindexes,
@@ -1047,36 +1034,9 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 							thisdata->attr_cnt, thisdata->vacattrstats);
 		}
 
-<<<<<<< HEAD
-		/*
-		 * Should we build extended statistics for this relation?
-		 *
-		 * The extended statistics catalog does not include an inheritance
-		 * flag, so we can't store statistics built both with and without
-		 * data from child relations. We can store just one set of statistics
-		 * per relation. For plain relations that's fine, but for inheritance
-		 * trees we have to pick whether to store statistics for just the
-		 * one relation or the whole tree. For plain inheritance we store
-		 * the (!inh) version, mostly for backwards compatibility reasons.
-		 * For partitioned tables that's pointless (the non-leaf tables are
-		 * always empty), so we store stats representing the whole tree.
-		 */
-		build_ext_stats = (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE) ? inh : (!inh);
-
-		/*
-		 * Build extended statistics (if there are any).
-		 *
-		 * For now we only build extended statistics on individual relations,
-		 * not for relations representing inheritance trees.
-		 */
-		if (build_ext_stats)
-			BuildRelationExtStatistics(onerel, totalrows, numrows, rows,
-									   attr_cnt, vacattrstats);
-=======
 		/* Build extended statistics (if there are any). */
 		BuildRelationExtStatistics(onerel, inh, totalrows, numrows, rows,
 								   attr_cnt, vacattrstats);
->>>>>>> REL_16_9
 	}
 
 	pgstat_progress_update_param(PROGRESS_ANALYZE_PHASE,
@@ -1119,7 +1079,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 							hasindex,
 							InvalidTransactionId,
 							InvalidMultiXactId,
-<<<<<<< HEAD
+							NULL, NULL,
 							in_outer_xact,
 							false /* isVacuum */);
 
@@ -1152,10 +1112,6 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			}
 			ReleaseSysCache(aotup);
 		}
-=======
-							NULL, NULL,
-							in_outer_xact);
->>>>>>> REL_16_9
 
 		/* Same for indexes */
 		for (ind = 0; ind < nindexes; ind++)
@@ -1195,13 +1151,9 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 								false,
 								InvalidTransactionId,
 								InvalidMultiXactId,
-<<<<<<< HEAD
+								NULL, NULL,
 								in_outer_xact,
 								false /* isVacuum */);
-=======
-								NULL, NULL,
-								in_outer_xact);
->>>>>>> REL_16_9
 		}
 	}
 	else if (onerel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
@@ -1214,13 +1166,9 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		vac_update_relstats(onerel, -1, totalrows,
 							0, hasindex, InvalidTransactionId,
 							InvalidMultiXactId,
-<<<<<<< HEAD
+							NULL, NULL,
 							in_outer_xact,
 							false /* isVacuum */);
-=======
-							NULL, NULL,
-							in_outer_xact);
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -1765,7 +1713,6 @@ acquire_sample_rows(Relation onerel, int elevel,
 	nblocks = BlockSampler_Init(&bs, totalblocks, targrows, randseed);
 
 #ifdef USE_PREFETCH
-<<<<<<< HEAD
 	/*
 	 * GPDB_14_MERGE_FIXME: pre-fetching is introduced in PG14.
 	 * It's not suitable for AO tables, will get error when PrefetchBuffer
@@ -1783,12 +1730,6 @@ acquire_sample_rows(Relation onerel, int elevel,
 		if (prefetch_maximum)
 			(void) BlockSampler_Init(&prefetch_bs, totalblocks, targrows, randseed);
 	}
-=======
-	prefetch_maximum = get_tablespace_maintenance_io_concurrency(onerel->rd_rel->reltablespace);
-	/* Create another BlockSampler, using the same seed, for prefetching */
-	if (prefetch_maximum)
-		(void) BlockSampler_Init(&prefetch_bs, totalblocks, targrows, randseed);
->>>>>>> REL_16_9
 #endif
 
 	/* Report sampling block numbers */
@@ -4468,7 +4409,6 @@ compute_scalar_stats(VacAttrStatsP stats,
 }
 
 /*
-<<<<<<< HEAD
  *	merge_leaf_stats() -- merge leaf stats for the root
  *
  *	We use this when we can find "=" and "<" operators for the datatype.
@@ -4975,9 +4915,6 @@ merge_leaf_stats(VacAttrStatsP stats,
 
 /*
  * qsort_arg comparator for sorting ScalarItems
-=======
- * Comparator for sorting ScalarItems
->>>>>>> REL_16_9
  *
  * Aside from sorting the items, we update the tupnoLink[] array
  * whenever two ScalarItems are found to contain equal datums.  The array

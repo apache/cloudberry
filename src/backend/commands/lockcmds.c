@@ -111,14 +111,9 @@ RangeVarCallbackForLockTable(const RangeVar *rv, Oid relid, Oid oldrelid,
 		relkind != RELKIND_VIEW && relkind != RELKIND_DIRECTORY_TABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-<<<<<<< HEAD
-				 errmsg("\"%s\" is not a table, directory table or view",
-						rv->relname)));
-=======
 				 errmsg("cannot lock relation \"%s\"",
 						rv->relname),
 				 errdetail_relkind_not_supported(relkind)));
->>>>>>> REL_16_9
 
 #if 0 /* Upstream code not applicable to GPDB */
 	/*

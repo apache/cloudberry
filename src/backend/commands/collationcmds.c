@@ -922,12 +922,6 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			enc = create_collation_from_locale(localebuf, nspid, &nvalid, &ncreated);
 			if (enc < 0)
 				continue;
-<<<<<<< HEAD
-			}
-			if (!PG_VALID_BE_ENCODING(enc))
-				continue;		/* ignore locales for client-only encodings */
-			if (enc == PG_SQL_ASCII)
-				continue;		/* C/POSIX are already in the catalog */
 			/*
 			 * Greenplum specific behavior: this function in Greenplum can only be called after a full cluster is
 			 * built, this is different from Postgres which might call this function during initdb. When reaching
@@ -935,35 +929,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			 * encoding because they cannot be used in this database.
 			 */
 			if (enc != GetDatabaseEncoding())
-				continue;       /* Ignore collations incompatible with database encoding */ 
-
-			/* count valid locales found in operating system */
-			nvalid++;
-
-			/*
-			 * Create a collation named the same as the locale, but quietly
-			 * doing nothing if it already exists.  This is the behavior we
-			 * need even at initdb time, because some versions of "locale -a"
-			 * can report the same locale name more than once.  And it's
-			 * convenient for later import runs, too, since you just about
-			 * always want to add on new locales without a lot of chatter
-			 * about existing ones.
-			 */
-			collid = CollationCreate(localebuf, nspid, GetUserId(),
-									 COLLPROVIDER_LIBC, true, enc,
-									 localebuf, localebuf,
-									 get_collation_actual_version(COLLPROVIDER_LIBC, localebuf),
-									 true, true);
-			if (OidIsValid(collid))
-			{
-				DispatchCollationCreate(localebuf, localebuf, nspid, "libc");
-				ncreated++;
-
-				/* Must do CCI between inserts to handle duplicates correctly */
-				CommandCounterIncrement();
-			}
-=======
->>>>>>> REL_16_9
+				continue;       /* Ignore collations incompatible with database encoding */
 
 			/*
 			 * Generate aliases such as "en_US" in addition to "en_US.utf8"
@@ -1063,11 +1029,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			const char *name;
 			char	   *langtag;
 			char	   *icucomment;
-<<<<<<< HEAD
-			const char *collcollate;
 			char	   *collname;
-=======
->>>>>>> REL_16_9
 			Oid			collid;
 
 			if (i == -1)

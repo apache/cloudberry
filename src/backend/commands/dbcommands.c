@@ -8,13 +8,9 @@
  * stepping on each others' toes.  Formerly we used table-level locks
  * on pg_database, but that's too coarse-grained.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -46,12 +42,9 @@
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_authid.h"
-<<<<<<< HEAD
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
-=======
 #include "catalog/pg_collation.h"
->>>>>>> REL_16_9
 #include "catalog/pg_database.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_subscription.h"
@@ -63,11 +56,8 @@
 #include "commands/defrem.h"
 #include "commands/seclabel.h"
 #include "commands/tablespace.h"
-<<<<<<< HEAD
 #include "commands/tag.h"
-=======
 #include "common/file_perm.h"
->>>>>>> REL_16_9
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -89,7 +79,6 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
-<<<<<<< HEAD
 #include "catalog/oid_dispatch.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
@@ -98,7 +87,7 @@
 #include "cdb/cdbvars.h"
 
 #include "utils/pg_rusage.h"
-=======
+
 /*
  * Create database strategy.
  *
@@ -114,7 +103,6 @@ typedef enum CreateDBStrategy
 	CREATEDB_WAL_LOG,
 	CREATEDB_FILE_COPY
 } CreateDBStrategy;
->>>>>>> REL_16_9
 
 typedef struct
 {
@@ -645,6 +633,13 @@ CreateDatabaseUsingFileCopy(Oid src_dboid, Oid dst_dboid, Oid src_tsid,
 		dstpath = GetDatabasePath(dst_dboid, dsttablespace);
 
 		/*
+		 * Register the database directory to PendingDBDelete link list
+		 * for cleanup in txn abort.
+		 */
+		ScheduleDbDirDelete(dst_dboid, dsttablespace, false);
+
+
+		/*
 		 * Copy this subdirectory to the new location
 		 *
 		 * We don't need to copy subdirectories
@@ -710,13 +705,7 @@ CreateDatabaseUsingFileCopy(Oid src_dboid, Oid dst_dboid, Oid src_tsid,
 Oid
 createdb(ParseState *pstate, const CreatedbStmt *stmt)
 {
-<<<<<<< HEAD
-	TableScanDesc scan;
-	Relation	rel;
 	Oid			src_dboid = InvalidOid;
-=======
-	Oid			src_dboid;
->>>>>>> REL_16_9
 	Oid			src_owner;
 	int			src_encoding = -1;
 	char	   *src_collate = NULL;
@@ -1382,12 +1371,6 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	 */
 	pg_database_rel = table_open(DatabaseRelationId, RowExclusiveLock);
 
-<<<<<<< HEAD
-	if (Gp_role == GP_ROLE_EXECUTE)
-		dboid = GetPreassignedOidForDatabase(dbname);
-	else
-	{
-=======
 	/*
 	 * If database OID is configured, check if the OID is already in use or
 	 * data directory already exists.
@@ -1410,19 +1393,20 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	else
 	{
 		/* Select an OID for the new database if is not explicitly configured. */
->>>>>>> REL_16_9
-		do
+		if (Gp_role == GP_ROLE_EXECUTE)
+			dboid = GetPreassignedOidForDatabase(dbname);
+		else
 		{
-			dboid = GetNewOidWithIndex(pg_database_rel, DatabaseOidIndexId,
-									   Anum_pg_database_oid);
-		} while (check_db_file_conflict(dboid));
-<<<<<<< HEAD
-
-		if (Gp_role == GP_ROLE_DISPATCH)
-			RememberAssignedOidForDatabase(dbname, dboid);
-=======
->>>>>>> REL_16_9
+			do
+			{
+				dboid = GetNewOidWithIndex(pg_database_rel, DatabaseOidIndexId,
+										   Anum_pg_database_oid);
+			} while (check_db_file_conflict(dboid));
+		}
 	}
+
+	if (Gp_role == GP_ROLE_DISPATCH)
+		RememberAssignedOidForDatabase(dbname, dboid);
 
 	/*
 	 * Insert a new tuple into pg_database.  This establishes our ownership of
@@ -1446,8 +1430,6 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	new_record[Anum_pg_database_datfrozenxid - 1] = TransactionIdGetDatum(src_frozenxid);
 	new_record[Anum_pg_database_datminmxid - 1] = TransactionIdGetDatum(src_minmxid);
 	new_record[Anum_pg_database_dattablespace - 1] = ObjectIdGetDatum(dst_deftablespace);
-<<<<<<< HEAD
-=======
 	new_record[Anum_pg_database_datcollate - 1] = CStringGetTextDatum(dbcollate);
 	new_record[Anum_pg_database_datctype - 1] = CStringGetTextDatum(dbctype);
 	if (dbiculocale)
@@ -1463,7 +1445,6 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	else
 		new_record_nulls[Anum_pg_database_datcollversion - 1] = true;
 
->>>>>>> REL_16_9
 	/*
 	 * We deliberately set datacl to default (NULL), rather than copying it
 	 * from the template database.  Copying it would be a bad idea when the
@@ -1565,117 +1546,12 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 		 * Otherwise, call CreateDatabaseUsingFileCopy that will copy the
 		 * database file by file.
 		 */
-<<<<<<< HEAD
-		rel = table_open(TableSpaceRelationId, AccessShareLock);
-		scan = table_beginscan_catalog(rel, 0, NULL);
-		while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
-		{
-			Form_pg_tablespace spaceform = (Form_pg_tablespace) GETSTRUCT(tuple);
-			Oid			srctablespace = spaceform->oid;
-			Oid			dsttablespace;
-			char	   *srcpath;
-			char	   *dstpath;
-			struct stat st;
-
-			/* No need to copy global tablespace */
-			if (srctablespace == GLOBALTABLESPACE_OID)
-				continue;
-
-			srcpath = GetDatabasePath(src_dboid, srctablespace);
-
-			if (stat(srcpath, &st) < 0 || !S_ISDIR(st.st_mode) ||
-				directory_is_empty(srcpath))
-			{
-				/* Assume we can ignore it */
-				pfree(srcpath);
-				continue;
-			}
-
-			if (srctablespace == src_deftablespace)
-				dsttablespace = dst_deftablespace;
-			else
-				dsttablespace = srctablespace;
-
-			dstpath = GetDatabasePath(dboid, dsttablespace);
-
-			/*
-			 * Register the database directory to PendingDBDelete link list
-			 * for cleanup in txn abort.
-			 */
-			ScheduleDbDirDelete(dboid, dsttablespace, false);
-
-			/*
-			 * Copy this subdirectory to the new location
-			 *
-			 * We don't need to copy subdirectories
-			 */
-			copydir(srcpath, dstpath, false);
-
-			SIMPLE_FAULT_INJECTOR("create_db_after_file_copy");
-
-			/* Record the filesystem change in XLOG */
-			{
-				xl_dbase_create_rec xlrec;
-
-				xlrec.db_id = dboid;
-				xlrec.tablespace_id = dsttablespace;
-				xlrec.src_db_id = src_dboid;
-				xlrec.src_tablespace_id = srctablespace;
-
-				XLogBeginInsert();
-				XLogRegisterData((char *) &xlrec, sizeof(xl_dbase_create_rec));
-
-				(void) XLogInsert(RM_DBASE_ID,
-								  XLOG_DBASE_CREATE | XLR_SPECIAL_REL_UPDATE);
-			}
-			
-			pfree(srcpath);
-			pfree(dstpath);
-		}
-
-		SIMPLE_FAULT_INJECTOR("after_xlog_create_database");
-
-		table_endscan(scan);
-		table_close(rel, AccessShareLock);
-
-		/*
-		 * We force a checkpoint before committing.  This effectively means
-		 * that committed XLOG_DBASE_CREATE operations will never need to be
-		 * replayed (at least not in ordinary crash recovery; we still have to
-		 * make the XLOG entry for the benefit of PITR operations). This
-		 * avoids two nasty scenarios:
-		 *
-		 * #1: When PITR is off, we don't XLOG the contents of newly created
-		 * indexes; therefore the drop-and-recreate-whole-directory behavior
-		 * of DBASE_CREATE replay would lose such indexes.
-		 *
-		 * #2: Since we have to recopy the source database during DBASE_CREATE
-		 * replay, we run the risk of copying changes in it that were
-		 * committed after the original CREATE DATABASE command but before the
-		 * system crash that led to the replay.  This is at least unexpected
-		 * and at worst could lead to inconsistencies, eg duplicate table
-		 * names.
-		 *
-		 * (Both of these were real bugs in releases 8.0 through 8.0.3.)
-		 *
-		 * In PITR replay, the first of these isn't an issue, and the second
-		 * is only a risk if the CREATE DATABASE and subsequent template
-		 * database change both occur while a base backup is being taken.
-		 * There doesn't seem to be much we can do about that except document
-		 * it as a limitation.
-		 *
-		 * Perhaps if we ever implement CREATE DATABASE in a less cheesy way,
-		 * we can avoid this.
-		 */
-		RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_FORCE | CHECKPOINT_WAIT);
-=======
 		if (dbstrategy == CREATEDB_WAL_LOG)
 			CreateDatabaseUsingWalLog(src_dboid, dboid, src_deftablespace,
 									  dst_deftablespace);
 		else
 			CreateDatabaseUsingFileCopy(src_dboid, dboid, src_deftablespace,
 										dst_deftablespace);
->>>>>>> REL_16_9
 
 		/*
 		 * Close pg_database, but keep lock till commit.
@@ -1824,11 +1700,7 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	pgdbrel = table_open(DatabaseRelationId, RowExclusiveLock);
 
 	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL,
-<<<<<<< HEAD
-					 &db_istemplate, NULL, NULL, NULL, NULL, &defaultTablespace, NULL, NULL))
-=======
 					 &db_istemplate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
->>>>>>> REL_16_9
 	{
 		if (!missing_ok)
 		{
@@ -1943,7 +1815,6 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 				 errdetail_busy_db(notherbackends, npreparedxacts)));
 
 	/*
-<<<<<<< HEAD
 	 * Free the database on the segDBs
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -1977,8 +1848,6 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	ReleaseSysCache(tup);
 
 	/*
-=======
->>>>>>> REL_16_9
 	 * Delete any comments or security labels associated with the database.
 	 */
 	DeleteSharedComments(db_id, DatabaseRelationId);
@@ -2049,12 +1918,6 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	 */
 	DropDatabaseBuffers(db_id);
 
-	/*
-<<<<<<< HEAD
-	 * Tell the stats collector to forget it immediately, too.
-	 */
-	pgstat_drop_database(db_id);
-	
 	/* MPP-6929: metadata tracking */
 	if (Gp_role == GP_ROLE_DISPATCH)
 		MetaTrackDropObject(DatabaseRelationId, db_id);
@@ -2065,8 +1928,6 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	pgstat_drop_database(db_id);
 
 	/*
-=======
->>>>>>> REL_16_9
 	 * Tell checkpointer to forget any pending fsync and unlink requests for
 	 * files in the database; else the fsyncs will fail at next checkpoint, or
 	 * worse, it will delete files that belong to a newly created database
@@ -2415,14 +2276,12 @@ movedb(const char *dbname, const char *tblspcname)
 							PointerGetDatum(&fparms));
 #endif
 	{
-<<<<<<< HEAD
-		ScheduleDbDirDelete(db_id, dst_tblspcoid, false);
-=======
 		Datum		new_record[Natts_pg_database] = {0};
 		bool		new_record_nulls[Natts_pg_database] = {0};
 		bool		new_record_repl[Natts_pg_database] = {0};
 
->>>>>>> REL_16_9
+		ScheduleDbDirDelete(db_id, dst_tblspcoid, false);
+
 		/*
 		 * Copy files from the old tablespace to the new one
 		 */
@@ -2536,7 +2395,6 @@ movedb(const char *dbname, const char *tblspcname)
 		MoveDbSessionLockRelease();
 	}
 
-<<<<<<< HEAD
 	/*
 	 * register the db_id with pending deletes list to schedule removing database
 	 * directory on transaction commit.
@@ -2546,14 +2404,6 @@ movedb(const char *dbname, const char *tblspcname)
 	pfree(src_dbpath);
 	pfree(dst_dbpath);
 	SIMPLE_FAULT_INJECTOR("inside_move_db_transaction");
-=======
-	/* Now it's safe to release the database lock */
-	UnlockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-								 AccessExclusiveLock);
-
-	pfree(src_dbpath);
-	pfree(dst_dbpath);
->>>>>>> REL_16_9
 }
 
 /*
@@ -2787,12 +2637,6 @@ AlterDatabase(ParseState *pstate, AlterDatabaseStmt *stmt, bool isTopLevel)
 	newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel), new_record,
 								 new_record_nulls, new_record_repl);
 	CatalogTupleUpdate(rel, &tuple->t_self, newtuple);
-<<<<<<< HEAD
-	
-=======
-	UnlockTuple(rel, &tuple->t_self, InplaceUpdateTupleLock);
-
->>>>>>> REL_16_9
 	InvokeObjectPostAlterHook(DatabaseRelationId, dboid, 0);
 
 	systable_endscan(scan);
@@ -3618,11 +3462,7 @@ dbase_redo(XLogReaderState *record)
 			(xl_dbase_create_file_copy_rec *) XLogRecGetData(record);
 		char	   *src_path;
 		char	   *dst_path;
-<<<<<<< HEAD
 		char	   *parentdir;
-=======
-		char	   *parent_path;
->>>>>>> REL_16_9
 		struct stat st;
 
 		src_path = GetDatabasePath(xlrec->src_db_id, xlrec->src_tablespace_id);
@@ -3643,7 +3483,6 @@ dbase_redo(XLogReaderState *record)
 		}
 
 		/*
-<<<<<<< HEAD
 		 * It is possible that the tablespace was later dropped, but we are
 		 * re-redoing database create before that. In that case,
 		 * either src_path or dst_path is probably missing here and needs to
@@ -3666,33 +3505,6 @@ dbase_redo(XLogReaderState *record)
 							parentdir)));
 		}
 		pfree(parentdir);
-=======
-		 * If the parent of the target path doesn't exist, create it now. This
-		 * enables us to create the target underneath later.
-		 */
-		parent_path = pstrdup(dst_path);
-		get_parent_directory(parent_path);
-		if (stat(parent_path, &st) < 0)
-		{
-			if (errno != ENOENT)
-				ereport(FATAL,
-						errmsg("could not stat directory \"%s\": %m",
-							   dst_path));
-
-			/* create the parent directory if needed and valid */
-			recovery_create_dbdir(parent_path, true);
-		}
-		pfree(parent_path);
-
-		/*
-		 * There's a case where the copy source directory is missing for the
-		 * same reason above.  Create the empty source directory so that
-		 * copydir below doesn't fail.  The directory will be dropped soon by
-		 * recovery.
-		 */
-		if (stat(src_path, &st) < 0 && errno == ENOENT)
-			recovery_create_dbdir(src_path, false);
->>>>>>> REL_16_9
 
 		/*
 		 * Force dirty buffers out to disk, to ensure source database is
@@ -3712,8 +3524,6 @@ dbase_redo(XLogReaderState *record)
 
 		pfree(src_path);
 		pfree(dst_path);
-<<<<<<< HEAD
-=======
 	}
 	else if (info == XLOG_DBASE_CREATE_WAL_LOG)
 	{
@@ -3733,7 +3543,6 @@ dbase_redo(XLogReaderState *record)
 		CreateDirAndVersionFile(dbpath, xlrec->db_id, xlrec->tablespace_id,
 								true);
 		pfree(dbpath);
->>>>>>> REL_16_9
 	}
 	else if (info == XLOG_DBASE_DROP)
 	{

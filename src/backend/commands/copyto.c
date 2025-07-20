@@ -52,10 +52,9 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 
-<<<<<<< HEAD
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"
-=======
+
 /*
  * Represents the different dest cases we need to worry about at
  * the bottom level
@@ -66,46 +65,10 @@ typedef enum CopyDest
 	COPY_FRONTEND,				/* to frontend */
 	COPY_CALLBACK				/* to callback function */
 } CopyDest;
->>>>>>> REL_16_9
 
 #define EXEC_DATA_P 0
 
-<<<<<<< HEAD
 extern CopyStmt *glob_copystmt;
-=======
-	int			file_encoding;	/* file or remote side's character encoding */
-	bool		need_transcoding;	/* file encoding diff from server? */
-	bool		encoding_embeds_ascii;	/* ASCII can be non-first byte? */
-
-	/* parameters from the COPY command */
-	Relation	rel;			/* relation to copy to */
-	QueryDesc  *queryDesc;		/* executable query to copy from */
-	List	   *attnumlist;		/* integer list of attnums to copy */
-	char	   *filename;		/* filename, or NULL for STDOUT */
-	bool		is_program;		/* is 'filename' a program to popen? */
-	copy_data_dest_cb data_dest_cb; /* function for writing data */
-
-	CopyFormatOptions opts;
-	Node	   *whereClause;	/* WHERE condition (or NULL) */
-
-	/*
-	 * Working state
-	 */
-	MemoryContext copycontext;	/* per-copy execution context */
-
-	FmgrInfo   *out_functions;	/* lookup info for output functions */
-	MemoryContext rowcontext;	/* per-row evaluation context */
-	uint64		bytes_processed;	/* number of bytes processed so far */
-} CopyToStateData;
-
-/* DestReceiver for COPY (query) TO */
-typedef struct
-{
-	DestReceiver pub;			/* publicly-known function pointers */
-	CopyToState cstate;			/* CopyToStateData for the command */
-	uint64		processed;		/* # of tuples processed */
-} DR_copy;
->>>>>>> REL_16_9
 
 /* NOTE: there's a copy of this in copyfromparse.c */
 static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
@@ -113,15 +76,10 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 
 /* non-export function prototypes */
 static void EndCopy(CopyToState cstate);
-<<<<<<< HEAD
-static void CopyAttributeOutText(CopyToState cstate, char *string);
-static void CopyAttributeOutCSV(CopyToState cstate, char *string,
-=======
 static void ClosePipeToProgram(CopyToState cstate);
 static void CopyOneRowTo(CopyToState cstate, TupleTableSlot *slot);
 static void CopyAttributeOutText(CopyToState cstate, const char *string);
 static void CopyAttributeOutCSV(CopyToState cstate, const char *string,
->>>>>>> REL_16_9
 								bool use_quote, bool single_attr);
 static uint64 CopyToDispatch(CopyToState cstate);
 static void CopyToDispatchFlush(CopyToState cstate);
@@ -255,19 +213,8 @@ void CopySendEndOfRow(CopyToState cstate)
 			(void) pq_putmessage('d', fe_msgbuf->data, fe_msgbuf->len);
 			break;
 		case COPY_CALLBACK:
-<<<<<<< HEAD
-			/* we don't actually do the write here, we let the caller do it */
-#ifndef WIN32
-			CopySendChar(cstate, '\n');
-#else
-			CopySendString(cstate, "\r\n");
-#endif
-			return; /* don't want to reset msgbuf quite yet */
-
-=======
 			cstate->data_dest_cb(fe_msgbuf->data, fe_msgbuf->len);
 			break;
->>>>>>> REL_16_9
 	}
 
 	/* Update the progress */
@@ -331,13 +278,7 @@ BeginCopyTo(ParseState *pstate,
 			List *options)
 {
 	CopyToState cstate;
-<<<<<<< HEAD
 	bool		pipe;
-=======
-	bool		pipe = (filename == NULL && data_dest_cb == NULL);
-	TupleDesc	tupDesc;
-	int			num_phys_attrs;
->>>>>>> REL_16_9
 	MemoryContext oldcontext;
 	const int	progress_cols[] = {
 		PROGRESS_COPY_COMMAND,
@@ -1225,15 +1166,9 @@ BeginCopy(ParseState *pstate,
 		 * function and is executed repeatedly.  (See also the same hack in
 		 * DECLARE CURSOR and PREPARE.)  XXX FIXME someday.
 		 */
-<<<<<<< HEAD
-		rewritten = pg_analyze_and_rewrite(copyObject(raw_query),
-										   pstate->p_sourcetext, NULL, 0,
-										   NULL);
-=======
-		rewritten = pg_analyze_and_rewrite_fixedparams(raw_query,
+		rewritten = pg_analyze_and_rewrite_fixedparams(copyObject(raw_query),
 													   pstate->p_sourcetext, NULL, 0,
 													   NULL);
->>>>>>> REL_16_9
 
 		/* check that we got back something we can work with */
 		if (rewritten == NIL)
@@ -1435,22 +1370,10 @@ BeginCopy(ParseState *pstate,
 
 	cstate->copy_dest = COPY_FILE;	/* default */
 
-<<<<<<< HEAD
 	MemoryContextSwitchTo(oldcontext);
 
 	return cstate;
 }
-=======
-	if (data_dest_cb)
-	{
-		progress_vals[1] = PROGRESS_COPY_TYPE_CALLBACK;
-		cstate->copy_dest = COPY_CALLBACK;
-		cstate->data_dest_cb = data_dest_cb;
-	}
-	else if (pipe)
-	{
-		progress_vals[1] = PROGRESS_COPY_TYPE_PIPE;
->>>>>>> REL_16_9
 
 CopyToState
 BeginCopyToOnSegment(QueryDesc *queryDesc)
@@ -1945,11 +1868,6 @@ CopyToDispatchDirectoryTable(CopyToState cstate)
 static uint64
 CopyTo(CopyToState cstate)
 {
-<<<<<<< HEAD
-=======
-	bool		pipe = (cstate->filename == NULL && cstate->data_dest_cb == NULL);
-	bool		fe_copy = (pipe && whereToSendOutput == DestRemote);
->>>>>>> REL_16_9
 	TupleDesc	tupDesc;
 	int			num_phys_attrs;
 	ListCell   *cur;
@@ -2477,8 +2395,6 @@ BeginCopyToDirectoryTable(ParseState *pstate,
 	return cstate;
 }
 
-<<<<<<< HEAD
-=======
 /*
  * Send text representation of one attribute, with conversion and escaping
  */
@@ -2788,4 +2704,3 @@ CreateCopyDestReceiver(void)
 
 	return (DestReceiver *) self;
 }
->>>>>>> REL_16_9

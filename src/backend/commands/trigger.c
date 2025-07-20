@@ -929,8 +929,7 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 															 CStringGetDatum(trigname));
 	values[Anum_pg_trigger_tgfoid - 1] = ObjectIdGetDatum(funcoid);
 	values[Anum_pg_trigger_tgtype - 1] = Int16GetDatum(tgtype);
-<<<<<<< HEAD
-	
+
 	/*
 	 * Special for Apache Cloudberry: Ignore foreign keys for now. Create
 	 * the triggers to back them as 'disabled'.
@@ -953,12 +952,7 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 			elog(WARNING, "unrecognized internal trigger function %u", funcoid);
 	}
 	values[Anum_pg_trigger_tgenabled - 1] = CharGetDatum(tgenabled);
-
-	values[Anum_pg_trigger_tgisinternal - 1] = BoolGetDatum(isInternal || in_partition);
-=======
-	values[Anum_pg_trigger_tgenabled - 1] = trigger_fires_when;
 	values[Anum_pg_trigger_tgisinternal - 1] = BoolGetDatum(isInternal);
->>>>>>> REL_16_9
 	values[Anum_pg_trigger_tgconstrrelid - 1] = ObjectIdGetDatum(constrrelid);
 	values[Anum_pg_trigger_tgconstrindid - 1] = ObjectIdGetDatum(indexOid);
 	values[Anum_pg_trigger_tgconstraint - 1] = ObjectIdGetDatum(constraintOid);
@@ -1274,11 +1268,7 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 
 			CreateTriggerFiringOn(childStmt, queryString,
 								  partdesc->oids[i], refRelOid,
-<<<<<<< HEAD
-								  InvalidOid, indexOnChild,
-=======
 								  InvalidOid, InvalidOid,
->>>>>>> REL_16_9
 								  funcoid, trigoid, qual,
 								  isInternal, true, trigger_fires_when);
 
@@ -1526,14 +1516,9 @@ RangeVarCallbackForRenameTrigger(const RangeVar *rv, Oid relid, Oid oldrelid,
 		form->relkind != RELKIND_PARTITIONED_TABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-<<<<<<< HEAD
-				 errmsg("\"%s\" is not a table, directory table, view, or foreign table",
-						rv->relname)));
-=======
 				 errmsg("relation \"%s\" cannot have triggers",
 						rv->relname),
 				 errdetail_relkind_not_supported(form->relkind)));
->>>>>>> REL_16_9
 
 	/* you must own the table to rename one of its triggers */
 	if (!object_ownercheck(RelationRelationId, relid, GetUserId()))
@@ -2640,21 +2625,12 @@ ExecARInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 
 	if ((trigdesc && trigdesc->trig_insert_after_row) ||
 		(transition_capture && transition_capture->tcs_insert_new_table))
-<<<<<<< HEAD
-	{
-		AfterTriggerSaveEvent(estate, relinfo, TRIGGER_EVENT_INSERT,
-							  true, NULL, slot,
-							  recheckIndexes, NULL,
-							  transition_capture);
-	}
-=======
 		AfterTriggerSaveEvent(estate, relinfo, NULL, NULL,
 							  TRIGGER_EVENT_INSERT,
 							  true, NULL, slot,
 							  recheckIndexes, NULL,
 							  transition_capture,
 							  false);
->>>>>>> REL_16_9
 }
 
 bool
@@ -5387,23 +5363,17 @@ AfterTriggerFreeQuery(AfterTriggersQueryData *qs)
 		ts = table->old_upd_tuplestore;
 		table->old_upd_tuplestore = NULL;
 		if (ts)
-<<<<<<< HEAD
 			release_or_prolong_tuplestore(ts, table->prolonged);
-		ts = table->new_tuplestore;
-		table->new_tuplestore = NULL;
-=======
-			tuplestore_end(ts);
 		ts = table->new_upd_tuplestore;
 		table->new_upd_tuplestore = NULL;
 		if (ts)
-			tuplestore_end(ts);
+			release_or_prolong_tuplestore(ts, table->prolonged);
 		ts = table->old_del_tuplestore;
 		table->old_del_tuplestore = NULL;
 		if (ts)
-			tuplestore_end(ts);
+			release_or_prolong_tuplestore(ts, table->prolonged);
 		ts = table->new_ins_tuplestore;
 		table->new_ins_tuplestore = NULL;
->>>>>>> REL_16_9
 		if (ts)
 			release_or_prolong_tuplestore(ts, table->prolonged);
 		if (table->storeslot)
