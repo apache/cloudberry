@@ -208,24 +208,16 @@ This product includes software from PostgreSQL, under the PostgreSQL License:
 The PostgreSQL software includes:
 
 ----------------------------
-   Apache License - Version 2.0
-      contrib/pax_storage/src/cpp/contrib/googlebench
-      see licenses/LICENSE-googlebench.txt
-
-----------------------------
    BSD License
       
       src/bin/pg_controldata/pg_controldata.c
       copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
-
-
 
 ----------------------------
    BSD-4-Clause (University of California-Specific)
       
       src/include/port/win32_msvc/glob.h
       src/port/glob.c
-
       see licenses/LICENSE-glob.txt
 
 ----------------------------
@@ -245,24 +237,6 @@ The PostgreSQL software includes:
       
       src/backend/libpq/sha2.h
       see licenses/LICENSE-bsd3-sha2.txt
-
-      contrib/pax_storage/src/cpp/contrib/googletest
-      see licenses/LICENSE-googletest.txt
-
-      gpcontrib/gpcloud/test/googletest
-      see licenses/LICENSE-googletest.txt
-
-----------------------------
-    MIT LICENSE
-
-      dependencies/yyjson
-      see licenses/LICENSE-yyjson.txt
-
-      contrib/pax_storage/src/cpp/contrib/cpp-stub
-      see licenses/LICENSE-cpp-stub.txt
-
-      contrib/pax_storage/src/cpp/contrib/tabulate
-      see licenses/LICENSE-tabulate.txt
 
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
@@ -321,8 +295,7 @@ Copyright (c) 2004-2020 VMware, Inc. or its affiliates. All Rights Reserved.
 All Rights Reserved.
 
 Greenplum Database is licensed under the Apache License Version 2.0
-(see LICENSE & NOTICE) and is based on the PostgreSQL Database
-Management System.
+(see LICENSE) and is based on the PostgreSQL Database Management System.
 
 The Greenplum Database software includes:
 
@@ -338,14 +311,47 @@ The Greenplum Database software includes:
       gpcontrib/orafce/*
       see licenses/LICENSE-orafce.txt
 
+ ----------------------------
+   BSD 3 Clause License
+
+      gpcontrib/gpcloud/test/googletest
+      see licenses/LICENSE-googletest.txt
+
 ================================================================================
-This product includes code from pg_cron under PostgreSQL license:
+Apache Cloudberry includes codes from
 
-   /src/include/task/pg_cron.h
-   /src/include/task/task_states.h
-   /src/include/task/job_metadata.h
-   /src/backend/task/task_states.c
-   /src/backend/task/job_metadata.c
-   /src/backend/task/pg_cron.c
+----------------------------
+   pg_cron under PostgreSQL license:
 
-   see licenses/LICENSE-citusdata.txt
+      /src/include/task/pg_cron.h
+      /src/include/task/task_states.h
+      /src/include/task/job_metadata.h
+      /src/backend/task/task_states.c
+      /src/backend/task/job_metadata.c
+      /src/backend/task/pg_cron.c
+
+      see licenses/LICENSE-citusdata.txt
+
+----------------------------
+   Apache License - Version 2.0
+
+      contrib/pax_storage/src/cpp/contrib/googlebench
+      see licenses/LICENSE-googlebench.txt
+
+----------------------------
+   MIT LICENSE
+
+      dependencies/yyjson
+      see licenses/LICENSE-yyjson.txt
+
+      contrib/pax_storage/src/cpp/cpp-stub
+      see licenses/LICENSE-cpp-stub.txt
+
+      contrib/pax_storage/src/cpp/contrib/tabulate
+      see licenses/LICENSE-tabulate.txt
+
+ ----------------------------
+   BSD 3 Clause License 
+
+      contrib/pax_storage/src/cpp/contrib/googletest
+      see licenses/LICENSE-googletest.txt
