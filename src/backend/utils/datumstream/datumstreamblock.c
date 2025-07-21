@@ -1642,7 +1642,8 @@ DatumStreamBlockWrite_PutOrig(
 			p = DatumGetPointer(d);
 			wsz = sz;
 		}
-		else if (value_type_could_short(DatumGetPointer(d), dsw->typeInfo->typid))
+		else if (dsw->typeInfo->typstorage != 'p' &&
+			 VARATT_CAN_MAKE_SHORT(DatumGetPointer(d)))
 		{
 			sz = VARATT_CONVERTED_SHORT_SIZE(DatumGetPointer(d));
 			c1 = VARSIZE_TO_SHORT_D(d);
@@ -3271,7 +3272,8 @@ DatumStreamBlockWrite_PutDense(
 			p = DatumGetPointer(d);
 			wsz = sz;
 		}
-		else if (value_type_could_short(DatumGetPointer(d), dsw->typeInfo->typid))
+		else if (dsw->typeInfo->typstorage != 'p' &&
+			 VARATT_CAN_MAKE_SHORT(DatumGetPointer(d)))
 		{
 			sz = VARATT_CONVERTED_SHORT_SIZE(DatumGetPointer(d));
 			c1 = VARSIZE_TO_SHORT_D(d);
@@ -4292,11 +4294,12 @@ DatumStreamBlockWrite_Init(
 				ereport(LOG,
 						(errmsg("Datum stream block write created "
 						"(maximum usable block space = %d, datum_buffer %p, "
-					 "datumlen = %d, typid = %u, align '%c', by value = %s)",
+					 "datumlen = %d, typid = %u, typstorage '%c', align '%c', by value = %s)",
 								dsw->maxDataBlockSize,
 								dsw->datum_buffer,
 								dsw->typeInfo->datumlen,
 								(uint32) dsw->typeInfo->typid,
+								dsw->typeInfo->typstorage,
 								dsw->typeInfo->align,
 								(dsw->typeInfo->byval ? "true" : "false")),
 						 errdetail_datumstreamblockwrite(dsw),
@@ -4403,11 +4406,12 @@ DatumStreamBlockWrite_Init(
 				ereport(LOG,
 						(errmsg("Datum stream block write created "
 						"(maximum usable block space = %d, datum_buffer %p, "
-					 "datumlen = %d, typid = %u, align '%c', by value = %s)",
+					 "datumlen = %d, typid = %u, typstorage '%c', align '%c', by value = %s)",
 								dsw->maxDataBlockSize,
 								dsw->datum_buffer,
 								dsw->typeInfo->datumlen,
 								(uint32) dsw->typeInfo->typid,
+								dsw->typeInfo->typstorage,
 								dsw->typeInfo->align,
 								(dsw->typeInfo->byval ? "true" : "false")),
 						 errdetail_datumstreamblockwrite(dsw),

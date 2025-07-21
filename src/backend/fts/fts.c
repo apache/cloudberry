@@ -340,8 +340,10 @@ void FtsLoop()
 		probe_requested = false;
 		skipFtsProbe = false;
 
+#ifdef FAULT_INJECTOR
 		if (SIMPLE_FAULT_INJECTOR("fts_probe") == FaultInjectorTypeSkip)
 			skipFtsProbe = true;
+#endif
 
 		if (skipFtsProbe || !has_mirrors)
 		{

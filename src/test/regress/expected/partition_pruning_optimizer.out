@@ -3558,7 +3558,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
                                                     QUERY PLAN                                                     
 -------------------------------------------------------------------------------------------------------------------
  Delete
-   Output: "outer".ColRef_0025, test.ctid, test.tableoid
+   Output: "outer".ColRef_0023, test.ctid, test.tableoid
    ->  Result
          Output: test.ctid, test.tableoid, test.gp_segment_id, 0
          ->  Hash Anti Join

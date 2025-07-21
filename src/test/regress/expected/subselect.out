@@ -1190,6 +1190,10 @@ select * from t1 where
 
 reset optimizer_minidump;
 reset optimizer_trace_fallback;
+-- start_matchsubs
+-- m/[ ]*\+$/
+-- s/[ ]*\+$/ \+/
+-- end_matchsubs
 -- Output DXL plan without unimportant properties.
 select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pretty.xml'))))::text, '        <', '<');
 ERROR:  could not stat file "minidumps/pretty.xml": No such file or directory
@@ -1219,3 +1223,33 @@ select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pre
 ERROR:  could not stat file "minidumps/pretty.xml": No such file or directory
 \! rm -rf $MASTER_DATA_DIRECTORY/minidumps
 drop table t1,t2,t3;
+-- Test case for subquery, which returns more than one rows
+create table table1 as
+    select * from (values (1, 0), (1, 0)) v(a, b) distributed by (a);
+create table table2 as
+    select * from (values (0, 10), (0, 10)) v(a, b) distributed by (a);
+explain (costs off)
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   ->  Seq Scan on table1
+         Filter: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Result
+                 Filter: ((table2.a = 0) OR (table1.b = table2.b))
+                 ->  Materialize
+                       ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                             ->  Seq Scan on table2
+(10 rows)
+
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+ a | b 
+---+---
+ 1 | 0
+ 1 | 0
+(2 rows)
+
+drop table table1, table2;

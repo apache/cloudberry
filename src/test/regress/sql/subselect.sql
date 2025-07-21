@@ -642,6 +642,11 @@ select * from t1 where
 reset optimizer_minidump;
 reset optimizer_trace_fallback;
 
+-- start_matchsubs
+-- m/[ ]*\+$/
+-- s/[ ]*\+$/ \+/
+-- end_matchsubs
+
 -- Output DXL plan without unimportant properties.
 -- start_ignore
 \! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
@@ -701,3 +706,23 @@ reset optimizer_trace_fallback;
 select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pretty.xml'))))::text, '          <', '<');
 \! rm -rf $MASTER_DATA_DIRECTORY/minidumps
 drop table t1,t2,t3;
+
+-- Test case for subquery, which returns more than one rows
+-- start_ignore
+drop table if exists table1, table2;
+-- end_ignore
+
+create table table1 as
+    select * from (values (1, 0), (1, 0)) v(a, b) distributed by (a);
+
+create table table2 as
+    select * from (values (0, 10), (0, 10)) v(a, b) distributed by (a);
+
+explain (costs off)
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+
+drop table table1, table2;

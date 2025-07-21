@@ -2611,6 +2611,12 @@ final_cost_mergejoin(PlannerInfo *root, MergePath *path,
 			 !ExecSupportsMarkRestore(inner_path->pathtype))
 		path->materialize_inner = true;
 
+#if 0
+	/*
+	 * In GPDB 6, this is not an optimization because the Mark/Restore
+	 * functionality in tuplestore.c has been significantly refactored into
+	 * tuplestorenew.c and it is still spilled to disk, so disable it.
+	 */
 	/*
 	 * Also, force materializing if the inner path is to be sorted and the
 	 * sort is expected to spill to disk.  This is because the final merge
@@ -2626,6 +2632,7 @@ final_cost_mergejoin(PlannerInfo *root, MergePath *path,
 			 relation_byte_size(inner_path_rows, inner_path->parent->width) >
 			 (work_mem * 1024L))
 		path->materialize_inner = true;
+#endif
 	else
 		path->materialize_inner = false;
 

@@ -17,6 +17,7 @@
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CLogical.h"
 #include "gpopt/operators/CLogicalConstTableGet.h"
+#include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CLogicalInnerJoin.h"
 #include "gpopt/operators/CLogicalLeftOuterCorrelatedApply.h"
 #include "gpopt/operators/CLogicalLeftOuterJoin.h"
@@ -145,14 +146,26 @@ CNormalizer::FPushable(CExpression *pexprLogical, CExpression *pexprPred)
 	GPOS_ASSERT(NULL != pexprLogical);
 	GPOS_ASSERT(NULL != pexprPred);
 
-	// do not push through volatile functions below an aggregate
-	// volatile functions can potentially give different results when they
-	// are called so we don't want aggregate to use volatile function result
-	// while it processes each row
-	if (COperator::EopLogicalGbAgg == pexprLogical->Pop()->Eopid() &&
-		(CPredicateUtils::FContainsVolatileFunction(pexprPred)))
+	if (COperator::EopLogicalGbAgg == pexprLogical->Pop()->Eopid())
 	{
-		return false;
+		// do not push through volatile functions below an aggregate
+		// volatile functions can potentially give different results when they
+		// are called so we don't want aggregate to use volatile function result
+		// while it processes each row
+		if (CPredicateUtils::FContainsVolatileFunction(pexprPred))
+		{
+			return false;
+		}
+
+		// we also do not push through aggregate when it has no grouping columns
+		// because HAVING clause should not produce any rows when the predicate
+		// if false but aggregates produce a single row even on empty tables.
+		// Because of this we have to keep the HAVING clause above the aggregate.
+		CLogicalGbAgg *pop = CLogicalGbAgg::PopConvert(pexprLogical->Pop());
+		if (0 == pop->Pdrgpcr()->Size())
+		{
+			return false;
+		}
 	}
 
 

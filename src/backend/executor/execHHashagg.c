@@ -469,9 +469,11 @@ lookup_agg_hash_entry(AggState *aggstate,
    
 	Assert(mt_bind != NULL);
 
+#ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("force_hashagg_stream_hashtable") == FaultInjectorTypeSkip)
 		if (((Agg *) aggstate->ss.ps.plan)->streaming)
 			return NULL;
+#endif
 
 	if (p_isnew != NULL)
 		*p_isnew = false;

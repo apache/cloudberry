@@ -1,6 +1,7 @@
 EXTENSION = gp_check_functions
 DATA = gp_check_functions--1.2.sql gp_check_functions--1.0.0--1.1.sql \
-       gp_check_functions--1.1--1.2.sql
+       gp_check_functions--1.1--1.2.sql gp_check_functions--1.2--1.3.sql \
+       gp_check_functions--1.3.sql
 MODULES = gp_check_functions
 # REGRESS testing is covered by the main suite test 'gp_check_files' as we need the custom tablespace directory support
 

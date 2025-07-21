@@ -1,0 +1,1200 @@
+-- Test cases when a parallel transaction drops a dependency object
+-- while current transaction is yet not committed.
+
+-- Case 1. Function dependency on the schema.
+create schema test_1_schema;
+CREATE
+
+1: begin;
+BEGIN
+1: create function test_1_schema.test_1_function() returns text as $$ select 'test'::text; /**/ $$ language sql;
+CREATE
+
+-- Check that we didn't add extra locks. Here we lock only namespace, so the count is 1.
+-- Do this check only for the first couple of tests in order not to overcomplicate the remaining.
+1:  select count(1), l.gp_segment_id from pg_locks l join pg_locks r using (locktype, classid, objid) where r.pid = pg_backend_pid() and r.locktype = 'object' group by 2 order by 2;
+ count | gp_segment_id 
+-------+---------------
+ 1     | -1            
+ 1     | 0             
+ 1     | 1             
+ 1     | 2             
+(4 rows)
+
+2&: drop schema test_1_schema;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop schema test_1_schema because other objects depend on it
+DETAIL:  function test_1_schema.test_1_function() depends on schema test_1_schema
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select test_1_schema.test_1_function();
+ test_1_function 
+-----------------
+ test            
+(1 row)
+
+drop schema test_1_schema cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create schema test_1_schema;
+CREATE
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop schema test_1_schema;
+DROP
+1&: create function test_1_schema.test_1_function() returns text as $$ select 'test'::text; /**/ $$ language sql;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  namespace ##### was concurrently dropped
+1: end;
+END
+
+-- Case 2. Function dependency on the return type.
+create type test_2_type as (a int);
+CREATE
+
+1: begin;
+BEGIN
+1: create function test_2_function() returns setof test_2_type as $$ select i from generate_series(1,5)i; /**/ $$ language sql;
+CREATE
+
+-- Check that we didn't add extra locks. Here we lock namespace ('public') and type, so the count is 2.
+-- Do this check only for the first couple of tests in order not to overcomplicate the remaining.
+1:  select count(1), l.gp_segment_id from pg_locks l join pg_locks r using (locktype, classid, objid) where r.pid = pg_backend_pid() and r.locktype = 'object' group by 2 order by 2;
+ count | gp_segment_id 
+-------+---------------
+ 2     | -1            
+ 2     | 0             
+ 2     | 1             
+ 2     | 2             
+(4 rows)
+
+2&: drop type test_2_type;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop type test_2_type because other objects depend on it
+DETAIL:  function test_2_function() depends on type test_2_type
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select test_2_function();
+ test_2_function 
+-----------------
+ (1)             
+ (2)             
+ (3)             
+ (4)             
+ (5)             
+(5 rows)
+
+drop type test_2_type cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create type test_2_type as (a int);
+CREATE
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop type test_2_type;
+DROP
+1&: create function test_2_function() returns setof test_2_type as $$ select i from generate_series(1,5)i; /**/ $$ language sql;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  type ##### was concurrently dropped
+1: end;
+END
+
+-- Case 3. Function dependency on the parameter type.
+create type test_3_type as enum ('one', 'two');
+CREATE
+
+1: begin;
+BEGIN
+1: create function test_3_function(a test_3_type) returns text as $$ select 'Return ' || a; /**/ $$ language sql;
+CREATE
+
+2&: drop type test_3_type;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop type test_3_type because other objects depend on it
+DETAIL:  function test_3_function(test_3_type) depends on type test_3_type
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select test_3_function('one');
+ test_3_function 
+-----------------
+ Return one      
+(1 row)
+
+drop type test_3_type cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create type test_3_type as enum ('one', 'two');
+CREATE
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop type test_3_type;
+DROP
+1&: create function test_3_function(a test_3_type) returns text as $$ select 'Return ' || a; /**/ $$ language sql;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  type ##### was concurrently dropped
+1: end;
+END
+
+-- Case 4. Function dependency on the language.
+create language plpythonu;
+CREATE
+
+1: begin;
+BEGIN
+1: create function test_4_function() returns text as $$ return "test" $$ language plpythonu;
+CREATE
+
+2&: drop language plpythonu;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop language plpythonu because other objects depend on it
+DETAIL:  function test_4_function() depends on language plpythonu
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select test_4_function();
+ test_4_function 
+-----------------
+ test            
+(1 row)
+
+drop language plpythonu cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create language plpythonu;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop language plpythonu;
+DROP
+1&: create function test_4_function() returns text as $$ return "test" $$ language plpythonu;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  language ##### was concurrently dropped
+1: end;
+END
+
+-- Case 5. Function dependency on the parameter default expression.
+create function test5_default_value_function() returns text as $$ select 'test'::text; /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+1: create function test_5_function(a text default test5_default_value_function()) returns text as $$ begin return a; /**/ end $$ language plpgsql;
+CREATE
+
+2&: drop function test5_default_value_function();  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop function test5_default_value_function() because other objects depend on it
+DETAIL:  function test_5_function(text) depends on function test5_default_value_function()
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select test_5_function();
+ test_5_function 
+-----------------
+ test            
+(1 row)
+
+drop function test5_default_value_function() cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create function test5_default_value_function() returns text as $$ select 'test'::text; /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop function test5_default_value_function();
+DROP
+1&: create function test_5_function(a text default test5_default_value_function()) returns text as $$ begin return a; /**/ end $$ language plpgsql;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  procedure ##### was concurrently dropped
+1: end;
+END
+
+-- Case 6. Table dependency on the column default expression.
+create function test_6_default_value_function() returns text as $$ select 'test'::text; /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+1: create table test_6_table(a text default test_6_default_value_function());
+CREATE
+
+2&: drop function test_6_default_value_function();  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop function test_6_default_value_function() because other objects depend on it
+DETAIL:  default for table test_6_table column a depends on function test_6_default_value_function()
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: insert into test_6_table default values;
+INSERT 1
+1: select * from test_6_table;
+ a    
+------
+ test 
+(1 row)
+
+drop function test_6_default_value_function() cascade;
+DROP
+drop table test_6_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create function test_6_default_value_function() returns text as $$ select 'test'::text; /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop function test_6_default_value_function();
+DROP
+1&: create table test_6_table(a text default test_6_default_value_function());  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  procedure ##### was concurrently dropped
+1: end;
+END
+
+-- Case 7. Table dependency on the column type.
+create type test_7_type as enum ('one', 'two');
+CREATE
+
+1: begin;
+BEGIN
+1: create table test_7_table(a test_7_type);
+CREATE
+
+2&: drop type test_7_type;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop type test_7_type because other objects depend on it
+DETAIL:  table test_7_table column a depends on type test_7_type
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_7_table;
+ a 
+---
+(0 rows)
+
+drop type test_7_type cascade;
+DROP
+drop table test_7_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create type test_7_type as enum ('one', 'two');
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop type test_7_type;
+DROP
+1&: create table test_7_table(a test_7_type);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  type ##### was concurrently dropped
+1: end;
+END
+
+-- Case 8. Table dependency on the collation.
+create collation test_8_collation (locale="en_US.utf8");
+CREATE
+
+1: begin;
+BEGIN
+1: create table test_8_table(a text collate test_8_collation);
+CREATE
+1: insert into test_8_table values('data');
+INSERT 1
+
+2&: drop collation test_8_collation;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop collation test_8_collation because other objects depend on it
+DETAIL:  table test_8_table column a depends on collation test_8_collation
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_8_table where a < 'test';
+ a    
+------
+ data 
+(1 row)
+
+drop collation test_8_collation cascade;
+DROP
+drop table test_8_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create collation test_8_collation (locale="en_US.utf8");
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop collation test_8_collation;
+DROP
+1&: create table test_8_table(a text collate test_8_collation);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  collation ##### was concurrently dropped
+1: end;
+END
+
+-- Case 9. Text search configuration dependency on the parser.
+create text search parser test_9_parser(start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype);
+CREATE
+
+1: begin;
+BEGIN
+1: create text search configuration test_9_configuration(parser = test_9_parser);
+CREATE
+
+2&: drop text search parser test_9_parser;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop text search parser test_9_parser because other objects depend on it
+DETAIL:  text search configuration test_9_configuration depends on text search parser test_9_parser
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select count(1) from ts_debug('public.test_9_configuration', 'test');
+ count 
+-------
+ 1     
+(1 row)
+
+drop text search parser test_9_parser cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create text search parser test_9_parser(start = prsd_start, gettoken = prsd_nexttoken, end = prsd_end, lextypes = prsd_lextype);
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop text search parser test_9_parser;
+DROP
+1&: create text search configuration test_9_configuration(parser = test_9_parser);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  text search parser ##### was concurrently dropped
+1: end;
+END
+
+-- Case 10. Text search dictionary dependency on the template.
+create text search template test_10_template(init = dsimple_init, lexize = dsimple_lexize);
+CREATE
+
+1: begin;
+BEGIN
+1: create text search dictionary test_10_dictionary(template = test_10_template);
+CREATE
+
+2&: drop text search template test_10_template;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop text search template test_10_template because other objects depend on it
+DETAIL:  text search dictionary test_10_dictionary depends on text search template test_10_template
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select ts_lexize('public.test_10_dictionary', 'test');
+ ts_lexize 
+-----------
+ {test}    
+(1 row)
+
+drop text search template test_10_template cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create text search template test_10_template(init = dsimple_init, lexize = dsimple_lexize);
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop text search template test_10_template;
+DROP
+1&: create text search dictionary test_10_dictionary(template = test_10_template);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  text search template ##### was concurrently dropped
+1: end;
+END
+
+-- Case 11. Server dependency on the foreign data wrapper.
+create foreign data wrapper test_11_fdw;
+CREATE
+
+1: begin;
+BEGIN
+1: create server test_11_server foreign data wrapper test_11_fdw;
+CREATE
+
+2&: drop foreign data wrapper test_11_fdw;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop foreign-data wrapper test_11_fdw because other objects depend on it
+DETAIL:  server test_11_server depends on foreign-data wrapper test_11_fdw
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: alter server test_11_server options (servername 'test_server');
+ALTER
+
+drop foreign data wrapper test_11_fdw cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create foreign data wrapper test_11_fdw;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop foreign data wrapper test_11_fdw;
+DROP
+1&: create server test_11_server foreign data wrapper test_11_fdw;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  foreign data wrapper ##### was concurrently dropped
+1: end;
+END
+
+-- Case 12. User mapping dependency on the server.
+create foreign data wrapper test_12_fdw;
+CREATE
+create server test_12_server foreign data wrapper test_12_fdw;
+CREATE
+
+1: begin;
+BEGIN
+1: create user mapping for public server test_12_server;
+CREATE
+
+2&: drop server test_12_server;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop server test_12_server because other objects depend on it
+DETAIL:  user mapping for public on server test_12_server depends on server test_12_server
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+SELECT srvname, usename FROM pg_user_mappings ORDER BY 1, 2;
+ srvname        | usename 
+----------------+---------
+ test_12_server | public  
+(1 row)
+
+drop server test_12_server cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create server test_12_server foreign data wrapper test_12_fdw;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop server test_12_server;
+DROP
+1&: create user mapping for public server test_12_server;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  server ##### was concurrently dropped
+1: end;
+END
+
+drop foreign data wrapper test_12_fdw;
+DROP
+
+-- Case 13. External table dependency on the protocol.
+create or replace function write_to_file() returns integer as '$libdir/gpextprotocol.so', 'demoprot_export' language c stable no sql;
+CREATE
+create or replace function read_from_file() returns integer as '$libdir/gpextprotocol.so', 'demoprot_import' language c stable no sql;
+CREATE
+
+create protocol demoprot (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE
+! echo 1 > /tmp/test_13.txt;
+
+
+1: begin;
+BEGIN
+1: create readable external table test_13_ext_table(a int) location('demoprot:///tmp/test_13.txt') format 'text';
+CREATE
+
+2&: drop protocol demoprot;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop protocol demoprot because other objects depend on it
+DETAIL:  external table test_13_ext_table depends on protocol demoprot
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_13_ext_table;
+ a 
+---
+ 1 
+ 1 
+ 1 
+(3 rows)
+
+! rm /tmp/test_13.txt;
+
+
+drop protocol demoprot cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create protocol demoprot (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop protocol demoprot;
+DROP
+1&: create readable external table test_13_ext_table(a int) location('demoprot://test.txt') format 'text';  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  protocol ##### was concurrently dropped
+1: end;
+END
+
+drop function write_to_file();
+DROP
+drop function read_from_file();
+DROP
+
+-- Case 14. Text search configuration dependency on the text search dictionary
+create text search dictionary test_14_dict ( template = simple );
+CREATE
+
+1: begin;
+BEGIN
+1: create text search configuration test_14_config (parser = default);
+CREATE
+1: alter text search configuration test_14_config alter mapping for asciiword with test_14_dict;
+ALTER
+
+2&: drop text search dictionary test_14_dict;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop text search dictionary test_14_dict because other objects depend on it
+DETAIL:  text search configuration test_14_config depends on text search dictionary test_14_dict
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select count(1) from ts_debug('public.test_14_config', 'test');
+ count 
+-------
+ 1     
+(1 row)
+
+drop text search dictionary test_14_dict cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create text search dictionary test_14_dict ( template = simple );
+CREATE
+
+1: begin;
+BEGIN
+1: create text search configuration test_14_config (parser = default);
+CREATE
+2: begin;
+BEGIN
+2: drop text search dictionary test_14_dict;
+DROP
+1&: alter text search configuration test_14_config alter mapping for asciiword with test_14_dict;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  text search dictionary ##### was concurrently dropped
+1: end;
+END
+
+-- Case 15. Table dependency on the operator.
+create function test_15_function(text, text) returns text as $$ begin return $1 || $2;  /**/ end;  /**/ $$ language plpgsql;
+CREATE
+
+create operator ~*~ ( procedure = test_15_function, leftarg = text, rightarg = text, commutator = ~*~ );
+CREATE
+
+1: begin;
+BEGIN
+1: create table test_15_table(a text default 'a' ~*~ 'b');
+CREATE
+
+2&: drop operator ~*~ (text, text);  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop operator ~*~(text,text) because other objects depend on it
+DETAIL:  default for table test_15_table column a depends on operator ~*~(text,text)
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: insert into test_15_table values (default);
+INSERT 1
+
+drop operator ~*~ (text, text) cascade;
+DROP
+drop table test_15_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create operator ~*~ ( procedure = test_15_function, leftarg = text, rightarg = text, commutator = ~*~ );
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop operator ~*~ (text, text);
+DROP
+1&: create table test_15_table(a text default 'a' ~*~ 'b');  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  operator ##### was concurrently dropped
+1: end;
+END
+
+drop function test_15_function(text, text);
+DROP
+
+-- Case 16. Index dependency on the operator class.
+create function test_16_idx_func(int, int) returns int as $$ begin return $1 - $2;  /**/ end;  /**/ $$ language plpgsql immutable;
+CREATE
+
+create operator class test_16_op_class for type int using btree as operator 1 =(int, int), function 1 test_16_idx_func(int, int);
+CREATE
+
+create table test_16_table(a int);
+CREATE
+
+1: begin;
+BEGIN
+1: create index idx_test_16_table on test_16_table using btree (a test_16_op_class);
+CREATE
+
+2&: drop operator class test_16_op_class using btree;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop operator class test_16_op_class for access method btree because other objects depend on it
+DETAIL:  index idx_test_16_table depends on operator class test_16_op_class for access method btree
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_16_table where a = 0;
+ a 
+---
+(0 rows)
+
+drop operator class test_16_op_class using btree cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create operator class test_16_op_class for type int using btree as operator 1 =(int, int), function 1 test_16_idx_func(int, int);
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop operator class test_16_op_class using btree;
+DROP
+1&: create index idx_test_16_table on test_16_table using btree (a test_16_op_class);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  operator class ##### was concurrently dropped
+1: end;
+END
+
+drop function test_16_idx_func(int, int);
+DROP
+drop table test_16_table;
+DROP
+
+-- Case 17. Operator class dependency on the operator family.
+create function test_17_eq(int, int) returns int as $$ begin return 1;  /**/ end;  /**/ $$ language plpgsql immutable;
+CREATE
+
+create operator family test_17_op_family using btree;
+CREATE
+
+1: begin;
+BEGIN
+1: create operator class test_17_op_class for type int using btree family test_17_op_family as operator 1 =(int, int), function 1 test_17_eq(int, int);
+CREATE
+
+2&: drop operator family test_17_op_family using btree;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+DROP
+
+-- Count below should be 0, as 'drop operator family' automatically drops
+-- all its operator classes.
+1: select count(*) from pg_opclass where opcname = 'test_17_op_class';
+ count 
+-------
+ 0     
+(1 row)
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create operator family test_17_op_family using btree;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop operator family test_17_op_family using btree;
+DROP
+1&: create operator class test_17_op_class for type int using btree family test_17_op_family as operator 1 =(int, int), function 1 test_17_eq(int, int);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  operator family ##### was concurrently dropped
+1: end;
+END
+
+drop function test_17_eq(int, int);
+DROP
+
+-- Case 18. View dependency on the function.
+create function test_18_function() returns text as $$ select 'test'::text;  /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+1: create view test_18_view as select test_18_function();
+CREATE
+
+2&: drop function test_18_function();  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop function test_18_function() because other objects depend on it
+DETAIL:  view test_18_view depends on function test_18_function()
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_18_view;
+ test_18_function 
+------------------
+ test             
+(1 row)
+
+drop function test_18_function() cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create function test_18_function() returns text as $$ select 'test'::text;  /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop function test_18_function();
+DROP
+1&: create view test_18_view as select test_18_function();  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  procedure ##### was concurrently dropped
+1: end;
+END
+
+-- Case 19. Materialized view dependency on the function.
+create function test_19_function() returns text as $$ select 'test'::text;  /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+1: create materialized view test_19_view as select test_19_function();
+CREATE 1
+
+2&: drop function test_19_function();  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop function test_19_function() because other objects depend on it
+DETAIL:  materialized view test_19_view depends on function test_19_function()
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_19_view;
+ test_19_function 
+------------------
+ test             
+(1 row)
+
+drop function test_19_function() cascade;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create function test_19_function() returns text as $$ select 'test'::text;  /**/ $$ language sql;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop function test_19_function();
+DROP
+1&: create materialized view test_19_view as select test_19_function();  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  procedure ##### was concurrently dropped
+1: end;
+END
+
+-- Case 20. Table dependency on the column type (with ALTER COLUMN).
+create type test_20_type as enum ('one', 'two');
+CREATE
+create table test_20_table(a text);
+CREATE
+
+1: begin;
+BEGIN
+1: alter table test_20_table alter column a set data type test_20_type using a::test_20_type;
+ALTER
+
+2&: drop type test_20_type;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop type test_20_type because other objects depend on it
+DETAIL:  table test_20_table column a depends on type test_20_type
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_20_table;
+ a 
+---
+(0 rows)
+
+drop type test_20_type cascade;
+DROP
+drop table test_20_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create type test_20_type as enum ('one', 'two');
+CREATE
+create table test_20_table(a text);
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop type test_20_type;
+DROP
+1&: alter table test_20_table alter column a set data type test_20_type using a::test_20_type;  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  type ##### was concurrently dropped
+1: end;
+END
+
+-- Case 21. Rule dependency on the table.
+create table test_21_table_1(a int);
+CREATE
+create table test_21_table_2(a int);
+CREATE
+
+1: begin;
+BEGIN
+1: create rule test_21_rule as on insert to test_21_table_1 do instead insert into test_21_table_2 values (1);
+CREATE
+
+2&: drop table test_21_table_2;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop table test_21_table_2 because other objects depend on it
+DETAIL:  rule test_21_rule on table test_21_table_1 depends on table test_21_table_2
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: insert into test_21_table_1 values (0);
+INSERT 1
+1: select * from test_21_table_2;
+ a 
+---
+ 1 
+(1 row)
+
+drop rule test_21_rule on test_21_table_1;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop table test_21_table_2;
+DROP
+1&: create rule test_21_rule as on insert to test_21_table_1 do instead insert into test_21_table_2 values (1);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  relation "test_21_table_2" does not exist
+LINE 1: ... insert to test_21_table_1 do instead insert into test_21_ta...
+                                                             ^
+1: end;
+END
+
+drop table test_21_table_1;
+DROP
+
+-- Case 22. Table dependency on the sequence.
+create sequence test_22_seq;
+CREATE
+
+1: begin;
+BEGIN
+1: create table test_22_table(id int default nextval('test_22_seq'));
+CREATE
+
+2&: drop sequence test_22_seq;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop sequence test_22_seq because other objects depend on it
+DETAIL:  default for table test_22_table column id depends on sequence test_22_seq
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: insert into test_22_table default values;
+INSERT 1
+
+drop sequence test_22_seq cascade;
+DROP
+drop table test_22_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create sequence test_22_seq;
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+2: drop sequence test_22_seq;
+DROP
+1&: create table test_22_table(id int default nextval('test_22_seq'));  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  sequence ##### was concurrently dropped
+1: end;
+END
+
+-- Case 23. Table dependency on the column type with REPEATABLE READ isolation level.
+create type test_23_type as enum ('one', 'two');
+CREATE
+
+1: begin;
+BEGIN
+1: set transaction isolation level repeatable read;
+SET
+1: create table test_23_table(a test_23_type);
+CREATE
+
+2&: drop type test_23_type;  <waiting ...>
+
+1: commit;
+COMMIT
+
+2<:  <... completed>
+ERROR:  cannot drop type test_23_type because other objects depend on it
+DETAIL:  table test_23_table column a depends on type test_23_type
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+
+1: select * from test_23_table;
+ a 
+---
+(0 rows)
+
+drop type test_23_type cascade;
+DROP
+drop table test_23_table;
+DROP
+
+-- Check if dependency is dropped before the creation of the dependent object.
+create type test_23_type as enum ('one', 'two');
+CREATE
+
+1: begin;
+BEGIN
+1: set transaction isolation level repeatable read;
+SET
+2: begin;
+BEGIN
+2: set transaction isolation level repeatable read;
+SET
+2: drop type test_23_type;
+DROP
+1&: create table test_23_table(a test_23_type);  <waiting ...>
+
+2: commit;
+COMMIT
+1<:  <... completed>
+ERROR:  type ##### was concurrently dropped
+1: end;
+END
+
+-- Test deadlock scenario. It should be resolved by the deadlock detection algorithm.
+create schema test_schema;
+CREATE
+create type test_type as enum ('one', 'two');
+CREATE
+
+1: begin;
+BEGIN
+2: begin;
+BEGIN
+
+2: drop type test_type;
+DROP
+1&: create function test_schema.test_function(a test_type) returns text as $$ select 'Return ' || a;  /**/ $$ language sql;  <waiting ...>
+2&: drop schema test_schema;  <waiting ...>
+
+
+1: rollback;
+ROLLBACK
+2: rollback;
+ROLLBACK
+
+drop schema test_schema;
+DROP
+drop type test_type;
+DROP
