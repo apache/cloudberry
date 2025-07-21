@@ -341,7 +341,7 @@ typedef struct _tableInfo
 	bool		dummy_view;		/* view's real definition must be postponed */
 	bool		postponed_def;	/* matview must be postponed into post-data */
 	bool		ispartition;	/* is table a partition? */
-	bool        unsafe_partitions;  /* is it an unsafe partitioned table? */
+	bool		unsafe_partitions;  /* is it an unsafe partitioned table? */
 
 	/*
 	 * These fields are computed only if we decide the table is interesting

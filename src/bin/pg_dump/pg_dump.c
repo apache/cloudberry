@@ -2806,7 +2806,7 @@ dumpTableData(Archive *fout, const TableDataInfo *tdinfo)
 
 	    parentTbinfo = getRootTableInfo(tbinfo);
 	    copyFrom = fmtQualifiedDumpable(parentTbinfo);
-	    printfPQExpBuffer(copyBuf, "-- load via partition root %s",
+	    printfPQExpBuffer(copyBuf, "--load-via-partition-root %s",
 	                      copyFrom);
 	    tdDefn = pg_strdup(copyBuf->data);
 	}
