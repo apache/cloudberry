@@ -276,10 +276,7 @@ _SPI_commit(bool chain)
 				(errcode(ERRCODE_INVALID_TRANSACTION_TERMINATION),
 				 errmsg("cannot commit while a subtransaction is active")));
 
-<<<<<<< HEAD
 	/* XXX this ain't re-entrant enough for my taste */
-=======
->>>>>>> REL_16_9
 	if (chain)
 		SaveTransactionCharacteristics(&savetc);
 
@@ -305,11 +302,7 @@ _SPI_commit(bool chain)
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
 		if (chain)
-<<<<<<< HEAD
-			RestoreTransactionCharacteristics();
-=======
 			RestoreTransactionCharacteristics(&savetc);
->>>>>>> REL_16_9
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -333,11 +326,7 @@ _SPI_commit(bool chain)
 		/* ... and start a new one */
 		StartTransactionCommand();
 		if (chain)
-<<<<<<< HEAD
-			RestoreTransactionCharacteristics();
-=======
 			RestoreTransactionCharacteristics(&savetc);
->>>>>>> REL_16_9
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -367,11 +356,7 @@ _SPI_rollback(bool chain)
 	MemoryContext oldcontext = CurrentMemoryContext;
 	SavedTransactionCharacteristics savetc;
 
-<<<<<<< HEAD
-	/* see under SPI_commit() */
-=======
 	/* see comments in _SPI_commit() */
->>>>>>> REL_16_9
 	if (_SPI_current->atomic)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TRANSACTION_TERMINATION),
@@ -383,10 +368,7 @@ _SPI_rollback(bool chain)
 				(errcode(ERRCODE_INVALID_TRANSACTION_TERMINATION),
 				 errmsg("cannot roll back while a subtransaction is active")));
 
-<<<<<<< HEAD
 	/* XXX this ain't re-entrant enough for my taste */
-=======
->>>>>>> REL_16_9
 	if (chain)
 		SaveTransactionCharacteristics(&savetc);
 
@@ -413,11 +395,7 @@ _SPI_rollback(bool chain)
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
 		if (chain)
-<<<<<<< HEAD
-			RestoreTransactionCharacteristics();
-=======
 			RestoreTransactionCharacteristics(&savetc);
->>>>>>> REL_16_9
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -442,11 +420,7 @@ _SPI_rollback(bool chain)
 		/* ... and start a new one */
 		StartTransactionCommand();
 		if (chain)
-<<<<<<< HEAD
-			RestoreTransactionCharacteristics();
-=======
 			RestoreTransactionCharacteristics(&savetc);
->>>>>>> REL_16_9
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -470,20 +444,6 @@ SPI_rollback_and_chain(void)
 	_SPI_rollback(true);
 }
 
-/*
-<<<<<<< HEAD
- * SPICleanup is a no-op, kept for backwards compatibility. We rely on
- * AtEOXact_SPI to cleanup. Extensions should not (need to) fiddle with the
- * internal SPI state directly.
- */
-void
-SPICleanup(void)
-{
-}
-
-/*
-=======
->>>>>>> REL_16_9
  * Clean up SPI state at transaction commit or abort.
  */
 void
@@ -493,11 +453,7 @@ AtEOXact_SPI(bool isCommit)
 
 	/*
 	 * Pop stack entries, stopping if we find one marked internal_xact (that
-<<<<<<< HEAD
-	 * one belongs to the caller of SPI_commit or SPI_abort).
-=======
 	 * one belongs to the caller of SPI_commit or SPI_rollback).
->>>>>>> REL_16_9
 	 */
 	while (_SPI_connected >= 0)
 	{
@@ -2572,10 +2528,6 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 	 */
 	if (snapshot != InvalidSnapshot)
 	{
-<<<<<<< HEAD
-=======
-		/* this intentionally tests the options field not the derived value */
->>>>>>> REL_16_9
 		Assert(!options->allow_nonatomic);
 		if (options->read_only)
 		{
@@ -2704,11 +2656,7 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 		 * plan, the refcount must be backed by the plan_owner.
 		 */
 		cplan = GetCachedPlan(plansource, options->params,
-<<<<<<< HEAD
 							  plan_owner, _SPI_current->queryEnv, NULL);
-=======
-							  plan_owner, _SPI_current->queryEnv);
->>>>>>> REL_16_9
 
 		stmt_list = cplan->stmt_list;
 
@@ -2739,11 +2687,7 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 			 * Skip it when doing non-atomic execution, though (we rely
 			 * entirely on the Portal snapshot in that case).
 			 */
-<<<<<<< HEAD
 			if (!options->read_only && !options->allow_nonatomic)
-=======
-			if (!options->read_only && !allow_nonatomic)
->>>>>>> REL_16_9
 			{
 				if (pushed_active_snap)
 					PopActiveSnapshot();
@@ -2854,16 +2798,10 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 				 * If we're not allowing nonatomic operations, tell
 				 * ProcessUtility this is an atomic execution context.
 				 */
-<<<<<<< HEAD
 				if (_SPI_current->atomic || !options->allow_nonatomic)
 					context = PROCESS_UTILITY_QUERY;
 				else
-=======
-				if (allow_nonatomic)
->>>>>>> REL_16_9
 					context = PROCESS_UTILITY_QUERY_NONATOMIC;
-				else
-					context = PROCESS_UTILITY_QUERY;
 
 				InitializeQueryCompletion(&qc);
 				ProcessUtility(stmt,

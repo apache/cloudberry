@@ -11,13 +11,9 @@
  * subplans, which are re-evaluated every time their result is required.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1229,7 +1225,6 @@ PG_TRY();
 	oldcontext = MemoryContextSwitchTo(econtext->ecxt_per_query_memory);
 
 	/*
-<<<<<<< HEAD
 	 * Set Params of this plan from parent plan correlation values. (Any
 	 * calculation we have to do is done in the parent econtext, since the
 	 * Param values don't need to have per-query lifetime.)  Currently, we
@@ -1271,8 +1266,6 @@ PG_TRY();
 	}
 
 	/*
-=======
->>>>>>> REL_16_9
 	 * Run the plan.  (If it needs to be rescanned, the first ExecProcNode
 	 * call will take care of that.)
 	 */

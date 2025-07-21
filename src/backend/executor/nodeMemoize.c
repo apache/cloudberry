@@ -115,13 +115,8 @@ typedef struct MemoizeKey
 typedef struct MemoizeEntry
 {
 	MemoizeKey *key;			/* Hash key for hash table lookups */
-<<<<<<< HEAD
-	MemoizeTuple *tuplehead;	/* Pointer to the first tuple or NULL if
-								 * no tuples are cached for this entry */
-=======
 	MemoizeTuple *tuplehead;	/* Pointer to the first tuple or NULL if no
 								 * tuples are cached for this entry */
->>>>>>> REL_16_9
 	uint32		hash;			/* Hash value (cached) */
 	char		status;			/* Hash status */
 	bool		complete;		/* Did we read the outer plan to completion? */
@@ -138,13 +133,8 @@ typedef struct MemoizeEntry
 static uint32 MemoizeHash_hash(struct memoize_hash *tb,
 							   const MemoizeKey *key);
 static bool MemoizeHash_equal(struct memoize_hash *tb,
-<<<<<<< HEAD
-							  const MemoizeKey *params1,
-							  const MemoizeKey *params2);
-=======
 							  const MemoizeKey *key1,
 							  const MemoizeKey *key2);
->>>>>>> REL_16_9
 
 #define SH_PREFIX memoize
 #define SH_ELEMENT_TYPE MemoizeEntry
@@ -168,31 +158,16 @@ static uint32
 MemoizeHash_hash(struct memoize_hash *tb, const MemoizeKey *key)
 {
 	MemoizeState *mstate = (MemoizeState *) tb->private_data;
-<<<<<<< HEAD
-=======
-	ExprContext *econtext = mstate->ss.ps.ps_ExprContext;
-	MemoryContext oldcontext;
->>>>>>> REL_16_9
 	TupleTableSlot *pslot = mstate->probeslot;
 	uint32		hashkey = 0;
 	int			numkeys = mstate->nkeys;
 
-<<<<<<< HEAD
-=======
-	oldcontext = MemoryContextSwitchTo(econtext->ecxt_per_tuple_memory);
-
->>>>>>> REL_16_9
 	if (mstate->binary_mode)
 	{
 		for (int i = 0; i < numkeys; i++)
 		{
-<<<<<<< HEAD
-			/* rotate hashkey left 1 bit at each step */
-			hashkey = (hashkey << 1) | ((hashkey & 0x80000000) ? 1 : 0);
-=======
 			/* combine successive hashkeys by rotating */
 			hashkey = pg_rotate_left32(hashkey, 1);
->>>>>>> REL_16_9
 
 			if (!pslot->tts_isnull[i])	/* treat nulls as having hash key 0 */
 			{
@@ -214,13 +189,8 @@ MemoizeHash_hash(struct memoize_hash *tb, const MemoizeKey *key)
 
 		for (int i = 0; i < numkeys; i++)
 		{
-<<<<<<< HEAD
-			/* rotate hashkey left 1 bit at each step */
-			hashkey = (hashkey << 1) | ((hashkey & 0x80000000) ? 1 : 0);
-=======
 			/* combine successive hashkeys by rotating */
 			hashkey = pg_rotate_left32(hashkey, 1);
->>>>>>> REL_16_9
 
 			if (!pslot->tts_isnull[i])	/* treat nulls as having hash key 0 */
 			{
@@ -233,7 +203,6 @@ MemoizeHash_hash(struct memoize_hash *tb, const MemoizeKey *key)
 		}
 	}
 
-	MemoryContextSwitchTo(oldcontext);
 	return murmurhash32(hashkey);
 }
 
@@ -245,11 +214,7 @@ MemoizeHash_hash(struct memoize_hash *tb, const MemoizeKey *key)
  */
 static bool
 MemoizeHash_equal(struct memoize_hash *tb, const MemoizeKey *key1,
-<<<<<<< HEAD
-			  const MemoizeKey *key2)
-=======
 				  const MemoizeKey *key2)
->>>>>>> REL_16_9
 {
 	MemoizeState *mstate = (MemoizeState *) tb->private_data;
 	ExprContext *econtext = mstate->ss.ps.ps_ExprContext;
@@ -261,15 +226,7 @@ MemoizeHash_equal(struct memoize_hash *tb, const MemoizeKey *key1,
 
 	if (mstate->binary_mode)
 	{
-<<<<<<< HEAD
 		int			numkeys = mstate->nkeys;
-=======
-		MemoryContext oldcontext;
-		int			numkeys = mstate->nkeys;
-		bool		match = true;
-
-		oldcontext = MemoryContextSwitchTo(econtext->ecxt_per_tuple_memory);
->>>>>>> REL_16_9
 
 		slot_getallattrs(tslot);
 		slot_getallattrs(pslot);
@@ -279,14 +236,7 @@ MemoizeHash_equal(struct memoize_hash *tb, const MemoizeKey *key1,
 			FormData_pg_attribute *attr;
 
 			if (tslot->tts_isnull[i] != pslot->tts_isnull[i])
-<<<<<<< HEAD
 				return false;
-=======
-			{
-				match = false;
-				break;
-			}
->>>>>>> REL_16_9
 
 			/* both NULL? they're equal */
 			if (tslot->tts_isnull[i])
@@ -296,30 +246,15 @@ MemoizeHash_equal(struct memoize_hash *tb, const MemoizeKey *key1,
 			attr = &tslot->tts_tupleDescriptor->attrs[i];
 			if (!datum_image_eq(tslot->tts_values[i], pslot->tts_values[i],
 								attr->attbyval, attr->attlen))
-<<<<<<< HEAD
 				return false;
 		}
-		return true;
-=======
-			{
-				match = false;
-				break;
-			}
-		}
-
-		MemoryContextSwitchTo(oldcontext);
-		return match;
->>>>>>> REL_16_9
+		return true
 	}
 	else
 	{
 		econtext->ecxt_innertuple = tslot;
 		econtext->ecxt_outertuple = pslot;
-<<<<<<< HEAD
 		return ExecQualAndReset(mstate->cache_eq_expr, econtext);
-=======
-		return ExecQual(mstate->cache_eq_expr, econtext);
->>>>>>> REL_16_9
 	}
 }
 
@@ -362,11 +297,7 @@ prepare_probe_slot(MemoizeState *mstate, MemoizeKey *key)
 		/* Set the probeslot's values based on the current parameter values */
 		for (int i = 0; i < numKeys; i++)
 			pslot->tts_values[i] = ExecEvalExpr(mstate->param_exprs[i],
-<<<<<<< HEAD
 												mstate->ss.ps.ps_ExprContext,
-=======
-												econtext,
->>>>>>> REL_16_9
 												&pslot->tts_isnull[i]);
 
 		MemoryContextSwitchTo(oldcontext);
@@ -451,11 +382,7 @@ static void
 cache_purge_all(MemoizeState *mstate)
 {
 	uint64		evictions = mstate->hashtable->members;
-<<<<<<< HEAD
-	PlanState *pstate = (PlanState *) mstate;
-=======
 	PlanState  *pstate = (PlanState *) mstate;
->>>>>>> REL_16_9
 
 	/*
 	 * Likely the most efficient way to remove all items is to just reset the
@@ -558,11 +485,7 @@ cache_reduce_memory(MemoizeState *mstate, MemoizeKey *specialkey)
 			break;
 	}
 
-<<<<<<< HEAD
-	mstate->stats.cache_evictions += evictions;	/* Update Stats */
-=======
 	mstate->stats.cache_evictions += evictions; /* Update Stats */
->>>>>>> REL_16_9
 
 	return specialkey_intact;
 }
@@ -752,24 +675,9 @@ static TupleTableSlot *
 ExecMemoize(PlanState *pstate)
 {
 	MemoizeState *node = castNode(MemoizeState, pstate);
-<<<<<<< HEAD
 	PlanState  *outerNode;
 	TupleTableSlot *slot;
 
-=======
-	ExprContext *econtext = node->ss.ps.ps_ExprContext;
-	PlanState  *outerNode;
-	TupleTableSlot *slot;
-
-	CHECK_FOR_INTERRUPTS();
-
-	/*
-	 * Reset per-tuple memory context to free any expression evaluation
-	 * storage allocated in the previous tuple cycle.
-	 */
-	ResetExprContext(econtext);
-
->>>>>>> REL_16_9
 	switch (node->mstatus)
 	{
 		case MEMO_CACHE_LOOKUP:
@@ -1058,13 +966,8 @@ ExecInitMemoize(Memoize *node, EState *estate, int eflags)
 												 &TTSOpsVirtual);
 
 	mstate->param_exprs = (ExprState **) palloc(nkeys * sizeof(ExprState *));
-<<<<<<< HEAD
-	mstate->collations = node->collations; /* Just point directly to the plan
-											* data */
-=======
 	mstate->collations = node->collations;	/* Just point directly to the plan
 											 * data */
->>>>>>> REL_16_9
 	mstate->hashfunctions = (FmgrInfo *) palloc(nkeys * sizeof(FmgrInfo));
 
 	eqfuncoids = palloc(nkeys * sizeof(Oid));
@@ -1228,7 +1131,6 @@ ExecReScanMemoize(MemoizeState *node)
 	 */
 	if (bms_nonempty_difference(outerPlan->chgParam, node->keyparamids))
 		cache_purge_all(node);
-<<<<<<< HEAD
 }
 
 void
@@ -1236,8 +1138,6 @@ ExecSquelchMemoize(MemoizeState *node, bool force)
 {
 	node->ss.ps.squelched = true;
 	ExecSquelchNode(outerPlanState(node), force);
-=======
->>>>>>> REL_16_9
 }
 
 /*
@@ -1249,11 +1149,7 @@ double
 ExecEstimateCacheEntryOverheadBytes(double ntuples)
 {
 	return sizeof(MemoizeEntry) + sizeof(MemoizeKey) + sizeof(MemoizeTuple) *
-<<<<<<< HEAD
-			ntuples;
-=======
 		ntuples;
->>>>>>> REL_16_9
 }
 
 /* ----------------------------------------------------------------

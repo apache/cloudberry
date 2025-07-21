@@ -48,10 +48,7 @@
 #include "executor/nodeProjectSet.h"
 #include "executor/nodeRecursiveunion.h"
 #include "executor/nodeResult.h"
-<<<<<<< HEAD
 #include "executor/nodeRuntimeFilter.h"
-=======
->>>>>>> REL_16_9
 #include "executor/nodeSamplescan.h"
 #include "executor/nodeSeqscan.h"
 #include "executor/nodeSetOp.h"

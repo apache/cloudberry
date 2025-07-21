@@ -224,15 +224,12 @@ ExecMergeAppend(PlanState *pstate)
 			MergeAppend *plan = (MergeAppend *) node->ps.plan;
 
 			node->ms_valid_subplans =
-<<<<<<< HEAD
 				ExecFindMatchingSubPlans(node->ms_prune_state,
+										 false,
 										 node->ps.state,
 										 list_length(plan->mergeplans),
 										 plan->join_prune_paramids);
 		}
-=======
-				ExecFindMatchingSubPlans(node->ms_prune_state, false);
->>>>>>> REL_16_9
 
 		/*
 		 * First time through: pull the first tuple from each valid subplan,

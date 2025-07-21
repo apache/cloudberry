@@ -930,15 +930,6 @@ ExecInitPartitionInfo(ModifyTableState *mtstate, EState *estate,
 		lappend(estate->es_tuple_routing_result_relations,
 				leaf_part_rri);
 
-<<<<<<< HEAD
-	if (RelationIsAoRows(leaf_part_rri->ri_RelationDesc))
-		appendonly_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
-	else if (RelationIsAoCols(leaf_part_rri->ri_RelationDesc))
-		aoco_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
-	else if (ext_dml_init_hook)
-		ext_dml_init_hook(leaf_part_rri->ri_RelationDesc, mtstate->operation);
-
-=======
 	/*
 	 * Initialize information about this partition that's needed to handle
 	 * MERGE.  We take the "first" result relation's mergeActionList as
@@ -1035,7 +1026,14 @@ ExecInitPartitionInfo(ModifyTableState *mtstate, EState *estate,
 				ExecInitQual((List *) action->qual, &mtstate->ps);
 		}
 	}
->>>>>>> REL_16_9
+
+	if (RelationIsAoRows(leaf_part_rri->ri_RelationDesc))
+		appendonly_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
+	else if (RelationIsAoCols(leaf_part_rri->ri_RelationDesc))
+		aoco_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
+	else if (ext_dml_init_hook)
+		ext_dml_init_hook(leaf_part_rri->ri_RelationDesc, mtstate->operation);
+
 	MemoryContextSwitchTo(oldcxt);
 
 	return leaf_part_rri;
@@ -1479,11 +1477,8 @@ get_partition_for_tuple(PartitionKey key, PartitionDesc partdesc, Datum *values,
 	int			part_index = -1;
 	PartitionBoundInfo boundinfo = partdesc->boundinfo;
 
-<<<<<<< HEAD
 	if (partdesc->nparts == 0)
 		return part_index;
-=======
->>>>>>> REL_16_9
 	/*
 	 * In the switch statement below, when we perform a cached lookup for
 	 * RANGE and LIST partitioned tables, if we find that the last found
@@ -2401,7 +2396,6 @@ ExecAddMatchingSubPlans(PartitionPruneState *prunestate, Bitmapset *result)
  *		Determine which subplans match the pruning steps detailed in
  *		'prunestate' for the current comparison expression values.
  *
-<<<<<<< HEAD
  * Here we assume we may evaluate PARAM_EXEC Params.
  *
  * GPDB: 'join_prune_paramids' can contain a list of PARAM_EXEC Param IDs
@@ -2410,17 +2404,9 @@ ExecAddMatchingSubPlans(PartitionPruneState *prunestate, Bitmapset *result)
  */
 Bitmapset *
 ExecFindMatchingSubPlans(PartitionPruneState *prunestate,
+						 bool initial_prune,
 						 EState *estate,
 						 int nplans, List *join_prune_paramids)
-=======
- * Pass initial_prune if PARAM_EXEC Params cannot yet be evaluated.  This
- * differentiates the initial executor-time pruning step from later
- * runtime pruning.
- */
-Bitmapset *
-ExecFindMatchingSubPlans(PartitionPruneState *prunestate,
-						 bool initial_prune)
->>>>>>> REL_16_9
 {
 	Bitmapset  *result = NULL;
 	MemoryContext oldcontext;

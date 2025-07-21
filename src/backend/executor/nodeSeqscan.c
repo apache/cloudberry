@@ -200,14 +200,8 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	/*
 	 * open the scan relation
 	 */
-<<<<<<< HEAD
+
 	scanstate->ss.ss_currentRelation = currentRelation;
-=======
-	scanstate->ss.ss_currentRelation =
-		ExecOpenScanRelation(estate,
-							 node->scan.scanrelid,
-							 eflags);
->>>>>>> REL_16_9
 
 	/* and create slot with the appropriate rowtype */
 	ExecInitScanTupleSlot(estate, &scanstate->ss,

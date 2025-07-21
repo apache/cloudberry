@@ -950,8 +950,6 @@ index_recheck_constraint(Relation index, Oid *constr_procs,
 
 	return true;
 }
-<<<<<<< HEAD
-=======
 
 /*
  * Check if ExecInsertIndexTuples() should pass indexUnchanged hint.
@@ -1098,4 +1096,3 @@ index_expression_changed_walker(Node *node, Bitmapset *allUpdatedCols)
 	return expression_tree_walker(node, index_expression_changed_walker,
 								  (void *) allUpdatedCols);
 }
->>>>>>> REL_16_9

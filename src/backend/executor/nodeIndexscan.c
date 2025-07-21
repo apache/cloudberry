@@ -574,10 +574,7 @@ ExecReScanIndexScan(IndexScanState *node)
 	if (node->iss_ReorderQueue)
 	{
 		HeapTuple	tuple;
-<<<<<<< HEAD
-=======
 
->>>>>>> REL_16_9
 		while (!pairingheap_is_empty(node->iss_ReorderQueue))
 		{
 			tuple = reorderqueue_pop(node);

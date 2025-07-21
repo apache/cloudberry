@@ -35,11 +35,8 @@
 #include "access/tableam.h"
 #include "access/tupdesc.h"
 #include "access/visibilitymap.h"
-<<<<<<< HEAD
 #include "cdb/cdbvars.h"
-=======
 #include "catalog/pg_type.h"
->>>>>>> REL_16_9
 #include "executor/execdebug.h"
 #include "executor/nodeIndexonlyscan.h"
 #include "executor/nodeIndexscan.h"
@@ -527,7 +524,6 @@ IndexOnlyScanState *
 ExecInitIndexOnlyScan(IndexOnlyScan *node, EState *estate, int eflags)
 {
 	Relation	currentRelation;
-<<<<<<< HEAD
 
 	/*
 	 * open the scan relation
@@ -543,9 +539,6 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 								  Relation currentRelation, Oid indexid)
 {
 	IndexOnlyScanState *indexstate;
-=======
-	Relation	indexRelation;
->>>>>>> REL_16_9
 	LOCKMODE	lockmode;
 	TupleDesc	tupDesc;
 	int			indnkeyatts;
@@ -617,12 +610,7 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 
 	/* Open the index relation. */
 	lockmode = exec_rt_fetch(node->scan.scanrelid, estate)->rellockmode;
-<<<<<<< HEAD
 	indexstate->ioss_RelationDesc = index_open(indexid, lockmode);
-=======
-	indexRelation = index_open(node->indexid, lockmode);
-	indexstate->ioss_RelationDesc = indexRelation;
->>>>>>> REL_16_9
 
 	/*
 	 * Initialize index-specific scan state

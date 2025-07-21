@@ -585,22 +585,14 @@ choose_next_subplan_locally(AppendState *node)
 			/* We'd have filled as_valid_subplans already */
 			Assert(node->as_valid_subplans_identified);
 		}
-<<<<<<< HEAD
-		else if (node->as_valid_subplans == NULL)
-		{
-			Append	   *plan = (Append *) node->ps.plan;
-			node->as_valid_subplans =
-				ExecFindMatchingSubPlans(node->as_prune_state,
-										 node->ps.state,
-										 list_length(plan->appendplans),
-										 plan->join_prune_paramids);
-=======
 		else if (!node->as_valid_subplans_identified)
 		{
 			node->as_valid_subplans =
-				ExecFindMatchingSubPlans(node->as_prune_state, false);
+				ExecFindMatchingSubPlans(node->as_prune_state, false,
+										 node->ps.state,
+										 list_length(plan->appendplans),
+										 plan->join_prune_paramids);
 			node->as_valid_subplans_identified = true;
->>>>>>> REL_16_9
 		}
 
 		whichplan = -1;
@@ -668,15 +660,11 @@ choose_next_subplan_for_leader(AppendState *node)
 			Append	   *plan = (Append *) node->ps.plan;
 
 			node->as_valid_subplans =
-<<<<<<< HEAD
-				ExecFindMatchingSubPlans(node->as_prune_state,
+				ExecFindMatchingSubPlans(node->as_prune_state, false,
 										 node->ps.state,
 										 list_length(plan->appendplans),
 										 plan->join_prune_paramids);
-=======
-				ExecFindMatchingSubPlans(node->as_prune_state, false);
 			node->as_valid_subplans_identified = true;
->>>>>>> REL_16_9
 
 			/*
 			 * Mark each invalid plan as finished to allow the loop below to
@@ -753,16 +741,12 @@ choose_next_subplan_for_worker(AppendState *node)
 		Append	   *plan = (Append *) node->ps.plan;
 
 		node->as_valid_subplans =
-<<<<<<< HEAD
-			ExecFindMatchingSubPlans(node->as_prune_state,
+			ExecFindMatchingSubPlans(node->as_prune_state, false,
 									 node->ps.state,
 									 list_length(plan->appendplans),
 									 plan->join_prune_paramids);
-=======
-			ExecFindMatchingSubPlans(node->as_prune_state, false);
 		node->as_valid_subplans_identified = true;
 
->>>>>>> REL_16_9
 		mark_invalid_subplans_as_finished(node);
 	}
 
@@ -925,15 +909,11 @@ ExecAppendAsyncBegin(AppendState *node)
 	{
 		Append	*plan = (Append *) node->ps.plan;
 		node->as_valid_subplans =
-<<<<<<< HEAD
-			ExecFindMatchingSubPlans(node->as_prune_state,
-										 node->ps.state,
-										 list_length(plan->appendplans),
-										 plan->join_prune_paramids);
-=======
-			ExecFindMatchingSubPlans(node->as_prune_state, false);
+			ExecFindMatchingSubPlans(node->as_prune_state, false,
+									 node->ps.state,
+									 list_length(plan->appendplans),
+									 plan->join_prune_paramids);
 		node->as_valid_subplans_identified = true;
->>>>>>> REL_16_9
 
 		classify_matching_subplans(node);
 	}
@@ -1134,7 +1114,6 @@ ExecAppendAsyncEventWait(AppendState *node)
 										 WAIT_EVENT_APPEND_READY);
 		}
 	}
-<<<<<<< HEAD
 
 	/*
 	 * No need for further processing if there are no configured events other
@@ -1159,14 +1138,6 @@ ExecAppendAsyncEventWait(AppendState *node)
 								 nevents, WAIT_EVENT_APPEND_READY);
 	FreeWaitEventSet(node->as_eventset);
 	node->as_eventset = NULL;
-=======
-	PG_FINALLY();
-	{
-		FreeWaitEventSet(node->as_eventset);
-		node->as_eventset = NULL;
-	}
-	PG_END_TRY();
->>>>>>> REL_16_9
 	if (noccurred == 0)
 		return;
 
@@ -1195,16 +1166,6 @@ ExecAppendAsyncEventWait(AppendState *node)
 				/* Do the actual work. */
 				ExecAsyncNotify(areq);
 			}
-<<<<<<< HEAD
-=======
-		}
-
-		/* Handle standard interrupts */
-		if ((w->events & WL_LATCH_SET) != 0)
-		{
-			ResetLatch(MyLatch);
-			CHECK_FOR_INTERRUPTS();
->>>>>>> REL_16_9
 		}
 	}
 }
