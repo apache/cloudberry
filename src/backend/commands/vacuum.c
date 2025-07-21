@@ -14,13 +14,9 @@
  * Also have a look at vacuum_ao.c, which contains VACUUM related code for
  * Append-Optimized tables.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -44,11 +40,8 @@
 #include "access/xact.h"
 #include "catalog/gp_matview_aux.h"
 #include "catalog/namespace.h"
-<<<<<<< HEAD
 #include "catalog/partition.h"
-=======
 #include "catalog/index.h"
->>>>>>> REL_16_9
 #include "catalog/pg_database.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
@@ -71,15 +64,12 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/fmgroids.h"
-<<<<<<< HEAD
 #include "utils/memutils.h"
 #include "utils/palloc.h"
-=======
 #include "utils/guc.h"
 #include "utils/guc_hooks.h"
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
->>>>>>> REL_16_9
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
@@ -158,11 +148,7 @@ static void vac_truncate_clog(TransactionId frozenXID,
 							  TransactionId lastSaneFrozenXid,
 							  MultiXactId lastSaneMinMulti);
 static bool vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
-<<<<<<< HEAD
-					   bool recursing);
-=======
-					   BufferAccessStrategy bstrategy);
->>>>>>> REL_16_9
+					   BufferAccessStrategy bstrategy, bool recursing);
 static double compute_parallel_delay(void);
 static VacOptValue get_vacoptval_from_boolean(DefElem *def);
 static bool vac_tid_reaped(ItemPointer itemptr, void *state);
@@ -213,14 +199,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	bool		ao_aux_only = false;
 	bool		full = false;
 	bool		disable_page_skipping = false;
-<<<<<<< HEAD
-	bool		rootonly = false;
-	bool		fullscan = false;
-	int			ao_phase = 0;
-	bool		process_toast = true;
-	bool		update_datfrozenxid = false;
- 	ListCell   *lc;
-=======
 	bool		process_main = true;
 	bool		process_toast = true;
 	int			ring_size;
@@ -228,7 +206,10 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	bool		only_database_stats = false;
 	MemoryContext vac_context;
 	ListCell   *lc;
->>>>>>> REL_16_9
+	bool		rootonly = false;
+	bool		fullscan = false;
+	int			ao_phase = 0;
+	bool		update_datfrozenxid = false;
 
 	/* index_cleanup and truncate values unspecified for now */
 	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
@@ -253,12 +234,10 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 			verbose = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "skip_locked") == 0)
 			skip_locked = defGetBoolean(opt);
-<<<<<<< HEAD
 		else if (strcmp(opt->defname, "rootpartition") == 0)
 			rootonly = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "fullscan") == 0)
 			fullscan = defGetBoolean(opt);
-=======
 		else if (strcmp(opt->defname, "buffer_usage_limit") == 0)
 		{
 			const char *hintmsg;
@@ -284,7 +263,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 
 			ring_size = result;
 		}
->>>>>>> REL_16_9
 		else if (!vacstmt->is_vacuumcmd)
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
@@ -361,15 +339,12 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 					params.nworkers = nworkers;
 			}
 		}
-<<<<<<< HEAD
 		else if (strcmp(opt->defname, "update_datfrozenxid") == 0)
 			update_datfrozenxid = defGetBoolean(opt);
-=======
 		else if (strcmp(opt->defname, "skip_database_stats") == 0)
 			skip_database_stats = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "only_database_stats") == 0)
 			only_database_stats = defGetBoolean(opt);
->>>>>>> REL_16_9
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
@@ -391,8 +366,10 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		(full ? VACOPT_FULL : 0) |
 		(ao_aux_only ? VACOPT_AO_AUX_ONLY : 0) |
 		(disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0) |
-<<<<<<< HEAD
+		(process_main ? VACOPT_PROCESS_MAIN : 0) |
 		(process_toast ? VACOPT_PROCESS_TOAST : 0) |
+		(skip_database_stats ? VACOPT_SKIP_DATABASE_STATS : 0) |
+		(only_database_stats ? VACOPT_ONLY_DATABASE_STATS : 0);
 		(update_datfrozenxid ? VACOPT_UPDATE_DATFROZENXID : 0);
 
 	if (rootonly)
@@ -400,12 +377,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	if (fullscan)
 		params.options |= VACOPT_FULLSCAN;
 	params.options |= ao_phase;
-=======
-		(process_main ? VACOPT_PROCESS_MAIN : 0) |
-		(process_toast ? VACOPT_PROCESS_TOAST : 0) |
-		(skip_database_stats ? VACOPT_SKIP_DATABASE_STATS : 0) |
-		(only_database_stats ? VACOPT_ONLY_DATABASE_STATS : 0);
->>>>>>> REL_16_9
 
 	/* sanity checks on options */
 	Assert(params.options & (VACOPT_VACUUM | VACOPT_ANALYZE));
@@ -505,9 +476,8 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	/* user-invoked vacuum uses VACOPT_VERBOSE instead of log_min_duration */
 	params.log_min_duration = -1;
 
-<<<<<<< HEAD
 	params.auto_stats = auto_stats;
-=======
+
 	/*
 	 * Create special memory context for cross-transaction storage.
 	 *
@@ -547,7 +517,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 
 		MemoryContextSwitchTo(old_context);
 	}
->>>>>>> REL_16_9
 
 	/* Now go through the common routine */
 	vacuum(vacstmt->rels, &params, bstrategy, vac_context, isTopLevel);
@@ -662,13 +631,8 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 		}
 		relations = newrels;
 	}
-<<<<<<< HEAD
 	else if (!(params->options & VACOPT_UPDATE_DATFROZENXID))
-		relations = get_all_vacuum_rels(params->options);
-=======
-	else
 		relations = get_all_vacuum_rels(vac_context, params->options);
->>>>>>> REL_16_9
 
 	/*
 	 * Decide whether we need to start/commit our own transactions.
@@ -748,11 +712,7 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 
 			if (params->options & VACOPT_VACUUM)
 			{
-<<<<<<< HEAD
-				if (!vacuum_rel(vrel->oid, vrel->relation, params, false))
-=======
-				if (!vacuum_rel(vrel->oid, vrel->relation, params, bstrategy))
->>>>>>> REL_16_9
+				if (!vacuum_rel(vrel->oid, vrel->relation, params, bstrategy, false))
 					continue;
 			}
 
@@ -770,11 +730,7 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 				}
 
 				analyze_rel(vrel->oid, vrel->relation, params,
-<<<<<<< HEAD
-							vrel->va_cols, in_outer_xact, vac_strategy, NULL);
-=======
-							vrel->va_cols, in_outer_xact, bstrategy);
->>>>>>> REL_16_9
+							vrel->va_cols, in_outer_xact, bstrategy, NULL);
 
 				if (use_own_xacts)
 				{
@@ -834,13 +790,8 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 		ClearOidAssignmentsOnCommit();
 	}
 
-<<<<<<< HEAD
-	if ((params->options & VACOPT_VACUUM) && !IsAutoVacuumWorkerProcess() &&
+	if ((params->options & VACOPT_VACUUM) && !(params->options & VACOPT_SKIP_DATABASE_STATS) &&
 		(Gp_role != GP_ROLE_EXECUTE || (params->options & VACOPT_UPDATE_DATFROZENXID)) && ENABLE_DISPATCH())
-=======
-	if ((params->options & VACOPT_VACUUM) &&
-		!(params->options & VACOPT_SKIP_DATABASE_STATS))
->>>>>>> REL_16_9
 	{
 		/*
 		 * Update pg_database.datfrozenxid, and truncate pg_xact if possible.
@@ -1834,13 +1785,9 @@ vac_update_relstats(Relation relation,
 					BlockNumber num_all_visible_pages,
 					bool hasindex, TransactionId frozenxid,
 					MultiXactId minmulti,
-<<<<<<< HEAD
+					bool *frozenxid_updated, bool *minmulti_updated,
 					bool in_outer_xact,
 					bool isvacuum)
-=======
-					bool *frozenxid_updated, bool *minmulti_updated,
-					bool in_outer_xact)
->>>>>>> REL_16_9
 {
 	Oid			relid = RelationGetRelid(relation);
 	Relation	rd;
@@ -2002,20 +1949,12 @@ vac_update_relstats(Relation relation,
 	 * GPDB: We check if pgcform->relfrozenxid is valid because AO and CO
 	 * tables should have relfrozenxid as InvalidTransactionId.
 	 */
-<<<<<<< HEAD
-	if (TransactionIdIsNormal(frozenxid) &&
-		TransactionIdIsValid(pgcform->relfrozenxid) &&
-		pgcform->relfrozenxid != frozenxid &&
-		(TransactionIdPrecedes(pgcform->relfrozenxid, frozenxid) ||
-		 TransactionIdPrecedes(ReadNextTransactionId(),
-							   pgcform->relfrozenxid)))
-=======
 	oldfrozenxid = pgcform->relfrozenxid;
 	futurexid = false;
 	if (frozenxid_updated)
 		*frozenxid_updated = false;
-	if (TransactionIdIsNormal(frozenxid) && oldfrozenxid != frozenxid)
->>>>>>> REL_16_9
+	if (TransactionIdIsNormal(frozenxid) && TransactionIdIsValid(pgcform->relfrozenxid) &&
+		oldfrozenxid != frozenxid)
 	{
 		bool		update = false;
 
@@ -2333,7 +2272,6 @@ vac_update_datfrozenxid(void)
 		newMinMulti = dbform->datminmxid;
 
 	if (dirty)
-<<<<<<< HEAD
 	{
 		/*
 		* GPDB_14_MERGE_FIXME
@@ -2349,11 +2287,6 @@ vac_update_datfrozenxid(void)
 			NameStr(dbform->datname), "");
 #endif
 	}
-=======
-		systable_inplace_update_finish(inplace_state, tuple);
-	else
-		systable_inplace_update_cancel(inplace_state);
->>>>>>> REL_16_9
 
 	heap_freetuple(tuple);
 	table_close(relation, RowExclusiveLock);
@@ -2557,11 +2490,7 @@ vac_truncate_clog(TransactionId frozenXID,
  */
 static bool
 vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
-<<<<<<< HEAD
-		   bool recursing)
-=======
-		   BufferAccessStrategy bstrategy)
->>>>>>> REL_16_9
+		   BufferAccessStrategy bstrategy, bool recursing)
 {
 	LOCKMODE		lmode;
 	Relation		rel;
@@ -2798,14 +2727,9 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	/*
 	 * Remember the relation's TOAST relation for later, if the caller asked
 	 * us to process it.  In VACUUM FULL, though, the toast table is
-<<<<<<< HEAD
 	 * automatically rebuilt by cluster_rel so we shouldn't recurse to it.
 	 *
 	 * GPDB: Also remember the AO segment relations for later.
-=======
-	 * automatically rebuilt by cluster_rel so we shouldn't recurse to it,
-	 * unless PROCESS_MAIN is disabled.
->>>>>>> REL_16_9
 	 */
 	if ((params->options & VACOPT_PROCESS_TOAST) != 0 &&
 		((params->options & VACOPT_FULL) == 0 ||
@@ -2943,7 +2867,6 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	save_nestlevel = NewGUCNestLevel();
 
 	/*
-<<<<<<< HEAD
 	 * If there are any bitmap indexes, we have to acquire a ShareLock for the
 	 * table, since reindex is used later. Otherwise, concurrent vacuum and
 	 * inserts may cause deadlock. MPP-5960
@@ -2973,15 +2896,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	}
 	/* TODO: vacuum directory table's temp files */
 
-	if (!is_appendoptimized && (params->options & VACOPT_FULL))
-=======
-	 * If PROCESS_MAIN is set (the default), it's time to vacuum the main
-	 * relation.  Otherwise, we can skip this part.  If processing the TOAST
-	 * table is required (e.g., PROCESS_TOAST is set), we force PROCESS_MAIN
-	 * to be set when we recurse to the TOAST table.
-	 */
-	if (params->options & VACOPT_PROCESS_MAIN)
->>>>>>> REL_16_9
+	if (!is_appendoptimized && (params->options & VACOPT_PROCESS_MAIN))
 	{
 		/*
 		 * Do the actual work --- either FULL or "lazy" vacuum
@@ -3003,11 +2918,6 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		else
 			table_relation_vacuum(rel, params, bstrategy);
 	}
-<<<<<<< HEAD
-	else /* Heap vacuum or AO/CO vacuum in specific phase */
-		table_relation_vacuum(rel, params, vac_strategy);
-=======
->>>>>>> REL_16_9
 
 	if (IS_QD_OR_SINGLENODE() && (params->options & VACOPT_FULL))
 	{
@@ -3093,8 +3003,15 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	 * being dispatched vacuum separately.
 	 */
 	if (toast_relid != InvalidOid)
-<<<<<<< HEAD
-		vacuum_rel(toast_relid, NULL, params, true);
+	{
+		VacuumParams toast_vacuum_params;
+
+		/* force VACOPT_PROCESS_MAIN so vacuum_rel() processes it */
+		memcpy(&toast_vacuum_params, params, sizeof(VacuumParams));
+		toast_vacuum_params.options |= VACOPT_PROCESS_MAIN;
+
+		vacuum_rel(toast_relid, NULL, &toast_vacuum_params, bstrategy);
+	}
 
 	/* do the same for an AO segments table, if any */
 	if (aoseg_relid != InvalidOid)
@@ -3167,16 +3084,6 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
-=======
-	{
-		VacuumParams toast_vacuum_params;
-
-		/* force VACOPT_PROCESS_MAIN so vacuum_rel() processes it */
-		memcpy(&toast_vacuum_params, params, sizeof(VacuumParams));
-		toast_vacuum_params.options |= VACOPT_PROCESS_MAIN;
-
-		vacuum_rel(toast_relid, NULL, &toast_vacuum_params, bstrategy);
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -3421,9 +3328,6 @@ get_vacoptval_from_boolean(DefElem *def)
 {
 	return defGetBoolean(def) ? VACOPTVALUE_ENABLED : VACOPTVALUE_DISABLED;
 }
-
-<<<<<<< HEAD
-
 
 /*
  * Dispatch a Vacuum command.
@@ -3852,7 +3756,8 @@ bool
 gp_vacuum_needs_update_stats(void)
 {
 	return (Gp_role == GP_ROLE_EXECUTE);
-=======
+}
+
 /*
  *	vac_bulkdel_one_index() -- bulk-deletion for index relation.
  *
@@ -3978,5 +3883,4 @@ vac_cmp_itemptr(const void *left, const void *right)
 		return 1;
 
 	return 0;
->>>>>>> REL_16_9
 }

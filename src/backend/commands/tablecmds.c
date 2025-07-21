@@ -3,13 +3,9 @@
  * tablecmds.c
  *	  Commands for creating and altering table structures and settings
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -40,13 +36,10 @@
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/partition.h"
-<<<<<<< HEAD
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_attribute_encoding.h"
-=======
 #include "catalog/pg_am.h"
 #include "catalog/pg_attrdef.h"
->>>>>>> REL_16_9
 #include "catalog/pg_collation.h"
 #include "catalog/pg_compression.h"
 #include "catalog/pg_constraint.h"
@@ -180,95 +173,6 @@ static List *on_commits = NIL;
  * In GPDB, these are in nodes/altertablenodes.h
  */
 
-<<<<<<< HEAD
-=======
-#define AT_PASS_UNSET			-1	/* UNSET will cause ERROR */
-#define AT_PASS_DROP			0	/* DROP (all flavors) */
-#define AT_PASS_ALTER_TYPE		1	/* ALTER COLUMN TYPE */
-#define AT_PASS_OLD_INDEX		2	/* re-add existing indexes */
-#define AT_PASS_OLD_CONSTR		3	/* re-add existing constraints */
-/* We could support a RENAME COLUMN pass here, but not currently used */
-#define AT_PASS_ADD_COL			4	/* ADD COLUMN */
-#define AT_PASS_ADD_CONSTR		5	/* ADD constraints (initial examination) */
-#define AT_PASS_COL_ATTRS		6	/* set column attributes, eg NOT NULL */
-#define AT_PASS_ADD_INDEXCONSTR	7	/* ADD index-based constraints */
-#define AT_PASS_ADD_INDEX		8	/* ADD indexes */
-#define AT_PASS_ADD_OTHERCONSTR	9	/* ADD other constraints, defaults */
-#define AT_PASS_MISC			10	/* other stuff */
-#define AT_NUM_PASSES			11
-
-typedef struct AlteredTableInfo
-{
-	/* Information saved before any work commences: */
-	Oid			relid;			/* Relation to work on */
-	char		relkind;		/* Its relkind */
-	TupleDesc	oldDesc;		/* Pre-modification tuple descriptor */
-
-	/*
-	 * Transiently set during Phase 2, normally set to NULL.
-	 *
-	 * ATRewriteCatalogs sets this when it starts, and closes when ATExecCmd
-	 * returns control.  This can be exploited by ATExecCmd subroutines to
-	 * close/reopen across transaction boundaries.
-	 */
-	Relation	rel;
-
-	/* Information saved by Phase 1 for Phase 2: */
-	List	   *subcmds[AT_NUM_PASSES]; /* Lists of AlterTableCmd */
-	/* Information saved by Phases 1/2 for Phase 3: */
-	List	   *constraints;	/* List of NewConstraint */
-	List	   *newvals;		/* List of NewColumnValue */
-	List	   *afterStmts;		/* List of utility command parsetrees */
-	bool		verify_new_notnull; /* T if we should recheck NOT NULL */
-	int			rewrite;		/* Reason for forced rewrite, if any */
-	Oid			newAccessMethod;	/* new access method; 0 means no change */
-	Oid			newTableSpace;	/* new tablespace; 0 means no change */
-	bool		chgPersistence; /* T if SET LOGGED/UNLOGGED is used */
-	char		newrelpersistence;	/* if above is true */
-	Expr	   *partition_constraint;	/* for attach partition validation */
-	/* true, if validating default due to some other attach/detach */
-	bool		validate_default;
-	/* Objects to rebuild after completing ALTER TYPE operations */
-	List	   *changedConstraintOids;	/* OIDs of constraints to rebuild */
-	List	   *changedConstraintDefs;	/* string definitions of same */
-	List	   *changedIndexOids;	/* OIDs of indexes to rebuild */
-	List	   *changedIndexDefs;	/* string definitions of same */
-	char	   *replicaIdentityIndex;	/* index to reset as REPLICA IDENTITY */
-	char	   *clusterOnIndex; /* index to use for CLUSTER */
-	List	   *changedStatisticsOids;	/* OIDs of statistics to rebuild */
-	List	   *changedStatisticsDefs;	/* string definitions of same */
-} AlteredTableInfo;
-
-/* Struct describing one new constraint to check in Phase 3 scan */
-/* Note: new NOT NULL constraints are handled elsewhere */
-typedef struct NewConstraint
-{
-	char	   *name;			/* Constraint name, or NULL if none */
-	ConstrType	contype;		/* CHECK or FOREIGN */
-	Oid			refrelid;		/* PK rel, if FOREIGN */
-	Oid			refindid;		/* OID of PK's index, if FOREIGN */
-	Oid			conid;			/* OID of pg_constraint entry, if FOREIGN */
-	Node	   *qual;			/* Check expr or CONSTR_FOREIGN Constraint */
-	ExprState  *qualstate;		/* Execution state for CHECK expr */
-} NewConstraint;
-
-/*
- * Struct describing one new column value that needs to be computed during
- * Phase 3 copy (this could be either a new column with a non-null default, or
- * a column that we're changing the type of).  Columns without such an entry
- * are just copied from the old table during ATRewriteTable.  Note that the
- * expr is an expression over *old* table values, except when is_generated
- * is true; then it is an expression over columns of the *new* tuple.
- */
-typedef struct NewColumnValue
-{
-	AttrNumber	attnum;			/* which column */
-	Expr	   *expr;			/* expression to compute */
-	ExprState  *exprstate;		/* execution state */
-	bool		is_generated;	/* is it a GENERATED expression? */
-} NewColumnValue;
-
->>>>>>> REL_16_9
 /*
  * Error-reporting support for RemoveRelations
  */
@@ -368,13 +272,10 @@ struct DropRelationCallbackState
 #define		ATT_COMPOSITE_TYPE		0x0010
 #define		ATT_FOREIGN_TABLE		0x0020
 #define		ATT_PARTITIONED_INDEX	0x0040
-<<<<<<< HEAD
-#define		ATT_DIRECTORY_TABLE		0x0080
-#define		ATT_SEQUENCE			0x0100
-=======
 #define		ATT_SEQUENCE			0x0080
->>>>>>> REL_16_9
 
+#define		ATT_DIRECTORY_TABLE		0x0100
+#define		ATT_SEQUENCE			0x0200
 /*
  * ForeignTruncateInfo
  *
@@ -684,7 +585,6 @@ static void RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid,
 											Oid oldRelOid, void *arg);
 static void RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid,
 											 Oid oldrelid, void *arg);
-<<<<<<< HEAD
 
 static void ATExecExpandTable(List **wqueue, Relation rel, AlterTableCmd *cmd, int numsegments);
 static void ATExecExpandPartitionTablePrepare(Relation rel, int numsegments);
@@ -693,12 +593,9 @@ static void ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTab
 static void ATExecSetDistributedBy(Relation rel, Node *node,
 								   AlterTableCmd *cmd);
 static PartitionSpec *transformPartitionSpec(Relation rel, PartitionSpec *partspec, char *strategy);
-=======
-static PartitionSpec *transformPartitionSpec(Relation rel, PartitionSpec *partspec);
 static void ComputePartitionAttrs(ParseState *pstate, Relation rel, List *partParams, AttrNumber *partattrs,
 								  List **partexprs, Oid *partopclass, Oid *partcollation,
 								  PartitionStrategy strategy);
->>>>>>> REL_16_9
 static void CreateInheritance(Relation child_rel, Relation parent_rel);
 static void RemoveInheritance(Relation child_rel, Relation parent_rel,
 							  bool expect_detached);
@@ -1297,7 +1194,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	{
 		const TableAmRoutine *tam = GetTableAmRoutineByAmId(accessMethodId);
 
-<<<<<<< HEAD
 		/*
 		 * Note that we disallow encoding clauses for unsupported tables
 		 * besides only one exception: if we're creating a partition as
@@ -1343,15 +1239,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 										&& !stmt->partbound
 										&& !stmt->partspec /* errorOnEncodingClause */);
 	}
-=======
-		if (partitioned)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("specifying a table access method is not supported on a partitioned table")));
-	}
-	else if (RELKIND_HAS_TABLE_AM(relkind))
-		accessMethod = default_table_access_method;
->>>>>>> REL_16_9
 
 	/*
 	 * In executor mode, we received all the defaults and constraints
@@ -2318,13 +2205,8 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 							  state->expected_relkind);
 
 	/* Allow DROP to either table owner or schema owner */
-<<<<<<< HEAD
-	if (!pg_class_ownercheck(relOid, GetUserId()) &&
-		!pg_namespace_ownercheck(classform->relnamespace, GetUserId()))
-=======
 	if (!object_ownercheck(RelationRelationId, relOid, GetUserId()) &&
 		!object_ownercheck(NamespaceRelationId, classform->relnamespace, GetUserId()))
->>>>>>> REL_16_9
 		aclcheck_error(ACLCHECK_NOT_OWNER,
 					   get_relkind_objtype(classform->relkind),
 					   rel->relname);
@@ -2511,11 +2393,7 @@ ExecuteTruncate(TruncateStmt *stmt)
 	}
 
 	ExecuteTruncateGuts(rels, relids, relids_logged,
-<<<<<<< HEAD
-						stmt->behavior, stmt->restart_seqs, stmt);
-=======
-						stmt->behavior, stmt->restart_seqs, false);
->>>>>>> REL_16_9
+						stmt->behavior, stmt->restart_seqs, false, stmt);
 
 	/* And close the rels */
 	foreach(cell, rels)
@@ -2543,14 +2421,10 @@ void
 ExecuteTruncateGuts(List *explicit_rels,
 					List *relids,
 					List *relids_logged,
-<<<<<<< HEAD
 					DropBehavior behavior,
 					bool restart_seqs,
+					bool run_as_table_owner
 					TruncateStmt *stmt)
-=======
-					DropBehavior behavior, bool restart_seqs,
-					bool run_as_table_owner)
->>>>>>> REL_16_9
 {
 	List	   *rels;
 	List	   *seq_relids = NIL;
@@ -4775,11 +4649,7 @@ RenameRelation(RenameStmt *stmt)
 
 		if (!OidIsValid(relid))
 		{
-<<<<<<< HEAD
 			ereport((Gp_role == GP_ROLE_EXECUTE) ? DEBUG1 : NOTICE,
-=======
-			ereport(NOTICE,
->>>>>>> REL_16_9
 					(errmsg("relation \"%s\" does not exist, skipping",
 							stmt->relation->relname)));
 			return InvalidObjectAddress;
@@ -4792,14 +4662,10 @@ RenameRelation(RenameStmt *stmt)
 		 * if we already acquired AccessExclusiveLock with an index, however.
 		 */
 		relkind = get_rel_relkind(relid);
-<<<<<<< HEAD
 		if (relkind == RELKIND_DIRECTORY_TABLE)
 			ereport(ERROR,
 						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						 errmsg("Rename directory table is not allowed.")));
-
-=======
->>>>>>> REL_16_9
 		obj_is_index = (relkind == RELKIND_INDEX ||
 						relkind == RELKIND_PARTITIONED_INDEX);
 		if (obj_is_index || is_index_stmt == obj_is_index)
@@ -4814,7 +4680,6 @@ RenameRelation(RenameStmt *stmt)
 
 	/* Do the work */
 	RenameRelationInternal(relid, stmt->newname, false, is_index_stmt);
-<<<<<<< HEAD
 
 	/* Try to Rename in gp_matview_aux too. */
 	if (stmt->renameType == OBJECT_MATVIEW)
@@ -4826,8 +4691,6 @@ RenameRelation(RenameStmt *stmt)
 	if (targetrelation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 		GpRenameChildPartitions(targetrelation, oldrelname, stmt->newname);
 	relation_close(targetrelation, NoLock);
-=======
->>>>>>> REL_16_9
 
 	ObjectAddressSet(address, RelationRelationId, relid);
 
@@ -5144,7 +5007,6 @@ AlterTable(AlterTableStmt *stmt, LOCKMODE lockmode,
 	/* Caller is required to provide an adequate lock. */
 	rel = relation_open(context->relid, NoLock);
 
-<<<<<<< HEAD
 	/*
 	 * GPDB creates ALTER stmts and executes them internally as part of some
 	 * partition related ALTER stmts, hence for such internal ALTER stmts
@@ -5152,9 +5014,6 @@ AlterTable(AlterTableStmt *stmt, LOCKMODE lockmode,
 	 */
 	if (!stmt->is_internal)
 		CheckTableNotInUse(rel, "ALTER TABLE");
-=======
-	CheckAlterTableIsSafe(rel);
->>>>>>> REL_16_9
 
 	ATController(stmt, rel, stmt->cmds, stmt->relation->inh, lockmode, context);
 
@@ -5816,22 +5675,14 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_DROP;
 			break;
 		case AT_SetStatistics:	/* ALTER COLUMN SET STATISTICS */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_MATVIEW | ATT_INDEX | ATT_PARTITIONED_INDEX | ATT_FOREIGN_TABLE | ATT_DIRECTORY_TABLE);
-=======
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_MATVIEW | ATT_INDEX | ATT_PARTITIONED_INDEX | ATT_FOREIGN_TABLE);
->>>>>>> REL_16_9
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_MATVIEW | ATT_INDEX | ATT_PARTITIONED_INDEX | ATT_FOREIGN_TABLE | ATT_DIRECTORY_TABLE);
 			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
 			/* No command-specific prep needed */
 			pass = AT_PASS_MISC;
 			break;
 		case AT_SetOptions:		/* ALTER COLUMN SET ( options ) */
 		case AT_ResetOptions:	/* ALTER COLUMN RESET ( options ) */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_MATVIEW | ATT_FOREIGN_TABLE);
-=======
 			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_MATVIEW | ATT_FOREIGN_TABLE);
->>>>>>> REL_16_9
 			/* This command never recurses */
 			pass = AT_PASS_MISC;
 			break;
@@ -5848,12 +5699,8 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_DropColumn:		/* DROP COLUMN */
-<<<<<<< HEAD
 		case AT_DropColumnRecurse:
-			ATSimplePermissions(rel,
-=======
 			ATSimplePermissions(cmd->subtype, rel,
->>>>>>> REL_16_9
 								ATT_TABLE | ATT_COMPOSITE_TYPE | ATT_FOREIGN_TABLE);
 			ATPrepDropColumn(wqueue, rel, recurse, recursing, cmd,
 							 lockmode, context);
@@ -5861,11 +5708,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_DROP;
 			break;
 		case AT_AddIndex:		/* ADD INDEX */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_DIRECTORY_TABLE);
-=======
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
->>>>>>> REL_16_9
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_DIRECTORY_TABLE);
 			/* This command never recurses */
 			/* No command-specific prep needed */
 			pass = AT_PASS_ADD_INDEX;
@@ -5932,14 +5775,8 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_SetLogged:		/* SET LOGGED */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE);
-			/* Commands are dispatched from QD to QE. Don't complain on QE. */
-			if (tab->chgPersistence && Gp_role != GP_ROLE_EXECUTE)
-=======
 			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_SEQUENCE);
-			if (tab->chgPersistence)
->>>>>>> REL_16_9
+			if (tab->chgPersistence, && Gp_role != GP_ROLE_EXECUTE)
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot change persistence setting twice")));
@@ -5953,14 +5790,8 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_SetUnLogged:	/* SET UNLOGGED */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE);
-			/* Commands are dispatched from QD to QE. Don't complain on QE. */
-			if (tab->chgPersistence && Gp_role != GP_ROLE_EXECUTE)
-=======
 			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_SEQUENCE);
-			if (tab->chgPersistence)
->>>>>>> REL_16_9
+			if (tab->chgPersistence && Gp_role != GP_ROLE_EXECUTE)
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot change persistence setting twice")));
@@ -5978,11 +5809,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_DROP;
 			break;
 		case AT_SetAccessMethod:	/* SET ACCESS METHOD */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_MATVIEW);
-=======
 			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_MATVIEW);
->>>>>>> REL_16_9
 
 			/* partitioned tables don't have an access method */
 			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
@@ -5991,11 +5818,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 						 errmsg("cannot change access method of a partitioned table")));
 
 			/* check if another access method change was already requested */
-<<<<<<< HEAD
 			if (Gp_role == GP_ROLE_DISPATCH && OidIsValid(tab->newAccessMethod))
-=======
-			if (OidIsValid(tab->newAccessMethod))
->>>>>>> REL_16_9
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot have multiple SET ACCESS METHOD subcommands")));
@@ -6236,16 +6059,9 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		case AT_DisableTrig:	/* DISABLE TRIGGER variants */
 		case AT_DisableTrigAll:
 		case AT_DisableTrigUser:
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_DIRECTORY_TABLE);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_DIRECTORY_TABLE);
 			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 				ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
-=======
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE);
-			/* Set up recursion for phase 2; no other prep needed */
-			if (recurse)
-				cmd->recurse = true;
->>>>>>> REL_16_9
 			pass = AT_PASS_MISC;
 			break;
 		case AT_EnableRule:		/* ENABLE/DISABLE RULE variants */
@@ -6258,11 +6074,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		case AT_DisableRowSecurity:
 		case AT_ForceRowSecurity:
 		case AT_NoForceRowSecurity:
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_DIRECTORY_TABLE);
-=======
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
->>>>>>> REL_16_9
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_DIRECTORY_TABLE);
 			/* These commands never recurse */
 			/* No command-specific prep needed */
 			pass = AT_PASS_MISC;
@@ -6583,7 +6395,6 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			/* nothing to do here, oid columns don't exist anymore */
 			break;
 		case AT_SetAccessMethod:	/* SET ACCESS METHOD */
-<<<<<<< HEAD
 			/* Set reloptions if specified any. Otherwise handled specially in Phase 3. */
 			{
 				bool aoopt_changed = false;
@@ -6602,10 +6413,6 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			/* If we are changing AM to AOCO, add pg_attribute_encoding entries for each column. */
 			if (tab->newAccessMethod == AO_COLUMN_TABLE_AM_OID) 
 				populate_rel_col_encodings(rel, NULL, (List*)cmd->def, tab->newAccessMethod);
-
-=======
-			/* handled specially in Phase 3 */
->>>>>>> REL_16_9
 			break;
 		case AT_SetTableSpace:	/* SET TABLESPACE */
 
@@ -6932,15 +6739,11 @@ ATParseTransformCmd(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			case AT_AddConstraint:
 				/* Recursion occurs during execution phase */
 				if (recurse)
-<<<<<<< HEAD
 				{
 					if (Gp_role == GP_ROLE_DISPATCH)
 						cmd2 = copyObject(cmd2);
-					cmd2->subtype = AT_AddConstraintRecurse;
+					cmd2->subtype = true;
 				}
-=======
-					cmd2->recurse = true;
->>>>>>> REL_16_9
 				switch (castNode(Constraint, cmd2->def)->contype)
 				{
 					case CONSTR_PRIMARY:
@@ -7158,12 +6961,8 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 		}
 		/*
 		 * We only need to rewrite the table if at least one column needs to
-<<<<<<< HEAD
 		 * be recomputed, or we are
 		 * changing its persistence or access method.
-=======
-		 * be recomputed, or we are changing its persistence or access method.
->>>>>>> REL_16_9
 		 *
 		 * There are two reasons for requiring a rewrite when changing
 		 * persistence: on one hand, we need to ensure that the buffers
@@ -7279,11 +7078,7 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			 * unlogged anyway.
 			 */
 			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, NewAccessMethod,
-<<<<<<< HEAD
 									   persistence, lockmode, hasIndexes, false);
-=======
-									   persistence, lockmode);
->>>>>>> REL_16_9
 
 			/*
 			 * Copy the heap data into the new table with the desired
@@ -8374,7 +8169,6 @@ ATSimplePermissions(AlterTableType cmdtype, Relation rel, int allowed_targets)
 		case RELKIND_FOREIGN_TABLE:
 			actual_target = ATT_FOREIGN_TABLE;
 			break;
-<<<<<<< HEAD
 		case RELKIND_DIRECTORY_TABLE:
 			actual_target = ATT_DIRECTORY_TABLE;
 			break;
@@ -8395,11 +8189,6 @@ ATSimplePermissions(AlterTableType cmdtype, Relation rel, int allowed_targets)
 				actual_target = 0;
 			break;
 
-=======
-		case RELKIND_SEQUENCE:
-			actual_target = ATT_SEQUENCE;
-			break;
->>>>>>> REL_16_9
 		default:
 			actual_target = 0;
 			break;
@@ -8436,7 +8225,6 @@ ATSimplePermissions(AlterTableType cmdtype, Relation rel, int allowed_targets)
 }
 
 /*
-<<<<<<< HEAD
  * ATWrongRelkindError
  *
  * Throw an error when a relation has been determined to be of the wrong
@@ -8518,8 +8306,6 @@ ATWrongRelkindError(Relation rel, int allowed_targets)
 }
 
 /*
-=======
->>>>>>> REL_16_9
  * ATSimpleRecursion
  *
  * Simple table recursion sufficient for most ALTER TABLE operations.
@@ -9162,7 +8948,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
 		rawEnt->attnum = attribute.attnum;
 		rawEnt->raw_default = copyObject(colDef->raw_default);
-<<<<<<< HEAD
 
 		rawEnt->hasCookedMissingVal = colDef->hasCookedMissingVal;
 		rawEnt->missingVal = colDef->missingVal;
@@ -9177,9 +8962,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 */
 		rawEnt->missingMode = (!colDef->generated);
 
-=======
-		rawEnt->missingMode = false;	/* XXX vestigial */
->>>>>>> REL_16_9
 		rawEnt->generated = colDef->generated;
 
 		/*
@@ -9196,7 +8978,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 
 		/* Make the additional catalog changes visible */
 		CommandCounterIncrement();
-<<<<<<< HEAD
 
 		/*
 		 * Did the request for a missing value work? If not we'll have to do a
@@ -9222,8 +9003,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 */
 		if (!rawEnt->missingMode || RelationIsAoRows(rel))
 			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
-=======
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -9337,7 +9116,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		{
 			NewColumnValue *newval;
 
-<<<<<<< HEAD
 			/* If QE, AlteredTableInfo streamed from QD already contains newvals */
 			if (Gp_role != GP_ROLE_EXECUTE)
 			{
@@ -9356,61 +9134,6 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			else
 			{
 				Assert(tab->newvals != NULL);
-=======
-			/* Prepare defval for execution, either here or in Phase 3 */
-			defval = expression_planner(defval);
-
-			/* Add the new default to the newvals list */
-			newval = (NewColumnValue *) palloc0(sizeof(NewColumnValue));
-			newval->attnum = attribute.attnum;
-			newval->expr = defval;
-			newval->is_generated = (colDef->generated != '\0');
-
-			tab->newvals = lappend(tab->newvals, newval);
-
-			/*
-			 * Attempt to skip a complete table rewrite by storing the
-			 * specified DEFAULT value outside of the heap.  This is only
-			 * allowed for plain relations and non-generated columns, and the
-			 * default expression can't be volatile (stable is OK).  Note that
-			 * contain_volatile_functions deems CoerceToDomain immutable, but
-			 * here we consider that coercion to a domain with constraints is
-			 * volatile; else it might fail even when the table is empty.
-			 */
-			if (rel->rd_rel->relkind == RELKIND_RELATION &&
-				!colDef->generated &&
-				!has_domain_constraints &&
-				!contain_volatile_functions((Node *) defval))
-			{
-				EState	   *estate;
-				ExprState  *exprState;
-				Datum		missingval;
-				bool		missingIsNull;
-
-				/* Evaluate the default expression */
-				estate = CreateExecutorState();
-				exprState = ExecPrepareExpr(defval, estate);
-				missingval = ExecEvalExpr(exprState,
-										  GetPerTupleExprContext(estate),
-										  &missingIsNull);
-				/* If it turns out NULL, nothing to do; else store it */
-				if (!missingIsNull)
-				{
-					StoreAttrMissingVal(rel, attribute.attnum, missingval);
-					/* Make the additional catalog change visible */
-					CommandCounterIncrement();
-					has_missing = true;
-				}
-				FreeExecutorState(estate);
-			}
-			else
-			{
-				/*
-				 * Failed to use missing mode.  We have to do a table rewrite
-				 * to install the value.
-				 */
-				tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
->>>>>>> REL_16_9
 			}
 		}
 
@@ -17617,7 +17340,6 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 {
 	Relation	rel;
 	Oid			reltoastrelid;
-<<<<<<< HEAD
 	Oid			relaosegrelid = InvalidOid;
 	Oid			relaoblkdirrelid = InvalidOid;
 	Oid			relaoblkdiridxid = InvalidOid;
@@ -17625,12 +17347,8 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 	Oid         relaovisimapidxid = InvalidOid;
 	Oid			relbmrelid = InvalidOid;
 	Oid			relbmidxid = InvalidOid;
-	Oid newrelfilenode;
-	RelFileNode newrnode;
-=======
 	RelFileNumber newrelfilenumber;
 	RelFileLocator newrlocator;
->>>>>>> REL_16_9
 	List	   *reltoastidxids = NIL;
 	ListCell   *lc;
 
@@ -17688,18 +17406,8 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 	}
 	else
 	{
-<<<<<<< HEAD
-		Assert(rel->rd_rel->relkind == RELKIND_RELATION ||
-			   rel->rd_rel->relkind == RELKIND_MATVIEW ||
-			   rel->rd_rel->relkind == RELKIND_TOASTVALUE ||
-			   rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
-			   rel->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
-			   rel->rd_rel->relkind == RELKIND_AOVISIMAP);
-		table_relation_copy_data(rel, &newrnode);
-=======
 		Assert(RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind));
 		table_relation_copy_data(rel, &newrlocator);
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -17714,7 +17422,6 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 
 	InvokeObjectPostAlterHook(RelationRelationId, RelationGetRelid(rel), 0);
 
-<<<<<<< HEAD
 	/* MPP-6929: metadata tracking */
 	if ((Gp_role == GP_ROLE_DISPATCH) && MetaTrackValidKindNsp(rel->rd_rel))
 		MetaTrackUpdObject(RelationRelationId,
@@ -17722,10 +17429,7 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 						   GetUserId(),
 						   "ALTER", "SET TABLESPACE");
 
-	RelationAssumeNewRelfilenode(rel);
-=======
 	RelationAssumeNewRelfilelocator(rel);
->>>>>>> REL_16_9
 
 	relation_close(rel, NoLock);
 
@@ -17988,15 +17692,11 @@ index_copy_data(Relation rel, RelFileLocator newrlocator)
 {
 	SMgrRelation dstrel;
 
-<<<<<<< HEAD
 	SMgrImpl smgr_which = smgr_get_impl(rel);
 
-	dstrel = smgropen(newrnode, rel->rd_backend, smgr_which, rel);
+	dstrel = smgropen(newrlocator, rel->rd_backend, smgr_which, rel);
 					  
-	RelationOpenSmgr(rel);
-=======
-	dstrel = smgropen(newrlocator, rel->rd_backend);
->>>>>>> REL_16_9
+	RelationGetSmgr(rel);
 
 	/*
 	 * Since we copy the file directly without looking at the shared buffers,
@@ -18013,11 +17713,7 @@ index_copy_data(Relation rel, RelFileLocator newrlocator)
 	 * NOTE: any conflict in relfilenumber value will be caught in
 	 * RelationCreateStorage().
 	 */
-<<<<<<< HEAD
-	RelationCreateStorage(newrnode, rel->rd_rel->relpersistence, smgr_which, rel);
-=======
-	RelationCreateStorage(newrlocator, rel->rd_rel->relpersistence, true);
->>>>>>> REL_16_9
+	RelationCreateStorage(newrlocator, rel->rd_rel->relpersistence, true, smgr_which, rel);
 
 	/* copy main fork */
 	RelationCopyStorage(RelationGetSmgr(rel), dstrel, MAIN_FORKNUM,
@@ -18038,13 +17734,8 @@ index_copy_data(Relation rel, RelFileLocator newrlocator)
 			if (RelationIsPermanent(rel) ||
 				(rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED &&
 				 forkNum == INIT_FORKNUM))
-<<<<<<< HEAD
-				log_smgrcreate(&newrnode, forkNum, smgr_which);
-			RelationCopyStorage(rel->rd_smgr, dstrel, forkNum,
-=======
-				log_smgrcreate(&newrlocator, forkNum);
+				log_smgrcreate(&newrlocator, forkNum, smgr_which);
 			RelationCopyStorage(RelationGetSmgr(rel), dstrel, forkNum,
->>>>>>> REL_16_9
 								rel->rd_rel->relpersistence);
 		}
 	}
@@ -18064,8 +17755,9 @@ ATExecEnableDisableTrigger(Relation rel, const char *trigname,
 						   char fires_when, bool skip_system, bool recurse,
 						   LOCKMODE lockmode)
 {
-<<<<<<< HEAD
-	EnableDisableTrigger(rel, trigname, fires_when, skip_system, lockmode);
+	EnableDisableTrigger(rel, trigname, InvalidOid,
+						 fires_when, skip_system, recurse,
+						 lockmode);
 
 	/* MPP-6929: metadata tracking */
 	if (Gp_role == GP_ROLE_DISPATCH && MetaTrackValidKindNsp(rel->rd_rel))
@@ -18095,11 +17787,6 @@ ATExecEnableDisableTrigger(Relation rel, const char *trigname,
 						   "ALTER", 
 						   subtype);
 	}
-=======
-	EnableDisableTrigger(rel, trigname, InvalidOid,
-						 fires_when, skip_system, recurse,
-						 lockmode);
->>>>>>> REL_16_9
 }
 
 /*
@@ -20884,12 +20571,6 @@ relation_mark_replica_identity(Relation rel, char ri_type, Oid indexOid,
 			CatalogTupleUpdate(pg_index, &pg_index_tuple->t_self, pg_index_tuple);
 			InvokeObjectPostAlterHookArg(IndexRelationId, thisIndexOid, 0,
 										 InvalidOid, is_internal);
-<<<<<<< HEAD
-			/*
-			 * Invalidate the relcache for the table, so that after we commit
-			 * all sessions will refresh the table's replica identity index
-			 * before attempting any UPDATE or DELETE on the table.
-=======
 
 			/*
 			 * Invalidate the relcache for the table, so that after we commit
@@ -20897,7 +20578,6 @@ relation_mark_replica_identity(Relation rel, char ri_type, Oid indexOid,
 			 * before attempting any UPDATE or DELETE on the table.  (If we
 			 * changed the table's pg_class row above, then a relcache inval
 			 * is already queued due to that; but we might not have.)
->>>>>>> REL_16_9
 			 */
 			CacheInvalidateRelcache(rel);
 		}
@@ -21440,7 +21120,6 @@ AlterTableNamespaceInternal(Relation rel, Oid oldNspOid, Oid nspOid,
 								   nspOid, false, false, objsMoved);
 
 	/* Fix other dependent stuff */
-<<<<<<< HEAD
 	if (rel->rd_rel->relkind == RELKIND_RELATION ||
 		rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE ||
 		rel->rd_rel->relkind == RELKIND_MATVIEW ||
@@ -21452,13 +21131,6 @@ AlterTableNamespaceInternal(Relation rel, Oid oldNspOid, Oid nspOid,
 		AlterConstraintNamespaces(RelationGetRelid(rel), oldNspOid, nspOid,
 								  false, objsMoved);
 	}
-=======
-	AlterIndexNamespaces(classRel, rel, oldNspOid, nspOid, objsMoved);
-	AlterSeqNamespaces(classRel, rel, oldNspOid, nspOid,
-					   objsMoved, AccessExclusiveLock);
-	AlterConstraintNamespaces(RelationGetRelid(rel), oldNspOid, nspOid,
-							  false, objsMoved);
->>>>>>> REL_16_9
 
 	table_close(classRel, RowExclusiveLock);
 }
@@ -22122,20 +21794,6 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 	 * Don't allow ALTER TABLE .. SET SCHEMA on relations that can't be moved
 	 * to a different schema, such as indexes and TOAST tables.
 	 */
-<<<<<<< HEAD
-	if (IsA(stmt, AlterObjectSchemaStmt) &&
-		relkind != RELKIND_RELATION &&
-		relkind != RELKIND_DIRECTORY_TABLE &&
-		relkind != RELKIND_VIEW &&
-		relkind != RELKIND_MATVIEW &&
-		relkind != RELKIND_SEQUENCE &&
-		relkind != RELKIND_FOREIGN_TABLE &&
-		relkind != RELKIND_PARTITIONED_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, directory table, view, materialized view, sequence, or foreign table",
-						rv->relname)));
-=======
 	if (IsA(stmt, AlterObjectSchemaStmt))
 	{
 		if (relkind == RELKIND_INDEX || relkind == RELKIND_PARTITIONED_INDEX)
@@ -22159,7 +21817,6 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 							rv->relname),
 					 errhint("Change the schema of the table instead.")));
 	}
->>>>>>> REL_16_9
 
 	ReleaseSysCache(tuple);
 }
@@ -23032,21 +22689,12 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd,
 	/*
 	 * If the partition we just attached is partitioned itself, invalidate
 	 * relcache for all descendent partitions too to ensure that their
-<<<<<<< HEAD
-	 * rd_partcheck expression trees are rebuilt; partitions already locked
-	 * at the beginning of this function.
-	 */
-	if (attachrel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-	{
-		ListCell *l;
-=======
 	 * rd_partcheck expression trees are rebuilt; partitions already locked at
 	 * the beginning of this function.
 	 */
 	if (attachrel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
 		ListCell   *l;
->>>>>>> REL_16_9
 
 		foreach(l, attachrel_children)
 		{
@@ -23223,16 +22871,12 @@ AttachPartitionEnsureIndexes(Relation rel, Relation attachrel)
 
 			stmt = generateClonedIndexStmt(NULL,
 										   idxRel, attmap,
-<<<<<<< HEAD
-										   &constraintOid);
+										   &conOid);
 			/*
 			 * Also don't dispatch this if it's part of an ALTER TABLE. We will dispatch
 			 * the whole ALTER TABLE command later.
 			 */
 			HOLD_DISPATCH();
-=======
-										   &conOid);
->>>>>>> REL_16_9
 			DefineIndex(RelationGetRelid(attachrel), stmt, InvalidOid,
 						RelationGetRelid(idxRel),
 						conOid,
@@ -23908,7 +23552,6 @@ DetachPartitionFinalize(Relation rel, Relation partRel, bool concurrent,
 	 */
 	CacheInvalidateRelcache(rel);
 
-<<<<<<< HEAD
 	/* MPP-6929: metadata tracking */
 	MetaTrackUpdObject(RelationRelationId,
 					   RelationGetRelid(partRel),
@@ -23925,18 +23568,6 @@ DetachPartitionFinalize(Relation rel, Relation partRel, bool concurrent,
 	if (partRel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
 		List   *children;
-=======
-	/*
-	 * If the partition we just detached is partitioned itself, invalidate
-	 * relcache for all descendent partitions too to ensure that their
-	 * rd_partcheck expression trees are rebuilt; must lock partitions before
-	 * doing so, using the same lockmode as what partRel has been locked with
-	 * by the caller.
-	 */
-	if (partRel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-	{
-		List	   *children;
->>>>>>> REL_16_9
 
 		children = find_all_inheritors(RelationGetRelid(partRel),
 									   AccessExclusiveLock, NULL);
@@ -24572,7 +24203,6 @@ GetAttributeCompression(Oid atttypid, char *compression)
 	return cmethod;
 }
 
-<<<<<<< HEAD
 static void
 ATSetTags(Relation rel, List *tags, bool unset)
 {
@@ -24628,10 +24258,11 @@ checkATSetDistributedByStandalone(AlteredTableInfo *tab, Relation rel)
 	if (!standalone)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot alter distribution with other subcommands for relation \"%s\"",
-						   RelationGetRelationName(rel)),
-					errhint("consider separating into multiple statements")));
-=======
+						errmsg("cannot alter distribution with other subcommands for relation \"%s\"",
+							   RelationGetRelationName(rel)),
+						errhint("consider separating into multiple statements")));
+}
+
 /*
  * resolve column storage specification
  */
@@ -24667,5 +24298,4 @@ GetAttributeStorage(Oid atttypid, const char *storagemode)
 						format_type_be(atttypid))));
 
 	return cstorage;
->>>>>>> REL_16_9
 }

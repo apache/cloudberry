@@ -679,6 +679,8 @@ typedef struct ViewOptions
 	(RELKIND_HAS_STORAGE((relation)->rd_rel->relkind) && \
 	 ((relation)->rd_rel->relfilenode == InvalidRelFileNumber))
 
+
+
 #ifndef FRONTEND
 /*
  * RelationGetSmgr

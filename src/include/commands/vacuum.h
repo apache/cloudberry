@@ -200,11 +200,12 @@ typedef enum VacuumOption
 	VACOPT_FREEZE = 1 << 3,		/* FREEZE option */
 	VACOPT_FULL = 1 << 4,		/* FULL (non-concurrent) vacuum */
 	VACOPT_SKIP_LOCKED = 1 << 5,	/* skip if cannot get lock */
-	VACOPT_PROCESS_TOAST = 1 << 6,	/* process the TOAST table, if any */
-	VACOPT_DISABLE_PAGE_SKIPPING = 1 << 7,	/* don't skip any pages */
+	VACOPT_PROCESS_MAIN = 1 << 6,	/* skip if cannot get lock */
+	VACOPT_PROCESS_TOAST = 1 << 7,	/* process the TOAST table, if any */
+	VACOPT_DISABLE_PAGE_SKIPPING = 1 << 8,	/* don't skip any pages */
 
 	/* Extra GPDB options */
-	VACOPT_AO_AUX_ONLY = 1 << 8,
+	VACOPT_AO_AUX_ONLY = 1 << 9,
 	VACOPT_ROOTONLY = 1 << 10,
 	VACOPT_FULLSCAN = 1 << 11,
 	VACOPT_SKIP_DATABASE_STATS = 1 << 12,

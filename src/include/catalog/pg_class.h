@@ -246,6 +246,9 @@ DECLARE_INDEX(pg_class_tblspc_relfilenode_index, 3455, ClassTblspcRelfilenodeInd
 #define RELKIND_HAS_TABLE_AM(relkind) \
 	((relkind) == RELKIND_RELATION || \
 	 (relkind) == RELKIND_TOASTVALUE || \
+	 (relkind) == RELKIND_AOSEGMENTS || \
+	 (relkind) == RELKIND_AOBLOCKDIR || \
+	 (relkind) == RELKIND_AOVISIMAP || \
 	 (relkind) == RELKIND_MATVIEW)
 
 extern int	errdetail_relkind_not_supported(char relkind);
