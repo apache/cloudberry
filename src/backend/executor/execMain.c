@@ -26,13 +26,9 @@
  *	before ExecutorEnd.  This can be omitted only in case of EXPLAIN,
  *	which should also omit ExecutorRun.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -64,11 +60,8 @@
 #include "jit/jit.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
-<<<<<<< HEAD
 #include "nodes/plannodes.h"
-=======
 #include "parser/parse_relation.h"
->>>>>>> REL_16_9
 #include "parser/parsetree.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
@@ -180,11 +173,13 @@ static void CheckValidRowMarkRel(Relation rel, RowMarkType markType);
 static void ExecPostprocessPlan(EState *estate);
 static void ExecEndPlan(PlanState *planstate, EState *estate);
 static void ExecutePlan(QueryDesc *queryDesc,
+						bool use_parallel_mode,
 						CmdType operation,
 						bool sendTuples,
 						uint64 numberTuples,
 						ScanDirection direction,
-						DestReceiver *dest);
+						DestReceiver *dest,
+						bool execute_once);
 static bool ExecCheckOneRelPerms(RTEPermissionInfo *perminfo);
 static bool ExecCheckPermissionsModified(Oid relOid, Oid userid,
 										 Bitmapset *modifiedCols,
@@ -931,26 +926,17 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 	 * run plan
 	 */
 	if (!ScanDirectionIsNoMovement(direction))
-<<<<<<< HEAD
 	{
 		if (execute_once && queryDesc->already_executed)
 			elog(ERROR, "can't re-execute query flagged for single execution");
 		queryDesc->already_executed = true;
 	}
-=======
-		ExecutePlan(queryDesc,
-					operation,
-					sendTuples,
-					count,
-					direction,
-					dest);
 
 	/*
 	 * Update es_total_processed to keep track of the number of tuples
 	 * processed across multiple ExecutorRun() calls.
 	 */
 	estate->es_total_processed += estate->es_processed;
->>>>>>> REL_16_9
 
 	/*
 	 * Need a try/catch block here so that if an ereport is called from
@@ -999,8 +985,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 
 			Assert(motionState);
 
-			ExecutePlan(estate,
-						(PlanState *) motionState,
+			ExecutePlan(queryDesc,
 						amIParallel,
 						CMD_SELECT,
 						sendTuples,
@@ -1036,8 +1021,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 				 */
 				EndpointNotifyQD(ENDPOINT_READY_ACK_MSG);
 
-				ExecutePlan(estate,
-							queryDesc->planstate,
+				ExecutePlan(queryDesc,
 							amIParallel,
 							operation,
 							true,
@@ -1055,8 +1039,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 				 * motion nodes at the fringe of the top slice to return
 				 * without ever calling nodes below them.
 				 */
-				ExecutePlan(estate,
-							queryDesc->planstate,
+				ExecutePlan(queryDesc,
 							amIParallel,
 							operation,
 							sendTuples,
@@ -1541,13 +1524,8 @@ ExecCheckPermissions(List *rangeTable, List *rteperminfos,
  * ExecCheckOneRelPerms
  *		Check access permissions for a single relation.
  */
-<<<<<<< HEAD
-bool
-ExecCheckRTEPerms(RangeTblEntry *rte)
-=======
 static bool
 ExecCheckOneRelPerms(RTEPermissionInfo *perminfo)
->>>>>>> REL_16_9
 {
 	AclMode		requiredPerms;
 	AclMode		relPerms;
@@ -1751,26 +1729,19 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 	{
 		RTEPermissionInfo *perminfo = lfirst_node(RTEPermissionInfo, l);
 
-<<<<<<< HEAD
 		rti++;
-
-		if (rte->rtekind != RTE_RELATION)
-			continue;
-
-		if ((rte->requiredPerms & (~ACL_SELECT)) == 0)
-			continue;
 
 		/*
 		 * External and foreign tables don't need two phase commit which is for
 		 * local mpp tables
 		 */
-		if (get_rel_relkind(rte->relid) == RELKIND_FOREIGN_TABLE)
-=======
+		if (get_rel_relkind(perminfo->relid) == RELKIND_FOREIGN_TABLE)
+			continue;
+
 		if ((perminfo->requiredPerms & (~ACL_SELECT)) == 0)
 			continue;
 
 		if (isTempNamespace(get_rel_namespace(perminfo->relid)))
->>>>>>> REL_16_9
 			continue;
 
 		if (isTempNamespace(get_rel_namespace(rte->relid)))
@@ -1782,7 +1753,7 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
         /* CDB: Allow SELECT FOR SHARE/UPDATE *
          *
          */
-        if ((rte->requiredPerms & ~(ACL_SELECT | ACL_SELECT_FOR_UPDATE)) == 0)
+        if ((perminfo->requiredPerms & ~(ACL_SELECT | ACL_SELECT_FOR_UPDATE)) == 0)
         {
         	ListCell   *cell;
         	bool foundRTI = false;
@@ -1850,14 +1821,10 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	/*
 	 * Do permissions checks
 	 */
-<<<<<<< HEAD
 	if (operation != CMD_SELECT || Gp_role != GP_ROLE_EXECUTE)
 	{
-		ExecCheckRTPerms(rangeTable, true);
+		ExecCheckPermissions(rangeTable, plannedstmt->permInfos, true);
 	}
-=======
-	ExecCheckPermissions(rangeTable, plannedstmt->permInfos, true);
->>>>>>> REL_16_9
 
 	/*
 	 * initialize the node's execution state
@@ -1976,7 +1943,6 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 		 * We may not have any motion in the current slice, e.g., in insert query
 		 * the root may not have any motion.
 		 */
-<<<<<<< HEAD
 		if (NULL != m)
 		{
 			start_plan_node = (Plan *) m;
@@ -2016,12 +1982,7 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			 * GPDB: We always set the REWIND flag, to delay eagerfree.
 			 */
 			sp_eflags = eflags
-				& (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA);
-=======
-		sp_eflags = eflags
-			& ~(EXEC_FLAG_REWIND | EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK);
-		if (bms_is_member(i, plannedstmt->rewindPlanIDs))
->>>>>>> REL_16_9
+				& ~(EXEC_FLAG_REWIND | EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK);
 			sp_eflags |= EXEC_FLAG_REWIND;
 
 			/* set our global sliceid variable for elog. */
@@ -2871,11 +2832,13 @@ ExecCloseRangeTableRelations(EState *estate)
  */
 static void
 ExecutePlan(QueryDesc *queryDesc,
+			bool use_parallel_mode,
 			CmdType operation,
 			bool sendTuples,
 			uint64 numberTuples,
 			ScanDirection direction,
-			DestReceiver *dest)
+			DestReceiver *dest,
+			bool execute_once)
 {
 	EState	   *estate = queryDesc->estate;
 	PlanState  *planstate = queryDesc->planstate;
@@ -2907,14 +2870,8 @@ ExecutePlan(QueryDesc *queryDesc,
 	 * already partially executed it, or if the caller asks us to exit early,
 	 * we must force the plan to run without parallelism.
 	 */
-<<<<<<< HEAD
 	if (!execute_once || GP_ROLE_DISPATCH == Gp_role)
-=======
-	if (queryDesc->already_executed || numberTuples != 0)
->>>>>>> REL_16_9
 		use_parallel_mode = false;
-	else
-		use_parallel_mode = queryDesc->plannedstmt->parallelModeNeeded;
 	queryDesc->already_executed = true;
 
 	estate->es_use_parallel_mode = use_parallel_mode;

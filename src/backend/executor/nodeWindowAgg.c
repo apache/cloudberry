@@ -43,11 +43,8 @@
 #include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-<<<<<<< HEAD
-=======
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
->>>>>>> REL_16_9
 #include "parser/parse_agg.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
@@ -844,18 +841,6 @@ finalize_windowaggregate(WindowAggState *winstate,
 		*isnull = peraggstate->transValueIsNull;
 	}
 
-<<<<<<< HEAD
-	/*
-	 * If result is pass-by-ref, make sure it is in the right context.
-	 */
-	if (!peraggstate->resulttypeByVal && !*isnull &&
-		!MemoryContextContainsGenericAllocation(CurrentMemoryContext,
-							   DatumGetPointer(*result)))
-		*result = datumCopy(*result,
-							peraggstate->resulttypeByVal,
-							peraggstate->resulttypeLen);
-=======
->>>>>>> REL_16_9
 	MemoryContextSwitchTo(oldContext);
 }
 
@@ -1337,13 +1322,7 @@ eval_windowfunction(WindowAggState *winstate, WindowStatePerFunc perfuncstate,
 	 * ensure it's not clobbered by later window functions.
 	 */
 	if (!perfuncstate->resulttypeByVal && !fcinfo->isnull &&
-<<<<<<< HEAD
-		!MemoryContextContainsGenericAllocation(CurrentMemoryContext,
-							   DatumGetPointer(*result))
-		)
-=======
 		winstate->numfuncs > 1)
->>>>>>> REL_16_9
 		*result = datumCopy(*result,
 							perfuncstate->resulttypeByVal,
 							perfuncstate->resulttypeLen);
@@ -2461,76 +2440,14 @@ ExecWindowAgg(PlanState *pstate)
 		winstate->start_offset_var_free &&
 		winstate->end_offset_var_free)
 	{
-<<<<<<< HEAD
 		compute_start_end_offsets(winstate);
 
-=======
-		int			frameOptions = winstate->frameOptions;
-		Datum		value;
-		bool		isnull;
-		int16		len;
-		bool		byval;
-
-		econtext = winstate->ss.ps.ps_ExprContext;
-
-		if (frameOptions & FRAMEOPTION_START_OFFSET)
-		{
-			Assert(winstate->startOffset != NULL);
-			value = ExecEvalExprSwitchContext(winstate->startOffset,
-											  econtext,
-											  &isnull);
-			if (isnull)
-				ereport(ERROR,
-						(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						 errmsg("frame starting offset must not be null")));
-			/* copy value into query-lifespan context */
-			get_typlenbyval(exprType((Node *) winstate->startOffset->expr),
-							&len, &byval);
-			winstate->startOffsetValue = datumCopy(value, byval, len);
-			if (frameOptions & (FRAMEOPTION_ROWS | FRAMEOPTION_GROUPS))
-			{
-				/* value is known to be int8 */
-				int64		offset = DatumGetInt64(value);
-
-				if (offset < 0)
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE),
-							 errmsg("frame starting offset must not be negative")));
-			}
-		}
-		if (frameOptions & FRAMEOPTION_END_OFFSET)
-		{
-			Assert(winstate->endOffset != NULL);
-			value = ExecEvalExprSwitchContext(winstate->endOffset,
-											  econtext,
-											  &isnull);
-			if (isnull)
-				ereport(ERROR,
-						(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						 errmsg("frame ending offset must not be null")));
-			/* copy value into query-lifespan context */
-			get_typlenbyval(exprType((Node *) winstate->endOffset->expr),
-							&len, &byval);
-			winstate->endOffsetValue = datumCopy(value, byval, len);
-			if (frameOptions & (FRAMEOPTION_ROWS | FRAMEOPTION_GROUPS))
-			{
-				/* value is known to be int8 */
-				int64		offset = DatumGetInt64(value);
-
-				if (offset < 0)
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE),
-							 errmsg("frame ending offset must not be negative")));
-			}
-		}
->>>>>>> REL_16_9
 		winstate->all_first = false;
 	}
 
 	/* We need to loop as the runCondition or qual may filter out tuples */
 	for (;;)
 	{
-<<<<<<< HEAD
 		/* Initialize for first partition and set current row = 0 */
 		begin_partition(winstate);
 		/* If there are no input rows, we'll detect that and exit below */
@@ -2591,9 +2508,6 @@ ExecWindowAgg(PlanState *pstate)
 		release_partition(winstate);
 
 		if (winstate->more_partitions)
-=======
-		if (winstate->buffer == NULL)
->>>>>>> REL_16_9
 		{
 			/* Initialize for first partition and set current row = 0 */
 			begin_partition(winstate);

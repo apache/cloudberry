@@ -237,17 +237,13 @@
  *    to filter expressions having to be evaluated early, and allows to JIT
  *    the entire expression into one native function.
  *
-<<<<<<< HEAD
  *    GPDB: Note that statement_mem is used to decide the operator memory
  *    instead of the work_mem, but to keep minimal change with postgres we keep
  *    the word "work_mem" in comments.
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -422,7 +418,6 @@ static void build_hash_table(AggState *aggstate, int setno, long nbuckets);
 static void hashagg_recompile_expressions(AggState *aggstate, bool minslot,
 										  bool nullcheck);
 static long hash_choose_num_buckets(double hashentrysize,
-<<<<<<< HEAD
 									long estimated_nbuckets,
 									Size memory);
 static int  hash_choose_num_partitions(AggState *aggstate,
@@ -430,13 +425,6 @@ static int  hash_choose_num_partitions(AggState *aggstate,
 									  double hashentrysize,
 									  int used_bits,
 									  int *log2_npartittions);
-=======
-									long ngroups, Size memory);
-static int	hash_choose_num_partitions(double input_groups,
-									   double hashentrysize,
-									   int used_bits,
-									   int *log2_npartitions);
->>>>>>> REL_16_9
 static void initialize_hash_entry(AggState *aggstate,
 								  TupleHashTable hashtable,
 								  TupleHashEntry entry);
@@ -456,12 +444,8 @@ static HashAggBatch *hashagg_batch_new(LogicalTape *input_tape, int setno,
 									   int64 input_tuples, double input_card,
 									   int used_bits);
 static MinimalTuple hashagg_batch_read(HashAggBatch *batch, uint32 *hashp);
-<<<<<<< HEAD
 static void hashagg_spill_init(AggState *aggstate,
-							   HashAggSpill *spill, HashTapeInfo *tapeinfo,
-=======
-static void hashagg_spill_init(HashAggSpill *spill, LogicalTapeSet *tapeset,
->>>>>>> REL_16_9
+							   HashAggSpill *spill, LogicalTapeSet *tapeset,
 							   int used_bits, double input_groups,
 							   double hashentrysize);
 static Size hashagg_spill_tuple(AggState *aggstate, HashAggSpill *spill,
@@ -559,13 +543,8 @@ initialize_phase(AggState *aggstate, int newphase)
 												  sortnode->sortOperators,
 												  sortnode->collations,
 												  sortnode->nullsFirst,
-<<<<<<< HEAD
 												  PlanStateOperatorMemKB((PlanState *) aggstate),
-												  NULL, false);
-=======
-												  work_mem,
 												  NULL, TUPLESORT_NONE);
->>>>>>> REL_16_9
 	}
 
 	aggstate->current_phase = newphase;
@@ -642,11 +621,7 @@ initialize_aggregate(AggState *aggstate, AggStatePerTrans pertrans,
 									  pertrans->sortOperators[0],
 									  pertrans->sortCollations[0],
 									  pertrans->sortNullsFirst[0],
-<<<<<<< HEAD
-									  PlanStateOperatorMemKB((PlanState *) aggstate), NULL, false);
-=======
-									  work_mem, NULL, TUPLESORT_NONE);
->>>>>>> REL_16_9
+									  PlanStateOperatorMemKB((PlanState *) aggstate), NULL, TUPLESORT_NONE);
 		}
 		else
 			pertrans->sortstates[aggstate->current_set] =
@@ -656,11 +631,7 @@ initialize_aggregate(AggState *aggstate, AggStatePerTrans pertrans,
 									 pertrans->sortOperators,
 									 pertrans->sortCollations,
 									 pertrans->sortNullsFirst,
-<<<<<<< HEAD
-									 PlanStateOperatorMemKB((PlanState *) aggstate), NULL, false);
-=======
-									 work_mem, NULL, TUPLESORT_NONE);
->>>>>>> REL_16_9
+									 PlanStateOperatorMemKB((PlanState *) aggstate), NULL, TUPLESORT_NONE);
 	}
 
 	/*
@@ -1206,19 +1177,6 @@ finalize_aggregate(AggState *aggstate,
 		*resultIsNull = pergroupstate->transValueIsNull;
 	}
 
-<<<<<<< HEAD
-	/*
-	 * If result is pass-by-ref, make sure it is in the right context.
-	 */
-	if (!peragg->resulttypeByVal && !*resultIsNull &&
-		!MemoryContextContainsGenericAllocation(CurrentMemoryContext,
-							   DatumGetPointer(*resultVal)))
-		*resultVal = datumCopy(*resultVal,
-							   peragg->resulttypeByVal,
-							   peragg->resulttypeLen);
-
-=======
->>>>>>> REL_16_9
 	MemoryContextSwitchTo(oldContext);
 }
 
@@ -1279,17 +1237,6 @@ finalize_partialaggregate(AggState *aggstate,
 		*resultIsNull = pergroupstate->transValueIsNull;
 	}
 
-<<<<<<< HEAD
-	/* If result is pass-by-ref, make sure it is in the right context. */
-	if (!peragg->resulttypeByVal && !*resultIsNull &&
-		!MemoryContextContainsGenericAllocation(CurrentMemoryContext,
-							   DatumGetPointer(*resultVal)))
-		*resultVal = datumCopy(*resultVal,
-							   peragg->resulttypeByVal,
-							   peragg->resulttypeLen);
-
-=======
->>>>>>> REL_16_9
 	MemoryContextSwitchTo(oldContext);
 }
 
@@ -1904,7 +1851,6 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 {
 	int			npartitions;
 	Size		partition_mem;
-<<<<<<< HEAD
 	uint64		strict_memlimit = work_mem;
 
 	if (aggstate)
@@ -1921,17 +1867,6 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 			*num_partitions = 0;
 		*mem_limit = strict_memlimit * 1024L;
 		*ngroups_limit = *mem_limit / hashentrysize;
-=======
-	Size		hash_mem_limit = get_hash_memory_limit();
-
-	/* if not expected to spill, use all of hash_mem */
-	if (input_groups * hashentrysize <= hash_mem_limit)
-	{
-		if (num_partitions != NULL)
-			*num_partitions = 0;
-		*mem_limit = hash_mem_limit;
-		*ngroups_limit = hash_mem_limit / hashentrysize;
->>>>>>> REL_16_9
 		return;
 	}
 
@@ -1957,17 +1892,10 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 	 * minimum number of partitions, so we aren't going to dramatically exceed
 	 * work mem anyway.
 	 */
-<<<<<<< HEAD
 	if (strict_memlimit * 1024L > 4 * partition_mem)
 		*mem_limit = strict_memlimit * 1024L - partition_mem;
 	else
 		*mem_limit = strict_memlimit * 1024L * 0.75;
-=======
-	if (hash_mem_limit > 4 * partition_mem)
-		*mem_limit = hash_mem_limit - partition_mem;
-	else
-		*mem_limit = hash_mem_limit * 0.75;
->>>>>>> REL_16_9
 
 	if (*mem_limit > hashentrysize)
 		*ngroups_limit = *mem_limit / hashentrysize;
@@ -2037,11 +1965,7 @@ hash_agg_enter_spill_mode(AggState *aggstate)
 			AggStatePerHash perhash = &aggstate->perhash[setno];
 			HashAggSpill *spill = &aggstate->hash_spills[setno];
 
-<<<<<<< HEAD
-			hashagg_spill_init(aggstate, spill, aggstate->hash_tapeinfo, 0,
-=======
-			hashagg_spill_init(spill, aggstate->hash_tapeset, 0,
->>>>>>> REL_16_9
+			hashagg_spill_init(aggstate, spill, aggstate->hash_tapeset, 0,
 							   perhash->aggnode->numGroups,
 							   aggstate->hashentrysize);
 		}
@@ -2144,21 +2068,16 @@ static int
 hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashentrysize,
 						   int used_bits, int *log2_npartitions)
 {
-<<<<<<< HEAD
 	/* GPDB_14_MERGE_FIXME: no use in GPDB, work_mem instead */
 #if 0
 	Size		hash_mem_limit = get_hash_memory_limit();
 #endif
 
-=======
-	Size		hash_mem_limit = get_hash_memory_limit();
->>>>>>> REL_16_9
 	double		partition_limit;
 	double		mem_wanted;
 	double		dpartitions;
 	int			npartitions;
 	int			partition_bits;
-<<<<<<< HEAD
 	uint64		strict_memlimit = work_mem;
 
 	// GPDB_14_MERGE_FIXME: PG14 applies `hash_mem_multiplier` to increase the memory
@@ -2170,29 +2089,19 @@ hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashe
 		if (operator_mem < strict_memlimit)
 			strict_memlimit = operator_mem;
 	}
-=======
->>>>>>> REL_16_9
 
 	/*
 	 * Avoid creating so many partitions that the memory requirements of the
 	 * open partition files are greater than 1/4 of hash_mem.
 	 */
 	partition_limit =
-<<<<<<< HEAD
 		(strict_memlimit * 1024L * 0.25 - HASHAGG_READ_BUFFER_SIZE) /
-=======
-		(hash_mem_limit * 0.25 - HASHAGG_READ_BUFFER_SIZE) /
->>>>>>> REL_16_9
 		HASHAGG_WRITE_BUFFER_SIZE;
 
 	mem_wanted = HASHAGG_PARTITION_FACTOR * input_groups * hashentrysize;
 
 	/* make enough partitions so that each one is likely to fit in memory */
-<<<<<<< HEAD
 	dpartitions = 1 + (mem_wanted / (strict_memlimit * 1024L));
-=======
-	dpartitions = 1 + (mem_wanted / hash_mem_limit);
->>>>>>> REL_16_9
 
 	if (dpartitions > partition_limit)
 		dpartitions = partition_limit;
@@ -2315,11 +2224,7 @@ lookup_hash_entries(AggState *aggstate)
 			TupleTableSlot *slot = aggstate->tmpcontext->ecxt_outertuple;
 
 			if (spill->partitions == NULL)
-<<<<<<< HEAD
-				hashagg_spill_init(aggstate, spill, aggstate->hash_tapeinfo, 0,
-=======
-				hashagg_spill_init(spill, aggstate->hash_tapeset, 0,
->>>>>>> REL_16_9
+				hashagg_spill_init(aggstate, spill, aggstate->hash_tapeset, 0,
 								   perhash->aggnode->numGroups,
 								   aggstate->hashentrysize);
 
@@ -2902,11 +2807,7 @@ agg_refill_hash_table(AggState *aggstate)
 				 * that we don't assign tapes that will never be used.
 				 */
 				spill_initialized = true;
-<<<<<<< HEAD
-				hashagg_spill_init(aggstate, &spill, tapeinfo, batch->used_bits,
-=======
-				hashagg_spill_init(&spill, tapeset, batch->used_bits,
->>>>>>> REL_16_9
+				hashagg_spill_init(aggstate, &spill, tapeset, batch->used_bits,
 								   batch->input_card, aggstate->hashentrysize);
 			}
 			/* no memory for a new group, spill */
@@ -3135,96 +3036,13 @@ agg_retrieve_hash_table_in_memory(AggState *aggstate)
 }
 
 /*
-<<<<<<< HEAD
- * Initialize HashTapeInfo
- */
-static void
-hashagg_tapeinfo_init(AggState *aggstate)
-{
-	HashTapeInfo *tapeinfo = palloc(sizeof(HashTapeInfo));
-	int			init_tapes = 16;	/* expanded dynamically */
-
-	tapeinfo->tapeset = LogicalTapeSetCreate(init_tapes, true, NULL, NULL, -1);
-	tapeinfo->ntapes = init_tapes;
-	tapeinfo->nfreetapes = init_tapes;
-	tapeinfo->freetapes_alloc = init_tapes;
-	tapeinfo->freetapes = palloc(init_tapes * sizeof(int));
-	for (int i = 0; i < init_tapes; i++)
-		tapeinfo->freetapes[i] = i;
-
-	aggstate->hash_tapeinfo = tapeinfo;
-
-#ifdef FAULT_INJECTOR
-	if (SIMPLE_FAULT_INJECTOR("hashagg_spill_temp_files") == FaultInjectorTypeSkip) {
-		const char *filename = LogicalTapeGetBufFilename(tapeinfo->tapeset);
-		if (!filename)
-			ereport(NOTICE, (errmsg("hashagg: buffilename is null")));
-		else if (strstr(filename, "base/" PG_TEMP_FILES_DIR) == filename)
-			ereport(NOTICE, (errmsg("hashagg: Use default tablespace")));
-		else if (strstr(filename, "pg_tblspc/") == filename)
-			ereport(NOTICE, (errmsg("hashagg: Use temp tablespace")));
-		else
-			ereport(NOTICE, (errmsg("hashagg: Unexpected prefix of the tablespace path")));
-
-	}
-#endif
-}
-
-/*
- * Assign unused tapes to spill partitions, extending the tape set if
- * necessary.
- */
-static void
-hashagg_tapeinfo_assign(HashTapeInfo *tapeinfo, int *partitions,
-						int npartitions)
-{
-	int			partidx = 0;
-
-	/* use free tapes if available */
-	while (partidx < npartitions && tapeinfo->nfreetapes > 0)
-		partitions[partidx++] = tapeinfo->freetapes[--tapeinfo->nfreetapes];
-
-	if (partidx < npartitions)
-	{
-		LogicalTapeSetExtend(tapeinfo->tapeset, npartitions - partidx);
-
-		while (partidx < npartitions)
-			partitions[partidx++] = tapeinfo->ntapes++;
-	}
-}
-
-/*
- * After a tape has already been written to and then read, this function
- * rewinds it for writing and adds it to the free list.
- */
-static void
-hashagg_tapeinfo_release(HashTapeInfo *tapeinfo, int tapenum)
-{
-	/* rewinding frees the buffer while not in use */
-	LogicalTapeRewindForWrite(tapeinfo->tapeset, tapenum);
-	if (tapeinfo->freetapes_alloc == tapeinfo->nfreetapes)
-	{
-		tapeinfo->freetapes_alloc <<= 1;
-		tapeinfo->freetapes = repalloc(tapeinfo->freetapes,
-									   tapeinfo->freetapes_alloc * sizeof(int));
-	}
-	tapeinfo->freetapes[tapeinfo->nfreetapes++] = tapenum;
-}
-
-/*
-=======
->>>>>>> REL_16_9
  * hashagg_spill_init
  *
  * Called after we determined that spilling is necessary. Chooses the number
  * of partitions to create, and initializes them.
  */
 static void
-<<<<<<< HEAD
-hashagg_spill_init(AggState *aggstate, HashAggSpill *spill, HashTapeInfo *tapeinfo, int used_bits,
-=======
-hashagg_spill_init(HashAggSpill *spill, LogicalTapeSet *tapeset, int used_bits,
->>>>>>> REL_16_9
+hashagg_spill_init(AggState *aggstate, HashAggSpill *spill,  LogicalTapeSet *tapeset, int used_bits,
 				   double input_groups, double hashentrysize)
 {
 	int			npartitions;
@@ -4448,12 +4266,6 @@ build_pertrans_for_aggref(AggStatePerTrans pertrans,
 	 * Set up infrastructure for calling the transfn.  Note that invtransfn is
 	 * not needed here.
 	 */
-<<<<<<< HEAD
-	if (DO_AGGSPLIT_COMBINE(pertrans->aggref->aggsplit))
-	{
-		Expr	   *combinefnexpr;
-		size_t		numTransArgs;
-=======
 	build_aggregate_transfn_expr(inputTypes,
 								 numArguments,
 								 numDirectArgs,
@@ -4464,7 +4276,6 @@ build_pertrans_for_aggref(AggStatePerTrans pertrans,
 								 InvalidOid,
 								 &transfnexpr,
 								 NULL);
->>>>>>> REL_16_9
 
 	fmgr_info(transfn_oid, &pertrans->transfn);
 	fmgr_info_set_expr((Node *) transfnexpr, &pertrans->transfn);

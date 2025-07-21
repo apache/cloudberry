@@ -3,13 +3,9 @@
  * nodeHash.c
  *	  Routines to hash relations for hashjoin
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -601,11 +597,7 @@ ExecHashTableCreate(HashState *state, HashJoinState *hjstate,
 	 * per-query memory context.  Everything else should be kept inside the
 	 * subsidiary hashCxt, batchCxt or spillCxt.
 	 */
-<<<<<<< HEAD
-	hashtable = (HashJoinTable) palloc0(sizeof(HashJoinTableData));
-=======
 	hashtable = palloc_object(HashJoinTableData);
->>>>>>> REL_16_9
 	hashtable->nbuckets = nbuckets;
 	hashtable->nbuckets_original = nbuckets;
 	hashtable->nbuckets_optimal = nbuckets;
@@ -663,16 +655,14 @@ ExecHashTableCreate(HashState *state, HashJoinState *hjstate,
 												"HashBatchContext",
 												ALLOCSET_DEFAULT_SIZES);
 
-<<<<<<< HEAD
 	/* CDB: track temp buf file allocations in separate context */
 	hashtable->bfCxt = AllocSetContextCreate(CurrentMemoryContext,
 											 "hbbfcxt",
 											 ALLOCSET_DEFAULT_SIZES);
-=======
+
 	hashtable->spillCxt = AllocSetContextCreate(hashtable->hashCxt,
 												"HashSpillContext",
 												ALLOCSET_DEFAULT_SIZES);
->>>>>>> REL_16_9
 
 	/* Allocate data that will live for the life of the hashjoin */
 
@@ -852,32 +842,20 @@ ExecChooseHashTableSize(double ntuples, int tupwidth, bool useskew,
 	/*
 	 * Compute in-memory hashtable size limit from GUCs.
 	 */
-<<<<<<< HEAD
 	hash_table_bytes = operatorMemKB * 1024L;
-=======
-	hash_table_bytes = get_hash_memory_limit();
->>>>>>> REL_16_9
 
 	/*
 	 * Parallel Hash tries to use the combined hash_mem of all workers to
 	 * avoid the need to batch.  If that won't work, it falls back to hash_mem
 	 * per worker and tries to process batches in parallel.
 	 */
-<<<<<<< HEAD
 	if (try_combined_hash_mem && parallel_workers > 0)
-=======
-	if (try_combined_hash_mem)
->>>>>>> REL_16_9
 	{
 		/* Careful, this could overflow size_t */
 		double		newlimit;
 
-<<<<<<< HEAD
 		/* CBDB_PARALLEL_FIXME: if we enable pg style parallel some day, we should reconsider it. */
 		newlimit = (double) hash_table_bytes * (double) parallel_workers;
-=======
-		newlimit = (double) hash_table_bytes * (double) (parallel_workers + 1);
->>>>>>> REL_16_9
 		newlimit = Min(newlimit, (double) SIZE_MAX);
 		hash_table_bytes = (size_t) newlimit;
 	}
@@ -998,15 +976,9 @@ ExecChooseHashTableSize(double ntuples, int tupwidth, bool useskew,
 		 * gp_hashjoin_tuples_per_bucket tuples, whose projected size already includes
 		 * overhead for the hash code, pointer to the next tuple, etc.
 		 */
-<<<<<<< HEAD
 		bucket_size = (tupsize * gp_hashjoin_tuples_per_bucket + sizeof(HashJoinTuple));
 		if (hash_table_bytes < bucket_size)
 			sbuckets = 1;
-=======
-		bucket_size = (tupsize * NTUP_PER_BUCKET + sizeof(HashJoinTuple));
-		if (hash_table_bytes <= bucket_size)
-			sbuckets = 1;		/* avoid pg_nextpower2_size_t(0) */
->>>>>>> REL_16_9
 		else
 			sbuckets = pg_nextpower2_size_t(hash_table_bytes / bucket_size);
 		sbuckets = Min(sbuckets, max_pointers);
@@ -1222,7 +1194,6 @@ ExecHashIncreaseNumBatches(HashJoinTable hashtable)
 		hashtable->outerBatchFile = repalloc0_array(hashtable->outerBatchFile, BufFile *, oldnbatch, nbatch);
 	}
 
-<<<<<<< HEAD
 	/* EXPLAIN ANALYZE batch statistics */
 	if (stats && stats->nbatchstats < nbatch)
 	{
@@ -1234,11 +1205,6 @@ ExecHashIncreaseNumBatches(HashJoinTable hashtable)
 		memset(stats->batchstats + stats->nbatchstats, 0, sz);
 		stats->nbatchstats = nbatch;
 	}
-
-	MemoryContextSwitchTo(oldcxt);
-
-=======
->>>>>>> REL_16_9
 	hashtable->nbatch = nbatch;
 
 	/*
@@ -1311,14 +1277,9 @@ ExecHashIncreaseNumBatches(HashJoinTable hashtable)
 				ExecHashJoinSaveTuple(NULL,
 									  HJTUPLE_MINTUPLE(hashTuple),
 									  hashTuple->hashvalue,
-<<<<<<< HEAD
 									  hashtable,
 									  &hashtable->innerBatchFile[batchno],
 									  hashtable->bfCxt);
-=======
-									  &hashtable->innerBatchFile[batchno],
-									  hashtable);
->>>>>>> REL_16_9
 
 				hashtable->spaceUsed -= hashTupleSize;
 				spaceFreed += hashTupleSize;
@@ -1467,23 +1428,9 @@ ExecParallelHashIncreaseNumBatches(HashJoinTable hashtable)
 					 * array.
 					 */
 					dtuples = (old_batch0->ntuples * 2.0) / new_nbatch;
-<<<<<<< HEAD
 					dbuckets = ceil(dtuples / gp_hashjoin_tuples_per_bucket);
 					dbuckets = Min(dbuckets,
 								   MaxAllocSize / sizeof(dsa_pointer_atomic));
-=======
-
-					/*
-					 * We need to calculate the maximum number of buckets to
-					 * stay within the MaxAllocSize boundary.  Round the
-					 * maximum number to the previous power of 2 given that
-					 * later we round the number to the next power of 2.
-					 */
-					max_buckets = pg_prevpower2_32((uint32)
-												   (MaxAllocSize / sizeof(dsa_pointer_atomic)));
-					dbuckets = ceil(dtuples / NTUP_PER_BUCKET);
-					dbuckets = Min(dbuckets, max_buckets);
->>>>>>> REL_16_9
 					new_nbuckets = (int) dbuckets;
 					new_nbuckets = Max(new_nbuckets, 1024);
 					new_nbuckets = pg_nextpower2_32(new_nbuckets);
@@ -2023,14 +1970,9 @@ ExecHashTableInsert(HashState *hashState, HashJoinTable hashtable,
 		Assert(batchno > hashtable->curbatch);
 		ExecHashJoinSaveTuple(ps, tuple,
 							  hashvalue,
-<<<<<<< HEAD
 							  hashtable,
 							  &hashtable->innerBatchFile[batchno],
 							  hashtable->bfCxt);
-=======
-							  &hashtable->innerBatchFile[batchno],
-							  hashtable);
->>>>>>> REL_16_9
 	}
 
 	if (shouldFree)
@@ -2731,16 +2673,11 @@ ExecReScanHash(HashState *node)
 	 * if chgParam of subnode is not null then plan will be re-scanned by
 	 * first ExecProcNode.
 	 */
-<<<<<<< HEAD
-	if (node->ps.lefttree->chgParam == NULL)
-		ExecReScan(node->ps.lefttree);
+	if (outerPlan->chgParam == NULL)
+		ExecReScan(outerPlan);
 
 	if (gp_enable_runtime_filter_pushdown && node->filters)
 		ResetRuntimeFilter(node);
-=======
-	if (outerPlan->chgParam == NULL)
-		ExecReScan(outerPlan);
->>>>>>> REL_16_9
 }
 
 
@@ -3435,16 +3372,10 @@ ExecHashRemoveNextSkewBucket(HashState *hashState, HashJoinTable hashtable)
 		{
 			/* Put the tuple into a temp file for later batches */
 			Assert(batchno > hashtable->curbatch);
-<<<<<<< HEAD
 			ExecHashJoinSaveTuple(ps, tuple,
 								  hashvalue,
 								  hashtable,
 								  &hashtable->innerBatchFile[batchno], hashtable->bfCxt);
-=======
-			ExecHashJoinSaveTuple(tuple, hashvalue,
-								  &hashtable->innerBatchFile[batchno],
-								  hashtable);
->>>>>>> REL_16_9
 			pfree(hashTuple);
 			hashtable->spaceUsed -= tupleSize;
 			hashtable->spaceUsedSkew -= tupleSize;
@@ -4057,15 +3988,6 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		sts_end_parallel_scan(hashtable->batches[curbatch].inner_tuples);
 		sts_end_parallel_scan(hashtable->batches[curbatch].outer_tuples);
 
-<<<<<<< HEAD
-		/* Detach from the batch we were last working on. */
-		/*
-		 * CBDB_PARALLEL: Parallel Hash Left Anti Semi (Not-In) Join(parallel-aware)
-		 * If phs_lasj_has_null is true, that means we have found null when building hash table,
-		 * there were no batches to detach.
-		 */
-		if (!hashtable->parallel_state->phs_lasj_has_null && BarrierArriveAndDetach(&batch->batch_barrier))
-=======
 		/* After attaching we always get at least to PHJ_BATCH_PROBE. */
 		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE ||
 			   BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_SCAN);
@@ -4083,7 +4005,6 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 */
 		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE &&
 			!hashtable->batches[curbatch].outer_eof)
->>>>>>> REL_16_9
 		{
 			/*
 			 * This flag may be written to by multiple backends during
@@ -4100,7 +4021,13 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 */
 		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE)
 			attached = BarrierArriveAndDetachExceptLast(&batch->batch_barrier);
-		if (attached && BarrierArriveAndDetach(&batch->batch_barrier))
+
+		/*
+		 * CBDB_PARALLEL: Parallel Hash Left Anti Semi (Not-In) Join(parallel-aware)
+		 * If phs_lasj_has_null is true, that means we have found null when building hash table,
+		 * there were no batches to detach.
+		 */
+		if (!hashtable->parallel_state->phs_lasj_has_null && attached && BarrierArriveAndDetach(&batch->batch_barrier))
 		{
 			/*
 			 * We are not longer attached to the batch barrier, but we're the
@@ -4399,16 +4326,15 @@ get_hash_memory_limit(void)
 size_t
 get_hash_memory_limit(void)
 {
-<<<<<<< HEAD
-	size_t		mem_limit = get_hash_memory_limit();
+	double		mem_limit;
 
-	/* Remove the kilobyte factor */
-	mem_limit /= 1024;
+	/* Do initial calculation in double arithmetic */
+	mem_limit = (double) work_mem * hash_mem_multiplier * 1024.0;
 
-	/* Clamp to MAX_KILOBYTES, like work_mem */
-	mem_limit = Min(mem_limit, (size_t) MAX_KILOBYTES);
+	/* Clamp in case it doesn't fit in size_t */
+	mem_limit = Min(mem_limit, (double) SIZE_MAX);
 
-	return (int) mem_limit;
+	return (size_t) mem_limit;
 }
 
 /*
@@ -4548,15 +4474,4 @@ ResetRuntimeFilter(HashState *node)
 		attr_filter->min    = LONG_MAX;
 		attr_filter->max    = LONG_MIN;
 	}
-=======
-	double		mem_limit;
-
-	/* Do initial calculation in double arithmetic */
-	mem_limit = (double) work_mem * hash_mem_multiplier * 1024.0;
-
-	/* Clamp in case it doesn't fit in size_t */
-	mem_limit = Min(mem_limit, (double) SIZE_MAX);
-
-	return (size_t) mem_limit;
->>>>>>> REL_16_9
 }

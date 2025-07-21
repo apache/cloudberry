@@ -3,13 +3,9 @@
  * nodeHashjoin.c
  *	  Routines to handle hash join nodes
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -322,13 +318,6 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				Assert(hashtable == NULL);
 
 				/*
-<<<<<<< HEAD
-				 * MPP-4165: My fix for MPP-3300 was correct in that we avoided
-				 * the *deadlock* but had very unexpected (and painful)
-				 * performance characteristics: we basically de-pipeline and
-				 * de-parallelize execution of any query which has motion below
-				 * us.
-=======
 				 * If the outer relation is completely empty, and it's not
 				 * right/right-anti/full join, we can quit without building
 				 * the hash table.  However, for an inner join it is only a
@@ -339,7 +328,6 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				 * should always make this check, since we aren't going to be
 				 * able to skip the join on the strength of an empty inner
 				 * relation anyway.)
->>>>>>> REL_16_9
 				 *
 				 * So now prefetch_inner is set (see createplan.c) if we have *any* motion
 				 * below us. If we don't have any motion, it doesn't matter.
@@ -643,17 +631,11 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 					 */
 					Assert(parallel_state == NULL);
 					Assert(batchno > hashtable->curbatch);
-<<<<<<< HEAD
 					ExecHashJoinSaveTuple(&node->js.ps, mintuple,
 										  hashvalue,
 										  hashtable,
 										  &hashtable->outerBatchFile[batchno],
 										  hashtable->bfCxt);
-=======
-					ExecHashJoinSaveTuple(mintuple, hashvalue,
-										  &hashtable->outerBatchFile[batchno],
-										  hashtable);
->>>>>>> REL_16_9
 
 					if (shouldFree)
 						heap_free_minimal_tuple(mintuple);
@@ -1517,34 +1499,8 @@ ExecHashJoinNewBatch(HashJoinState *hjstate)
 
 	if (!ExecHashJoinReloadHashTable(hjstate))
 	{
-<<<<<<< HEAD
 		/* We no longer continue as we couldn't load the batch */
 		return false;
-=======
-		if (BufFileSeek(innerFile, 0, 0, SEEK_SET))
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not rewind hash-join temporary file")));
-
-		while ((slot = ExecHashJoinGetSavedTuple(hjstate,
-												 innerFile,
-												 &hashvalue,
-												 hjstate->hj_HashTupleSlot)))
-		{
-			/*
-			 * NOTE: some tuples may be sent to future batches.  Also, it is
-			 * possible for hashtable->nbatch to be increased here!
-			 */
-			ExecHashTableInsert(hashtable, slot, hashvalue);
-		}
-
-		/*
-		 * after we build the hash table, the inner batch file is no longer
-		 * needed
-		 */
-		BufFileClose(innerFile);
-		hashtable->innerBatchFile[curbatch] = NULL;
->>>>>>> REL_16_9
 	}
 
 	/*
@@ -1603,16 +1559,11 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 		{
 			SharedTuplestoreAccessor *inner_tuples;
 			Barrier    *batch_barrier =
-<<<<<<< HEAD
 			&hashtable->batches[batchno].shared->batch_barrier;
 			int			phase = BarrierAttach(batch_barrier);
-=======
-				&hashtable->batches[batchno].shared->batch_barrier;
->>>>>>> REL_16_9
 
 			if (hashtable->nbatch == 1 && batchno == 0 && ((HashJoin *)hjstate->js.ps.plan)->batch0_barrier)
 			{
-<<<<<<< HEAD
 				Assert(phase == PHJ_BATCH_PROBING);
 
 				batch0_barrier = &pstate->batch0_barrier;
@@ -1622,10 +1573,7 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 			switch (phase)
 			{
 
-				case PHJ_BATCH_ELECTING:
-=======
 				case PHJ_BATCH_ELECT:
->>>>>>> REL_16_9
 
 					/* One backend allocates the hash table. */
 					if (BarrierArriveAndWait(batch_barrier,
@@ -1729,7 +1677,6 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
  * created for the hashtable.
  */
 void
-<<<<<<< HEAD
 ExecHashJoinSaveTuple(PlanState *ps, MinimalTuple tuple, uint32 hashvalue,
 					  HashJoinTable hashtable, BufFile **fileptr,
 					  MemoryContext bfCxt)
@@ -1770,35 +1717,6 @@ ExecHashJoinSaveTuple(PlanState *ps, MinimalTuple tuple, uint32 hashvalue,
 			 BufFileGetFilename(file));
 
 		MemoryContextSwitchTo(oldcxt);
-=======
-ExecHashJoinSaveTuple(MinimalTuple tuple, uint32 hashvalue,
-					  BufFile **fileptr, HashJoinTable hashtable)
-{
-	BufFile    *file = *fileptr;
-
-	/*
-	 * The batch file is lazily created. If this is the first tuple written to
-	 * this batch, the batch file is created and its buffer is allocated in
-	 * the spillCxt context, NOT in the batchCxt.
-	 *
-	 * During the build phase, buffered files are created for inner batches.
-	 * Each batch's buffered file is closed (and its buffer freed) after the
-	 * batch is loaded into memory during the outer side scan. Therefore, it
-	 * is necessary to allocate the batch file buffer in a memory context
-	 * which outlives the batch itself.
-	 *
-	 * Also, we use spillCxt instead of hashCxt for a better accounting of the
-	 * spilling memory consumption.
-	 */
-	if (file == NULL)
-	{
-		MemoryContext oldctx = MemoryContextSwitchTo(hashtable->spillCxt);
-
-		file = BufFileCreateTemp(false);
-		*fileptr = file;
-
-		MemoryContextSwitchTo(oldctx);
->>>>>>> REL_16_9
 	}
 
 	BufFileWrite(file, &hashvalue, sizeof(uint32));
@@ -1866,15 +1784,10 @@ ExecReScanHashJoin(HashJoinState *node)
 	 */
 	if (node->hj_HashTable != NULL)
 	{
-<<<<<<< HEAD
 		node->hj_HashTable->first_pass = false;
 
 		if (node->js.ps.righttree->chgParam == NULL &&
 			!node->hj_HashTable->eagerlyReleased)
-=======
-		if (node->hj_HashTable->nbatch == 1 &&
-			innerPlan->chgParam == NULL)
->>>>>>> REL_16_9
 		{
 			/*
 			 * Okay to reuse the hash table; needn't rescan inner, either.
@@ -1913,13 +1826,9 @@ ExecReScanHashJoin(HashJoinState *node)
 		else
 		{
 			/* must destroy and rebuild hash table */
-<<<<<<< HEAD
 			if (!node->hj_HashTable->eagerlyReleased)
 			{
-				HashState  *hashNode = castNode(HashState, innerPlanState(node));
-=======
-			HashState  *hashNode = castNode(HashState, innerPlan);
->>>>>>> REL_16_9
+				HashState  *hashNode = castNode(HashState, innerPlan);
 
 				Assert(hashNode->hashtable == node->hj_HashTable);
 				/* accumulate stats from old hash table, if wanted */
