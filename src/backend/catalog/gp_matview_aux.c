@@ -338,7 +338,8 @@ SetRelativeMatviewAuxStatus(Oid relid, char status, char direction)
 	/*
 	 * Do a quick check if relation has relative materialized views.
 	 */
-	if (get_rel_relmvrefcount(relid) <= 0)
+	if (get_rel_relmvrefcount(relid) <= 0 &&
+		!get_rel_relispartition(relid))
 		return;
 
 	mvauxRel = table_open(GpMatviewAuxId, RowExclusiveLock);
