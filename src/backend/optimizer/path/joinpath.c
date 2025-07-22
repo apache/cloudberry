@@ -3,13 +3,9 @@
  * joinpath.c
  *	  Routines to find all possible paths for processing a set of joins
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -30,12 +26,9 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
-<<<<<<< HEAD
 #include "optimizer/tlist.h"
 #include "utils/lsyscache.h"
-=======
 #include "optimizer/restrictinfo.h"
->>>>>>> REL_16_9
 #include "utils/typcache.h"
 #include "utils/guc.h"
 
@@ -397,7 +390,6 @@ add_paths_to_join_relation(PlannerInfo *root,
 	 * permissions as, give the FDW a chance to push down joins.
 	 */
 	if (joinrel->fdwroutine &&
-<<<<<<< HEAD
 		joinrel->fdwroutine->GetForeignJoinPaths)
 	{
 		List *foreignRestrictlist = NIL;
@@ -432,10 +424,6 @@ add_paths_to_join_relation(PlannerInfo *root,
 
 		extra.restrictlist = foreignRestrictlist;
 
-=======
-		joinrel->fdwroutine->GetForeignJoinPaths &&
-		consider_join_pushdown)
->>>>>>> REL_16_9
 		joinrel->fdwroutine->GetForeignJoinPaths(root, joinrel,
 												 outerrel, innerrel,
 												 jointype, &extra);
@@ -515,11 +503,6 @@ allow_star_schema_join(PlannerInfo *root,
  * to use a clause involving a Var with nonempty varnullingrels at
  * a join level where that value isn't yet computable.
  *
-<<<<<<< HEAD
- * Additionally we also collect the outer exprs and the hash operators for
- * each parameter to innerrel.  These set in 'param_exprs', 'operators' and
- * 'binary_mode' when we return true.
-=======
  * In practice, this test never finds a problem because earlier join order
  * restrictions prevent us from attempting a join that would cause a problem.
  * (That's unsurprising, because the code worked before we ever added
@@ -575,7 +558,6 @@ have_unsafe_outer_join_ref(PlannerInfo *root,
  * These are returned in parallel lists in *param_exprs and *operators.
  * We also set *binary_mode to indicate whether strict binary matching is
  * required.
->>>>>>> REL_16_9
  */
 static bool
 paraminfo_get_equal_hashops(PlannerInfo *root, ParamPathInfo *param_info,
@@ -602,10 +584,6 @@ paraminfo_get_equal_hashops(PlannerInfo *root, ParamPathInfo *param_info,
 			Node	   *expr;
 			Oid			hasheqoperator;
 
-<<<<<<< HEAD
-			/* can't use a memoize node without a valid hash equals operator */
-			if (!OidIsValid(rinfo->hasheqoperator) ||
-=======
 			opexpr = (OpExpr *) rinfo->clause;
 
 			/*
@@ -613,7 +591,6 @@ paraminfo_get_equal_hashops(PlannerInfo *root, ParamPathInfo *param_info,
 			 * with 2 args.
 			 */
 			if (!IsA(opexpr, OpExpr) || list_length(opexpr->args) != 2 ||
->>>>>>> REL_16_9
 				!clause_sides_match_join(rinfo, outerrel, innerrel))
 			{
 				list_free(*operators);
@@ -676,11 +653,7 @@ paraminfo_get_equal_hashops(PlannerInfo *root, ParamPathInfo *param_info,
 		typentry = lookup_type_cache(exprType(expr),
 									 TYPECACHE_HASH_PROC | TYPECACHE_EQ_OPR);
 
-<<<<<<< HEAD
-		/* can't use a memoize node without a valid hash equals operator */
-=======
 		/* can't use memoize without a valid hash proc and equals operator */
->>>>>>> REL_16_9
 		if (!OidIsValid(typentry->hash_proc) || !OidIsValid(typentry->eq_opr))
 		{
 			list_free(*operators);
@@ -1563,11 +1536,7 @@ sort_inner_and_outer(PlannerInfo *root,
 
 	foreach(l, all_pathkeys)
 	{
-<<<<<<< HEAD
-		PathKey	   *front_pathkey = (PathKey *) lfirst(l);
-=======
 		PathKey    *front_pathkey = (PathKey *) lfirst(l);
->>>>>>> REL_16_9
 		List	   *cur_mergeclauses;
 		List	   *outerkeys;
 		List	   *innerkeys;
@@ -2281,11 +2250,7 @@ consider_parallel_nestloop(PlannerInfo *root,
 									 extra);
 			if (mpath != NULL)
 				try_partial_nestloop_path(root, joinrel, outerpath, mpath,
-<<<<<<< HEAD
 										  pathkeys, jointype, save_jointype, extra);
-=======
-										  pathkeys, jointype, extra);
->>>>>>> REL_16_9
 		}
 	}
 }

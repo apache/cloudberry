@@ -3,13 +3,10 @@
  * joinrels.c
  *	  Routines to determine which relations should be joined
  *
-<<<<<<< HEAD
+
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -781,14 +778,9 @@ make_join_relation(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2)
 	 * Find or build the join RelOptInfo, and compute the restrictlist that
 	 * goes with this particular joining.
 	 */
-<<<<<<< HEAD
-	joinrel = build_join_rel(root, joinrelids, rel1, rel2, sjinfo,
-							 &restrictlist, NULL);
-=======
 	joinrel = build_join_rel(root, joinrelids, rel1, rel2,
 							 sjinfo, pushed_down_joins,
-							 &restrictlist);
->>>>>>> REL_16_9
+							 &restrictlist, NULL);
 
 	/*
 	 * If we've already proven this join is empty, we needn't consider any

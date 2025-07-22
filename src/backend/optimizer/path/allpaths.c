@@ -3,13 +3,9 @@
  * allpaths.c
  *	  Routines to find possible search paths for processing a query
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -2276,11 +2272,8 @@ generate_orderedappend_paths(PlannerInfo *root, RelOptInfo *rel,
 														  NULL,
 														  0,
 														  false,
-<<<<<<< HEAD
 														  -1),
 						root);
-=======
-														  -1));
 
 			if (fractional_subpaths)
 				add_path(rel, (Path *) create_append_path(root,
@@ -2291,8 +2284,8 @@ generate_orderedappend_paths(PlannerInfo *root, RelOptInfo *rel,
 														  NULL,
 														  0,
 														  false,
-														  -1));
->>>>>>> REL_16_9
+														  -1),
+						 root);
 		}
 		else
 		{
@@ -2308,19 +2301,16 @@ generate_orderedappend_paths(PlannerInfo *root, RelOptInfo *rel,
 																rel,
 																total_subpaths,
 																pathkeys,
-<<<<<<< HEAD
 																NULL),
 						root);
-=======
-																NULL));
 
 			if (fractional_subpaths)
 				add_path(rel, (Path *) create_merge_append_path(root,
 																rel,
 																fractional_subpaths,
 																pathkeys,
-																NULL));
->>>>>>> REL_16_9
+																NULL),
+						 root);
 		}
 	}
 }
@@ -2854,6 +2844,7 @@ static void
 set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 					  Index rti, RangeTblEntry *rte)
 {
+	Query	   *parse = root->parse;
 	Query	   *subquery = rte->subquery;
 	bool		trivial_pathtarget;
 	Relids		required_outer;
@@ -2902,64 +2893,15 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 
 	/* if IS_SINGLENODE then role must be GP_ROLE_UTILITY */
 	forceDistRand = rte->forceDistRandom && Gp_role != GP_ROLE_UTILITY;
+
 	/* CDB: Could be a preplanned subquery from window_planner. */
-	if (rte->subquery_root == NULL)
+	if (rel->baserestrictinfo != NIL &&
+		subquery_is_pushdown_safe(subquery, subquery, &safetyInfo))
 	{
-		/*
-		 * push down quals if possible. Note subquery might be
-		 * different pointer from original one.
-		 */
-		subquery = push_down_restrict(root, rel, rte, rti, subquery);
+		/* OK to consider pushing down individual quals */
+		List	   *upperrestrictlist = NIL;
+		ListCell   *l;
 
-<<<<<<< HEAD
-		/*
-		 * The upper query might not use all the subquery's output columns; if
-		 * not, we can simplify.
-		 */
-		remove_unused_subquery_outputs(subquery, rel);
-
-		/*
-		 * We can safely pass the outer tuple_fraction down to the subquery if the
-		 * outer level has no joining, aggregation, or sorting to do. Otherwise
-		 * we'd better tell the subquery to plan for full retrieval. (XXX This
-		 * could probably be made more intelligent ...)
-		 */
-		if (subquery->hasAggs ||
-			subquery->groupClause ||
-			subquery->groupingSets ||
-			subquery->havingQual ||
-			subquery->distinctClause ||
-			subquery->sortClause ||
-			has_multiple_baserels(root))
-			tuple_fraction = 0.0;	/* default case */
-		else
-			tuple_fraction = root->tuple_fraction;
-
-		/* Generate a subroot and Paths for the subquery */
-		config = CopyPlannerConfig(root->config);
-		config->honor_order_by = false;		/* partial order is enough */
-
-		/*
-		 * CDB: if this subquery is the inner plan of a lateral
-		 * join and if it contains a limit, we can only gather
-		 * it to singleQE and materialize the data because we
-		 * cannot pass params across motion.
-		 */
-		if ((!bms_is_empty(required_outer)) &&
-			is_query_contain_limit_groupby(subquery))
-			config->force_singleQE = true;
-
-		/*
-		 * Cloudberry specific behavior:
-		 * config->may_rescan is used to guide if
-		 * we should add materialize path over motion
-		 * in the left tree of a join.
-		 */
-		config->may_rescan = config->may_rescan || !bms_is_empty(required_outer);
-
-		/* plan_params should not be in use in current query level */
-		Assert(root->plan_params == NIL);
-=======
 		foreach(l, rel->baserestrictinfo)
 		{
 			RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
@@ -3034,18 +2976,35 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		tuple_fraction = 0.0;	/* default case */
 	else
 		tuple_fraction = root->tuple_fraction;
->>>>>>> REL_16_9
 
-		rel->subroot = subquery_planner(root->glob, subquery,
-									root,
-									false, tuple_fraction,
-									config);
-	}
-	else
-	{
-		/* This is a preplanned sub-query RTE. */
-		rel->subroot = rte->subquery_root;
-	}
+
+	/* Generate a subroot and Paths for the subquery */
+	config = CopyPlannerConfig(root->config);
+	config->honor_order_by = false;		/* partial order is enough */
+
+	/*
+	 * CDB: if this subquery is the inner plan of a lateral
+	 * join and if it contains a limit, we can only gather
+	 * it to singleQE and materialize the data because we
+	 * cannot pass params across motion.
+	 */
+	if ((!bms_is_empty(required_outer)) &&
+		is_query_contain_limit_groupby(subquery))
+		config->force_singleQE = true;
+
+	/*
+	 * Cloudberry specific behavior:
+	 * config->may_rescan is used to guide if
+	 * we should add materialize path over motion
+	 * in the left tree of a join.
+	 */
+	config->may_rescan = config->may_rescan || !bms_is_empty(required_outer);
+
+
+	rel->subroot = subquery_planner(root->glob, subquery,
+								root,
+								false, tuple_fraction,
+								config);
 
 	/* Isolate the params needed by this specific subplan */
 	rel->subplan_params = root->plan_params;
@@ -3139,14 +3098,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 												(Node *) l);
 
 		/* Generate outer path using this subpath */
-<<<<<<< HEAD
 		add_path(rel, path, root);
-=======
-		add_path(rel, (Path *)
-				 create_subqueryscan_path(root, rel, subpath,
-										  trivial_pathtarget,
-										  pathkeys, required_outer));
->>>>>>> REL_16_9
 	}
 
 	/* If outer rel allows parallelism, do same for partial paths. */
@@ -3177,13 +3129,8 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 												 make_tlist_from_pathtarget(subpath->pathtarget));
 
 			/* Generate outer path using this subpath */
-<<<<<<< HEAD
 			path = (Path *) create_subqueryscan_path(root, rel, subpath,
-=======
-			add_partial_path(rel, (Path *)
-							 create_subqueryscan_path(root, rel, subpath,
-													  trivial_pathtarget,
->>>>>>> REL_16_9
+													 trivial_pathtarget,
 													  pathkeys,
 													  locus,
 													  required_outer);
@@ -3441,7 +3388,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	}
 	if (lc == NULL)				/* shouldn't happen */
 		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
-<<<<<<< HEAD
 
 	Assert(IsA(cte->ctequery, Query));
 	/*
@@ -3623,14 +3569,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	}
 
 	pathkeys = subroot->query_pathkeys;
-=======
-	if (ndx >= list_length(cteroot->cte_plan_ids))
-		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
-	plan_id = list_nth_int(cteroot->cte_plan_ids, ndx);
-	if (plan_id <= 0)
-		elog(ERROR, "no plan was made for CTE \"%s\"", rte->ctename);
-	cteplan = (Plan *) list_nth(root->glob->subplans, plan_id - 1);
->>>>>>> REL_16_9
 
 	/* Mark rel with estimated output rows, width, etc */
 	{
@@ -4039,35 +3977,12 @@ generate_useful_gather_paths(PlannerInfo *root, RelOptInfo *rel, bool override_r
 			 */
 			if (presorted_keys == 0 || !enable_incremental_sort)
 			{
-<<<<<<< HEAD
-				Path	   *tmp;
-
-				tmp = (Path *) create_sort_path(root,
-												rel,
-												subpath,
-												useful_pathkeys,
-												-1.0);
-
-				rows = tmp->rows * tmp->parallel_workers;
-
-				path = create_gather_merge_path(root, rel,
-												tmp,
-												rel->reltarget,
-												tmp->pathkeys,
-												NULL,
-												rowsp);
-
-				add_path(rel, &path->path, root);
-
-				/* Fall through */
-=======
 				subpath = (Path *) create_sort_path(root,
 													rel,
 													subpath,
 													useful_pathkeys,
 													-1.0);
 				rows = subpath->rows * subpath->parallel_workers;
->>>>>>> REL_16_9
 			}
 			else
 				subpath = (Path *) create_incremental_sort_path(root,
@@ -4083,41 +3998,7 @@ generate_useful_gather_paths(PlannerInfo *root, RelOptInfo *rel, bool override_r
 											NULL,
 											rowsp);
 
-<<<<<<< HEAD
-			/*
-			 * Consider incremental sort, but only when the subpath is already
-			 * partially sorted on a pathkey prefix.
-			 */
-			if (enable_incremental_sort && presorted_keys > 0)
-			{
-				Path	   *tmp;
-
-				/*
-				 * We should have already excluded pathkeys of length 1
-				 * because then presorted_keys > 0 would imply is_sorted was
-				 * true.
-				 */
-				Assert(list_length(useful_pathkeys) != 1);
-
-				tmp = (Path *) create_incremental_sort_path(root,
-															rel,
-															subpath,
-															useful_pathkeys,
-															presorted_keys,
-															-1);
-
-				path = create_gather_merge_path(root, rel,
-												tmp,
-												rel->reltarget,
-												tmp->pathkeys,
-												NULL,
-												rowsp);
-
-				add_path(rel, &path->path, root);
-			}
-=======
-			add_path(rel, &path->path);
->>>>>>> REL_16_9
+			add_path(rel, &path->path, root);
 		}
 	}
 }
@@ -4416,12 +4297,8 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels)
 			 * partial paths.  We'll do the same for the topmost scan/join rel
 			 * once we know the final targetlist (see grouping_planner).
 			 */
-<<<<<<< HEAD
 #if 0
-			if (lev < levels_needed)
-=======
 			if (!bms_equal(rel->relids, root->all_query_rels))
->>>>>>> REL_16_9
 				generate_useful_gather_paths(root, rel, false);
 #endif
 

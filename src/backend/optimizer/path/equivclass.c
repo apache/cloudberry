@@ -725,19 +725,15 @@ get_eclass_for_sort_expr(PlannerInfo *root,
 		{
 			RelOptInfo *rel = root->simple_rel_array[i];
 
-<<<<<<< HEAD
-			Assert(rel->reloptkind == RELOPT_BASEREL ||
-				   rel->reloptkind == RELOPT_DEADREL ||
-				   rel->reloptkind == RELOPT_OTHER_MEMBER_REL);
-=======
 			if (rel == NULL)	/* must be an outer join */
 			{
 				Assert(bms_is_member(i, root->outer_join_rels));
 				continue;
 			}
 
-			Assert(rel->reloptkind == RELOPT_BASEREL);
->>>>>>> REL_16_9
+			Assert(rel->reloptkind == RELOPT_BASEREL ||
+				   rel->reloptkind == RELOPT_DEADREL ||
+				   rel->reloptkind == RELOPT_OTHER_MEMBER_REL);
 
 			rel->eclass_indexes = bms_add_member(rel->eclass_indexes,
 												 ec_index);

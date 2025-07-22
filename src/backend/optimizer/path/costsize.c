@@ -60,13 +60,9 @@
  * values.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -157,11 +153,7 @@ bool		enable_hashagg_disk = true;
 bool		enable_nestloop = false;
 bool		enable_material = true;
 bool		enable_memoize = true;
-<<<<<<< HEAD
 bool		enable_mergejoin = false;
-=======
-bool		enable_mergejoin = true;
->>>>>>> REL_16_9
 bool		enable_hashjoin = true;
 bool		enable_gathermerge = true;
 bool		enable_partitionwise_join = false;
@@ -206,11 +198,7 @@ static Selectivity get_foreign_key_join_selectivity(PlannerInfo *root,
 													List **restrictlist);
 static Cost append_nonpartial_cost(List *subpaths, int numpaths,
 								   int parallel_workers);
-<<<<<<< HEAD
-=======
-static void set_rel_width(PlannerInfo *root, RelOptInfo *rel);
 static int32 get_expr_width(PlannerInfo *root, const Node *expr);
->>>>>>> REL_16_9
 static double relation_byte_size(double tuples, int width);
 static double page_size(double tuples, int width);
 static double get_parallel_divisor(Path *path);
@@ -314,7 +302,6 @@ adjust_reloptinfo(RelOptInfoPerSegment *basescan, RelOptInfo *baserel_orig,
 }
 
 /*
-<<<<<<< HEAD
  * ADJUST_BASESCAN initializes the proxy structs for RelOptInfo and ParamPathInfo,
  * adjusting them by # of segments as needed.
  */
@@ -324,7 +311,8 @@ adjust_reloptinfo(RelOptInfoPerSegment *basescan, RelOptInfo *baserel_orig,
 	RelOptInfoPerSegment *baserel = &baserel_adjusted; \
 	ParamPathInfoPerSegment *param_info = adjust_reloptinfo(&baserel_adjusted, baserel_orig, \
 															&param_info_adjusted, param_info_orig)
-=======
+
+/*
  * clamp_cardinality_to_long
  *		Cast a Cardinality value to a sane long value.
  */
@@ -349,7 +337,6 @@ clamp_cardinality_to_long(Cardinality x)
 	 */
 	return (x < (double) LONG_MAX) ? (long) x : LONG_MAX;
 }
->>>>>>> REL_16_9
 
 
 /*
@@ -1586,7 +1573,6 @@ cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_SUBQUERY);
 
-<<<<<<< HEAD
 	/* Adjust row count if this runs in multiple segments and parallel model */
 	if (CdbPathLocus_IsPartitioned(path->path.locus))
 	{
@@ -1595,23 +1581,16 @@ cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 	else
 		numsegments = 1;
 
-	/* Mark the path with the correct row estimate */
-=======
 	/*
 	 * We compute the rowcount estimate as the subplan's estimate times the
 	 * selectivity of relevant restriction clauses.  In simple cases this will
 	 * come out the same as baserel->rows; but when dealing with parallelized
 	 * paths we must do it like this to get the right answer.
 	 */
->>>>>>> REL_16_9
 	if (param_info)
 		qpquals = list_concat_copy(param_info->ppi_clauses,
 								   baserel->baserestrictinfo);
 	else
-<<<<<<< HEAD
-		path->path.rows = baserel->rows;
-	path->path.rows = clamp_row_est(path->path.rows / numsegments);
-=======
 		qpquals = baserel->baserestrictinfo;
 
 	path->path.rows = clamp_row_est(path->subpath->rows *
@@ -1620,7 +1599,6 @@ cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 														   0,
 														   JOIN_INNER,
 														   NULL));
->>>>>>> REL_16_9
 
 	/*
 	 * Cost of path is cost of evaluating the subplan, plus cost of evaluating
@@ -1651,11 +1629,7 @@ cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 
 	startup_cost = qpqual_cost.startup;
 	cpu_per_tuple = cpu_tuple_cost + qpqual_cost.per_tuple;
-<<<<<<< HEAD
-	run_cost = cpu_per_tuple * clamp_row_est(baserel->tuples / numsegments);
-=======
-	run_cost = cpu_per_tuple * path->subpath->rows;
->>>>>>> REL_16_9
+	run_cost = cpu_per_tuple * clamp_row_est(path->subpath->rows / numsegments);
 
 	/* tlist eval costs are paid per output row, not per tuple scanned */
 	startup_cost += path->path.pathtarget->cost.startup;
@@ -2703,10 +2677,7 @@ cost_memoize_rescan(PlannerInfo *root, MemoizePath *mpath,
 					Cost *rescan_startup_cost, Cost *rescan_total_cost)
 {
 	EstimationInfo estinfo;
-<<<<<<< HEAD
-=======
 	ListCell   *lc;
->>>>>>> REL_16_9
 	Cost		input_startup_cost = mpath->subpath->startup_cost;
 	Cost		input_total_cost = mpath->subpath->total_cost;
 	double		tuples = mpath->subpath->rows;
@@ -3366,12 +3337,8 @@ final_cost_nestloop(PlannerInfo *root, NestPath *path,
 	if (path->jpath.path.param_info)
 		path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
 	else
-<<<<<<< HEAD
-		path->path.rows = path->path.parent->rows;
-	path->path.rows /= numsegments;
-=======
 		path->jpath.path.rows = path->jpath.path.parent->rows;
->>>>>>> REL_16_9
+	path->jpath.path.rows /= numsegments;
 
 	/* For partial paths, scale row estimate. */
 	if (path->jpath.path.parallel_workers > 0)
@@ -4248,10 +4215,6 @@ final_cost_hashjoin(PlannerInfo *root, HashPath *path,
 	Cost		run_cost = workspace->run_cost;
 	int			numbuckets = workspace->numbuckets;
 	int			numbatches = workspace->numbatches;
-<<<<<<< HEAD
-=======
-	Cost		cpu_per_tuple;
->>>>>>> REL_16_9
 	QualCost	hash_qual_cost;
 	QualCost	qp_qual_cost;
 	double		hashjointuples;
@@ -6745,63 +6708,6 @@ set_pathtarget_cost_width(PlannerInfo *root, PathTarget *target)
 		/* For non-Vars, account for evaluation cost */
 		if (!IsA(node, Var))
 		{
-<<<<<<< HEAD
-			Var		   *var = (Var *) node;
-			int32		item_width;
-
-			/* We should not see any upper-level Vars here */
-			Assert(var->varlevelsup == 0);
-
-			/* Try to get data from RelOptInfo cache */
-			if (var->varno < root->simple_rel_array_size)
-			{
-				RelOptInfo *rel = root->simple_rel_array[var->varno];
-
-				if (rel != NULL &&
-					var->varattno >= rel->min_attr &&
-					var->varattno <= rel->max_attr)
-				{
-					int			ndx = var->varattno - rel->min_attr;
-
-					if (rel->attr_widths[ndx] > 0)
-					{
-						tuple_width += rel->attr_widths[ndx];
-						continue;
-					}
-				}
-			}
-
-			/*
-			 * No cached data available, so estimate using just the type info.
-			 */
-			item_width = get_typavgwidth(var->vartype, var->vartypmod);
-			Assert(item_width > 0);
-			tuple_width += item_width;
-		}
-		else if (IsA(node, Aggref))
-		{
-			int32		item_width;
-
-			/*
-			 * If the target is evaluated by AggPath, it'll care of cost
-			 * estimate. If the target is above AggPath (typically target of a
-			 * join relation that contains grouped relation), the cost of
-			 * Aggref should not be accounted for again.
-			 *
-			 * On the other hand, width is always needed.
-			 */
-			item_width = get_typavgwidth(exprType(node), exprTypmod(node));
-			Assert(item_width > 0);
-			tuple_width += item_width;
-		}
-		else
-		{
-			/*
-			 * Handle general expressions using type info.
-			 */
-			int32		item_width;
-=======
->>>>>>> REL_16_9
 			QualCost	cost;
 
 			cost_qual_eval_node(&cost, node, root);
