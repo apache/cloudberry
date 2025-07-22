@@ -100,7 +100,10 @@ static TupleTableSlot *ExecPrepareTupleRouting(ModifyTableState *mtstate,
 											   ResultRelInfo **partRelInfo);
 
 static void
-send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids);
+send_subtag(StringInfoData *buf,
+			ExtendProtocolSubTag subtag,
+			Bitmapset* relids,
+			bool hi);
 
 static void
 notify_modified_relations_to_QD(ModifyTableState *node);
@@ -109,7 +112,7 @@ static void
 notify_modified_relations_local(ModifyTableState *node);
 
 static void
-epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids);
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids, bool hi);
 
 /*
  * Verify that the tuples to be produced by INSERT match the
@@ -1052,8 +1055,15 @@ ExecInsert(ModifyTableState *mtstate,
 
 	if (resultRelationDesc->rd_rel->relispartition)
 	{
-		mtstate->mt_leaf_relids_inserted =
-			bms_add_member(mtstate->mt_leaf_relids_inserted, RelationGetRelid(resultRelationDesc));
+		Oid relid = RelationGetRelid(resultRelationDesc);
+
+		if (relid <= PG_INT32_MAX)
+			mtstate->mt_leaf_relids_inserted_lo = bms_add_member(mtstate->mt_leaf_relids_inserted_lo, relid);
+		else
+		{
+			relid &= PG_INT32_MAX;
+			mtstate->mt_leaf_relids_inserted_hi = bms_add_member(mtstate->mt_leaf_relids_inserted_hi, relid);
+		}
 		mtstate->has_leaf_changed = true;
 	}
 
@@ -1520,9 +1530,15 @@ ldelete:;
 
 	if (resultRelationDesc->rd_rel->relispartition)
 	{
+		Oid relid = RelationGetRelid(resultRelationDesc);
 
-		mtstate->mt_leaf_relids_deleted =
-			bms_add_member(mtstate->mt_leaf_relids_deleted, RelationGetRelid(resultRelationDesc));
+		if (relid <= PG_INT32_MAX)
+			mtstate->mt_leaf_relids_deleted_lo = bms_add_member(mtstate->mt_leaf_relids_deleted_lo, relid);
+		else
+		{
+			relid &= PG_INT32_MAX;
+			mtstate->mt_leaf_relids_deleted_hi = bms_add_member(mtstate->mt_leaf_relids_deleted_hi, relid);
+		}
 		mtstate->has_leaf_changed = true;
 	}
 
@@ -2170,8 +2186,15 @@ lreplace:;
 
 	if (resultRelationDesc->rd_rel->relispartition)
 	{
-		mtstate->mt_leaf_relids_updated =
-			bms_add_member(mtstate->mt_leaf_relids_updated, RelationGetRelid(resultRelationDesc));
+		Oid relid = RelationGetRelid(resultRelationDesc);
+
+		if (relid <= PG_INT32_MAX)
+			mtstate->mt_leaf_relids_updated_lo = bms_add_member(mtstate->mt_leaf_relids_updated_lo, relid);
+		else
+		{
+			relid &= PG_INT32_MAX;
+			mtstate->mt_leaf_relids_updated_hi = bms_add_member(mtstate->mt_leaf_relids_updated_hi, relid);
+		}
 		mtstate->has_leaf_changed = true;
 	}
 
@@ -3100,9 +3123,12 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	mtstate->ps.state = estate;
 	mtstate->ps.ExecProcNode = ExecModifyTable;
 
-	mtstate->mt_leaf_relids_inserted = NULL;
-	mtstate->mt_leaf_relids_updated = NULL;
-	mtstate->mt_leaf_relids_deleted = NULL;
+	mtstate->mt_leaf_relids_inserted_hi = NULL;
+	mtstate->mt_leaf_relids_updated_hi = NULL;
+	mtstate->mt_leaf_relids_deleted_hi = NULL;
+	mtstate->mt_leaf_relids_inserted_lo = NULL;
+	mtstate->mt_leaf_relids_updated_lo = NULL;
+	mtstate->mt_leaf_relids_deleted_lo = NULL;
 	mtstate->has_leaf_changed = false;
 
 	mtstate->operation = operation;
@@ -3766,14 +3792,23 @@ notify_modified_relations_to_QD(ModifyTableState *node)
 	StringInfoData buf;
 	pq_beginmessage(&buf, PQExtendProtocol);
 
-	if (!bms_is_empty(node->mt_leaf_relids_inserted))
-		send_subtag(&buf, EP_TAG_I, node->mt_leaf_relids_inserted);
+	if (!bms_is_empty(node->mt_leaf_relids_inserted_lo))
+		send_subtag(&buf, EP_TAG_I, node->mt_leaf_relids_inserted_lo, false);
 
-	if (!bms_is_empty(node->mt_leaf_relids_updated))
-		send_subtag(&buf, EP_TAG_U, node->mt_leaf_relids_updated);
+	if (!bms_is_empty(node->mt_leaf_relids_inserted_hi))
+		send_subtag(&buf, EP_TAG_I, node->mt_leaf_relids_inserted_hi, true);
 
-	if (!bms_is_empty(node->mt_leaf_relids_deleted))
-		send_subtag(&buf, EP_TAG_D, node->mt_leaf_relids_deleted);
+	if (!bms_is_empty(node->mt_leaf_relids_updated_lo))
+		send_subtag(&buf, EP_TAG_U, node->mt_leaf_relids_updated_lo, false);
+
+	if (!bms_is_empty(node->mt_leaf_relids_updated_hi))
+		send_subtag(&buf, EP_TAG_U, node->mt_leaf_relids_updated_hi, true);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted_lo))
+		send_subtag(&buf, EP_TAG_D, node->mt_leaf_relids_deleted_lo, false);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted_hi))
+		send_subtag(&buf, EP_TAG_D, node->mt_leaf_relids_deleted_hi, true);
 
 	pq_sendint32(&buf, EP_TAG_MAX); /* Finish this run. */
 	pq_endmessage(&buf);
@@ -3785,9 +3820,13 @@ notify_modified_relations_to_QD(ModifyTableState *node)
  * Send the data of subtag, the format is:
  * 	subtag + length + data
  * while length is the length of data followed.
+ * 
+ * When hi is true, it indicates that the bitmaps store Oids that exceed
+ * the maximum value of an Int. In this case, we recover these Oids
+ * to their correct values.
  */
 static void
-send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
+send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids, bool hi)
 {
 
 	bytea	*res;
@@ -3795,11 +3834,12 @@ send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
 	char	*ptr;
 	int		rcount;
 	int		relid = -1;
+	Oid		relid_hi;
 
 	pq_sendint32(buf, subtag); /* subtag */
 
 	rcount = bms_num_members(relids);
-	rlen = sizeof(int)/* count of relids */ + sizeof(int) * rcount;
+	rlen = sizeof(int)/* count of relids */ + sizeof(Oid) * rcount;
 
 	pq_sendint32(buf, rlen); /* length */
 
@@ -3808,10 +3848,18 @@ send_subtag(StringInfoData *buf, ExtendProtocolSubTag subtag, Bitmapset* relids)
 
 	memcpy(ptr, &rcount, sizeof(int));
 	ptr += sizeof(int);
+
 	while ((relid = bms_next_member(relids, relid)) >= 0)
 	{
-		memcpy(ptr, &relid, sizeof(int));
-		ptr += sizeof(int);
+		if (hi)
+		{
+			relid_hi = (Oid)relid |  0x80000000;
+			memcpy(ptr, &relid_hi, sizeof(Oid));
+		}
+		else
+			memcpy(ptr, &relid, sizeof(Oid));
+
+		ptr += sizeof(Oid);
 	}
 
 	SET_VARSIZE(res, rlen + VARHDRSZ);
@@ -3830,14 +3878,23 @@ notify_modified_relations_local(ModifyTableState *node)
 {
 	Assert(epd);
 
-	if (!bms_is_empty(node->mt_leaf_relids_inserted))
-		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted);
+	if (!bms_is_empty(node->mt_leaf_relids_inserted_lo))
+		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted_lo, false);
 
-	if (!bms_is_empty(node->mt_leaf_relids_updated))
-		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated);
+	if (!bms_is_empty(node->mt_leaf_relids_inserted_hi))
+		epd_add_subtag_data(EP_TAG_I, node->mt_leaf_relids_inserted_hi, true);
 
-	if (!bms_is_empty(node->mt_leaf_relids_deleted))
-		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted);
+	if (!bms_is_empty(node->mt_leaf_relids_updated_lo))
+		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated_lo, false);
+
+	if (!bms_is_empty(node->mt_leaf_relids_updated_hi))
+		epd_add_subtag_data(EP_TAG_U, node->mt_leaf_relids_updated_hi, true);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted_lo))
+		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted_lo, false);
+
+	if (!bms_is_empty(node->mt_leaf_relids_deleted_hi))
+		epd_add_subtag_data(EP_TAG_D, node->mt_leaf_relids_deleted_hi, true);
 }
 
 /*
@@ -3849,7 +3906,7 @@ notify_modified_relations_local(ModifyTableState *node)
  * are performed under the TopTransactionContext to ensure proper memory management.
  */
 static void
-epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset * relids)
+epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset *relids, bool hi)
 {
 	MemoryContext 	oldctx;
 	StringInfo		buf;
@@ -3858,18 +3915,27 @@ epd_add_subtag_data(ExtendProtocolSubTag subtag, Bitmapset * relids)
 	char	*ptr;
 	int		rcount;
 	int		relid = -1;
+	Oid		relid_hi;
 
 	rcount = bms_num_members(relids);
-	rlen = sizeof(int) /* count of relids */ + sizeof(int) * rcount;
+	rlen = sizeof(int) /* count of relids */ + sizeof(Oid) * rcount;
 	res = palloc(rlen + VARHDRSZ);
 	ptr = VARDATA(res);
 
 	memcpy(ptr, &rcount, sizeof(int));
 	ptr += sizeof(int);
+
 	while ((relid = bms_next_member(relids, relid)) >= 0)
 	{
-		memcpy(ptr, &relid, sizeof(int));
-		ptr += sizeof(int);
+		if (hi)
+		{
+			relid_hi = (Oid)relid |  0x80000000;
+			memcpy(ptr, &relid_hi, sizeof(Oid));
+		}
+		else
+			memcpy(ptr, &relid, sizeof(Oid));
+
+		ptr += sizeof(Oid);
 	}
 	SET_VARSIZE(res, rlen + VARHDRSZ);
 
