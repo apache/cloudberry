@@ -374,7 +374,7 @@ Apache Cloudberry includes codes from
       dependencies/yyjson
       see licenses/LICENSE-yyjson.txt
 
-      contrib/pax_storage/src/cpp/contrib/cpp-stub
+      contrib/pax_storage/src/cpp/cpp-stub
       see licenses/LICENSE-cpp-stub.txt
 
       contrib/pax_storage/src/cpp/contrib/tabulate
