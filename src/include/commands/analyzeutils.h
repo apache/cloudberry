@@ -61,4 +61,8 @@ extern AttrNumber fetch_leaf_attnum(Oid leafRelid, const char* attname);
 extern HeapTuple fetch_leaf_att_stats(Oid leafRelid, AttrNumber leafAttNum);
 extern bool leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel);
 
+extern bool aggregate_leaf_partition_ndvbs(int nParts,
+								HeapTuple *heaptupleStats,
+								float4 *relTuples,
+								float8 *result);
 #endif  /* ANALYZEUTILS_H */
