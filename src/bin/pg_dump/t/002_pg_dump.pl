@@ -2200,6 +2200,27 @@ my %tests = (
 		unlike => { exclude_dump_test_schema => 1, },
 	},
 
+	'CREATE APPEND OPTIMIZED ao_table' => {
+		create_order => 19,
+		create_sql	=> 'CREATE TABLE dump_test.test_table_ao(a integer, b text)
+						WITH (appendonly = true, compresstype = zlib, compresslevel = 1);',
+		regexp => qr/^
+			\QCREATE TABLE dump_test.test_table_ao (\E\n
+			\s+\Qa integer,\E\n
+			\s+\Qb text\E\n
+			\QWITH (appendonly = true, orientation = column, compresstype = zlib, compresslevel = 1);\E\n/xm,
+		like => {
+			%full_runs,
+			%dump_test_schema_runs,
+			only_dump_test_table => 1,
+			section_pre_data     => 1,
+		},
+		unlike => {
+			exclude_dump_test_schema => 1,
+			exclude_test_table       => 1,
+		},
+	},
+
 	'CREATE POLICY p1 ON test_table' => {
 		create_order => 22,
 		create_sql   => 'CREATE POLICY p1 ON dump_test.test_table

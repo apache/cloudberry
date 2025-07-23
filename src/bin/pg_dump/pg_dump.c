@@ -18111,13 +18111,30 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 			actual_atts = 0;
 
 		if (nonemptyReloptions(tbinfo->reloptions) ||
-			nonemptyReloptions(tbinfo->toast_reloptions))
+			nonemptyReloptions(tbinfo->toast_reloptions) ||
+			(tbinfo->amoid &&
+			(tbinfo->amoid == AO_ROW_TABLE_AM_OID ||
+			tbinfo->amoid == AO_COLUMN_TABLE_AM_OID)))
 		{
 			bool		addcomma = false;
 
 			appendPQExpBufferStr(q, "\nWITH (");
+			if (tbinfo->amoid && tbinfo->amoid == AO_ROW_TABLE_AM_OID)
+			{
+				addcomma = true;
+				appendPQExpBufferStr(q, "appendonly = true");
+			}
+			else if (tbinfo->amoid && tbinfo->amoid == AO_COLUMN_TABLE_AM_OID)
+			{
+				addcomma = true;
+				appendPQExpBufferStr(q, "appendonly = true, orientation = column");
+			}
+
 			if (nonemptyReloptions(tbinfo->reloptions))
 			{
+				if (addcomma)
+					appendPQExpBufferStr(q, ", ");
+
 				addcomma = true;
 				appendReloptionsArrayAH(q, tbinfo->reloptions, "", fout);
 			}
