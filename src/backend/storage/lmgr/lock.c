@@ -958,6 +958,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 				else
 					ereport(FATAL,
 							(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+							 errprintstack(true),
 							 errmsg(WRITER_IS_MISSING_MSG),
 							 errdetail("lock [%u,%u] %s %d. "
 									   "Probably because writer gang is gone somehow. "
