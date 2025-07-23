@@ -90,7 +90,7 @@ CPartPruneStepsBuilder::CreatePartPruneInfoForOneLevel(CDXLNode *filterNode)
 			// partition did survive pruning
 			pinfo->subplan_map[i] = part_ptr;
 			pinfo->relid_map[i] = gpdb::RelationGetPartitionDesc(m_relation, true)->oids[i];
-			pinfo->present_parts = bms_add_member(pinfo->present_parts, i);
+			pinfo->present_parts = gpdb::BmsAddMember(pinfo->present_parts, i);
 			++part_ptr;
 		}
 		else

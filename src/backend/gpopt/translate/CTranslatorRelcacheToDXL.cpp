@@ -413,7 +413,7 @@ CTranslatorRelcacheToDXL::RetrieveExtStatsInfo(CMemoryPool *mp, IMDId *mdid)
 		CBitSet *keys = GPOS_NEW(mp) CBitSet(mp);
 
 		int attno = -1;
-		while ((attno = bms_next_member(info->keys, attno)) >= 0)
+		while ((attno = gpdb::BmsNextMember(info->keys, attno)) >= 0)
 		{
 			keys->ExchangeSet(attno);
 		}
