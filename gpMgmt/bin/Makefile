@@ -79,13 +79,36 @@ endif
 #
 # Python Libraries
 #
+# Download Python source packages using pip3 download
+# This replaces the previously bundled tar.gz files to comply with Apache Release policy
+#
+MOCK_VERSION=1.0.1
+PARSE_VERSION=1.8.2
+SETUP_TOOLS_VERSION=36.6.0
+BEHAVE_VERSION=1.2.6
+PYGRESQL_VERSION=5.2
+PSUTIL_VERSION=5.7.0
+PYYAML_VERSION=5.4.1
 
+download-python-deps:
+	@echo "--- Downloading Python dependencies"
+	@mkdir -p $(PYLIB_SRC_EXT)
+	pip3 download --no-deps --no-binary :all: --no-build-isolation psutil==$(PSUTIL_VERSION) --dest $(PYLIB_SRC_EXT)/
+	pip3 download --no-deps --no-binary :all: --no-build-isolation mock==$(MOCK_VERSION) --dest $(PYLIB_SRC_EXT)/
+	pip3 download --no-deps --no-binary :all: --no-build-isolation parse==$(PARSE_VERSION) --dest $(PYLIB_SRC_EXT)/
+	pip3 download --no-deps --no-binary :all: --no-build-isolation setuptools==$(SETUP_TOOLS_VERSION) --dest $(PYLIB_SRC_EXT)/
+	pip3 download --no-deps --no-binary :all: --no-build-isolation behave==$(BEHAVE_VERSION) --dest $(PYLIB_SRC_EXT)/
+	# Download PyYAML, wheel is for metadata vefiry；
+	# cython is used for building, see https://github.com/apache/cloudberry/issues/1201
+	pip3 install wheel "cython<3.0.0"
+	pip3 download --no-deps --no-binary :all: --no-build-isolation PyYAML==$(PYYAML_VERSION) --dest $(PYLIB_SRC_EXT)/
+	# Download PyGreSQL, the $PATH is needed to avoid cannot find the pg_config
+	PATH=$(DESTDIR)$(bindir):$$PATH pip3 download --no-deps --no-binary :all: --no-build-isolation PyGreSQL==$(PYGRESQL_VERSION) --dest $(PYLIB_SRC_EXT)/
 #
 # PyGreSQL
 #
-PYGRESQL_VERSION=5.2
 PYGRESQL_DIR=PyGreSQL-$(PYGRESQL_VERSION)
-pygresql:
+pygresql: download-python-deps
 	@echo "--- PyGreSQL"
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYGRESQL_DIR).tar.gz
 	cd $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/ && PATH=$(DESTDIR)$(bindir):$$PATH LDFLAGS='$(LDFLAGS) $(PYGRESQL_LDFLAGS)' python3 setup.py build
@@ -95,10 +118,8 @@ pygresql:
 #
 # PSUTIL
 #
-PSUTIL_VERSION=5.7.0
 PSUTIL_DIR=psutil-$(PSUTIL_VERSION)
-
-psutil:
+psutil: download-python-deps
 	@echo "--- psutil"
 ifeq "$(findstring $(BLD_ARCH),aix7_ppc_64 )" ""
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PSUTIL_DIR).tar.gz
@@ -109,22 +130,18 @@ endif
 #
 # PYYAML
 #
-PYYAML_VERSION=5.4.1
 PYYAML_DIR=PyYAML-$(PYYAML_VERSION)
 
-pyyaml:
+pyyaml: download-python-deps
 	@echo "--- pyyaml"
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYYAML_DIR).tar.gz
-	cd $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/ && env -u CC python3 setup.py build
+	cd $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/ && env -u CC CFLAGS="-w" python3 setup.py build
 	cp -r $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
 #
 # MOCK SETUP
 #
-MOCK_VERSION=1.0.1
 MOCK_DIR=mock-$(MOCK_VERSION)
-SETUP_TOOLS_VERSION=36.6.0
-PARSE_VERSION=1.8.2
 SETUP_TOOLS_DIR=setuptools-$(SETUP_TOOLS_VERSION)
 PARSE_DIR=parse-$(PARSE_VERSION)
 PYTHONSRC_INSTALL=$(PYLIB_SRC_EXT)/install
@@ -135,7 +152,7 @@ PYTHONSRC_INSTALL_PYTHON_PATH=$(PYTHONPATH):$(PYTHONSRC_INSTALL_SITE)
 MOCK_BIN=$(PYTHONSRC_INSTALL)/lib/python$(PYTHON_VERSION)/site-packages/mock-1.0.1-py2.6.egg
 UBUNTU_PLATFORM=$(shell if lsb_release -a 2>/dev/null | grep -q 'Ubuntu' ; then echo "Ubuntu"; fi)
 
-$(MOCK_BIN):
+$(MOCK_BIN): download-python-deps
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
 	@if [ "$(UBUNTU_PLATFORM)" = "Ubuntu" ]; then\
        pip3 install mock;\
@@ -207,8 +224,8 @@ installcheck: installcheck-bash
 
 clean distclean:
 	rm -rf $(RUFF_BIN) $(SRC)/ruff.txt $(SRC)/.ruff_cache
-	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
-	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC_EXT)/*.tar.gz $(PYLIB_SRC_EXT)/*.whl
+	rm -rf $(PYLIB_SRC_EXT)/*/
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
 		  gpcheckperfc gpcheckresgroupimplc gpchecksubnetcfgc gpconfigc \
