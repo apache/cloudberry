@@ -207,8 +207,9 @@ installcheck: installcheck-bash
 
 clean distclean:
 	rm -rf $(RUFF_BIN) $(SRC)/ruff.txt $(SRC)/.ruff_cache
-	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
-	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)
+	rm -rf $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)
+	rm -rf $(PYLIB_SRC_EXT)/$(PYYAML_DIR)
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
 		  gpcheckperfc gpcheckresgroupimplc gpchecksubnetcfgc gpconfigc \
