@@ -237,6 +237,7 @@ enum Edxltoken
 	EdxltokenScalarWindowFrameTrailingEdge,
 	EdxltokenWindowKeyList,
 	EdxltokenWindowKey,
+	EdxltokenWindowHashAgg,
 
 	EdxltokenWindowSpecList,
 	EdxltokenWindowSpec,

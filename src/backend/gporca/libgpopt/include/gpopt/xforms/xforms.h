@@ -71,6 +71,7 @@
 #include "gpopt/xforms/CXformImplementLimit.h"
 #include "gpopt/xforms/CXformImplementSequence.h"
 #include "gpopt/xforms/CXformImplementSequenceProject.h"
+#include "gpopt/xforms/CXformImplementHashSequenceProject.h"
 #include "gpopt/xforms/CXformImplementSplit.h"
 #include "gpopt/xforms/CXformImplementTVF.h"
 #include "gpopt/xforms/CXformImplementTVFNoArgs.h"

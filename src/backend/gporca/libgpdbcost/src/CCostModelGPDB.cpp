@@ -31,6 +31,7 @@
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
 #include "gpopt/operators/CPhysicalSequenceProject.h"
+#include "gpopt/operators/CPhysicalHashSequenceProject.h"
 #include "gpopt/operators/CPhysicalStreamAgg.h"
 #include "gpopt/operators/CPhysicalUnionAll.h"
 #include "gpopt/operators/CPredicateUtils.h"
@@ -1594,11 +1595,17 @@ CCostModelGPDB::CostSequenceProject(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	GPOS_ASSERT(COperator::EopPhysicalSequenceProject ==
 				exprhdl.Pop()->Eopid());
 
+	const CDouble dTupDefaultProcCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpTupDefaultProcCostUnit)
+			->Get();
+	GPOS_ASSERT(0 < dTupDefaultProcCostUnit);
+
 	CPhysicalSequenceProject *psp = CPhysicalSequenceProject::PopConvert(exprhdl.Pop());
 
-	if (GPOS_FTRACE(EopttraceForceSplitWindowFunc) && 
+	if (GPOS_FTRACE(EopttraceForceSplitWindowFunc) &&
 		psp->Pspt() == COperator::EsptypeGlobalTwoStep) {
-		return CCost(0);
+		return CCost(dTupDefaultProcCostUnit * 2);
 	}
 
 	const DOUBLE num_rows_outer = pci->PdRows()[0];
@@ -1614,11 +1621,58 @@ CCostModelGPDB::CostSequenceProject(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		ulSortCols += pos->UlSortColumns();
 	}
 
+	// we process (sorted window of) input tuples to compute window function values
+	CCost costLocal =
+		CCost(pci->NumRebinds() * (ulSortCols * num_rows_outer * dWidthOuter *
+								   dTupDefaultProcCostUnit));
+	CCost costChild =
+		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
+	
+	return costLocal + costChild;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCostModelGPDB::CostSequenceProject
+//
+//	@doc:
+//		Cost of sequence project
+//
+//---------------------------------------------------------------------------
+CCost
+CCostModelGPDB::CostHashSequenceProject(CMemoryPool *mp, CExpressionHandle &exprhdl,
+									const CCostModelGPDB *pcmgpdb,
+									const SCostingInfo *pci)
+{
+	GPOS_ASSERT(nullptr != pcmgpdb);
+	GPOS_ASSERT(nullptr != pci);
+	GPOS_ASSERT(COperator::EopPhysicalHashSequenceProject ==
+				exprhdl.Pop()->Eopid());
 	const CDouble dTupDefaultProcCostUnit =
 		pcmgpdb->GetCostModelParams()
 			->PcpLookup(CCostModelParamsGPDB::EcpTupDefaultProcCostUnit)
 			->Get();
 	GPOS_ASSERT(0 < dTupDefaultProcCostUnit);
+
+	CPhysicalHashSequenceProject *psp = CPhysicalHashSequenceProject::PopConvert(exprhdl.Pop());
+
+	if (GPOS_FTRACE(EopttraceForceSplitWindowFunc) && 
+		psp->Pspt() == COperator::EsptypeGlobalTwoStep) {
+		return CCost(dTupDefaultProcCostUnit);
+	}
+
+	const DOUBLE num_rows_outer = pci->PdRows()[0];
+	const DOUBLE dWidthOuter = pci->GetWidth()[0];
+
+	ULONG ulSortCols = 0;
+	COrderSpecArray *pdrgpos =
+		CPhysicalHashSequenceProject::PopConvert(psp)->Pdrgpos();
+	const ULONG ulOrderSpecs = pdrgpos->Size();
+	for (ULONG ul = 0; ul < ulOrderSpecs; ul++)
+	{
+		COrderSpec *pos = (*pdrgpos)[ul];
+		ulSortCols += pos->UlSortColumns();
+	}
 
 	// we process (sorted window of) input tuples to compute window function values
 	CCost costLocal =
@@ -2462,18 +2516,26 @@ CCostModelGPDB::Cost(
 			return CostSequenceProject(m_mp, exprhdl, this, pci);
 		}
 
+		case COperator::EopPhysicalHashSequenceProject:
+		{
+			return CostHashSequenceProject(m_mp, exprhdl, this, pci);
+		}
+
 		case COperator::EopPhysicalCTEProducer:
 		{
 			return CostCTEProducer(m_mp, exprhdl, this, pci);
 		}
+
 		case COperator::EopPhysicalCTEConsumer:
 		{
 			return CostCTEConsumer(m_mp, exprhdl, this, pci);
 		}
+
 		case COperator::EopPhysicalConstTableGet:
 		{
 			return CostConstTableGet(m_mp, exprhdl, this, pci);
 		}
+
 		case COperator::EopPhysicalDML:
 		{
 			return CostDML(m_mp, exprhdl, this, pci);

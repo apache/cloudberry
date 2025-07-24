@@ -178,7 +178,8 @@ public:
 
 	// print
 	IOstream &OsPrint(IOstream &os) const override;
-	IOstream &OsPrintWithPrefix(IOstream &os, const char *prefix) const;
+	IOstream &OsPrintNoWrap(IOstream &os) const override;
+	IOstream &OsPrintWithPrefix(IOstream &os, const char *prefix, BOOL wrap = true) const;
 
 	// return a hashed distribution on the maximal hashable subset of given columns
 	static CDistributionSpecHashed *PdshashedMaximal(CMemoryPool *mp,

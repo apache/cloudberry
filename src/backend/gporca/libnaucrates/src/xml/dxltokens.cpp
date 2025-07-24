@@ -343,6 +343,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenWindowFrame, GPOS_WSZ_LIT("WindowFrame")},
 		{EdxltokenWindowKeyList, GPOS_WSZ_LIT("WindowKeyList")},
 		{EdxltokenWindowKey, GPOS_WSZ_LIT("WindowKey")},
+		{EdxltokenWindowHashAgg, GPOS_WSZ_LIT("IsWindowHashAgg")},
 
 		{EdxltokenWindowSpecList, GPOS_WSZ_LIT("WindowSpecList")},
 		{EdxltokenWindowSpec, GPOS_WSZ_LIT("WindowSpec")},

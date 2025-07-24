@@ -18,6 +18,7 @@
 extern "C" {
 #include "postgres.h"
 
+#include "optimizer/orcaopt.h"
 #include "nodes/params.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
@@ -30,7 +31,8 @@ public:
 	static PlannedStmt *GPOPTOptimizedPlan(
 		Query *query,
 		bool *
-			had_unexpected_failure	// output : set to true if optimizer unexpectedly failed to produce plan
+			had_unexpected_failure,	// output : set to true if optimizer unexpectedly failed to produce plan
+		OptimizerOptions *opts
 	);
 
 	// serialize planned statement into DXL
@@ -45,7 +47,8 @@ public:
 extern "C" {
 
 extern PlannedStmt *GPOPTOptimizedPlan(Query *query,
-									   bool *had_unexpected_failure);
+									   bool *had_unexpected_failure,
+									   OptimizerOptions *opts);
 extern char *SerializeDXLPlan(Query *query);
 extern void InitGPOPT();
 extern void TerminateGPOPT();

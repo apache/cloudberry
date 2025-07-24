@@ -58,6 +58,7 @@
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
 #include "gpopt/operators/CPhysicalScalarAgg.h"
 #include "gpopt/operators/CPhysicalSequenceProject.h"
+#include "gpopt/operators/CPhysicalHashSequenceProject.h"
 #include "gpopt/operators/CPhysicalSort.h"
 #include "gpopt/operators/CPhysicalSplit.h"
 #include "gpopt/operators/CPhysicalSpool.h"
@@ -313,8 +314,6 @@ CTranslatorExprToDXL::PdxlnTranslate(CExpression *pexpr,
 		pdxlnPrL->ReplaceChild(ul, pdxlnPrElNew);
 	}
 
-
-
 	if (0 == ulNonGatherMotions)
 	{
 		CTranslatorExprToDXLUtils::SetDirectDispatchInfo(
@@ -409,10 +408,11 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
+		case COperator::EopPhysicalHashSequenceProject:
 		case COperator::EopPhysicalSequenceProject:
 			dxlnode = CTranslatorExprToDXL::PdxlnWindow(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
-				pfDML);
+				pfDML, pexpr->Pop()->Eopid() == COperator::EopPhysicalHashSequenceProject);
 			break;
 		case COperator::EopPhysicalInnerNLJoin:
 		case COperator::EopPhysicalInnerIndexNLJoin:
@@ -6854,11 +6854,13 @@ CDXLNode *
 CTranslatorExprToDXL::PdxlnWindow(CExpression *pexprSeqPrj,
 								  CColRefArray *colref_array,
 								  CDistributionSpecArray *pdrgpdsBaseTables,
-								  ULONG *pulNonGatherMotions, BOOL *pfDML)
+								  ULONG *pulNonGatherMotions, BOOL *pfDML,
+								  BOOL fWindowHashAgg)
 {
 	GPOS_ASSERT(nullptr != pexprSeqPrj);
 
-	CPhysicalSequenceProject *popSeqPrj =
+	CPhysicalSequenceProject *popSeqPrj = fWindowHashAgg ? 
+		CPhysicalHashSequenceProject::PopConvert(pexprSeqPrj->Pop()) :
 		CPhysicalSequenceProject::PopConvert(pexprSeqPrj->Pop());
 	CDistributionSpec *pds = popSeqPrj->Pds();
 	ULongPtrArray *colids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
@@ -6940,7 +6942,8 @@ CTranslatorExprToDXL::PdxlnWindow(CExpression *pexprSeqPrj,
 
 	// construct a Window node
 	CDXLPhysicalWindow *pdxlopWindow =
-		GPOS_NEW(m_mp) CDXLPhysicalWindow(m_mp, colids, pdrgpdxlwk);
+		GPOS_NEW(m_mp) CDXLPhysicalWindow(m_mp, colids, pdrgpdxlwk,
+			fWindowHashAgg);
 	CDXLNode *pdxlnWindow = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopWindow);
 	pdxlnWindow->SetProperties(dxl_properties);
 
@@ -6957,7 +6960,6 @@ CTranslatorExprToDXL::PdxlnWindow(CExpression *pexprSeqPrj,
 
 	return pdxlnWindow;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:

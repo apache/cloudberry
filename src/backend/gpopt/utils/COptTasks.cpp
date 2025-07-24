@@ -913,7 +913,7 @@ COptTasks::OptimizeTask(void *ptr)
 	{
 		// set trace flags
 		trace_flags = CConfigParamMapping::PackConfigParamInBitset(
-			mp, CXform::ExfSentinel);
+			mp, CXform::ExfSentinel, opt_ctxt->m_create_vec_plan);
 		SetTraceflags(mp, trace_flags, &enabled_trace_flags,
 					  &disabled_trace_flags);
 
@@ -1156,13 +1156,15 @@ COptTasks::Optimize(Query *query)
 //
 //---------------------------------------------------------------------------
 PlannedStmt *
-COptTasks::GPOPTOptimizedPlan(Query *query, SOptContext *gpopt_context)
+COptTasks::GPOPTOptimizedPlan(Query *query, SOptContext *gpopt_context, OptimizerOptions *opts)
 {
 	Assert(query);
 	Assert(gpopt_context);
 
 	gpopt_context->m_query = query;
 	gpopt_context->m_should_generate_plan_stmt = true;
+	// Copy options in `OptimizerOptions` to `SOptContext`
+	gpopt_context->m_create_vec_plan = opts->create_vectorization_plan;
 	Execute(&OptimizeTask, gpopt_context);
 	return gpopt_context->m_plan_stmt;
 }

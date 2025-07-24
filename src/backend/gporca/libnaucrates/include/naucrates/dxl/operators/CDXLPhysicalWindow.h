@@ -46,12 +46,14 @@ private:
 	// window keys
 	CDXLWindowKeyArray *m_dxl_window_key_array;
 
+	BOOL m_window_hash_agg;
+
 public:
 	CDXLPhysicalWindow(CDXLPhysicalWindow &) = delete;
 
 	//ctor
 	CDXLPhysicalWindow(CMemoryPool *mp, ULongPtrArray *part_by_colid_array,
-					   CDXLWindowKeyArray *window_key_array);
+					   CDXLWindowKeyArray *window_key_array, BOOL fWindowHashAgg);
 
 	//dtor
 	~CDXLPhysicalWindow() override;
@@ -75,6 +77,9 @@ public:
 
 	// return the window key at a given position
 	CDXLWindowKey *GetDXLWindowKeyAt(ULONG ulPos) const;
+
+	// is windowagg implements by window hash agg
+	BOOL IsWindowHashAgg() const;
 
 	// serialize operator in DXL format
 	void SerializeToDXL(CXMLSerializer *xml_serializer,
