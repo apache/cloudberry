@@ -50,10 +50,6 @@
 typedef long pgpid_t;
 
 
-/* postgres version ident string */
-#define PM_VERSIONSTR "postgres (Greengage Database) " PG_VERSION "\n"
-
-
 typedef enum
 {
 	SMART_MODE,

@@ -78,9 +78,6 @@
 /* Ideally this would be in a .h file, but it hardly seems worth the trouble */
 extern const char *select_default_timezone(const char *share_path);
 
-/* version string we expect back from postgres */
-#define PG_VERSIONSTR "postgres (Greengage Database) " PG_VERSION "\n"
-
 
 static const char *auth_methods_host[] = {
 	"trust", "reject", "scram-sha-256", "md5", "password", "ident", "radius",
