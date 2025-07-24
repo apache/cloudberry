@@ -2534,6 +2534,35 @@ _readWindowAgg(void)
 	READ_DONE();
 }
 
+static WindowHashAgg *
+_readWindowHashAgg(void)
+{
+	READ_LOCALS(WindowHashAgg);
+
+	ReadCommonPlan(&local_node->plan);
+
+	READ_UINT_FIELD(winref);
+	READ_INT_FIELD(partNumCols);
+	READ_ATTRNUMBER_ARRAY(partColIdx, local_node->partNumCols);
+	READ_OID_ARRAY(partOperators, local_node->partNumCols);
+	READ_OID_ARRAY(partCollations, local_node->partNumCols);
+	READ_INT_FIELD(ordNumCols);
+	READ_ATTRNUMBER_ARRAY(ordColIdx, local_node->ordNumCols);
+	READ_OID_ARRAY(ordOperators, local_node->ordNumCols);
+	READ_OID_ARRAY(ordCollations, local_node->ordNumCols);
+	READ_BOOL_ARRAY(ordNullsFirst, local_node->ordNumCols);
+	READ_INT_FIELD(frameOptions);
+	READ_NODE_FIELD(startOffset);
+	READ_NODE_FIELD(endOffset);
+	READ_OID_FIELD(startInRangeFunc);
+	READ_OID_FIELD(endInRangeFunc);
+	READ_OID_FIELD(inRangeColl);
+	READ_BOOL_FIELD(inRangeAsc);
+	READ_BOOL_FIELD(inRangeNullsFirst);
+
+	READ_DONE();
+}
+
 /*
  * _readUnique
  */
@@ -3165,6 +3194,8 @@ parseNodeString(void)
 		return_value = _readDQAExpr();
 	else if (MATCH("WINDOWAGG", 9))
 		return_value = _readWindowAgg();
+	else if (MATCH("WINDOWHASHAGG", 13))
+		return_value = _readWindowHashAgg();
 	else if (MATCH("UNIQUE", 6))
 		return_value = _readUnique();
 	else if (MATCH("GATHER", 6))

@@ -407,8 +407,13 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		}
 		case EdxlopPhysicalWindow:
 		{
-			plan = TranslateDXLWindow(dxlnode, output_context,
+			if (CDXLPhysicalWindow::Cast(dxlnode->GetOperator())->IsWindowHashAgg()) {
+				plan = TranslateDXLWindowHashAgg(dxlnode, output_context,
+									  	ctxt_translation_prev_siblings);
+			} else {
+				plan = TranslateDXLWindowAgg(dxlnode, output_context,
 									  ctxt_translation_prev_siblings);
+			}
 			break;
 		}
 		case EdxlopPhysicalSort:
@@ -3040,16 +3045,121 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 	return (Plan *) agg;
 }
 
+static
+int WindowFrameSpecToOptions(const EdxlFrameSpec &dxlFS) {
+	int winFrameOptions = 0;
+	if (EdxlfsRow == dxlFS)
+	{
+		winFrameOptions |= FRAMEOPTION_ROWS;
+	}
+	else if (EdxlfsGroups == dxlFS)
+	{
+		winFrameOptions |= FRAMEOPTION_GROUPS;
+	}
+	else
+	{
+		winFrameOptions |= FRAMEOPTION_RANGE;
+	}
+	return winFrameOptions;
+}
+
+static
+int WindowFrameExclusionStrategyToOptions(const EdxlFrameExclusionStrategy &dxlFES) {
+	int winFrameOptions = 0;
+	if (dxlFES == EdxlfesCurrentRow)
+	{
+		winFrameOptions |= FRAMEOPTION_EXCLUDE_CURRENT_ROW;
+	}
+	else if (dxlFES == EdxlfesGroup)
+	{
+		winFrameOptions |= FRAMEOPTION_EXCLUDE_GROUP;
+	}
+	else if (dxlFES == EdxlfesTies)
+	{
+		winFrameOptions |= FRAMEOPTION_EXCLUDE_TIES;
+	}
+
+	return winFrameOptions;
+}
+
+static 
+int WindowFrameStartBoundaryToOptions(const EdxlFrameBoundary &dxlFB) {
+	int winFrameOptions = 0;
+	if (dxlFB == EdxlfbUnboundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_START_UNBOUNDED_PRECEDING;
+	}
+	if (dxlFB == EdxlfbBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbCurrentRow)
+	{
+		winFrameOptions |= FRAMEOPTION_START_CURRENT_ROW;
+	}
+	if (dxlFB == EdxlfbBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbUnboundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
+	}
+	return winFrameOptions;
+}
+
+static 
+int WindowFrameEndBoundaryToOptions(const EdxlFrameBoundary &dxlFB) {
+	int winFrameOptions = 0;
+	if (dxlFB == EdxlfbUnboundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_END_UNBOUNDED_PRECEDING;
+	}
+	if (dxlFB == EdxlfbBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbCurrentRow)
+	{
+		winFrameOptions |= FRAMEOPTION_END_CURRENT_ROW;
+	}
+	if (dxlFB == EdxlfbBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbUnboundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_END_UNBOUNDED_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
+	}
+	return winFrameOptions;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorDXLToPlStmt::TranslateDXLWindow
+//		CTranslatorDXLToPlStmt::TranslateDXLWindowAgg
 //
 //	@doc:
 //		Translate DXL window node into GPDB window plan node
 //
 //---------------------------------------------------------------------------
 Plan *
-CTranslatorDXLToPlStmt::TranslateDXLWindow(
+CTranslatorDXLToPlStmt::TranslateDXLWindowAgg(
 	const CDXLNode *window_dxlnode, CDXLTranslateContext *output_context,
 	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
 {
@@ -3104,9 +3214,6 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 	const ULongPtrArray *part_by_cols_array =
 		window_dxlop->GetPartByColsArray();
 	window->partNumCols = part_by_cols_array->Size();
-	window->partColIdx = nullptr;
-	window->partOperators = nullptr;
-	window->partCollations = nullptr;
 
 	if (window->partNumCols > 0)
 	{
@@ -3116,6 +3223,10 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
 		window->partCollations =
 			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
+	} else {
+		window->partColIdx = nullptr;
+		window->partOperators = nullptr;
+		window->partCollations = nullptr;
 	}
 
 	const ULONG num_of_part_cols = part_by_cols_array->Size();
@@ -3196,33 +3307,9 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 		if (nullptr != window_key->GetWindowFrame())
 		{
 			window->frameOptions = FRAMEOPTION_NONDEFAULT;
-			if (EdxlfsRow == window_frame->ParseDXLFrameSpec())
-			{
-				window->frameOptions |= FRAMEOPTION_ROWS;
-			}
-			else if (EdxlfsGroups == window_frame->ParseDXLFrameSpec())
-			{
-				window->frameOptions |= FRAMEOPTION_GROUPS;
-			}
-			else
-			{
-				window->frameOptions |= FRAMEOPTION_RANGE;
-			}
-
-			if (window_frame->ParseFrameExclusionStrategy() ==
-				EdxlfesCurrentRow)
-			{
-				window->frameOptions |= FRAMEOPTION_EXCLUDE_CURRENT_ROW;
-			}
-			else if (window_frame->ParseFrameExclusionStrategy() ==
-					 EdxlfesGroup)
-			{
-				window->frameOptions |= FRAMEOPTION_EXCLUDE_GROUP;
-			}
-			else if (window_frame->ParseFrameExclusionStrategy() == EdxlfesTies)
-			{
-				window->frameOptions |= FRAMEOPTION_EXCLUDE_TIES;
-			}
+			window->frameOptions |= WindowFrameSpecToOptions(window_frame->ParseDXLFrameSpec());
+			window->frameOptions |= WindowFrameExclusionStrategyToOptions(
+				window_frame->ParseFrameExclusionStrategy());
 
 			// translate the CDXLNodes representing the leading and trailing edge
 			CDXLTranslationContextArray *child_contexts =
@@ -3240,38 +3327,9 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 			// without our help.
 			//
 			CDXLNode *win_frame_leading_dxlnode = window_frame->PdxlnLeading();
-			EdxlFrameBoundary lead_boundary_type =
-				CDXLScalarWindowFrameEdge::Cast(
-					win_frame_leading_dxlnode->GetOperator())
-					->ParseDXLFrameBoundary();
-			if (lead_boundary_type == EdxlfbUnboundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_START_UNBOUNDED_PRECEDING;
-			}
-			if (lead_boundary_type == EdxlfbBoundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
-			}
-			if (lead_boundary_type == EdxlfbCurrentRow)
-			{
-				window->frameOptions |= FRAMEOPTION_START_CURRENT_ROW;
-			}
-			if (lead_boundary_type == EdxlfbBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
-			}
-			if (lead_boundary_type == EdxlfbUnboundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
-			}
-			if (lead_boundary_type == EdxlfbDelayedBoundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
-			}
-			if (lead_boundary_type == EdxlfbDelayedBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
-			}
+			window->frameOptions |= WindowFrameStartBoundaryToOptions(
+					CDXLScalarWindowFrameEdge::Cast(win_frame_leading_dxlnode->GetOperator())
+					->ParseDXLFrameBoundary());
 			if (0 != win_frame_leading_dxlnode->Arity())
 			{
 				window->startOffset =
@@ -3282,38 +3340,215 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 			// And the same for the trail boundary
 			CDXLNode *win_frame_trailing_dxlnode =
 				window_frame->PdxlnTrailing();
-			EdxlFrameBoundary trail_boundary_type =
+			window->frameOptions |= WindowFrameEndBoundaryToOptions(
 				CDXLScalarWindowFrameEdge::Cast(
 					win_frame_trailing_dxlnode->GetOperator())
-					->ParseDXLFrameBoundary();
-			if (trail_boundary_type == EdxlfbUnboundedPreceding)
+					->ParseDXLFrameBoundary());
+
+			if (0 != win_frame_trailing_dxlnode->Arity())
 			{
-				window->frameOptions |= FRAMEOPTION_END_UNBOUNDED_PRECEDING;
+				window->endOffset =
+					(Node *) m_translator_dxl_to_scalar->TranslateDXLToScalar(
+						(*win_frame_trailing_dxlnode)[0], &colid_var_mapping);
 			}
-			if (trail_boundary_type == EdxlfbBoundedPreceding)
+
+			window->startInRangeFunc = window_frame->PdxlnStartInRangeFunc();
+			window->endInRangeFunc = window_frame->PdxlnEndInRangeFunc();
+			window->inRangeColl = window_frame->PdxlnInRangeColl();
+			window->inRangeAsc = window_frame->PdxlnInRangeAsc();
+			window->inRangeNullsFirst = window_frame->PdxlnInRangeNullsFirst();
+
+			// cleanup
+			child_contexts->Release();
+		}
+		else
+		{
+			window->frameOptions = FRAMEOPTION_DEFAULTS;
+		}
+	}
+
+	SetParamIds(plan);
+
+	// cleanup
+	child_contexts->Release();
+
+	return (Plan *) window;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLWindowHashAgg
+//
+//	@doc:
+//		Translate DXL window node into GPDB window hash plan node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLWindowHashAgg(
+	const CDXLNode *window_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	WindowHashAgg *window = MakeNode(WindowHashAgg);
+
+	Plan *plan = &(window->plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	CDXLPhysicalWindow *window_dxlop =
+		CDXLPhysicalWindow::Cast(window_dxlnode->GetOperator());
+
+	// translate the operator costs
+	TranslatePlanCosts(window_dxlnode, plan);
+
+	// translate children
+	CDXLNode *child_dxlnode = (*window_dxlnode)[EdxlwindowIndexChild];
+	CDXLNode *project_list_dxlnode = (*window_dxlnode)[EdxlwindowIndexProjList];
+	CDXLNode *filter_dxlnode = (*window_dxlnode)[EdxlwindowIndexFilter];
+
+	CDXLTranslateContext child_context(m_mp, true,
+									   output_context->GetColIdToParamIdMap());
+	Plan *child_plan = TranslateDXLOperatorToPlan(
+		child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+
+	CDXLTranslationContextArray *child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	child_contexts->Append(&child_context);
+
+	// translate proj list and filter
+	TranslateProjListAndFilter(project_list_dxlnode, filter_dxlnode,
+							   nullptr,	 // translate context for the base table
+							   child_contexts,	// pdxltrctxRight,
+							   &plan->targetlist, &plan->qual, output_context);
+
+	ListCell *lc;
+
+	foreach (lc, plan->targetlist)
+	{
+		TargetEntry *target_entry = (TargetEntry *) lfirst(lc);
+		if (IsA(target_entry->expr, WindowFunc))
+		{
+			WindowFunc *window_func = (WindowFunc *) target_entry->expr;
+			window->winref = window_func->winref;
+			break;
+		}
+	}
+
+	plan->lefttree = child_plan;
+
+	// translate partition columns
+	const ULongPtrArray *part_by_cols_array =
+		window_dxlop->GetPartByColsArray();
+	window->partNumCols = part_by_cols_array->Size();
+
+	if (window->partNumCols > 0)
+	{
+		window->partColIdx = (AttrNumber *) gpdb::GPDBAlloc(
+			window->partNumCols * sizeof(AttrNumber));
+		window->partOperators =
+			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
+		window->partCollations =
+			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
+	} else {
+		window->partColIdx = nullptr;
+		window->partOperators = nullptr;
+		window->partCollations = nullptr;
+	}
+
+	const ULONG num_of_part_cols = part_by_cols_array->Size();
+	for (ULONG ul = 0; ul < num_of_part_cols; ul++)
+	{
+		ULONG part_colid = *((*part_by_cols_array)[ul]);
+		const TargetEntry *te_part_colid =
+			child_context.GetTargetEntry(part_colid);
+		if (nullptr == te_part_colid)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtAttributeNotFound,
+					   part_colid);
+		}
+		window->partColIdx[ul] = te_part_colid->resno;
+
+		// Also find the equality operators to use for each partitioning key col.
+		Oid type_id = gpdb::ExprType((Node *) te_part_colid->expr);
+		window->partOperators[ul] = gpdb::GetEqualityOp(type_id);
+		Assert(window->partOperators[ul] != 0);
+		window->partCollations[ul] =
+			gpdb::ExprCollation((Node *) te_part_colid->expr);
+	}
+
+	// translate window keys
+	const ULONG size = window_dxlop->WindowKeysCount();
+	if (size > 1)
+	{
+		GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR,
+					"ORCA produced a plan with more than one window key",
+					nullptr);
+	}
+	GPOS_ASSERT(size <= 1 && "cannot have more than one window key");
+
+	if (size == 1)
+	{
+		// translate the sorting columns used in the window key
+		const CDXLWindowKey *window_key = window_dxlop->GetDXLWindowKeyAt(0);
+		const CDXLWindowFrame *window_frame = window_key->GetWindowFrame();
+		const CDXLNode *sort_col_list_dxlnode = window_key->GetSortColListDXL();
+
+		const ULONG num_of_cols = sort_col_list_dxlnode->Arity();
+
+		window->ordNumCols = num_of_cols;
+		window->ordColIdx =
+			(AttrNumber *) gpdb::GPDBAlloc(num_of_cols * sizeof(AttrNumber));
+		window->ordOperators =
+			(Oid *) gpdb::GPDBAlloc(num_of_cols * sizeof(Oid));
+		window->ordCollations =
+			(Oid *) gpdb::GPDBAlloc(num_of_cols * sizeof(Oid));
+		window->ordNullsFirst =
+			(bool *) gpdb::GPDBAlloc(num_of_cols * sizeof(bool));
+		// different with windowagg, sort should be full
+		TranslateSortCols(sort_col_list_dxlnode, &child_context,
+						  window->ordColIdx, window->ordOperators,
+						  window->ordCollations, window->ordNullsFirst);
+
+		// translate the window frame specified in the window key
+		if (nullptr != window_key->GetWindowFrame())
+		{
+			window->frameOptions = FRAMEOPTION_NONDEFAULT;
+			window->frameOptions |= WindowFrameSpecToOptions(window_frame->ParseDXLFrameSpec());
+			window->frameOptions |= WindowFrameExclusionStrategyToOptions(
+				window_frame->ParseFrameExclusionStrategy());
+
+			// translate the CDXLNodes representing the leading and trailing edge
+			CDXLTranslationContextArray *child_contexts =
+				GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+			child_contexts->Append(&child_context);
+
+			CMappingColIdVarPlStmt colid_var_mapping =
+				CMappingColIdVarPlStmt(m_mp, nullptr, child_contexts,
+									   output_context, m_dxl_to_plstmt_context);
+
+			// Translate lead boundary
+			//
+			// Note that we don't distinguish between the delayed and undelayed
+			// versions beoynd this point. Executor will make that decision
+			// without our help.
+			//
+			CDXLNode *win_frame_leading_dxlnode = window_frame->PdxlnLeading();
+			window->frameOptions |= WindowFrameStartBoundaryToOptions(
+					CDXLScalarWindowFrameEdge::Cast(win_frame_leading_dxlnode->GetOperator())
+					->ParseDXLFrameBoundary());
+			if (0 != win_frame_leading_dxlnode->Arity())
 			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
+				window->startOffset =
+					(Node *) m_translator_dxl_to_scalar->TranslateDXLToScalar(
+						(*win_frame_leading_dxlnode)[0], &colid_var_mapping);
 			}
-			if (trail_boundary_type == EdxlfbCurrentRow)
-			{
-				window->frameOptions |= FRAMEOPTION_END_CURRENT_ROW;
-			}
-			if (trail_boundary_type == EdxlfbBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
-			}
-			if (trail_boundary_type == EdxlfbUnboundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_END_UNBOUNDED_FOLLOWING;
-			}
-			if (trail_boundary_type == EdxlfbDelayedBoundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
-			}
-			if (trail_boundary_type == EdxlfbDelayedBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
-			}
+
+			// And the same for the trail boundary
+			CDXLNode *win_frame_trailing_dxlnode =
+				window_frame->PdxlnTrailing();
+			window->frameOptions |= WindowFrameEndBoundaryToOptions(
+				CDXLScalarWindowFrameEdge::Cast(
+					win_frame_trailing_dxlnode->GetOperator())
+					->ParseDXLFrameBoundary());
+
 			if (0 != win_frame_trailing_dxlnode->Arity())
 			{
 				window->endOffset =

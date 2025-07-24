@@ -238,6 +238,9 @@ enum EOptTraceFlag
 	// Disable dynamic seq/bitmap/index scan
 	EopttraceDisableDynamicTableScan = 103049,
 
+	// Enable window hash agg
+	EopttraceEnableWindowHashAgg = 103050,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

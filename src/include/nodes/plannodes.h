@@ -1442,6 +1442,47 @@ typedef struct WindowAgg
 	bool		inRangeNullsFirst;	/* nulls sort first for in_range tests? */
 } WindowAgg;
 
+
+/* ----------------
+ *		window hash aggregate node
+ *
+ * A WindowHashAgg node implements window functions over zero or more
+ * ordering/framing specifications within a partition specification on
+ * appropriately UNORDERED input.
+ * 
+ * CBDB does not create plans with `WindowHashAgg` for the row executor,
+ * but does for the vectorization executor.
+ * ----------------
+ */
+typedef struct WindowHashAgg
+{
+	Plan		plan;
+	Index		winref;			/* ID referenced by window functions */
+	int			partNumCols;	/* number of columns in partition clause */
+	AttrNumber *partColIdx;		/* their indexes in the target list */
+	Oid		   *partOperators;	/* equality operators for partition columns */
+	Oid		   *partCollations; /* collations for partition columns */
+	/*
+	 * Different with `WindowAgg`, WindowHashAgg may use the 
+	 * `order by` information.
+	 */
+	int			ordNumCols;		/* number of sort-key columns */
+	AttrNumber *ordColIdx;		/* their indexes in the target list */
+	Oid		   *ordOperators;	/* OIDs of operators to sort them by */
+	Oid		   *ordCollations;	/* OIDs of collations */
+	bool	   *ordNullsFirst;	/* NULLS FIRST/LAST directions */
+
+	int			frameOptions;	/* frame_clause options, see WindowDef */
+	Node	   *startOffset;	/* expression for starting bound, if any */
+	Node	   *endOffset;		/* expression for ending bound, if any */
+	/* these fields are used with RANGE offset PRECEDING/FOLLOWING: */
+	Oid			startInRangeFunc;	/* in_range function for startOffset */
+	Oid			endInRangeFunc; /* in_range function for endOffset */
+	Oid			inRangeColl;	/* collation for in_range tests */
+	bool		inRangeAsc;		/* use ASC sort order for in_range tests? */
+	bool		inRangeNullsFirst;	/* nulls sort first for in_range tests? */
+} WindowHashAgg;
+
 /* ----------------
  *		unique node
  * ----------------
