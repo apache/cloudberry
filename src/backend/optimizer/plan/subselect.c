@@ -6,13 +6,9 @@
  * This module deals with SubLinks and CTEs, but not subquery RTEs (i.e.,
  * not sub-SELECT-in-FROM cases).
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -983,10 +979,6 @@ subplan_is_hashable(Plan *plan)
 	 */
 	subquery_size = plan->plan_rows *
 		(MAXALIGN(plan->plan_width) + MAXALIGN(SizeofHeapTupleHeader));
-<<<<<<< HEAD
-
-=======
->>>>>>> REL_16_9
 	if (subquery_size > get_hash_memory_limit())
 		return false;
 
@@ -3301,11 +3293,8 @@ finalize_plan(PlannerInfo *root, Plan *plan,
 			break;
 
 		case T_ProjectSet:
-<<<<<<< HEAD
 		case T_Hash:
 		case T_RuntimeFilter:
-=======
->>>>>>> REL_16_9
 		case T_Material:
 		case T_Sort:
 		case T_ShareInputScan:
@@ -3394,7 +3383,6 @@ finalize_plan(PlannerInfo *root, Plan *plan,
 	/* but not any initplan setParams */
 	plan->extParam = bms_del_members(plan->extParam, initSetParam);
 
-<<<<<<< HEAD
 	/*
 	 * Currently GPDB doesn't fully support shareinputscan referencing outer
 	 * rels.
@@ -3404,17 +3392,6 @@ finalize_plan(PlannerInfo *root, Plan *plan,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("shareinputscan with outer refs is not supported by GPDB")));
 
-	/*
-	 * For speed at execution time, make sure extParam/allParam are actually
-	 * NULL if they are empty sets.
-	 */
-	if (bms_is_empty(plan->extParam))
-		plan->extParam = NULL;
-	if (bms_is_empty(plan->allParam))
-		plan->allParam = NULL;
-
-=======
->>>>>>> REL_16_9
 	return plan->allParam;
 }
 

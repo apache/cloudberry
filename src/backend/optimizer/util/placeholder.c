@@ -446,7 +446,6 @@ add_placeholders_to_joinrel(PlannerInfo *root, RelOptInfo *joinrel,
 }
 
 /*
-<<<<<<< HEAD
  * In GPDB, SubPlans expressions pose a problem, if they're moved or
  * duplicated in the plan tree. If the SubPlan contains any Motions, it can
  * only be evaluated at a particular slice, because the Motion nodes in the
@@ -622,10 +621,12 @@ make_placeholders_for_subplans_recurse(PlannerInfo *root, Node *jtnode, Relids *
 void
 make_placeholders_for_subplans(PlannerInfo *root)
 {
-	Relids		scope;
+	Relids scope;
 
 	make_placeholders_for_subplans_recurse(root, (Node *) root->parse->jointree, &scope);
-=======
+}
+
+/*
  * contain_placeholder_references_to
  *		Detect whether any PlaceHolderVars in the given clause contain
  *		references to the given relid (typically an OJ relid).
@@ -694,5 +695,4 @@ contain_placeholder_references_walker(Node *node,
 	}
 	return expression_tree_walker(node, contain_placeholder_references_walker,
 								  context);
->>>>>>> REL_16_9
 }

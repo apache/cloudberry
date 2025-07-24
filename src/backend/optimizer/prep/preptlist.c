@@ -25,13 +25,9 @@
  * rewriter's work is more concerned with SQL semantics.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -53,7 +49,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
-<<<<<<< HEAD
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
 #include "optimizer/plancat.h"
@@ -65,12 +60,8 @@ static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
 													List *range_table,
 													List *tlist);
 
-static List *expand_insert_targetlist(List *tlist, Relation rel, Index split_update_result_relation);
+static List *expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel, Index split_update_result_relation);
 
-=======
-static List *expand_insert_targetlist(PlannerInfo *root, List *tlist,
-									  Relation rel);
->>>>>>> REL_16_9
 
 
 /*
@@ -126,11 +117,7 @@ preprocess_targetlist(PlannerInfo *root)
 	 */
 	tlist = parse->targetList;
 	if (command_type == CMD_INSERT)
-<<<<<<< HEAD
-		tlist = expand_insert_targetlist(tlist, target_relation, 0);
-=======
-		tlist = expand_insert_targetlist(root, tlist, target_relation);
->>>>>>> REL_16_9
+		tlist = expand_insert_targetlist(root, tlist, target_relation, 0);
 	else if (command_type == CMD_UPDATE)
 	{
 		/*
@@ -410,11 +397,7 @@ extract_update_targetlist_colnos(List *tlist, bool reorder_resno)
  * but now this code is only applied to INSERT targetlists.
  */
 static List *
-<<<<<<< HEAD
-expand_insert_targetlist(List *tlist, Relation rel, Index split_update_result_relation)
-=======
-expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel)
->>>>>>> REL_16_9
+expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel, Index split_update_result_relation)
 {
 	List	   *new_tlist = NIL;
 	ListCell   *tlist_item;
@@ -476,7 +459,6 @@ expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel)
 			 */
 			Node	   *new_expr;
 
-<<<<<<< HEAD
 			if (!att_tup->attisdropped)
 			{
 				if (split_update_result_relation)
@@ -507,9 +489,6 @@ expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel)
 				}
 			}
 			else
-=======
-			if (att_tup->attisdropped)
->>>>>>> REL_16_9
 			{
 				/* Insert NULL for dropped column */
 				new_expr = (Node *) makeConst(INT4OID,

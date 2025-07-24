@@ -4,13 +4,9 @@
  *	  Post-processing of a completed plan tree: fix references to subplan
  *	  vars, compute regproc values for operators, etc
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -32,13 +28,10 @@
 #include "optimizer/planner.h"
 #include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
-<<<<<<< HEAD
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
-=======
->>>>>>> REL_16_9
 #include "tcop/utility.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -86,12 +79,9 @@ typedef struct
 	indexed_tlist *inner_itlist;
 	Index		acceptable_rel;
 	int			rtoffset;
-<<<<<<< HEAD
+	NullingRelsMatch nrm_match;
 	bool        use_outer_tlist_for_matching_nonvars;
 	bool        use_inner_tlist_for_matching_nonvars;
-=======
-	NullingRelsMatch nrm_match;
->>>>>>> REL_16_9
 	double		num_exec;
 } fix_join_expr_context;
 
@@ -108,10 +98,12 @@ typedef struct
 typedef struct
 {
 	PlannerInfo *root;
-<<<<<<< HEAD
 	plan_tree_base_prefix base;
 } cdb_extract_plan_dependencies_context;
-=======
+
+typedef struct
+{
+	PlannerInfo *root;
 	indexed_tlist *subplan_itlist;
 	int			newvarno;
 } fix_windowagg_cond_context;
@@ -122,7 +114,6 @@ typedef struct
 	PlannerGlobal *glob;
 	Query	   *query;
 } flatten_rtes_walker_context;
->>>>>>> REL_16_9
 
 /*
  * Selecting the best alternative in an AlternativeSubPlan expression requires
@@ -248,16 +239,13 @@ static List *set_returning_clause_references(PlannerInfo *root,
 											 Plan *topplan,
 											 Index resultRelation,
 											 int rtoffset);
-<<<<<<< HEAD
 static  bool cdb_expr_requires_full_eval(Node *node);
 static Plan *cdb_insert_result_node(PlannerInfo *root,
 									Plan *plan, 
 									int rtoffset);
-=======
 static List *set_windowagg_runcondition_references(PlannerInfo *root,
 												   List *runcondition,
 												   Plan *plan);
->>>>>>> REL_16_9
 
 static bool cdb_extract_plan_dependencies_walker(Node *node,
 									 cdb_extract_plan_dependencies_context *context);
@@ -504,7 +492,6 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	/* Now fix the Plan tree */
 	result = set_plan_refs(root, plan, rtoffset);
 
-<<<<<<< HEAD
 #ifdef USE_ASSERT_CHECKING
 	/**
 	 * Ensuring that the output of setrefs behaves as expected.
@@ -512,8 +499,6 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	set_plan_references_output_asserts(glob, result);
 #endif
 
-=======
->>>>>>> REL_16_9
 	/*
 	 * If we have AlternativeSubPlans, it is likely that we now have some
 	 * unreferenced subplans in glob->subplans.  To avoid expending cycles on
@@ -785,13 +770,12 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 	{
 		case T_SeqScan: /* Rely on structure equivalence */
 			{
-				Scan    *splan = (Scan *) plan;
+				SeqScan    *splan = (SeqScan *) plan;
 
 				if (cdb_expr_requires_full_eval((Node *)plan->targetlist))
 					return cdb_insert_result_node(root, plan, rtoffset);
 
-<<<<<<< HEAD
-				splan->scanrelid += rtoffset;
+				splan->scan.scanrelid += rtoffset;
 
 				/* If the scan appears below a shareinput, we hit this assert. */
 #ifdef USE_ASSERT_CHECKING
@@ -799,14 +783,8 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 				RangeTblEntry *rte = rt_fetch(splan->scanrelid, root->glob->finalrtable);
 				Assert((rte->rtekind == RTE_RELATION || rte->rtekind == RTE_CTE) && "Scan plan should refer to a scan relation");
 #endif
-
-				splan->plan.targetlist =
-					fix_scan_list(root, splan->plan.targetlist,
-=======
-				splan->scan.scanrelid += rtoffset;
 				splan->scan.plan.targetlist =
 					fix_scan_list(root, splan->scan.plan.targetlist,
->>>>>>> REL_16_9
 								  rtoffset, NUM_EXEC_TLIST(plan));
 				splan->scan.plan.qual =
 					fix_scan_list(root, splan->scan.plan.qual,
@@ -1319,7 +1297,6 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 				 * in GPDB, we allow the ROWS/RANGE expressions to contain
 				 * references to the subplan, so we have to use fix_upper_expr.
 				 */
-<<<<<<< HEAD
 				if (wplan->startOffset || wplan->endOffset)
 				{
 					subplan_itlist =
@@ -1333,11 +1310,6 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 									   subplan_itlist, OUTER_VAR, rtoffset, 1);
 					pfree(subplan_itlist);
 				}
-=======
-				wplan->startOffset =
-					fix_scan_expr(root, wplan->startOffset, rtoffset, 1);
-				wplan->endOffset =
-					fix_scan_expr(root, wplan->endOffset, rtoffset, 1);
 				wplan->runCondition = fix_scan_list(root,
 													wplan->runCondition,
 													rtoffset,
@@ -1346,7 +1318,6 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 														wplan->runConditionOrig,
 														rtoffset,
 														NUM_EXEC_TLIST(plan));
->>>>>>> REL_16_9
 			}
 			break;
 		case T_Result:
@@ -2179,17 +2150,6 @@ set_append_references(PlannerInfo *root,
 	/*
 	 * See if it's safe to get rid of the Append entirely.  For this to be
 	 * safe, there must be only one child plan and that child plan's parallel
-<<<<<<< HEAD
-	 * awareness must match that of the Append's.  The reason for the latter
-	 * is that the if the Append is parallel aware and the child is not then
-	 * the calling plan may execute the non-parallel aware child multiple
-	 * times.
-	 */
-	if (list_length(aplan->appendplans) == 1 &&
-		((Plan *) linitial(aplan->appendplans))->parallel_aware == aplan->plan.parallel_aware)
-		return clean_up_removed_plan_level((Plan *) aplan,
-										   (Plan *) linitial(aplan->appendplans));
-=======
 	 * awareness must match the Append's.  The reason for the latter is that
 	 * if the Append is parallel aware and the child is not, then the calling
 	 * plan may execute the non-parallel aware child multiple times.  (If you
@@ -2202,7 +2162,6 @@ set_append_references(PlannerInfo *root,
 		if (p->parallel_aware == aplan->plan.parallel_aware)
 			return clean_up_removed_plan_level((Plan *) aplan, p);
 	}
->>>>>>> REL_16_9
 
 	/*
 	 * Otherwise, clean up the Append as needed.  It's okay to do this after
@@ -2272,17 +2231,6 @@ set_mergeappend_references(PlannerInfo *root,
 	/*
 	 * See if it's safe to get rid of the MergeAppend entirely.  For this to
 	 * be safe, there must be only one child plan and that child plan's
-<<<<<<< HEAD
-	 * parallel awareness must match that of the MergeAppend's.  The reason
-	 * for the latter is that the if the MergeAppend is parallel aware and the
-	 * child is not then the calling plan may execute the non-parallel aware
-	 * child multiple times.
-	 */
-	if (list_length(mplan->mergeplans) == 1 &&
-		((Plan *) linitial(mplan->mergeplans))->parallel_aware == mplan->plan.parallel_aware)
-		return clean_up_removed_plan_level((Plan *) mplan,
-										   (Plan *) linitial(mplan->mergeplans));
-=======
 	 * parallel awareness must match the MergeAppend's.  The reason for the
 	 * latter is that if the MergeAppend is parallel aware and the child is
 	 * not, then the calling plan may execute the non-parallel aware child
@@ -2296,7 +2244,6 @@ set_mergeappend_references(PlannerInfo *root,
 		if (p->parallel_aware == mplan->plan.parallel_aware)
 			return clean_up_removed_plan_level((Plan *) mplan, p);
 	}
->>>>>>> REL_16_9
 
 	/*
 	 * Otherwise, clean up the MergeAppend as needed.  It's okay to do this
@@ -2842,28 +2789,6 @@ set_join_references(PlannerInfo *root, Join *join, int rtoffset)
 	 * be, so we just tell fix_join_expr to accept superset nullingrels
 	 * matches instead of exact ones.
 	 */
-<<<<<<< HEAD
-	switch (join->jointype)
-	{
-		case JOIN_LEFT:
-		case JOIN_SEMI:
-		case JOIN_ANTI:
-		case JOIN_LASJ_NOTIN:
-			inner_itlist->has_non_vars = false;
-			break;
-		case JOIN_RIGHT:
-			outer_itlist->has_non_vars = false;
-			break;
-		case JOIN_FULL:
-			outer_itlist->has_non_vars = false;
-			inner_itlist->has_non_vars = false;
-			break;
-		default:
-			break;
-	}
-
-=======
->>>>>>> REL_16_9
 	join->plan.targetlist = fix_join_expr(root,
 										  join->plan.targetlist,
 										  outer_itlist,
@@ -3620,12 +3545,7 @@ fix_join_expr(PlannerInfo *root,
 	context.inner_itlist = inner_itlist;
 	context.acceptable_rel = acceptable_rel;
 	context.rtoffset = rtoffset;
-<<<<<<< HEAD
-	context.use_outer_tlist_for_matching_nonvars = true;
-	context.use_inner_tlist_for_matching_nonvars = true;
-=======
 	context.nrm_match = nrm_match;
->>>>>>> REL_16_9
 	context.num_exec = num_exec;
 	return (List *) fix_join_expr_mutator((Node *) clauses, &context);
 }
@@ -3950,7 +3870,6 @@ fix_upper_expr_mutator(Node *node, fix_upper_expr_context *context)
 	if (IsA(node, Var))
 	{
 		Var		   *var = (Var *) node;
-<<<<<<< HEAD
 		if (context->subplan_itlist->has_non_vars)
 		{
 			newvar = search_indexed_tlist_for_non_var((Expr *) node,
@@ -3962,20 +3881,11 @@ fix_upper_expr_mutator(Node *node, fix_upper_expr_context *context)
 			newvar = search_indexed_tlist_for_var(var,
 												context->subplan_itlist,
 												context->newvarno,
-												context->rtoffset);
+												context->rtoffset,
+												context->nrm_match);
 			if (!newvar)
 				elog(ERROR, "variable not found in subplan target list");
 		}
-=======
-
-		newvar = search_indexed_tlist_for_var(var,
-											  context->subplan_itlist,
-											  context->newvarno,
-											  context->rtoffset,
-											  context->nrm_match);
-		if (!newvar)
-			elog(ERROR, "variable not found in subplan target list");
->>>>>>> REL_16_9
 		return (Node *) newvar;
 	}
 	if (IsA(node, PlaceHolderVar))

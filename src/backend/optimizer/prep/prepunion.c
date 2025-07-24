@@ -12,7 +12,6 @@
  * case, but most of the heavy lifting for that is done elsewhere,
  * notably in prepjointree.c and allpaths.c.
  *
-<<<<<<< HEAD
  * There is also some code here to support planning of queries that use
  * inheritance (SELECT FROM foo*).  Inheritance trees are converted into
  * append relations, and thenceforth share code with the UNION ALL case.
@@ -20,10 +19,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -312,12 +308,8 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		 * soon too, likely.)
 		 */
 		path = (Path *) create_subqueryscan_path(root, rel, subpath,
-<<<<<<< HEAD
-												 NIL, cdbpathlocus_from_subquery(root, rel, subpath), NULL);
-=======
 												 trivial_tlist,
-												 NIL, NULL);
->>>>>>> REL_16_9
+												 NIL, cdbpathlocus_from_subquery(root, rel, subpath), NULL);
 
 		add_path(rel, path, root);
 
@@ -335,12 +327,8 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 			partial_subpath = linitial(final_rel->partial_pathlist);
 			partial_path = (Path *)
 				create_subqueryscan_path(root, rel, partial_subpath,
-<<<<<<< HEAD
-										 NIL, cdbpathlocus_from_subquery(root, rel, partial_subpath), NULL);
-=======
 										 trivial_tlist,
-										 NIL, NULL);
->>>>>>> REL_16_9
+										 NIL, cdbpathlocus_from_subquery(root, rel, partial_subpath), NULL);
 			add_partial_path(rel, partial_path);
 		}
 

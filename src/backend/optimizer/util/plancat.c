@@ -4,13 +4,9 @@
  *	   routines for accessing the system catalogs
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -314,11 +310,7 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			 * We don't have an AM for partitioned indexes, so we'll just
 			 * NULLify the AM related fields for those.
 			 */
-<<<<<<< HEAD
-			if (IsIndexAccessMethod(info->relam, BTREE_AM_OID))
-=======
 			if (indexRelation->rd_rel->relkind != RELKIND_PARTITIONED_INDEX)
->>>>>>> REL_16_9
 			{
 				/* We copy just the fields we need, not all of rd_indam */
 				amroutine = indexRelation->rd_indam;
@@ -341,7 +333,7 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 				/*
 				 * Fetch the ordering information for the index, if any.
 				 */
-				if (info->relam == BTREE_AM_OID)
+				if (IsIndexAccessMethod(info->relam, BTREE_AM_OID))
 				{
 					/*
 					 * If it's a btree index, we can use its opfamily OIDs
@@ -472,7 +464,6 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			 * than the table.  We must ignore partitioned indexes here as
 			 * there are not physical indexes.
 			 */
-<<<<<<< HEAD
 			double		allvisfrac; /* dummy */
 
 			cdb_estimate_rel_size(rel,
@@ -490,38 +481,6 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			{
 				/* For btrees, get tree height while we have the index open */
 				info->tree_height = _bt_getrootheight(indexRelation);
-=======
-			if (indexRelation->rd_rel->relkind != RELKIND_PARTITIONED_INDEX)
-			{
-				if (info->indpred == NIL)
-				{
-					info->pages = RelationGetNumberOfBlocks(indexRelation);
-					info->tuples = rel->tuples;
-				}
-				else
-				{
-					double		allvisfrac; /* dummy */
-
-					estimate_rel_size(indexRelation, NULL,
-									  &info->pages, &info->tuples, &allvisfrac);
-					if (info->tuples > rel->tuples)
-						info->tuples = rel->tuples;
-				}
-
-				if (info->relam == BTREE_AM_OID)
-				{
-					/*
-					 * For btrees, get tree height while we have the index
-					 * open
-					 */
-					info->tree_height = _bt_getrootheight(indexRelation);
-				}
-				else
-				{
-					/* For other index types, just set it to "unknown" for now */
-					info->tree_height = -1;
-				}
->>>>>>> REL_16_9
 			}
 			else
 			{
@@ -1370,18 +1329,6 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 
 	if (RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind))
 	{
-<<<<<<< HEAD
-		case RELKIND_RELATION:
-		case RELKIND_DIRECTORY_TABLE:
-		case RELKIND_MATVIEW:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_AOSEGMENTS:
-		case RELKIND_AOBLOCKDIR:
-		case RELKIND_AOVISIMAP:
-			table_relation_estimate_size(rel, attr_widths, pages, tuples,
-										 allvisfrac);
-			break;
-=======
 		table_relation_estimate_size(rel, attr_widths, pages, tuples,
 									 allvisfrac);
 	}
@@ -1391,7 +1338,6 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 		 * XXX: It'd probably be good to move this into a callback, individual
 		 * index types e.g. know if they have a metapage.
 		 */
->>>>>>> REL_16_9
 
 		/* it has storage, ok to call the smgr */
 		curpages = RelationGetNumberOfBlocks(rel);
@@ -1694,7 +1640,6 @@ get_relation_constraints(PlannerInfo *root,
 }
 
 /*
-<<<<<<< HEAD
  * GetExtStatisticsName
  *		Retrieve the name of an extended statistic object
  */
@@ -1765,7 +1710,9 @@ List *
 GetRelationExtStatistics(Relation relation)
 {
 	return get_relation_statistics(NULL, relation);
-=======
+}
+
+/*
  * Try loading data for the statistics object.
  *
  * We don't know if the data (specified by statOid and inh value) exist.
@@ -1844,7 +1791,6 @@ get_relation_statistics_worker(List **stainfos, RelOptInfo *rel,
 	}
 
 	ReleaseSysCache(dtup);
->>>>>>> REL_16_9
 }
 
 /*

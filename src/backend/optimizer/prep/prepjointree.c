@@ -14,13 +14,9 @@
  *		remove_useless_result_rtes
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -4307,7 +4303,6 @@ find_jointree_node_for_rel(Node *jtnode, int relid)
 }
 
 /*
-<<<<<<< HEAD
  * init_list_cteplaninfo
  *   Create a list of CtePlanInfos of size 'numCtes', and initialize each CtePlanInfo.
  */
@@ -4315,7 +4310,7 @@ List *
 init_list_cteplaninfo(int numCtes)
 {
 	List *list_cteplaninfo = NULL;
-	
+
 	for (int cteNo = 0; cteNo < numCtes; cteNo++)
 	{
 		CtePlanInfo *ctePlanInfo = palloc0(sizeof(CtePlanInfo));
@@ -4323,8 +4318,9 @@ init_list_cteplaninfo(int numCtes)
 	}
 
 	return list_cteplaninfo;
-	
-=======
+}
+
+/*
  * get_nullingrels: collect info about which outer joins null which relations
  *
  * The result struct contains, for each leaf relation used in the query,
@@ -4413,5 +4409,4 @@ get_nullingrels_recurse(Node *jtnode, Relids upper_nullingrels,
 	else
 		elog(ERROR, "unrecognized node type: %d",
 			 (int) nodeTag(jtnode));
->>>>>>> REL_16_9
 }

@@ -3,13 +3,9 @@
  * clauses.c
  *	  routines to manipulate qualification clauses
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -4952,11 +4948,7 @@ inline_function(Oid funcid, Oid result_type, Oid result_collid,
 			query_list = list_make1(n);
 		if (list_length(query_list) != 1)
 			goto fail;
-<<<<<<< HEAD
-		querytree = linitial(querytree_list);
-=======
 		querytree = linitial(query_list);
->>>>>>> REL_16_9
 
 		/*
 		 * Because we'll insist below that the querytree have an empty rtable
@@ -5710,7 +5702,6 @@ substitute_actual_srf_parameters_mutator(Node *node,
 }
 
 /*
-<<<<<<< HEAD
  * flatten_join_alias_var_optimizer
  *	  Replace Vars that reference JOIN outputs with references to the original
  *	  relation variables instead.
@@ -5925,8 +5916,6 @@ get_rightscalararrayop(const Expr *clause)
 }
 
 /*
-=======
->>>>>>> REL_16_9
  * pull_paramids
  *		Returns a Bitmapset containing the paramids of all Params in 'expr'.
  */
@@ -5947,11 +5936,7 @@ pull_paramids_walker(Node *node, Bitmapset **context)
 		return false;
 	if (IsA(node, Param))
 	{
-<<<<<<< HEAD
-		Param	   *param = (Param *)node;
-=======
 		Param	   *param = (Param *) node;
->>>>>>> REL_16_9
 
 		*context = bms_add_member(*context, param->paramid);
 		return false;

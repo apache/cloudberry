@@ -3,13 +3,9 @@
  * initsplan.c
  *	  Target list, qualification, joininfo initialization routines
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -141,12 +137,9 @@ static void distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 									bool is_clone,
 									List **postponed_oj_qual_list);
 static bool check_redundant_nullability_qual(PlannerInfo *root, Node *clause);
-<<<<<<< HEAD
-=======
 static Relids get_join_domain_min_rels(PlannerInfo *root, Relids domain_relids);
 static void check_mergejoinable(RestrictInfo *restrictinfo);
 static void check_hashjoinable(RestrictInfo *restrictinfo);
->>>>>>> REL_16_9
 static void check_memoizable(RestrictInfo *restrictinfo);
 
 
@@ -313,13 +306,8 @@ build_base_rel_tlists(PlannerInfo *root, List *final_tlist)
  *	  PlaceHolderInfo entry, and update its ph_needed.
  */
 void
-<<<<<<< HEAD
 add_vars_to_targetlist_x(PlannerInfo *root, List *vars,
 						 Relids where_needed, bool create_new_ph, bool force)
-=======
-add_vars_to_targetlist(PlannerInfo *root, List *vars,
-					   Relids where_needed)
->>>>>>> REL_16_9
 {
 	ListCell   *temp;
 
@@ -1067,11 +1055,6 @@ deconstruct_jointree(PlannerInfo *root)
 								 top_jdomain, NULL,
 								 &item_list);
 
-<<<<<<< HEAD
-	/* Shouldn't be any leftover quals */
-	if (postponed_qual_list != NIL)
-		elog(ERROR, "JOIN qualification may not refer to other relations.");
-=======
 	/* Now we can form the value of all_query_rels, too */
 	root->all_query_rels = bms_union(root->all_baserels, root->outer_join_rels);
 
@@ -1103,7 +1086,6 @@ deconstruct_jointree(PlannerInfo *root)
 
 	/* Don't need the JoinTreeItems any more */
 	list_free_deep(item_list);
->>>>>>> REL_16_9
 
 	return result;
 }
@@ -1211,21 +1193,10 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 	else if (IsA(jtnode, JoinExpr))
 	{
 		JoinExpr   *j = (JoinExpr *) jtnode;
-<<<<<<< HEAD
-		List	   *child_postponed_quals = NIL;
-		Relids		leftids = NULL;
-		Relids		rightids = NULL;
-		Relids		left_inners = NULL;
-		Relids		right_inners = NULL;
-		Relids		nonnullable_rels;
-		Relids		nullable_rels;
-		Relids		ojscope;
-=======
 		JoinDomain *child_domain,
 				   *fj_domain;
 		JoinTreeItem *left_item,
 				   *right_item;
->>>>>>> REL_16_9
 		List	   *leftjoinlist,
 				   *rightjoinlist;
 
@@ -1241,13 +1212,6 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 												   item_list);
 				left_item = (JoinTreeItem *) llast(*item_list);
 				rightjoinlist = deconstruct_recurse(root, j->rarg,
-<<<<<<< HEAD
-													below_outer_join,
-													&rightids, &right_inners,
-													&child_postponed_quals);
-				*qualscope = bms_union(leftids, rightids);
-				*inner_join_rels = bms_copy(*qualscope);
-=======
 													parent_domain,
 													jtitem,
 													item_list);
@@ -1258,22 +1222,18 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 				jtitem->inner_join_rels = jtitem->qualscope;
 				jtitem->left_rels = left_item->qualscope;
 				jtitem->right_rels = right_item->qualscope;
->>>>>>> REL_16_9
 				/* Inner join adds no restrictions for quals */
 				jtitem->nonnullable_rels = NULL;
 				break;
 			case JOIN_LEFT:
 			case JOIN_ANTI:
-<<<<<<< HEAD
 			case JOIN_LASJ_NOTIN:
-=======
 				/* Make new join domain for my quals and the RHS */
 				child_domain = makeNode(JoinDomain);
 				child_domain->jd_relids = NULL; /* filled by recursion */
 				root->join_domains = lappend(root->join_domains, child_domain);
 				jtitem->jdomain = child_domain;
 				/* Recurse */
->>>>>>> REL_16_9
 				leftjoinlist = deconstruct_recurse(root, j->larg,
 												   parent_domain,
 												   jtitem,
@@ -1319,14 +1279,6 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 												   item_list);
 				left_item = (JoinTreeItem *) llast(*item_list);
 				rightjoinlist = deconstruct_recurse(root, j->rarg,
-<<<<<<< HEAD
-													below_outer_join,
-													&rightids, &right_inners,
-													&child_postponed_quals);
-				*qualscope = bms_union(leftids, rightids);
-				*inner_join_rels = bms_union(left_inners, right_inners);
-				*inner_join_rels = bms_add_members(*inner_join_rels, rightids);
-=======
 													parent_domain,
 													jtitem,
 													item_list);
@@ -1340,7 +1292,6 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 													right_item->inner_join_rels);
 				jtitem->left_rels = left_item->qualscope;
 				jtitem->right_rels = right_item->qualscope;
->>>>>>> REL_16_9
 				/* Semi join adds no restrictions for quals */
 				jtitem->nonnullable_rels = NULL;
 				break;
@@ -1401,104 +1352,8 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 		}
 
 		/*
-<<<<<<< HEAD
-		 * Try to process any quals postponed by children.  If they need
-		 * further postponement, add them to my output postponed_qual_list.
-		 * Quals that can be processed now must be included in my_quals, so
-		 * that they'll be handled properly in make_outerjoininfo.
-		 */
-		my_quals = NIL;
-		foreach(l, child_postponed_quals)
-		{
-			PostponedQual *pq = (PostponedQual *) lfirst(l);
-
-			if (bms_is_subset(pq->relids, *qualscope))
-				my_quals = lappend(my_quals, pq->qual);
-			else
-			{
-				/*
-				 * We should not be postponing any quals past an outer join.
-				 * If this Assert fires, pull_up_subqueries() messed up.
-				 */
-				/*
-				 * GPDB_94_MERGE_FIXME: In GPDB, SEMI JOIN may come here, since
-				 * GPDB pulls up correlated ANY_SUBLINK. Consider the query
-				 * below:
-				 *
-				 * select * from A where exists (select * from B where A.i in
-				 * (select C.i from C where C.i = B.i));
-				 *
-				 * We are unsure if postponing quals past a semi-join is always
-				 * semantically correct, see discussion on mailing list here:
-				 * "Regarding postponing quals past an semi join"
-				 * https://groups.google.com/a/greenplum.org/d/msg/gpdb-dev/YHYNIUZnecI/Rlum0VD3FwAJ
-				 *
-				 * MORE: In GPDB, ANTI-JOIN/LASJ_NOTIN-JOIN may come here.
-				 */
-				Assert(j->jointype == JOIN_INNER || j->jointype == JOIN_SEMI ||
-					   j->jointype == JOIN_ANTI || j->jointype == JOIN_LASJ_NOTIN);
-				*postponed_qual_list = lappend(*postponed_qual_list, pq);
-			}
-		}
-		my_quals = list_concat(my_quals, (List *) j->quals);
-
-		/*
-		 * For an OJ, form the SpecialJoinInfo now, because we need the OJ's
-		 * semantic scope (ojscope) to pass to distribute_qual_to_rels.  But
-		 * we mustn't add it to join_info_list just yet, because we don't want
-		 * distribute_qual_to_rels to think it is an outer join below us.
-		 *
-		 * Semijoins are a bit of a hybrid: we build a SpecialJoinInfo, but we
-		 * want ojscope = NULL for distribute_qual_to_rels.
-		 */
-		if (j->jointype != JOIN_INNER)
-		{
-			sjinfo = make_outerjoininfo(root,
-										leftids, rightids,
-										*inner_join_rels,
-										j->jointype,
-										my_quals);
-			if (j->jointype == JOIN_SEMI)
-				ojscope = NULL;
-			else
-				ojscope = bms_union(sjinfo->min_lefthand,
-									sjinfo->min_righthand);
-		}
-		else
-		{
-			sjinfo = NULL;
-			ojscope = NULL;
-		}
-
-		/* Process the JOIN's qual clauses */
-		foreach(l, my_quals)
-		{
-			Node	   *qual = (Node *) lfirst(l);
-
-			distribute_qual_to_rels(root, qual,
-									below_outer_join, j->jointype,
-									root->qual_security_level,
-									*qualscope,
-									ojscope, nonnullable_rels,
-									postponed_qual_list);
-		}
-
-		/* Now we can add the SpecialJoinInfo to join_info_list */
-		if (sjinfo)
-		{
-			root->join_info_list = lappend(root->join_info_list, sjinfo);
-			/* Each time we do that, recheck placeholder eval levels */
-			update_placeholder_eval_levels(root, sjinfo);
-		}
-
-		/*
-		 * Finally, compute the output joinlist.  We fold subproblems together
-		 * except at a FULL JOIN or where join_collapse_limit would be
-		 * exceeded.
-=======
 		 * Compute the output joinlist.  We fold subproblems together except
 		 * at a FULL JOIN or where join_collapse_limit would be exceeded.
->>>>>>> REL_16_9
 		 */
 		if (j->jointype == JOIN_FULL)
 		{
@@ -1775,18 +1630,11 @@ mark_rels_nulled_by_join(PlannerInfo *root, Index ojrelid,
  *	  Build a SpecialJoinInfo for the current outer join
  *
  * Inputs:
-<<<<<<< HEAD
- *	left_rels: the base Relids syntactically on outer side of join
- *	right_rels: the base Relids syntactically on inner side of join
- *	inner_join_rels: base Relids participating in inner joins below this one
- *	jointype: what it says (must always be LEFT, FULL, SEMI, ANTI, or LASJ)
-=======
  *	left_rels: the base+OJ Relids syntactically on outer side of join
  *	right_rels: the base+OJ Relids syntactically on inner side of join
  *	inner_join_rels: base+OJ Relids participating in inner joins below this one
  *	jointype: what it says (must always be LEFT, FULL, SEMI, or ANTI)
  *	ojrelid: RT index of the join RTE (0 for SEMI, which isn't in the RT list)
->>>>>>> REL_16_9
  *	clause: the outer join's join condition (in implicit-AND format)
  *
  * The node should eventually be appended to root->join_info_list, but we
@@ -1963,15 +1811,9 @@ make_outerjoininfo(PlannerInfo *root,
 		 * min_lefthand.  (We must use its full syntactic relset, not just its
 		 * min_lefthand + min_righthand.  This is because there might be other
 		 * OJs below this one that this one can commute with, but we cannot
-<<<<<<< HEAD
-		 * commute with them if we don't with this one.)  Also, if the current
-		 * join is a semijoin, antijoin or lasj, we must preserve ordering
-		 * regardless of strictness.
-=======
 		 * commute with them if we don't with this one.)  Also, if we have
 		 * unsafe PHVs or the current join is a semijoin or antijoin, we must
 		 * preserve ordering regardless of strictness.
->>>>>>> REL_16_9
 		 *
 		 * Note: I believe we have to insist on being strict for at least one
 		 * rel in the lower OJ's min_righthand, not its whole syn_righthand.
@@ -1983,13 +1825,9 @@ make_outerjoininfo(PlannerInfo *root,
 		if (bms_overlap(left_rels, otherinfo->syn_righthand))
 		{
 			if (bms_overlap(clause_relids, otherinfo->syn_righthand) &&
-<<<<<<< HEAD
-				(jointype == JOIN_SEMI || jointype == JOIN_ANTI ||
-				 jointype == JOIN_LASJ_NOTIN ||
-=======
 				(have_unsafe_phvs ||
 				 jointype == JOIN_SEMI || jointype == JOIN_ANTI ||
->>>>>>> REL_16_9
+				 jointype == JOIN_LASJ_NOTIN ||
 				 !bms_overlap(strict_relids, otherinfo->min_righthand)))
 			{
 				/* Preserve ordering */
@@ -2042,12 +1880,8 @@ make_outerjoininfo(PlannerInfo *root,
 				jointype == JOIN_LASJ_NOTIN ||
 				otherinfo->jointype == JOIN_SEMI ||
 				otherinfo->jointype == JOIN_ANTI ||
-<<<<<<< HEAD
 				otherinfo->jointype == JOIN_LASJ_NOTIN ||
-				!otherinfo->lhs_strict || otherinfo->delay_upper_joins)
-=======
 				!otherinfo->lhs_strict)
->>>>>>> REL_16_9
 			{
 				/* Preserve ordering */
 				min_righthand = bms_add_members(min_righthand,
@@ -3727,13 +3561,8 @@ check_hashjoinable(RestrictInfo *restrictinfo)
 /*
  * check_memoizable
  *	  If the restrictinfo's clause is suitable to be used for a Memoize node,
-<<<<<<< HEAD
- *	  set the hasheqoperator to the hash equality operator that will be needed
- *	  during caching.
-=======
  *	  set the left_hasheqoperator and right_hasheqoperator to the hash equality
  *	  operator that will be needed during caching.
->>>>>>> REL_16_9
  */
 static void
 check_memoizable(RestrictInfo *restrictinfo)
@@ -3751,25 +3580,9 @@ check_memoizable(RestrictInfo *restrictinfo)
 		return;
 
 	lefttype = exprType(linitial(((OpExpr *) clause)->args));
-<<<<<<< HEAD
-	righttype = exprType(lsecond(((OpExpr *) clause)->args));
-
-	/*
-	 * Really there should be a field for both the left and right hash
-	 * equality operator, however, in v14, there's only a single field in
-	 * RestrictInfo to record the operator in, so we must insist that the left
-	 * and right types match.
-	 */
-	if (lefttype != righttype)
-		return;
-
-	typentry = lookup_type_cache(lefttype, TYPECACHE_HASH_PROC |
-										   TYPECACHE_EQ_OPR);
-=======
 
 	typentry = lookup_type_cache(lefttype, TYPECACHE_HASH_PROC |
 								 TYPECACHE_EQ_OPR);
->>>>>>> REL_16_9
 
 	if (OidIsValid(typentry->hash_proc) && OidIsValid(typentry->eq_opr))
 		restrictinfo->left_hasheqoperator = typentry->eq_opr;

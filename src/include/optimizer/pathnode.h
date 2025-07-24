@@ -123,7 +123,7 @@ extern SubqueryScanPath *create_subqueryscan_path(PlannerInfo *root,
 												  Path *subpath,
 												  bool trivial_pathtarget,
 												  List *pathkeys,
-												  CdbPathLocus locus
+												  CdbPathLocus locus,
 												  Relids required_outer);
 extern Path *create_functionscan_path(PlannerInfo *root, RelOptInfo *rel,
 									  RangeTblEntry *rte,

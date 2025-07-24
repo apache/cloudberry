@@ -273,12 +273,8 @@ merge_clump(PlannerInfo *root, List *clumps, Clump *new_clump, int num_gene,
 				 * rel once we know the final targetlist (see
 				 * grouping_planner).
 				 */
-<<<<<<< HEAD
-				if (old_clump->size + new_clump->size < num_gene)
 				#if 0
-=======
 				if (!bms_equal(joinrel->relids, root->all_query_rels))
->>>>>>> REL_16_9
 					generate_useful_gather_paths(root, joinrel, false);
 				#endif
 

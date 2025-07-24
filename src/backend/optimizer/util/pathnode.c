@@ -3,13 +3,9 @@
  * pathnode.c
  *	  Routines to manipulate pathlists and create path nodes
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -2315,11 +2311,7 @@ create_memoize_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->param_exprs = param_exprs;
 	pathnode->singlerow = singlerow;
 	pathnode->binary_mode = binary_mode;
-<<<<<<< HEAD
-	pathnode->calls = calls;
-=======
 	pathnode->calls = clamp_row_est(calls);
->>>>>>> REL_16_9
 
 	/*
 	 * For now we set est_entries to 0.  cost_memoize_rescan() does all the
@@ -3072,12 +3064,8 @@ create_gather_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
  */
 SubqueryScanPath *
 create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
-<<<<<<< HEAD
-						 List *pathkeys, CdbPathLocus locus, Relids required_outer)
-=======
 						 bool trivial_pathtarget,
-						 List *pathkeys, Relids required_outer)
->>>>>>> REL_16_9
+						 List *pathkeys, CdbPathLocus locus, Relids required_outer)
 {
 	SubqueryScanPath *pathnode = makeNode(SubqueryScanPath);
 
@@ -3093,7 +3081,6 @@ create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->path.pathkeys = pathkeys;
 	pathnode->subpath = subpath;
 
-<<<<<<< HEAD
 	pathnode->path.locus = locus;
 	pathnode->path.motionHazard = subpath->motionHazard;
 	pathnode->path.barrierHazard = subpath->barrierHazard;
@@ -3101,11 +3088,8 @@ create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->path.sameslice_relids = NULL;
 
 	pathnode->required_outer = bms_copy(required_outer);
-	cost_subqueryscan(pathnode, root, rel, pathnode->path.param_info);
-=======
 	cost_subqueryscan(pathnode, root, rel, pathnode->path.param_info,
 					  trivial_pathtarget);
->>>>>>> REL_16_9
 
 	return pathnode;
 }
@@ -4035,19 +4019,11 @@ create_nestloop_path(PlannerInfo *root,
 		restrict_clauses = jclauses;
 	}
 
-<<<<<<< HEAD
-
 	pathnode = makeNode(NestPath);
-	pathnode->path.pathtype = T_NestLoop;
-	pathnode->path.parent = joinrel;
-	pathnode->path.pathtarget = joinrel->reltarget;
-	pathnode->path.param_info =
-=======
 	pathnode->jpath.path.pathtype = T_NestLoop;
 	pathnode->jpath.path.parent = joinrel;
 	pathnode->jpath.path.pathtarget = joinrel->reltarget;
 	pathnode->jpath.path.param_info =
->>>>>>> REL_16_9
 		get_joinrel_parampathinfo(root,
 								  joinrel,
 								  outer_path,
@@ -4060,35 +4036,26 @@ create_nestloop_path(PlannerInfo *root,
 		outer_path->parallel_safe && inner_path->parallel_safe;
 #if 0
 	/* This is a foolish way to estimate parallel_workers, but for now... */
-<<<<<<< HEAD
 	pathnode->path.parallel_workers = outer_path->parallel_workers;
 #endif
 	/* GPDB parallel, use join locus parallel_workers as we may add Motion path above inner and outer */
-	pathnode->path.parallel_workers = join_locus.parallel_workers;
-	pathnode->path.pathkeys = pathkeys;
-	pathnode->jointype = jointype;
-	pathnode->inner_unique = extra->inner_unique;
-	pathnode->outerjoinpath = outer_path;
-	pathnode->innerjoinpath = inner_path;
-	pathnode->joinrestrictinfo = restrict_clauses;
-=======
-	pathnode->jpath.path.parallel_workers = outer_path->parallel_workers;
+
+	pathnode->jpath.path.parallel_workers = join_locus.parallel_workers;
 	pathnode->jpath.path.pathkeys = pathkeys;
 	pathnode->jpath.jointype = jointype;
 	pathnode->jpath.inner_unique = extra->inner_unique;
 	pathnode->jpath.outerjoinpath = outer_path;
 	pathnode->jpath.innerjoinpath = inner_path;
 	pathnode->jpath.joinrestrictinfo = restrict_clauses;
->>>>>>> REL_16_9
 
-	pathnode->path.locus = join_locus;
-	pathnode->path.motionHazard = outer_path->motionHazard || inner_path->motionHazard;
-	pathnode->path.barrierHazard = outer_path->barrierHazard || inner_path->barrierHazard;
+	pathnode->jpath.path.locus = join_locus;
+	pathnode->jpath.path.motionHazard = outer_path->motionHazard || inner_path->motionHazard;
+	pathnode->jpath.path.barrierHazard = outer_path->barrierHazard || inner_path->barrierHazard;
 
 	/* we're only as rescannable as our child plans */
-	pathnode->path.rescannable = outer_path->rescannable && inner_path->rescannable;
+	pathnode->jpath.path.rescannable = outer_path->rescannable && inner_path->rescannable;
 
-	pathnode->path.sameslice_relids = bms_union(inner_path->sameslice_relids, outer_path->sameslice_relids);
+	pathnode->jpath.path.sameslice_relids = bms_union(inner_path->sameslice_relids, outer_path->sameslice_relids);
 
 	/*
 	 * inner_path & outer_path are possibly modified above. Let's recalculate
@@ -4106,7 +4073,7 @@ create_nestloop_path(PlannerInfo *root,
 		return (Path *) create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
-												 pathnode->innerjoinpath->parent->relids,
+												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
 	}
 
@@ -4129,7 +4096,7 @@ create_nestloop_path(PlannerInfo *root,
 	 */
 	return turn_volatile_seggen_to_singleqe(root,
 											(Path *) pathnode,
-											(Node *) (pathnode->joinrestrictinfo));
+											(Node *) (pathnode->jpath.joinrestrictinfo));
 }
 
 /*
@@ -5140,11 +5107,7 @@ create_agg_path(PlannerInfo *root,
 	}
 	else
 		pathnode->path.pathkeys = NIL;	/* output is unordered */
-<<<<<<< HEAD
-	pathnode->path.barrierHazard = subpath->barrierHazard;
-=======
-
->>>>>>> REL_16_9
+	pathnode->path.barrierHazard = subpath->barrierHazard;9
 	pathnode->subpath = subpath;
 	pathnode->streaming = streaming;
 
@@ -6392,39 +6355,24 @@ reparameterize_path(PlannerInfo *root, Path *path,
 									   apath->path.parallel_aware,
 									   -1);
 			}
-<<<<<<< HEAD
+		case T_Material:
+		{
+			MaterialPath *mpath = (MaterialPath *) path;
+			Path	   *spath = mpath->subpath;
+
+			spath = reparameterize_path(root, spath,
+										required_outer,
+										loop_count);
+			if (spath == NULL)
+				return NULL;
+			return (Path *) create_material_path(rel, spath);
+		}
 		case T_Memoize:
 			{
 				MemoizePath *mpath = (MemoizePath *) path;
 
 				return (Path *) create_memoize_path(root, rel,
 													mpath->subpath,
-=======
-		case T_Material:
-			{
-				MaterialPath *mpath = (MaterialPath *) path;
-				Path	   *spath = mpath->subpath;
-
-				spath = reparameterize_path(root, spath,
-											required_outer,
-											loop_count);
-				if (spath == NULL)
-					return NULL;
-				return (Path *) create_material_path(rel, spath);
-			}
-		case T_Memoize:
-			{
-				MemoizePath *mpath = (MemoizePath *) path;
-				Path	   *spath = mpath->subpath;
-
-				spath = reparameterize_path(root, spath,
-											required_outer,
-											loop_count);
-				if (spath == NULL)
-					return NULL;
-				return (Path *) create_memoize_path(root, rel,
-													spath,
->>>>>>> REL_16_9
 													mpath->param_exprs,
 													mpath->hash_operators,
 													mpath->singlerow,
@@ -6733,35 +6681,22 @@ do { \
 				new_path = (Path *) apath;
 			}
 			break;
-
-<<<<<<< HEAD
-		case T_MemoizePath:
-			{
-				MemoizePath *mpath;
-
-				FLAT_COPY_PATH(mpath, path, MemoizePath);
-				REPARAMETERIZE_CHILD_PATH(mpath->subpath);
-				new_path = (Path *) mpath;
-=======
 		case T_MaterialPath:
-			{
-				MaterialPath *mpath;
+		{
+			MaterialPath *mpath;
 
-				FLAT_COPY_PATH(mpath, path, MaterialPath);
-				REPARAMETERIZE_CHILD_PATH(mpath->subpath);
-				new_path = (Path *) mpath;
-			}
+			FLAT_COPY_PATH(mpath, path, MaterialPath);
+			REPARAMETERIZE_CHILD_PATH(mpath->subpath);
+			new_path = (Path *) mpath;
+		}
 			break;
-
 		case T_MemoizePath:
 			{
 				MemoizePath *mpath;
 
 				FLAT_COPY_PATH(mpath, path, MemoizePath);
 				REPARAMETERIZE_CHILD_PATH(mpath->subpath);
-				ADJUST_CHILD_ATTRS(mpath->param_exprs);
 				new_path = (Path *) mpath;
->>>>>>> REL_16_9
 			}
 			break;
 

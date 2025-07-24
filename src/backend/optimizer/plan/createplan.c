@@ -5,13 +5,9 @@
  *	  Planning is complete, we just need to convert the selected
  *	  Path into a Plan.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -119,11 +115,7 @@ static List *get_gating_quals(PlannerInfo *root, List *quals);
 static Plan *create_gating_plan(PlannerInfo *root, Path *path, Plan *plan,
 								List *gating_quals);
 static Plan *create_join_plan(PlannerInfo *root, JoinPath *best_path);
-<<<<<<< HEAD
-static bool is_async_capable_plan(Plan *plan, Path *path);
-=======
 static bool mark_async_capable_plan(Plan *plan, Path *path);
->>>>>>> REL_16_9
 static Plan *create_append_plan(PlannerInfo *root, AppendPath *best_path,
 								int flags);
 static Plan *create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_path,
@@ -237,12 +229,8 @@ static IndexScan *make_indexscan(List *qptlist, List *qpqual, Index scanrelid,
 								 ScanDirection indexscandir);
 static IndexOnlyScan *make_indexonlyscan(List *qptlist, List *qpqual,
 										 Index scanrelid, Oid indexid,
-<<<<<<< HEAD
 										 List *indexqual, List *indexqualorig,
 										 List *recheckqual,
-=======
-										 List *indexqual, List *recheckqual,
->>>>>>> REL_16_9
 										 List *indexorderby,
 										 List *indextlist,
 										 ScanDirection indexscandir);
@@ -330,10 +318,7 @@ static IncrementalSort *make_incrementalsort_from_pathkeys(Plan *lefttree,
 static Sort *make_sort_from_groupcols(List *groupcls,
 									  AttrNumber *grpColIdx,
 									  Plan *lefttree);
-<<<<<<< HEAD
-=======
 static Material *make_material(Plan *lefttree);
->>>>>>> REL_16_9
 static Memoize *make_memoize(Plan *lefttree, Oid *hashoperators,
 							 Oid *collations, List *param_exprs,
 							 bool singlerow, bool binary_mode,
@@ -1278,13 +1263,6 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path)
 }
 
 /*
-<<<<<<< HEAD
- * is_async_capable_plan
- *		Check whether the Plan node created from a Path node is async-capable.
- */
-static bool
-is_async_capable_plan(Plan *plan, Path *path)
-=======
  * mark_async_capable_plan
  *		Check whether the Plan node created from a Path node is async-capable,
  *		and if so, mark the Plan node as such and return true, otherwise
@@ -1292,7 +1270,6 @@ is_async_capable_plan(Plan *plan, Path *path)
  */
 static bool
 mark_async_capable_plan(Plan *plan, Path *path)
->>>>>>> REL_16_9
 {
 	switch (nodeTag(path))
 	{
@@ -1520,15 +1497,8 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path, int flags)
 			}
 		}
 
-<<<<<<< HEAD
-		subplans = lappend(subplans, subplan);
-
-		/* If needed, check to see if subplan can be executed asynchronously */
-		if (consider_async && is_async_capable_plan(subplan, subpath))
-=======
 		/* If needed, check to see if subplan can be executed asynchronously */
 		if (consider_async && mark_async_capable_plan(subplan, subpath))
->>>>>>> REL_16_9
 		{
 			Assert(subplan->async_capable);
 			++nasyncplans;
@@ -3953,10 +3923,7 @@ create_indexscan_plan(PlannerInfo *root,
 												indexoid,
 												fixed_indexquals,
 												stripped_indexquals,
-<<<<<<< HEAD
 												stripped_indexquals,
-=======
->>>>>>> REL_16_9
 												fixed_indexorderbys,
 												indexinfo->indextlist,
 												best_path->indexscandir);
@@ -4802,22 +4769,6 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 	}
 	if (lc == NULL)				/* shouldn't happen */
 		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
-<<<<<<< HEAD
-=======
-	if (ndx >= list_length(cteroot->cte_plan_ids))
-		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
-	plan_id = list_nth_int(cteroot->cte_plan_ids, ndx);
-	if (plan_id <= 0)
-		elog(ERROR, "no plan was made for CTE \"%s\"", rte->ctename);
-	foreach(lc, cteroot->init_plans)
-	{
-		ctesplan = (SubPlan *) lfirst(lc);
-		if (ctesplan->plan_id == plan_id)
-			break;
-	}
-	if (lc == NULL)				/* shouldn't happen */
-		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
->>>>>>> REL_16_9
 
 	/*
 	 * In PostgreSQL, we use the index to look up the plan ID in the
@@ -6849,10 +6800,7 @@ make_indexonlyscan(List *qptlist,
 				   Index scanrelid,
 				   Oid indexid,
 				   List *indexqual,
-<<<<<<< HEAD
 				   List *indexqualorig,
-=======
->>>>>>> REL_16_9
 				   List *recheckqual,
 				   List *indexorderby,
 				   List *indextlist,
@@ -6868,10 +6816,7 @@ make_indexonlyscan(List *qptlist,
 	node->scan.scanrelid = scanrelid;
 	node->indexid = indexid;
 	node->indexqual = indexqual;
-<<<<<<< HEAD
 	node->indexqualorig = indexqualorig;
-=======
->>>>>>> REL_16_9
 	node->recheckqual = recheckqual;
 	node->indexorderby = indexorderby;
 	node->indextlist = indextlist;

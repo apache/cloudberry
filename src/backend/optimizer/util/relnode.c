@@ -3,13 +3,9 @@
  * relnode.c
  *	  Relation-node lookup/construction routines
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -38,12 +34,9 @@
 #include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
-<<<<<<< HEAD
 #include "parser/parse_oper.h"
-=======
 #include "rewrite/rewriteManip.h"
 #include "parser/parse_relation.h"
->>>>>>> REL_16_9
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
 #include "utils/selfuncs.h"
@@ -64,14 +57,10 @@ typedef struct GroupedHashEntry
 } GroupedHashEntry;
 
 static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
-<<<<<<< HEAD
-					RelOptInfo *input_rel);
-=======
 								RelOptInfo *input_rel,
 								SpecialJoinInfo *sjinfo,
 								List *pushed_down_joins,
 								bool can_null);
->>>>>>> REL_16_9
 static List *build_joinrel_restrictlist(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outer_rel,
@@ -95,15 +84,8 @@ static void add_join_rel(PlannerInfo *root, RelOptInfo *joinrel);
 static void build_joinrel_partition_info(PlannerInfo *root,
 										 RelOptInfo *joinrel,
 										 RelOptInfo *outer_rel, RelOptInfo *inner_rel,
-<<<<<<< HEAD
-										 List *restrictlist, JoinType jointype);
-=======
 										 SpecialJoinInfo *sjinfo,
 										 List *restrictlist);
-static bool have_partkey_equi_join(PlannerInfo *root, RelOptInfo *joinrel,
-								   RelOptInfo *rel1, RelOptInfo *rel2,
-								   JoinType jointype, List *restrictlist);
->>>>>>> REL_16_9
 static int	match_expr_to_partition_keys(Expr *expr, RelOptInfo *rel,
 										 bool strict_op);
 static void set_joinrel_partition_key_exprs(RelOptInfo *joinrel,
@@ -271,10 +253,8 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptInfo *parent)
 	rel->rel_parallel_workers = -1; /* set up in get_relation_info */
 	rel->amflags = 0;
 	rel->serverid = InvalidOid;
-<<<<<<< HEAD
 	rel->segSeverids = NIL;
-	rel->userid = rte->checkAsUser;
-=======
+
 	if (rte->rtekind == RTE_RELATION)
 	{
 		Assert(parent == NULL ||
@@ -304,7 +284,6 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptInfo *parent)
 	}
 	else
 		rel->userid = InvalidOid;
->>>>>>> REL_16_9
 	rel->useridiscurrent = false;
 	rel->exec_location = FTEXECLOCATION_NOT_DEFINED;
 	rel->fdwroutine = NULL;
@@ -722,12 +701,9 @@ find_join_rel(PlannerInfo *root, Relids relids)
  *
  * Otherwise these fields are left invalid, so GetForeignJoinPaths will not be
  * called for the join relation.
-<<<<<<< HEAD
  *
  * GPDB: Also, EXECUTE ON must match. (Perhaps we shouldn't allow EXECUTE
  * ON on individual tables? Then it would be enough to compare server id)
-=======
->>>>>>> REL_16_9
  */
 static void
 set_foreign_rel_properties(RelOptInfo *joinrel, RelOptInfo *outer_rel,
@@ -1074,13 +1050,9 @@ build_join_rel(PlannerInfo *root,
 			   RelOptInfo *outer_rel,
 			   RelOptInfo *inner_rel,
 			   SpecialJoinInfo *sjinfo,
-<<<<<<< HEAD
 			   List **restrictlist_ptr,
-			   RelAggInfo *agg_info)
-=======
 			   List *pushed_down_joins,
-			   List **restrictlist_ptr)
->>>>>>> REL_16_9
+			   RelAggInfo *agg_info)
 {
 	RelOptInfo *joinrel;
 	List	   *restrictlist;
@@ -1107,13 +1079,8 @@ build_join_rel(PlannerInfo *root,
 			*restrictlist_ptr = build_joinrel_restrictlist(root,
 														   joinrel,
 														   outer_rel,
-<<<<<<< HEAD
-														   inner_rel);
-
-=======
 														   inner_rel,
 														   sjinfo);
->>>>>>> REL_16_9
 		return joinrel;
 	}
 
@@ -1200,25 +1167,19 @@ build_join_rel(PlannerInfo *root,
 	 * and inner rels we first try to build it from.  But the contents should
 	 * be the same regardless.
 	 */
-<<<<<<< HEAD
 	if (!grouped)
 	{
-		build_joinrel_tlist(root, joinrel, outer_rel);
-		build_joinrel_tlist(root, joinrel, inner_rel);
-		add_placeholders_to_joinrel(root, joinrel, outer_rel, inner_rel);
+		build_joinrel_tlist(root, joinrel, outer_rel, sjinfo, pushed_down_joins,
+							(sjinfo->jointype == JOIN_FULL));
+		build_joinrel_tlist(root, joinrel, inner_rel, sjinfo, pushed_down_joins,
+							(sjinfo->jointype != JOIN_INNER));
+		add_placeholders_to_joinrel(root, joinrel, outer_rel, inner_rel, sjinfo);
 	}
 	else
 	{
 		/* Target and costs already created in create_rel_agg_info */
 		joinrel->reltarget = agg_info->target;
 	}
-=======
-	build_joinrel_tlist(root, joinrel, outer_rel, sjinfo, pushed_down_joins,
-						(sjinfo->jointype == JOIN_FULL));
-	build_joinrel_tlist(root, joinrel, inner_rel, sjinfo, pushed_down_joins,
-						(sjinfo->jointype != JOIN_INNER));
-	add_placeholders_to_joinrel(root, joinrel, outer_rel, inner_rel, sjinfo);
->>>>>>> REL_16_9
 
 	/*
 	 * add_placeholders_to_joinrel also took care of adding the ph_lateral
@@ -1236,16 +1197,12 @@ build_join_rel(PlannerInfo *root,
 	 * for set_joinrel_size_estimates().)
 	 */
 	restrictlist = build_joinrel_restrictlist(root, joinrel,
-<<<<<<< HEAD
-											  outer_rel, inner_rel);
+											  outer_rel, inner_rel,
+											  sjinfo);
 
 	/* Compute information relevant to the foreign relations. */
 	set_foreign_rel_properties(joinrel, outer_rel, inner_rel, restrictlist);
 
-=======
-											  outer_rel, inner_rel,
-											  sjinfo);
->>>>>>> REL_16_9
 	if (restrictlist_ptr)
 		*restrictlist_ptr = restrictlist;
 	build_joinrel_joinlist(joinrel, outer_rel, inner_rel);
@@ -1257,13 +1214,8 @@ build_join_rel(PlannerInfo *root,
 	joinrel->has_eclass_joins = has_relevant_eclass_joinclause(root, joinrel);
 
 	/* Store the partition information. */
-<<<<<<< HEAD
-	build_joinrel_partition_info(joinrel, outer_rel, inner_rel, restrictlist,
-									sjinfo->jointype);
-=======
 	build_joinrel_partition_info(root, joinrel, outer_rel, inner_rel, sjinfo,
 								 restrictlist);
->>>>>>> REL_16_9
 
 	if (grouped && agg_info->build_from_plain)
 	{
@@ -2550,13 +2502,9 @@ build_joinrel_partition_info(PlannerInfo *root,
  * of matching partition keys of the relations being joined for all
  * partition keys.
  */
-<<<<<<< HEAD
+
 bool
-have_partkey_equi_join(RelOptInfo *joinrel,
-=======
-static bool
 have_partkey_equi_join(PlannerInfo *root, RelOptInfo *joinrel,
->>>>>>> REL_16_9
 					   RelOptInfo *rel1, RelOptInfo *rel2,
 					   JoinType jointype, List *restrictlist)
 {
