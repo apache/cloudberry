@@ -347,12 +347,16 @@ abort;
 -- start_ignore
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- end_ignore
-create table par1(a int, b int) partition by range(a) using ao_row distributed randomly;
+create table par_normal_oid(a int, b int) partition by range(a) using ao_row distributed randomly;
 select gp_inject_fault('bump_oid', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
-create table sub_par1 partition of par1 for values from (1) to (2) using ao_row;
-select 'sub_par1'::regclass::oid > x'7FFFFFFF'::bigint;
+create table sub_par1_large_oid partition of par_normal_oid for values from (1) to (2) using ao_row;
+select 'sub_par1_large_oid'::regclass::oid > x'7FFFFFFF'::bigint;
 select gp_inject_fault('bump_oid', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
-insert into par1 values(1, 2);
+create materialized view mv_par_normal_oid as
+    select count(*) from par_normal_oid;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid';
+insert into par_normal_oid values(1, 2);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid';
 
 --start_ignore
 drop schema matview_data_schema cascade;

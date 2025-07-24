@@ -1091,6 +1091,7 @@ ExecInsert(ModifyTableState *mtstate,
 	{
 		ModifiedLeafRelidsKey	key;
 
+		MemSet(&key, 0, sizeof(key));
 		key.cmd = CMD_INSERT;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
@@ -1562,6 +1563,7 @@ ldelete:;
 	{
 		ModifiedLeafRelidsKey	key;
 
+		MemSet(&key, 0, sizeof(key));
 		key.cmd = CMD_DELETE;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
@@ -2214,6 +2216,7 @@ lreplace:;
 	{
 		ModifiedLeafRelidsKey	key;
 
+		MemSet(&key, 0, sizeof(key));
 		key.cmd = CMD_UPDATE;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
