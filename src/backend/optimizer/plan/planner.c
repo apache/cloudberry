@@ -328,13 +328,16 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 {
 	PlannedStmt *result;
 	instr_time	starttime, endtime;
+	OptimizerOptions *optimizer_options;
 
+	optimizer_options = palloc(sizeof(OptimizerOptions));
+	optimizer_options->create_vectorization_plan = false;
 	if (planner_hook)
 	{
 		if (gp_log_optimization_time)
 			INSTR_TIME_SET_CURRENT(starttime);
 
-		result = (*planner_hook) (parse, query_string, cursorOptions, boundParams);
+		result = (*planner_hook) (parse, query_string, cursorOptions, boundParams, optimizer_options);
 
 		if (gp_log_optimization_time)
 		{
@@ -344,14 +347,14 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 		}
 	}
 	else
-		result = standard_planner(parse, query_string, cursorOptions, boundParams);
-
+		result = standard_planner(parse, query_string, cursorOptions, boundParams, optimizer_options);
+	pfree(optimizer_options);
 	return result;
 }
 
 PlannedStmt *
 standard_planner(Query *parse, const char *query_string, int cursorOptions,
-				 ParamListInfo boundParams)
+				 ParamListInfo boundParams, OptimizerOptions *optimizer_options)
 {
 	PlannedStmt *result;
 	PlannerGlobal *glob;
@@ -404,7 +407,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 			INSTR_TIME_SET_CURRENT(starttime);
 
 #ifdef USE_ORCA
-		result = optimize_query(parse, cursorOptions, boundParams);
+		result = optimize_query(parse, cursorOptions, boundParams, optimizer_options);
 #else
 		/* Make sure this branch is not taken in builds using --disable-orca. */
 		Assert(false);

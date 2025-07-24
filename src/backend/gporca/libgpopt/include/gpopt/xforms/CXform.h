@@ -170,6 +170,7 @@ public:
 		ExfSplitDQA,
 		ExfSequenceProject2Apply,
 		ExfImplementSequenceProject,
+		ExfImplementHashSequenceProject,
 		ExfImplementAssert,
 		ExfCTEAnchor2Sequence,
 		ExfCTEAnchor2TrivialSelect,

@@ -1014,6 +1014,33 @@ _outWindowAgg(StringInfo str, const WindowAgg *node)
 }
 
 static void
+_outWindowHashAgg(StringInfo str, const WindowHashAgg *node)
+{
+	WRITE_NODE_TYPE("WINDOWHASHAGG");
+
+	_outPlanInfo(str, (const Plan *) node);
+
+	WRITE_UINT_FIELD(winref);
+	WRITE_INT_FIELD(partNumCols);
+	WRITE_ATTRNUMBER_ARRAY(partColIdx, node->partNumCols);
+	WRITE_OID_ARRAY(partOperators, node->partNumCols);
+	WRITE_OID_ARRAY(partCollations, node->partNumCols);
+	WRITE_INT_FIELD(ordNumCols);
+	WRITE_ATTRNUMBER_ARRAY(ordColIdx, node->ordNumCols);
+	WRITE_OID_ARRAY(ordOperators, node->ordNumCols);
+	WRITE_OID_ARRAY(ordCollations, node->ordNumCols);
+	WRITE_BOOL_ARRAY(ordNullsFirst, node->ordNumCols);
+	WRITE_INT_FIELD(frameOptions);
+	WRITE_NODE_FIELD(startOffset);
+	WRITE_NODE_FIELD(endOffset);
+	WRITE_OID_FIELD(startInRangeFunc);
+	WRITE_OID_FIELD(endInRangeFunc);
+	WRITE_OID_FIELD(inRangeColl);
+	WRITE_BOOL_FIELD(inRangeAsc);
+	WRITE_BOOL_FIELD(inRangeNullsFirst);
+}
+
+static void
 _outGroup(StringInfo str, const Group *node)
 {
 	WRITE_NODE_TYPE("GROUP");
@@ -4346,6 +4373,9 @@ outNode(StringInfo str, const void *obj)
                 break;
 			case T_WindowAgg:
 				_outWindowAgg(str, obj);
+				break;
+			case T_WindowHashAgg:
+				_outWindowHashAgg(str, obj);
 				break;
 			case T_Group:
 				_outGroup(str, obj);

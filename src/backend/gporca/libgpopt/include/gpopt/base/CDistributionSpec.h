@@ -179,6 +179,9 @@ public:
 	}
 	// print
 	IOstream &OsPrint(IOstream &os) const override = 0;
+	virtual IOstream &OsPrintNoWrap(IOstream &os) const{
+		return OsPrint(os);
+	}
 
 	// return distribution partitioning type
 	virtual EDistributionPartitioningType Edpt() const = 0;

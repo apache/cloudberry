@@ -1474,6 +1474,43 @@ _copyWindowAgg(const WindowAgg *from)
 }
 
 /*
+ * _copyWindowHashAgg
+ */
+static WindowHashAgg *
+_copyWindowHashAgg(const WindowHashAgg *from)
+{
+	WindowHashAgg  *newnode = makeNode(WindowHashAgg);
+
+	CopyPlanFields((const Plan *) from, (Plan *) newnode);
+
+	COPY_SCALAR_FIELD(winref);
+	COPY_SCALAR_FIELD(partNumCols);
+	COPY_POINTER_FIELD(partColIdx, from->partNumCols * sizeof(AttrNumber));
+	COPY_POINTER_FIELD(partOperators, from->partNumCols * sizeof(Oid));
+	COPY_POINTER_FIELD(partCollations, from->partNumCols * sizeof(Oid));
+	COPY_SCALAR_FIELD(ordNumCols);
+
+	if (from->ordNumCols > 0)
+	{
+		COPY_POINTER_FIELD(ordColIdx, from->ordNumCols * sizeof(AttrNumber));
+		COPY_POINTER_FIELD(ordOperators, from->ordNumCols * sizeof(Oid));
+		COPY_POINTER_FIELD(ordCollations, from->ordNumCols * sizeof(Oid));
+		COPY_POINTER_FIELD(ordNullsFirst, from->ordNumCols * sizeof(bool));
+	}
+
+	COPY_SCALAR_FIELD(frameOptions);
+	COPY_NODE_FIELD(startOffset);
+	COPY_NODE_FIELD(endOffset);
+	COPY_SCALAR_FIELD(startInRangeFunc);
+	COPY_SCALAR_FIELD(endInRangeFunc);
+	COPY_SCALAR_FIELD(inRangeColl);
+	COPY_SCALAR_FIELD(inRangeAsc);
+	COPY_SCALAR_FIELD(inRangeNullsFirst);
+
+	return newnode;
+}
+
+/*
  * _copyUnique
  */
 static Unique *
@@ -6561,6 +6598,9 @@ copyObjectImpl(const void *from)
 			break;
 		case T_WindowAgg:
 			retval = _copyWindowAgg(from);
+			break;
+		case T_WindowHashAgg:
+			retval = _copyWindowHashAgg(from);
 			break;
 		case T_TableFunctionScan:
 			retval = _copyTableFunctionScan(from);
