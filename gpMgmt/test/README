@@ -29,7 +29,7 @@ make -f Makefile.behave behave flags="--tags smoke --tags mirrors"
 WARNING: The tag boolean logic syntax is different in this version versus
 the version documented online.
 
-From gpdb/gpMgmt/bin/pythonSrc/ext/behave-1.2.4/docs/behave.rst:
+From behave documentation (behave is now installed via pip):
 
 | Tag Expression
 | --------------

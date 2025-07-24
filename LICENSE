@@ -218,11 +218,7 @@ The PostgreSQL software includes:
       src/bin/pg_controldata/pg_controldata.c
       copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
 
-      gpMgmt/bin/pythonSrc/ext/behave-1.2.6.tar.gz
-      see licenses/LICENSE-bsd2-behave.txt
 
-      gpMgmt/bin/pythonSrc/ext/mock-1.0.1.tar.gz
-      see licenses/LICENSE-bsd2-mock.txt
 
 ----------------------------
    BSD-4-Clause (University of California-Specific)
@@ -250,9 +246,6 @@ The PostgreSQL software includes:
       src/backend/libpq/sha2.h
       see licenses/LICENSE-bsd3-sha2.txt
 
-      gpMgmt/bin/pythonSrc/ext/psutil-5.7.0.tar.gz
-      see licenses/LICENSE-bsd3-psutil.txt
-
       contrib/pax_storage/src/cpp/contrib/googletest
       see licenses/LICENSE-googletest.txt
 
@@ -261,15 +254,6 @@ The PostgreSQL software includes:
 
 ----------------------------
     MIT LICENSE
-
-      gpMgmt/bin/pythonSrc/ext/PyYAML-5.4.1.tar.gz
-      see licenses/LICENSE-pyyaml.txt
-
-      gpMgmt/bin/pythonSrc/ext/setuptools-36.6.0.tar.gz
-      see licenses/LICENSE-setuptools.txt
-
-      gpMgmt/bin/pythonSrc/ext/parse-1.8.2.tar.gz
-      see licenses/LICENSE-parse.txt
 
       dependencies/yyjson
       see licenses/LICENSE-yyjson.txt
@@ -312,21 +296,18 @@ The PostgreSQL software includes:
    test-ctype LICENSE
 
       src/test/locale/test-ctype.c
-  
       see licenses/LICENSE-test-ctype.txt
 
 ----------------------------
    regex LICENSE
       
       src/backend/regex 
-  
       see licenses/LICENSE-regex.txt
 
 ----------------------------
    PostgreSQL-style License
 
       src/port/gettimeofday.c 
-  
       see licenses/LICENSE-gettimeofday.txt
 
 ================================================================================
@@ -349,21 +330,13 @@ The Greenplum Database software includes:
    Stream License
 
       gpMgmt/bin/stream/*
-
       see licenses/LICENSE-stream.txt
 
 ----------------------------
    0-clause license ("Zero Clause BSD")
 
       gpcontrib/orafce/*
-
       see licenses/LICENSE-orafce.txt
-
-================================================================================
-PostgreSQL-style license
-
-   gpMgmt/bin/pythonSrc/ext/PyGreSQL-5.2.tar.gz
-   see licenses/LICENSE-pygresql.txt
 
 ================================================================================
 This product includes code from pg_cron under PostgreSQL license:
