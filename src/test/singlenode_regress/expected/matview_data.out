@@ -462,7 +462,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1_1 | i
  mv_par1   | i
  mv_par    | i
- mv_par2   | u
+ mv_par2   | i
 (6 rows)
 
 refresh materialized view mv_par;
