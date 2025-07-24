@@ -138,7 +138,7 @@ static SerializedParams *serializeParamsForDispatch(QueryDesc *queryDesc,
 													ParamExecData *execParams,
 													Bitmapset *sendParams);
 
-static Bitmapset* process_epd_iud_internal(List* subtagdata);
+static List* process_epd_iud_internal(List* subtagdata);
 
 /*
  * Compose and dispatch the MPPEXEC commands corresponding to a plan tree
@@ -1729,7 +1729,7 @@ ConsumeExtendProtocolData(ExtendProtocolSubTag subtag)
 }
 
 void
-ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted, Bitmapset **updated, Bitmapset **deleted)
+ConsumeAndProcessExtendProtocolData_IUD(List **inserted, List **updated, List **deleted)
 {
 	List *ilist = NIL;
 	List *ulist = NIL;
@@ -1749,10 +1749,10 @@ ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted, Bitmapset **update
 	return;
 }
 
-static Bitmapset*
+static List*
 process_epd_iud_internal(List* subtagdata)
 {
-	Bitmapset	*res = NULL;
+	List		*res = NIL;
 	ListCell 	*lc;
 	int 		count;
 
@@ -1763,10 +1763,10 @@ process_epd_iud_internal(List* subtagdata)
 		data += sizeof(int);
 		for (int i = 0; i < count; i++)
 		{
-			int relid;
-			memcpy(&relid, data, sizeof(int));
-			data += sizeof(int);
-			res = bms_add_member(res, relid);
+			Oid relid;
+			memcpy(&relid, data, sizeof(Oid));
+			data += sizeof(Oid);
+			res = list_append_unique_oid(res, relid);
 		}
 	}
 	return res;
