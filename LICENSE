@@ -238,6 +238,24 @@ The PostgreSQL software includes:
       src/backend/libpq/sha2.h
       see licenses/LICENSE-bsd3-sha2.txt
 
+      contrib/pax_storage/src/cpp/contrib/googletest
+      see licenses/LICENSE-googletest.txt
+
+      gpcontrib/gpcloud/test/googletest
+      see licenses/LICENSE-googletest.txt
+
+----------------------------
+    MIT LICENSE
+
+      dependencies/yyjson
+      see licenses/LICENSE-yyjson.txt
+
+      contrib/pax_storage/src/cpp/contrib/cpp-stub
+      see licenses/LICENSE-cpp-stub.txt
+
+      contrib/pax_storage/src/cpp/contrib/tabulate
+      see licenses/LICENSE-tabulate.txt
+
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
       
