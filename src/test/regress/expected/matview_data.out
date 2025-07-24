@@ -491,7 +491,7 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
  mv_par1_1 | i
  mv_par1   | i
  mv_par    | i
- mv_par2   | u
+ mv_par2   | i
 (6 rows)
 
 refresh materialized view mv_par;
@@ -897,16 +897,16 @@ abort;
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 NOTICE:  extension "gp_inject_fault" already exists, skipping
 -- end_ignore
-create table par1(a int, b int) partition by range(a) using ao_row distributed randomly;
+create table par_normal_oid(a int, b int) partition by range(a) using ao_row distributed randomly;
 select gp_inject_fault('bump_oid', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
  gp_inject_fault 
 -----------------
  Success:
 (1 row)
 
-create table sub_par1 partition of par1 for values from (1) to (2) using ao_row;
+create table sub_par1_large_oid partition of par_normal_oid for values from (1) to (2) using ao_row;
 NOTICE:  table has parent, setting distribution columns to match parent table
-select 'sub_par1'::regclass::oid > x'7FFFFFFF'::bigint;
+select 'sub_par1_large_oid'::regclass::oid > x'7FFFFFFF'::bigint;
  ?column? 
 ----------
  t
@@ -918,7 +918,23 @@ select gp_inject_fault('bump_oid', 'reset', dbid) from gp_segment_configuration 
  Success:
 (1 row)
 
-insert into par1 values(1, 2);
+create materialized view mv_par_normal_oid as
+    select count(*) from par_normal_oid;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid';
+      mvname       | datastatus 
+-------------------+------------
+ mv_par_normal_oid | u
+(1 row)
+
+insert into par_normal_oid values(1, 2);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid';
+      mvname       | datastatus 
+-------------------+------------
+ mv_par_normal_oid | i
+(1 row)
+
 --start_ignore
 drop schema matview_data_schema cascade;
 NOTICE:  drop cascades to 3 other objects

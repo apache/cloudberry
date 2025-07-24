@@ -1319,6 +1319,7 @@ ExecInsert(ModifyTableContext *context,
 	{
 		ModifiedLeafRelidsKey	key;
 
+		MemSet(&key, 0, sizeof(key));
 		key.cmd = CMD_INSERT;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
@@ -1925,6 +1926,7 @@ ldelete:
 	{
 		ModifiedLeafRelidsKey	key;
 
+		MemSet(&key, 0, sizeof(key));
 		key.cmd = CMD_DELETE;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
@@ -2445,6 +2447,7 @@ ExecUpdateEpilogue(ModifyTableContext *context, UpdateContext *updateCxt,
 	{
 		ModifiedLeafRelidsKey	key;
 
+		MemSet(&key, 0, sizeof(key));
 		key.cmd = CMD_UPDATE;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
