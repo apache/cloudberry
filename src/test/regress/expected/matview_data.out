@@ -893,6 +893,32 @@ select count(*) from gp_matview_aux where mvname = 'mv_name2';
 (1 row)
 
 abort;
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+NOTICE:  extension "gp_inject_fault" already exists, skipping
+-- end_ignore
+create table par1(a int, b int) partition by range(a) using ao_row distributed randomly;
+select gp_inject_fault('bump_oid', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+create table sub_par1 partition of par1 for values from (1) to (2) using ao_row;
+NOTICE:  table has parent, setting distribution columns to match parent table
+select 'sub_par1'::regclass::oid > x'7FFFFFFF'::bigint;
+ ?column? 
+----------
+ t
+(1 row)
+
+select gp_inject_fault('bump_oid', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+insert into par1 values(1, 2);
 --start_ignore
 drop schema matview_data_schema cascade;
 NOTICE:  drop cascades to 3 other objects

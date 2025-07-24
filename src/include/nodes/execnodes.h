@@ -1457,6 +1457,9 @@ typedef struct ModifyTableState
 	double		mt_merge_inserted;
 	double		mt_merge_updated;
 	double		mt_merge_deleted;
+
+	HTAB	*modified_leaf_relids;
+
 } ModifyTableState;
 
 /* ----------------
