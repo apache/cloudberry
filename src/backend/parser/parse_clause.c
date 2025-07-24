@@ -3,13 +3,9 @@
  * parse_clause.c
  *	  handle clauses in parser
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -582,13 +578,7 @@ transformRangeSubselect(ParseState *pstate, RangeSubselect *r)
 	 * might still be required (if there is an all-tables locking clause).
 	 */
 	query = parse_sub_analyze(r->subquery, pstate, NULL,
-<<<<<<< HEAD
 							  getLockedRefname(pstate, r->alias->aliasname),
-=======
-							  isLockedRefname(pstate,
-											  r->alias == NULL ? NULL :
-											  r->alias->aliasname),
->>>>>>> REL_16_9
 							  true);
 
 	/* Restore state */
@@ -1744,8 +1734,6 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 									&res_colnames, &res_colvars,
 									res_nscolumns + res_colindex);
 
-<<<<<<< HEAD
-=======
 		/* If join has an alias, it syntactically hides all inputs */
 		if (j->alias)
 		{
@@ -1758,7 +1746,6 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 			}
 		}
 
->>>>>>> REL_16_9
 		/*
 		 * Now build an RTE and nsitem for the result of the join.
 		 */

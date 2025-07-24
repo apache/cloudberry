@@ -154,12 +154,6 @@ static void transformPartitionCmd(CreateStmtContext *cxt, PartitionCmd *cmd);
 static List *transformPartitionRangeBounds(ParseState *pstate, List *blist,
 										   Relation parent, PartitionKey key);
 static void validateInfiniteBounds(ParseState *pstate, List *blist);
-<<<<<<< HEAD
-=======
-static Const *transformPartitionBoundValue(ParseState *pstate, Node *val,
-										   const char *colName, Oid colType, int32 colTypmod,
-										   Oid partCollation);
->>>>>>> REL_16_9
 
 static DistributedBy *getLikeDistributionPolicy(TableLikeClause *e);
 static DistributedBy *transformDistributedBy(ParseState *pstate,
@@ -296,11 +290,7 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString)
 	cxt.fkconstraints = NIL;
 	cxt.ixconstraints = NIL;
 	cxt.likeclauses = NIL;
-<<<<<<< HEAD
-	cxt.extstats = NIL;
 	cxt.attr_encodings = stmt->attr_encodings;
-=======
->>>>>>> REL_16_9
 	cxt.blist = NIL;
 	cxt.alist = NIL;
 	cxt.pkey = NULL;
@@ -476,14 +466,7 @@ generateSerialExtraStmts(CreateStmtContext *cxt, ColumnDef *column,
 	AlterSeqStmt *altseqstmt;
 	List	   *attnamelist;
 
-<<<<<<< HEAD
 	bool		has_cache_option = false;
-
-	int			nameEl_idx = -1;
-=======
-	/* Make a copy of this as we may end up modifying it in the code below */
-	seqoptions = list_copy(seqoptions);
->>>>>>> REL_16_9
 
 	/*
 	 * Check for non-SQL-standard options (not supported within CREATE
@@ -1148,14 +1131,9 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 		relation->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-<<<<<<< HEAD
-				 errmsg("\"%s\" is not a table, directory table, view, materialized view, composite type, or foreign table",
-						RelationGetRelationName(relation))));
-=======
 				 errmsg("relation \"%s\" is invalid in LIKE clause",
 						RelationGetRelationName(relation)),
 				 errdetail_relkind_not_supported(relation->rd_rel->relkind)));
->>>>>>> REL_16_9
 
 	cancel_parser_errposition_callback(&pcbstate);
 
@@ -1310,7 +1288,6 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 	}
 
 	/*
-<<<<<<< HEAD
 	 * GPDB_12_MERGE_FIXME:
 	 * 		This is wrong and creates unspecified behaviour when multiple like
 	 * 		clauses are present in the statement.
@@ -1400,8 +1377,6 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 	}
 
 	/*
-=======
->>>>>>> REL_16_9
 	 * Close the parent rel, but keep our AccessShareLock on it until xact
 	 * commit.  That will prevent someone else from deleting or ALTERing the
 	 * parent before we can run expandTableLikeClause.
@@ -2216,23 +2191,8 @@ generateClonedExtStatsStmt(RangeVar *heapRel, Oid heapRelid,
 		{
 			Node	   *expr = (Node *) lfirst(lc);
 			StatsElem  *selem = makeNode(StatsElem);
-<<<<<<< HEAD
 			selem->name = NULL;
 			selem->expr = (Node *) lfirst(lc);
-=======
-			bool		found_whole_row;
-
-			/* Adjust Vars to match new table's column numbering */
-			expr = map_variable_attnos(expr,
-									   1, 0,
-									   attmap,
-									   InvalidOid,
-									   &found_whole_row);
-
-			selem->name = NULL;
-			selem->expr = expr;
-
->>>>>>> REL_16_9
 			def_names = lappend(def_names, selem);
 		}
 		pfree(exprsString);
@@ -4893,12 +4853,8 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 		newcmds = lappend(newcmds, newcmd);
 	}
 
-<<<<<<< HEAD
 	/* Append extended statistics objects */
 	transformExtendedStatistics(&cxt);
-
-=======
->>>>>>> REL_16_9
 	/* Close rel */
 	relation_close(rel, NoLock);
 

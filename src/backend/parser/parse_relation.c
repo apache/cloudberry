@@ -3,13 +3,9 @@
  * parse_relation.c
  *	  parser support routines dealing with relations
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1788,22 +1784,12 @@ addRangeTableEntryForSubquery(ParseState *pstate,
 	rte->inh = false;			/* never true for subqueries */
 	rte->inFromCl = inFromCl;
 
-<<<<<<< HEAD
-	rte->requiredPerms = 0;
-	rte->checkAsUser = InvalidOid;
-	rte->selectedCols = NULL;
-	rte->insertedCols = NULL;
-	rte->updatedCols = NULL;
-	rte->extraUpdatedCols = NULL;
-
 	Assert(pstate != NULL);
-=======
 	/*
 	 * Add completed RTE to pstate's range table list, so that we know its
 	 * index.  But we don't add it to the join list --- caller must do that if
 	 * appropriate.
 	 */
->>>>>>> REL_16_9
 	pstate->p_rtable = lappend(pstate->p_rtable, rte);
 
 	/*
@@ -2289,11 +2275,8 @@ addRangeTableEntryForTableFunc(ParseState *pstate,
 	Assert(list_length(tf->coltypmods) == list_length(tf->colnames));
 	Assert(list_length(tf->colcollations) == list_length(tf->colnames));
 
-<<<<<<< HEAD
-=======
 	refname = alias ? alias->aliasname : pstrdup("xmltable");
 
->>>>>>> REL_16_9
 	rte->rtekind = RTE_TABLEFUNC;
 	rte->relid = InvalidOid;
 	rte->subquery = NULL;
@@ -2315,12 +2298,8 @@ addRangeTableEntryForTableFunc(ParseState *pstate,
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
 				 errmsg("%s function has %d columns available but %d columns specified",
-<<<<<<< HEAD
-						"XMLTABLE", list_length(tf->colnames), numaliases)));
-=======
 						"XMLTABLE",
 						list_length(tf->colnames), numaliases)));
->>>>>>> REL_16_9
 
 	rte->eref = eref;
 

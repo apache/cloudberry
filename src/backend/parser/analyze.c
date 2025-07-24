@@ -14,13 +14,9 @@
  * contain optimizable statements, which we should transform.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	src/backend/parser/analyze.c
@@ -2486,13 +2482,8 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 		/* Process an internal node (set operation node) */
 		SetOperationStmt *op = makeNode(SetOperationStmt);
 		const char *context;
-<<<<<<< HEAD
-		bool recursive = (pstate->p_parent_cte &&
-						  pstate->p_parent_cte->cterecursive);
-=======
 		bool		recursive = (pstate->p_parent_cte &&
 								 pstate->p_parent_cte->cterecursive);
->>>>>>> REL_16_9
 
 		context = (stmt->op == SETOP_UNION ? "UNION" :
 				   (stmt->op == SETOP_INTERSECT ? "INTERSECT" :
@@ -2527,7 +2518,6 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 		 * branch.
 		 */
 		if (isTopLevel && recursive)
-<<<<<<< HEAD
 		{
 			List *ltargetlist;
 			List *selected_types;
@@ -2537,8 +2527,6 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 
 			coerceSetOpTypes(pstate, op->larg, selected_types, selected_typmods, &ltargetlist);
 
-=======
->>>>>>> REL_16_9
 			determineRecursiveColTypes(pstate, op->larg, ltargetlist);
 		}
 
@@ -2770,14 +2758,10 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 				setup_parser_errposition_callback(&pcbstate, pstate,
 												  bestlocation);
 
-<<<<<<< HEAD
-				/* If it's a recursive union, we need to require hashing support. */
-=======
 				/*
 				 * If it's a recursive union, we need to require hashing
 				 * support.
 				 */
->>>>>>> REL_16_9
 				op->groupClauses = lappend(op->groupClauses,
 										   makeSortGroupClauseForSetOp(rescoltype, recursive));
 
@@ -3859,16 +3843,12 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 			switch (rte->rtekind)
 			{
 				case RTE_RELATION:
-<<<<<<< HEAD
 					if (rel_is_external_table(rte->relid))
 						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("SELECT FOR UPDATE/SHARE cannot be applied to external tables")));
 
-					applyLockingClause(qry, i, lc->strength, lc->waitPolicy,
-									   pushedDown);
-					rte->requiredPerms |= ACL_SELECT_FOR_UPDATE;
-=======
+
 					{
 						RTEPermissionInfo *perminfo;
 
@@ -3879,7 +3859,6 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 						perminfo = getRTEPermissionInfo(qry->rteperminfos, rte);
 						perminfo->requiredPerms |= ACL_SELECT_FOR_UPDATE;
 					}
->>>>>>> REL_16_9
 					break;
 				case RTE_SUBQUERY:
 					applyLockingClause(qry, i, lc->strength, lc->waitPolicy,
@@ -3935,14 +3914,7 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 				/*
 				 * A join RTE without an alias is not visible as a relation
 				 * name and needs to be skipped (otherwise it might hide a
-<<<<<<< HEAD
-				 * base relation with the same name).
-				 */
-				if (rte->rtekind == RTE_JOIN && rte->alias == NULL)
-					continue;
-
-				if (strcmp(rte->eref->aliasname, thisrel->relname) == 0)
-=======
+				/*
 				 * base relation with the same name), except if it has a USING
 				 * alias, which *is* visible.
 				 *
@@ -3963,20 +3935,14 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 				}
 
 				if (strcmp(rtename, thisrel->relname) == 0)
->>>>>>> REL_16_9
 				{
 					switch (rte->rtekind)
 					{
 						case RTE_RELATION:
-<<<<<<< HEAD
 							if (rel_is_external_table(rte->relid))
 								ereport(ERROR,
 										(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 										 errmsg("SELECT FOR UPDATE/SHARE cannot be applied to external tables")));
-							applyLockingClause(qry, i, lc->strength,
-											   lc->waitPolicy, pushedDown);
-							rte->requiredPerms |= ACL_SELECT_FOR_UPDATE;
-=======
 							{
 								RTEPermissionInfo *perminfo;
 
@@ -3987,7 +3953,6 @@ transformLockingClause(ParseState *pstate, Query *qry, LockingClause *lc,
 								perminfo = getRTEPermissionInfo(qry->rteperminfos, rte);
 								perminfo->requiredPerms |= ACL_SELECT_FOR_UPDATE;
 							}
->>>>>>> REL_16_9
 							break;
 						case RTE_SUBQUERY:
 							applyLockingClause(qry, i, lc->strength,
