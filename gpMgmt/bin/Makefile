@@ -224,7 +224,7 @@ installcheck: installcheck-bash
 
 clean distclean:
 	rm -rf $(RUFF_BIN) $(SRC)/ruff.txt $(SRC)/.ruff_cache
-	rm -rf $(PYLIB_SRC_EXT)/*.tar.gz $(PYLIB_SRC_EXT)/*.whl
+	rm -rf $(PYLIB_SRC_EXT)/*.tar.gz $(PYLIB_SRC_EXT)/*.zip $(PYLIB_SRC_EXT)/*.whl
 	rm -rf $(PYLIB_SRC_EXT)/*/
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
