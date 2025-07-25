@@ -22,11 +22,8 @@
 #include "storage/latch.h"
 #include "storage/procsignal.h"
 #include "utils/guc.h"
-<<<<<<< HEAD
 #include "utils/faultinjector.h"
-=======
 #include "utils/memutils.h"
->>>>>>> REL_16_9
 
 volatile sig_atomic_t ConfigReloadPending = false;
 volatile sig_atomic_t ShutdownRequestPending = false;

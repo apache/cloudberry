@@ -125,10 +125,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_database.h"
-<<<<<<< HEAD
-=======
 #include "catalog/pg_namespace.h"
->>>>>>> REL_16_9
 #include "commands/dbcommands.h"
 #include "commands/vacuum.h"
 #include "lib/ilist.h"
@@ -185,14 +182,7 @@ int			autovacuum_multixact_freeze_max_age;
 double		autovacuum_vac_cost_delay;
 int			autovacuum_vac_cost_limit;
 
-<<<<<<< HEAD
-int			Log_autovacuum_min_duration = 0;
-
-/* how long to keep pgstat data in the launcher, in milliseconds */
-#define STATS_READ_DELAY 1000
-=======
 int			Log_autovacuum_min_duration = 600000;
->>>>>>> REL_16_9
 
 /* the minimum allowed time between two awakenings of the launcher */
 #define MIN_AUTOVAC_SLEEPTIME 100.0 /* milliseconds */
@@ -2237,15 +2227,11 @@ do_autovacuum(void)
 		bool		wraparound;
 
 		if (classForm->relkind != RELKIND_RELATION &&
-<<<<<<< HEAD
 			classForm->relkind != RELKIND_DIRECTORY_TABLE &&
 			classForm->relkind != RELKIND_MATVIEW &&
 			classForm->relkind != RELKIND_AOSEGMENTS &&
 			classForm->relkind != RELKIND_AOBLOCKDIR &&
 			classForm->relkind != RELKIND_AOVISIMAP)
-=======
-			classForm->relkind != RELKIND_MATVIEW)
->>>>>>> REL_16_9
 			continue;
 
 		relid = classForm->oid;
@@ -2955,15 +2941,11 @@ extract_autovac_opts(HeapTuple tup, TupleDesc pg_class_desc)
 
 	Assert(((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_RELATION ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_MATVIEW ||
-<<<<<<< HEAD
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_DIRECTORY_TABLE ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_TOASTVALUE ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_AOSEGMENTS ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_AOBLOCKDIR ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_AOVISIMAP);
-=======
-		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_TOASTVALUE);
->>>>>>> REL_16_9
 
 	relam = ((Form_pg_class) GETSTRUCT(tup))->relam;
 	tam = GetTableAmRoutineByAmId(relam);
@@ -3104,16 +3086,11 @@ table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 		tab->at_params.multixact_freeze_table_age = multixact_freeze_table_age;
 		tab->at_params.is_wraparound = wraparound;
 		tab->at_params.log_min_duration = log_min_duration;
-<<<<<<< HEAD
 		tab->at_params.auto_stats = false;
-		tab->at_vacuum_cost_limit = vac_cost_limit;
-		tab->at_vacuum_cost_delay = vac_cost_delay;
-=======
 		tab->at_storage_param_vac_cost_limit = avopts ?
 			avopts->vacuum_cost_limit : 0;
 		tab->at_storage_param_vac_cost_delay = avopts ?
 			avopts->vacuum_cost_delay : -1;
->>>>>>> REL_16_9
 		tab->at_relname = NULL;
 		tab->at_nspname = NULL;
 		tab->at_datname = NULL;
@@ -3239,19 +3216,13 @@ relation_needs_vacanalyze(Oid relid,
 	TransactionId xidForceLimit;
 	MultiXactId multiForceLimit;
 
-<<<<<<< HEAD
 	/*
 	 * We don't need to hold AutovacuumLock here, since it should be read-only in the worker itself
 	 * once the MyWorkerInfo gets set, all the workers only care about its own value.
 	 */
 	Assert(MyWorkerInfo);
-
-	AssertArg(classForm != NULL);
-	AssertArg(OidIsValid(relid));
-=======
 	Assert(classForm != NULL);
 	Assert(OidIsValid(relid));
->>>>>>> REL_16_9
 
 	/*
 	 * Determine vacuum/analyze equation parameters.  We have two possible
@@ -3431,15 +3402,12 @@ autovacuum_do_vac_analyze(autovac_table *tab, BufferAccessStrategy bstrategy)
 	rel = makeVacuumRelation(rangevar, tab->at_relid, NIL);
 	rel_list = list_make1(rel);
 
-<<<<<<< HEAD
 #ifdef FAULT_INJECTOR
 	FaultInjector_InjectFaultIfSet(
 		"auto_vac_worker_after_report_activity", DDLNotSpecified,
 		"", tab->at_relname);
 #endif
 
-	vacuum(rel_list, &tab->at_params, bstrategy, true);
-=======
 	vac_context = AllocSetContextCreate(CurrentMemoryContext,
 										"Vacuum",
 										ALLOCSET_DEFAULT_SIZES);
@@ -3447,7 +3415,6 @@ autovacuum_do_vac_analyze(autovac_table *tab, BufferAccessStrategy bstrategy)
 	vacuum(rel_list, &tab->at_params, bstrategy, vac_context, true);
 
 	MemoryContextDelete(vac_context);
->>>>>>> REL_16_9
 }
 
 /*

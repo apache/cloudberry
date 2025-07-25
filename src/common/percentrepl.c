@@ -90,10 +90,14 @@ replace_percent_placeholders(const char *instr, const char *param_name, const ch
 			}
 			else if (sp[1] == 'c')
 			{
+				char		contentid[12];
+
 				/* GPDB: %c: contentId of segment */
 				Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
 				sp++;
 				pg_ltoa(GpIdentity.segindex, contentid);
+				appendStringInfoString(&result, contentid);
+				break;
 			}
 			else if (sp[1] == 'R')
 			{

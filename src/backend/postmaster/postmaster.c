@@ -32,13 +32,9 @@
  *	  clients.
  *
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -238,7 +234,6 @@ char	   *Unix_socket_directories;
 char	   *ListenAddresses;
 
 /*
-<<<<<<< HEAD
  * The interconnect address. We assume the interconnect is the address
  * in gp_segment_configuration. And it's never changed at runtime.
  */
@@ -252,7 +247,6 @@ char	   *interconnect_address = NULL;
  * "if there are <= ReservedBackends connections available, only superusers
  * can make new connections" --- pre-existing superuser connections don't
  * count against the limit.
-=======
  * SuperuserReservedConnections is the number of backends reserved for
  * superuser use, and ReservedConnections is the number of backends reserved
  * for use by roles with privileges of the pg_use_reserved_connections
@@ -269,7 +263,6 @@ char	   *interconnect_address = NULL;
  * roles with privileges of pg_use_reserved_connections can make new
  * connections.  Note that pre-existing superuser and
  * pg_use_reserved_connections connections don't count against the limits.
->>>>>>> REL_16_9
  */
 int			SuperuserReservedConnections;
 int			ReservedConnections;
@@ -293,12 +286,9 @@ bool		enable_bonjour = false;
 char	   *bonjour_name;
 bool		restart_after_crash = true;
 bool		remove_temp_files_after_crash = true;
-<<<<<<< HEAD
 bool		enable_password_profile = true;
-=======
 bool		send_abort_for_crash = false;
 bool		send_abort_for_kill = false;
->>>>>>> REL_16_9
 
 /* Hook for plugins to start background workers */
 start_bgworkers_hook_type start_bgworkers_hook = NULL;
@@ -315,13 +305,8 @@ static pid_t StartupPID = 0,
 			WalReceiverPID = 0,
 			AutoVacPID = 0,
 			PgArchPID = 0,
-<<<<<<< HEAD
-			PgStatPID = 0,
 			SysLoggerPID = 0,
 			LoginMonitorPID = 0;
-=======
-			SysLoggerPID = 0;
->>>>>>> REL_16_9
 
 /* Startup process's status */
 typedef enum
@@ -556,12 +541,8 @@ static int	ServerLoop(void);
 static int	BackendStartup(Port *port);
 static int	ProcessStartupPacket(Port *port, bool ssl_done, bool gss_done);
 static void SendNegotiateProtocolVersion(List *unrecognized_protocol_options);
-<<<<<<< HEAD
 static void processCancelRequest(Port *port, void *pkt, MsgType code);
 static int	initMasks(fd_set *rmask);
-=======
-static void processCancelRequest(Port *port, void *pkt);
->>>>>>> REL_16_9
 static void report_fork_failure_to_client(Port *port, int errnum);
 static CAC_state canAcceptConnections(int backend_type);
 static bool RandomCancelKey(int32 *cancel_key);
@@ -792,7 +773,6 @@ PostmasterMain(int argc, char *argv[])
 	/*
 	 * Set up signal handlers for the postmaster process.
 	 *
-<<<<<<< HEAD
 	 * In the postmaster, we use pqsignal_pm() rather than pqsignal() (which
 	 * is used by all child processes and client processes).  That has a
 	 * couple of special behaviors:
@@ -813,8 +793,6 @@ PostmasterMain(int argc, char *argv[])
 	 * flag.  We expect children to set up their own handlers before
 	 * unblocking signals.
 	 *
-=======
->>>>>>> REL_16_9
 	 * CAUTION: when changing this list, check for side-effects on the signal
 	 * handling setup of child processes.  See tcop/postgres.c,
 	 * bootstrap/bootstrap.c, postmaster/bgwriter.c, postmaster/walwriter.c,
@@ -872,11 +850,7 @@ PostmasterMain(int argc, char *argv[])
 	 * tcop/postgres.c (the option sets should not conflict) and with the
 	 * common help() function in main/main.c.
 	 */
-<<<<<<< HEAD
-	while ((opt = getopt(argc, argv, "B:bc:C:D:d:EeFf:h:ijk:lMmN:nOo:Pp:r:R:S:sTt:W:-:")) != -1)
-=======
-	while ((opt = getopt(argc, argv, "B:bC:c:D:d:EeFf:h:ijk:lN:OPp:r:S:sTt:W:-:")) != -1)
->>>>>>> REL_16_9
+	while ((opt = getopt(argc, argv, "B:bc:C:D:d:EeFf:h:ijk:lMmN:Oo:Pp:r:R:S:sTt:W:-:")) != -1)
 	{
 		switch (opt)
 		{
@@ -1158,9 +1132,7 @@ PostmasterMain(int argc, char *argv[])
      * non-leaf QEs don't necessarily access the database (some are used only
      * for sorting, hashing, etc); so again the number of buffers need not be
      * in proportion to the number of connections.
-	 */
-<<<<<<< HEAD
-	if (NBuffers < 16)
+	 */if (NBuffers < 16)
 	{
 		/*
 		 * Do not accept -B so small that backends are likely to starve for
@@ -1177,10 +1149,7 @@ PostmasterMain(int argc, char *argv[])
 	 * max_connections. Hence, in gpdb below check is modified from upstream to
 	 * allow equal setting.
 	 */
-	if (ReservedBackends > MaxConnections)
-=======
 	if (SuperuserReservedConnections + ReservedConnections >= MaxConnections)
->>>>>>> REL_16_9
 	{
 		write_stderr("%s: superuser_reserved_connections (%d) plus reserved_connections (%d) must be less than max_connections (%d)\n",
 					 progname,
@@ -1289,7 +1258,6 @@ PostmasterMain(int argc, char *argv[])
 	LocalProcessControlFile(false);
 
 	/*
-<<<<<<< HEAD
 	 * CDB: gpdb auxilary process like fts probe, dtx recovery process is
 	 * essential, we need to load them ahead of custom shared preload libraries
 	 * to avoid exceeding max_worker_processes.
@@ -1297,14 +1265,8 @@ PostmasterMain(int argc, char *argv[])
 	load_auxiliary_libraries();
 
 	/*
-	 * Register the apply launcher.  Since it registers a background worker,
-	 * it needs to be called before InitializeMaxBackends(), and it's probably
-	 * a good idea to call it before any modules had chance to take the
-	 * background worker slots.
-=======
 	 * Register the apply launcher.  It's probably a good idea to call this
 	 * before any modules had a chance to take the background worker slots.
->>>>>>> REL_16_9
 	 */
 	ApplyLauncherRegister();
 
@@ -1336,17 +1298,7 @@ PostmasterMain(int argc, char *argv[])
 	InitializeMaxBackends();
 
 	/*
-<<<<<<< HEAD
-	 * Now that modules have been loaded, we can process any custom resource
-	 * managers specified in the wal_consistency_checking GUC.
-	 */
-	InitializeWalConsistencyChecking();
-
-	/*
-	 * Set up shared memory and semaphores.
-=======
 	 * Give preloaded libraries a chance to request additional shared memory.
->>>>>>> REL_16_9
 	 */
 	process_shmem_requests();
 
@@ -1735,13 +1687,8 @@ PostmasterMain(int argc, char *argv[])
 		 * since there is no way to connect to the database in this case.
 		 */
 		ereport(FATAL,
-<<<<<<< HEAD
 				(errcode(ERRCODE_CONFIG_FILE_ERROR),
 				 (errmsg("could not load pg_hba.conf"))));
-=======
-		/* translator: %s is a configuration file */
-				(errmsg("could not load %s", HbaFileName)));
->>>>>>> REL_16_9
 	}
 	if (!load_ident())
 	{
@@ -2331,7 +2278,6 @@ ServerLoop(void)
 }
 
 /*
-<<<<<<< HEAD
  * Initialise the masks for select() for the ports we are listening on.
  * Return the number of sockets to listen on.
  */
@@ -2384,8 +2330,6 @@ GetMirrorReadyFlag(void)
 }
 
 /*
-=======
->>>>>>> REL_16_9
  * Read a client's startup packet and do something according to it.
  *
  * Returns STATUS_OK or STATUS_ERROR, or might call ereport(FATAL) and
@@ -2483,18 +2427,7 @@ ProcessStartupPacket(Port *port, bool ssl_done, bool gss_done)
 
 	if (proto == CANCEL_REQUEST_CODE || proto == FINISH_REQUEST_CODE)
 	{
-<<<<<<< HEAD
 		processCancelRequest(port, buf, proto);
-=======
-		if (len != sizeof(CancelRequestPacket))
-		{
-			ereport(COMMERROR,
-					(errcode(ERRCODE_PROTOCOL_VIOLATION),
-					 errmsg("invalid length of startup packet")));
-			return STATUS_ERROR;
-		}
-		processCancelRequest(port, buf);
->>>>>>> REL_16_9
 		/* Not really an error, but we don't want to proceed further */
 		return STATUS_ERROR;
 	}
@@ -2921,7 +2854,6 @@ retry1:
 					(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
 					 errmsg("sorry, too many clients already")));
 			break;
-<<<<<<< HEAD
 		case CAC_MIRROR_READY:
 			if (am_ftshandler || am_faulthandler)
 			{
@@ -2956,8 +2888,6 @@ retry1:
 		case CAC_SUPERUSER:
 			/* OK for now, will check in InitPostgres */
 			break;
-=======
->>>>>>> REL_16_9
 		case CAC_OK:
 			break;
 	}
@@ -3324,8 +3254,6 @@ handle_pm_pmsignal_signal(SIGNAL_ARGS)
 {
 	int			save_errno = errno;
 
-<<<<<<< HEAD
-=======
 	pending_pm_pmsignal = true;
 	SetLatch(MyLatch);
 
@@ -3357,7 +3285,6 @@ process_pm_reload_request(void)
 	ereport(DEBUG2,
 			(errmsg_internal("postmaster received reload request signal")));
 
->>>>>>> REL_16_9
 	if (Shutdown <= SmartShutdown)
 	{
 		ereport(LOG,
@@ -3380,13 +3307,8 @@ process_pm_reload_request(void)
 			signal_child(PgArchPID, SIGHUP);
 		if (SysLoggerPID != 0)
 			signal_child(SysLoggerPID, SIGHUP);
-<<<<<<< HEAD
-		if (PgStatPID != 0)
-			signal_child(PgStatPID, SIGHUP);
 		if (enable_password_profile && LoginMonitorPID != 0)
 			signal_child(LoginMonitorPID, SIGHUP);
-=======
->>>>>>> REL_16_9
 
 		/* Reload authentication config files too */
 		if (!load_hba())
@@ -3420,11 +3342,6 @@ process_pm_reload_request(void)
 		write_nondefault_variables(PGC_SIGHUP);
 #endif
 	}
-<<<<<<< HEAD
-
-	errno = save_errno;
-=======
->>>>>>> REL_16_9
 }
 
 /*
@@ -3436,13 +3353,6 @@ handle_pm_shutdown_request_signal(SIGNAL_ARGS)
 {
 	int			save_errno = errno;
 
-<<<<<<< HEAD
-	ereport(DEBUG2,
-			(errmsg_internal("postmaster received signal %d",
-							 postgres_signal_arg)));
-
-=======
->>>>>>> REL_16_9
 	switch (postgres_signal_arg)
 	{
 		case SIGTERM:
@@ -3617,8 +3527,7 @@ process_pm_shutdown_request(void)
 	}
 }
 
-<<<<<<< HEAD
-=======
+
 static void
 handle_pm_child_exit_signal(SIGNAL_ARGS)
 {
@@ -3627,7 +3536,6 @@ handle_pm_child_exit_signal(SIGNAL_ARGS)
 	pending_pm_child_exit = true;
 	SetLatch(MyLatch);
 
->>>>>>> REL_16_9
 	errno = save_errno;
 }
 
@@ -3640,11 +3548,8 @@ process_pm_child_exit(void)
 	int			pid;			/* process id of dead child process */
 	int			exitstatus;		/* its exit status */
 
-<<<<<<< HEAD
-=======
 	pending_pm_child_exit = false;
 
->>>>>>> REL_16_9
 	ereport(DEBUG4,
 			(errmsg_internal("reaping dead processes")));
 
@@ -3761,13 +3666,8 @@ process_pm_child_exit(void)
 				AutoVacPID = StartAutoVacLauncher();
 			if (PgArchStartupAllowed() && PgArchPID == 0)
 				PgArchPID = StartArchiver();
-<<<<<<< HEAD
-			if (PgStatPID == 0)
-				PgStatPID = pgstat_start();
 			if (enable_password_profile && LoginMonitorPID == 0)
 				LoginMonitorPID = StartLoginMonitorLauncher();
-=======
->>>>>>> REL_16_9
 
 			/* workers may be scheduled to start now */
 			maybe_start_bgworkers();
@@ -3973,11 +3873,6 @@ process_pm_child_exit(void)
 	 * or actions to make.
 	 */
 	PostmasterStateMachine();
-<<<<<<< HEAD
-
-	errno = save_errno;
-=======
->>>>>>> REL_16_9
 }
 
 /*
@@ -4603,10 +4498,7 @@ PostmasterStateMachine(void)
 			Assert(CheckpointerPID == 0);
 			Assert(WalWriterPID == 0);
 			Assert(AutoVacPID == 0);
-<<<<<<< HEAD
 			Assert(LoginMonitorPID == 0);
-=======
->>>>>>> REL_16_9
 			/* syslogger is not considered here */
 			pmState = PM_NO_CHILDREN;
 		}
@@ -4699,15 +4591,13 @@ PostmasterStateMachine(void)
 		/* crash recovery started, reset SIGKILL flag */
 		AbortStartTime = 0;
 
-<<<<<<< HEAD
 		if (start_bgworkers_hook)
 		{
 			(*start_bgworkers_hook) (FatalError, pmState, do_start_bgworker);
 		}
-=======
+
 		/* start accepting server socket connection events again */
 		ConfigurePostmasterWaitSet(true);
->>>>>>> REL_16_9
 	}
 }
 
@@ -4838,13 +4728,8 @@ TerminateChildren(int signal)
 		signal_child(AutoVacPID, signal);
 	if (PgArchPID != 0)
 		signal_child(PgArchPID, signal);
-<<<<<<< HEAD
-	if (PgStatPID != 0)
-		signal_child(PgStatPID, signal);
 	if (enable_password_profile && LoginMonitorPID != 0)
 		signal_child(LoginMonitorPID, signal);
-=======
->>>>>>> REL_16_9
 }
 
 /*
@@ -4891,13 +4776,8 @@ BackendStartup(Port *port)
 
 	/* Pass down canAcceptConnections state */
 	port->canAcceptConnections = canAcceptConnections(BACKEND_TYPE_NORMAL);
-<<<<<<< HEAD
 	bn->dead_end = (port->canAcceptConnections != CAC_OK &&
-					port->canAcceptConnections != CAC_SUPERUSER &&
 					port->canAcceptConnections != CAC_MIRROR_READY);
-=======
-	bn->dead_end = (port->canAcceptConnections != CAC_OK);
->>>>>>> REL_16_9
 
 	/*
 	 * Unless it's a dead_end child, assign it a child slot number
@@ -5199,11 +5079,7 @@ BackendInitialize(Port *port)
 	}
 
 	appendStringInfo(&ps_data, "%s ", port->user_name);
-<<<<<<< HEAD
-	if (!am_walsender && !am_ftshandler && !am_faulthandler)
-=======
 	if (port->database_name[0] != '\0')
->>>>>>> REL_16_9
 		appendStringInfo(&ps_data, "%s ", port->database_name);
 	appendStringInfoString(&ps_data, port->remote_host);
 	if (port->remote_port[0] != '\0')
@@ -5640,13 +5516,9 @@ SubPostmasterMain(int argc, char *argv[])
 	if (strcmp(argv[1], "--forkbackend") == 0   ||
 		strcmp(argv[1], "--forkavlauncher") == 0 ||
 		strcmp(argv[1], "--forkavworker") == 0 ||
-<<<<<<< HEAD
 		strcmp(argv[1], "--forkautovac") == 0   ||
 		strcmp(argv[1], "--forkglobaldeadlockdetector") == 0 ||
-		strcmp(argv[1], "--forkboot") == 0 ||
-=======
 		strcmp(argv[1], "--forkaux") == 0 ||
->>>>>>> REL_16_9
 		strncmp(argv[1], "--forkbgworker=", 15) == 0)
 		PGSharedMemoryReAttach();
 	else
@@ -5864,12 +5736,9 @@ process_pm_pmsignal(void)
 {
 	pending_pm_pmsignal = false;
 
-<<<<<<< HEAD
-=======
 	ereport(DEBUG2,
 			(errmsg_internal("postmaster received pmsignal signal")));
 
->>>>>>> REL_16_9
 	/*
 	 * RECOVERY_STARTED and BEGIN_HOT_STANDBY signals are ignored in
 	 * unexpected states. If the startup process quickly starts up, completes
@@ -6074,11 +5943,6 @@ process_pm_pmsignal(void)
 		 */
 		signal_child(StartupPID, SIGUSR2);
 	}
-<<<<<<< HEAD
-
-	errno = save_errno;
-=======
->>>>>>> REL_16_9
 }
 
 /*
