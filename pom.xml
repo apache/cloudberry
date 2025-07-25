@@ -157,12 +157,6 @@ code or new licensing patterns.
             <exclude>.git-blame-ignore-revs</exclude>
             <exclude>.dir-locals.el</exclude>
             <exclude>GNUmakefile.in</exclude>
-            <exclude>.github/DISCUSSION_TEMPLATE/ideas-feature-requests.yml</exclude>
-            <exclude>.github/DISCUSSION_TEMPLATE/proposal.yml</exclude>
-            <exclude>.github/full_color_black.svg</exclude>
-            <exclude>.github/ISSUE_TEMPLATE/bug-report.yml</exclude>
-            <exclude>.github/ISSUE_TEMPLATE/config.yml</exclude>
-            <exclude>.github/full_color_white.svg</exclude>
             <exclude>.gitattributes</exclude>
 
             <exclude>gpMgmt/demo/gpfdist_transform/**</exclude>
@@ -179,7 +173,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/gpload_test/gpload2/*.ans</exclude>
             <exclude>gpMgmt/bin/gpload_test/gpload2/data/**</exclude>
 
-            <exclude>gpMgmt/bin/gpdemo</exclude>
             <exclude>gpMgmt/bin/gpcheckperf</exclude>
             <exclude>gpMgmt/bin/test/gpinitsystem_test.bash</exclude>
             <exclude>gpMgmt/bin/test/suite.bash</exclude>
@@ -338,14 +331,11 @@ code or new licensing patterns.
 
             <exclude>.abi-check/**</exclude>
 
-            <exclude>deploy/**</exclude>
-
             <exclude>.clang-tidy</exclude>
             <exclude>putversion</exclude>
             <exclude>.gitmodules</exclude>
             <exclude>.editorconfig</exclude>
-            <exclude>sonar-project.properties</exclude>
-
+            
             <exclude>contrib/**/Makefile</exclude>
             <exclude>contrib/**/*.control</exclude>
             <exclude>contrib/**/*.source</exclude>
@@ -381,37 +371,6 @@ code or new licensing patterns.
 
             <exclude>contrib/unaccent/unaccent.rules</exclude>
             <exclude>contrib/unaccent/generate_unaccent_rules.py</exclude>
-
-            <exclude>contrib/pax_storage/src/test/**</exclude>
-
-            <exclude>contrib/pax_storage/init_file</exclude>
-            <exclude>contrib/pax_storage/tools/gen_sql.c</exclude>
-            <exclude>contrib/pax_storage/CMakeLists.txt</exclude>
-            <exclude>contrib/pax_storage/hd-ci/clang_tidy_pax.bash</exclude>
-            <exclude>contrib/pax_storage/hd-ci/compile_pax.bash</exclude>
-            <exclude>contrib/pax_storage/.clang-tidy</exclude>
-            <exclude>contrib/pax_storage/pax_schedule</exclude>
-            <exclude>contrib/pax_storage/FindDependencies.cmake</exclude>
-            <exclude>contrib/pax_storage/.clang-format</exclude>
-            <exclude>contrib/pax_storage/src/cpp/CMakeLists.txt</exclude>
-            <exclude>contrib/pax_storage/src/cpp/cmake/pax_format.cmake</exclude>
-            <exclude>contrib/pax_storage/src/cpp/cmake/pax.cmake</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/CPPLINT.cfg</exclude>
-            <exclude>contrib/pax_storage/src/cpp/storage/proto/micro_partition_stats.proto</exclude>
-            <exclude>contrib/pax_storage/src/cpp/storage/proto/pax.proto</exclude>
-            <exclude>contrib/pax_storage/src/cpp/storage/proto/CPPLINT.cfg</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxfile_type.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/CMakeLists.txt</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/test/paxpy_test.py</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxpy_modules.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxpy_comm.h</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/setup-debug.py</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/MANIFEST.in</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxfilereader_type.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/setup.py</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxtype_cast.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/setup.cfg</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxpy_types.h</exclude>
 
             <exclude>contrib/cube/cubeparse.y</exclude>
             <exclude>contrib/cube/CHANGES</exclude>
@@ -510,7 +469,6 @@ code or new licensing patterns.
             <exclude>contrib/pgcrypto/rijndael.tbl</exclude>
             <exclude>contrib/pgcrypto/rijndael.h</exclude>
             <exclude>contrib/pgcrypto/crypt-blowfish.c</exclude>
-            <exclude>contrib/pgcrypto/sm4.h</exclude>
             <exclude>contrib/pgcrypto/package/gppkg_spec.yml.in</exclude>
             <exclude>contrib/pgcrypto/package/pgcrypto.spec</exclude>
 
@@ -581,7 +539,6 @@ code or new licensing patterns.
 
             <exclude>contrib/formatter_fixedwidth/fixedwidth.c</exclude>
 
-            <exclude>gpAux/gpdemo/gpdemo-defaults.sh</exclude>
             <exclude>gpAux/gpdemo/Makefile</exclude>
             <exclude>gpAux/gpdemo/demo_cluster.sh</exclude>
             <exclude>gpAux/gpdemo/lalshell</exclude>
@@ -997,11 +954,6 @@ code or new licensing patterns.
             <exclude>src/include/gpopt/utils/COptTasks.h</exclude>
             <exclude>src/include/gpopt/.clang-format</exclude>
             <exclude>src/include/pg_config.h.win32</exclude>
-            <exclude>src/include/task/bitstring.h</exclude>
-            <exclude>src/include/task/cron.h</exclude>
-            <exclude>src/include/task/pg_cron.h</exclude>
-            <exclude>src/include/task/task_states.h</exclude>
-            <exclude>src/include/task/job_metadata.h</exclude>
             <exclude>src/include/libpq/hba.h</exclude>
             <exclude>src/include/gppc/gppc_config.h</exclude>
             <exclude>src/include/commands/extprotocolcmds.h</exclude>
@@ -1264,7 +1216,6 @@ code or new licensing patterns.
             <exclude>src/makefiles/Makefile.netbsd</exclude>
             <exclude>src/fe_utils/log.c</exclude>
             <exclude>src/fe_utils/test/print_test.c</exclude>
-            <exclude>src/common/sm3.c</exclude>
             <exclude>src/common/digit_table.h</exclude>
             <exclude>src/common/etcdutils.c</exclude>
             <exclude>src/nls-global.mk</exclude>
@@ -1285,9 +1236,51 @@ code or new licensing patterns.
 
             <exclude>BUILD_NUMBER</exclude>
             <exclude>Makefile</exclude>
-            <exclude>.gitmessage</exclude>
             <exclude>aclocal.m4</exclude>
             <exclude>python-dependencies.txt</exclude>
+
+            
+            <!-- Finally we exclude a few file types (based on
+                 extension) for which comments are tough to
+                 maintain. Note that this is a combination of files
+                 licensed to ASF and files that came from PostgreSQL
+                 and other projects (under compatible licenses).
+                 You may need to engage in software archaeology to
+                 find out the origins of these.
+            -->
+
+            <exclude>**/*.gif</exclude>
+            <exclude>**/*.md</exclude>
+            <exclude>**/*.json</exclude>
+            <exclude>**/*.sql</exclude>
+            <exclude>**/*.out</exclude>
+            <exclude>**/Thumbs.db</exclude>
+            <exclude>.github/full_color_black.svg</exclude>
+            <exclude>.github/full_color_white.svg</exclude>
+            <exclude>sonar-project.properties</exclude>
+            <exclude>.gitmessage</exclude>
+           
+            <!-- The following files are from pg_cron under PostgreSQL 
+                 license, introduced by Cloudberry.
+            -->
+            <exclude>src/include/task/bitstring.h</exclude>
+            <exclude>src/include/task/cron.h</exclude>
+            <exclude>src/include/task/pg_cron.h</exclude>
+            <exclude>src/include/task/task_states.h</exclude>
+            <exclude>src/include/task/job_metadata.h</exclude>
+
+            <!-- The following files are used by PAX as the 
+                 submodules or created originally by Cloudberry.
+            -->
+            <exclude>contrib/pax_storage/src/test/**</exclude>
+            <exclude>contrib/pax_storage/init_file</exclude>
+            <exclude>contrib/pax_storage/.clang-tidy</exclude>
+            <exclude>contrib/pax_storage/pax_schedule</exclude>
+            <exclude>contrib/pax_storage/.clang-format</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/CPPLINT.cfg</exclude>
+            <exclude>contrib/pax_storage/src/cpp/storage/proto/CPPLINT.cfg</exclude>
+            <exclude>contrib/pax_storage/src/api/python3/MANIFEST.in</exclude>
+            <exclude>contrib/pax_storage/src/api/python3/setup.cfg</exclude>
 
             <exclude>dependency/yyjson/.gitattributes</exclude>
             <exclude>dependency/yyjson/.github/codecov.yml</exclude>
@@ -1703,66 +1696,11 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/include/gmock/internal/custom/gmock-generated-actions.h</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest_deps.bzl</exclude>
 
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test_cpp17/test_private_member.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/src_linux/addr_any.h</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/Makefile.linux64.gcc</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_private_member_function_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_object_member_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_constructor_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_virtual_overload_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_virtual_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_function.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_variadic_function.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/Makefile.win32</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/Makefile.linux64.clang</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_addr_lambda_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_class_member_function.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_addr_lambda_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_addr_any_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_private_member_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/Makefile.linux32.gcc</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_dynamic_library_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_template_function_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_template_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/Makefile.linux32.clang</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_constructor_function_x86_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_dtor_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_overload_function_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_functor_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_functor_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_object_member_function_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/Makefile.win64</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_dtor_function_x86_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_dynamic_library_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_overload_function_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_virtual_function_x86_win.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_valgrind_discard_translation_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/test/test_addr_any_linux.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/src_darwin/addr_any.h</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/.gitmodules</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/src_win/addr_any.h</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/.github/workflows/make-test-multi-platform.yml</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/ut/include/gmock/internal/gmock-pp.h</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/ut/include/gmock/internal/custom/gmock-generated-actions.h.pump</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/ut/src/mocks/mock_obj.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/ut/src/test_obj.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/ut/src/fixtures/strings.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/ut/src/main.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/src/obj_operations.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/src/obj.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/src/obj.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/src/main.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/gtest/src/obj_operations.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/ut/include/catch.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/ut/src/test_obj.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/ut/src/main.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/src/obj_operations.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/src/obj.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/src/obj.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/src/main.cpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/ut_examples/catch2/src/obj_operations.hpp</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/src/addr_pri.h</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/cpp-stub/src/stub.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_linux/addr_any.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_darwin/addr_any.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_win/addr_any.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/addr_pri.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/stub.h</exclude>
 
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>
@@ -1797,25 +1735,6 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/unicode.cpp</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.clang-format</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.travis.yml</exclude>
-
-            <!-- Finally we exclude a few file types (based on
-                 extension) for which comments are tough to
-                 maintain. Note that this is a combination of files
-                 licensed to ASF and files that came from PostgreSQL
-                 and other projects (under compatible licenses).
-                 You may need to engage in software archaeology to
-                 find out the origins of these.
-            -->
-
-            <exclude>**/*.gif</exclude>
-            <exclude>**/*.md</exclude>
-            <exclude>**/*.json</exclude>
-            <exclude>**/*.sql</exclude>
-            <exclude>**/*.out</exclude>
-            <exclude>**/Thumbs.db</exclude>
-
-            <!-- Exclude GPL-licensed archive that will be removed -->
-            <exclude>gpMgmt/bin/pythonSrc/ext/pylint-0.21.0.tar.gz</exclude>
 
           </excludes>
 
