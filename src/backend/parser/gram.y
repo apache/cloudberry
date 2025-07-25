@@ -6,13 +6,9 @@
  * gram.y
  *	  POSTGRESQL BISON rules/actions
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -266,36 +262,6 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	TypeName   *typnam;
 	FunctionParameter *fun_param;
 	FunctionParameterMode fun_param_mode;
-<<<<<<< HEAD
-	ObjectWithArgs		*objwithargs;
-	DefElem				*defelt;
-	SortBy				*sortby;
-	WindowDef			*windef;
-	JoinExpr			*jexpr;
-	IndexElem			*ielem;
-	StatsElem			*selem;
-	Alias				*alias;
-	RangeVar			*range;
-	IntoClause			*into;
-	WithClause			*with;
-	InferClause			*infer;
-	OnConflictClause	*onconflict;
-	A_Indices			*aind;
-	ResTarget			*target;
-	struct PrivTarget	*privtarget;
-	AccessPriv			*accesspriv;
-	struct ImportQual	*importqual;
-	InsertStmt			*istmt;
-	VariableSetStmt		*vsetstmt;
-	PartitionElem		*partelem;
-	PartitionSpec		*partspec;
-	PartitionBoundSpec	*partboundspec;
-	RoleSpec			*rolespec;
-	struct SelectLimit	*selectlimit;
-	DistributionKeyElem *dkelem;
-	SetQuantifier	 setquantifier;
-	struct GroupClause  *groupclause;
-=======
 	ObjectWithArgs *objwithargs;
 	DefElem	   *defelt;
 	SortBy	   *sortby;
@@ -322,12 +288,12 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	RoleSpec   *rolespec;
 	PublicationObjSpec *publicationobjectspec;
 	struct SelectLimit *selectlimit;
+	DistributionKeyElem *dkelem;
 	SetQuantifier setquantifier;
 	struct GroupClause *groupclause;
 	MergeWhenClause *mergewhen;
 	struct KeyActions *keyactions;
 	struct KeyAction *keyaction;
->>>>>>> REL_16_9
 }
 
 %type <node>	stmt toplevel_stmt schema_stmt routine_body_stmt
@@ -401,17 +367,12 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <list>    alter_identity_column_option_list
 %type <defelt>  alter_identity_column_option
 
-<<<<<<< HEAD
 %type <node>	alter_table_partition_cmd alter_table_partition_id_spec
 				alter_table_partition_id_spec_with_opt_default
 %type <list>	part_values_clause multi_spec_value_list part_values_single
 %type <ival>	opt_table_partition_exchange_validate
 
-%type <dbehavior>	opt_drop_behavior
 %type <dbehavior>	opt_drop_directory_table_behavior
-
-=======
->>>>>>> REL_16_9
 %type <list>	createdb_opt_list createdb_opt_items copy_opt_list
 				transaction_mode_list
 				create_extension_opt_list alter_extension_opt_list
@@ -453,19 +414,14 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <str>		foreign_server_version opt_foreign_server_version
 %type <str>		opt_in_database
 
-<<<<<<< HEAD
 %type <list>	OptQueueList
 %type <defelt>	OptQueueElem
 
 %type <list>	OptResourceGroupList
 %type <defelt>	OptResourceGroupElem
 
-%type <str>		OptSchemaName
-%type <list>	OptSchemaEltList
-=======
 %type <str>		parameter_name
 %type <list>	OptSchemaEltList parameter_name_list
->>>>>>> REL_16_9
 
 %type <chr>		am_type
 
@@ -485,12 +441,8 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <str>		copy_file_name
 				access_method_clause attr_name
 				table_access_method_clause name cursor_name file_name
-<<<<<<< HEAD
-				opt_index_name cluster_index_specification opt_file_name
+				cluster_index_specification opt_file_name
 %type <str>		OptWithLocation
-=======
-				cluster_index_specification
->>>>>>> REL_16_9
 
 %type <list>	func_name handler_name qual_Op qual_all_Op subquery_Op
 				opt_inline_handler opt_validator validator_clause
@@ -534,13 +486,9 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 				oper_argtypes RuleActionList RuleActionMulti
 				cdb_string_list
 				opt_column_list columnList opt_name_list
-<<<<<<< HEAD
 				exttab_auth_list keyvalue_list
-				sort_clause opt_sort_clause sortby_list index_params stats_params
-=======
 				sort_clause opt_sort_clause sortby_list index_params
 				stats_params
->>>>>>> REL_16_9
 				opt_include opt_c_include index_including_params
 				name_list role_list from_clause from_list opt_array_bounds
 				qualified_name_list qualified_name_list_with_only any_name any_name_list type_name_list
@@ -608,14 +556,9 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <str>		unicode_normal_form
 
 %type <boolean> opt_instead
-<<<<<<< HEAD
 %type <boolean> opt_unique opt_concurrently opt_verbose opt_full
 %type <boolean> opt_freeze opt_analyze opt_ao_aux_only opt_default opt_recheck
 %type <boolean> opt_dxl
-=======
-%type <boolean> opt_unique opt_verbose opt_full
-%type <boolean> opt_freeze opt_analyze opt_default opt_recheck
->>>>>>> REL_16_9
 %type <defelt>	opt_binary copy_delimiter
 
 %type <boolean> copy_from opt_program
@@ -812,10 +755,9 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <list>		hash_partbound
 %type <defelt>		hash_partbound_elem
 
-<<<<<<< HEAD
 %type <list>	OptWarehouseOptList WarehouseOptList
 %type <defelt>	WarehouseOptElem
-=======
+
 %type <node>	json_format_clause_opt
 				json_value_expr
 				json_output_clause_opt
@@ -830,7 +772,6 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 				json_object_constructor_null_clause_opt
 				json_array_constructor_null_clause_opt
 
->>>>>>> REL_16_9
 
 /*
  * Non-keyword token types.  These are hard-wired into the "flex" lexer.
@@ -891,11 +832,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	HANDLER HAVING HEADER_P HOLD HOUR_P
 
 	IDENTITY_P IF_P ILIKE IMMEDIATE IMMUTABLE IMPLICIT_P IMPORT_P IN_P INCLUDE
-<<<<<<< HEAD
-	INCLUDING INCREMENT INCREMENTAL INDEX INDEXES INHERIT INHERITS INITIALLY INLINE_P
-=======
-	INCLUDING INCREMENT INDENT INDEX INDEXES INHERIT INHERITS INITIALLY INLINE_P
->>>>>>> REL_16_9
+	INCLUDING INCREMENT INCREMENTAL INDENT INDEX INDEXES INHERIT INHERITS INITIALLY INLINE_P
 	INNER_P INOUT INPUT_P INSENSITIVE INSERT INSTEAD INT_P INTEGER
 	INTERSECT INTERVAL INTO INVOKER IS ISNULL ISOLATION
 
@@ -907,13 +844,8 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	LEADING LEAKPROOF LEAST LEFT LEVEL LIKE LIMIT LISTEN LOAD LOCAL
 	LOCALTIME LOCALTIMESTAMP LOCATION LOCK_P LOCKED LOCUS LOGGED
 
-<<<<<<< HEAD
-	MAPPING MATCH MATERIALIZED MAXVALUE MEMORY_QUOTA
+	MAPPING MATCH MATCHED MATERIALIZED MAXVALUE MERGE MEMORY_QUOTA
 	METHOD MINUTE_P MINVALUE MIN_COST MODE MONTH_P MOVE
-=======
-	MAPPING MATCH MATCHED MATERIALIZED MAXVALUE MERGE METHOD
-	MINUTE_P MINVALUE MODE MONTH_P MOVE
->>>>>>> REL_16_9
 
 	NAME_P NAMES NATIONAL NATURAL NCHAR NEW NEXT NFC NFD NFKC NFKD NO NONE
 	NORMALIZE NORMALIZED
@@ -1032,12 +964,8 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
  * FORMAT_LA, NULLS_LA, WITH_LA, and WITHOUT_LA are needed to make the grammar
  * LALR(1).
  */
-<<<<<<< HEAD
-%token		NOT_LA NULLS_LA WITH_LA
-%token		PARTITION_TAIL
-=======
 %token		FORMAT_LA NOT_LA NULLS_LA WITH_LA WITHOUT_LA
->>>>>>> REL_16_9
+%token		PARTITION_TAIL
 
 /*
  * The grammar likewise thinks these tokens are keywords, but they are never
@@ -2241,12 +2169,8 @@ CreateUserStmt:
 					n->stmt_type = ROLESTMT_USER;
 					n->role = $3;
 					n->options = $5;
-<<<<<<< HEAD
 					n->tags = $6;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 
@@ -2606,7 +2530,6 @@ CreateSchemaStmt:
                 }
 		;
 
-<<<<<<< HEAD
 /*****************************************************************************
  *
  * Alter a schema to add a tag
@@ -2631,13 +2554,6 @@ AlterSchemaStmt:
                 }
         ;
 
-OptSchemaName:
-			ColId									{ $$ = $1; }
-			| /* EMPTY */							{ $$ = NULL; }
-		;
-
-=======
->>>>>>> REL_16_9
 OptSchemaEltList:
 			OptSchemaEltList schema_stmt
 				{
@@ -4269,20 +4185,11 @@ alter_column_default:
 			| DROP DEFAULT				{ $$ = NULL; }
 		;
 
-<<<<<<< HEAD
-opt_drop_behavior:
-			CASCADE						{ $$ = DROP_CASCADE; }
-			| RESTRICT					{ $$ = DROP_RESTRICT; }
-			| /* EMPTY */				{ $$ = DROP_RESTRICT; /* default */ }
-		;
-
 opt_drop_directory_table_behavior:
 			WITH CONTENT_P				{ $$ = true; }
 			| /* EMPTY */				{ $$ = false; }
 		;
 
-=======
->>>>>>> REL_16_9
 opt_collate_clause:
 			COLLATE any_name
 				{
@@ -5160,7 +5067,6 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list
 					/* Concatenate user-supplied flags */
 					if ($2)
 						n->options = lappend(n->options, $2);
-<<<<<<< HEAD
 					if ($9)
 						n->options = lappend(n->options, $9);
 					if ($11)
@@ -5169,13 +5075,6 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list
 						n->options = list_concat(n->options, $13);
 
 					$$ = (Node *)n;
-=======
-					if ($8)
-						n->options = lappend(n->options, $8);
-					if ($10)
-						n->options = list_concat(n->options, $10);
-					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| COPY '(' PreparableStmt ')' TO opt_program copy_file_name opt_with copy_options
 				{
@@ -5195,8 +5094,7 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list
 								 errmsg("STDIN/STDOUT not allowed with PROGRAM"),
 								 parser_errposition(@5)));
 
-<<<<<<< HEAD
-					$$ = (Node *)n;
+					$$ = (Node *) n;
 					/*
 					 * GPDB_96_MERGE_FIXME: The above statement changed in
 					 * upstream commit 92e38182d7c from select_with_parens to
@@ -5206,9 +5104,6 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list
 					 * preparable_stmt_with_parens should be added as ecpg does
 					 * not fair very well with \' or \( \) chars.
 					 */
-=======
-					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
             | COPY BINARY DIRECTORY TABLE qualified_name Sconst TO opt_program copy_file_name
                 {
@@ -5445,7 +5340,6 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->oncommit = $12;
 					n->tablespacename = $13;
 					n->if_not_exists = false;
-<<<<<<< HEAD
 					n->origin = ORIGIN_NO_GEN;
 					n->distributedBy = (DistributedBy *) $14;
 					n->tags = $16;
@@ -5453,10 +5347,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 
 					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name '('
 			OptTableElementList ')' OptInherit OptFirstPartitionSpec table_access_method_clause
@@ -5482,7 +5373,6 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->oncommit = $15;
 					n->tablespacename = $16;
 					n->if_not_exists = true;
-<<<<<<< HEAD
 					n->origin = ORIGIN_NO_GEN;
 					n->distributedBy = (DistributedBy *) $17;
 					n->tags = $19;
@@ -5490,10 +5380,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 
 					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		| CREATE OptTemp TABLE qualified_name OF any_name
 			OptTypedTableElementList OptFirstPartitionSpec table_access_method_clause
@@ -5520,7 +5407,6 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->oncommit = $11;
 					n->tablespacename = $12;
 					n->if_not_exists = false;
-<<<<<<< HEAD
 					n->origin = ORIGIN_NO_GEN;
 					n->distributedBy = (DistributedBy *) $13;
 					n->tags = $15;
@@ -5528,10 +5414,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 
 					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name OF any_name
 			OptTypedTableElementList OptFirstPartitionSpec table_access_method_clause
@@ -5558,7 +5441,6 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->oncommit = $14;
 					n->tablespacename = $15;
 					n->if_not_exists = true;
-<<<<<<< HEAD
 					n->origin = ORIGIN_NO_GEN;
 					n->distributedBy = (DistributedBy *) $16;
 					n->tags = $18;
@@ -5566,10 +5448,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 
 					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		| CREATE OptTemp TABLE qualified_name PARTITION OF qualified_name
 			OptTypedTableElementList PartitionBoundSpec OptFirstPartitionSpec
@@ -5596,7 +5475,6 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->oncommit = $13;
 					n->tablespacename = $14;
 					n->if_not_exists = false;
-<<<<<<< HEAD
 					n->origin = ORIGIN_NO_GEN;
 					n->distributedBy = NULL;
 					n->tags = $16;
@@ -5604,10 +5482,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 
 					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name PARTITION OF
 			qualified_name OptTypedTableElementList PartitionBoundSpec OptFirstPartitionSpec
@@ -5634,7 +5509,6 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->oncommit = $16;
 					n->tablespacename = $17;
 					n->if_not_exists = true;
-<<<<<<< HEAD
 					n->origin = ORIGIN_NO_GEN;
 					n->distributedBy = NULL;
 					n->tags = $19;
@@ -5642,10 +5516,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 
 					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 
@@ -5726,7 +5597,6 @@ TypedTableElement:
 			| TableConstraint					{ $$ = $1; }
 		;
 
-<<<<<<< HEAD
 column_reference_storage_directive:
 			COLUMN ColId ENCODING definition
 				{
@@ -5749,10 +5619,7 @@ column_reference_storage_directive:
 				}
 		;
 
-columnDef:	ColId Typename opt_column_compression create_generic_options ColQualList opt_storage_encoding
-=======
-columnDef:	ColId Typename opt_column_storage opt_column_compression create_generic_options ColQualList
->>>>>>> REL_16_9
+columnDef:	ColId Typename opt_column_storage opt_column_compression create_generic_options ColQualList opt_storage_encoding
 				{
 					ColumnDef *n = makeNode(ColumnDef);
 
@@ -5762,7 +5629,6 @@ columnDef:	ColId Typename opt_column_storage opt_column_compression create_gener
 					n->compression = $4;
 					n->inhcount = 0;
 					n->is_local = true;
-					n->encoding = $6;
 					n->is_not_null = false;
 					n->is_from_type = false;
 					n->storage = 0;
@@ -5772,6 +5638,7 @@ columnDef:	ColId Typename opt_column_storage opt_column_compression create_gener
 					n->fdwoptions = $5;
 					SplitColQualList($6, &n->constraints, &n->collClause,
 									 yyscanner);
+                    n->encoding = $7;
 					n->location = @1;
 					$$ = (Node *) n;
 				}
@@ -7270,12 +7137,9 @@ CreateAsStmt:
 				{
 					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
 
-<<<<<<< HEAD
 					/* reset the hack set in OptFirstPartitionSpec */
 					pg_yyget_extra(yyscanner)->tail_partition_magic = false;
 
-=======
->>>>>>> REL_16_9
 					ctas->query = $6;
 					ctas->into = $4;
 					ctas->objtype = OBJECT_TABLE;
@@ -7799,14 +7663,9 @@ CreateMatViewStmt:
 		| CREATE OptNoLog DYNAMIC TABLE create_mv_target IF_P NOT EXISTS SCHEDULE task_schedule AS SelectStmt opt_with_data OptDistributedBy
 				{
 					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-<<<<<<< HEAD
+
 					ctas->query = $12;
 					ctas->into = $5;
-=======
-
-					ctas->query = $10;
-					ctas->into = $8;
->>>>>>> REL_16_9
 					ctas->objtype = OBJECT_MATVIEW;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = true;
@@ -7912,12 +7771,8 @@ CreateSeqStmt:
 					n->options = $5;
 					n->ownerId = InvalidOid;
 					n->if_not_exists = false;
-<<<<<<< HEAD
 					n->tags = $6;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| CREATE OptTemp SEQUENCE IF_P NOT EXISTS qualified_name OptSeqOptList OptTagOptList
 				{
@@ -7928,12 +7783,8 @@ CreateSeqStmt:
 					n->options = $8;
 					n->ownerId = InvalidOid;
 					n->if_not_exists = true;
-<<<<<<< HEAD
 					n->tags = $9;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 
@@ -8142,12 +7993,8 @@ opt_procedural:
 CreateTableSpaceStmt: CREATE TABLESPACE name OptTableSpaceOwner LOCATION Sconst opt_reloptions OptServer OptFileHandler OptTagOptList
 				{
 					CreateTableSpaceStmt *n = makeNode(CreateTableSpaceStmt);
-<<<<<<< HEAD
 					List	*fileHandler_list;
 					char    *tmpfilehandler;
-=======
-
->>>>>>> REL_16_9
 					n->tablespacename = $3;
 					n->owner = $4;
 					n->location = $6;
@@ -9804,17 +9651,10 @@ DefineStmt:
 					n->kind = OBJECT_AGGREGATE;
 					n->oldstyle = false;
 					n->replace = $2;
-<<<<<<< HEAD
 					n->defnames = $5;
 					n->args = $6;
 					n->definition = $7;
-					$$ = (Node *)n;
-=======
-					n->defnames = $4;
-					n->args = $5;
-					n->definition = $6;
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| CREATE opt_or_replace opt_ordered AGGREGATE func_name old_aggr_definition
 				{
@@ -9826,13 +9666,8 @@ DefineStmt:
 					n->replace = $2;
 					n->defnames = $5;
 					n->args = NIL;
-<<<<<<< HEAD
 					n->definition = $6;
-					$$ = (Node *)n;
-=======
-					n->definition = $5;
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| CREATE OPERATOR any_operator definition
 				{
@@ -10020,7 +9855,6 @@ def_elem:	ColLabel '=' def_arg
 		;
 
 /* Note: any simple identifier will be returned as a type name! */
-<<<<<<< HEAD
 def_arg:	func_type						{ $$ = (Node *)$1; }
 			/* MPP-6685: allow unquoted ROW keyword as "orientation" option */
 			| ROW							{ $$ = (Node *)makeString(pstrdup("row")); }
@@ -10029,14 +9863,6 @@ def_arg:	func_type						{ $$ = (Node *)$1; }
 			| NumericOnly					{ $$ = (Node *)$1; }
 			| Sconst						{ $$ = (Node *)makeString($1); }
 			| NONE							{ $$ = (Node *)makeString(pstrdup($1)); }
-=======
-def_arg:	func_type						{ $$ = (Node *) $1; }
-			| reserved_keyword				{ $$ = (Node *) makeString(pstrdup($1)); }
-			| qual_all_Op					{ $$ = (Node *) $1; }
-			| NumericOnly					{ $$ = (Node *) $1; }
-			| Sconst						{ $$ = (Node *) makeString($1); }
-			| NONE							{ $$ = (Node *) makeString(pstrdup($1)); }
->>>>>>> REL_16_9
 		;
 
 old_aggr_definition: '(' old_aggr_list ')'			{ $$ = $2; }
@@ -10411,12 +10237,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
-<<<<<<< HEAD
 					n->isdynamic = false;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| DROP object_type_any_name any_name_list opt_drop_behavior
 				{
@@ -10427,12 +10249,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
-<<<<<<< HEAD
 					n->isdynamic = false;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| DROP drop_type_name IF_P EXISTS name_list opt_drop_behavior
 				{
@@ -10443,12 +10261,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
-<<<<<<< HEAD
 					n->isdynamic = false;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| DROP drop_type_name name_list opt_drop_behavior
 				{
@@ -10459,12 +10273,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
-<<<<<<< HEAD
 					n->isdynamic = false;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| DROP object_type_name_on_any_name name ON any_name opt_drop_behavior
 				{
@@ -10547,12 +10357,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $4;
 					n->behavior = $5;
 					n->concurrent = true;
-<<<<<<< HEAD
 					n->isdynamic = false;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| DROP INDEX CONCURRENTLY IF_P EXISTS any_name_list opt_drop_behavior
 				{
@@ -10563,9 +10369,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $6;
 					n->behavior = $7;
 					n->concurrent = true;
-<<<<<<< HEAD
 					n->isdynamic = false;
-					$$ = (Node *)n;
+					$$ = (Node *) n;
 				}
 /* DROP DYNAMIC TABLE */
 			| DROP DYNAMIC TABLE IF_P EXISTS any_name_list opt_drop_behavior
@@ -10589,9 +10394,6 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					n->isdynamic = true;
 					$$ = (Node *)n;
-=======
-					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 
@@ -11763,11 +11565,7 @@ defacl_privilege_target:
 
 IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_single_name
 			ON relation_expr access_method_clause '(' index_params ')'
-<<<<<<< HEAD
-			opt_include opt_reloptions OptTableSpace where_clause OptTagOptList
-=======
-			opt_include opt_unique_null_treatment opt_reloptions OptTableSpace where_clause
->>>>>>> REL_16_9
+			opt_include opt_unique_null_treatment opt_reloptions OptTableSpace where_clause OptTagOptList
 				{
 					IndexStmt *n = makeNode(IndexStmt);
 
@@ -11795,21 +11593,13 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_single_name
 					n->transformed = false;
 					n->if_not_exists = false;
 					n->reset_default_tblspc = false;
-<<<<<<< HEAD
-					n->tags = $16;
+					n->tags = $17;
 
-					$$ = (Node *)n;
-				}
-			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS name
-			ON relation_expr access_method_clause '(' index_params ')'
-			opt_include opt_reloptions OptTableSpace where_clause OptTagOptList
-=======
 					$$ = (Node *) n;
 				}
 			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS name
 			ON relation_expr access_method_clause '(' index_params ')'
-			opt_include opt_unique_null_treatment opt_reloptions OptTableSpace where_clause
->>>>>>> REL_16_9
+			opt_include opt_unique_null_treatment opt_reloptions OptTableSpace where_clause OptTagOptList
 				{
 					IndexStmt *n = makeNode(IndexStmt);
 
@@ -11837,13 +11627,9 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_single_name
 					n->transformed = false;
 					n->if_not_exists = true;
 					n->reset_default_tblspc = false;
-<<<<<<< HEAD
-					n->tags = $19;
+					n->tags = $20;
 
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 
@@ -11959,12 +11745,8 @@ CreateFunctionStmt:
 					n->returnType = $7;
 					n->options = $8;
 					n->sql_body = $9;
-<<<<<<< HEAD
 					n->options = list_concat(n->options, $10);
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
 			  RETURNS TABLE '(' table_func_column_list ')' opt_createfunc_opt_list opt_routine_body
@@ -11980,12 +11762,8 @@ CreateFunctionStmt:
 					n->returnType->location = @7;
 					n->options = $11;
 					n->sql_body = $12;
-<<<<<<< HEAD
 					n->options = list_concat(n->options, $13);
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| CREATE opt_or_replace FUNCTION func_name func_args_with_defaults
 			  opt_createfunc_opt_list opt_routine_body opt_definition
@@ -11999,12 +11777,8 @@ CreateFunctionStmt:
 					n->returnType = NULL;
 					n->options = $6;
 					n->sql_body = $7;
-<<<<<<< HEAD
 					n->options = list_concat(n->options, $8);
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| CREATE opt_or_replace PROCEDURE func_name func_args_with_defaults
 			  opt_createfunc_opt_list opt_routine_body
@@ -12937,21 +12711,11 @@ ReindexStmt:
 					n->kind = $3;
 					n->relation = $5;
 					n->name = NULL;
-<<<<<<< HEAD
-					n->params = NIL;
-					if ($3)
-					{
-						n->params = lappend(n->params,
-								makeDefElem("concurrently", NULL, @3));
-					}
-					$$ = (Node *)n;
-=======
 					n->params = $2;
 					if ($4)
 						n->params = lappend(n->params,
 											makeDefElem("concurrently", NULL, @4));
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| REINDEX opt_reindex_option_list SCHEMA opt_concurrently name
 				{
@@ -12959,53 +12723,16 @@ ReindexStmt:
 
 					n->kind = REINDEX_OBJECT_SCHEMA;
 					n->relation = NULL;
-<<<<<<< HEAD
-					n->params = NIL;
-					if ($3)
-					{
-						n->params = lappend(n->params,
-								makeDefElem("concurrently", NULL, @3));
-					}
-					$$ = (Node *)n;
-=======
 					n->name = $5;
 					n->params = $2;
 					if ($4)
 						n->params = lappend(n->params,
 											makeDefElem("concurrently", NULL, @4));
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| REINDEX opt_reindex_option_list reindex_target_all opt_concurrently opt_single_name
 				{
 					ReindexStmt *n = makeNode(ReindexStmt);
-<<<<<<< HEAD
-					n->kind = $5;
-					n->relation = $7;
-					n->name = NULL;
-					n->params = $3;
-					if ($6)
-					{
-						n->params = lappend(n->params,
-								makeDefElem("concurrently", NULL, @6));
-					}
-					$$ = (Node *)n;
-				}
-			| REINDEX '(' utility_option_list ')' reindex_target_multitable opt_concurrently name
-				{
-					ReindexStmt *n = makeNode(ReindexStmt);
-					n->kind = $5;
-					n->name = $7;
-					n->relation = NULL;
-					n->params = $3;
-					if ($6)
-					{
-						n->params = lappend(n->params,
-								makeDefElem("concurrently", NULL, @6));
-					}
-					$$ = (Node *)n;
-=======
-
 					n->kind = $3;
 					n->relation = NULL;
 					n->name = $5;
@@ -13014,7 +12741,6 @@ ReindexStmt:
 						n->params = lappend(n->params,
 											makeDefElem("concurrently", NULL, @4));
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 reindex_target_relation:
@@ -15178,12 +14904,8 @@ CreatedbStmt:
 
 					n->dbname = $3;
 					n->options = $5;
-<<<<<<< HEAD
 					n->tags = $6;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 		;
 
@@ -15919,12 +15641,7 @@ ExplainStmt:
 		| EXPLAIN analyze_keyword opt_verbose opt_dxl ExplainableStmt
 				{
 					ExplainStmt *n = makeNode(ExplainStmt);
-<<<<<<< HEAD
 					n->query = $5;
-=======
-
-					n->query = $4;
->>>>>>> REL_16_9
 					n->options = list_make1(makeDefElem("analyze", NULL, @2));
 					if ($3)
 						n->options = lappend(n->options,
@@ -15937,12 +15654,7 @@ ExplainStmt:
 		| EXPLAIN VERBOSE opt_dxl ExplainableStmt
 				{
 					ExplainStmt *n = makeNode(ExplainStmt);
-<<<<<<< HEAD
 					n->query = $4;
-=======
-
-					n->query = $3;
->>>>>>> REL_16_9
 					n->options = list_make1(makeDefElem("verbose", NULL, @2));
 					if ($3)
 						n->options = lappend(n->options,
@@ -19408,14 +19120,10 @@ func_application: func_name '(' ')'
 					 * "must be an aggregate", but there's no provision
 					 * for that in FuncCall at the moment.
 					 */
-<<<<<<< HEAD
 					n->func_variadic = false;
 					n->location = @1;
 					n->over = NULL;
-					$$ = (Node *)n;
-=======
 					$$ = (Node *) n;
->>>>>>> REL_16_9
 				}
 			| func_name '(' DISTINCT func_arg_list opt_sort_clause ')'
 				{
@@ -21485,11 +21193,8 @@ unreserved_keyword:
 			| INCLUDING
 			| INCLUSIVE
 			| INCREMENT
-<<<<<<< HEAD
 			| INCREMENTAL
-=======
 			| INDENT
->>>>>>> REL_16_9
 			| INDEX
 			| INDEXES
 			| INHERIT
@@ -21528,11 +21233,8 @@ unreserved_keyword:
 			| MATCHED
 			| MATERIALIZED
 			| MAXVALUE
-<<<<<<< HEAD
 			| MEMORY_QUOTA
-=======
 			| MERGE
->>>>>>> REL_16_9
 			| METHOD
 			| MINUTE_P
 			| MINVALUE
@@ -22480,11 +22182,8 @@ bare_label_keyword:
 			| INCLUDING
 			| INCLUSIVE
 			| INCREMENT
-<<<<<<< HEAD
 			| INCREMENTAL
-=======
 			| INDENT
->>>>>>> REL_16_9
 			| INDEX
 			| INDEXES
 			| INHERIT
@@ -22542,12 +22241,9 @@ bare_label_keyword:
 			| MATCHED
 			| MATERIALIZED
 			| MAXVALUE
-<<<<<<< HEAD
 			| MEDIAN
 			| MEMORY_QUOTA
-=======
 			| MERGE
->>>>>>> REL_16_9
 			| METHOD
 			| MINVALUE
 			| MIN_COST
@@ -22674,11 +22370,8 @@ bare_label_keyword:
 			| ROWS
 			| RULE
 			| SAVEPOINT
-<<<<<<< HEAD
-			| SCHEDULE
-=======
 			| SCALAR
->>>>>>> REL_16_9
+			| SCHEDULE
 			| SCHEMA
 			| SCHEMAS
 			| SCROLL
