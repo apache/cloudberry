@@ -12,7 +12,7 @@ SerializeDXLPlan(Query *pquery)
 }
 
 PlannedStmt *
-GPOPTOptimizedPlan(Query *pquery, bool pfUnexpectedFailure)
+GPOPTOptimizedPlan(Query *pquery, bool pfUnexpectedFailure, OptimizerOptions *opts)
 {
 	elog(ERROR, "mock implementation of GPOPTOptimizedPlan called");
 	return NULL;

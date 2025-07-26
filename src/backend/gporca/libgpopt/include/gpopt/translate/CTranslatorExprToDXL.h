@@ -244,7 +244,7 @@ private:
 
 	CDXLNode *PdxlnWindow(CExpression *pexprSeqPrj, CColRefArray *colref_array,
 						  CDistributionSpecArray *pdrgpdsBaseTables,
-						  ULONG *pulNonGatherMotions, BOOL *pfDML);
+						  ULONG *pulNonGatherMotions, BOOL *pfDML, BOOL fWindowHashAgg);
 
 	CDXLNode *PdxlnNLJoin(CExpression *pexprNLJ, CColRefArray *colref_array,
 						  CDistributionSpecArray *pdrgpdsBaseTables,

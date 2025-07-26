@@ -107,6 +107,12 @@ private:
 									 const CCostModelGPDB *pcmgpdb,
 									 const SCostingInfo *pci);
 
+	// cost of hash sequence project
+	static CCost CostHashSequenceProject(CMemoryPool *mp, 
+									CExpressionHandle &exprhdl,
+									const CCostModelGPDB *pcmgpdb,
+									const SCostingInfo *pci);
+
 	// cost of CTE producer
 	static CCost CostCTEProducer(CMemoryPool *mp, CExpressionHandle &exprhdl,
 								 const CCostModelGPDB *pcmgpdb,

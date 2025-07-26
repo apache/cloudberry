@@ -3336,6 +3336,8 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 		}
 	}
 
+	window->isWindowHashAgg = window_dxlop->IsWindowHashAgg();
+
 	SetParamIds(plan);
 
 	// cleanup
