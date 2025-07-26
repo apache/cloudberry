@@ -72,10 +72,12 @@ typedef struct gfile_t
 #endif
 	} fd;
 
+#ifdef LIBSSH2
 	LIBSSH2_SESSION *session;
 	LIBSSH2_SFTP *sftp_session;
 	LIBSSH2_SFTP_HANDLE *sftp_handle;
 	int sock;
+#endif
 
 	union
 	{
