@@ -1,0 +1,2 @@
+# This directory is used for downloading Python source packages via pip3 download
+# The downloaded tar.gz files should not be committed to git

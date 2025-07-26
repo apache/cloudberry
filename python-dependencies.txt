@@ -1,3 +1,7 @@
 psutil==5.7.0
 pygresql==5.2
-pyyaml==5.3.1
+pyyaml==5.4.1
+mock==1.0.1
+parse==1.8.2
+setuptools==36.6.0
+behave==1.2.6
