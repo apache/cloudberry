@@ -3,13 +3,9 @@
  * lmgr.c
  *	  POSTGRES lock manager code
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1423,7 +1419,6 @@ DescribeLockTag(StringInfo buf, const LOCKTAG *tag)
 							 tag->locktag_field3,
 							 tag->locktag_field4);
 			break;
-<<<<<<< HEAD
 		case LOCKTAG_RESOURCE_QUEUE:
 			appendStringInfo(buf,
 							 _("resource queue %u"),
@@ -1432,13 +1427,13 @@ DescribeLockTag(StringInfo buf, const LOCKTAG *tag)
 		case LOCKTAG_WAREHOUSE:
 			appendStringInfo(buf,
 							 _("warehouse %u"),
-=======
+							 tag->locktag_field1);
+			break;
 		case LOCKTAG_APPLY_TRANSACTION:
 			appendStringInfo(buf,
 							 _("remote transaction %u of subscription %u of database %u"),
 							 tag->locktag_field3,
 							 tag->locktag_field2,
->>>>>>> REL_16_9
 							 tag->locktag_field1);
 			break;
 		default:

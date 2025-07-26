@@ -3,13 +3,9 @@
  * proc.c
  *	  routines to manage per-process shared memory data structure
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -41,13 +37,10 @@
 
 #include "access/transam.h"
 #include "access/twophase.h"
-<<<<<<< HEAD
 #include "access/xact.h"
 #include "catalog/namespace.h" /* TempNamespaceOidIsValid */
 #include "commands/async.h"
-=======
 #include "access/xlogutils.h"
->>>>>>> REL_16_9
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
@@ -207,20 +200,11 @@ InitProcGlobal(void)
 	 * Initialize the data structures.
 	 */
 	ProcGlobal->spins_per_delay = DEFAULT_SPINS_PER_DELAY;
-<<<<<<< HEAD
-	ProcGlobal->freeProcs = NULL;
-	ProcGlobal->autovacFreeProcs = NULL;
 	ProcGlobal->lmFreeProcs = NULL;
-	ProcGlobal->bgworkerFreeProcs = NULL;
-	ProcGlobal->walsenderFreeProcs = NULL;
-	ProcGlobal->startupProc = NULL;
-	ProcGlobal->startupProcPid = 0;
-=======
 	dlist_init(&ProcGlobal->freeProcs);
 	dlist_init(&ProcGlobal->autovacFreeProcs);
 	dlist_init(&ProcGlobal->bgworkerFreeProcs);
 	dlist_init(&ProcGlobal->walsenderFreeProcs);
->>>>>>> REL_16_9
 	ProcGlobal->startupBufferPinWaitBufId = -1;
 	ProcGlobal->walwriterLatch = NULL;
 	ProcGlobal->checkpointerLatch = NULL;
@@ -491,13 +475,8 @@ InitProcess(void)
 	MyProc->databaseId = InvalidOid;
 	MyProc->roleId = InvalidOid;
 	MyProc->tempNamespaceId = InvalidOid;
-<<<<<<< HEAD
 	MyProc->isBackgroundWorker = IsBackgroundWorker;
-	MyProc->delayChkpt = 0;
-=======
-	MyProc->isBackgroundWorker = !AmRegularBackendProcess();
 	MyProc->delayChkptFlags = 0;
->>>>>>> REL_16_9
 	MyProc->statusFlags = 0;
 	/* NB -- autovac launcher intentionally does not set IS_AUTOVACUUM */
 	if (IsAutoVacuumWorkerProcess())
@@ -763,13 +742,8 @@ InitAuxiliaryProcess(void)
 	MyProc->mppSessionId = InvalidGpSessionId;
     MyProc->mppIsWriter = false;
 	MyProc->tempNamespaceId = InvalidOid;
-<<<<<<< HEAD
 	MyProc->isBackgroundWorker = IsBackgroundWorker;
-	MyProc->delayChkpt = 0;
-=======
-	MyProc->isBackgroundWorker = true;
 	MyProc->delayChkptFlags = 0;
->>>>>>> REL_16_9
 	MyProc->statusFlags = 0;
 	MyProc->lwWaiting = LW_WS_NOT_WAITING;
 	MyProc->lwWaitMode = 0;
@@ -1034,10 +1008,7 @@ ProcKill(int code, Datum arg)
 
 	Assert(MyProc != NULL);
 
-<<<<<<< HEAD
 	SIMPLE_FAULT_INJECTOR("proc_kill");
-=======
->>>>>>> REL_16_9
 	/* not safe if forked by system(), etc. */
 	if (MyProc->pid != (int) getpid())
 		elog(PANIC, "ProcKill() called in child process");
@@ -1098,7 +1069,6 @@ ProcKill(int code, Datum arg)
 	/* Cancel any pending condition variable sleep, too */
 	ConditionVariableCancelSleep();
 
-<<<<<<< HEAD
 	MyProc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
     MyProc->mppLocalProcessSerial = 0;
 	MyProc->mppSessionId = InvalidGpSessionId;
@@ -1106,16 +1076,6 @@ ProcKill(int code, Datum arg)
 	MyProc->pid = 0;
 	/* Cancel any pending condition variable sleep, too */
 	ConditionVariableCancelSleep();
-
-	/* Make sure active replication slots are released */
-	if (MyReplicationSlot != NULL)
-		ReplicationSlotRelease();
-
-	/* Also cleanup all the temporary slots. */
-	ReplicationSlotCleanup();
-
-=======
->>>>>>> REL_16_9
 	/*
 	 * Detach from any lock group of which we are a member.  If the leader
 	 * exits before all other group members, its PGPROC will remain allocated

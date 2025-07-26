@@ -144,13 +144,8 @@ static const char *const lock_mode_names[] =
 static bool Dummy_trace = false;
 #endif
 
-<<<<<<< HEAD
 const LockMethodData default_lockmethod = {
-	AccessExclusiveLock,		/* highest valid lock mode number */
-=======
-static const LockMethodData default_lockmethod = {
 	MaxLockMode,
->>>>>>> REL_16_9
 	LockConflicts,
 	lock_mode_names,
 #ifdef LOCK_DEBUG
@@ -160,13 +155,8 @@ static const LockMethodData default_lockmethod = {
 #endif
 };
 
-<<<<<<< HEAD
 const LockMethodData user_lockmethod = {
-	AccessExclusiveLock,		/* highest valid lock mode number */
-=======
-static const LockMethodData user_lockmethod = {
 	MaxLockMode,
->>>>>>> REL_16_9
 	LockConflicts,
 	lock_mode_names,
 #ifdef LOCK_DEBUG
@@ -177,7 +167,7 @@ static const LockMethodData user_lockmethod = {
 };
 
 const LockMethodData resource_lockmethod = {
-	AccessExclusiveLock,        /* highest valid lock mode number */
+	MaxLockMode,        /* highest valid lock mode number */
 	LockConflicts,
 	lock_mode_names,
 #ifdef LOCK_DEBUG
@@ -1001,10 +991,6 @@ LockAcquireExtended(const LOCKTAG *locktag,
 		}
 	}
 
-<<<<<<< HEAD
-
-=======
->>>>>>> REL_16_9
 	/*
 	 * Prepare to emit a WAL record if acquisition of this lock needs to be
 	 * replayed in a standby server.
@@ -2102,24 +2088,8 @@ WaitOnLock(LOCALLOCK *locallock, ResourceOwner owner)
 	LOCK_PRINT("WaitOnLock: sleeping on lock",
 			   locallock->lock, locallock->tag.mode);
 
-<<<<<<< HEAD
-	/* Report change to waiting status */
-	if (update_process_title)
-	{
-		const char *old_status;
-		int			len;
-
-		old_status = get_real_act_ps_display(&len);
-		new_status = (char *) palloc(len + 8 + 1);
-		memcpy(new_status, old_status, len);
-		strcpy(new_status + len, " waiting");
-		set_ps_display(new_status);
-		new_status[len] = '\0'; /* truncate off " waiting" */
-	}
-=======
 	/* adjust the process title to indicate that it's waiting */
 	set_ps_display_suffix("waiting");
->>>>>>> REL_16_9
 
 	awaitedLock = locallock;
 	awaitedOwner = owner;
@@ -3581,9 +3551,6 @@ LockRefindAndRelease(LockMethod lockMethodTable, PGPROC *proc,
 }
 
 /*
-<<<<<<< HEAD
- * Prepare for prepare, while we're still in a transaction.
-=======
  * CheckForSessionAndXactLocks
  *		Check to see if transaction holds both session-level and xact-level
  *		locks on the same object; if so, throw an error.
@@ -3683,22 +3650,16 @@ CheckForSessionAndXactLocks(void)
  * AtPrepare_Locks
  *		Do the preparatory work for a PREPARE: make 2PC state file records
  *		for all locks currently held.
->>>>>>> REL_16_9
  *
  * This marks LOCALLOCK objects on temporary tables, so that we can
  * ignore them while writing the prepare record. Figuring out which
  * tables are temporary requires catalog access, hence we must do this
  * before we start actually preparing.
  *
-<<<<<<< HEAD
- * If new locks are taken after this, they will be considered as
- * not temp.
-=======
  * For the most part, we don't need to touch shared memory for this ---
  * all the necessary state information is in the locallock table.
  * Fast-path locks are an exception, however: we move any such locks to
  * the main table before allowing PREPARE TRANSACTION to succeed.
->>>>>>> REL_16_9
  */
 void
 PrePrepare_Locks(void)
@@ -3706,16 +3667,10 @@ PrePrepare_Locks(void)
 	HASH_SEQ_STATUS status;
 	LOCALLOCK  *locallock;
 
-<<<<<<< HEAD
-	/*
-	 * Scan the local locks, and set the 'istemptable' flags.
-	 */
-=======
 	/* First, verify there aren't locks of both xact and session level */
 	CheckForSessionAndXactLocks();
 
 	/* Now do the per-locallock cleanup work */
->>>>>>> REL_16_9
 	hash_seq_init(&status, LockMethodLocalHash);
 	while ((locallock = (LOCALLOCK *) hash_seq_search(&status)) != NULL)
 	{
