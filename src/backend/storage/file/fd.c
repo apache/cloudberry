@@ -3,13 +3,8 @@
  * fd.c
  *	  Virtual file descriptor code.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2007-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -107,12 +102,9 @@
 #include "utils/guc.h"
 #include "utils/guc_hooks.h"
 #include "utils/resowner_private.h"
-<<<<<<< HEAD
 #include "utils/workfile_mgr.h"
 #include "utils/faultinjector.h"
-=======
 #include "utils/varlena.h"
->>>>>>> REL_16_9
 
 /* Define PG_FLUSH_DATA_WORKS if we have an implementation for pg_flush_data */
 #if defined(HAVE_SYNC_FILE_RANGE)
@@ -670,19 +662,21 @@ retry:
 }
 
 /*
-<<<<<<< HEAD
  * Retrying close in case it gets interrupted. If that happens, it will cause
  * unlink to fail later.
  */
 int
-gp_retry_close(int fd) {
+gp_retry_close(int fd)
+{
 	int err = 0;
 	do
 	{
 		err = close(fd);
 	} while (err == -1 && errno == EINTR);
 	return err;
-=======
+}
+
+/*
  * Truncate an open file to a given length.
  */
 static int
@@ -697,7 +691,6 @@ retry:
 		goto retry;
 
 	return ret;
->>>>>>> REL_16_9
 }
 
 /*
@@ -878,7 +871,6 @@ durable_unlink(const char *fname, int elevel)
 }
 
 /*
-<<<<<<< HEAD
  * durable_rename_excl -- rename a file in a durable manner.
  *
  * Similar to durable_rename(), except that this routine tries (but does not
@@ -2420,7 +2412,6 @@ FileSync(File file, uint32 wait_event_info)
 }
 
 /*
-<<<<<<< HEAD
  * Get the size of a physical file by using fstat()
  *
  * Returns size in bytes if successful, < 0 otherwise
@@ -2430,7 +2421,19 @@ FileDiskSize(File file)
 {
 	int			returnCode = 0;
 	struct stat buf;
-=======
+
+	returnCode = FileAccess(file);
+	if (returnCode < 0)
+		return returnCode;
+
+	returnCode = fstat(VfdCache[file].fd, &buf);
+	if (returnCode < 0)
+		return returnCode;
+
+	return (int64) buf.st_size;
+}
+
+/*
  * Zero a region of the file.
  *
  * Returns 0 on success, -1 otherwise. In the latter case errno is set to the
@@ -2445,21 +2448,13 @@ FileZero(File file, off_t offset, off_t amount, uint32 wait_event_info)
 	Assert(FileIsValid(file));
 
 	DO_DB(elog(LOG, "FileZero: %d (%s) " INT64_FORMAT " " INT64_FORMAT,
-			   file, VfdCache[file].fileName,
-			   (int64) offset, (int64) amount));
->>>>>>> REL_16_9
+			file, VfdCache[file].fileName,
+			(int64) offset, (int64) amount));
 
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
 		return returnCode;
 
-<<<<<<< HEAD
-	returnCode = fstat(VfdCache[file].fd, &buf);
-	if (returnCode < 0)
-		return returnCode;
-
-	return (int64) buf.st_size;
-=======
 	pgstat_report_wait_start(wait_event_info);
 	written = pg_pwrite_zeros(VfdCache[file].fd, amount, offset);
 	pgstat_report_wait_end();
@@ -2527,7 +2522,6 @@ retry:
 #endif
 
 	return FileZero(file, offset, amount, wait_event_info);
->>>>>>> REL_16_9
 }
 
 off_t

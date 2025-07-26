@@ -21,10 +21,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-<<<<<<< HEAD
 #include "crypto/bufenc.h"
-=======
->>>>>>> REL_16_9
 #include "common/file_utils.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -76,13 +73,8 @@ copydir(const char *fromdir, const char *todir, bool recurse)
 			if (recurse)
 				copydir(fromfile, tofile, true);
 		}
-<<<<<<< HEAD
-		else if (S_ISREG(fst.st_mode))
-			copy_file(fromfile, tofile, false);
-=======
 		else if (xlde_type == PGFILETYPE_REG)
-			copy_file(fromfile, tofile);
->>>>>>> REL_16_9
+			copy_file(fromfile, tofile, false);
 	}
 	FreeDir(xldir);
 
@@ -125,11 +117,7 @@ copydir(const char *fromdir, const char *todir, bool recurse)
  * copy one file
  */
 void
-<<<<<<< HEAD
-copy_file(char *fromfile, char *tofile, bool encrypt_init_file)
-=======
-copy_file(const char *fromfile, const char *tofile)
->>>>>>> REL_16_9
+copy_file(const char *fromfile, const char *tofile, bool encrypt_init_file)
 {
 	char	   *buffer;
 	int			srcfd;

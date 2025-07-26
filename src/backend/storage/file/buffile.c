@@ -95,15 +95,10 @@ struct BufFile
 	bool		dirty;			/* does buffer need to be written? */
 	bool		readOnly;		/* has the file been set to read only? */
 
-<<<<<<< HEAD
 	char	   *operation_name; /* for naming temporary files. */
 
-	SharedFileSet *fileset;		/* space for segment files if shared */
-	const char *name;			/* name of this BufFile if shared */
-=======
 	FileSet    *fileset;		/* space for fileset based segment files */
 	const char *name;			/* name of fileset based BufFile */
->>>>>>> REL_16_9
 
 	/*
 	 * workfile_set for the files in current buffile. The workfile_set creator
@@ -127,7 +122,6 @@ struct BufFile
 	 */
 	int			curFile;		/* file index (0..n) part of current pos */
 	off_t		curOffset;		/* offset part of current pos */
-<<<<<<< HEAD
 	off_t		pos;			/* next read/write position in buffer */
 	int64		nbytes;			/* total # of valid bytes in buffer */
 	FakeAlignedBlock buffer;	/* GPDB: PG upstream uses PGAlignedBlock */
@@ -161,16 +155,6 @@ struct BufFile
 	ZSTD_inBuffer compressed_buffer;
 	bool		decompression_finished;
 #endif
-=======
-	int			pos;			/* next read/write position in buffer */
-	int			nbytes;			/* total # of valid bytes in buffer */
-
-	/*
-	 * XXX Should ideally us PGIOAlignedBlock, but might need a way to avoid
-	 * wasting per-file alignment padding when some users create many files.
-	 */
-	PGAlignedBlock buffer;
->>>>>>> REL_16_9
 };
 
 static BufFile *makeBufFileCommon(int nfiles);
@@ -374,11 +358,7 @@ MakeNewFileSetSegment(BufFile *buffile, int segment)
  * unrelated SharedFileSet objects.
  */
 BufFile *
-<<<<<<< HEAD
-BufFileCreateShared(SharedFileSet *fileset, const char *name, workfile_set *work_set)
-=======
-BufFileCreateFileSet(FileSet *fileset, const char *name)
->>>>>>> REL_16_9
+BufFileCreateFileSet(FileSet *fileset, const char *name, workfile_set *work_set)
 {
 	BufFile    *file;
 
@@ -471,7 +451,6 @@ BufFileOpenFileSet(FileSet *fileset, const char *name, int mode,
 }
 
 /*
-<<<<<<< HEAD
  * Open a shared BufFile with the given fileset, name, and mode.
  *
  * Parameters:
@@ -536,12 +515,8 @@ BufFileOpenSharedV2(SharedFileSet *fileset, const char *name, int mode)
 }
 
 /*
- * Delete a BufFile that was created by BufFileCreateShared in the given
- * SharedFileSet using the given name.
-=======
  * Delete a BufFile that was created by BufFileCreateFileSet in the given
  * FileSet using the given name.
->>>>>>> REL_16_9
  *
  * It is not necessary to delete files explicitly with this function.  It is
  * provided only as a way to delete files proactively, rather than waiting for
@@ -661,11 +636,7 @@ BufFileLoadBuffer(BufFile *file)
 	 */
 	file->nbytes = FileRead(thisfile,
 							file->buffer.data,
-<<<<<<< HEAD
 							BLCKSZ,
-=======
-							sizeof(file->buffer.data),
->>>>>>> REL_16_9
 							file->curOffset,
 							WAIT_EVENT_BUFFILE_READ);
 	if (file->nbytes < 0)
@@ -859,7 +830,6 @@ BufFileReadCommon(BufFile *file, void *ptr, size_t size, bool exact, bool eofOK)
 }
 
 /*
-<<<<<<< HEAD
  * BufFileReadFromBuffer
  *
  * This function provides a faster implementation of Read which applies
@@ -871,7 +841,7 @@ BufFileReadCommon(BufFile *file, void *ptr, size_t size, bool exact, bool eofOK)
 void *
 BufFileReadFromBuffer(BufFile *file, size_t size)
 {
-	void	   *result = NULL;
+	void *result = NULL;
 
 	switch (file->state)
 	{
@@ -898,7 +868,9 @@ BufFileReadFromBuffer(BufFile *file, size_t size)
 	}
 
 	return result;
-=======
+}
+
+/*
  * Legacy interface where the caller needs to check for end of file or short
  * reads.
  */
@@ -1280,7 +1252,6 @@ BufFileAppend(BufFile *target, BufFile *source)
 }
 
 /*
-<<<<<<< HEAD
  * Return filename of the underlying file.
  *
  * For debugging purposes only. Returns the filename of the
@@ -1631,12 +1602,8 @@ BufFileLoadCompressedBuffer(BufFile *file, void *buffer, size_t bufsize)
 #endif		/* HAVE_ZSTD */
 
 /*
- * Truncate a BufFile created by BufFileCreateShared up to the given fileno and
- * the offset.
-=======
  * Truncate a BufFile created by BufFileCreateFileSet up to the given fileno
  * and the offset.
->>>>>>> REL_16_9
  */
 void
 BufFileTruncateFileSet(BufFile *file, int fileno, off_t offset)

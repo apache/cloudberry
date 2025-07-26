@@ -25,11 +25,8 @@
 
 #include "access/heapam_xlog.h"
 #include "access/htup_details.h"
-<<<<<<< HEAD
 #include "access/xlog.h"
-=======
 #include "access/xloginsert.h"
->>>>>>> REL_16_9
 #include "access/xlogutils.h"
 #include "miscadmin.h"
 #include "storage/freespace.h"
