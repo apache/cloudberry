@@ -1273,6 +1273,10 @@ static void request_end(request_t* r, int error, const char* errmsg, int sendhea
 static int local_send(request_t *r, const char* buf, int buflen)
 {
 	int n = gpfdist_send(r, buf, buflen);
+	
+	int is_sftp_type = 0;
+	if(strncmp(r->path, "/<sftp://", 9) == 0)
+		is_sftp_type = 1;
 
 	if (n < 0)
 	{
@@ -1419,7 +1423,7 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 	int 		size;
 	const int 	whole_rows = 1; /* gpfdist must not read data with partial rows */
 	struct fstream_filename_and_offset fos;
-
+	memset(&fos, 0, sizeof fos);
 	session_t *session = r->session;
 
 	retblock->bot = retblock->top = 0;
@@ -1662,20 +1666,36 @@ static void sessions_cleanup(void)
 static int session_attach(request_t* r)
 {
 	char key[1024];
+	char tmp_key[1024];
 	session_t* session = NULL;
-
+	int is_sftp_mode = 0;
 	/*
 	 * create the session key (tid:path)
 	 */
-	if (sizeof(key) - 1 == apr_snprintf(key, sizeof(key), "%s:%s",
-										r->tid, r->path))
+	if (strncmp(r->path, "/<sftp://", 9) == 0)
 	{
-		http_error(r, FDIST_BAD_REQUEST, "path too long");
-		request_end(r, 1, 0, 0);
-		return -1;
+		is_sftp_mode = 1;
+
+		if (strlen(r->tid) + strlen(r->path) >= 1024)
+		{
+			gwarning(NULL, "sftp_path is too long");
+			request_end(r, 1, 0, 0);
+			return -1;
+		}
 	}
 
+	else
+	{
+		if (sizeof(tmp_key) - 1 == apr_snprintf(tmp_key, sizeof(tmp_key), "%s:%s",
+											r->tid, r->path))
+		{
+			http_error(r, FDIST_BAD_REQUEST, "path too long");
+			request_end(r, 1, 0, 0);
+			return -1;
+		}
+	}
 
+	apr_snprintf(key, sizeof(key), "%s:%s", r->tid, r->path);
 	/* check if such session already exists in hashtable */
 	session = apr_hash_get(gcb.session.tab, key, APR_HASH_KEY_STRING);
 
@@ -1769,7 +1789,8 @@ static int session_attach(request_t* r)
 			fstream_options.transform->errfile    = r->trans.errfile;
 			fstream_options.transform->stderr_server = r->trans.stderr_server;
         }
-		gprintlnif(r, "r->path %s", r->path);
+		if (is_sftp_mode == 0)
+			gprintlnif(r, "r->path %s", r->path);
 #endif
 
 		/* try opening the fstream */
@@ -2069,6 +2090,7 @@ static void do_read_request(int fd, short event, void* arg)
 	char*		p = NULL;
 	char*		pp = NULL;
 	char*		path = NULL;
+	bool is_sftp_type = false;
 
 	/* If we timeout, close the request. */
 	if (event & EV_TIMEOUT)
@@ -2207,6 +2229,11 @@ static void do_read_request(int fd, short event, void* arg)
 	{
 		/* we forced in a filename with the hidden -f option. use it */
 		r->path = opt.f;
+	}
+	else if (!strncmp(path, "/<sftp://", 9))
+	{
+		is_sftp_type = true;
+		r->path = apr_psprintf(r->pool, "%s", path);
 	}
 	else
 	{
