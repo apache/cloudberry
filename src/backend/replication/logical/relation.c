@@ -17,10 +17,7 @@
 
 #include "postgres.h"
 
-<<<<<<< HEAD
-=======
 #include "access/genam.h"
->>>>>>> REL_16_9
 #include "access/table.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_am_d.h"
@@ -385,11 +382,7 @@ logicalrep_rel_open(LogicalRepRelId remoteid, LOCKMODE lockmode)
 		/* Release the no-longer-useful attrmap, if any. */
 		if (entry->attrmap)
 		{
-<<<<<<< HEAD
 			pfree(entry->attrmap);
-=======
-			free_attrmap(entry->attrmap);
->>>>>>> REL_16_9
 			entry->attrmap = NULL;
 		}
 
@@ -528,8 +521,6 @@ logicalrep_partmap_invalidate_cb(Datum arg, Oid reloid)
 
 		while ((entry = (LogicalRepPartMapEntry *) hash_seq_search(&status)) != NULL)
 			entry->relmapentry.localrelvalid = false;
-<<<<<<< HEAD
-=======
 	}
 }
 
@@ -564,7 +555,6 @@ logicalrep_partmap_reset_relmap(LogicalRepRelation *remoterel)
 		logicalrep_relmap_free_entry(entry);
 
 		memset(entry, 0, sizeof(LogicalRepRelMapEntry));
->>>>>>> REL_16_9
 	}
 }
 
@@ -628,25 +618,8 @@ logicalrep_partition_open(LogicalRepRelMapEntry *root,
 
 	entry = &part_entry->relmapentry;
 
-<<<<<<< HEAD
 	if (found && entry->localrelvalid)
 		return entry;
-=======
-	/*
-	 * We must always overwrite entry->localrel with the latest partition
-	 * Relation pointer, because the Relation pointed to by the old value may
-	 * have been cleared after the caller would have closed the partition
-	 * relation after the last use of this entry.  Note that localrelvalid is
-	 * only updated by the relcache invalidation callback, so it may still be
-	 * true irrespective of whether the Relation pointed to by localrel has
-	 * been cleared or not.
-	 */
-	if (found && entry->localrelvalid)
-	{
-		entry->localrel = partrel;
-		return entry;
-	}
->>>>>>> REL_16_9
 
 	/* Switch to longer-lived context. */
 	oldctx = MemoryContextSwitchTo(LogicalRepPartMapContext);
@@ -657,16 +630,6 @@ logicalrep_partition_open(LogicalRepRelMapEntry *root,
 		part_entry->partoid = partOid;
 	}
 
-<<<<<<< HEAD
-=======
-	/* Release the no-longer-useful attrmap, if any. */
-	if (entry->attrmap)
-	{
-		free_attrmap(entry->attrmap);
-		entry->attrmap = NULL;
-	}
-
->>>>>>> REL_16_9
 	if (!entry->remoterel.remoteid)
 	{
 		int			i;

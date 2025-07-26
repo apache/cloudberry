@@ -98,14 +98,12 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
-<<<<<<< HEAD
 #include "cdb/cdbvars.h"
 #include "replication/gp_replication.h"
 #include "utils/faultinjector.h"
-=======
+
 /* Minimum interval used by walsender for stats flushes, in ms */
 #define WALSENDER_STATS_FLUSH_INTERVAL         1000
->>>>>>> REL_16_9
 
 /*
  * Maximum data payload in a WAL data message.  Must be >= XLOG_BLCKSZ.
@@ -130,14 +128,9 @@ bool		am_cascading_walsender = false; /* Am I cascading WAL to another
 											 * standby? */
 bool		am_db_walsender = false;	/* Connected to a database? */
 
-<<<<<<< HEAD
 /* User-settable parameters for walsender */
-int			repl_catchup_within_range = 0;
-int			max_wal_senders = 0;	/* the maximum number of concurrent
-=======
-/* GUC variables */
+int			repl_catchup_within_range = 0*/
 int			max_wal_senders = 10;	/* the maximum number of concurrent
->>>>>>> REL_16_9
 									 * walsenders */
 int			wal_sender_timeout = 60 * 1000; /* maximum time to send one WAL
 											 * data message */
@@ -262,14 +255,9 @@ static void ProcessStandbyMessage(void);
 static void ProcessStandbyReplyMessage(void);
 static void ProcessStandbyHSFeedbackMessage(void);
 static void ProcessRepliesIfAny(void);
-<<<<<<< HEAD
 static const char *WalSndGetStateString(WalSndState state);
 static void ProcessPendingWrites(void);
-static void WalSndKeepalive(bool requestReply);
-=======
-static void ProcessPendingWrites(void);
 static void WalSndKeepalive(bool requestReply, XLogRecPtr writePtr);
->>>>>>> REL_16_9
 static void WalSndKeepaliveIfNecessary(void);
 static void WalSndCheckTimeOut(void);
 static long WalSndComputeSleeptime(TimestampTz now);
@@ -1518,10 +1506,7 @@ WalSndUpdateProgress(LogicalDecodingContext *ctx, XLogRecPtr lsn, TransactionId 
 {
 	static TimestampTz sendTime = 0;
 	TimestampTz now = GetCurrentTimestamp();
-<<<<<<< HEAD
-=======
 	bool		pending_writes = false;
->>>>>>> REL_16_9
 	bool		end_xact = ctx->end_xact;
 
 	/*
@@ -1541,17 +1526,6 @@ WalSndUpdateProgress(LogicalDecodingContext *ctx, XLogRecPtr lsn, TransactionId 
 	}
 
 	/*
-<<<<<<< HEAD
-	 * Try to send a keepalive if required. We don't need to try sending keep
-	 * alive messages at the transaction end as that will be done at a later
-	 * point in time. This is required only for large transactions where we
-	 * don't send any changes to the downstream and the receiver can timeout
-	 * due to that.
-	 */
-	if (!end_xact &&
-		now >= TimestampTzPlusMilliseconds(last_reply_timestamp,
-										   wal_sender_timeout / 2))
-=======
 	 * When skipping empty transactions in synchronous replication, we send a
 	 * keepalive message to avoid delaying such transactions.
 	 *
@@ -1584,7 +1558,6 @@ WalSndUpdateProgress(LogicalDecodingContext *ctx, XLogRecPtr lsn, TransactionId 
 	if (pending_writes || (!end_xact &&
 						   now >= TimestampTzPlusMilliseconds(last_reply_timestamp,
 															  wal_sender_timeout / 2)))
->>>>>>> REL_16_9
 		ProcessPendingWrites();
 }
 
@@ -2744,11 +2717,9 @@ InitWalSenderSlot(void)
 			walsnd->sync_standby_priority = 0;
 			walsnd->latch = &MyProc->procLatch;
 			walsnd->replyTime = 0;
-<<<<<<< HEAD
 			/* Will be decided in hand-shake */
 			walsnd->xlogCleanUpTo = InvalidXLogRecPtr;
 			walsnd->caughtup_within_range = false;
-=======
 
 			/*
 			 * The kind assignment is done here and not in StartReplication()
@@ -2766,7 +2737,6 @@ InitWalSenderSlot(void)
 			else
 				walsnd->kind = REPLICATION_KIND_LOGICAL;
 
->>>>>>> REL_16_9
 			SpinLockRelease(&walsnd->mutex);
 			/* don't need the lock anymore */
 			MyWalSnd = (WalSnd *) walsnd;

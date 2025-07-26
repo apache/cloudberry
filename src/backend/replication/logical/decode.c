@@ -92,11 +92,7 @@ LogicalDecodingProcessRecord(LogicalDecodingContext *ctx, XLogReaderState *recor
 {
 	XLogRecordBuffer buf;
 	TransactionId txid;
-<<<<<<< HEAD
-	RmgrData rmgr;
-=======
 	RmgrData	rmgr;
->>>>>>> REL_16_9
 
 	buf.origptr = ctx->reader->ReadRecPtr;
 	buf.endptr = ctx->reader->EndRecPtr;
@@ -194,14 +190,11 @@ xlog_decode(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 		case XLOG_FPW_CHANGE:
 		case XLOG_FPI_FOR_HINT:
 		case XLOG_FPI:
-<<<<<<< HEAD
+		case XLOG_OVERWRITE_CONTRECORD:
 		/* GPDB_14_MERGE_FIXME: see pg_control.h, Compatible, Figure out whether 0xC0 already used? */
 		case XLOG_NEXTRELFILENODE:
 		case XLOG_OVERWRITE_CONTRECORD:
 		case XLOG_ENCRYPTION_LSN:
-=======
-		case XLOG_OVERWRITE_CONTRECORD:
->>>>>>> REL_16_9
 			break;
 		default:
 			elog(ERROR, "unexpected RM_XLOG_ID record type: %u", info);

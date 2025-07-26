@@ -221,15 +221,6 @@ typedef struct FlushPosition
 
 static dlist_head lsn_mapping = DLIST_STATIC_INIT(lsn_mapping);
 
-<<<<<<< HEAD
-typedef struct SlotErrCallbackArg
-{
-	LogicalRepRelMapEntry *rel;
-	int			remote_attnum;
-} SlotErrCallbackArg;
-
-=======
->>>>>>> REL_16_9
 typedef struct ApplyExecutionData
 {
 	EState	   *estate;			/* executor state, used to track resources */
@@ -407,14 +398,6 @@ static void send_feedback(XLogRecPtr recvpos, bool force, bool requestReply);
 
 static void DisableSubscriptionAndExit(void);
 
-<<<<<<< HEAD
-static void maybe_reread_subscription(void);
-
-/* prototype needed because of stream_commit */
-static void apply_dispatch(StringInfo s);
-
-=======
->>>>>>> REL_16_9
 static void apply_handle_commit_internal(LogicalRepCommitData *commit_data);
 static void apply_handle_insert_internal(ApplyExecutionData *edata,
 										 ResultRelInfo *relinfo,
@@ -819,29 +802,6 @@ slot_fill_defaults(LogicalRepRelMapEntry *rel, EState *estate,
 }
 
 /*
-<<<<<<< HEAD
- * Error callback to give more context info about data conversion failures
- * while reading data from the remote server.
- */
-static void
-slot_store_error_callback(void *arg)
-{
-	SlotErrCallbackArg *errarg = (SlotErrCallbackArg *) arg;
-	LogicalRepRelMapEntry *rel;
-
-	/* Nothing to do if remote attribute number is not set */
-	if (errarg->remote_attnum < 0)
-		return;
-
-	rel = errarg->rel;
-	errcontext("processing remote data for replication target relation \"%s.%s\" column \"%s\"",
-			   rel->remoterel.nspname, rel->remoterel.relname,
-			   rel->remoterel.attnames[errarg->remote_attnum]);
-}
-
-/*
-=======
->>>>>>> REL_16_9
  * Store tuple data into slot.
  *
  * Incoming data can be either text or binary format.
@@ -855,17 +815,6 @@ slot_store_data(TupleTableSlot *slot, LogicalRepRelMapEntry *rel,
 
 	ExecClearTuple(slot);
 
-<<<<<<< HEAD
-	/* Push callback + info on the error context stack */
-	errarg.rel = rel;
-	errarg.remote_attnum = -1;
-	errcallback.callback = slot_store_error_callback;
-	errcallback.arg = (void *) &errarg;
-	errcallback.previous = error_context_stack;
-	error_context_stack = &errcallback;
-
-=======
->>>>>>> REL_16_9
 	/* Call the "in" function for each non-dropped, non-null attribute */
 	Assert(natts == rel->attrmap->maplen);
 	for (i = 0; i < natts; i++)
@@ -879,12 +828,8 @@ slot_store_data(TupleTableSlot *slot, LogicalRepRelMapEntry *rel,
 
 			Assert(remoteattnum < tupleData->ncols);
 
-<<<<<<< HEAD
-			errarg.remote_attnum = remoteattnum;
-=======
 			/* Set attnum for error callback */
 			apply_error_callback_arg.remote_attnum = remoteattnum;
->>>>>>> REL_16_9
 
 			if (tupleData->colstatus[remoteattnum] == LOGICALREP_COLUMN_TEXT)
 			{
@@ -932,12 +877,8 @@ slot_store_data(TupleTableSlot *slot, LogicalRepRelMapEntry *rel,
 				slot->tts_isnull[i] = true;
 			}
 
-<<<<<<< HEAD
-			errarg.remote_attnum = -1;
-=======
 			/* Reset attnum for error callback */
 			apply_error_callback_arg.remote_attnum = -1;
->>>>>>> REL_16_9
 		}
 		else
 		{
@@ -986,7 +927,6 @@ slot_modify_data(TupleTableSlot *slot, TupleTableSlot *srcslot,
 	memcpy(slot->tts_values, srcslot->tts_values, natts * sizeof(Datum));
 	memcpy(slot->tts_isnull, srcslot->tts_isnull, natts * sizeof(bool));
 
-<<<<<<< HEAD
 	/* For error reporting, push callback + info on the error context stack */
 	errarg.rel = rel;
 	errarg.remote_attnum = -1;
@@ -995,8 +935,6 @@ slot_modify_data(TupleTableSlot *slot, TupleTableSlot *srcslot,
 	errcallback.previous = error_context_stack;
 	error_context_stack = &errcallback;
 
-=======
->>>>>>> REL_16_9
 	/* Call the "in" function for each replaced attribute */
 	Assert(natts == rel->attrmap->maplen);
 	for (i = 0; i < natts; i++)
@@ -1013,12 +951,8 @@ slot_modify_data(TupleTableSlot *slot, TupleTableSlot *srcslot,
 		{
 			StringInfo	colvalue = &tupleData->colvalues[remoteattnum];
 
-<<<<<<< HEAD
-			errarg.remote_attnum = remoteattnum;
-=======
 			/* Set attnum for error callback */
 			apply_error_callback_arg.remote_attnum = remoteattnum;
->>>>>>> REL_16_9
 
 			if (tupleData->colstatus[remoteattnum] == LOGICALREP_COLUMN_TEXT)
 			{
@@ -1062,12 +996,8 @@ slot_modify_data(TupleTableSlot *slot, TupleTableSlot *srcslot,
 				slot->tts_isnull[i] = true;
 			}
 
-<<<<<<< HEAD
-			errarg.remote_attnum = -1;
-=======
 			/* Reset attnum for error callback */
 			apply_error_callback_arg.remote_attnum = -1;
->>>>>>> REL_16_9
 		}
 	}
 
@@ -2214,12 +2144,8 @@ apply_spooled_messages(FileSet *stream_fileset, TransactionId xid,
 	elog(DEBUG1, "replayed %d (all) changes from file \"%s\"",
 		 nchanges, path);
 
-<<<<<<< HEAD
-	apply_handle_commit_internal(&commit_data);
-=======
 	return;
 }
->>>>>>> REL_16_9
 
 /*
  * Handle STREAM COMMIT message.
@@ -3344,11 +3270,8 @@ apply_handle_truncate(StringInfo s)
 						relids_logged,
 						DROP_RESTRICT,
 						restart_seqs,
-<<<<<<< HEAD
+						!MySubscription->runasowner,
 						NULL);
-=======
-						!MySubscription->runasowner);
->>>>>>> REL_16_9
 	foreach(lc, remote_rels)
 	{
 		LogicalRepRelMapEntry *rel = lfirst(lc);
@@ -4093,6 +4016,7 @@ subxact_info_write(Oid subid, TransactionId xid)
 	char		path[MAXPGPATH];
 	Size		len;
 	BufFile    *fd;
+	workfile_set *work_set;
 
 	Assert(TransactionIdIsValid(xid));
 
@@ -4112,33 +4036,14 @@ subxact_info_write(Oid subid, TransactionId xid)
 	 * Create the subxact file if it not already created, otherwise open the
 	 * existing file.
 	 */
-<<<<<<< HEAD
-	if (ent->subxact_fileset == NULL)
-	{
-		MemoryContext oldctx;
-		workfile_set *work_set;
-
-		/*
-		 * We need to maintain shared fileset across multiple stream
-		 * start/stop calls.  So, need to allocate it in a persistent context.
-		 */
-		oldctx = MemoryContextSwitchTo(ApplyContext);
-		ent->subxact_fileset = palloc(sizeof(SharedFileSet));
-		SharedFileSetInit(ent->subxact_fileset, NULL);
-		MemoryContextSwitchTo(oldctx);
-
-		work_set = workfile_mgr_create_set("Subxact", path, false /* hold pin */);
-
-		fd = BufFileCreateShared(ent->subxact_fileset, path, work_set);
-	}
-	else
-		fd = BufFileOpenShared(ent->subxact_fileset, path, O_RDWR);
-=======
 	fd = BufFileOpenFileSet(MyLogicalRepWorker->stream_fileset, path, O_RDWR,
 							true);
 	if (fd == NULL)
-		fd = BufFileCreateFileSet(MyLogicalRepWorker->stream_fileset, path);
->>>>>>> REL_16_9
+	{
+		work_set = workfile_mgr_create_set("Subxact", path, false /* hold pin */);
+		fd = BufFileCreateFileSet(MyLogicalRepWorker->stream_fileset, path, work_set);
+
+	}
 
 	len = sizeof(SubXactInfo) * subxact_data.nsubxacts;
 
@@ -4358,39 +4263,13 @@ stream_open_file(Oid subid, TransactionId xid, bool first_segment)
 	 * Otherwise, just open the file for writing, in append mode.
 	 */
 	if (first_segment)
-<<<<<<< HEAD
 	{
-		MemoryContext savectx;
-		SharedFileSet *fileset;
 		workfile_set *work_set;
 
-		if (found)
-			ereport(ERROR,
-					(errcode(ERRCODE_PROTOCOL_VIOLATION),
-					 errmsg_internal("incorrect first-segment flag for streamed replication transaction")));
-
-		/*
-		 * We need to maintain shared fileset across multiple stream
-		 * start/stop calls. So, need to allocate it in a persistent context.
-		 */
-		savectx = MemoryContextSwitchTo(ApplyContext);
-		fileset = palloc(sizeof(SharedFileSet));
-
-		SharedFileSetInit(fileset, NULL);
-		MemoryContextSwitchTo(savectx);
-
 		work_set = workfile_mgr_create_set("LogicalStreaming", path, false /* hold pin */);
-		stream_fd = BufFileCreateShared(fileset, path, work_set);
-
-		/* Remember the fileset for the next stream of the same transaction */
-		ent->xid = xid;
-		ent->stream_fileset = fileset;
-		ent->subxact_fileset = NULL;
-	}
-=======
 		stream_fd = BufFileCreateFileSet(MyLogicalRepWorker->stream_fileset,
-										 path);
->>>>>>> REL_16_9
+										 path, work_set);
+	}
 	else
 	{
 		/*
@@ -4609,30 +4488,6 @@ void
 InitializeApplyWorker(void)
 {
 	MemoryContext oldctx;
-<<<<<<< HEAD
-	char		originname[NAMEDATALEN];
-	XLogRecPtr	origin_startpos;
-	char	   *myslotname;
-	WalRcvStreamOptions options;
-
-	/* Attach to slot */
-	logicalrep_worker_attach(worker_slot);
-
-	/* Setup signal handling */
-	pqsignal(SIGHUP, SignalHandlerForConfigReload);
-	pqsignal(SIGTERM, die);
-	BackgroundWorkerUnblockSignals();
-
-	/*
-	 * We don't currently need any ResourceOwner in a walreceiver process, but
-	 * if we did, we could call CreateAuxProcessResourceOwner here.
-	 */
-
-	/* Initialise stats to a sanish value */
-	MyLogicalRepWorker->last_send_time = MyLogicalRepWorker->last_recv_time =
-		MyLogicalRepWorker->reply_time = GetCurrentTimestamp();
-
-	/* Load the libpq-specific functions */
 	/*
 	 * In GPDB, we build libpqwalreceiver functions, as well as a copy of
 	 * libpq into the backend itself, to support QD-QE communication. See
@@ -4640,8 +4495,6 @@ InitializeApplyWorker(void)
 	 */
 	if (!WalReceiverFunctions)
 		libpqwalreceiver_PG_init();
-=======
->>>>>>> REL_16_9
 
 	/* Run as replica session replication role. */
 	SetConfigOption("session_replication_role", "replica",

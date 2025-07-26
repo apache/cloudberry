@@ -62,7 +62,7 @@ extern BufFile *BufFileOpenShared(SharedFileSet *fileset, const char *name,
 extern void BufFileDeleteShared(SharedFileSet *fileset, const char *name);
 extern void BufFileTruncateShared(BufFile *file, int fileno, off_t offset);
 
-extern BufFile *BufFileCreateFileSet(FileSet *fileset, const char *name);
+extern BufFile *BufFileCreateFileSet(FileSet *fileset, const char *name, workfile_set *work_set);
 extern void BufFileExportFileSet(BufFile *file);
 extern BufFile *BufFileOpenFileSet(FileSet *fileset, const char *name,
 								   int mode, bool missing_ok);

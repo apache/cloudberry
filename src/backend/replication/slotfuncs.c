@@ -26,7 +26,6 @@
 #include "utils/pg_lsn.h"
 #include "utils/resowner.h"
 
-<<<<<<< HEAD
 static void
 check_permissions(void)
 {
@@ -43,8 +42,6 @@ warn_slot_only_created_on_segment(const char *name) {
 			 errhint("Creating replication slots on a single segment is not advised.  Replication slots are automatically created by management tools.")));
 }
 
-=======
->>>>>>> REL_16_9
 /*
  * Helper function for creating a new physical replication slot with
  * given arguments. Note that this function doesn't release the created

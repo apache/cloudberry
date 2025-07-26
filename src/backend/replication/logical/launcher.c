@@ -389,15 +389,9 @@ retry:
 	}
 
 	/*
-<<<<<<< HEAD
-	 * We don't allow to invoke more sync workers once we have reached the sync
-	 * worker limit per subscription. So, just return silently as we might get
-	 * here because of an otherwise harmless race condition.
-=======
 	 * We don't allow to invoke more sync workers once we have reached the
 	 * sync worker limit per subscription. So, just return silently as we
 	 * might get here because of an otherwise harmless race condition.
->>>>>>> REL_16_9
 	 */
 	if (OidIsValid(relid) && nsyncworkers >= max_sync_workers_per_subscription)
 	{

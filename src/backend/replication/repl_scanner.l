@@ -121,7 +121,6 @@ BASE_BACKUP			{ return K_BASE_BACKUP; }
 IDENTIFY_SYSTEM		{ return K_IDENTIFY_SYSTEM; }
 READ_REPLICATION_SLOT	{ return K_READ_REPLICATION_SLOT; }
 SHOW		{ return K_SHOW; }
-<<<<<<< HEAD
 LABEL			{ return K_LABEL; }
 NOWAIT			{ return K_NOWAIT; }
 EXCLUDE			{ return K_EXCLUDE; }
@@ -130,8 +129,6 @@ MAX_RATE		{ return K_MAX_RATE; }
 WAL			{ return K_WAL; }
 TABLESPACE_MAP			{ return K_TABLESPACE_MAP; }
 NOVERIFY_CHECKSUMS	{ return K_NOVERIFY_CHECKSUMS; }
-=======
->>>>>>> REL_16_9
 TIMELINE			{ return K_TIMELINE; }
 START_REPLICATION	{ return K_START_REPLICATION; }
 CREATE_REPLICATION_SLOT		{ return K_CREATE_REPLICATION_SLOT; }
@@ -216,11 +213,7 @@ WAIT				{ return K_WAIT; }
 					return yytext[0];
 				}
 
-<<<<<<< HEAD
-<xq,xd><<EOF>>	{ yyerror("unterminated quoted string"); }
-=======
 <xq,xd><<EOF>>	{ replication_yyerror("unterminated quoted string"); }
->>>>>>> REL_16_9
 
 
 <<EOF>>			{
@@ -316,10 +309,7 @@ replication_scanner_is_replication_command(void)
 		case K_START_REPLICATION:
 		case K_CREATE_REPLICATION_SLOT:
 		case K_DROP_REPLICATION_SLOT:
-<<<<<<< HEAD
-=======
 		case K_READ_REPLICATION_SLOT:
->>>>>>> REL_16_9
 		case K_TIMELINE_HISTORY:
 		case K_SHOW:
 			/* Yes; push back the first token so we can parse later. */

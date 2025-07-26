@@ -655,13 +655,8 @@ ReorderBufferTXNByXid(ReorderBuffer *rb, TransactionId xid, bool create,
 	}
 
 	/*
-<<<<<<< HEAD
-	 * If the cache wasn't hit or it yielded a "does-not-exist" and we want
-	 * to create an entry.
-=======
 	 * If the cache wasn't hit or it yielded a "does-not-exist" and we want to
 	 * create an entry.
->>>>>>> REL_16_9
 	 */
 
 	/* search the lookup table */
@@ -3208,14 +3203,7 @@ ReorderBufferChangeMemoryUpdate(ReorderBuffer *rb,
 	 * Update the total size in top level as well. This is later used to
 	 * compute the decoding stats.
 	 */
-<<<<<<< HEAD
-	if (txn->toptxn != NULL)
-		toptxn = txn->toptxn;
-	else
-		toptxn = txn;
-=======
 	toptxn = rbtxn_get_toptxn(txn);
->>>>>>> REL_16_9
 
 	if (addition)
 	{

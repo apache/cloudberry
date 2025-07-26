@@ -784,14 +784,9 @@ fetch_remote_table_info(char *nspname, char *relname,
 	WalRcvExecResult *res;
 	StringInfoData cmd;
 	TupleTableSlot *slot;
-<<<<<<< HEAD
-	Oid			tableRow[3] = {OIDOID, CHAROID, CHAROID};
-	Oid			attrRow[4] = {TEXTOID, OIDOID, INT4OID, BOOLOID};
-=======
 	Oid			tableRow[] = {OIDOID, CHAROID, CHAROID};
 	Oid			attrRow[] = {INT2OID, TEXTOID, OIDOID, BOOLOID};
 	Oid			qualRow[] = {TEXTOID};
->>>>>>> REL_16_9
 	bool		isnull;
 	char		relkind;
 	int			natt;
@@ -1242,11 +1237,7 @@ copy_table(Relation rel)
 										 NULL, false, false);
 
 	attnamelist = make_copy_attnamelist(relmapentry);
-<<<<<<< HEAD
-	cstate = BeginCopyFrom(pstate, rel, NULL, NULL, false, copy_read_data, NULL, attnamelist, NIL);
-=======
-	cstate = BeginCopyFrom(pstate, rel, NULL, NULL, false, copy_read_data, attnamelist, options);
->>>>>>> REL_16_9
+	cstate = BeginCopyFrom(pstate, rel, NULL, NULL, false, copy_read_data, NULL, attnamelist, options);
 
 	/* Do the copy */
 	(void) CopyFrom(cstate);

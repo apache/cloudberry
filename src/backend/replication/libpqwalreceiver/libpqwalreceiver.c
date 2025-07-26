@@ -36,7 +36,6 @@
 #include "utils/pg_lsn.h"
 #include "utils/tuplestore.h"
 
-<<<<<<< HEAD
 /*
  * In PostgreSQL, this is a dynamically loaded module, because PostgreSQL
  * doesn't want to link libpq statically into the backend.  In GPDB, we have
@@ -44,9 +43,6 @@
  * compiled and linked directly as part of the postgres binary, like any
  * other backend .c file.
  */
-=======
-PG_MODULE_MAGIC;
->>>>>>> REL_16_9
 
 struct WalReceiverConn
 {

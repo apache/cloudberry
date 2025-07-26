@@ -222,12 +222,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * don't touch the queue.
 	 */
 	if (!SyncRepRequested() ||
-<<<<<<< HEAD
 		(!IS_QUERY_DISPATCHER() && !((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined))
-=======
-		((((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_status) &
-		 (SYNC_STANDBY_INIT | SYNC_STANDBY_DEFINED)) == SYNC_STANDBY_INIT)
->>>>>>> REL_16_9
 		return;
 
 	/* Cap the level for anything other than commit to remote flush only. */
@@ -243,7 +238,6 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	Assert(MyProc->syncRepState == SYNC_REP_NOT_WAITING);
 
 	/*
-<<<<<<< HEAD
 	 * GPDB special behavior: if the master/coordinator doesn't configure a standby,
 	 * or the standby is down, or the connection between the master/coordinator and standby
 	 * is broken, the xlog will not be synchronized to the standby before the key
@@ -330,12 +324,8 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	}
 
 	/*
-	 * We don't wait for sync rep if WalSndCtl->sync_standbys_defined is not
-	 * set.  See SyncRepUpdateSyncStandbysDefined.
-=======
 	 * We don't wait for sync rep if SYNC_STANDBY_DEFINED is not set.  See
 	 * SyncRepUpdateSyncStandbysDefined().
->>>>>>> REL_16_9
 	 *
 	 * Also check that the standby hasn't already replied. Unlikely race
 	 * condition but we'll be fetching that cache line anyway so it's likely
@@ -345,7 +335,6 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * (SYNC_STANDBY_INIT is not set), fall back to a check based on the LSN,
 	 * then do a direct GUC check.
 	 */
-<<<<<<< HEAD
 	if (((!IS_QUERY_DISPATCHER()) && !WalSndCtl->sync_standbys_defined) ||
 		lsn <= WalSndCtl->lsn[mode])
 	{
@@ -356,43 +345,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 			   (uint32) (WalSndCtl->lsn[mode] >> 32), (uint32) WalSndCtl->lsn[mode],
 			   (uint32) (lsn >> 32), (uint32) lsn);
 
-=======
-	if (WalSndCtl->sync_standbys_status & SYNC_STANDBY_INIT)
-	{
-		if ((WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) == 0 ||
-			lsn <= WalSndCtl->lsn[mode])
-		{
-			LWLockRelease(SyncRepLock);
-			return;
-		}
-	}
-	else if (lsn <= WalSndCtl->lsn[mode])
-	{
-		/*
-		 * The LSN is older than what we need to wait for.  The sync standby
-		 * data has not been initialized yet, but we are OK to not wait
-		 * because we know that there is no point in doing so based on the
-		 * LSN.
-		 */
-		LWLockRelease(SyncRepLock);
-		return;
-	}
-	else if (!SyncStandbysDefined())
-	{
-		/*
-		 * If we are here, the sync standby data has not been initialized yet,
-		 * and the LSN is newer than what need to wait for, so we have fallen
-		 * back to the best thing we could do in this case: a check on
-		 * SyncStandbysDefined() to see if the GUC is set or not.
-		 *
-		 * When the GUC has a value, we wait until the checkpointer updates
-		 * the status data because we cannot be sure yet if we should wait or
-		 * not. Here, the GUC has *no* value, we are sure that there is no
-		 * point to wait; this matters for example when initializing a
-		 * cluster, where we should never wait, and no sync standbys is the
-		 * default behavior.
-		 */
->>>>>>> REL_16_9
+
 		LWLockRelease(SyncRepLock);
 		return;
 	}
@@ -415,22 +368,8 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	{
 		char		buffer[32];
 
-<<<<<<< HEAD
-		old_status = get_real_act_ps_display(&len);
-		/*
-		 * The 32 represents the bytes in the string " waiting for %X/%X", as
-		 * in upstream.  The 12 represents GPDB specific " replication" suffix.
-		 */
-		new_status = (char *) palloc(len + 32 + 12 + 1);
-		memcpy(new_status, old_status, len);
-		sprintf(new_status + len, " waiting for %X/%X",
-				LSN_FORMAT_ARGS(lsn));
-		set_ps_display(new_status);
-		new_status[len] = '\0'; /* truncate off " waiting ..." */
-=======
 		sprintf(buffer, "waiting for %X/%X", LSN_FORMAT_ARGS(lsn));
 		set_ps_display_suffix(buffer);
->>>>>>> REL_16_9
 	}
 
 	/* Report the wait */
@@ -551,20 +490,11 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	MyProc->syncRepState = SYNC_REP_NOT_WAITING;
 	MyProc->waitLSN = 0;
 
-<<<<<<< HEAD
 	pgstat_report_wait_end();
 
-	if (new_status)
-	{
-		/* Reset ps display */
-		set_ps_display(new_status);
-		pfree(new_status);
-	}
-=======
 	/* reset ps display to remove the suffix */
 	if (update_process_title)
 		set_ps_display_remove_suffix();
->>>>>>> REL_16_9
 }
 
 /*

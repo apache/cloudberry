@@ -873,12 +873,7 @@ ReplicationSlotsComputeRequiredXmin(bool already_locked)
 		SpinLockAcquire(&s->mutex);
 		effective_xmin = s->effective_xmin;
 		effective_catalog_xmin = s->effective_catalog_xmin;
-<<<<<<< HEAD
-		invalidated = (!XLogRecPtrIsInvalid(s->data.invalidated_at) &&
-					   XLogRecPtrIsInvalid(s->data.restart_lsn));
-=======
 		invalidated = s->data.invalidated != RS_INVAL_NONE;
->>>>>>> REL_16_9
 		SpinLockRelease(&s->mutex);
 
 		/* invalidated slots need not apply */
@@ -1335,14 +1330,10 @@ ReportSlotInvalidation(ReplicationSlotInvalidationCause cause,
  * for syscalls, so caller must restart if we return true.
  */
 static bool
-<<<<<<< HEAD
-InvalidatePossiblyObsoleteSlot(ReplicationSlot *s, XLogRecPtr oldestLSN,
-=======
 InvalidatePossiblyObsoleteSlot(ReplicationSlotInvalidationCause cause,
 							   ReplicationSlot *s,
 							   XLogRecPtr oldestLSN,
 							   Oid dboid, TransactionId snapshotConflictHorizon,
->>>>>>> REL_16_9
 							   bool *invalidated)
 {
 	int			last_signaled_pid = 0;
@@ -1458,10 +1449,6 @@ InvalidatePossiblyObsoleteSlot(ReplicationSlotInvalidationCause cause,
 		{
 			MyReplicationSlot = s;
 			s->active_pid = MyProcPid;
-<<<<<<< HEAD
-			s->data.invalidated_at = restart_lsn;
-			s->data.restart_lsn = InvalidXLogRecPtr;
-=======
 			s->data.invalidated = conflict;
 
 			/*
@@ -1470,7 +1457,6 @@ InvalidatePossiblyObsoleteSlot(ReplicationSlotInvalidationCause cause,
 			 */
 			if (conflict == RS_INVAL_WAL_REMOVED)
 				s->data.restart_lsn = InvalidXLogRecPtr;
->>>>>>> REL_16_9
 
 			/* Let caller know */
 			*invalidated = true;
@@ -1582,12 +1568,6 @@ InvalidatePossiblyObsoleteSlot(ReplicationSlotInvalidationCause cause,
  * NB - this runs as part of checkpoint, so avoid raising errors if possible.
  */
 bool
-<<<<<<< HEAD
-InvalidateObsoleteReplicationSlots(XLogSegNo oldestSegno)
-{
-	XLogRecPtr	oldestLSN;
-	bool		invalidated = false;
-=======
 InvalidateObsoleteReplicationSlots(ReplicationSlotInvalidationCause cause,
 								   XLogSegNo oldestSegno, Oid dboid,
 								   TransactionId snapshotConflictHorizon)
@@ -1601,7 +1581,6 @@ InvalidateObsoleteReplicationSlots(ReplicationSlotInvalidationCause cause,
 
 	if (max_replication_slots == 0)
 		return invalidated;
->>>>>>> REL_16_9
 
 	XLogSegNoOffsetToRecPtr(oldestSegno, 0, wal_segment_size, oldestLSN);
 
@@ -1614,13 +1593,9 @@ restart:
 		if (!s->in_use)
 			continue;
 
-<<<<<<< HEAD
-		if (InvalidatePossiblyObsoleteSlot(s, oldestLSN, &invalidated))
-=======
 		if (InvalidatePossiblyObsoleteSlot(cause, s, oldestLSN, dboid,
 										   snapshotConflictHorizon,
 										   &invalidated))
->>>>>>> REL_16_9
 		{
 			/* if the lock was released, start from scratch */
 			goto restart;
@@ -1633,12 +1608,9 @@ restart:
 	 */
 	if (invalidated)
 	{
-<<<<<<< HEAD
 		/* GPDB: Set WalSndCtl state to indicate persistent sync error state */
 		WalSndCtl->error = WALSNDERROR_WALREAD;
 
-=======
->>>>>>> REL_16_9
 		ReplicationSlotsComputeRequiredXmin(false);
 		ReplicationSlotsComputeRequiredLSN();
 	}

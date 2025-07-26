@@ -1272,26 +1272,17 @@ pg_replication_origin_create(PG_FUNCTION_ARGS)
 
 	name = text_to_cstring((text *) DatumGetPointer(PG_GETARG_DATUM(0)));
 
-<<<<<<< HEAD
-	/* Replication origins "pg_xxx|gp_xxx" are reserved for internal use */
-	if (IsReservedName(name) || IsReservedGpName(name))
-=======
 	/*
 	 * Replication origins "any and "none" are reserved for system options.
 	 * The origins "pg_xxx" are reserved for internal use.
 	 */
-	if (IsReservedName(name) || IsReservedOriginName(name))
->>>>>>> REL_16_9
+	if (IsReservedName(name) || IsReservedOriginName(name) || IsReservedGpName(name))
 		ereport(ERROR,
 				(errcode(ERRCODE_RESERVED_NAME),
 				 errmsg("replication origin name \"%s\" is reserved",
 						name),
-<<<<<<< HEAD
-				 errdetail("Origin names starting with \"%s\" are reserved.", GetReservedPrefix(name))));
-=======
 				 errdetail("Origin names \"%s\", \"%s\", and names starting with \"pg_\" are reserved.",
 						   LOGICALREP_ORIGIN_ANY, LOGICALREP_ORIGIN_NONE)));
->>>>>>> REL_16_9
 
 	/*
 	 * If built with appropriate switch, whine when regression-testing

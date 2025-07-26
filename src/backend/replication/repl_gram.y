@@ -66,15 +66,12 @@ Node *replication_parse_result;
 %token K_DROP_REPLICATION_SLOT
 %token K_TIMELINE_HISTORY
 %token K_WAIT
-<<<<<<< HEAD
 %token K_NOWAIT
 %token K_EXCLUDE
 %token K_MAX_RATE
 %token K_WAL
 %token K_TABLESPACE_MAP
 %token K_NOVERIFY_CHECKSUMS
-=======
->>>>>>> REL_16_9
 %token K_TIMELINE
 %token K_PHYSICAL
 %token K_LOGICAL
@@ -89,15 +86,9 @@ Node *replication_parse_result;
 %type <node>	command
 %type <node>	base_backup start_replication start_logical_replication
 				create_replication_slot drop_replication_slot identify_system
-<<<<<<< HEAD
-				timeline_history show
-%type <list>	base_backup_opt_list
-%type <defelt>	base_backup_opt
-=======
 				read_replication_slot timeline_history show
 %type <list>	generic_option_list
 %type <defelt>	generic_option
->>>>>>> REL_16_9
 %type <uintval>	opt_timeline
 %type <list>	plugin_options plugin_opt_list
 %type <defelt>	plugin_opt_elem
@@ -186,7 +177,6 @@ base_backup:
 				}
 			;
 
-<<<<<<< HEAD
 base_backup_opt_list:
 			base_backup_opt_list base_backup_opt
 				{ $$ = lappend($1, $2); }
@@ -252,8 +242,6 @@ base_backup_opt:
 				}
 			;
 
-=======
->>>>>>> REL_16_9
 create_replication_slot:
 			/* CREATE_REPLICATION_SLOT slot [TEMPORARY] PHYSICAL [options] */
 			K_CREATE_REPLICATION_SLOT IDENT opt_temporary K_PHYSICAL create_slot_options
@@ -448,11 +436,6 @@ plugin_opt_arg:
 			| /* EMPTY */					{ $$ = NULL; }
 		;
 
-<<<<<<< HEAD
-%%
-
-#include "repl_scanner.c"
-=======
 generic_option_list:
 			generic_option_list ',' generic_option
 				{ $$ = lappend($1, $3); }
@@ -502,4 +485,3 @@ ident_or_keyword:
 		;
 
 %%
->>>>>>> REL_16_9

@@ -140,19 +140,12 @@ static StringInfoData incoming_message;
 static void WalRcvFetchTimeLineHistoryFiles(TimeLineID first, TimeLineID last);
 static void WalRcvWaitForStartPosition(XLogRecPtr *startpoint, TimeLineID *startpointTLI);
 static void WalRcvDie(int code, Datum arg);
-<<<<<<< HEAD
-static void XLogWalRcvProcessMsg(unsigned char type, char *buf, Size len);
-static void XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr);
-static void XLogWalRcvFlush(bool dying);
-static void XLogWalRcvClose(XLogRecPtr recptr);
-=======
 static void XLogWalRcvProcessMsg(unsigned char type, char *buf, Size len,
 								 TimeLineID tli);
 static void XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr,
 							TimeLineID tli);
 static void XLogWalRcvFlush(bool dying, TimeLineID tli);
 static void XLogWalRcvClose(XLogRecPtr recptr, TimeLineID tli);
->>>>>>> REL_16_9
 static void XLogWalRcvSendReply(bool force, bool requestReply);
 static void XLogWalRcvSendHSFeedback(bool immed);
 static void ProcessWalSndrMessage(XLogRecPtr walEnd, TimestampTz sendTime);
@@ -929,18 +922,6 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr, TimeLineID tli)
 
 		/* Close the current segment if it's completed */
 		if (recvFile >= 0 && !XLByteInSeg(recptr, recvSegNo, wal_segment_size))
-<<<<<<< HEAD
-			XLogWalRcvClose(recptr);
-
-		if (recvFile < 0)
-		{
-			bool		use_existent = true;
-
-			/* Create/use new log file */
-			XLByteToSeg(recptr, recvSegNo, wal_segment_size);
-			recvFile = XLogFileInit(recvSegNo, &use_existent, true);
-			recvFileTLI = ThisTimeLineID;
-=======
 			XLogWalRcvClose(recptr, tli);
 
 		if (recvFile < 0)
@@ -949,7 +930,6 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr, TimeLineID tli)
 			XLByteToSeg(recptr, recvSegNo, wal_segment_size);
 			recvFile = XLogFileInit(recvSegNo, tli);
 			recvFileTLI = tli;
->>>>>>> REL_16_9
 		}
 
 		/* Calculate the start offset of the received logs */
@@ -1011,11 +991,7 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr, TimeLineID tli)
 	 * segment is received and written.
 	 */
 	if (recvFile >= 0 && !XLByteInSeg(recptr, recvSegNo, wal_segment_size))
-<<<<<<< HEAD
-		XLogWalRcvClose(recptr);
-=======
 		XLogWalRcvClose(recptr, tli);
->>>>>>> REL_16_9
 }
 
 /*
@@ -1086,29 +1062,18 @@ XLogWalRcvFlush(bool dying, TimeLineID tli)
  * Create an archive notification file since the segment is known completed.
  */
 static void
-<<<<<<< HEAD
-XLogWalRcvClose(XLogRecPtr recptr)
-=======
 XLogWalRcvClose(XLogRecPtr recptr, TimeLineID tli)
->>>>>>> REL_16_9
 {
 	char		xlogfname[MAXFNAMELEN];
 
 	Assert(recvFile >= 0 && !XLByteInSeg(recptr, recvSegNo, wal_segment_size));
-<<<<<<< HEAD
-=======
 	Assert(tli != 0);
->>>>>>> REL_16_9
 
 	/*
 	 * fsync() and close current file before we switch to next one. We would
 	 * otherwise have to reopen this file to fsync it later
 	 */
-<<<<<<< HEAD
-	XLogWalRcvFlush(false);
-=======
 	XLogWalRcvFlush(false, tli);
->>>>>>> REL_16_9
 
 	XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
 
@@ -1120,11 +1085,7 @@ XLogWalRcvClose(XLogRecPtr recptr, TimeLineID tli)
 	if (close(recvFile) != 0)
 		ereport(PANIC,
 				(errcode_for_file_access(),
-<<<<<<< HEAD
-				 errmsg("could not close log segment %s: %m",
-=======
 				 errmsg("could not close WAL segment %s: %m",
->>>>>>> REL_16_9
 						xlogfname)));
 
 	/*
