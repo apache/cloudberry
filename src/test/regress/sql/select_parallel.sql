@@ -393,6 +393,7 @@ reset debug_parallel_query;
 reset role;
 
 -- Window function calculation can't be pushed to workers.
+-- CBDB_PARALLEL: window function's subpath could be parallel.
 explain (costs off, verbose)
   select count(*) from tenk1 a where (unique1, two) in
     (select unique1, row_number() over() from tenk1 b);
