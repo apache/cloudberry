@@ -807,7 +807,13 @@ max_parallel_hazard_walker(Node *node, max_parallel_hazard_context *context)
 	 */
 	else if (IsA(node, WindowFunc))
 	{
-		if (max_parallel_hazard_test(PROPARALLEL_RESTRICTED, context))
+		/*
+		 * In Cloudberry, we proess window fuctions by redistributeing the tuples
+		 * if there is Partition By clause.
+		 * Each partition is processed individually, whether in a single process
+		 * or distributed parallel workers setup.
+		 */
+		if (max_parallel_hazard_test(PROPARALLEL_SAFE, context))
 			return true;
 	}
 
