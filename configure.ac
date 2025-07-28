@@ -1636,8 +1636,8 @@ AC_DEFUN([CHECK_APR], [
 if test "$enable_gpfdist" = yes ; then
   CHECK_APR()
   _LIBS="$LIBS"
-  AC_SEARCH_LIBS(event_add, [event], [], [AC_MSG_ERROR([libevent is required for gpfdist])])
-  EVENT_LIBS=" -levent"
+  PKG_CHECK_MODULES([EVENT], [libevent >= 2.0.0], [], [AC_MSG_ERROR([libevent >= 2.0.0 is required for gpfdist])])
+  EVENT_LIBS="$EVENT_LIBS"
   AC_SUBST(EVENT_LIBS)
 
   AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_WARN([libyaml is not found. disabling transformations for gpfdist.])])
