@@ -6,13 +6,9 @@
  *	  All file system operations in POSTGRES dispatch through these
  *	  routines.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -23,7 +19,6 @@
  */
 #include "postgres.h"
 
-<<<<<<< HEAD
 #include "access/aomd.h"
 #include "access/relation.h"
 #include "access/xact.h"
@@ -34,9 +29,7 @@
 #include "postmaster/autovacuum.h"
 #include "postmaster/postmaster.h"
 #include "access/xlog.h"
-=======
 #include "access/xlogutils.h"
->>>>>>> REL_16_9
 #include "lib/ilist.h"
 #include "storage/bufmgr.h"
 #include "storage/fd.h"
@@ -53,41 +46,10 @@
  * For example, disk quota extension will use these hooks to
  * detect active tables.
  */
-<<<<<<< HEAD
 file_create_hook_type file_create_hook = NULL;
 file_extend_hook_type file_extend_hook = NULL;
 file_truncate_hook_type file_truncate_hook = NULL;
 file_unlink_hook_type file_unlink_hook = NULL;
-=======
-typedef struct f_smgr
-{
-	void		(*smgr_init) (void);	/* may be NULL */
-	void		(*smgr_shutdown) (void);	/* may be NULL */
-	void		(*smgr_open) (SMgrRelation reln);
-	void		(*smgr_close) (SMgrRelation reln, ForkNumber forknum);
-	void		(*smgr_create) (SMgrRelation reln, ForkNumber forknum,
-								bool isRedo);
-	bool		(*smgr_exists) (SMgrRelation reln, ForkNumber forknum);
-	void		(*smgr_unlink) (RelFileLocatorBackend rlocator, ForkNumber forknum,
-								bool isRedo);
-	void		(*smgr_extend) (SMgrRelation reln, ForkNumber forknum,
-								BlockNumber blocknum, const void *buffer, bool skipFsync);
-	void		(*smgr_zeroextend) (SMgrRelation reln, ForkNumber forknum,
-									BlockNumber blocknum, int nblocks, bool skipFsync);
-	bool		(*smgr_prefetch) (SMgrRelation reln, ForkNumber forknum,
-								  BlockNumber blocknum);
-	void		(*smgr_read) (SMgrRelation reln, ForkNumber forknum,
-							  BlockNumber blocknum, void *buffer);
-	void		(*smgr_write) (SMgrRelation reln, ForkNumber forknum,
-							   BlockNumber blocknum, const void *buffer, bool skipFsync);
-	void		(*smgr_writeback) (SMgrRelation reln, ForkNumber forknum,
-								   BlockNumber blocknum, BlockNumber nblocks);
-	BlockNumber (*smgr_nblocks) (SMgrRelation reln, ForkNumber forknum);
-	void		(*smgr_truncate) (SMgrRelation reln, ForkNumber forknum,
-								  BlockNumber old_blocks, BlockNumber nblocks);
-	void		(*smgr_immedsync) (SMgrRelation reln, ForkNumber forknum);
-} f_smgr;
->>>>>>> REL_16_9
 
 smgr_get_impl_hook_type smgr_get_impl_hook = NULL;
 
@@ -314,11 +276,7 @@ smgrAOGetDefault(void) {
  * This does not attempt to actually open the underlying file.
  */
 SMgrRelation
-<<<<<<< HEAD
-smgropen(RelFileNode rnode, BackendId backend, SMgrImpl which, Relation rel)
-=======
-smgropen(RelFileLocator rlocator, BackendId backend)
->>>>>>> REL_16_9
+smgropen(RelFileLocator rlocator, BackendId backend, SMgrImpl which, Relation rel)
 {
 	RelFileLocatorBackend brlocator;
 	SMgrRelation reln;
@@ -340,14 +298,9 @@ smgropen(RelFileLocator rlocator, BackendId backend)
 	}
 
 	/* Look up or create an entry */
-<<<<<<< HEAD
-	memset(&brnode, 0, sizeof(RelFileNodeBackend));
-	brnode.node = rnode;
-	brnode.backend = backend;
-=======
+	memset(&brlocator, 0, sizeof(RelFileLocatorBackend));
 	brlocator.locator = rlocator;
 	brlocator.backend = backend;
->>>>>>> REL_16_9
 	reln = (SMgrRelation) hash_search(SMgrRelationHash,
 									  &brlocator,
 									  HASH_ENTER, &found);
@@ -652,17 +605,11 @@ smgrdounlinkall(SMgrRelation *rels, int nrels, bool isRedo)
 	rlocators = palloc(sizeof(RelFileLocatorBackend) * nrels);
 	for (i = 0; i < nrels; i++)
 	{
-<<<<<<< HEAD
-		RelFileNodeBackend rnode = rels[i]->smgr_rnode;
-
-		rnodes[i] = rnode;
-=======
 		RelFileLocatorBackend rlocator = rels[i]->smgr_rlocator;
 		int			which = rels[i]->smgr_which;
 
 		rlocators[i] = rlocator;
 
->>>>>>> REL_16_9
 		/* Close the forks at smgr level */
 		for (forknum = 0; forknum <= MAX_FORKNUM; forknum++)
 			(*rels[i]->smgr).smgr_close(rels[i], forknum);
@@ -690,41 +637,25 @@ smgrdounlinkall(SMgrRelation *rels, int nrels, bool isRedo)
 	for (i = 0; i < nrels; i++)
 	{
 		for (forknum = 0; forknum <= MAX_FORKNUM; forknum++)
-<<<<<<< HEAD
-			(*rels[i]->smgr).smgr_unlink(rnodes[i], forknum, isRedo);
+			(*rels[i]->smgr).smgr_unlink(rlocators[i], forknum, isRedo);
 	}
 
 	if (file_unlink_hook)
 		for (i = 0; i < nrels; i++)
-			(*file_unlink_hook)(rnodes[i]);
-
-	pfree(rnodes);
-=======
-			smgrsw[which].smgr_unlink(rlocators[i], forknum, isRedo);
-	}
+			(*file_unlink_hook)(rlocators[i]);
 
 	pfree(rlocators);
->>>>>>> REL_16_9
 }
 
 
 /*
  * smgrextend() -- Add a new block to a file.
  *
-<<<<<<< HEAD
- *		The semantics are nearly the same as smgrwrite(): write at the
- *		specified position.  However, this is to be used for the case of
- *		extending a relation (i.e., blocknum is at or beyond the current
- *		EOF).  Note that we assume writing a block beyond current EOF
- *		causes intervening file space to become filled with zeroes.
- *		failure we clean up by truncating.
-=======
  * The semantics are nearly the same as smgrwrite(): write at the
  * specified position.  However, this is to be used for the case of
  * extending a relation (i.e., blocknum is at or beyond the current
  * EOF).  Note that we assume writing a block beyond current EOF
  * causes intervening file space to become filled with zeroes.
->>>>>>> REL_16_9
  */
 void
 smgrextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
@@ -942,12 +873,7 @@ smgrtruncate2(SMgrRelation reln, ForkNumber *forknum, int nforks,
 		/* Make the cached size is invalid if we encounter an error. */
 		reln->smgr_cached_nblocks[forknum[i]] = InvalidBlockNumber;
 
-<<<<<<< HEAD
 		(*reln->smgr).smgr_truncate(reln, forknum[i], nblocks[i]);
-=======
-		smgrsw[reln->smgr_which].smgr_truncate(reln, forknum[i],
-											   old_nblocks[i], nblocks[i]);
->>>>>>> REL_16_9
 
 		/*
 		 * We might as well update the local smgr_cached_nblocks values. The
@@ -959,7 +885,7 @@ smgrtruncate2(SMgrRelation reln, ForkNumber *forknum, int nforks,
 		reln->smgr_cached_nblocks[forknum[i]] = nblocks[i];
 	}
 	if (file_truncate_hook)
-		(*file_truncate_hook)(reln->smgr_rnode);
+		(*file_truncate_hook)(reln->smgr_rlocator);
 }
 
 /*
@@ -1031,13 +957,13 @@ AtEOXact_SMgr(void)
 	}
 }
 
-<<<<<<< HEAD
 const char *smgr_get_name(SMgrImpl impl)
 {
 	if (impl > SMGR_MAX_ID)
 		return "invalid";
 	return smgrsw[impl].smgr_name ? smgrsw[impl].smgr_name : "unknown";
-=======
+}
+
 /*
  * This routine is called when we are ordered to release all open files by a
  * ProcSignalBarrier.
@@ -1047,5 +973,4 @@ ProcessBarrierSmgrRelease(void)
 {
 	smgrreleaseall();
 	return true;
->>>>>>> REL_16_9
 }

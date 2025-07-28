@@ -253,7 +253,6 @@ mdcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
 }
 
 /*
-<<<<<<< HEAD
  *	mdcreate_ao() -- Create a AO segfile
  *
  * If isRedo is true, it's okay for the file to exist already.
@@ -294,10 +293,7 @@ mdcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo)
 }
 
 /*
- *	mdunlink() -- Unlink a relation.
-=======
  * mdunlink() -- Unlink a relation.
->>>>>>> REL_16_9
  *
  * Note that we're passed a RelFileLocatorBackend --- by the time this is called,
  * there won't be an SMgrRelation hashtable entry anymore.
@@ -1341,11 +1337,7 @@ ForgetDatabaseSyncRequests(Oid dbid)
  * DropRelationFiles -- drop files of all given relations
  */
 void
-<<<<<<< HEAD
 DropRelationFiles(RelFileNodePendingDelete *delrels, int ndelrels, bool isRedo)
-=======
-DropRelationFiles(RelFileLocator *delrels, int ndelrels, bool isRedo)
->>>>>>> REL_16_9
 {
 	SMgrRelation *srels;
 	int			i;
@@ -1660,11 +1652,7 @@ _mdnblocks(SMgrRelation reln, ForkNumber forknum, MdfdVec *seg)
 int
 mdsyncfiletag(const FileTag *ftag, char *path)
 {
-<<<<<<< HEAD
-	SMgrRelation reln = smgropen(ftag->rnode, InvalidBackendId, 0, NULL);
-=======
-	SMgrRelation reln = smgropen(ftag->rlocator, InvalidBackendId);
->>>>>>> REL_16_9
+	SMgrRelation reln = smgropen(ftag->rlocator, InvalidBackendId, 0, NULL);
 	File		file;
 	instr_time	io_start;
 	bool		need_to_close;

@@ -141,6 +141,8 @@ typedef struct f_smgr
 								bool isRedo);
 	void		(*smgr_extend) (SMgrRelation reln, ForkNumber forknum,
 								BlockNumber blocknum, char *buffer, bool skipFsync);
+	void		(*smgr_zeroextend) (SMgrRelation reln, ForkNumber forknum,
+									BlockNumber blocknum, int nblocks, bool skipFsync);
 	bool		(*smgr_prefetch) (SMgrRelation reln, ForkNumber forknum,
 								  BlockNumber blocknum);
 	void		(*smgr_read) (SMgrRelation reln, ForkNumber forknum,
@@ -232,16 +234,16 @@ extern const char* smgr_get_name(SMgrImpl impl);
  * For example, disk quota extension will use these hooks to
  * detect active tables.
  */
-typedef void (*file_create_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_create_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_create_hook_type file_create_hook;
 
-typedef void (*file_extend_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_extend_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_extend_hook_type file_extend_hook;
 
-typedef void (*file_truncate_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_truncate_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_truncate_hook_type file_truncate_hook;
 
-typedef void (*file_unlink_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_unlink_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_unlink_hook_type file_unlink_hook;
 
 /*

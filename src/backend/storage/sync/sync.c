@@ -38,13 +38,10 @@
 #include "utils/inval.h"
 #include "utils/memutils.h"
 
-<<<<<<< HEAD
 #include "utils/faultinjector.h"
 
 static MemoryContext pendingOpsCxt; /* context for the pending ops state  */
 
-=======
->>>>>>> REL_16_9
 /*
  * In some contexts (currently, standalone backends and the checkpointer)
  * we keep track of pending fsync operations: we need to remember all relation
@@ -576,15 +573,9 @@ RememberSyncRequest(const FileTag *ftag, SyncRequestType type)
 		{
 			PendingUnlinkEntry *pue = (PendingUnlinkEntry *) lfirst(cell);
 
-<<<<<<< HEAD
-			if (entry->tag.handler == ftag->handler &&
-				syncsw[ftag->handler].sync_filetagmatches(ftag, &entry->tag))
-				entry->canceled = true;
-=======
 			if (pue->tag.handler == ftag->handler &&
 				syncsw[ftag->handler].sync_filetagmatches(ftag, &pue->tag))
 				pue->canceled = true;
->>>>>>> REL_16_9
 		}
 	}
 	else if (type == SYNC_UNLINK_REQUEST)
