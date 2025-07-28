@@ -22,11 +22,8 @@
 #include "commands/async.h"
 #include "miscadmin.h"
 #include "pgstat.h"
-<<<<<<< HEAD
 #include "postmaster/loginmonitor.h"
-=======
 #include "replication/logicalworker.h"
->>>>>>> REL_16_9
 #include "replication/walsender.h"
 #include "storage/condition_variable.h"
 #include "storage/ipc.h"

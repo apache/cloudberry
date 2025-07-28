@@ -354,24 +354,6 @@ dsm_impl_posix_resize(int fd, off_t size)
 	int			rc;
 	int			save_errno;
 	sigset_t	save_sigmask;
-<<<<<<< HEAD
-
-	/*
-	 * Block all blockable signals, except SIGQUIT.  posix_fallocate() can run
-	 * for quite a long time, and is an all-or-nothing operation.  If we
-	 * allowed SIGUSR1 to interrupt us repeatedly (for example, due to recovery
-	 * conflicts), the retry loop might never succeed.
-	 */
-	if (IsUnderPostmaster)
-		sigprocmask(SIG_SETMASK, &BlockSig, &save_sigmask);
-
-	/* Truncate (or extend) the file to the requested size. */
-	do
-	{
-		rc = ftruncate(fd, size);
-	} while (rc < 0 && errno == EINTR);
-=======
->>>>>>> REL_16_9
 
 	/*
 	 * Block all blockable signals, except SIGQUIT.  posix_fallocate() can run
@@ -399,22 +381,8 @@ dsm_impl_posix_resize(int fd, off_t size)
 	 */
 	do
 	{
-<<<<<<< HEAD
-		/*
-		 * We still use a traditional EINTR retry loop to handle SIGCONT.
-		 * posix_fallocate() doesn't restart automatically, and we don't want
-		 * this to fail if you attach a debugger.
-		 */
-		pgstat_report_wait_start(WAIT_EVENT_DSM_FILL_ZERO_WRITE);
-		do
-		{
-			rc = posix_fallocate(fd, 0, size);
-		} while (rc == EINTR);
-		pgstat_report_wait_end();
-=======
 		rc = posix_fallocate(fd, 0, size);
 	} while (rc == EINTR);
->>>>>>> REL_16_9
 
 	/*
 	 * The caller expects errno to be set, but posix_fallocate() doesn't set

@@ -1035,19 +1035,11 @@ StandbyAcquireAccessExclusiveLock(TransactionId xid, Oid dbOid, Oid relOid)
 static void
 StandbyReleaseXidEntryLocks(RecoveryLockXidEntry *xidentry)
 {
-<<<<<<< HEAD
-	ListCell   *lc;
-
-	foreach(lc, locks)
-	{
-		xl_standby_lock *lock = (xl_standby_lock *) lfirst(lc);
-=======
 	RecoveryLockEntry *entry;
 	RecoveryLockEntry *next;
 
 	for (entry = xidentry->head; entry != NULL; entry = next)
 	{
->>>>>>> REL_16_9
 		LOCKTAG		locktag;
 
 		elog(trace_recovery(DEBUG4),
@@ -1062,18 +1054,12 @@ StandbyReleaseXidEntryLocks(RecoveryLockXidEntry *xidentry)
 				 entry->key.xid, entry->key.dbOid, entry->key.relOid);
 			Assert(false);
 		}
-<<<<<<< HEAD
-	}
-
-	list_free_deep(locks);
-=======
 		/* ... and remove the per-lock hash entry */
 		next = entry->next;
 		hash_search(RecoveryLockHash, entry, HASH_REMOVE, NULL);
 	}
 
 	xidentry->head = NULL;		/* just for paranoia */
->>>>>>> REL_16_9
 }
 
 /*

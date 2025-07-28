@@ -84,25 +84,6 @@
 #error "no wait set implementation available"
 #endif
 
-<<<<<<< HEAD
-=======
-/*
- * By default, we use a self-pipe with poll() and a signalfd with epoll(), if
- * available.  We avoid signalfd on illumos for now based on problem reports.
- * For testing the choice can also be manually specified.
- */
-#if defined(WAIT_USE_POLL) || defined(WAIT_USE_EPOLL)
-#if defined(WAIT_USE_SELF_PIPE) || defined(WAIT_USE_SIGNALFD)
-/* don't overwrite manual choice */
-#elif defined(WAIT_USE_EPOLL) && defined(HAVE_SYS_SIGNALFD_H) && \
-	!defined(__illumos__)
-#define WAIT_USE_SIGNALFD
-#else
-#define WAIT_USE_SELF_PIPE
-#endif
-#endif
-
->>>>>>> REL_16_9
 /* typedef in latch.h */
 struct WaitEventSet
 {
@@ -453,15 +434,9 @@ OwnLatch(Latch *latch)
 	Assert(signal_fd >= 0);
 #endif
 
-<<<<<<< HEAD
-	if (latch->owner_pid != 0)
-		elog(ERROR, "latch already owned by pid %d (is_set: %d)",
-			 latch->owner_pid, (int) latch->is_set);
-=======
 	owner_pid = latch->owner_pid;
 	if (owner_pid != 0)
 		elog(PANIC, "latch already owned by PID %d", owner_pid);
->>>>>>> REL_16_9
 
 	latch->owner_pid = MyProcPid;
 }

@@ -271,8 +271,6 @@ typedef enum GlobalVisHorizonKind
 	VISHORIZON_TEMP
 } GlobalVisHorizonKind;
 
-<<<<<<< HEAD
-=======
 /*
  * Reason codes for KnownAssignedXidsCompress().
  */
@@ -284,7 +282,6 @@ typedef enum KAXCompressReason
 	KAX_STARTUP_PROCESS_IDLE	/* startup process is about to sleep */
 } KAXCompressReason;
 
->>>>>>> REL_16_9
 
 static ProcArrayStruct *procArray;
 
@@ -797,14 +794,6 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 	/* avoid unnecessarily dirtying shared cachelines */
 	if (proc->statusFlags & PROC_VACUUM_STATE_MASK)
 	{
-<<<<<<< HEAD
-		Assert(!LWLockHeldByMe(ProcArrayLock));
-		LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
-		Assert(proc->statusFlags == ProcGlobal->statusFlags[proc->pgxactoff]);
-		proc->statusFlags &= ~PROC_VACUUM_STATE_MASK;
-		ProcGlobal->statusFlags[proc->pgxactoff] = proc->statusFlags;
-		LWLockRelease(ProcArrayLock);
-=======
 		/*
 		 * If we have no XID, we don't need to lock, since we won't affect
 		 * anyone else's calculation of a snapshot.  We might change their
@@ -833,7 +822,6 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 			ProcGlobal->statusFlags[proc->pgxactoff] = proc->statusFlags;
 			LWLockRelease(ProcArrayLock);
 		}
->>>>>>> REL_16_9
 	}
 
 	resetTmGxact();
@@ -862,14 +850,8 @@ ProcArrayEndTransactionInternal(PGPROC *proc, TransactionId latestXid)
 	proc->lxid = InvalidLocalTransactionId;
 	proc->xmin = InvalidTransactionId;
 
-<<<<<<< HEAD
-	/* be sure these are cleared in abort */
-	proc->delayChkpt = false;
-	proc->delayChkptEnd = false;
-=======
 	/* be sure this is cleared in abort */
 	proc->delayChkptFlags = 0;
->>>>>>> REL_16_9
 
 	proc->recoveryConflictPending = false;
 
@@ -984,7 +966,6 @@ ProcArrayGroupClearXid(PGPROC *proc, TransactionId latestXid)
 	while (nextidx != INVALID_PGPROCNO)
 	{
 		PGPROC	   *nextproc = &allProcs[nextidx];
-<<<<<<< HEAD
 		TMGXACT	   *tmGxact = &allTmGxact[nextidx];
 
 		if (TransactionIdIsValid(nextproc->procArrayGroupMemberXid))
@@ -992,10 +973,6 @@ ProcArrayGroupClearXid(PGPROC *proc, TransactionId latestXid)
 
 		if (TransactionIdIsValid(tmGxact->gxid))
 			ProcArrayEndGxact(tmGxact);
-=======
-
-		ProcArrayEndTransactionInternal(nextproc, nextproc->procArrayGroupMemberXid);
->>>>>>> REL_16_9
 
 		/* Move to next proc in list. */
 		nextidx = pg_atomic_read_u32(&nextproc->procArrayGroupNext);
@@ -1322,13 +1299,8 @@ ProcArrayApplyRecoveryInfo(RunningTransactions running)
 		 *
 		 * We have to sort them logically, because in KnownAssignedXidsAdd we
 		 * call TransactionIdFollowsOrEquals and so on. But we know these XIDs
-<<<<<<< HEAD
-		 * come from RUNNING_XACTS, which means there are only normal XIDs from
-		 * the same epoch, so this is safe.
-=======
 		 * come from RUNNING_XACTS, which means there are only normal XIDs
 		 * from the same epoch, so this is safe.
->>>>>>> REL_16_9
 		 */
 		qsort(xids, nxids, sizeof(TransactionId), xidLogicalComparator);
 
@@ -2041,40 +2013,11 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h, bool updateGlobalVis)
 			TransactionIdOlder(h->data_oldest_nonremovable, kaxmin);
 		/* temp relations cannot be accessed in recovery */
 	}
-<<<<<<< HEAD
-	else
-	{
-		/*
-		 * Compute the cutoff XID by subtracting vacuum_defer_cleanup_age.
-		 *
-		 * vacuum_defer_cleanup_age provides some additional "slop" for the
-		 * benefit of hot standby queries on standby servers.  This is quick
-		 * and dirty, and perhaps not all that useful unless the primary has a
-		 * predictable transaction rate, but it offers some protection when
-		 * there's no walsender connection.  Note that we are assuming
-		 * vacuum_defer_cleanup_age isn't large enough to cause wraparound ---
-		 * so guc.c should limit it to no more than the xidStopLimit threshold
-		 * in varsup.c.  Also note that we intentionally don't apply
-		 * vacuum_defer_cleanup_age on standby servers.
-		 */
-		h->oldest_considered_running =
-			TransactionIdRetreatedBy(h->oldest_considered_running,
-									 vacuum_defer_cleanup_age);
-		h->shared_oldest_nonremovable =
-			TransactionIdRetreatedBy(h->shared_oldest_nonremovable,
-									 vacuum_defer_cleanup_age);
-		h->data_oldest_nonremovable =
-			TransactionIdRetreatedBy(h->data_oldest_nonremovable,
-									 vacuum_defer_cleanup_age);
-		/* defer doesn't apply to temp relations */
-	}
-=======
 
 	Assert(TransactionIdPrecedesOrEquals(h->oldest_considered_running,
 										 h->shared_oldest_nonremovable));
 	Assert(TransactionIdPrecedesOrEquals(h->shared_oldest_nonremovable,
 										 h->data_oldest_nonremovable));
->>>>>>> REL_16_9
 
 	/*
 	 * Check whether there are replication slots requiring an older xmin.
@@ -2258,7 +2201,6 @@ GetOldestNonRemovableTransactionId(Relation rel)
 	TransactionId result;
 	result = GetLocalOldestNonRemovableTransactionId(rel, true);
 
-<<<<<<< HEAD
 	/*
 	 * In QD node, all distributed transactions have an entry in the proc array,
 	 * so we're done.
@@ -2276,24 +2218,6 @@ GetOldestNonRemovableTransactionId(Relation rel)
 		result = DistributedLog_GetOldestXmin(result);
 	
 	return result;
-=======
-	ComputeXidHorizons(&horizons);
-
-	switch (GlobalVisHorizonKindForRel(rel))
-	{
-		case VISHORIZON_SHARED:
-			return horizons.shared_oldest_nonremovable;
-		case VISHORIZON_CATALOG:
-			return horizons.catalog_oldest_nonremovable;
-		case VISHORIZON_DATA:
-			return horizons.data_oldest_nonremovable;
-		case VISHORIZON_TEMP:
-			return horizons.temp_oldest_nonremovable;
-	}
-
-	/* just to prevent compiler warnings */
-	return InvalidTransactionId;
->>>>>>> REL_16_9
 }
 
 /*
@@ -2994,10 +2918,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	TransactionId *other_xids = ProcGlobal->xids;
 	TransactionId xmin;
 	TransactionId xmax;
-<<<<<<< HEAD
 	TransactionId globalxmin;
-=======
->>>>>>> REL_16_9
 	int			count = 0;
 	int			subcount = 0;
 	bool		suboverflowed = false;
@@ -3405,13 +3326,6 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 		 */
 		oldestfxid = FullXidRelativeTo(latest_completed, oldestxid);
 
-<<<<<<< HEAD
-		/* apply vacuum_defer_cleanup_age */
-		def_vis_xid_data =
-			TransactionIdRetreatedBy(globalxmin, vacuum_defer_cleanup_age);
-
-=======
->>>>>>> REL_16_9
 		/* Check whether there's a replication slot requiring an older xmin. */
 		def_vis_xid_data =
 			TransactionIdOlder(xmin, replication_slot_xmin);
@@ -4025,30 +3939,12 @@ GetOldestSafeDecodingTransactionId(bool catalogOnly)
  * actions in progress.
  *
  * Constructs an array of VXIDs of transactions that are currently in commit
-<<<<<<< HEAD
- * critical sections, as shown by having delayChkpt or delayChkptEnd set in
- * their PGPROC.
-=======
  * critical sections, as shown by having specified delayChkptFlags bits set
  * in their PGPROC.
->>>>>>> REL_16_9
  *
  * Returns a palloc'd array that should be freed by the caller.
  * *nvxids is the number of valid entries.
  *
-<<<<<<< HEAD
- * Note that because backends set or clear delayChkpt and delayChkptEnd
- * without holding any lock, the result is somewhat indeterminate, but we
- * don't really care.  Even in a multiprocessor with delayed writes to
- * shared memory, it should be certain that setting of delayChkpt will
- * propagate to shared memory when the backend takes a lock, so we cannot
- * fail to see a virtual xact as delayChkpt if it's already inserted its
- * commit record.  Whether it takes a little while for clearing of
- * delayChkpt to propagate is unimportant for correctness.
- */
-static VirtualTransactionId *
-GetVirtualXIDsDelayingChkptGuts(int *nvxids, int type)
-=======
  * Note that because backends set or clear delayChkptFlags without holding any
  * lock, the result is somewhat indeterminate, but we don't really care.  Even
  * in a multiprocessor with delayed writes to shared memory, it should be
@@ -4060,7 +3956,6 @@ GetVirtualXIDsDelayingChkptGuts(int *nvxids, int type)
  */
 VirtualTransactionId *
 GetVirtualXIDsDelayingChkpt(int *nvxids, int type)
->>>>>>> REL_16_9
 {
 	VirtualTransactionId *vxids;
 	ProcArrayStruct *arrayP = procArray;
@@ -4080,12 +3975,7 @@ GetVirtualXIDsDelayingChkpt(int *nvxids, int type)
 		int			pgprocno = arrayP->pgprocnos[index];
 		PGPROC	   *proc = &allProcs[pgprocno];
 
-<<<<<<< HEAD
-		if (((type & DELAY_CHKPT_START) && proc->delayChkpt) ||
-			((type & DELAY_CHKPT_COMPLETE) && proc->delayChkptEnd))
-=======
 		if ((proc->delayChkptFlags & type) != 0)
->>>>>>> REL_16_9
 		{
 			VirtualTransactionId vxid;
 
@@ -4102,26 +3992,6 @@ GetVirtualXIDsDelayingChkpt(int *nvxids, int type)
 }
 
 /*
- * GetVirtualXIDsDelayingChkpt - Get the VXIDs of transactions that are
- * delaying the start of a checkpoint.
- */
-VirtualTransactionId *
-GetVirtualXIDsDelayingChkpt(int *nvxids)
-{
-	return GetVirtualXIDsDelayingChkptGuts(nvxids, DELAY_CHKPT_START);
-}
-
-/*
- * GetVirtualXIDsDelayingChkptEnd - Get the VXIDs of transactions that are
- * delaying the end of a checkpoint.
- */
-VirtualTransactionId *
-GetVirtualXIDsDelayingChkptEnd(int *nvxids)
-{
-	return GetVirtualXIDsDelayingChkptGuts(nvxids, DELAY_CHKPT_COMPLETE);
-}
-
-/*
  * HaveVirtualXIDsDelayingChkpt -- Are any of the specified VXIDs delaying?
  *
  * This is used with the results of GetVirtualXIDsDelayingChkpt to see if any
@@ -4130,14 +4000,8 @@ GetVirtualXIDsDelayingChkptEnd(int *nvxids)
  * Note: this is O(N^2) in the number of vxacts that are/were delaying, but
  * those numbers should be small enough for it not to be a problem.
  */
-<<<<<<< HEAD
-static bool
-HaveVirtualXIDsDelayingChkptGuts(VirtualTransactionId *vxids, int nvxids,
-								 int type)
-=======
 bool
 HaveVirtualXIDsDelayingChkpt(VirtualTransactionId *vxids, int nvxids, int type)
->>>>>>> REL_16_9
 {
 	bool		result = false;
 	ProcArrayStruct *arrayP = procArray;
@@ -4155,12 +4019,7 @@ HaveVirtualXIDsDelayingChkpt(VirtualTransactionId *vxids, int nvxids, int type)
 
 		GET_VXID_FROM_PGPROC(vxid, *proc);
 
-<<<<<<< HEAD
-		if ((((type & DELAY_CHKPT_START) && proc->delayChkpt) ||
-			 ((type & DELAY_CHKPT_COMPLETE) && proc->delayChkptEnd)) &&
-=======
 		if ((proc->delayChkptFlags & type) != 0 &&
->>>>>>> REL_16_9
 			VirtualTransactionIdIsValid(vxid))
 		{
 			int			i;
@@ -5680,21 +5539,6 @@ ExpireAllKnownAssignedTransactionIds(void)
 	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 	KnownAssignedXidsRemovePreceding(InvalidTransactionId);
 
-<<<<<<< HEAD
-=======
-	/* Reset latestCompletedXid to nextXid - 1 */
-	Assert(FullTransactionIdIsValid(ShmemVariableCache->nextXid));
-	latestXid = ShmemVariableCache->nextXid;
-	FullTransactionIdRetreat(&latestXid);
-	ShmemVariableCache->latestCompletedXid = latestXid;
-
-	/*
-	 * Any transactions that were in-progress were effectively aborted, so
-	 * advance xactCompletionCount.
-	 */
-	ShmemVariableCache->xactCompletionCount++;
-
->>>>>>> REL_16_9
 	/*
 	 * Reset lastOverflowedXid.  Currently, lastOverflowedXid has no use after
 	 * the call of this function.  But do this for unification with what
@@ -5716,17 +5560,6 @@ ExpireOldKnownAssignedTransactionIds(TransactionId xid)
 
 	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 
-<<<<<<< HEAD
-=======
-	/* As in ProcArrayEndTransaction, advance latestCompletedXid */
-	latestXid = xid;
-	TransactionIdRetreat(latestXid);
-	MaintainLatestCompletedXidRecovery(latestXid);
-
-	/* ... and xactCompletionCount */
-	ShmemVariableCache->xactCompletionCount++;
-
->>>>>>> REL_16_9
 	/*
 	 * Reset lastOverflowedXid if we know all transactions that have been
 	 * possibly running are being gone.  Not doing so could cause an incorrect
