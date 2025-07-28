@@ -124,7 +124,6 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 	int			bufid;
 	bool		found;
 
-<<<<<<< HEAD
 	/*
 	 * Local buffers are used for temp tables in PostgreSQL.  As temp tables
 	 * use shared buffers in Cloudberry, we shouldn't be useing local buffers
@@ -132,10 +131,7 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 	 */
 	Assert(false);
 
-	INIT_BUFFERTAG(newTag, smgr->smgr_rnode.node, forkNum, blockNum);
-=======
 	InitBufferTag(&newTag, &smgr->smgr_rlocator.locator, forkNum, blockNum);
->>>>>>> REL_16_9
 
 	/* Initialize local buffers if first request in this session */
 	if (LocalBufHash == NULL)
@@ -179,14 +175,6 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 
 		*foundPtr = false;
 	}
-<<<<<<< HEAD
-	
-#ifdef LBDEBUG
-	fprintf(stderr, "LB ALLOC (%u,%d,%d) %d\n",
-			smgr->smgr_rnode.node.relNode, forkNum, blockNum,
-			-nextFreeLocalBuf - 1);
-#endif
-=======
 
 	return bufHdr;
 }
@@ -200,7 +188,6 @@ GetLocalVictimBuffer(void)
 	BufferDesc *bufHdr;
 
 	ResourceOwnerEnlargeBuffers(CurrentResourceOwner);
->>>>>>> REL_16_9
 
 	/*
 	 * Need to get a new buffer.  We use a clock sweep algorithm (essentially
@@ -246,45 +233,6 @@ GetLocalVictimBuffer(void)
 	}
 
 	/*
-<<<<<<< HEAD
-	 * this buffer is not referenced but it might still be dirty. if that's
-	 * the case, write it out before reusing it!
-	 */
-	if (buf_state & BM_DIRTY)
-	{
-		SMgrRelation oreln;
-		Page		localpage = (char *) LocalBufHdrGetBlock(bufHdr);
-
-		/* Find smgr relation for buffer */
-		oreln = smgropen(bufHdr->tag.rnode, MyBackendId, 0, NULL);
-
-		// GPDB_93_MERGE_FIXME: is this TODO comment still relevant?
-		// UNDONE: Unfortunately, I think we write temp relations to the mirror...
-		/*
-		 * Technically BM_PERMANENT could indicate an init fork, but that's
-		 * okay since forkNum would also tell us not to encrypt init forks.
-		 */
-		PageEncryptInplace(localpage, bufHdr->tag.forkNum,
-					        bufHdr->tag.blockNum);
-		PageSetChecksumInplace(localpage, bufHdr->tag.blockNum);
-
-		/* And write... */
-		smgrwrite(oreln,
-				  bufHdr->tag.forkNum,
-				  bufHdr->tag.blockNum,
-				  localpage,
-				  false);
-
-		/* Mark not-dirty now in case we error out below */
-		buf_state &= ~BM_DIRTY;
-		pg_atomic_unlocked_write_u32(&bufHdr->state, buf_state);
-
-		pgBufferUsage.local_blks_written++;
-	}
-
-	/*
-=======
->>>>>>> REL_16_9
 	 * lazy memory allocation: allocate space on first use of a buffer.
 	 */
 	if (LocalBufHdrGetBlock(bufHdr) == NULL)
@@ -306,6 +254,12 @@ GetLocalVictimBuffer(void)
 		/* Find smgr relation for buffer */
 		oreln = smgropen(BufTagGetRelFileLocator(&bufHdr->tag), MyBackendId);
 
+		/*
+		 * Technically BM_PERMANENT could indicate an init fork, but that's
+		 * okay since forkNum would also tell us not to encrypt init forks.
+		 */
+		PageEncryptInplace(localpage, bufHdr->tag.forkNum,
+						   bufHdr->tag.blockNum);
 		PageSetChecksumInplace(localpage, bufHdr->tag.blockNum);
 
 		io_start = pgstat_prepare_io_time();
