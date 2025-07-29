@@ -160,7 +160,7 @@ code or new licensing patterns.
             <exclude>.gitattributes</exclude>
 
             <exclude>gpMgmt/demo/gpfdist_transform/**</exclude>
-
+            <exclude>gpMgmt/demo/gppkg/sample-sources.tar.gz</exclude>
             <exclude>gpMgmt/demo/gppkg/sample.control</exclude>
             <exclude>gpMgmt/demo/gppkg/sample.spec</exclude>
             <exclude>gpMgmt/demo/gppkg/gppkg_spec.yml.in</exclude>
