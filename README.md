@@ -46,6 +46,7 @@
   <img alt="SonarQube Cloud" src="https://sonarcloud.io/images/project_badges/sonarcloud-highlight.svg" width="100px">
 </a>
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/apache/cloudberry)
+[![Apache Rat Audit](https://github.com/apache/cloudberry/actions/workflows/apache-rat-audit.yml/badge.svg)](https://github.com/apache/cloudberry/actions/workflows/apache-rat-audit.yml)
 ---------
 
 ## Introduction
