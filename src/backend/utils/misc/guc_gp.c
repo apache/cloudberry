@@ -3525,7 +3525,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			NULL
 		},
 		&gp_appendonly_insert_files,
-		4, 0, 127,
+		0, 0, 127,
 		NULL, NULL, NULL
 	},
 
