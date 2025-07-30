@@ -505,8 +505,7 @@ static void ATExecPartAddInternal(Relation rel, Node *def);
 
 static RangeVar *make_temp_table_name(Relation rel, BackendId id);
 static bool prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro,
-								List *opts, bool isTmpTableAo,
-								bool useExistingColumnAttributes);
+								List *opts, bool useExistingColumnAttributes);
 static void ATPartitionCheck(AlterTableType subtype, Relation rel, bool rejectroot, bool recursing);
 static void ATExternalPartitionCheck(AlterTableType subtype, Relation rel, bool recursing);
 
@@ -14567,7 +14566,6 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 
 	pre_built = prebuild_temp_table(rel, tmprel, dist_clause,
 									storage_opts,
-									RelationIsAppendOptimized(rel),
 									useExistingColumnAttributes);
 	if (pre_built)
 	{
@@ -14710,13 +14708,10 @@ make_temp_table_name(Relation rel, BackendId id)
  * If we need to do it, but fail, issue an error. (See make_type.)
  *
  * Specifically for build_ctas_with_dist.
- *
- * Note that the caller should guarantee that isTmpTableAo has
- * a value that matches 'opts'.
  */
 static bool
 prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List *opts,
-					bool isTmpTableAo, bool useExistingColumnAttributes)
+					bool useExistingColumnAttributes)
 {
 	bool need_rebuild = false;
 	int attno = 0;
@@ -14749,7 +14744,7 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 	 * important to create the block directory to support the reindex
 	 * later. See MPP-9545 for more info.
 	 */
-	if (isTmpTableAo &&
+	if (RelationIsAppendOptimized(rel) &&
 		rel->rd_rel->relhasindex)
 		need_rebuild = true;
 
@@ -14767,13 +14762,27 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 		cs->tablespacename = get_tablespace_name(rel->rd_rel->reltablespace);
 		cs->buildAoBlkdir = false;
 
-		if (isTmpTableAo &&
+		if (RelationIsAppendOptimized(rel) &&
 			rel->rd_rel->relhasindex)
 			cs->buildAoBlkdir = true;
 
 		cs->options = opts;
 
-		if (RelationIsAoRows(rel))
+		if (!RelationIsAppendOptimized(rel))
+		{
+			/*
+			 * In order to avoid being affected by gp_default_storage_options,
+			 * we have to specify appendonly=false. This prevents accidentally
+			 * changing the access method to AO.
+			 */
+			if (!reloptions_has_opt(cs->options, "appendonly"))
+			{
+				DefElem *elem = makeDefElem("appendonly",
+											(Node *) makeString("false"));
+				cs->options = lappend(cs->options, elem);
+			}
+		}
+		else if (RelationIsAoRows(rel))
 		{
 			/*
 			* In order to avoid being affected by the GUC of gp_default_storage_options,

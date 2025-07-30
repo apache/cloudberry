@@ -52,3 +52,111 @@ select count(*) > 0 as has_different_distribution from
  t
 (1 row)
 
+-- ALTER TABLE SET also shouldn't change table access method because of
+-- changes in gp_default_storage_options.
+-- Heap -> AOCO
+create table tb_heap(id int, s1 text, s2 text);
+insert into tb_heap select v, v::text, v::text FROM generate_series(1, 100) v;
+alter table tb_heap drop column s1;
+set gp_default_storage_options = 'appendonly=true, orientation=column';
+alter table tb_heap set with (reorganize = true);
+select max(id) from tb_heap;
+ max 
+-----
+ 100
+(1 row)
+
+select relstorage from pg_class where relname = 'tb_heap';
+ relstorage 
+------------
+ h
+(1 row)
+
+-- Heap -> AO
+alter table tb_heap drop column s2;
+set gp_default_storage_options = 'appendonly=true, orientation=row';
+alter table tb_heap set with (reorganize = true);
+select max(id) from tb_heap;
+ max 
+-----
+ 100
+(1 row)
+
+select relstorage from pg_class where relname = 'tb_heap';
+ relstorage 
+------------
+ h
+(1 row)
+
+-- AOCO -> Heap
+set gp_default_storage_options = 'appendonly=true, orientation=column';
+create table tb_aoco(id int, s1 text, s2 text);
+insert into tb_aoco select v, v::text, v::text FROM generate_series(1, 100) v;
+alter table tb_aoco drop column s1;
+set gp_default_storage_options = 'appendonly=false';
+alter table tb_aoco set with (reorganize = true);
+select max(id) from tb_aoco;
+ max 
+-----
+ 100
+(1 row)
+
+select relstorage from pg_class where relname = 'tb_aoco';
+ relstorage 
+------------
+ c
+(1 row)
+
+-- AOCO -> AO
+alter table tb_aoco drop column s2;
+set gp_default_storage_options = 'appendonly=true, orientation=row';
+alter table tb_aoco set with (reorganize = true);
+select max(id) from tb_aoco;
+ max 
+-----
+ 100
+(1 row)
+
+select relstorage from pg_class where relname = 'tb_aoco';
+ relstorage 
+------------
+ c
+(1 row)
+
+-- AO -> Heap
+set gp_default_storage_options = 'appendonly=true, orientation=row';
+create table tb_ao(id int, s1 text, s2 text);
+insert into tb_ao select v, v::text, v::text FROM generate_series(1, 100) v;
+alter table tb_ao drop column s1;
+set gp_default_storage_options = 'appendonly=false';
+alter table tb_ao set with (reorganize = true);
+select max(id) from tb_ao;
+ max 
+-----
+ 100
+(1 row)
+
+select relstorage from pg_class where relname = 'tb_ao';
+ relstorage 
+------------
+ a
+(1 row)
+
+-- AO -> AOCO
+alter table tb_ao drop column s2;
+set gp_default_storage_options = 'appendonly=true, orientation=column';
+alter table tb_ao set with (reorganize = true);
+select max(id) from tb_ao;
+ max 
+-----
+ 100
+(1 row)
+
+select relstorage from pg_class where relname = 'tb_ao';
+ relstorage 
+------------
+ a
+(1 row)
+
+-- Cleanup
+drop table tb_heap, tb_aoco, tb_ao;
