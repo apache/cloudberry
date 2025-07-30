@@ -8001,6 +8001,7 @@ make_windowagg(List *tlist, Index winref,
 	node->inRangeColl = inRangeColl;
 	node->inRangeAsc = inRangeAsc;
 	node->inRangeNullsFirst = inRangeNullsFirst;
+	node->isWindowHashAgg = false;
 
 	plan->targetlist = tlist;
 	plan->lefttree = lefttree;

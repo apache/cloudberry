@@ -2530,6 +2530,7 @@ _readWindowAgg(void)
 	READ_OID_FIELD(inRangeColl);
 	READ_BOOL_FIELD(inRangeAsc);
 	READ_BOOL_FIELD(inRangeNullsFirst);
+	READ_BOOL_FIELD(isWindowHashAgg);
 
 	READ_DONE();
 }

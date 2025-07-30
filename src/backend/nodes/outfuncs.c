@@ -1011,6 +1011,7 @@ _outWindowAgg(StringInfo str, const WindowAgg *node)
 	WRITE_OID_FIELD(inRangeColl);
 	WRITE_BOOL_FIELD(inRangeAsc);
 	WRITE_BOOL_FIELD(inRangeNullsFirst);
+	WRITE_BOOL_FIELD(isWindowHashAgg);
 }
 
 static void

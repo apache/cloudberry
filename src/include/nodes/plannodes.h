@@ -1440,6 +1440,12 @@ typedef struct WindowAgg
 	Oid			inRangeColl;	/* collation for in_range tests */
 	bool		inRangeAsc;		/* use ASC sort order for in_range tests? */
 	bool		inRangeNullsFirst;	/* nulls sort first for in_range tests? */
+
+	/* 
+	 * No need sort node is current is hash agg.
+	 * Only used on vectorization
+	 */
+	bool		isWindowHashAgg; 
 } WindowAgg;
 
 /* ----------------

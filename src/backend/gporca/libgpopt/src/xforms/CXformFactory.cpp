@@ -248,6 +248,7 @@ CXformFactory::Instantiate()
 	Add(GPOS_NEW(m_mp) CXformSplitDQA(m_mp));
 	Add(GPOS_NEW(m_mp) CXformSequenceProject2Apply(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementSequenceProject(m_mp));
+	Add(GPOS_NEW(m_mp) CXformImplementHashSequenceProject(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementAssert(m_mp));
 	Add(GPOS_NEW(m_mp) CXformCTEAnchor2Sequence(m_mp));
 	Add(GPOS_NEW(m_mp) CXformCTEAnchor2TrivialSelect(m_mp));
