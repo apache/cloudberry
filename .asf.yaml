@@ -85,7 +85,6 @@ github:
         # Actions workflows. They do not include the workflow name as a
         # prefix
         contexts:
-          - rat-check
           - check-skip
           - Build Apache Cloudberry RPM
           - RPM Install Test Apache Cloudberry
