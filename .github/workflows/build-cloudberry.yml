@@ -310,6 +310,9 @@ jobs:
               {"test":"ic-isolation2",
                "make_configs":["src/test/isolation2:installcheck-isolation2"]
               },
+              {"test":"ic-isolation2-hot-standby",
+               "make_configs":["src/test/isolation2:installcheck-hot-standby"]
+              },
               {"test":"ic-isolation2-crash",
                "make_configs":["src/test/isolation2:installcheck-isolation2-crash"],
                "enable_core_check":false

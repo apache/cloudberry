@@ -92,6 +92,7 @@ static int	CdbComponentDatabaseInfoCompare(const void *p1, const void *p2);
 
 static GpSegConfigEntry * readGpSegConfigFromCatalog(int *total_dbs);
 static GpSegConfigEntry * readGpSegConfigFromFTSFiles(int *total_dbs);
+static GpSegConfigEntry * readGpSegConfigFromFiles(int *total_dbs);
 
 static void getAddressesForDBid(GpSegConfigEntry *c, int elevel);
 static HTAB *hostPrimaryCountHashTableInit(void);
@@ -132,6 +133,15 @@ typedef struct HostPrimaryCountEntry
 static GpSegConfigEntry *
 readGpSegConfigFromFTSFiles(int *total_dbs)
 {
+	Assert(!IsTransactionState() && !IS_HOT_DR_CLUSTER());
+	/* notify and wait FTS to finish a probe and update the dump file */
+	FtsNotifyProber();
+	return readGpSegConfigFromFiles(total_dbs);
+}
+
+static GpSegConfigEntry *
+readGpSegConfigFromFiles(int *total_dbs)
+{
 	FILE	*fd;
 	int		idx = 0;
 	int		array_size = 500;
@@ -141,11 +151,6 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 	char	hostname[MAXHOSTNAMELEN];
 	char	address[MAXHOSTNAMELEN];
 	char	buf[MAXHOSTNAMELEN * 2 + 32];
-
-	Assert(!IsTransactionState());
-
-	/* notify and wait FTS to finish a probe and update the dump file */
-	FtsNotifyProber();	
 
 	fd = AllocateFile(GPSEGCONFIGDUMPFILE, "r");
 
@@ -186,6 +191,18 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 
 	*total_dbs = idx;
 	return configs;
+}
+
+bool
+checkGpSegConfigFtsFiles()
+{
+	FILE *fd = AllocateFile(GPSEGCONFIGDUMPFILE, "r");
+
+	if (!fd)
+		return false;
+
+	FreeFile(fd);
+	return true;
 }
 
 /*
@@ -372,10 +389,17 @@ getCdbComponentInfo(void)
 
 	HTAB	   *hostPrimaryCountHash = hostPrimaryCountHashTableInit();
 
-	if (IsTransactionState())
-		configs = readGpSegConfigFromCatalog(&total_dbs);
+	if (EnableHotDR)
+	{
+		configs = readGpSegConfigFromFiles(&total_dbs);
+	}
 	else
-		configs = readGpSegConfigFromFTSFiles(&total_dbs);
+	{
+		if (IsTransactionState())
+			configs = readGpSegConfigFromCatalog(&total_dbs);
+		else
+			configs = readGpSegConfigFromFTSFiles(&total_dbs);
+	}
 
 	component_databases = palloc0(sizeof(CdbComponentDatabases));
 
