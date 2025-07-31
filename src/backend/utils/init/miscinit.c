@@ -109,13 +109,6 @@ InitPostmasterChild(void)
 	IsUnderPostmaster = true;	/* we are a postmaster subprocess now */
 
 	/*
-<<<<<<< HEAD
-	 * Set reference point for stack-depth checking.  This might seem
-	 * redundant in !EXEC_BACKEND builds; but it's not because the postmaster
-	 * launches its children from signal handlers, so we might be running on
-	 * an alternative stack.
-	 */
-=======
 	 * Start our win32 signal implementation. This has to be done after we
 	 * read the backend variables, because we need to pick up the signal pipe
 	 * from the parent process.
@@ -129,7 +122,6 @@ InitPostmasterChild(void)
 	 * redundant in !EXEC_BACKEND builds, but it's better to keep the depth
 	 * logic the same with and without that build option.
 	 */
->>>>>>> REL_16_9
 	(void) set_stack_base();
 
 	InitProcessGlobals();
@@ -328,24 +320,12 @@ GetBackendTypeDesc(BackendType backendType)
 		case B_WAL_WRITER:
 			backendDesc = "walwriter";
 			break;
-<<<<<<< HEAD
-		case B_ARCHIVER:
-			backendDesc = "archiver";
-			break;
-		case B_STATS_COLLECTOR:
-			backendDesc = "stats collector";
-			break;
-		case B_LOGGER:
-			backendDesc = "logger";
-			break;
 		case B_LOGIN_MONITOR:
 			backendDesc = "login monitor";
 			break;
 		case B_LOGIN_MONITOR_WORKER:
 			backendDesc = "login monitor worker";
 			break;
-=======
->>>>>>> REL_16_9
 	}
 
 	return backendDesc;
@@ -591,10 +571,6 @@ GetSessionUserId(void)
 	return SessionUserId;
 }
 
-<<<<<<< HEAD
-/* extern so DispatchAgent can use this (postgres.c) */
-extern void
-=======
 bool
 GetSessionUserIsSuperuser(void)
 {
@@ -602,8 +578,8 @@ GetSessionUserIsSuperuser(void)
 	return SessionUserIsSuperuser;
 }
 
-static void
->>>>>>> REL_16_9
+/* extern so DispatchAgent can use this (postgres.c) */
+extern void
 SetSessionUserId(Oid userid, bool is_superuser)
 {
 	Assert(SecurityRestrictionContext == 0);
@@ -921,14 +897,8 @@ InitializeSessionUserId(const char *rolename, Oid roleid)
 		 * many connections to each segment to execute a non-trivial plan and
 		 * the user connection limit does not map, semantically, to that idea.
 		 */
-<<<<<<< HEAD
 		if (Gp_role == GP_ROLE_DISPATCH && rform->rolconnlimit >= 0 &&
 			!AuthenticatedUserIsSuperuser &&
-=======
-		if (rform->rolconnlimit >= 0 &&
-			AmRegularBackendProcess() &&
-			!is_superuser &&
->>>>>>> REL_16_9
 			CountUserBackends(roleid) > rform->rolconnlimit)
 			ereport(FATAL,
 					(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
@@ -936,7 +906,6 @@ InitializeSessionUserId(const char *rolename, Oid roleid)
 							rname)));
 	}
 
-<<<<<<< HEAD
 	/*
 	 * If resource scheduling is enabled, then set cached value for the
 	 * queue. Do this even in standalone backend mode, just in case someone
@@ -954,8 +923,6 @@ InitializeSessionUserId(const char *rolename, Oid roleid)
 					AuthenticatedUserIsSuperuser ? "on" : "off",
 					PGC_INTERNAL, PGC_S_OVERRIDE);
 
-=======
->>>>>>> REL_16_9
 	ReleaseSysCache(roleTup);
 }
 
@@ -970,15 +937,11 @@ InitializeSessionUserIdStandalone(void)
 	 * This function should only be called in single-user mode, in autovacuum
 	 * workers, login monitor, and in background workers.
 	 */
-<<<<<<< HEAD
 	AssertState(!IsUnderPostmaster || IsAutoVacuumWorkerProcess() || IsBackgroundWorker
 		    		|| IsAnyLoginMonitorProcess()
 				|| am_startup
 				|| (am_faulthandler && am_mirror)
 				|| (am_ftshandler && am_mirror));
-=======
-	Assert(!IsUnderPostmaster || IsAutoVacuumWorkerProcess() || IsBackgroundWorker);
->>>>>>> REL_16_9
 
 	/* call only once */
 	Assert(!OidIsValid(AuthenticatedUserId));
@@ -1056,7 +1019,6 @@ SetSessionAuthorization(Oid userid, bool is_superuser)
 {
 	SetSessionUserId(userid, is_superuser);
 
-<<<<<<< HEAD
 	/* If resource scheduling enabled, set the cached queue for the new role.*/
 	if ((Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE() || Gp_role == GP_ROLE_EXECUTE) && IsResQueueEnabled())
 	{
@@ -1066,10 +1028,6 @@ SetSessionAuthorization(Oid userid, bool is_superuser)
 	SetConfigOption("is_superuser",
 					is_superuser ? "on" : "off",
 					PGC_INTERNAL, PGC_S_OVERRIDE);
-=======
-	if (!SetRoleIsActive)
-		SetOuterUserId(userid, is_superuser);
->>>>>>> REL_16_9
 }
 
 /*
@@ -1123,7 +1081,6 @@ SetCurrentRoleId(Oid roleid, bool is_superuser)
 	else
 		SetRoleIsActive = true;
 
-<<<<<<< HEAD
 	SetOuterUserId(roleid);
 
 	/* If resource scheduling enabled, set the cached queue for the new role.*/
@@ -1135,9 +1092,6 @@ SetCurrentRoleId(Oid roleid, bool is_superuser)
 	SetConfigOption("is_superuser",
 					is_superuser ? "on" : "off",
 					PGC_INTERNAL, PGC_S_OVERRIDE);
-=======
-	SetOuterUserId(roleid, is_superuser);
->>>>>>> REL_16_9
 }
 
 
@@ -1168,7 +1122,6 @@ GetUserNameFromId(Oid roleid, bool noerr)
 	return result;
 }
 
-<<<<<<< HEAD
 Oid
 GetCurrentWarehouseId(void)
 {
@@ -1181,7 +1134,7 @@ SetCurrentWarehouseId(Oid warehouseid)
 	AssertArg(OidIsValid(warehouseid));
 	CurrentWarehouseId = warehouseid;
 }
-=======
+
 /* ------------------------------------------------------------------------
  *				Client connection state shared with parallel workers
  *
@@ -1274,8 +1227,6 @@ RestoreClientConnectionInfo(char *conninfo)
 															  authn_id);
 	}
 }
-
->>>>>>> REL_16_9
 
 /*-------------------------------------------------------------------------
  *				Interlock-file support
@@ -2006,7 +1957,6 @@ char	   *local_preload_libraries_string = NULL;
 bool		process_shared_preload_libraries_in_progress = false;
 bool		process_shared_preload_libraries_done = false;
 
-<<<<<<< HEAD
 /*
  * process shared preload libraries array.
  */
@@ -2118,10 +2068,9 @@ expand_shared_preload_libraries_string()
 	pfree(rawstring);
 	return expand_string.data;
 }
-=======
+
 shmem_request_hook_type shmem_request_hook = NULL;
 bool		process_shmem_requests_in_progress = false;
->>>>>>> REL_16_9
 
 /*
  * load the shared libraries listed in 'libraries'
