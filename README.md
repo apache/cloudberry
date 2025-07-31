@@ -62,7 +62,7 @@ also be used for large-scale analytics and AI/ML workloads.
 
 ### Build from source
 
-You can follow [these guides](./deploy/build) to build Cloudberry on
+You can follow [these guides](https://cloudberry.apache.org/docs/deployment/) to build Cloudberry on
 Linux OS (including RHEL/Rocky Linux, and Ubuntu) and macOS.
 
 ### Try out quickly
