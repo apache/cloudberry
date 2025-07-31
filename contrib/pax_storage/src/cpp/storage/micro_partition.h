@@ -204,12 +204,10 @@ class MicroPartitionReader {
 
     std::shared_ptr<PaxFilter> filter;
 
-#ifdef VEC_BUILD
-    TupleDesc tuple_desc = nullptr;
-#endif
-
     // should only reference
     std::shared_ptr<Bitmap8> visibility_bitmap = nullptr;
+
+    TupleDesc tuple_desc = nullptr;
   };
   MicroPartitionReader() = default;
 
