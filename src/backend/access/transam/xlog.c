@@ -141,6 +141,7 @@ int			XLogArchiveTimeout = 0;
 int			XLogArchiveMode = ARCHIVE_MODE_OFF;
 char	   *XLogArchiveCommand = NULL;
 bool		EnableHotStandby = false;
+bool		EnableHotDR = false;
 bool		fullPageWrites = true;
 bool		wal_log_hints = false;
 int			wal_compression = WAL_COMPRESSION_NONE;
@@ -8161,6 +8162,9 @@ XLogRestorePoint(const char *rpName)
 
 	xlrec.rp_time = GetCurrentTimestamp();
 	strlcpy(xlrec.rp_name, rpName, MAXFNAMELEN);
+
+	/* LogHotStandby for the restore here */
+	LogStandbySnapshot();
 
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xl_restore_point));

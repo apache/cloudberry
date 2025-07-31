@@ -302,6 +302,7 @@
 		"gp_workfile_max_entries",
 		"gss_accept_delegation",
 		"hba_file",
+		"hot_dr",
 		"hot_standby",
 		"hot_standby_feedback",
 		"huge_pages",

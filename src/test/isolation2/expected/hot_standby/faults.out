@@ -133,7 +133,7 @@ select gp_inject_fault('out_of_recovery_in_startupxlog', 'reset', dbid) from gp_
 ERROR:  primary segments can only process MPP protocol messages from primary QD  (seg1 slice1 127.0.1.1:7006 pid=14671)
 HINT:  Exit the current session and re-connect.
 -1Sq: ... <quitting>
-
+-- start_ignore
 -- will fail due to downed mirror (previous primary)
 -1S: select * from hs_failover;
 ERROR:  failed to acquire resources on one or more segments
@@ -141,6 +141,7 @@ DETAIL:  connection to server at "10.13.9.74", port 7003 failed: Connection refu
 	Is the server running on that host and accepting TCP/IP connections?
  (seg1 10.13.9.74:7003)
 -1Sq: ... <quitting>
+-- end_ignore
 
 -- bring the downed mirror up
 !\retcode gprecoverseg -aF;
