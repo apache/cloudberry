@@ -123,6 +123,7 @@ extern int	XLogArchiveTimeout;
 extern int	wal_retrieve_retry_interval;
 extern char *XLogArchiveCommand;
 extern bool EnableHotStandby;
+extern bool EnableHotDR;
 
 extern bool fullPageWrites;
 extern bool wal_log_hints;

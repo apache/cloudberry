@@ -86,6 +86,7 @@ static bool check_optimizer(bool *newval, void **extra, GucSource source);
 static bool check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source);
 static bool check_dispatch_log_stats(bool *newval, void **extra, GucSource source);
 static bool check_gp_workfile_compression(bool *newval, void **extra, GucSource source);
+static bool check_hot_dr(bool *newval, void **extra, GucSource source);
 
 /* Helper function for guc setter */
 bool gpvars_check_gp_resqueue_priority_default_value(char **newval,
@@ -3332,6 +3333,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"hot_dr", PGC_POSTMASTER, REPLICATION_STANDBY,
+			gettext_noop("DR Cluster as well as allows connteions and queries"),
+			NULL
+		},
+		&EnableHotDR,
+		false,
+		check_hot_dr, NULL, NULL
+	},
+
+	{
 		{"gp_enable_runtime_filter_pushdown", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Try to push the hash table of hash join to the seqscan or AM as bloom filter."),
 			NULL
@@ -5452,6 +5463,22 @@ check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source)
 	if (!*newval && Gp_role == GP_ROLE_DISPATCH)
 		elog(WARNING, "verify_gpfdists_cert=off. Apache Cloudberry will stop validating "
 				"the gpfdists SSL certificate for connections between segments and gpfdists");
+	return true;
+}
+
+static bool
+check_hot_dr(bool *newval, void **extra, GucSource source)
+{
+	if (*newval && !EnableHotStandby)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("cannot enable \"hot_dr\" when \"hot_standby\" is false")));
+
+	if (*newval && IS_QUERY_DISPATCHER() && !checkGpSegConfigFtsFiles())
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("cannot enable \"hot_dr\" since DR cluster segment configuration file does not exits")));
+
 	return true;
 }
 
