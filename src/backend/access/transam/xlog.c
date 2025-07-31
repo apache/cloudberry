@@ -114,6 +114,7 @@ int			XLogArchiveTimeout = 0;
 int			XLogArchiveMode = ARCHIVE_MODE_OFF;
 char	   *XLogArchiveCommand = NULL;
 bool		EnableHotStandby = false;
+bool		EnableHotDR = false;
 bool		fullPageWrites = true;
 bool		wal_log_hints = false;
 bool		wal_compression = false;
@@ -7967,6 +7968,12 @@ StartupXLOG(void)
 				if (gp_pause_on_restore_point_replay)
 					pauseRecoveryOnRestorePoint(xlogreader);
 
+				/* Exit the recovery loop if a promotion is triggered in pauseRecoveryOnRestorePoint() */
+				if (reachedContinuousRecoveryTarget && recoveryTargetAction == RECOVERY_TARGET_ACTION_PROMOTE){
+					reachedRecoveryTarget = true;
+					break;
+				}
+
 				/* Exit loop if we reached inclusive recovery target */
 				if (recoveryStopsAfter(xlogreader))
 				{
@@ -10756,6 +10763,9 @@ XLogRestorePoint(const char *rpName)
 
 	xlrec.rp_time = GetCurrentTimestamp();
 	strlcpy(xlrec.rp_name, rpName, MAXFNAMELEN);
+
+	/* LogHotStandby for the restore here */
+	LogStandbySnapshot();
 
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xl_restore_point));
