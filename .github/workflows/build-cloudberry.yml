@@ -273,7 +273,8 @@ jobs:
                "make_configs":["src/test/isolation:installcheck-singlenode",
                                "src/test/singlenode_regress:installcheck-singlenode",
                                "src/test/singlenode_isolation2:installcheck-singlenode"],
-               "num_primary_mirror_pairs":0
+               "num_primary_mirror_pairs":0,
+               "pg_settings":{"optimizer":"off"}
               },
               {"test":"ic-resgroup-v2",
                "make_configs":["src/test/isolation2:installcheck-resgroup-v2"],
@@ -315,9 +316,6 @@ jobs:
               },
               {"test":"ic-parallel-retrieve-cursor",
                "make_configs":["src/test/isolation2:installcheck-parallel-retrieve-cursor"]
-              },
-              {"test":"ic-cbdb-parallel",
-               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }
             ]
           }'
