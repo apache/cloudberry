@@ -335,6 +335,8 @@ typedef enum GpVars_Interconnect_Method
 {
 	INTERCONNECT_FC_METHOD_CAPACITY = 0,
 	INTERCONNECT_FC_METHOD_LOSS = 2,
+	INTERCONNECT_FC_METHOD_LOSS_ADVANCE = 3,
+	INTERCONNECT_FC_METHOD_LOSS_TIMER = 4,
 } GpVars_Interconnect_Method;
 
 extern int Gp_interconnect_fc_method;
@@ -368,6 +370,7 @@ extern int	Gp_interconnect_min_rto;
 extern int  Gp_interconnect_transmit_timeout;
 extern int	Gp_interconnect_min_retries_before_timeout;
 extern int	Gp_interconnect_debug_retry_interval;
+extern int	Gp_interconnect_mem_size;
 
 /* UDP recv buf size in KB.  For testing */
 extern int 	Gp_udp_bufsize_k;
