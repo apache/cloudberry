@@ -823,7 +823,7 @@ select unique2 from onek2 where unique2 = 11 and stringu1 < 'B' for update;
          Index Cond: (unique2 = 11)
          Filter: (stringu1 < 'B'::name)
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'B' for update;
  unique2 
