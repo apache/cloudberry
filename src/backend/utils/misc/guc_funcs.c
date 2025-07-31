@@ -57,13 +57,15 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 	{
 		case VAR_SET_VALUE:
 		case VAR_SET_CURRENT:
-			if (stmt->is_local)
+			if (stmt->is_local &&
+				Gp_role != GP_ROLE_EXECUTE && !IsBootstrapProcessingMode())
 				WarnNoTransactionBlock(isTopLevel, "SET LOCAL");
 			(void) set_config_option(stmt->name,
 									 ExtractSetVariableArgs(stmt),
 									 (superuser() ? PGC_SUSET : PGC_USERSET),
 									 PGC_S_SESSION,
 									 action, true, 0, false);
+			DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
 			break;
 		case VAR_SET_MULTI:
 
@@ -78,7 +80,8 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 			{
 				ListCell   *head;
 
-				WarnNoTransactionBlock(isTopLevel, "SET TRANSACTION");
+				if (Gp_role != GP_ROLE_EXECUTE)
+					WarnNoTransactionBlock(isTopLevel, "SET TRANSACTION");
 
 				foreach(head, stmt->args)
 				{
@@ -150,6 +153,30 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 		case VAR_RESET_ALL:
 			ResetAllOptions();
 			break;
+	}
+
+
+	if (stmt->kind == VAR_SET_DEFAULT ||
+		stmt->kind == VAR_RESET ||
+		stmt->kind == VAR_RESET_ALL)
+	{
+		if (Gp_role == GP_ROLE_DISPATCH)
+		{
+			/*
+			 * RESET must be dispatched different, because it can't
+			 * be in a user transaction
+			 */
+			StringInfoData buffer;
+
+			initStringInfo(&buffer);
+
+			if (stmt->kind == VAR_RESET_ALL)
+				appendStringInfo(&buffer, "RESET ALL");
+			else
+				appendStringInfo(&buffer, "RESET %s", stmt->name);
+
+			CdbDispatchSetCommand(buffer.data, false);
+		}
 	}
 
 	/* Invoke the post-alter hook for setting this GUC variable, by name. */
@@ -314,6 +341,13 @@ flatten_set_variable_args(const char *name, List *args)
 void
 SetPGVariable(const char *name, List *args, bool is_local)
 {
+	SetPGVariableOptDispatch(name, args, is_local, true);
+}
+
+/* GPDB: Like SetPGVariable, but with extra 'gp_dispatch' parameter.  */
+void
+SetPGVariableOptDispatch(const char *name, List *args, bool is_local, bool gp_dispatch)
+{
 	char	   *argstring = flatten_set_variable_args(name, args);
 
 	/* Note SET DEFAULT (argstring == NULL) is equivalent to RESET */
@@ -323,6 +357,9 @@ SetPGVariable(const char *name, List *args, bool is_local)
 							 PGC_S_SESSION,
 							 is_local ? GUC_ACTION_LOCAL : GUC_ACTION_SET,
 							 true, 0, false);
+
+	if (gp_dispatch)
+		DispatchSetPGVariable(name, args, is_local);
 }
 
 /*
@@ -366,6 +403,30 @@ set_config_by_name(PG_FUNCTION_ARGS)
 							 PGC_S_SESSION,
 							 is_local ? GUC_ACTION_LOCAL : GUC_ACTION_SET,
 							 true, 0, false);
+
+	if (Gp_role == GP_ROLE_DISPATCH && !IsBootstrapProcessingMode())
+	{
+		StringInfoData	buffer;
+		char		   *quoted_name;
+		char		   *quoted_value = NULL;
+
+		initStringInfo(&buffer);
+
+		quoted_name = quote_literal_cstr(name);
+		if (value)
+			quoted_value = quote_literal_cstr(value);
+
+		appendStringInfo(&buffer, "SELECT pg_catalog.set_config(%s, %s, %s)",
+						 quoted_name,
+						 quoted_value ? quoted_value : "NULL",
+						 is_local ? "true" : "false");
+
+		if (quoted_value)
+			pfree(quoted_value);
+		pfree(quoted_name);
+
+		CdbDispatchSetCommand(buffer.data, false /* cancelOnError */ );
+	}
 
 	/* get the new current value */
 	new_value = GetConfigOptionByName(name, NULL, false);
