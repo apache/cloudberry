@@ -1446,7 +1446,11 @@ drop table agg_hash_4;
 
 -- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
+set enable_indexscan = off;
+set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class, (select count(*) > 0 from (select count(*) from pg_class where relnatts > 8) x) y;
+reset enable_indexscan;
+reset enable_indexonlyscan;
 
 -- test aggno
 create table tgb1(v1 int, v2 int, v3 int);
