@@ -560,7 +560,6 @@ select explain_analyze_without_memory('select * from (select * from t order by a
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
-reset max_parallel_workers_per_gather;
 select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from (select * from t order by a) s order by a, b limit 55'));
  jsonb_pretty 
 --------------
@@ -568,6 +567,7 @@ select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from
  ]
 (1 row)
 
+reset max_parallel_workers_per_gather;
 select explain_analyze_inc_sort_nodes_verify_invariants('select * from (select * from t order by a) s order by a, b limit 55');
  explain_analyze_inc_sort_nodes_verify_invariants 
 --------------------------------------------------
@@ -743,7 +743,6 @@ select explain_analyze_without_memory('select * from (select * from t order by a
  Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
 
-reset max_parallel_workers_per_gather;
 select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from (select * from t order by a) s order by a, b limit 70'));
  jsonb_pretty 
 --------------
@@ -751,6 +750,7 @@ select jsonb_pretty(explain_analyze_inc_sort_nodes_without_memory('select * from
  ]
 (1 row)
 
+reset max_parallel_workers_per_gather;
 select explain_analyze_inc_sort_nodes_verify_invariants('select * from (select * from t order by a) s order by a, b limit 70');
  explain_analyze_inc_sort_nodes_verify_invariants 
 --------------------------------------------------
