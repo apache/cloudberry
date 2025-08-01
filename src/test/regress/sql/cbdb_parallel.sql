@@ -1074,6 +1074,68 @@ reset enable_parallel;
 -- End of test Parallel UNION
 --
 
+--
+-- Test Parallel Subquery.
+--
+CREATE TABLE departments (
+    department_id INT PRIMARY KEY,
+    department_name VARCHAR(100)
+);
+
+CREATE TABLE employees (
+    employee_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    salary NUMERIC,
+    department_id INT
+);
+
+INSERT INTO departments VALUES 
+(1, 'Sales'),
+(2, 'IT'),
+(3, 'HR');
+
+INSERT INTO employees VALUES
+(1, 'Alice', 5000, 1),
+(2, 'Bob', 6000, 1),
+(3, 'Charlie', 7000, 2),
+(4, 'David', 8000, 2),
+(5, 'Eve', 9000, 3);
+
+set enable_parallel = off;
+explain SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+set enable_parallel = on;
+set min_parallel_table_scan_size = 0;
+
+explain SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+  
+reset enable_parallel;
+reset min_parallel_table_scan_size;
+
 -- start_ignore
 drop schema test_parallel cascade;
 -- end_ignore
