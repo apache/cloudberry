@@ -3661,7 +3661,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		int sp; /* small rel parallel workers */
 		
 		/* Consider locus when parallel_ware. */
-		if(parallel_aware)
+		if (parallel_aware)
 		{
 			/* can't parallel join if both are Hashed, it should be in non-parallel path */
 			if (CdbPathLocus_IsHashed(outer.locus) &&

@@ -2651,7 +2651,7 @@ cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 		return subpath;
 	}
 
-	if (is_sorted && group_pathkeys)
+	if (is_sorted && group_pathkeys && (subpath->locus.parallel_workers <= 1))
 	{
 		/*
 		 * The input is already conveniently sorted. We could redistribute
@@ -2665,7 +2665,8 @@ cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 											 group_pathkeys,
 											 false, locus);
 	}
-	else if (!is_sorted && group_pathkeys)
+	else if ((is_sorted && group_pathkeys && (subpath->locus.parallel_workers > 1)) ||
+		(!is_sorted && group_pathkeys))
 	{
 		/*
 		 * If we need to redistribute, it's usually best to redistribute

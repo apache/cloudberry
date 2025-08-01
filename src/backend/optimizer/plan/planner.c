@@ -300,6 +300,20 @@ static split_rollup_data *make_new_rollups_for_hash_grouping_set(PlannerInfo *ro
 																 Path *path,
 																 grouping_sets_data *gd);
 
+static bool
+contain_case_expr(Node *clause);
+
+static bool
+contain_case_expr_walker(Node *node, void *context);
+
+static void create_partial_window_path(PlannerInfo *root,
+											RelOptInfo *window_rel,
+											Path *path,
+											PathTarget *input_target,
+											PathTarget *output_target,
+											WindowFuncLists *wflists,
+											List *activeWindows);
+
 
 /*****************************************************************************
  *
@@ -4877,6 +4891,27 @@ create_window_paths(PlannerInfo *root,
 	}
 
 	/*
+	 * Unlike Upstream, we could make window function parallel by redistributing
+	 * the tuples according to the PARTITION BY clause which is similar to Group By.
+	 * Even there is no PARTITION BY, window function could be parallel from
+	 * sub partial paths.
+	 */
+	if (window_rel->consider_parallel &&
+		input_rel->partial_pathlist)
+	{
+		/* For partial, only the best one if enough. */
+		Path	   *path = (Path *) linitial(input_rel->partial_pathlist);
+
+		create_partial_window_path(root,
+							   window_rel,
+							   path,
+							   input_target,
+							   output_target,
+							   wflists,
+							   activeWindows);
+	}
+
+	/*
 	 * If there is an FDW that's responsible for all baserels of the query,
 	 * let it consider adding ForeignPaths.
 	 */
@@ -9102,4 +9137,134 @@ make_new_rollups_for_hash_grouping_set(PlannerInfo        *root,
 	srd->unhashed_rollup = unhashed_rollup;
 
 	return srd;
+}
+
+static bool
+contain_case_expr(Node *clause)
+{
+	return contain_case_expr_walker(clause, NULL);
+}
+
+static bool
+contain_case_expr_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, CaseExpr))
+		return true;
+
+	return expression_tree_walker(node, contain_case_expr_walker,
+								  context);
+}
+
+/*
+ * Parallel processing of window functions.
+ *
+ * NB: it may produce non-deterministic results if the window function
+ * lacks ORDER BY and PARTITION BY clause.
+ * SQL:2011 has clarified this behavior.
+ */
+static void
+create_partial_window_path(PlannerInfo *root,
+					   RelOptInfo *window_rel,
+					   Path *path,
+					   PathTarget *input_target,
+					   PathTarget *output_target,
+					   WindowFuncLists *wflists,
+					   List *activeWindows)
+{
+	PathTarget *window_target;
+	ListCell   *l;
+	Bitmapset  *sgrefs;
+
+	window_target = input_target;
+
+	sgrefs = NULL;
+
+	foreach(l, activeWindows)
+	{
+		WindowClause *wc = lfirst_node(WindowClause, l);
+		ListCell   *lc2;
+
+		foreach(lc2, wc->partitionClause)
+		{
+			SortGroupClause *sortcl = lfirst_node(SortGroupClause, lc2);
+
+			sgrefs = bms_add_member(sgrefs, sortcl->tleSortGroupRef);
+		}
+		foreach(lc2, wc->orderClause)
+		{
+			SortGroupClause *sortcl = lfirst_node(SortGroupClause, lc2);
+
+			sgrefs = bms_add_member(sgrefs, sortcl->tleSortGroupRef);
+		}
+	}
+
+	int x = -1;
+	while ((x = bms_next_member(sgrefs, x)) >= 0)
+	{
+		Index	sgref = get_pathtarget_sortgroupref(input_target, x);
+		if (sgref != 0)
+		{
+			ListCell   *lc;
+			foreach(lc, input_target->exprs)
+			{
+				Expr	*expr = (Expr *) lfirst(lc);
+				if (contain_case_expr((Node*)expr))
+					return;
+			}
+		}
+	}
+
+	foreach(l, activeWindows)
+	{
+		WindowClause *wc = lfirst_node(WindowClause, l);
+		List	   *window_pathkeys;
+		int			presorted_keys;
+		bool		is_sorted;
+
+		window_pathkeys = make_pathkeys_for_window(root,
+												   wc,
+												   root->processed_tlist);
+
+		is_sorted = pathkeys_count_contained_in(window_pathkeys,
+												path->pathkeys,
+												&presorted_keys);
+
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   presorted_keys,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
+		if (lnext(activeWindows, l))
+		{
+			ListCell   *lc2;
+
+			window_target = copy_pathtarget(window_target);
+			foreach(lc2, wflists->windowFuncs[wc->winref])
+			{
+				WindowFunc *wfunc = lfirst_node(WindowFunc, lc2);
+
+				add_column_to_pathtarget(window_target, (Expr *) wfunc, 0);
+				window_target->width += get_typavgwidth(wfunc->wintype, -1);
+			}
+		}
+		else
+		{
+			window_target = output_target;
+		}
+
+		path = (Path *)
+			create_windowagg_path(root, window_rel, path, window_target,
+								  wflists->windowFuncs[wc->winref],
+								  wc);
+	}
+
+	add_partial_path(window_rel, path);
 }
