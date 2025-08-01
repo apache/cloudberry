@@ -87,17 +87,40 @@ PYGRESQL_VERSION=5.2
 PSUTIL_VERSION=5.7.0
 PYYAML_VERSION=5.4.1
 
-download-python-deps:
+check-pip3:
+	@echo "--- Checking for pip3 installation"
+	@if ! command -v pip3 >/dev/null 2>&1; then \
+		echo "pip3 not found, attempting to install..."; \
+		if command -v apt-get >/dev/null 2>&1; then \
+			echo "Detected APT package manager, installing python3-pip"; \
+			sudo apt-get update && sudo apt-get install -y python3-pip; \
+		elif command -v dnf >/dev/null 2>&1; then \
+			echo "Detected DNF package manager, installing python3-pip"; \
+			sudo dnf install -y python3-pip; \
+		else \
+			echo "ERROR: Please install pip3 manually."; \
+			exit 1; \
+		fi; \
+		if ! command -v pip3 >/dev/null 2>&1; then \
+			echo "ERROR: pip3 installation failed. Please install pip3 manually."; \
+			exit 1; \
+		fi; \
+		echo "pip3 successfully installed"; \
+	else \
+		echo "pip3 is already available"; \
+	fi
+
+download-python-deps: check-pip3
 	@echo "--- Downloading Python dependencies for gpMgmt modules"
 	@mkdir -p $(PYLIB_SRC_EXT)
 	# Download psutil
-	pip3 download --no-deps --no-binary :all: --no-build-isolation psutil==$(PSUTIL_VERSION) --dest $(PYLIB_SRC_EXT)/
+	pip3 download --no-deps --no-binary :all: psutil==$(PSUTIL_VERSION) --dest $(PYLIB_SRC_EXT)/
 	# Download PyYAML, wheel is for metadata vefiry;
 	# cython is used for building, see https://github.com/apache/cloudberry/issues/1201
-	pip3 install wheel "cython<3.0.0"
-	pip3 download --no-deps --no-binary :all: --no-build-isolation PyYAML==$(PYYAML_VERSION) --dest $(PYLIB_SRC_EXT)/
+	pip3 install --user wheel "cython<3.0.0"
+	pip3 download --no-deps --no-binary :all: PyYAML==$(PYYAML_VERSION) --dest $(PYLIB_SRC_EXT)/
 	# Download PyGreSQL, the `PATH` is needed to avoid cannot find the pg_config
-	PATH=$(DESTDIR)$(bindir):$$PATH pip3 download --no-deps --no-binary :all: --no-build-isolation PyGreSQL==$(PYGRESQL_VERSION) --dest $(PYLIB_SRC_EXT)/
+	PATH=$(DESTDIR)$(bindir):$$PATH pip3 download --no-deps --no-binary :all: PyGreSQL==$(PYGRESQL_VERSION) --dest $(PYLIB_SRC_EXT)/
 
 #
 # PyGreSQL
@@ -150,7 +173,7 @@ $(MOCK_BIN):
        pip3 install mock;\
      else\
 	   mkdir -p $(PYLIB_SRC_EXT) && \
-	   pip3 download --no-deps --no-binary :all: --no-build-isolation mock==$(MOCK_VERSION) --dest $(PYLIB_SRC_EXT)/ && \
+	   pip3 download --no-deps --no-binary :all: mock==$(MOCK_VERSION) --dest $(PYLIB_SRC_EXT)/ && \
 	   mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
 	   cd $(PYLIB_SRC_EXT)/ && unzip -q $(MOCK_DIR).zip && \
 	   cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
