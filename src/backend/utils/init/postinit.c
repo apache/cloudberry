@@ -73,12 +73,9 @@
 #include "tcop/tcopprot.h"
 #include "tcop/idle_resource_cleaner.h"
 #include "utils/acl.h"
-<<<<<<< HEAD
 #include "utils/backend_cancel.h"
 #include "utils/faultinjector.h"
-=======
 #include "utils/builtins.h"
->>>>>>> REL_16_9
 #include "utils/fmgroids.h"
 #include "utils/guc_hooks.h"
 #include "utils/memutils.h"
@@ -104,11 +101,8 @@ static void StatementTimeoutHandler(void);
 static void LockTimeoutHandler(void);
 static void IdleInTransactionSessionTimeoutHandler(void);
 static void IdleSessionTimeoutHandler(void);
-<<<<<<< HEAD
 static void GpParallelRetrieveCursorCheckTimeoutHandler(void);
-=======
 static void IdleStatsUpdateTimeoutHandler(void);
->>>>>>> REL_16_9
 static void ClientCheckTimeoutHandler(void);
 static bool ThereIsAtLeastOneRole(void);
 static void process_startup_options(Port *port, bool am_superuser);
@@ -409,16 +403,11 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 	 * These checks are not enforced when in standalone mode, so that there is
 	 * a way to recover from disabling all access to all databases, for
 	 * example "UPDATE pg_database SET datallowconn = false;".
-<<<<<<< HEAD
 	 *
 	 * We do not enforce them for autovacuum worker and login monitor processes
 	 * either.
 	 */
 	if (IsUnderPostmaster && !IsAutoVacuumWorkerProcess() && !IsLoginMonitorWorkerProcess())
-=======
-	 */
-	if (IsUnderPostmaster)
->>>>>>> REL_16_9
 	{
 		/*
 		 * Check that the database is currently allowing connections.
@@ -460,12 +449,7 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 		 * many connections to each segment to execute a non-trivial plan and
 		 * the db connection limit does not map, semantically, to that idea.
 		 */
-<<<<<<< HEAD
 		if (Gp_role == GP_ROLE_DISPATCH && dbform->datconnlimit >= 0 &&
-=======
-		if (dbform->datconnlimit >= 0 &&
-			AmRegularBackendProcess() &&
->>>>>>> REL_16_9
 			!am_superuser &&
 			CountDBConnections(MyDatabaseId) > dbform->datconnlimit)
 			ereport(FATAL,
@@ -741,15 +725,14 @@ BaseInit(void)
 	smgrinit();
 	InitBufferPoolAccess();
 
-<<<<<<< HEAD
-	/* 
+	/*
 	 * Initialize catalog tablespace storage component
 	 * with knowledge of how to perform unlink.
 	 * 
 	 * Needed for xlog replay and normal operations.
 	 */
 	TablespaceStorageInit(UnlinkTablespaceDirectory);
-=======
+
 	/*
 	 * Initialize temporary file access after pgstat, so that the temporary
 	 * file shutdown hook can report temporary file statistics.
@@ -767,7 +750,6 @@ BaseInit(void)
 	 * drop ephemeral slots, which in turn triggers stats reporting.
 	 */
 	ReplicationSlotInitialize();
->>>>>>> REL_16_9
 }
 
 /*
@@ -1068,25 +1050,6 @@ InitPostgres(const char *in_dbname, Oid dboid,
 	}
 
 	/*
-<<<<<<< HEAD
-	 * The last few connection slots are reserved for superusers.  Replication
-	 * connections are drawn from slots reserved with max_wal_senders and not
-	 * limited by max_connections or superuser_reserved_connections.
-	 *
-	 * In Cloudberry, there is a concept of restricted mode where
-	 * superuser_reserved_connections is set equal to max_connections making
-	 * it so only superusers can connect. Changes made in restricted mode need
-	 * to be replicated to the standby master. We currently only support one
-	 * walsender anyways so we should allow the connection to happen. This may
-	 * need to be reviewed later when we start supporting multiple mirrors.
-	 */
-	if ((!am_superuser /* || am_walsender */) &&
-		ReservedBackends > 0 &&
-		!HaveNFreeProcs(ReservedBackends))
-		ereport(FATAL,
-				(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
-				 errmsg("remaining connection slots are reserved for non-replication superuser connections")));
-=======
 	 * The last few regular connection slots are reserved for superusers and
 	 * roles with privileges of pg_use_reserved_connections.  We do not apply
 	 * these limits to background processes, since they all have their own
@@ -1112,7 +1075,6 @@ InitPostgres(const char *in_dbname, Oid dboid,
 					 errmsg("remaining connection slots are reserved for roles with privileges of the \"%s\" role",
 							"pg_use_reserved_connections")));
 	}
->>>>>>> REL_16_9
 
 	if (am_superuser)
 		check_superuser_connection_limit();
@@ -1122,19 +1084,7 @@ InitPostgres(const char *in_dbname, Oid dboid,
 	{
 		Assert(!bootstrap);
 
-<<<<<<< HEAD
-		/*
-		 * must have authenticated as a replication role
-		 *
-		 * In Cloudberry, this code path is overloaded for handling FTS messages
-		 * on primary as well as mirror.
-		 * has_rolreplication() performs a syscache lookup,
-		 * which cannot happen on mirror/standby.
-		 */
-		if (am_walsender && !superuser() && !has_rolreplication(GetUserId()))
-=======
-		if (!has_rolreplication(GetUserId()))
->>>>>>> REL_16_9
+		if (am_walsender && !has_rolreplication(GetUserId()))
 			ereport(FATAL,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("permission denied to start WAL sender"),
@@ -1441,12 +1391,13 @@ InitPostgres(const char *in_dbname, Oid dboid,
 	InitializeSession();
 
 	/*
-<<<<<<< HEAD
 	 * report this backend in the PgBackendStatus array, meanwhile, we do not
 	 * want users to see auxiliary background worker like fts in pg_stat_* views.
 	 */
 	if (!bootstrap && (!amAuxiliaryBgWorker() || IsDtxRecoveryProcess()))
-=======
+		pgstat_bestart();
+
+	/*
 	 * If this is an interactive session, load any libraries that should be
 	 * preloaded at backend start.  Since those are determined by GUCs, this
 	 * can't happen until GUC settings are complete, but we want it to happen
@@ -1456,10 +1407,6 @@ InitPostgres(const char *in_dbname, Oid dboid,
 	if (load_session_libraries)
 		process_session_preload_libraries();
 
-	/* report this backend in the PgBackendStatus array */
-	if (!bootstrap)
->>>>>>> REL_16_9
-		pgstat_bestart();
 
 	/* 
      * MPP package setup 
