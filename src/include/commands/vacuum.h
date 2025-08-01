@@ -434,13 +434,6 @@ extern double anl_random_fract(void);
 extern double anl_init_selection_state(int n);
 extern double anl_get_next_S(double t, int n, double *stateptr);
 
-extern int acquire_sample_rows(Relation onerel, int elevel,
-							   HeapTuple *rows, int targrows,
-							   double *totalrows, double *totaldeadrows);
-extern int acquire_inherited_sample_rows(Relation onerel, int elevel,
-							  HeapTuple *rows, int targrows,
-							  double *totalrows, double *totaldeadrows);
-
 /* in commands/analyzefuncs.c */
 extern Datum gp_acquire_sample_rows(PG_FUNCTION_ARGS);
 extern Datum gp_acquire_correlations(PG_FUNCTION_ARGS);
