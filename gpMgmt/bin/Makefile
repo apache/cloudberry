@@ -90,14 +90,14 @@ PYYAML_VERSION=5.4.1
 download-python-deps:
 	@echo "--- Downloading Python dependencies for gpMgmt modules"
 	@mkdir -p $(PYLIB_SRC_EXT)
-	# Download psutil
-	pip3 download --no-deps --no-binary :all: --no-build-isolation psutil==$(PSUTIL_VERSION) --dest $(PYLIB_SRC_EXT)/
-	# Download PyYAML, wheel is for metadata vefiry;
-	# cython is used for building, see https://github.com/apache/cloudberry/issues/1201
-	pip3 install wheel "cython<3.0.0"
-	pip3 download --no-deps --no-binary :all: --no-build-isolation PyYAML==$(PYYAML_VERSION) --dest $(PYLIB_SRC_EXT)/
-	# Download PyGreSQL, the `PATH` is needed to avoid cannot find the pg_config
-	PATH=$(DESTDIR)$(bindir):$$PATH pip3 download --no-deps --no-binary :all: --no-build-isolation PyGreSQL==$(PYGRESQL_VERSION) --dest $(PYLIB_SRC_EXT)/
+	# Download psutil using curl
+	curl -sSL https://files.pythonhosted.org/packages/source/p/psutil/psutil-$(PSUTIL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz
+	# Download PyYAML using curl
+	curl -sSL https://files.pythonhosted.org/packages/source/P/PyYAML/PyYAML-$(PYYAML_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz
+	# Download PyGreSQL using curl
+	curl -sSL https://files.pythonhosted.org/packages/source/P/PyGreSQL/PyGreSQL-$(PYGRESQL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz
+	# Install wheel and cython for PyYAML building
+	pip3 install --user wheel "cython<3.0.0"
 
 #
 # PyGreSQL
@@ -148,14 +148,14 @@ $(MOCK_BIN):
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
 	@if [ "$(UBUNTU_PLATFORM)" = "Ubuntu" ]; then\
        pip3 install mock;\
-     else\
-	   mkdir -p $(PYLIB_SRC_EXT) && \
-	   pip3 download --no-deps --no-binary :all: --no-build-isolation mock==$(MOCK_VERSION) --dest $(PYLIB_SRC_EXT)/ && \
-	   mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
-	   cd $(PYLIB_SRC_EXT)/ && unzip -q $(MOCK_DIR).zip && \
-	   cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
-	   PYTHONPATH=$(PYTHONSRC_INSTALL_PYTHON_PATH) python3 setup.py install --prefix $(PYTHONSRC_INSTALL) ; \
-	 fi;
+    else\
+       mkdir -p $(PYLIB_SRC_EXT) && \
+       curl -sSL https://files.pythonhosted.org/packages/source/m/mock/mock-$(MOCK_VERSION).zip -o $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip && \
+       mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
+       cd $(PYLIB_SRC_EXT)/ && unzip -q $(MOCK_DIR).zip && \
+       cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
+       PYTHONPATH=$(PYTHONSRC_INSTALL_PYTHON_PATH) python3 setup.py install --prefix $(PYTHONSRC_INSTALL) ; \
+    fi;
 
 # -----------------------------------------------------------------------------
 #

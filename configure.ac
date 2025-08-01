@@ -1077,6 +1077,25 @@ AC_SUBST(with_python)
 AC_MSG_CHECKING([whether to build Python modules for gpMgmt])
 PGAC_ARG_BOOL(with, pythonsrc-ext, no, [build Python modules for gpMgmt])
 AC_MSG_RESULT([$with_pythonsrc_ext])
+
+# Check for required dependencies when pythonsrc-ext is enabled
+if test "$with_pythonsrc_ext" = yes; then
+  AC_PATH_PROG([PYTHON3], [python3])
+  if test -z "$PYTHON3"; then
+    AC_MSG_ERROR([python3 is required for --with-pythonsrc-ext but was not found])
+  fi
+
+  AC_PATH_PROG([CURL], [curl])
+  if test -z "$CURL"; then
+    AC_MSG_ERROR([curl is required for --with-pythonsrc-ext but was not found])
+  fi
+
+  AC_PATH_PROG([PIP3], [pip3])
+  if test -z "$PIP3"; then
+    AC_MSG_ERROR([pip3 is required for --with-pythonsrc-ext but was not found])
+  fi
+fi
+
 AC_SUBST(with_pythonsrc_ext)
 
 
