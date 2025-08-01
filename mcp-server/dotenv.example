@@ -1,0 +1,14 @@
+# Example environment configuration
+# Copy this file to .env and update with your actual values
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=your_password_here
+
+# Server Configuration  
+MCP_HOST=localhost
+MCP_PORT=8000
+MCP_DEBUG=false
