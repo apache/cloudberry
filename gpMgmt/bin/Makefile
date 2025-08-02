@@ -117,8 +117,8 @@ download-python-deps: check-pip3
 	pip3 download --no-deps --no-binary :all: psutil==$(PSUTIL_VERSION) --dest $(PYLIB_SRC_EXT)/
 	# Download PyYAML, wheel is for metadata vefiry;
 	# cython is used for building, see https://github.com/apache/cloudberry/issues/1201
-    # Download setuptools for building PyYAML
-    pip3 install --user wheel "cython<3.0.0" "setuptools<58.0.0"
+	# Download setuptools for building PyYAML
+	pip3 install --user wheel "cython<3.0.0"
 	pip3 download --no-deps --no-binary :all: PyYAML==$(PYYAML_VERSION) --dest $(PYLIB_SRC_EXT)/
 	# Download PyGreSQL, the `PATH` is needed to avoid cannot find the pg_config
 	PATH=$(DESTDIR)$(bindir):$$PATH pip3 download --no-deps --no-binary :all: PyGreSQL==$(PYGRESQL_VERSION) --dest $(PYLIB_SRC_EXT)/
