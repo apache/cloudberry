@@ -11089,7 +11089,7 @@ ORDER BY 1, 2, 3, 4 DESC LIMIT 25;
  35NAME        |              7 | 5NAME        |              1
 (25 rows)
 
--- Test that SharedInputScan within the same slice is always executed 
+-- Test that ShareInputScan within the same slice is always executed 
 set gp_cte_sharing=on;
 -- start_ignore
 CREATE TABLE car (a int, b int);

@@ -4445,7 +4445,7 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 		CDXLPhysicalCTEProducer::Cast(cte_producer_dxlnode->GetOperator());
 	ULONG cte_id = cte_prod_dxlop->Id();
 
-	// create the shared input scan representing the CTE Producer
+	// create the Share Input Scan representing the CTE Producer
 	ShareInputScan *shared_input_scan = MakeNode(ShareInputScan);
 	shared_input_scan->share_id = cte_id;
 	shared_input_scan->discard_output = true;
