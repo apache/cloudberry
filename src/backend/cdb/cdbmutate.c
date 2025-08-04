@@ -825,8 +825,8 @@ shareinput_peekmot(ApplyShareInputContext *ctxt)
  * plan.
  *
  * To work around that issue, create a CTE for each shared input node, with
- * columns that match the target list of the SharedInputScan's subplan,
- * and replace the target list entries of the SharedInputScan with
+ * columns that match the target list of the ShareInputScan's subplan,
+ * and replace the target list entries of the ShareInputScan with
  * Vars that point to the CTE instead of the child plan.
  */
 Plan *
@@ -893,8 +893,8 @@ replace_shareinput_targetlists_walker(Node *node, PlannerInfo *root, bool fPop)
 		/*
 		 * Replace all the target list entries.
 		 *
-		 * SharedInputScan nodes are not projection-capable, so the target
-		 * list of the SharedInputScan matches the subplan's target list.
+		 * ShareInputScan nodes are not projection-capable, so the target
+		 * list of the ShareInputScan matches the subplan's target list.
 		 */
 		newtargetlist = NIL;
 		attno = 1;
