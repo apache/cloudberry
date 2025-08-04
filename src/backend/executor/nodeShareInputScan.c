@@ -76,7 +76,7 @@
 /*
  * In a cross-slice ShareinputScan, the producer and consumer processes
  * communicate using shared memory. There's a hash table containing one
- * 'shareinput_share_state' for each in-progress shared input scan.
+ * 'shareinput_share_state' for each in-progress Share Input Scan.
  *
  * The hash table itself,, and the fields within every entry, are protected
  * by ShareInputScanLock. (Although some operations get away without the
@@ -631,11 +631,11 @@ ExecSquelchShareInputScan(ShareInputScanState *node, bool force)
 	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 
 	/*
-	 * If this SharedInputScan is shared within the same slice then its
+	 * If this ShareInputScan is shared within the same slice then its
 	 * subtree may still need to be executed and the motions in the subtree
 	 * cannot yet be stopped. Thus, don't recurse in this case.
 	 *
-	 * In squelching a cross-slice SharedInputScan writer, we need to ensure
+	 * In squelching a cross-slice ShareInputScan writer, we need to ensure
 	 * we don't block any reader on other slices as a result of not
 	 * materializing the shared plan.
 	 *

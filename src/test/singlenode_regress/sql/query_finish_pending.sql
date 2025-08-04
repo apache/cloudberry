@@ -45,7 +45,7 @@ select i1 from _tmp_table order by i2 limit 3;
 
 select gp_inject_fault('execsort_sort_bounded_heap', 'status', 1);
 
--- test if shared input scan deletes memory correctly when QueryFinishPending and its child has been eagerly freed,
+-- test if Share Input Scan deletes memory correctly when QueryFinishPending and its child has been eagerly freed,
 -- where the child is a Sort node
 drop table if exists testsisc;
 create table testsisc (i1 int, i2 int, i3 int, i4 int); 
@@ -55,13 +55,13 @@ insert into testsisc select i, i % 1000, i % 100000, i % 75 from
 
 set gp_resqueue_print_operator_memory_limits=on;
 set statement_mem='2MB';
--- ORCA does not generate SharedInputScan with a Sort node underneath it. For
+-- ORCA does not generate ShareInputScan with a Sort node underneath it. For
 -- the following query, ORCA disregards the order by inside the cte definition;
 -- planner on the other hand does not.
 set optimizer=off;
 select gp_inject_fault('execshare_input_next', 'reset', 1);
--- Set QueryFinishPending to true after SharedInputScan has retrieved the first tuple. 
--- This will eagerly free the memory context of shared input scan's child node.  
+-- Set QueryFinishPending to true after ShareInputScan has retrieved the first tuple. 
+-- This will eagerly free the memory context of Share Input Scan's child node.  
 select gp_inject_fault('execshare_input_next', 'finish_pending', 1);
 
 -- In cbdb single node, if we inject fault in the single node, no data should return. 
@@ -71,13 +71,13 @@ select * from cte c1, cte c2 limit 2;
 -- end_ignore
 select gp_inject_fault('execshare_input_next', 'status', 1);
 
--- test if shared input scan deletes memory correctly when QueryFinishPending and its child has been eagerly freed,
+-- test if Share Input Scan deletes memory correctly when QueryFinishPending and its child has been eagerly freed,
 -- where the child is a Sort node and sort_mk algorithm is used
 
 
 select gp_inject_fault('execshare_input_next', 'reset', 1);
--- Set QueryFinishPending to true after SharedInputScan has retrieved the first tuple. 
--- This will eagerly free the memory context of shared input scan's child node.  
+-- Set QueryFinishPending to true after ShareInputScan has retrieved the first tuple. 
+-- This will eagerly free the memory context of Share Input Scan's child node.  
 select gp_inject_fault('execshare_input_next', 'finish_pending', 1);
 
 -- In cbdb single node, if we inject fault in the single node, no data should return. 
