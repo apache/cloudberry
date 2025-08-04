@@ -158,7 +158,7 @@ public:
 	// register a newly CTE producer
 	void RegisterCTEProducerInfo(ULONG cte_id, ULongPtrArray *producer_output_colidx_map, ShareInputScan *siscan);
 
-	// return the shared input scan plans representing the CTE producer
+	// return the Share Input Scan plans representing the CTE producer
 	std::pair<ULongPtrArray *, ShareInputScan *> GetCTEProducerInfo(ULONG cte_id) const;
 
 	// return list of range table entries
