@@ -166,7 +166,7 @@ extern void cost_group(Path *path, PlannerInfo *root,
 					   List *quals,
 					   Cost input_startup_cost, Cost input_total_cost,
 					   double input_tuples);
-/* GPDB_92_MERGE_FIXME: parameterized path for shared input scan? */
+/* GPDB_92_MERGE_FIXME: parameterized path for Share Input Scan? */
 extern void cost_shareinputscan(Path *path, PlannerInfo *root, Cost sharecost, double ntuples, int width);
 extern void initial_cost_nestloop(PlannerInfo *root,
 								  JoinCostWorkspace *workspace,
