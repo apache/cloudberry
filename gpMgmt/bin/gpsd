@@ -187,13 +187,12 @@ def parseCmdLine():
                  default=False, help='Include HLL stats')
     return p
 
-
 def isOrcaPresent(versionString):
     if 'HAWQ' in versionString:
         return True
-    match = re.search('(?<=Greengage Database )[0-9.]+', versionString)
+    match = re.search(r'(Green\w+) Database ([\d.]+)', versionString)
     if match and len(match.group()):
-        return LooseVersion(match.group()) >= LooseVersion('4.3')
+        return LooseVersion(match.groups()[1]) >= LooseVersion('4.3')
     # No HAWQ and we can't find the GPDB Version
     sys.stderr.write('Cannot determine HAWQ/GPDB version.  Exiting.\n')
     sys.exit(1)

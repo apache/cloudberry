@@ -204,8 +204,8 @@ def usage(exitarg=None):
 def getversion():
     db = connect()
     curs = db.query('''
-    select regexp_replace(version(),
-       E'.*PostgreSQL [^ ]+ .Greengage Database ([1-9]+.[0-9]+|main).*',
+    select regexp_replace(current_setting('gp_server_version'),
+       E'([1-9]+.[0-9]+|main).*',
        E'\\\\1') as ver;''')
 
     row = curs.getresult()[0]
