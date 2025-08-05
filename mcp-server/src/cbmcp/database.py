@@ -18,7 +18,7 @@
 # under the License.
 
 """
-Database utilities for the PostgreSQL MCP server
+Database utilities for the Apache Cloudberry MCP server
 """
 
 import logging

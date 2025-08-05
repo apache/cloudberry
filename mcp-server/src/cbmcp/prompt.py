@@ -17,7 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Prompt templates for PostgreSQL database analysis."""
+"""Prompt templates for Apache Cloudberry database analysis."""
 
 ANALYZE_QUERY_PERFORMANCE_PROMPT = """Please help me analyze and optimize a PostgreSQL query.
 
