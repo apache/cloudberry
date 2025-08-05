@@ -22,7 +22,7 @@ description = "MCP server for Apache Cloudberry database interaction"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "Apache Cloudberry", email = "dev@cloudberry.apache.org"},
+    {name = "Shengwen Yang", email = "yangshengwen@gmail.com"},
 ]
 maintainers = [
     {name = "Shengwen Yang", email = "yangshengwen@gmail.com"},
