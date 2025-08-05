@@ -30,10 +30,10 @@ pytest tests/
 pytest tests/test_cbmcp.py
 
 # Run specific test class
-pytest tests/test_cbmcp.py::TestPostgreSQLMCPClient
+pytest tests/test_cbmcp.py::TestCloudberryMCPClient
 
 # Run specific test method
-pytest tests/test_cbmcp.py::TestPostgreSQLMCPClient::test_list_capabilities
+pytest tests/test_cbmcp.py::TestCloudberryMCPClient::test_list_capabilities
 
 # Run tests for specific mode
 pytest tests/test_cbmcp.py -k "stdio"
@@ -85,7 +85,7 @@ Tests support two modes:
 ## Notes
 
 1. Tests will skip inaccessible features (e.g., when database is not connected)
-2. Ensure PostgreSQL service is started and configured correctly
+2. Ensure Apache Cloudberry service is started and configured correctly
 3. Check database connection configuration in .env file
 
 ## Using Scripts to Run

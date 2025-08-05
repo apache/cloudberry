@@ -22,18 +22,20 @@ description = "MCP server for Apache Cloudberry database interaction"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "HashML Team", email = "hashml@hashdata.cn"},
+    {name = "Apache Cloudberry", email = "dev@cloudberry.apache.org"},
 ]
 maintainers = [
-    {name = "Yangshengwen", email = "hashml@cloudberry.com"},
+    {name = "Shengwen Yang", email = "yangshengwen@gmail.com"},
 ]
-license = {text = "MIT"}
+license = {text = "Apache License 2.0"}
 keywords = ["mcp", "cloudberry", "postgresql", "database", "server", "ai"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License, Version 2.0",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -60,9 +62,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/apache/cloudberry/mcp-server"
+Homepage = "https://github.com/apache/cloudberry//tree/main/mcp-server"
 Repository = "https://github.com/apache/cloudberry"
-Documentation = "https://github.com/apache/cloudberry/mcp-server/README.md"
+Documentation = "https://github.com/apache/cloudberry/mcp-server/tree/main/mcp-server/README.md"
 
 [project.scripts]
 cloudberry-server = "cbmcp.server:main"
