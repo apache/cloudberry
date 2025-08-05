@@ -18,7 +18,7 @@
 # under the License.
 
 """
-Configuration utilities for the PostgreSQL MCP server
+Configuration utilities for the Apache Cloudberry MCP server
 """
 
 import os
@@ -49,7 +49,7 @@ class DatabaseConfig:
     
     @property
     def connection_string(self) -> str:
-        """Get PostgreSQL connection string"""
+        """Get Apache Cloudberry connection string"""
         return f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
