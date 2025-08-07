@@ -122,7 +122,7 @@ typedef struct HostPrimaryCountEntry
  *
  * In phase 2 of 2PC, current xact has been marked to TRANS_COMMIT/ABORT,
  * COMMIT_PREPARED or ABORT_PREPARED DTM are performed, if they failed,
- * dispather disconnect and destroy all gangs and fetch the latest segment
+ * dispatcher disconnect and destroy all gangs and fetch the latest segment
  * configurations to do RETRY_COMMIT_PREPARED or RETRY_ABORT_PREPARED,
  * however, postgres disallow catalog lookups outside of xacts.
  *
