@@ -1651,3 +1651,15 @@ DROP FUNCTION op_leak(int, int);
 RESET SESSION AUTHORIZATION;
 DROP SCHEMA tststats CASCADE;
 DROP USER regress_stats_user1;
+
+-- test analyze with extended statistics 
+CREATE TABLE tbl_issue1293 (col1 int, col2 int);
+INSERT INTO tbl_issue1293
+SELECT i / 10000, i / 100000
+FROM generate_series(1, 1000000) s(i);
+ANALYZE tbl_issue1293;
+-- Create extended statistics on col1, col2
+CREATE STATISTICS s1 (dependencies) ON col1, col2 FROM tbl_issue1293;
+-- Trigger extended stats collection
+ANALYZE tbl_issue1293;
+DROP TABLE tbl_issue1293;

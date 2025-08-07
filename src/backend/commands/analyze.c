@@ -717,8 +717,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 * statistics target. So we may need to sample more rows and then build
 	 * the statistics with enough detail.
 	 */
-	minrows = ComputeExtStatisticsRows(onerel, attr_cnt, vacattrstats);
-	
+	if (IS_QD_OR_SINGLENODE())
+		minrows = ComputeExtStatisticsRows(onerel, attr_cnt, vacattrstats);
+	else
+		minrows = 0;
 
 	if (targrows < minrows)
 		targrows = minrows;
