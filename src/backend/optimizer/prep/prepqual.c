@@ -675,3 +675,438 @@ process_duplicate_ors(List *orlist)
 	else
 		return make_andclause(pull_ands(winners));
 }
+
+static Expr *
+convert_or_to_cnf_complete(Expr *expr);
+
+static Expr *
+convert_and_to_cnf_complete(Expr *expr);
+static Expr *
+distribute_or_over_ands_complete(List *non_ands, List *and_clauses);
+static List *
+flatten_or_args_complete(List *args);
+static List *
+flatten_and_args_complete(List *args);
+static Expr *
+combine_cnf_clauses_complete(List *clauses);
+static List *
+remove_duplicates_in_list(List *clauses);
+static List *
+remove_duplicate_and_subsumed_clauses(List *clauses);
+static bool
+or_clause_subsumes(Expr *or_clause1, Expr *or_clause2);
+static Expr *
+deduplicate_cnf_result(Expr *expr);
+
+/*
+ * convert_expr_to_cnf_complete
+ *    Complete CNF conversion with built-in deduplication
+ *    Handles: (s='s' AND year=2001) OR (s='s' AND year=2002) OR
+ *             (s='c' AND year=2001 AND sum>0) OR (s='c' AND year=2002 AND sum>0)
+ *    Should produce: (year=2001 OR year=2002) AND (s='s' OR s='c') AND (s='s' OR sum>0)
+ */
+Expr *
+convert_expr_to_cnf_complete(Expr *expr)
+{
+	if (expr == NULL)
+		return NULL;
+
+	/* Base case: non-Boolean expressions */
+	if (!is_orclause(expr) && !is_andclause(expr))
+		return expr;
+
+	if (is_orclause(expr))
+	{
+		return convert_or_to_cnf_complete(expr);
+	}
+	else if (is_andclause(expr))
+	{
+		return convert_and_to_cnf_complete(expr);
+	}
+
+	return expr;
+}
+
+/*
+ * convert_or_to_cnf_complete
+ *    Complete OR to CNF conversion with deduplication
+ */
+static Expr *
+convert_or_to_cnf_complete(Expr *expr)
+{
+	List *or_args = NIL;
+	ListCell *lc;
+
+	/* Step 1: Recursively convert all arguments */
+	foreach (lc, ((BoolExpr *)expr)->args)
+	{
+		Expr *arg = convert_expr_to_cnf_complete((Expr *)lfirst(lc));
+		or_args = lappend(or_args, arg);
+	}
+
+	/* Step 2: Flatten nested ORs */
+	or_args = flatten_or_args_complete(or_args);
+
+	/* Step 3: Remove duplicate arguments within this OR */
+	or_args = remove_duplicates_in_list(or_args);
+
+	/* Step 4: Check for AND clauses that need distribution */
+	List *and_clauses = NIL;
+	List *non_and_clauses = NIL;
+	bool has_and = false;
+
+	foreach (lc, or_args)
+	{
+		Expr *arg = (Expr *)lfirst(lc);
+		if (is_andclause(arg))
+		{
+			and_clauses = lappend(and_clauses, arg);
+			has_and = true;
+		}
+		else
+		{
+			non_and_clauses = lappend(non_and_clauses, arg);
+		}
+	}
+
+	/* Step 5: If no AND clauses, return simplified OR */
+	if (!has_and)
+	{
+		if (list_length(or_args) == 0)
+			return (Expr *)makeBoolConst(true, false);
+		else if (list_length(or_args) == 1)
+			return (Expr *)linitial(or_args);
+		else
+			return make_orclause(or_args);
+	}
+
+	/* Step 6: Apply distributive law */
+	Expr *result = distribute_or_over_ands_complete(non_and_clauses, and_clauses);
+
+	/* Step 7: Final deduplication of the resulting CNF */
+	return deduplicate_cnf_result(result);
+}
+
+/*
+ * convert_and_to_cnf_complete
+ *    Complete AND to CNF conversion with deduplication
+ */
+static Expr *
+convert_and_to_cnf_complete(Expr *expr)
+{
+	List *and_args = NIL;
+	ListCell *lc;
+
+	/* Step 1: Recursively convert all arguments */
+	foreach (lc, ((BoolExpr *)expr)->args)
+	{
+		Expr *arg = convert_expr_to_cnf_complete((Expr *)lfirst(lc));
+		and_args = lappend(and_args, arg);
+	}
+
+	/* Step 2: Flatten nested ANDs */
+	and_args = flatten_and_args_complete(and_args);
+
+	/* Step 3: Remove duplicates */
+	and_args = remove_duplicates_in_list(and_args);
+
+	/* Step 4: Return simplified AND */
+	if (list_length(and_args) == 0)
+		return (Expr *)makeBoolConst(true, false);
+	else if (list_length(and_args) == 1)
+		return (Expr *)linitial(and_args);
+	else
+		return make_andclause(and_args);
+}
+
+/*
+ * distribute_or_over_ands_complete
+ *    Enhanced distribution that handles multiple AND clauses properly
+ */
+static Expr *
+distribute_or_over_ands_complete(List *non_ands, List *and_clauses)
+{
+	/* Use the first AND clause for initial distribution */
+	Expr *first_and = (Expr *)linitial(and_clauses);
+	List *first_and_args = ((BoolExpr *)first_and)->args;
+
+	/* Remove duplicates from first AND arguments */
+	first_and_args = remove_duplicates_in_list(first_and_args);
+
+	/* Remaining AND clauses */
+	List *remaining_ands = list_delete_first(list_copy(and_clauses));
+
+	/* Base arguments for distribution: non-ANDs + remaining ANDs */
+	List *base_args = list_concat(remove_duplicates_in_list(non_ands),
+								  remaining_ands);
+
+	/* Apply distribution */
+	List *distributed_clauses = NIL;
+	ListCell *lc;
+
+	foreach (lc, first_and_args)
+	{
+		Expr *subclause = (Expr *)lfirst(lc);
+
+		/* Create new OR: (base_args OR subclause) */
+		List *new_or_args = list_copy(base_args);
+		new_or_args = lappend(new_or_args, subclause);
+
+		/* Remove duplicates in the new OR arguments */
+		new_or_args = remove_duplicates_in_list(new_or_args);
+
+		/* Convert recursively to CNF */
+		Expr *new_or = make_orclause(new_or_args);
+		Expr *cnf_or = convert_expr_to_cnf_complete(new_or);
+
+		distributed_clauses = lappend(distributed_clauses, cnf_or);
+	}
+
+	/* Combine all distributed clauses */
+	return combine_cnf_clauses_complete(distributed_clauses);
+}
+
+/*
+ * flatten_or_args_complete
+ *    Flatten nested OR clauses with deduplication
+ */
+static List *
+flatten_or_args_complete(List *args)
+{
+	List *result = NIL;
+	ListCell *lc;
+
+	foreach (lc, args)
+	{
+		Expr *arg = (Expr *)lfirst(lc);
+
+		if (is_orclause(arg))
+		{
+			List *sub_args = flatten_or_args_complete(((BoolExpr *)arg)->args);
+			result = list_concat(result, sub_args);
+		}
+		else
+		{
+			result = lappend(result, arg);
+		}
+	}
+
+	/* Remove duplicates after flattening */
+	return remove_duplicates_in_list(result);
+}
+
+/*
+ * flatten_and_args_complete
+ *    Flatten nested AND clauses with deduplication
+ */
+static List *
+flatten_and_args_complete(List *args)
+{
+	List *result = NIL;
+	ListCell *lc;
+
+	foreach (lc, args)
+	{
+		Expr *arg = (Expr *)lfirst(lc);
+
+		if (is_andclause(arg))
+		{
+			List *sub_args = flatten_and_args_complete(((BoolExpr *)arg)->args);
+			result = list_concat(result, sub_args);
+		}
+		else
+		{
+			result = lappend(result, arg);
+		}
+	}
+
+	/* Remove duplicates after flattening */
+	return remove_duplicates_in_list(result);
+}
+
+/*
+ * combine_cnf_clauses_complete
+ *    Combine CNF clauses with advanced deduplication
+ */
+static Expr *
+combine_cnf_clauses_complete(List *clauses)
+{
+	if (list_length(clauses) == 0)
+		return (Expr *)makeBoolConst(true, false);
+
+	if (list_length(clauses) == 1)
+		return (Expr *)linitial(clauses);
+
+	/* Extract all subclauses, handling nested ANDs */
+	List *all_clauses = NIL;
+	ListCell *lc;
+
+	foreach (lc, clauses)
+	{
+		Expr *clause = (Expr *)lfirst(lc);
+
+		if (is_andclause(clause))
+		{
+			all_clauses = list_concat(all_clauses,
+									  list_copy(((BoolExpr *)clause)->args));
+		}
+		else
+		{
+			all_clauses = lappend(all_clauses, clause);
+		}
+	}
+
+	/* Remove duplicates and subsumed clauses */
+	all_clauses = remove_duplicate_and_subsumed_clauses(all_clauses);
+
+	if (list_length(all_clauses) == 0)
+		return (Expr *)makeBoolConst(true, false);
+	else if (list_length(all_clauses) == 1)
+		return (Expr *)linitial(all_clauses);
+	else
+		return make_andclause(all_clauses);
+}
+
+/*
+ * remove_duplicates_in_list
+ *    Remove duplicate expressions from a list
+ */
+static List *
+remove_duplicates_in_list(List *clauses)
+{
+	List *result = NIL;
+	ListCell *lc;
+
+	foreach (lc, clauses)
+	{
+		Expr *clause = (Expr *)lfirst(lc);
+		bool found = false;
+		ListCell *lc2;
+
+		foreach (lc2, result)
+		{
+			if (equal(clause, (Expr *)lfirst(lc2)))
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			result = lappend(result, clause);
+	}
+
+	return result;
+}
+
+/*
+ * remove_duplicate_and_subsumed_clauses
+ *    Remove duplicates and subsumed OR clauses
+ */
+static List *
+remove_duplicate_and_subsumed_clauses(List *clauses)
+{
+	List *result = NIL;
+	ListCell *lc;
+
+	foreach (lc, clauses)
+	{
+		Expr *clause = (Expr *)lfirst(lc);
+		bool keep = true;
+
+		/* Check against all existing clauses */
+		ListCell *lc_exist;
+		foreach (lc_exist, result)
+		{
+			Expr *existing = (Expr *)lfirst(lc_exist);
+
+			/* Exact duplicate */
+			if (equal(clause, existing))
+			{
+				keep = false;
+				break;
+			}
+
+			/* Check for OR clause subsumption */
+			if (is_orclause(clause) && is_orclause(existing))
+			{
+				if (or_clause_subsumes(existing, clause))
+				{
+					/* Existing subsumes current, skip current */
+					keep = false;
+					break;
+				}
+				else if (or_clause_subsumes(clause, existing))
+				{
+					/* Current subsumes existing, remove existing */
+					result = list_delete_cell(result, lc_exist);
+					break;
+				}
+			}
+		}
+
+		if (keep)
+			result = lappend(result, clause);
+	}
+
+	return result;
+}
+
+/*
+ * or_clause_subsumes
+ *    Check if or_clause1 subsumes or_clause2
+ *    (A OR B) subsumes (A OR B OR C) means we can remove (A OR B OR C)
+ */
+static bool
+or_clause_subsumes(Expr *or_clause1, Expr *or_clause2)
+{
+	if (!is_orclause(or_clause1) || !is_orclause(or_clause2))
+		return false;
+
+	List *args1 = ((BoolExpr *)or_clause1)->args;
+	List *args2 = ((BoolExpr *)or_clause2)->args;
+
+	/* If all elements of clause1 are in clause2, clause1 subsumes clause2 */
+	ListCell *lc1;
+	foreach (lc1, args1)
+	{
+		Expr *arg1 = (Expr *)lfirst(lc1);
+		bool found = false;
+		ListCell *lc2;
+
+		foreach (lc2, args2)
+		{
+			if (equal(arg1, (Expr *)lfirst(lc2)))
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * deduplicate_cnf_result
+ *    Final deduplication pass for the CNF result
+ */
+static Expr *
+deduplicate_cnf_result(Expr *expr)
+{
+	if (!is_andclause(expr))
+		return expr;
+
+	List *and_args = ((BoolExpr *)expr)->args;
+	List *unique_clauses = remove_duplicate_and_subsumed_clauses(and_args);
+
+	if (list_length(unique_clauses) == 0)
+		return (Expr *)makeBoolConst(true, false);
+	else if (list_length(unique_clauses) == 1)
+		return (Expr *)linitial(unique_clauses);
+	else
+		return make_andclause(unique_clauses);
+}

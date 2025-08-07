@@ -691,6 +691,15 @@ typedef struct CtePlanInfo
 	 * The subroot corresponding to the subplan.
 	 */
 	PlannerInfo *subroot;
+
+	/* the relations refered to shared cte. */
+	List *rels;
+	
+	List *list_quals;
+
+	Relids relids;
+	
+	Query *subquery;
 } CtePlanInfo;
 
 /*

@@ -2527,7 +2527,12 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 	{
 		JoinTreeItem *pitem;
 
-		Assert(root->hasLateralRTEs);	/* shouldn't happen otherwise */
+		/*
+		 * GPDB: quals collected from CTE references and pushed down into the
+		 * shared CTE subquery may end up outside their syntactic scope without
+		 * any LATERAL RTE being involved, so this assertion no longer holds.
+		 */
+		/* Assert(root->hasLateralRTEs); */	/* shouldn't happen otherwise */
 		Assert(sjinfo == NULL); /* mustn't postpone past outer join */
 		for (pitem = jtitem->jti_parent; pitem; pitem = pitem->jti_parent)
 		{

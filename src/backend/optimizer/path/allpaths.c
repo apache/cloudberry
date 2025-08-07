@@ -65,6 +65,8 @@
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 
+#include "optimizer/optimizer.h"
+
 // TODO: these planner gucs need to be refactored into PlannerConfig.
 bool		gp_enable_sort_limit = false;
 
@@ -194,6 +196,11 @@ static void bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel);
 static bool is_query_contain_limit_groupby(Query *parse);
 static void handle_gen_seggen_volatile_path(PlannerInfo *root, RelOptInfo *rel);
 
+static List *
+collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery);
+
+static void subquery_push_qual_1(Query *subquery, Relids relids, Node *qual);
 
 /*
  * make_one_rel
@@ -3327,6 +3334,82 @@ set_tablefunction_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rt
 	}
 }
 
+static void
+recurse_push_qual_1(Node *setOp, Query *topquery,
+				   Relids relids, Node *qual)
+{
+	if (IsA(setOp, RangeTblRef))
+	{
+		RangeTblRef *rtr = (RangeTblRef *) setOp;
+		RangeTblEntry *subrte = rt_fetch(rtr->rtindex, topquery->rtable);
+		Query	   *subquery = subrte->subquery;
+
+		Assert(subquery != NULL);
+		subquery_push_qual_1(subquery, relids, qual);
+	}
+	else if (IsA(setOp, SetOperationStmt))
+	{
+		SetOperationStmt *op = (SetOperationStmt *) setOp;
+
+		recurse_push_qual_1(op->larg, topquery, relids, qual);
+		recurse_push_qual_1(op->rarg, topquery, relids, qual);
+	}
+	else
+	{
+		elog(ERROR, "unrecognized node type: %d",
+			 (int) nodeTag(setOp));
+	}
+}
+
+/*
+ * subquery_push_qual - push down a qual that we have determined is safe
+ */
+static void
+subquery_push_qual_1(Query *subquery, Relids relids, Node *qual)
+{
+	if (subquery->setOperations != NULL)
+	{
+		/* Recurse to push it separately to each component query */
+		recurse_push_qual_1(subquery->setOperations, subquery,
+						  relids, qual);
+	}
+	else
+	{
+		/*
+		 * We need to replace Vars in the qual (which must refer to outputs of
+		 * the subquery) with copies of the subquery's targetlist expressions.
+		 * Note that at this point, any uplevel Vars in the qual should have
+		 * been replaced with Params, so they need no work.
+		 *
+		 * This step also ensures that when we are pushing into a setop tree,
+		 * each component query gets its own copy of the qual.
+		 */
+		qual = ReplaceVarsFromTargetList_1(qual, relids, 0,
+										 subquery->targetList,
+										 REPLACEVARS_REPORT_ERROR, 0,
+										 &subquery->hasSubLinks);
+
+		/*
+		 * Now attach the qual to the proper place: normally WHERE, but if the
+		 * subquery uses grouping or aggregation, put it in HAVING (since the
+		 * qual really refers to the group-result rows).
+		 */
+		if (subquery->hasAggs || subquery->groupClause || subquery->groupingSets || subquery->havingQual)
+		{
+			subquery->havingQual = (Node *) make_and_qual(subquery->havingQual, qual);
+			//subquery->havingQual = (Node *) canonicalize_qual((Expr*)subquery->havingQual, false);
+		}
+		else
+			subquery->jointree->quals = make_and_qual(subquery->jointree->quals, qual);
+
+		/*
+		 * We need not change the subquery's hasAggs or hasSubLinks flags,
+		 * since we can't be pushing down any aggregates that weren't there
+		 * before, and we don't push down subselects at all.
+		 */
+	}
+}
+
 /*
  * set_values_pathlist
  *		Build the (single) access path for a VALUES RTE
@@ -3566,6 +3649,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 			config->honor_order_by = false;
 
+			/*
+			 * collect all quals
+			 * make them with OR clause
+			 * push down to subquery
+			 * keep rel's baserestrictioninfo as original
+			 * reset rels->{root, paths, keys and etc.}
+			 * if one have no qual, should be XXX OR (TRUE) ?
+			 */
+
+			cteplaninfo->subquery = copyObject(subquery);
+
 			subroot = subquery_planner(cteroot->glob, subquery, cteroot, cte->cterecursive,
 									   tuple_fraction, config);
 
@@ -3582,6 +3676,112 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		}
 		else
 			subroot = cteplaninfo->subroot;
+
+
+		/* Also replace Vars with subquery's targetlist */
+		List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
+		cteplaninfo->rels = lappend(cteplaninfo->rels, rel);
+		cteplaninfo->relids = bms_add_member(cteplaninfo->relids, rel->relid);
+
+		// TODO: if quals is NIL, it means a cte ref need all the data from cte
+		if (quals != NIL)
+		{
+			// Expr *and_clause;
+			//and_clause = (list_length(quals) == 1) ? linitial(quals) : make_andclause(quals);
+			cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
+		}
+
+		int num_rels = list_length(cteplaninfo->rels);
+
+		if (num_rels == cte->cterefcount)
+		{
+			/* Do a second plan for shared cte. */
+
+			PlannerConfig *config = CopyPlannerConfig(root->config);
+
+			/*
+			 * Having multiple SharedScans can lead to deadlocks. For now,
+			 * disallow sharing of ctes at lower levels.
+			 */
+			config->gp_cte_sharing = false;
+
+			config->honor_order_by = false;
+
+			Expr *new_quals = convert_expr_to_cnf_complete(make_orclause(cteplaninfo->list_quals));
+
+			List *quals = make_ands_implicit(new_quals);
+
+			ListCell   *lc;
+			foreach(lc, quals)
+			{
+				subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
+			}
+
+			subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,
+										   tuple_fraction, config);
+
+			/* Select best Path and turn it into a Plan */
+			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
+
+			/*
+			 * we cannot use different plans for different instances of this CTE
+			 * reference, so keep only the cheapest
+			 */
+			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
+
+			cteplaninfo->subroot = subroot;
+
+			Path *best_path = sub_final_rel->cheapest_total_path;
+			CdbPathLocus locus;
+			double		sub_total_rows;
+
+			if (!IS_DUMMY_REL(sub_final_rel))
+			{
+				double		numsegments;
+
+				if (CdbPathLocus_IsPartitioned(sub_final_rel->cheapest_total_path->locus))
+					numsegments = CdbPathLocus_NumSegments(sub_final_rel->cheapest_total_path->locus);
+				else
+					numsegments = 1;
+				sub_total_rows = sub_final_rel->cheapest_total_path->rows * numsegments;
+
+			}
+
+			foreach (lc, cteplaninfo->rels)
+			{
+				RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
+				Relids required_outer = cte_rel->lateral_relids;
+
+				if (IS_DUMMY_REL(sub_final_rel))
+				{
+					set_dummy_rel_pathlist(root, cte_rel);
+					continue;
+				}
+				/* Mark rel with estimated output rows, width, etc */
+				set_cte_size_estimates(root, cte_rel, sub_total_rows);
+
+				locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
+
+				/* Convert subquery pathkeys to outer representation */
+				pathkeys = convert_subquery_pathkeys(root, cte_rel, best_path->pathkeys,
+													 make_tlist_from_pathtarget(best_path->pathtarget));
+
+				cte_rel->subroot = subroot;
+
+				/* truncate preivous path */
+				cte_rel->pathlist = NIL;
+
+				/* Generate appropriate path */
+				add_path(cte_rel, create_ctescan_path(root,
+												  cte_rel,
+												  NULL /* is_shared */,
+												  locus,
+												  pathkeys,
+												  required_outer),
+						root);
+			}
+			return;
+		}
 	}
 	rel->subroot = subroot;
 
@@ -4457,6 +4657,56 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
 	return subquery;
 }
 
+static List *
+collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery)
+{
+	List *quals = NIL;
+
+	pushdown_safety_info safetyInfo;
+
+	/* Nothing to do here if it doesn't have qual at all */
+	if (rel->baserestrictinfo == NIL)
+		return NIL;
+
+	memset(&safetyInfo, 0, sizeof(safetyInfo));
+	safetyInfo.unsafeFlags = (unsigned char *)
+		palloc0((list_length(subquery->targetList) + 1) * sizeof(unsigned char));
+
+	safetyInfo.unsafeLeaky = rte->security_barrier;
+
+	if (subquery_is_pushdown_safe(subquery, subquery, &safetyInfo))
+	{
+		/* OK to consider pushing down individual quals */
+		ListCell   *l;
+
+		foreach(l, rel->baserestrictinfo)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+			Node	   *qual= (Node *) rinfo->clause;
+
+			if (!rinfo->pseudoconstant &&
+				qual_is_pushdown_safe(subquery, rti, rinfo, &safetyInfo))
+			{
+				// TODO: replace varno to the first one?
+				// Is it possible that baseresctictinfo has quals with sublink or whole row? 
+
+				qual = ReplaceVarsFromTargetList(qual, rti, 0, rte,
+												 subquery->targetList,
+												 REPLACEVARS_REPORT_ERROR, 0,
+												 &subquery->hasSubLinks);
+				/* valid quals */
+				quals = lappend(quals, qual);
+			}
+		}
+	}
+	pfree(safetyInfo.unsafeFlags);
+	quals = list_copy_deep(quals);
+
+	return quals;
+}
+
+
 /*
  * subquery_is_pushdown_safe - is a subquery safe for pushing down quals?
  *
@@ -4952,8 +5202,7 @@ subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
 		if (subquery->hasAggs || subquery->groupClause || subquery->groupingSets || subquery->havingQual)
 			subquery->havingQual = make_and_qual(subquery->havingQual, qual);
 		else
-			subquery->jointree->quals =
-				make_and_qual(subquery->jointree->quals, qual);
+			subquery->jointree->quals = make_and_qual(subquery->jointree->quals, qual);
 
 		/*
 		 * We need not change the subquery's hasAggs or hasSubLinks flags,
@@ -5768,3 +6017,5 @@ debug_print_rel(PlannerInfo *root, RelOptInfo *rel)
 }
 
 #endif							/* OPTIMIZER_DEBUG */
+
+
