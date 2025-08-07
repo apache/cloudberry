@@ -1,6 +1,4 @@
-# YAGP Hooks Collector Metrics
-
-## Introduction
+## YAGP Hooks Collector Metrics
 
 ### States  
 A Postgres process goes through 4 executor functions to execute a query:  
@@ -14,14 +12,14 @@ yagp-hooks-collector sends messages with 4 states, from _Dispatcher_ and/or _Exe
 submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -> ExecutorEnd() -> done
 ```
 
-## Key Points  
+### Key Points  
 - Some queries may skip the _end_ state, then the _end_ statistics is sent during _done_.  
 - If a query finishes with an error (`METRICS_QUERY_ERROR`), or is cancelled (`METRICS_QUERY_CANCELLED`), statistics is sent at _done_.  
 - Some statistics is calculated as the difference between the current global metric and the previous. The initial snapshot is taken at submit, and at _end_/_done_ the diff is calculated.  
 - Nested queries on _Dispatcher_ become top-level on _Execute_.  
 - Each process (_Dispatcher_/_Execute_) sends its own statistics.  
 
-## Notations  
+### Notations  
 - **S** = Submit event.  
 - **T** = Start event.  
 - **E** = End event.  
@@ -30,7 +28,7 @@ submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -
 - **ABS** = Absolute value, or where diff is not applicable, the value taken.  
 - **Local*** - Statistics that starts counting from zero for each new query. A nested query is also considered new.  
 
-## Statistics Table
+### Statistics Table
 
 | Proto Field                  | Type   | When    | DIFF/ABS | Local* | Scope   | Dispatcher | Execute | Units   | Notes                                               |
 | :--------------------------- | :----- | :------ | :------- | ------ | :------ | :--------: | :-----: | :------ | :-------------------------------------------------- |
