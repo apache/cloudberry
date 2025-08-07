@@ -659,6 +659,8 @@ shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt)
 		ctxt->shared_input_count = new_shared_input_count;
 	}
 
+	plan->ref_set = true;
+
 	Assert(ctxt->shared_plans[share_id] == NULL);
 	ctxt->shared_plans[share_id] = plan->scan.plan.lefttree;
 }
