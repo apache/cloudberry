@@ -217,7 +217,7 @@ typedef struct TMGXACT
 	* When first assigning and fetching gxid, using this to keep
 	* atomic and then assign/fetch gxid with its value.
 	* Only use this on QD when necessary as QE's gxid and
-	* DistributedSnapshot is dispathed from QD.
+	* DistributedSnapshot is dispatched from QD.
 	*/
 	pg_atomic_uint64 			atomic_gxid;
 #endif

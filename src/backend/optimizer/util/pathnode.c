@@ -2092,7 +2092,7 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 				 * gp_execution_segment() = <segid> here, so we should update
 				 * direct dispatch info when creating plan.
 				 */
-				((ProjectionPath *) subpath)->direct_dispath_contentIds = list_make1_int(gp_session_id % numsegments);
+				((ProjectionPath *) subpath)->direct_dispatch_contentIds = list_make1_int(gp_session_id % numsegments);
 
 				CdbPathLocus_MakeStrewn(&(subpath->locus),
 				                        numsegments,

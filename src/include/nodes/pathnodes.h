@@ -2133,7 +2133,7 @@ typedef struct ProjectionPath
 	 * CDB: projection with qual gp_execution_segment() = <segid>,
 	 * for such case we should consider update directdispatch info.
 	 */
-	List	   *direct_dispath_contentIds;
+	List	   *direct_dispatch_contentIds;
 } ProjectionPath;
 
 typedef struct RuntimeFilterPath
