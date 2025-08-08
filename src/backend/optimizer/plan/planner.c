@@ -300,12 +300,6 @@ static split_rollup_data *make_new_rollups_for_hash_grouping_set(PlannerInfo *ro
 																 Path *path,
 																 grouping_sets_data *gd);
 
-static bool
-contain_case_expr(Node *clause);
-
-static bool
-contain_case_expr_walker(Node *node, void *context);
-
 static void create_partial_window_path(PlannerInfo *root,
 											RelOptInfo *window_rel,
 											Path *path,
@@ -9139,25 +9133,6 @@ make_new_rollups_for_hash_grouping_set(PlannerInfo        *root,
 	return srd;
 }
 
-static bool
-contain_case_expr(Node *clause)
-{
-	return contain_case_expr_walker(clause, NULL);
-}
-
-static bool
-contain_case_expr_walker(Node *node, void *context)
-{
-	if (node == NULL)
-		return false;
-
-	if (IsA(node, CaseExpr))
-		return true;
-
-	return expression_tree_walker(node, contain_case_expr_walker,
-								  context);
-}
-
 /*
  * Parallel processing of window functions.
  *
@@ -9176,46 +9151,8 @@ create_partial_window_path(PlannerInfo *root,
 {
 	PathTarget *window_target;
 	ListCell   *l;
-	Bitmapset  *sgrefs;
 
 	window_target = input_target;
-
-	sgrefs = NULL;
-
-	foreach(l, activeWindows)
-	{
-		WindowClause *wc = lfirst_node(WindowClause, l);
-		ListCell   *lc2;
-
-		foreach(lc2, wc->partitionClause)
-		{
-			SortGroupClause *sortcl = lfirst_node(SortGroupClause, lc2);
-
-			sgrefs = bms_add_member(sgrefs, sortcl->tleSortGroupRef);
-		}
-		foreach(lc2, wc->orderClause)
-		{
-			SortGroupClause *sortcl = lfirst_node(SortGroupClause, lc2);
-
-			sgrefs = bms_add_member(sgrefs, sortcl->tleSortGroupRef);
-		}
-	}
-
-	int x = -1;
-	while ((x = bms_next_member(sgrefs, x)) >= 0)
-	{
-		Index	sgref = get_pathtarget_sortgroupref(input_target, x);
-		if (sgref != 0)
-		{
-			ListCell   *lc;
-			foreach(lc, input_target->exprs)
-			{
-				Expr	*expr = (Expr *) lfirst(lc);
-				if (contain_case_expr((Node*)expr))
-					return;
-			}
-		}
-	}
 
 	foreach(l, activeWindows)
 	{

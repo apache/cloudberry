@@ -498,7 +498,7 @@ SELECT sum(salary) OVER w, rank() OVER w FROM empsalary WINDOW w AS (PARTITION B
 (10 rows)
 
 -- w8
--- strict aggs
+-- window agg in CASE WHEN clause
 set enable_parallel = off;
 EXPLAIN(COSTS OFF)
 SELECT empno, depname, salary, bonus, depadj, MIN(bonus) OVER (ORDER BY empno), MAX(depadj) OVER () FROM(
@@ -556,12 +556,12 @@ SELECT empno, depname, salary, bonus, depadj, MIN(bonus) OVER (ORDER BY empno), 
 			AVG(salary) OVER (PARTITION BY depname) < salary
 		THEN 200 END AS depadj FROM empsalary
 )s;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  WindowAgg
    ->  WindowAgg
          Order By: s.empno
-         ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Gather Motion 6:1  (slice1; segments: 6)
                Merge Key: s.empno
                ->  Sort
                      Sort Key: s.empno
@@ -570,9 +570,12 @@ SELECT empno, depname, salary, bonus, depadj, MIN(bonus) OVER (ORDER BY empno), 
                                  Partition By: empsalary.depname
                                  ->  Sort
                                        Sort Key: empsalary.depname
-                                       ->  Seq Scan on empsalary
+                                       ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                                             Hash Key: empsalary.depname
+                                             Hash Module: 3
+                                             ->  Parallel Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(14 rows)
+(17 rows)
 
 SELECT empno, depname, salary, bonus, depadj, MIN(bonus) OVER (ORDER BY empno), MAX(depadj) OVER () FROM(
 	SELECT *,
