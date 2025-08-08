@@ -420,7 +420,6 @@
 		"optimizer_enable_motion_gather",
 		"optimizer_enable_motion_redistribute",
 		"optimizer_enable_motions",
-		"optimizer_enable_motions_masteronly_queries",
 		"optimizer_enable_multiple_distinct_aggs",
 		"optimizer_enable_nljoin",
 		"optimizer_enable_outerjoin_rewrite",

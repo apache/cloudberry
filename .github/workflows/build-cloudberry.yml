@@ -269,11 +269,12 @@ jobs:
               {"test":"ic-expandshrink",
                "make_configs":["src/test/isolation2:installcheck-expandshrink"]
               },
-              {"test":"ic-singlenode",
+              {"test":"ic-singlenode-opt-off",
                "make_configs":["src/test/isolation:installcheck-singlenode",
                                "src/test/singlenode_regress:installcheck-singlenode",
                                "src/test/singlenode_isolation2:installcheck-singlenode"],
-               "num_primary_mirror_pairs":0
+               "num_primary_mirror_pairs":0,
+               "pg_settings":{"optimizer":"off"}
               },
               {"test":"ic-resgroup-v2",
                "make_configs":["src/test/isolation2:installcheck-resgroup-v2"],
