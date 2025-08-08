@@ -1,0 +1,130 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Brand Name Check for Changes
+# --------------------------------------------------------------------
+# Description:
+# This GitHub Actions workflow checks pull requests (PRs) for deprecated
+# terms related to "Cloudberry" and "Greenplum". It ensures consistent
+# usage of updated branding throughout the project.
+#
+# Purpose:
+# - Identify outdated terms such as "Cloudberry Database" or "Greenplum".
+# - Automatically comment on the PR, suggesting replacements where needed.
+# - Encourage the use of "Apache Cloudberry" or "Cloudberry" as standards.
+#
+# How it works:
+# - Triggers when a PR is opened, edited, or synchronized with its branch.
+# - Scans only the changes (diffs) in the PR, focusing on modified content.
+# - Posts a comment if deprecated terms are detected in the changes.
+#
+# Note: This GitHub Actions is not a required option for merging one
+# Pull Request, just as one reference for the brand check.
+
+name: Brand Name Checks for Diffs
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-brand-name:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check for Old Names in PR Diffs
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // List of deprecated terms to check in PR changes
+            const deprecatedTerms = [
+              "Cloudberry Database",
+              "CloudberryDB",
+              "Cloudberry DB",
+              "Greenplum Database",
+              "Greenplum",
+              "GPDB"
+            ];
+
+            try {
+              // Fetch the list of changed files in the PR
+              const { data: files } = await github.rest.pulls.listFiles({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+
+              // Check if there are any files changed in the PR
+              if (!files.length) {
+                console.log("No files changed in this PR.");
+                return;
+              }
+
+              // Initialize a set to store the found deprecated terms
+              const foundTerms = new Set();
+
+              // Iterate over each file in the PR changes
+              for (const file of files) {
+                // Check if the file has a patch (i.e., it has changes)
+                if (file.patch) {
+                  // Iterate over each deprecated term
+                  for (const term of deprecatedTerms) {
+                    // Check if the deprecated term is in the file's patch
+                    if (file.patch.includes(term)) {
+                      // Add the deprecated term to the set of found terms
+                      foundTerms.add(term);
+                    }
+                  }
+                }
+              }
+
+              // Check if any deprecated terms were found
+              if (foundTerms.size > 0) {
+                // Create a comment body with the found deprecated terms
+                const commentBody = `
+              > [!NOTE]
+              > This is not a required check for merging this PR, just for your reference.
+
+               **Attention:** The following old brand terms were found in your changes: ${Array.from(foundTerms).map(term => `\`${term}\``)}
+
+              Please consider replacing them with "Apache Cloudberry" or "Cloudberry" where appropriate. Thank you for ensuring consistency in our branding! 🙏
+              `;
+
+                // Post a comment on the PR with the found deprecated terms
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body: commentBody,
+                });
+              }
+            } catch (error) {
+              // Log any errors that occur during the script execution
+              console.error("Error checking for deprecated terms:", error);
+            }
