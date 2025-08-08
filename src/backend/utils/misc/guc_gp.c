@@ -365,6 +365,7 @@ bool		optimizer_enable_replicated_table;
 bool		optimizer_enable_foreign_table;
 bool		optimizer_enable_right_outer_join;
 bool		optimizer_enable_query_parameter;
+int			optimizer_agg_pds_strategy;
 
 /* Optimizer plan enumeration related GUCs */
 bool		optimizer_enumerate_plans;
@@ -4486,6 +4487,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&optimizer_mdcache_size,
 		16384, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_agg_pds_strategy", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Set the strategy of agg required distribution."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_agg_pds_strategy,
+		OPTIMIZER_AGG_PDS_ALL_KEY, OPTIMIZER_AGG_PDS_ALL_KEY, OPTIMIZER_AGG_PDS_EXCLUDE_NON_FIXED,
 		NULL, NULL, NULL
 	},
 
