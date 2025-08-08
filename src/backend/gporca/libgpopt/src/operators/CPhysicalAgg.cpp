@@ -39,12 +39,14 @@ CPhysicalAgg::CPhysicalAgg(
 	CColRefArray *pdrgpcrMinimal,  // minimal grouping columns based on FD's
 	COperator::EGbAggType egbaggtype, BOOL fGeneratesDuplicates,
 	CColRefArray *pdrgpcrArgDQA, BOOL fMultiStage, BOOL isAggFromSplitDQA,
-	CLogicalGbAgg::EAggStage aggStage, BOOL should_enforce_distribution)
+	CLogicalGbAgg::EAggStage aggStage, BOOL isAggPushdown,
+	BOOL should_enforce_distribution)
 	: CPhysical(mp),
 	  m_pdrgpcr(colref_array),
 	  m_egbaggtype(egbaggtype),
 	  m_isAggFromSplitDQA(isAggFromSplitDQA),
 	  m_aggStage(aggStage),
+	  m_aggpushdown(isAggPushdown),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_fGeneratesDuplicates(fGeneratesDuplicates),
 	  m_pdrgpcrArgDQA(pdrgpcrArgDQA),
@@ -695,6 +697,10 @@ CPhysicalAgg::OsPrint(IOstream &os) const
 	if (m_fMultiStage)
 	{
 		os << ", multi-stage";
+	}
+	if (m_aggpushdown)
+	{
+		os << ", pushdown";
 	}
 	os << " )";
 
