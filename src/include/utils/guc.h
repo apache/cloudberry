@@ -546,6 +546,7 @@ extern bool optimizer_enable_replicated_table;
 extern bool optimizer_enable_foreign_table;
 extern bool optimizer_enable_right_outer_join;
 extern bool optimizer_enable_query_parameter;
+extern bool optimizer_force_window_hash_agg;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;

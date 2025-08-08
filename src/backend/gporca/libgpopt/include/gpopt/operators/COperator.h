@@ -213,6 +213,7 @@ public:
 		EopPhysicalCTEProducer,
 		EopPhysicalCTEConsumer,
 		EopPhysicalSequenceProject,
+		EopPhysicalHashSequenceProject,
 		EopPhysicalDynamicIndexScan,
 
 		EopPhysicalInnerHashJoin,

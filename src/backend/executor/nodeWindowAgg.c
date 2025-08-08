@@ -2617,6 +2617,9 @@ ExecInitWindowAgg(WindowAgg *node, EState *estate, int eflags)
 	TupleDesc	scanDesc;
 	ListCell   *l;
 
+	// not support window hash agg
+	Assert(!node->isWindowHashAgg);
+
 	/* check for unsupported flags */
 	Assert(!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK)));
 

@@ -1469,6 +1469,7 @@ _copyWindowAgg(const WindowAgg *from)
 	COPY_SCALAR_FIELD(inRangeColl);
 	COPY_SCALAR_FIELD(inRangeAsc);
 	COPY_SCALAR_FIELD(inRangeNullsFirst);
+	COPY_SCALAR_FIELD(isWindowHashAgg);
 
 	return newnode;
 }

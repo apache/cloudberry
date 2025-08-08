@@ -394,6 +394,8 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	{
 
 #ifdef USE_ORCA
+		OptimizerOptions *optimizer_options = palloc0(sizeof(OptimizerOptions));
+		optimizer_options->create_vectorization_plan = false;
 		if (!optimizer_init) {
 			/* Initialize GPOPT */
 			OptimizerMemoryContext = AllocSetContextCreate(TopMemoryContext,
@@ -410,7 +412,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 			INSTR_TIME_SET_CURRENT(starttime);
 
 #ifdef USE_ORCA
-		result = optimize_query(parse, cursorOptions, boundParams);
+		result = optimize_query(parse, cursorOptions, boundParams, optimizer_options);
 #else
 		/* Make sure this branch is not taken in builds using --disable-orca. */
 		Assert(false);

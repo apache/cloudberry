@@ -365,6 +365,7 @@ bool		optimizer_enable_replicated_table;
 bool		optimizer_enable_foreign_table;
 bool		optimizer_enable_right_outer_join;
 bool		optimizer_enable_query_parameter;
+bool		optimizer_force_window_hash_agg;
 
 /* Optimizer plan enumeration related GUCs */
 bool		optimizer_enumerate_plans;
@@ -3288,6 +3289,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"optimizer_force_window_hash_agg", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Enable create window hash agg."),
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_force_window_hash_agg, // TODO: remove it before merge
+		false,
+		NULL, NULL, NULL
+	},
+
 	{
 		{"aqumv_allow_foreign_table", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("allow answer query using materialized views which have foreign or external tables."),

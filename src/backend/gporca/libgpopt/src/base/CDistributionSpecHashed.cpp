@@ -859,8 +859,15 @@ CDistributionSpecHashed::OsPrint(IOstream &os) const
 }
 
 IOstream &
+CDistributionSpecHashed::OsPrintNoWrap(IOstream &os) const
+{
+	return OsPrintWithPrefix(os, "", false);
+}
+
+IOstream &
 CDistributionSpecHashed::OsPrintWithPrefix(IOstream &os,
-										   const char *prefix) const
+										   const char *prefix,
+										   BOOL wrap) const
 {
 	os << this->SzId() << ": [ ";
 	const ULONG length = m_pdrgpexpr->Size();
@@ -876,7 +883,7 @@ CDistributionSpecHashed::OsPrintWithPrefix(IOstream &os,
 		}
 		else
 		{
-			os << *(hash_expr);
+			hash_expr->OsPrint(os);
 			// the expression added a newline, indent the following with the prefix
 			os << prefix;
 		}
@@ -912,7 +919,8 @@ CDistributionSpecHashed::OsPrintWithPrefix(IOstream &os,
 	if (nullptr != m_equiv_hash_exprs && m_equiv_hash_exprs->Size() > 0 &&
 		GPOS_FTRACE(EopttracePrintEquivDistrSpecs))
 	{
-		os << "," << std::endl;
+		os << ",";
+		if (wrap) os << std::endl;
 		for (ULONG ul = 0; ul < m_equiv_hash_exprs->Size(); ul++)
 		{
 			CExpressionArray *equiv_distribution_exprs =

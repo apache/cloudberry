@@ -45,7 +45,8 @@ PlannedStmt *
 CGPOptimizer::GPOPTOptimizedPlan(
 	Query *query,
 	bool *
-		had_unexpected_failure	// output : set to true if optimizer unexpectedly failed to produce plan
+		had_unexpected_failure,	// output : set to true if optimizer unexpectedly failed to produce plan
+	OptimizerOptions *opts
 )
 {
 	SOptContext gpopt_context;
@@ -55,7 +56,7 @@ CGPOptimizer::GPOPTOptimizedPlan(
 
 	GPOS_TRY
 	{
-		plStmt = COptTasks::GPOPTOptimizedPlan(query, &gpopt_context);
+		plStmt = COptTasks::GPOPTOptimizedPlan(query, &gpopt_context, opts);
 		// clean up context
 		gpopt_context.Free(gpopt_context.epinQuery, gpopt_context.epinPlStmt);
 	}
@@ -199,9 +200,9 @@ CGPOptimizer::TerminateGPOPT()
 //---------------------------------------------------------------------------
 extern "C" {
 PlannedStmt *
-GPOPTOptimizedPlan(Query *query, bool *had_unexpected_failure)
+GPOPTOptimizedPlan(Query *query, bool *had_unexpected_failure, OptimizerOptions *opts)
 {
-	return CGPOptimizer::GPOPTOptimizedPlan(query, had_unexpected_failure);
+	return CGPOptimizer::GPOPTOptimizedPlan(query, had_unexpected_failure, opts);
 }
 }
 
