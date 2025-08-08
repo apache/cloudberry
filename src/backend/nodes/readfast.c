@@ -1002,6 +1002,7 @@ _readShareInputScan(void)
 	READ_INT_FIELD(this_slice_id);
 	READ_INT_FIELD(nconsumers);
 	READ_BOOL_FIELD(discard_output);
+	READ_BOOL_FIELD(ref_set);
 
 	ReadCommonPlan(&local_node->scan.plan);
 
