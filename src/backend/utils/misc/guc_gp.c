@@ -831,6 +831,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"gp_enable_explain_node_summary", PGC_USERSET, CLIENT_CONN_OTHER,
+			gettext_noop("Dump CdbExplain_NodeSummary for every node in EXPLAIN ANALYZE."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_enable_explain_node_summary,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_enable_sort_limit", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enable LIMIT operation to be performed while sorting."),
 			gettext_noop("Sort more efficiently when plan requires the first <n> rows at most.")
