@@ -919,7 +919,7 @@ AC_MSG_RESULT([checking whether to build with external-fts... $enable_external_f
 AC_SUBST(enable_external_fts)
 
 if test "$enable_external_fts" = no; then
-  AC_DEFINE([USE_INTERNAL_FTS], [1])
+  AC_DEFINE([USE_INTERNAL_FTS], [1], [Define to 1 to use the internal FTS implementation.])
   CFLAGS="$CFLAGS -DUSE_INTERNAL_FTS=1"
 fi
 
@@ -1742,7 +1742,7 @@ if test "$enable_openssl_redirect" = yes; then
     AC_MSG_ERROR([--enable-openssl-redirect must specify --with-ssl])
   fi
 
-  AC_DEFINE([OPENSSL_ALLOW_REDIRECT], [1])
+  AC_DEFINE([OPENSSL_ALLOW_REDIRECT], [1], [Define to 1 if you want to allow OpenSSL redirects.])
 fi
 
 # Check for curl.
