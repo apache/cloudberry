@@ -1173,3 +1173,43 @@ SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.c = t2
 EXPLAIN (COSTS OFF)
 SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.b = t2.b AND t1.c = t2.c) WHERE ((t1.b >= 100 AND t1.b < 110) OR (t1.b >= 200 AND t1.b < 210)) AND ((t2.b >= 100 AND t2.b < 110) OR (t2.b >= 200 AND t2.b < 210)) AND t1.c IN ('0004', '0009') ORDER BY t1.a, t1.b;
 SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.b = t2.b AND t1.c = t2.c) WHERE ((t1.b >= 100 AND t1.b < 110) OR (t1.b >= 200 AND t1.b < 210)) AND ((t2.b >= 100 AND t2.b < 110) OR (t2.b >= 200 AND t2.b < 210)) AND t1.c IN ('0004', '0009') ORDER BY t1.a, t1.b;
+
+--
+-- test issue https://github.com/apache/cloudberry/issues/1301
+--
+begin;
+create table t_issue_1301_big(
+	id varchar(32),
+	t varchar(32)
+) distributed by (id)
+partition by range(t)
+(
+partition p1 start ('0') end ('5'),
+partition p2 start ('5') end ('9999999999999999999')
+);
+create index idx_t_issue_1301_big_id on t_issue_1301_big(id);
+insert into t_issue_1301_big select seq, seq from generate_series(1, 100000) as seq;
+create table t_issue_1301_small(
+  id varchar(32),
+  t varchar(32)
+) distributed by (id);
+insert into t_issue_1301_small select seq*10000, seq*10000 from generate_series(1, 100) as seq;
+set local optimizer = off;
+set local enable_nestloop to on;
+analyze t_issue_1301_big;
+analyze t_issue_1301_small;
+explain(costs off) select a.* from t_issue_1301_small a left join t_issue_1301_big b on a.id=b.id;
+abort;
+
+BEGIN;
+CREATE TABLE t1 (id varchar(32), date date) DISTRIBUTED BY (id)
+PARTITION BY RANGE (date)
+(START (date '2016-01-01') INCLUSIVE END (date '2016-01-04') EXCLUSIVE EVERY (INTERVAL '1 day'));
+CREATE TABLE t2 (id varchar(32)) DISTRIBUTED BY (id);
+analyze t1;
+analyze t2;
+\d+ t1;
+\d+ t2;
+EXPLAIN(COSTS OFF) SELECT COUNT(*) FROM t1_1_prt_1 JOIN t2 USING(id);
+EXPLAIN(COSTS OFF) SELECT COUNT(*) FROM t1 JOIN t2 USING(id);
+ABORT;
