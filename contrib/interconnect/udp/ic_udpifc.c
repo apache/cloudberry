@@ -3965,7 +3965,10 @@ receiveChunksUDPIFCLoop(ChunkTransportState *pTransportStates, ChunkTransportSta
 		/* check the potential errors in rx thread. */
 		checkRxThreadError();
 
-		/* do not check interrupts when holding the lock */
+		FaultInjector_InjectFaultIfSet("interconnect_stop_recv_chunk",
+											DDLNotSpecified,
+											"" /* databaseName */ ,
+											"" /* tableName */ );
 		ML_CHECK_FOR_INTERRUPTS(pTransportStates->teardownActive);
 
 		/*
