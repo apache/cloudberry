@@ -2089,7 +2089,13 @@ dumpUserConfig(PGconn *conn, const char *username)
 	res = executeQuery(conn, buf->data);
 
 	if (PQntuples(res) > 0)
-		fprintf(OPF, "\n--\n-- User Config \"%s\"\n--\n\n", username);
+	{
+		char	   *sanitized;
+
+		sanitized = sanitize_line(username, true);
+		fprintf(OPF, "\n--\n-- User Config \"%s\"\n--\n\n", sanitized);
+		free(sanitized);
+	}
 
 	for (int i = 0; i < PQntuples(res); i++)
 	{
@@ -2456,6 +2462,7 @@ dumpDatabases(PGconn *conn)
 	for (i = 0; i < PQntuples(res); i++)
 	{
 		char	   *dbname = PQgetvalue(res, i, 0);
+		char	   *sanitized;
 		const char *create_opts;
 		int			ret;
 
@@ -2472,7 +2479,9 @@ dumpDatabases(PGconn *conn)
 
 		pg_log_info("dumping database \"%s\"", dbname);
 
-		fprintf(OPF, "--\n-- Database \"%s\" dump\n--\n\n", dbname);
+		sanitized = sanitize_line(dbname, true);
+		fprintf(OPF, "--\n-- Database \"%s\" dump\n--\n\n", sanitized);
+		free(sanitized);
 
 		/*
 		 * We assume that "template1" and "postgres" already exist in the

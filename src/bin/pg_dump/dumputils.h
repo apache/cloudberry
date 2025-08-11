@@ -35,6 +35,7 @@
 #define PGDUMP_STRFTIME_FMT  "%Y-%m-%d %H:%M:%S"
 #endif
 
+extern char *sanitize_line(const char *str, bool want_hyphen);
 extern bool buildACLCommands(const char *name, const char *subname, const char *nspname,
 							 const char *type, const char *acls, const char *baseacls,
 							 const char *owner, const char *prefix, int remoteVersion,
