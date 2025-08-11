@@ -70,5 +70,7 @@ extern void makeAlterConfigCommand(PGconn *conn, const char *configitem,
 extern char *escape_backslashes(const char *src, bool quotes_too);
 extern char *escape_fmtopts_string(const char *src);
 extern char *custom_fmtopts_string(const char *src);
+extern char *generate_restrict_key(void);
+extern bool valid_restrict_key(const char *restrict_key);
 
 #endif							/* DUMPUTILS_H */
