@@ -30,14 +30,38 @@ A Model Communication Protocol (MCP) server for Apache Cloudberry database inter
 - **Security-First Design**: SQL injection prevention, read-only constraints, and connection pooling
 - **Async Performance**: Built with asyncpg for high-performance database operations
 
+## Prerequisites
+
+- Python 3.8+
+- uv (for dependency management)
+
 ## Installation
 
-```bash
-# Install dependencies
-pip install -e .
+### Install uv
 
-# Or using uv
+```bash
+curl -sSfL https://astral.sh/uv/install.sh | sh
+```
+
+### Install Dependencies
+
+```bash
+cd mcp-server
+uv venv
+source .venv/bin/activate
+uv sync
+```
+
+### Install Project
+
+```bash
 uv pip install -e .
+```
+
+### Build Project
+
+```bash
+uv build
 ```
 
 ## Configuration
@@ -64,17 +88,20 @@ MCP_DEBUG=false
 
 ```bash
 # Run the MCP server
-python -m src.mcp.server
+python -m cbmcp.server
+
+# Or run with cloudberry-mcp-server
+cloudberry-mcp-server
 
 # Or run with custom configuration
-MCP_HOST=0.0.0.0 MCP_PORT=8080 python -m src.mcp.server
+MCP_HOST=0.0.0.0 MCP_PORT=8080 python -m cbmcp.server
 ```
 
 ### Testing the Client
 
 ```bash
 # Run the test client
-python -m src.mcp.client
+python -m cbmcp.client
 ```
 
 ## API Reference
