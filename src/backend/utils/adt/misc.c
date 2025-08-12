@@ -1089,7 +1089,6 @@ pg_get_replica_identity_index(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 }
 
-<<<<<<< HEAD
 Datum
 gp_get_segment_configuration(PG_FUNCTION_ARGS)
 {
@@ -1185,7 +1184,7 @@ gp_get_segment_configuration(PG_FUNCTION_ARGS)
 		SRF_RETURN_DONE(funcctx);
 	}
 #endif
-=======
+
 /*
  * Transition function for the ANY_VALUE aggregate
  */
@@ -1193,5 +1192,4 @@ Datum
 any_value_transfn(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_DATUM(PG_GETARG_DATUM(0));
->>>>>>> REL_16_9
 }

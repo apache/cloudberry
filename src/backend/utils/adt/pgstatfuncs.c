@@ -312,11 +312,7 @@ pg_stat_get_progress_info(PG_FUNCTION_ARGS)
 Datum
 pg_stat_get_activity(PG_FUNCTION_ARGS)
 {
-<<<<<<< HEAD
-#define PG_STAT_GET_ACTIVITY_COLS	34
-=======
-#define PG_STAT_GET_ACTIVITY_COLS	31
->>>>>>> REL_16_9
+#define PG_STAT_GET_ACTIVITY_COLS	35
 	int			num_backends = pgstat_fetch_stat_numbackends();
 	int			curr_backend;
 	int			pid = PG_ARGISNULL(0) ? -1 : PG_GETARG_INT32(0);
@@ -643,29 +639,25 @@ pg_stat_get_activity(PG_FUNCTION_ARGS)
 			if (beentry->st_query_id == 0)
 				nulls[30] = true;
 			else
-<<<<<<< HEAD
-				values[29] = UInt64GetDatum(beentry->st_query_id);
+				values[30] = UInt64GetDatum(beentry->st_query_id);
 
-			values[30] = Int32GetDatum(beentry->st_session_id);  /* GPDB */
+			values[31] = Int32GetDatum(beentry->st_session_id);  /* GPDB */
 
 			{
 				char *groupName = GetResGroupNameForId(beentry->st_rsgid);
 
-				values[31] = ObjectIdGetDatum(beentry->st_rsgid);
+				values[32] = ObjectIdGetDatum(beentry->st_rsgid);
 
 				if (groupName != NULL)
-					values[32] = CStringGetTextDatum(groupName);
+					values[33] = CStringGetTextDatum(groupName);
 				else
-					nulls[32] = true;
+					nulls[33] = true;
 			}
 
 			if (beentry->st_warehouse_id != InvalidOid)
-				values[33] = ObjectIdGetDatum(beentry->st_warehouse_id);
+				values[34] = ObjectIdGetDatum(beentry->st_warehouse_id);
 			else
-				nulls[33] = true;
-=======
-				values[30] = UInt64GetDatum(beentry->st_query_id);
->>>>>>> REL_16_9
+				nulls[34] = true;
 		}
 		else
 		{
@@ -694,16 +686,13 @@ pg_stat_get_activity(PG_FUNCTION_ARGS)
 			nulls[27] = true;
 			nulls[28] = true;
 			nulls[29] = true;
-<<<<<<< HEAD
+			nulls[30] = true;
 
             /* GPDB specific values */
-			values[30] = Int32GetDatum(beentry->st_session_id);
-			nulls[31] = true;
+			values[31] = Int32GetDatum(beentry->st_session_id);
 			nulls[32] = true;
 			nulls[33] = true;
-=======
-			nulls[30] = true;
->>>>>>> REL_16_9
+			nulls[34] = true;
 		}
 
 		tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
@@ -1610,13 +1599,8 @@ pg_stat_get_slru(PG_FUNCTION_ARGS)
 	for (i = 0;; i++)
 	{
 		/* for each row */
-<<<<<<< HEAD
-		Datum		values[PG_STAT_GET_SLRU_COLS];
-		bool		nulls[PG_STAT_GET_SLRU_COLS];
-=======
 		Datum		values[PG_STAT_GET_SLRU_COLS] = {0};
 		bool		nulls[PG_STAT_GET_SLRU_COLS] = {0};
->>>>>>> REL_16_9
 		PgStat_SLRUStats stat;
 		const char *name;
 
@@ -1626,11 +1610,6 @@ pg_stat_get_slru(PG_FUNCTION_ARGS)
 			break;
 
 		stat = stats[i];
-<<<<<<< HEAD
-		MemSet(values, 0, sizeof(values));
-		MemSet(nulls, 0, sizeof(nulls));
-=======
->>>>>>> REL_16_9
 
 		values[0] = PointerGetDatum(cstring_to_text(name));
 		values[1] = Int64GetDatum(stat.blocks_zeroed);
@@ -1802,7 +1781,6 @@ pg_stat_clear_snapshot(PG_FUNCTION_ARGS)
 }
 
 
-<<<<<<< HEAD
 Datum
 pg_stat_get_queue_num_exec(PG_FUNCTION_ARGS)
 {
@@ -1891,7 +1869,6 @@ pg_renice_session(PG_FUNCTION_ARGS)
 	PG_RETURN_INT32(prio_out);
 }
 
-=======
 /* Force statistics to be reported at the next occasion */
 Datum
 pg_stat_force_next_flush(PG_FUNCTION_ARGS)
@@ -1902,7 +1879,6 @@ pg_stat_force_next_flush(PG_FUNCTION_ARGS)
 }
 
 
->>>>>>> REL_16_9
 /* Reset all counters for the current database */
 Datum
 pg_stat_reset(PG_FUNCTION_ARGS)
@@ -2106,32 +2082,11 @@ pg_stat_get_replication_slot(PG_FUNCTION_ARGS)
 	text	   *slotname_text;
 	NameData	slotname;
 	TupleDesc	tupdesc;
-<<<<<<< HEAD
-	Datum		values[PG_STAT_GET_REPLICATION_SLOT_COLS];
-	bool		nulls[PG_STAT_GET_REPLICATION_SLOT_COLS];
-	PgStat_StatReplSlotEntry *slotent;
-	PgStat_StatReplSlotEntry allzero;
-
-	/*
-	 * Function was accidentally marked as non-strict, can't change that post
-	 * release.
-	 */
-	if (PG_ARGISNULL(0))
-		PG_RETURN_NULL();
-
-	slotname_text = PG_GETARG_TEXT_P(0);
-
-	/* Initialise values and NULL flags arrays */
-	MemSet(values, 0, sizeof(values));
-	MemSet(nulls, 0, sizeof(nulls));
-
-=======
 	Datum		values[PG_STAT_GET_REPLICATION_SLOT_COLS] = {0};
 	bool		nulls[PG_STAT_GET_REPLICATION_SLOT_COLS] = {0};
 	PgStat_StatReplSlotEntry *slotent;
 	PgStat_StatReplSlotEntry allzero;
 
->>>>>>> REL_16_9
 	/* Initialise attributes information in the tuple descriptor */
 	tupdesc = CreateTemplateTupleDesc(PG_STAT_GET_REPLICATION_SLOT_COLS);
 	TupleDescInitEntry(tupdesc, (AttrNumber) 1, "slot_name",

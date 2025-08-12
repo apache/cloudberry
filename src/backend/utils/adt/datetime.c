@@ -35,7 +35,6 @@
 #include "utils/memutils.h"
 #include "utils/tzparser.h"
 
-<<<<<<< HEAD
 /*
  * We don't support locale-aware month names or day-of-week names, or non-arabic numbers,
  * and we know the only alpha or numeric chars we can handle are in the ASCII7 set.
@@ -49,10 +48,7 @@
 #undef isalnum
 #define isalnum(x) (isalpha(x) || isdigit(x))
 
-static int	DecodeNumber(int flen, char *field, bool haveTextMonth,
-=======
 static int	DecodeNumber(int flen, char *str, bool haveTextMonth,
->>>>>>> REL_16_9
 						 int fmask, int *tmask,
 						 struct pg_tm *tm, fsec_t *fsec, bool *is2digits);
 static int	DecodeNumberField(int len, char *str,
@@ -68,13 +64,6 @@ static const datetkn *datebsearch(const char *key, const datetkn *base, int nel)
 static int	DecodeDate(char *str, int fmask, int *tmask, bool *is2digits,
 					   struct pg_tm *tm);
 static char *AppendSeconds(char *cp, int sec, fsec_t fsec,
-<<<<<<< HEAD
-                           int precision, bool fillzeros);
-static void AdjustFractSeconds(double frac, struct pg_tm *tm, fsec_t *fsec,
-							   int scale);
-static void AdjustFractDays(double frac, struct pg_tm *tm, fsec_t *fsec,
-							int scale);
-=======
 						   int precision, bool fillzeros);
 static bool int64_multiply_add(int64 val, int64 multiplier, int64 *sum);
 static bool AdjustFractMicroseconds(double frac, int64 scale,
@@ -90,7 +79,6 @@ static bool AdjustDays(int64 val, int scale,
 static bool AdjustMonths(int64 val, struct pg_itm_in *itm_in);
 static bool AdjustYears(int64 val, int scale,
 						struct pg_itm_in *itm_in);
->>>>>>> REL_16_9
 static int	DetermineTimeZoneOffsetInternal(struct pg_tm *tm, pg_tz *tzp,
 											pg_time_t *tp);
 static bool DetermineTimeZoneAbbrevOffsetInternal(pg_time_t t,

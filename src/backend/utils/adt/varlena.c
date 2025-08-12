@@ -301,12 +301,8 @@ byteain(PG_FUNCTION_ARGS)
 
 		bc = (len - 2) / 2 + VARHDRSZ;	/* maximum possible length */
 		result = palloc(bc);
-<<<<<<< HEAD
-		bc = hex_decode(inputText + 2, len - 2, VARDATA(result));
-=======
 		bc = hex_decode_safe(inputText + 2, len - 2, VARDATA(result),
 							 escontext);
->>>>>>> REL_16_9
 		SET_VARSIZE(result, bc + VARHDRSZ); /* actual length */
 
 		PG_RETURN_BYTEA_P(result);

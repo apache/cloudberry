@@ -154,19 +154,12 @@ record_in(PG_FUNCTION_ARGS)
 		ptr++;
 	if (*ptr++ != '(')
 	{
-<<<<<<< HEAD
 		ReleaseTupleDesc(tupdesc);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				 errmsg("malformed record literal: \"%s\"", string),
-				 errdetail("Missing left parenthesis.")));
-=======
 		errsave(escontext,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("malformed record literal: \"%s\"", string),
 				 errdetail("Missing left parenthesis.")));
 		goto fail;
->>>>>>> REL_16_9
 	}
 
 	initStringInfo(&buf);
@@ -200,10 +193,7 @@ record_in(PG_FUNCTION_ARGS)
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("malformed record literal: \"%s\"", string),
 						 errdetail("Too few columns.")));
-<<<<<<< HEAD
-=======
 				goto fail;
->>>>>>> REL_16_9
 			}
 		}
 
@@ -225,39 +215,25 @@ record_in(PG_FUNCTION_ARGS)
 
 				if (ch == '\0')
 				{
-<<<<<<< HEAD
 					ReleaseTupleDesc(tupdesc);
-					ereport(ERROR,
-=======
 					errsave(escontext,
->>>>>>> REL_16_9
 							(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 							 errmsg("malformed record literal: \"%s\"",
 									string),
 							 errdetail("Unexpected end of input.")));
-<<<<<<< HEAD
-=======
 					goto fail;
->>>>>>> REL_16_9
 				}
 				if (ch == '\\')
 				{
 					if (*ptr == '\0')
 					{
-<<<<<<< HEAD
 						ReleaseTupleDesc(tupdesc);
-						ereport(ERROR,
-=======
 						errsave(escontext,
->>>>>>> REL_16_9
 								(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								 errmsg("malformed record literal: \"%s\"",
 										string),
 								 errdetail("Unexpected end of input.")));
-<<<<<<< HEAD
-=======
 						goto fail;
->>>>>>> REL_16_9
 					}
 					appendStringInfoChar(&buf, *ptr++);
 				}
@@ -310,38 +286,24 @@ record_in(PG_FUNCTION_ARGS)
 
 	if (*ptr++ != ')')
 	{
-<<<<<<< HEAD
 		ReleaseTupleDesc(tupdesc);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				 errmsg("malformed record literal: \"%s\"", string),
-				 errdetail("Too many columns.")));
-=======
 		errsave(escontext,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("malformed record literal: \"%s\"", string),
 				 errdetail("Too many columns.")));
 		goto fail;
->>>>>>> REL_16_9
 	}
 	/* Allow trailing whitespace */
 	while (*ptr && isspace((unsigned char) *ptr))
 		ptr++;
 	if (*ptr)
 	{
-<<<<<<< HEAD
 		ReleaseTupleDesc(tupdesc);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
-				 errmsg("malformed record literal: \"%s\"", string),
-				 errdetail("Junk after right parenthesis.")));
-=======
 		errsave(escontext,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("malformed record literal: \"%s\"", string),
 				 errdetail("Junk after right parenthesis.")));
 		goto fail;
->>>>>>> REL_16_9
 	}
 
 	tuple = heap_form_tuple(tupdesc, values, nulls);

@@ -41,11 +41,7 @@ typedef struct SerialIOData
 typedef struct DeserialIOData
 {
 	FmgrInfo	typreceive;
-<<<<<<< HEAD
-	Oid		typioparam;
-=======
 	Oid			typioparam;
->>>>>>> REL_16_9
 } DeserialIOData;
 
 static Datum array_position_common(FunctionCallInfo fcinfo);

@@ -10,13 +10,9 @@
  *	  Index cost functions are located via the index AM's API struct,
  *	  which is obtained from the handler function registered in pg_am.
  *
-<<<<<<< HEAD
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
-=======
  * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -149,14 +145,12 @@
 #include "utils/timestamp.h"
 #include "utils/typcache.h"
 
-<<<<<<< HEAD
 #include "cdb/cdbgroup.h" /* cdbpathlocus_collocates_expressions */
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 #include "optimizer/restrictinfo.h"
-=======
+
 #define DEFAULT_PAGE_CPU_MULTIPLIER 50.0
->>>>>>> REL_16_9
 
 /* Hooks for plugins to get control when we ask for stats */
 get_relation_stats_hook_type get_relation_stats_hook = NULL;
@@ -3977,30 +3971,12 @@ estimate_multivariate_ndistinct(PlannerInfo *root, RelOptInfo *rel,
 	Oid			statOid = InvalidOid;
 	MVNDistinct *stats;
 	StatisticExtInfo *matched_info = NULL;
-<<<<<<< HEAD
-	RangeTblEntry		*rte;
-=======
 	RangeTblEntry *rte = planner_rt_fetch(rel->relid, root);
->>>>>>> REL_16_9
 
 	/* bail out immediately if the table has no extended statistics */
 	if (!rel->statlist)
 		return false;
 
-<<<<<<< HEAD
-	/*
-	 * When dealing with regular inheritance trees, ignore extended stats
-	 * (which were built without data from child rels, and thus do not
-	 * represent them). For partitioned tables data there's no data in the
-	 * non-leaf relations, so we build stats only for the inheritance tree.
-	 * So for partitioned tables we do consider extended stats.
-	 */
-	rte = planner_rt_fetch(rel->relid, root);
-	if (rte->inh && rte->relkind != RELKIND_PARTITIONED_TABLE)
-		return false;
-
-=======
->>>>>>> REL_16_9
 	/* look for the ndistinct statistics object matching the most vars */
 	nmatches_vars = 0;			/* we require at least two matches */
 	nmatches_exprs = 0;
@@ -5439,11 +5415,7 @@ examine_variable(PlannerInfo *root, Node *node, int varRelid,
 		foreach(slist, onerel->statlist)
 		{
 			StatisticExtInfo *info = (StatisticExtInfo *) lfirst(slist);
-<<<<<<< HEAD
-			RangeTblEntry	 *rte = planner_rt_fetch(onerel->relid, root);
-=======
 			RangeTblEntry *rte = planner_rt_fetch(onerel->relid, root);
->>>>>>> REL_16_9
 			ListCell   *expr_item;
 			int			pos;
 
@@ -5487,17 +5459,6 @@ examine_variable(PlannerInfo *root, Node *node, int varRelid,
 				/* found a match, see if we can extract pg_statistic row */
 				if (equal(node, expr))
 				{
-<<<<<<< HEAD
-					HeapTuple	t = statext_expressions_load(info->statOid, pos);
-
-					/* Get statistics object's table for permission check */
-					RangeTblEntry *rte;
-					Oid			userid;
-
-					vardata->statsTuple = t;
-
-=======
->>>>>>> REL_16_9
 					/*
 					 * XXX Not sure if we should cache the tuple somewhere.
 					 * Now we just create a new copy every time.
@@ -6173,7 +6134,6 @@ get_variable_range(PlannerInfo *root, VariableStatData *vardata,
 	{
 		bool		use_mcvs = have_data;
 
-<<<<<<< HEAD
 		/*
 		 * GPDB: See the identical check, above, for histogram data.
 		 */
@@ -6181,8 +6141,6 @@ get_variable_range(PlannerInfo *root, VariableStatData *vardata,
 			elog(ERROR, "invalid MCV array of type %s, for attribute of type %s",
 				 format_type_be(sslot.valuetype), format_type_be(vardata->atttype));
 
-=======
->>>>>>> REL_16_9
 		if (!have_data)
 		{
 			double		sumcommon = 0.0;

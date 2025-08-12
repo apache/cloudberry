@@ -40,11 +40,8 @@
 #include "utils/builtins.h"
 #include "utils/float.h"
 #include "utils/guc.h"
-<<<<<<< HEAD
 #include "utils/int8.h"
 #include "utils/memutils.h"
-=======
->>>>>>> REL_16_9
 #include "utils/numeric.h"
 #include "utils/pg_lsn.h"
 #include "utils/sortsupport.h"

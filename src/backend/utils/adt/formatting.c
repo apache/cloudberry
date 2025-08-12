@@ -4570,7 +4570,6 @@ do_to_timestamp(text *date_txt, text *fmt, Oid collid, bool std,
 	{
 		if (tm->tm_hour < 1 || tm->tm_hour > HOURS_PER_DAY / 2)
 		{
-<<<<<<< HEAD
             /*
              * GPDB_13_MERGE_FIXME: The IF branch is from the GPDB specific behavior.
              * It will not raise an error if the hour is greater than 12
@@ -4606,19 +4605,14 @@ HINT:  Use the 24-hour clock, or give an hour between 1 and 12.
 				tm->tm_hour = tm->tm_hour - HOURS_PER_DAY / 2;
 			}
 			else
-			RETURN_ERROR(ereport(ERROR,
-								 (errcode(ERRCODE_INVALID_DATETIME_FORMAT),
-								  errmsg("hour \"%d\" is invalid for the 12-hour clock",
-										 tm->tm_hour),
-								  errhint("Use the 24-hour clock, or give an hour between 1 and 12."))));
-=======
-			errsave(escontext,
-					(errcode(ERRCODE_INVALID_DATETIME_FORMAT),
-					 errmsg("hour \"%d\" is invalid for the 12-hour clock",
-							tm->tm_hour),
-					 errhint("Use the 24-hour clock, or give an hour between 1 and 12.")));
-			goto fail;
->>>>>>> REL_16_9
+			{
+				errsave(escontext,
+						(errcode(ERRCODE_INVALID_DATETIME_FORMAT),
+								errmsg("hour \"%d\" is invalid for the 12-hour clock",
+									   tm->tm_hour),
+								errhint("Use the 24-hour clock, or give an hour between 1 and 12.")));
+				goto fail;
+			}
 		}
 
 		if (tmfc.pm && tm->tm_hour < HOURS_PER_DAY / 2)

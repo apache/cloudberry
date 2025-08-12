@@ -59,11 +59,8 @@
 #include "catalog/pg_control.h"
 #include "common/string.h"
 #include "mb/pg_wchar.h"
-<<<<<<< HEAD
 #include "utils/faultinjector.h"
-=======
 #include "miscadmin.h"
->>>>>>> REL_16_9
 #include "utils/builtins.h"
 #include "utils/formatting.h"
 #include "utils/guc_hooks.h"

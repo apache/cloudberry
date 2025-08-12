@@ -2769,11 +2769,7 @@ interval_cmp_value(const Interval *interval)
 	return span;
 }
 
-<<<<<<< HEAD
 int
-=======
-static int
->>>>>>> REL_16_9
 interval_cmp_internal(const Interval *interval1, const Interval *interval2)
 {
 	INT128		span1 = interval_cmp_value(interval1);
@@ -3509,9 +3505,6 @@ timestamp_pl_interval(PG_FUNCTION_ARGS)
 	Interval   *span = PG_GETARG_INTERVAL_P(1);
 	Timestamp	result;
 
-<<<<<<< HEAD
-	result = timestamp_offset_internal(timestamp, span);
-=======
 	if (TIMESTAMP_NOT_FINITE(timestamp))
 		result = timestamp;
 	else
@@ -3594,7 +3587,6 @@ timestamp_pl_interval(PG_FUNCTION_ARGS)
 
 		result = timestamp;
 	}
->>>>>>> REL_16_9
 
 	PG_RETURN_TIMESTAMP(result);
 }
@@ -3616,18 +3608,10 @@ timestamp_mi_interval(PG_FUNCTION_ARGS)
 	PG_RETURN_TIMESTAMP(result);
 }
 
-
-<<<<<<< HEAD
-/*
- * timestamptz_pl_interval()
- * Add an interval to a timestamp with time zone data type.
- * Note that interval has provisions for qualitative year/month
-=======
 /* timestamptz_pl_interval_internal()
  * Add an interval to a timestamptz, in the given (or session) timezone.
  *
  * Note that interval has provisions for qualitative year/month and day
->>>>>>> REL_16_9
  *	units, so try to do the right thing with them.
  * To add a month, increment the month, and use the same day of month.
  * Then, if the next month has fewer days, set the day of month
@@ -3640,11 +3624,6 @@ timestamptz_pl_interval_internal(TimestampTz timestamp,
 								 Interval *span,
 								 pg_tz *attimezone)
 {
-<<<<<<< HEAD
-	TimestampTz timestamp = PG_GETARG_TIMESTAMPTZ(0);
-	Interval   *span = PG_GETARG_INTERVAL_P(1);
-	TimestampTz result = timestamptz_offset_internal(timestamp, span);
-=======
 	TimestampTz result;
 	int			tz;
 
@@ -3741,7 +3720,6 @@ timestamptz_pl_interval_internal(TimestampTz timestamp,
 
 		result = timestamp;
 	}
->>>>>>> REL_16_9
 
 	return result;
 }
@@ -3780,20 +3758,8 @@ timestamptz_mi_interval(PG_FUNCTION_ARGS)
 {
 	TimestampTz timestamp = PG_GETARG_TIMESTAMPTZ(0);
 	Interval   *span = PG_GETARG_INTERVAL_P(1);
-<<<<<<< HEAD
-	Interval	tspan;
-	TimestampTz result;
-
-	tspan.month = -span->month;
-	tspan.day = -span->day;
-	tspan.time = -span->time;
-
-	result = timestamptz_offset_internal(timestamp, &tspan);
-	PG_RETURN_TIMESTAMP(result);
-=======
 
 	PG_RETURN_TIMESTAMP(timestamptz_mi_interval_internal(timestamp, span, NULL));
->>>>>>> REL_16_9
 }
 
 /* timestamptz_pl_interval_at_zone()
@@ -4485,16 +4451,10 @@ timestamp_age(PG_FUNCTION_ARGS)
 	Timestamp	dt1 = PG_GETARG_TIMESTAMP(0);
 	Timestamp	dt2 = PG_GETARG_TIMESTAMP(1);
 	Interval   *result;
-<<<<<<< HEAD
 	fsec_t		fsec,
 				fsec1 = 0,
 				fsec2 = 0;
 	struct pg_tm tt,
-=======
-	fsec_t		fsec1,
-				fsec2;
-	struct pg_itm tt,
->>>>>>> REL_16_9
 			   *tm = &tt;
 	struct pg_tm tt1,
 			   *tm1 = &tt1;
@@ -4868,20 +4828,8 @@ timestamp_bin(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 				 errmsg("stride must be greater than zero")));
 
-<<<<<<< HEAD
 	tm_diff = timestamp - origin;
 	tm_delta = tm_diff - tm_diff % stride_usecs;
-=======
-	if (unlikely(pg_sub_s64_overflow(timestamp, origin, &tm_diff)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-				 errmsg("interval out of range")));
-
-	/* These calculations cannot overflow */
-	tm_modulo = tm_diff % stride_usecs;
-	tm_delta = tm_diff - tm_modulo;
-	result = origin + tm_delta;
->>>>>>> REL_16_9
 
 	/*
 	 * We want to round towards -infinity, not 0, when tm_diff is negative and
@@ -5073,20 +5021,8 @@ timestamptz_bin(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 				 errmsg("stride must be greater than zero")));
 
-<<<<<<< HEAD
 	tm_diff = timestamp - origin;
 	tm_delta = tm_diff - tm_diff % stride_usecs;
-=======
-	if (unlikely(pg_sub_s64_overflow(timestamp, origin, &tm_diff)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-				 errmsg("interval out of range")));
-
-	/* These calculations cannot overflow */
-	tm_modulo = tm_diff % stride_usecs;
-	tm_delta = tm_diff - tm_modulo;
-	result = origin + tm_delta;
->>>>>>> REL_16_9
 
 	/*
 	 * We want to round towards -infinity, not 0, when tm_diff is negative and
@@ -6633,19 +6569,9 @@ timestamptz_zone(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-<<<<<<< HEAD
-		/* try it as a full zone name */
-		tzp = pg_tzset(tzname);
-		if (tzp)
-		{
-			/* Apply the timezone change */
-			struct pg_tm tm;
- 			fsec_t		fsec = 0;
-=======
 		/* full zone name, rotate from that zone */
 		struct pg_tm tm;
-		fsec_t		fsec;
->>>>>>> REL_16_9
+		fsec_t		fsec = 0;
 
 		if (timestamp2tm(timestamp, &tz, &tm, &fsec, NULL, tzp) != 0)
 			ereport(ERROR,

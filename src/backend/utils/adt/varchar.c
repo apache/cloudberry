@@ -127,13 +127,8 @@ anychar_typmodout(int32 typmod)
  * of throwing an error; the caller must check SOFT_ERROR_OCCURRED()
  * to detect errors.
  */
-<<<<<<< HEAD
 BpChar *
-bpchar_input(const char *s, size_t len, int32 atttypmod)
-=======
-static BpChar *
 bpchar_input(const char *s, size_t len, int32 atttypmod, Node *escontext)
->>>>>>> REL_16_9
 {
 	BpChar	   *result;
 	char	   *r;
@@ -459,13 +454,8 @@ bpchartypmodout(PG_FUNCTION_ARGS)
  * of throwing an error; the caller must check SOFT_ERROR_OCCURRED()
  * to detect errors.
  */
-<<<<<<< HEAD
 VarChar *
-varchar_input(const char *s, size_t len, int32 atttypmod)
-=======
-static VarChar *
 varchar_input(const char *s, size_t len, int32 atttypmod, Node *escontext)
->>>>>>> REL_16_9
 {
 	VarChar    *result;
 	size_t		maxlen;

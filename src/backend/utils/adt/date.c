@@ -3139,14 +3139,7 @@ timetz_zone(PG_FUNCTION_ARGS)
 		TimestampTz now = GetCurrentTransactionStartTimestamp();
 		int			isdst;
 
-<<<<<<< HEAD
-		tm = pg_localtime(&now, tzp);
-		tm->tm_year += 1900;	/* adjust to PG conventions */
-		tm->tm_mon += 1;
-		tz = DetermineTimeZoneAbbrevOffset(tm, tzname, tzp);
-=======
 		tz = DetermineTimeZoneAbbrevOffsetTS(now, tzname, tzp, &isdst);
->>>>>>> REL_16_9
 	}
 	else
 	{

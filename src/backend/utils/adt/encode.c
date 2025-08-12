@@ -172,13 +172,8 @@ hex_encode(const char *src, size_t len, char *dst)
 	return (uint64) len * 2;
 }
 
-<<<<<<< HEAD
-static inline char
-get_hex(const char *cp)
-=======
 static inline bool
 get_hex(const char *cp, char *out)
->>>>>>> REL_16_9
 {
 	unsigned char c = (unsigned char) *cp;
 	int			res = -1;
@@ -186,33 +181,20 @@ get_hex(const char *cp, char *out)
 	if (c < 127)
 		res = hexlookup[c];
 
-<<<<<<< HEAD
-	if (res < 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("invalid hexadecimal digit: \"%.*s\"",
-						pg_mblen(cp), cp)));
-
-	return (char) res;
-=======
 	*out = (char) res;
 
 	return (res >= 0);
->>>>>>> REL_16_9
 }
 
 uint64
 hex_decode(const char *src, size_t len, char *dst)
 {
-<<<<<<< HEAD
-=======
 	return hex_decode_safe(src, len, dst, NULL);
 }
 
 uint64
 hex_decode_safe(const char *src, size_t len, char *dst, Node *escontext)
 {
->>>>>>> REL_16_9
 	const char *s,
 			   *srcend;
 	char		v1,
@@ -229,18 +211,6 @@ hex_decode_safe(const char *src, size_t len, char *dst, Node *escontext)
 			s++;
 			continue;
 		}
-<<<<<<< HEAD
-		v1 = get_hex(s) << 4;
-		s++;
-		if (s >= srcend)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("invalid hexadecimal data: odd number of digits")));
-
-		v2 = get_hex(s);
-		s++;
-		*p++ = v1 | v2;
-=======
 		if (!get_hex(s, &v1))
 			ereturn(escontext, 0,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -258,7 +228,6 @@ hex_decode_safe(const char *src, size_t len, char *dst, Node *escontext)
 							pg_mblen(s), s)));
 		s++;
 		*p++ = (v1 << 4) | v2;
->>>>>>> REL_16_9
 	}
 
 	return p - dst;

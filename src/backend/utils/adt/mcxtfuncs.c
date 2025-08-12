@@ -164,16 +164,11 @@ pg_get_backend_memory_contexts(PG_FUNCTION_ARGS)
 Datum
 pg_log_backend_memory_contexts(PG_FUNCTION_ARGS)
 {
-<<<<<<< HEAD
-	int		pid = PG_GETARG_INT32(0);
-	PGPROC		*proc = BackendPidGetProc(pid);
-=======
 	int			pid = PG_GETARG_INT32(0);
 	PGPROC	   *proc;
 	BackendId	backendId = InvalidBackendId;
 
 	proc = BackendPidGetProc(pid);
->>>>>>> REL_16_9
 
 	/*
 	 * See if the process with given pid is a backend or an auxiliary process.

@@ -35,7 +35,6 @@
 #include "utils/lsyscache.h"
 #include "utils/numeric.h"
 #include "utils/rel.h"
-<<<<<<< HEAD
 #include "utils/relcache.h"
 #include "utils/relfilenodemap.h"
 #include "utils/relmapper.h"
@@ -51,9 +50,47 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
 #include "utils/snapmgr.h"
+#include "utils/relfilenumbermap.h"
+#include "utils/relmapper.h"
+#include "utils/syscache.h"
 
 /* Divide by two and round away from zero */
 #define half_rounded(x)   (((x) + ((x) < 0 ? -1 : 1)) / 2)
+
+/* Units used in pg_size_pretty functions.  All units must be powers of 2 */
+struct size_pretty_unit
+{
+	const char *name;			/* bytes, kB, MB, GB etc */
+	uint32		limit;			/* upper limit, prior to half rounding after
+								 * converting to this unit. */
+	bool		round;			/* do half rounding for this unit */
+	uint8		unitbits;		/* (1 << unitbits) bytes to make 1 of this
+								 * unit */
+};
+
+/* When adding units here also update the docs and the error message in pg_size_bytes */
+static const struct size_pretty_unit size_pretty_units[] = {
+		{"bytes", 10 * 1024, false, 0},
+		{"kB", 20 * 1024 - 1, true, 10},
+		{"MB", 20 * 1024 - 1, true, 20},
+		{"GB", 20 * 1024 - 1, true, 30},
+		{"TB", 20 * 1024 - 1, true, 40},
+		{"PB", 20 * 1024 - 1, true, 50},
+		{NULL, 0, false, 0}
+};
+
+/* Additional unit aliases accepted by pg_size_bytes */
+struct size_bytes_unit_alias
+{
+	const char *alias;
+	int			unit_index;		/* corresponding size_pretty_units element */
+};
+
+/* When adding units here also update the docs and the error message in pg_size_bytes */
+static const struct size_bytes_unit_alias size_bytes_aliases[] = {
+		{"B", 0},
+		{NULL}
+};
 
 static int64 calculate_total_relation_size(Relation rel);
 static HTAB *cbdb_get_size_from_segDBs(const char *cmd, int32 relnum);
@@ -129,49 +166,6 @@ get_size_from_segDBs(const char *cmd)
 
 	return result;
 }
-=======
-#include "utils/relfilenumbermap.h"
-#include "utils/relmapper.h"
-#include "utils/syscache.h"
-
-/* Divide by two and round away from zero */
-#define half_rounded(x)   (((x) + ((x) < 0 ? -1 : 1)) / 2)
-
-/* Units used in pg_size_pretty functions.  All units must be powers of 2 */
-struct size_pretty_unit
-{
-	const char *name;			/* bytes, kB, MB, GB etc */
-	uint32		limit;			/* upper limit, prior to half rounding after
-								 * converting to this unit. */
-	bool		round;			/* do half rounding for this unit */
-	uint8		unitbits;		/* (1 << unitbits) bytes to make 1 of this
-								 * unit */
-};
-
-/* When adding units here also update the docs and the error message in pg_size_bytes */
-static const struct size_pretty_unit size_pretty_units[] = {
-	{"bytes", 10 * 1024, false, 0},
-	{"kB", 20 * 1024 - 1, true, 10},
-	{"MB", 20 * 1024 - 1, true, 20},
-	{"GB", 20 * 1024 - 1, true, 30},
-	{"TB", 20 * 1024 - 1, true, 40},
-	{"PB", 20 * 1024 - 1, true, 50},
-	{NULL, 0, false, 0}
-};
-
-/* Additional unit aliases accepted by pg_size_bytes */
-struct size_bytes_unit_alias
-{
-	const char *alias;
-	int			unit_index;		/* corresponding size_pretty_units element */
-};
-
-/* When adding units here also update the docs and the error message in pg_size_bytes */
-static const struct size_bytes_unit_alias size_bytes_aliases[] = {
-	{"B", 0},
-	{NULL}
-};
->>>>>>> REL_16_9
 
 /* Return physical size of directory contents, or 0 if dir doesn't exist */
 static int64
@@ -496,11 +490,7 @@ pg_tablespace_size_name(PG_FUNCTION_ARGS)
  * is no check here or at the call sites for that.
  */
 static int64
-<<<<<<< HEAD
-calculate_relation_size(Relation rel, ForkNumber forknum)
-=======
 calculate_relation_size(RelFileLocator *rfn, BackendId backend, ForkNumber forknum)
->>>>>>> REL_16_9
 {
 	int64		totalsize = 0;
 	char	   *relationpath;
@@ -576,7 +566,6 @@ pg_relation_size(PG_FUNCTION_ARGS)
 	if (rel == NULL)
 		PG_RETURN_NULL();
 
-<<<<<<< HEAD
 	if (rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
 	{
 		FdwRoutine *fdwroutine;
@@ -612,10 +601,6 @@ pg_relation_size(PG_FUNCTION_ARGS)
 
 		size += get_size_from_segDBs(sql);
 	}
-=======
-	size = calculate_relation_size(&(rel->rd_locator), rel->rd_backend,
-								   forkname_to_number(text_to_cstring(forkName)));
->>>>>>> REL_16_9
 
 	relation_close(rel, AccessShareLock);
 
@@ -639,12 +624,8 @@ calculate_toast_table_size(Oid toastrelid)
 
 	/* toast heap size, including FSM and VM size */
 	for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
-<<<<<<< HEAD
-		size += calculate_relation_size(toastRel, forkNum);
-=======
 		size += calculate_relation_size(&(toastRel->rd_locator),
 										toastRel->rd_backend, forkNum);
->>>>>>> REL_16_9
 
 	/* toast index size, including FSM and VM size */
 	indexlist = RelationGetIndexList(toastRel);
@@ -657,12 +638,8 @@ calculate_toast_table_size(Oid toastrelid)
 		toastIdxRel = relation_open(lfirst_oid(lc),
 									AccessShareLock);
 		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
-<<<<<<< HEAD
-			size += calculate_relation_size(toastIdxRel, forkNum);
-=======
 			size += calculate_relation_size(&(toastIdxRel->rd_locator),
 											toastIdxRel->rd_backend, forkNum);
->>>>>>> REL_16_9
 
 		relation_close(toastIdxRel, AccessShareLock);
 	}
@@ -693,17 +670,11 @@ calculate_table_size(Relation rel)
 	/*
 	 * heap size, including FSM and VM
 	 */
-<<<<<<< HEAD
-	if (rel->rd_node.relNode != 0)
+	if (rel->rd_locator.relNumber != 0)
 	{
 		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
-			size += calculate_relation_size(rel, forkNum);
+			size += calculate_relation_size(rel, rel->rd_backend, forkNum);
 	}
-=======
-	for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
-		size += calculate_relation_size(&(rel->rd_locator), rel->rd_backend,
-										forkNum);
->>>>>>> REL_16_9
 
 	/*
 	 * Size of toast relation
@@ -771,17 +742,12 @@ calculate_indexes_size(Relation rel)
 
 			idxRel = try_relation_open(idxOid, AccessShareLock, false);
 
-<<<<<<< HEAD
 			if (RelationIsValid(idxRel))
 			{
 				for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
-					size += calculate_relation_size(idxRel, forkNum);
-=======
-			for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
-				size += calculate_relation_size(&(idxRel->rd_locator),
-												idxRel->rd_backend,
-												forkNum);
->>>>>>> REL_16_9
+					size += calculate_relation_size(&(idxRel->rd_locator),
+													idxRel->rd_backend,
+													forkNum);
 
 				relation_close(idxRel, AccessShareLock);
 			}
@@ -927,35 +893,6 @@ pg_size_pretty(PG_FUNCTION_ARGS)
 
 	for (unit = size_pretty_units; unit->name != NULL; unit++)
 	{
-<<<<<<< HEAD
-		/*
-		 * We use divide instead of bit shifting so that behavior matches for
-		 * both positive and negative size values.
-		 */
-		size /= (1 << 9);		/* keep one extra bit for rounding */
-		if (Abs(size) < limit2)
-			snprintf(buf, sizeof(buf), INT64_FORMAT " kB",
-					 half_rounded(size));
-		else
-		{
-			size /= (1 << 10);
-			if (Abs(size) < limit2)
-				snprintf(buf, sizeof(buf), INT64_FORMAT " MB",
-						 half_rounded(size));
-			else
-			{
-				size /= (1 << 10);
-				if (Abs(size) < limit2)
-					snprintf(buf, sizeof(buf), INT64_FORMAT " GB",
-							 half_rounded(size));
-				else
-				{
-					size /= (1 << 10);
-					snprintf(buf, sizeof(buf), INT64_FORMAT " TB",
-							 half_rounded(size));
-				}
-			}
-=======
 		uint8		bits;
 		uint64		abs_size = size < 0 ? 0 - (uint64) size : (uint64) size;
 
@@ -970,7 +907,6 @@ pg_size_pretty(PG_FUNCTION_ARGS)
 
 			snprintf(buf, sizeof(buf), INT64_FORMAT " %s", size, unit->name);
 			break;
->>>>>>> REL_16_9
 		}
 
 		/*
@@ -1060,62 +996,18 @@ pg_size_pretty_numeric(PG_FUNCTION_ARGS)
 
 	for (unit = size_pretty_units; unit->name != NULL; unit++)
 	{
-<<<<<<< HEAD
-		result = psprintf("%s bytes", numeric_to_cstring(size));
-	}
-	else
-	{
-		/* keep one extra bit for rounding */
-		/* size /= (1 << 9) */
-		size = numeric_truncated_divide(size, 1 << 9);
-=======
 		unsigned int shiftby;
->>>>>>> REL_16_9
 
 		/* use this unit if there are no more units or we're below the limit */
 		if (unit[1].name == NULL ||
 			numeric_is_less(numeric_absolute(size),
 							int64_to_numeric(unit->limit)))
 		{
-<<<<<<< HEAD
-			size = numeric_half_rounded(size);
-			result = psprintf("%s kB", numeric_to_cstring(size));
-		}
-		else
-		{
-			/* size /= (1 << 10) */
-			size = numeric_truncated_divide(size, 1 << 10);
-
-			if (numeric_is_less(numeric_absolute(size), limit2))
-			{
-				size = numeric_half_rounded(size);
-				result = psprintf("%s MB", numeric_to_cstring(size));
-			}
-			else
-			{
-				/* size /= (1 << 10) */
-				size = numeric_truncated_divide(size, 1 << 10);
-
-				if (numeric_is_less(numeric_absolute(size), limit2))
-				{
-					size = numeric_half_rounded(size);
-					result = psprintf("%s GB", numeric_to_cstring(size));
-				}
-				else
-				{
-					/* size /= (1 << 10) */
-					size = numeric_truncated_divide(size, 1 << 10);
-					size = numeric_half_rounded(size);
-					result = psprintf("%s TB", numeric_to_cstring(size));
-				}
-			}
-=======
 			if (unit->round)
 				size = numeric_half_rounded(size);
 
 			result = psprintf("%s %s", numeric_to_cstring(size), unit->name);
 			break;
->>>>>>> REL_16_9
 		}
 
 		/*
@@ -1306,11 +1198,7 @@ Datum
 pg_relation_filenode(PG_FUNCTION_ARGS)
 {
 	Oid			relid = PG_GETARG_OID(0);
-<<<<<<< HEAD
-	Oid 		result;
-=======
 	RelFileNumber result;
->>>>>>> REL_16_9
 	HeapTuple	tuple;
 	Form_pg_class relform;
 
@@ -1321,7 +1209,6 @@ pg_relation_filenode(PG_FUNCTION_ARGS)
 
 	switch (relform->relkind)
 	{
-<<<<<<< HEAD
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
 		case RELKIND_INDEX:
@@ -1343,18 +1230,6 @@ pg_relation_filenode(PG_FUNCTION_ARGS)
 			/* no storage, return NULL */
 			result = InvalidOid;
 			break;
-=======
-		if (relform->relfilenode)
-			result = relform->relfilenode;
-		else					/* Consult the relation mapper */
-			result = RelationMapOidToFilenumber(relid,
-												relform->relisshared);
-	}
-	else
-	{
-		/* no storage, return NULL */
-		result = InvalidRelFileNumber;
->>>>>>> REL_16_9
 	}
 
 	ReleaseSysCache(tuple);
@@ -1382,11 +1257,7 @@ Datum
 pg_filenode_relation(PG_FUNCTION_ARGS)
 {
 	Oid			reltablespace = PG_GETARG_OID(0);
-<<<<<<< HEAD
-	Oid 		relfilenode = PG_GETARG_OID(1);
-=======
 	RelFileNumber relfilenumber = PG_GETARG_OID(1);
->>>>>>> REL_16_9
 	Oid			heaprel;
 
 	/* test needed so RelidByRelfilenumber doesn't misbehave */
@@ -1423,7 +1294,6 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 
 	switch (relform->relkind)
 	{
-<<<<<<< HEAD
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
 		case RELKIND_INDEX:
@@ -1437,51 +1307,27 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 
 			/* This logic should match RelationInitPhysicalAddr */
 			if (relform->reltablespace)
-				rnode.spcNode = relform->reltablespace;
+				rlocator.spcOid = relform->reltablespace;
 			else
-				rnode.spcNode = MyDatabaseTableSpace;
-			if (rnode.spcNode == GLOBALTABLESPACE_OID)
-				rnode.dbNode = InvalidOid;
+				rlocator.spcOid = MyDatabaseTableSpace;
+			if (rlocator.spcOid == GLOBALTABLESPACE_OID)
+				rlocator.dbOid = InvalidOid;
 			else
-				rnode.dbNode = MyDatabaseId;
+				rlocator.dbOid = MyDatabaseId;
 			if (relform->relfilenode)
-				rnode.relNode = relform->relfilenode;
+				rlocator.relNumber = relform->relfilenode;
 			else				/* Consult the relation mapper */
-				rnode.relNode = RelationMapOidToFilenode(relid,
+				rlocator.relNumber = RelationMapOidToFilenode(relid,
 														 relform->relisshared);
 			break;
 
 		default:
 			/* no storage, return NULL */
-			rnode.relNode = InvalidOid;
+			rlocator.relNumber = InvalidOid;
 			/* some compilers generate warnings without these next two lines */
-			rnode.dbNode = InvalidOid;
-			rnode.spcNode = InvalidOid;
-			break;
-=======
-		/* This logic should match RelationInitPhysicalAddr */
-		if (relform->reltablespace)
-			rlocator.spcOid = relform->reltablespace;
-		else
-			rlocator.spcOid = MyDatabaseTableSpace;
-		if (rlocator.spcOid == GLOBALTABLESPACE_OID)
 			rlocator.dbOid = InvalidOid;
-		else
-			rlocator.dbOid = MyDatabaseId;
-		if (relform->relfilenode)
-			rlocator.relNumber = relform->relfilenode;
-		else					/* Consult the relation mapper */
-			rlocator.relNumber = RelationMapOidToFilenumber(relid,
-															relform->relisshared);
-	}
-	else
-	{
-		/* no storage, return NULL */
-		rlocator.relNumber = InvalidRelFileNumber;
-		/* some compilers generate warnings without these next two lines */
-		rlocator.dbOid = InvalidOid;
-		rlocator.spcOid = InvalidOid;
->>>>>>> REL_16_9
+			rlocator.spcOid = InvalidOid;
+			break;
 	}
 
 	if (!RelFileNumberIsValid(rlocator.relNumber))

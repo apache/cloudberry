@@ -43,10 +43,7 @@
 #include "postgres.h"
 
 #include "access/detoast.h"
-<<<<<<< HEAD
-=======
 #include "catalog/pg_type_d.h"
->>>>>>> REL_16_9
 #include "common/hashfn.h"
 #include "fmgr.h"
 #include "utils/builtins.h"

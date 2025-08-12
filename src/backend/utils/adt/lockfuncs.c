@@ -44,17 +44,11 @@ const char *const LockTagTypeNames[] = {
 	"distributed xid",
 	"userlock",
 	"advisory",
-<<<<<<< HEAD
+	"applytransaction"
 	"warehouse"
 };
 
 StaticAssertDecl(lengthof(LockTagTypeNames) == (LOCKTAG_WAREHOUSE + 1),
-=======
-	"applytransaction"
-};
-
-StaticAssertDecl(lengthof(LockTagTypeNames) == (LOCKTAG_LAST_TYPE + 1),
->>>>>>> REL_16_9
 				 "array length mismatch");
 
 /* This must match enum PredicateLockTargetType (predicate_internals.h) */
@@ -463,7 +457,6 @@ pg_lock_status(PG_FUNCTION_ARGS)
 				nulls[8] = true;
 				nulls[9] = true;
 				break;
-<<<<<<< HEAD
 			case LOCKTAG_RESOURCE_QUEUE:
 			case LOCKTAG_WAREHOUSE:
 #if 0
@@ -471,23 +464,19 @@ pg_lock_status(PG_FUNCTION_ARGS)
 #endif
 				nulls[1] = true;
 				values[8] = ObjectIdGetDatum(instance->locktag.locktag_field1);
-=======
+				nulls[2] = true;
+				nulls[3] = true;
+				nulls[4] = true;
+				nulls[5] = true;
+				nulls[6] = true;
+				nulls[7] = true;
+				nulls[9] = true;
+				break;
 			case LOCKTAG_SPECULATIVE_TOKEN:
 				values[6] =
 					TransactionIdGetDatum(instance->locktag.locktag_field1);
 				values[8] = ObjectIdGetDatum(instance->locktag.locktag_field2);
 				nulls[1] = true;
->>>>>>> REL_16_9
-				nulls[2] = true;
-				nulls[3] = true;
-				nulls[4] = true;
-				nulls[5] = true;
-<<<<<<< HEAD
-				nulls[6] = true;
-				nulls[7] = true;
-				nulls[9] = true;
-				break;
-=======
 				nulls[7] = true;
 				nulls[9] = true;
 				break;
@@ -502,7 +491,6 @@ pg_lock_status(PG_FUNCTION_ARGS)
 				nulls[5] = true;
 				nulls[7] = true;
 				break;
->>>>>>> REL_16_9
 			case LOCKTAG_OBJECT:
 			case LOCKTAG_USERLOCK:
 			case LOCKTAG_ADVISORY:
