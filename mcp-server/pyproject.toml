@@ -67,4 +67,4 @@ Repository = "https://github.com/apache/cloudberry"
 Documentation = "https://github.com/apache/cloudberry/mcp-server/tree/main/mcp-server/README.md"
 
 [project.scripts]
-cloudberry-server = "cbmcp.server:main"
+cloudberry-mcp-server = "cbmcp.server:main"
