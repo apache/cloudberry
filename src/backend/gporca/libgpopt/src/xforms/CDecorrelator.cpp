@@ -426,7 +426,14 @@ CDecorrelator::FProcessGbAgg(CMemoryPool *mp, CExpression *pexpr,
 		return false;
 	}
 
-	// TODO: 12/20/2012 - ; check for strictness of agg function
+	if (0 == popAggOriginal->Pdrgpcr()->Size())
+	{
+		CColRef *pcrCount = nullptr;
+		if (CUtils::FHasCountAgg((*pexpr)[1], &pcrCount))
+		{
+			return false;
+		}
+	}
 
 	// decorrelate relational child, allow only equality predicates, see below for the reason
 	CExpression *pexprRelational = nullptr;
