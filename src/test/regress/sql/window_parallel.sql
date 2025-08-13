@@ -213,6 +213,52 @@ select sum(salary) over (order by enroll_date range between '1 year'::interval p
 --
 -- End of test of Parallel process of Window Functions.
 --
+
+--
+-- Test Parallel UNION ALL
+--
+create table t1(a int, b int) with(parallel_workers=2);
+create table t2(a int, b int) with(parallel_workers=2);
+insert into t1 select i, i from generate_series(1, 10000) i;
+insert into t1 select i, i from generate_series(1, 10000) i;
+analyze t1;
+analyze t2;
+
+begin;
+set local enable_parallel = on;
+set local enable_parallel_append = on;
+set local min_parallel_table_scan_size = 0;
+
+-- If parallel-aware append encounters a motion hazard, fall back to parallel-oblivious append.
+explain(costs off, verbose)
+select b, count(*) from t1 group by b union all select b, count(*) from t2 group by b;
+
+set local enable_parallel_append = off;
+-- Naturally, use parallel-oblivious append directly when parallel-aware mode is disabled.
+explain(costs off, verbose)
+select b, count(*) from t1 group by b union all select b, count(*) from t2 group by b;
+
+-- Ensure compatibility between different paths when using parallel workers
+set local enable_parallel_append = on;
+set max_parallel_workers_per_gather = 3;
+alter table t2 set(parallel_workers=3);
+explain(costs off, verbose)
+select b, count(*) from t1 group by b union all select b, count(*) from t2 group by b;
+
+-- Could not drive a parallel plan if no partial paths are avaliable
+alter table t2 set(parallel_workers=0);
+-- parallel-aware
+explain(costs off, verbose)
+select b, count(*) from t1 group by b union all select b, count(*) from t2 group by b;
+set local enable_parallel_append = off;
+-- Also applies to parallel-oblivious
+explain(costs off, verbose)
+select b, count(*) from t1 group by b union all select b, count(*) from t2 group by b;
+abort;
+
+--
+-- End of test Parallel UNION ALL
+--
 -- start_ignore
 drop schema window_parallel cascade;
 -- end_ignore
