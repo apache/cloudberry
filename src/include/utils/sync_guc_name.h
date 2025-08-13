@@ -66,6 +66,7 @@
 		"gp_enable_interconnect_aggressive_retry",
 		"gp_enable_runtime_filter",
 		"gp_enable_runtime_filter_pushdown",
+		"gp_runtime_filter_selectivity_threshold",
 		"gp_enable_segment_copy_checking",
 		"gp_external_enable_filter_pushdown",
 		"gp_hashjoin_tuples_per_bucket",

@@ -3093,15 +3093,19 @@ typedef struct RuntimeFilterState
 typedef struct AttrFilter
 {
 	bool			empty;  /* empty filter or not */
+	bool			hasnulls; /* has null value or not */
 	PlanState		*target;/* the node in where runtime filter will be used,
 							   target will be seqscan, see FindTargetAttr().
 							   in nodeHashjoin.c */
 	AttrNumber		rattno;	/* attr no in hash node */
 	AttrNumber		lattno;	/* if target is seqscan, attr no in relation */
+	Oid 			vartype;	/* type of the attribute */
+	Oid 			collation;	/* collation of the attribute */
 
 	bloom_filter	*blm_filter;
 	Datum			min;
 	Datum			max;
+	float4			n_distinct; /* estimated number of distinct values */
 } AttrFilter;
 
 /* ----------------

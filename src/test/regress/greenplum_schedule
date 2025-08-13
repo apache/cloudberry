@@ -127,6 +127,7 @@ test: rle rle_delta dsp not_out_of_shmem_exit_slots create_am_gp
 # Cloudberry-specific tests
 test: cbdb_optimizer_test
 test: gp_runtime_filter
+test: gp_runtimefilter_pushdown
 
 # Disabled tests. XXX: Why are these disabled?
 #test: olap_window

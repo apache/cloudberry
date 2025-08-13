@@ -1,0 +1,365 @@
+SET optimizer TO on;
+-- Test Suit 1: runtime filter main case
+DROP TABLE IF EXISTS fact_rf, dim_rf;
+NOTICE:  table "fact_rf" does not exist, skipping
+NOTICE:  table "dim_rf" does not exist, skipping
+CREATE TABLE fact_rf (fid int, did int, val int) using pax WITH(minmax_columns='fid,did,val');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'fid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE dim_rf (did int, proj_id int, filter_val int) using pax WITH(minmax_columns='did,proj_id,filter_val');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- Generating data, fact_rd.did and dim_rf.did is 80% matched
+INSERT INTO fact_rf SELECT i, i % 8000 + 1, i FROM generate_series(1, 100000) s(i);
+INSERT INTO dim_rf SELECT i, i % 10, i FROM generate_series(1, 10000) s(i);
+ANALYZE fact_rf, dim_rf;
+SET gp_enable_runtime_filter_pushdown TO off;
+EXPLAIN ANALYZE SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 2 AND filter_val <= 1000;
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..869.37 rows=1486 width=1) (actual time=4.000..8.000 rows=898 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 200 of 524288 buckets.
+                     ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..4.000 rows=33462 loops=1)
+                     ->  Hash  (cost=431.33..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4104kB
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                                 ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..4.000 rows=80 loops=1)
+                                       Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                       Rows Removed by Filter: 3288
+ Planning Time: 8.388 ms
+   (slice0)    Executor memory: 63K bytes.
+   (slice1)    Executor memory: 4269K bytes avg x 3x(0) workers, 4269K bytes max (seg0).  Work_mem: 4104K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 9.602 ms
+(20 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN ANALYZE SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 2 AND filter_val <= 1000;
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..869.37 rows=1486 width=1) (actual time=0.000..8.000 rows=898 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg1)   RF: fact_rf attrno: 2, range[1, 1000], n_distinct: -0.22
+ (seg1)   Hash chain length 1.0 avg, 1 max, using 200 of 524288 buckets.
+                     ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..0.000 rows=33462 loops=1)
+                           Extra Text: (seg0)   ScanKey[did] >= 1, ScanKey[did] <= 1000
+                     ->  Hash  (cost=431.33..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4104kB
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                                 ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                                       Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                       Rows Removed by Filter: 3288
+ Planning Time: 6.353 ms
+   (slice0)    Executor memory: 63K bytes.
+   (slice1)    Executor memory: 4400K bytes avg x 3x(0) workers, 4400K bytes max (seg0).  Work_mem: 4104K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 7.437 ms
+(22 rows)
+
+-- Test bad filter rate
+EXPLAIN ANALYZE SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 7;
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..870.16 rows=1 width=8) (actual time=12.001..12.001 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..870.16 rows=1 width=8) (actual time=12.001..12.001 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..870.16 rows=1 width=8) (actual time=12.001..12.001 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..870.16 rows=29211 width=1) (actual time=4.000..8.000 rows=23492 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg2)   Hash chain length 1.0 avg, 2 max, using 2285 of 524288 buckets.
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..432.51 rows=33334 width=4) (actual time=0.000..4.000 rows=33501 loops=1)
+                           Hash Key: fact_rf.did
+                           ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..4.000 rows=33462 loops=1)
+                     ->  Hash  (cost=431.23..431.23 rows=2334 width=4) (actual time=0.000..0.000 rows=2368 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4180kB
+                           ->  Seq Scan on dim_rf  (cost=0.00..431.23 rows=2334 width=4) (actual time=0.000..0.000 rows=2368 loops=1)
+                                 Filter: (proj_id < 7)
+                                 Rows Removed by Filter: 1017
+ Planning Time: 8.409 ms
+   (slice0)    Executor memory: 62K bytes.
+   (slice1)    Executor memory: 4252K bytes avg x 3x(0) workers, 4252K bytes max (seg0).  Work_mem: 4180K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 12.455 ms
+(21 rows)
+
+-- Test outer join
+-- LeftJoin (eliminated and applicatable)
+EXPLAIN ANALYZE SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2 AND filter_val <= 1000;
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..869.37 rows=1486 width=1) (actual time=0.000..8.000 rows=898 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg1)   RF: fact_rf attrno: 2, range[1, 1000], n_distinct: -0.22
+ (seg1)   Hash chain length 1.0 avg, 1 max, using 200 of 524288 buckets.
+                     ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..0.000 rows=33462 loops=1)
+                           Extra Text: (seg0)   ScanKey[did] >= 1, ScanKey[did] <= 1000
+                     ->  Hash  (cost=431.33..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4104kB
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                                 ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                                       Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                       Rows Removed by Filter: 3288
+ Planning Time: 7.237 ms
+   (slice0)    Executor memory: 63K bytes.
+   (slice1)    Executor memory: 4399K bytes avg x 3x(0) workers, 4399K bytes max (seg0).  Work_mem: 4104K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 7.955 ms
+(22 rows)
+
+-- LeftJoin
+EXPLAIN ANALYZE SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id IS NULL OR proj_id < 2 AND filter_val <= 1000;
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..876.97 rows=1 width=8) (actual time=12.001..12.001 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..876.97 rows=1 width=8) (actual time=12.001..12.001 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..876.97 rows=1 width=8) (actual time=12.001..12.001 rows=1 loops=1)
+               ->  Result  (cost=0.00..876.97 rows=32949 width=1) (actual time=0.000..12.001 rows=1040 loops=1)
+                     Filter: ((dim_rf.proj_id IS NULL) OR ((dim_rf.proj_id < 2) AND (dim_rf.filter_val <= 1000)))
+                     ->  Hash Left Join  (cost=0.00..872.63 rows=65944 width=8) (actual time=0.000..8.000 rows=33501 loops=1)
+                           Hash Cond: (fact_rf.did = dim_rf.did)
+                           Extra Text: (seg1)   Hash chain length 1.0 avg, 2 max, using 3377 of 524288 buckets.
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..432.51 rows=33334 width=4) (actual time=0.000..4.000 rows=33501 loops=1)
+                                 Hash Key: fact_rf.did
+                                 ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..4.000 rows=33462 loops=1)
+                           ->  Hash  (cost=431.08..431.08 rows=3334 width=12) (actual time=0.000..0.000 rows=3385 loops=1)
+                                 Buckets: 524288  Batches: 1  Memory Usage: 4242kB
+                                 ->  Seq Scan on dim_rf  (cost=0.00..431.08 rows=3334 width=12) (actual time=0.000..0.000 rows=3385 loops=1)
+ Planning Time: 7.118 ms
+   (slice0)    Executor memory: 66K bytes.
+   (slice1)    Executor memory: 4318K bytes avg x 3x(0) workers, 4318K bytes max (seg0).  Work_mem: 4242K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 14.055 ms
+(21 rows)
+
+-- RightJoin (applicatable)
+EXPLAIN ANALYZE SELECT COUNT(*) FROM
+    fact_rf RIGHT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2 AND filter_val <= 1000;
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..869.72 rows=1 width=8) (actual time=44.002..44.002 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..869.72 rows=1 width=8) (actual time=44.002..44.002 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..869.72 rows=1 width=8) (actual time=44.002..44.002 rows=1 loops=1)
+               ->  Hash Right Join  (cost=0.00..869.72 rows=1546 width=1) (actual time=0.000..44.002 rows=1040 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 80 of 524288 buckets.
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..432.51 rows=33334 width=4) (actual time=0.000..8.000 rows=33501 loops=1)
+                           Hash Key: fact_rf.did
+                           ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..4.000 rows=33462 loops=1)
+                     ->  Hash  (cost=431.31..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4099kB
+                           ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                                 Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                 Rows Removed by Filter: 3288
+ Planning Time: 6.693 ms
+   (slice0)    Executor memory: 63K bytes.
+   (slice1)    Executor memory: 4238K bytes avg x 3x(0) workers, 4238K bytes max (seg0).  Work_mem: 4099K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 43.338 ms
+(21 rows)
+
+-- SemiJoin
+EXPLAIN ANALYZE SELECT COUNT(*) FROM fact_rf
+    WHERE fact_rf.did IN (SELECT did FROM dim_rf WHERE proj_id < 2 AND filter_val <= 1000);
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+               ->  Hash Semi Join  (cost=0.00..869.37 rows=1486 width=1) (actual time=4.000..8.000 rows=898 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg1)   RF: fact_rf attrno: 2, range[1, 1000], n_distinct: -0.22
+ (seg1)   Hash chain length 1.0 avg, 1 max, using 200 of 524288 buckets.
+                     ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..4.000 rows=33462 loops=1)
+                           Extra Text: (seg0)   ScanKey[did] >= 1, ScanKey[did] <= 1000
+                     ->  Hash  (cost=431.33..431.33 rows=356 width=4) (actual time=4.000..4.000 rows=200 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4104kB
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.33 rows=356 width=4) (actual time=4.000..4.000 rows=200 loops=1)
+                                 ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                                       Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                       Rows Removed by Filter: 3288
+ Planning Time: 20.060 ms
+   (slice0)    Executor memory: 63K bytes.
+   (slice1)    Executor memory: 4399K bytes avg x 3x(0) workers, 4399K bytes max (seg0).  Work_mem: 4104K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 8.057 ms
+(22 rows)
+
+-- SemiJoin -> InnerJoin and deduplicate
+EXPLAIN ANALYZE SELECT COUNT(*) FROM dim_rf
+    WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2 AND filter_val <= 1000;
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..868.28 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..868.28 rows=1 width=8) (actual time=8.000..8.000 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..868.28 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..868.28 rows=119 width=1) (actual time=8.000..8.000 rows=80 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 80 of 131072 buckets.
+                     ->  HashAggregate  (cost=0.00..436.48 rows=2663 width=4) (actual time=8.000..8.000 rows=2679 loops=1)
+                           Group Key: fact_rf.did
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..436.16 rows=2663 width=4) (actual time=4.000..8.000 rows=7979 loops=1)
+                                 Hash Key: fact_rf.did
+                                 ->  Streaming HashAggregate  (cost=0.00..436.12 rows=2663 width=4) (actual time=4.000..4.000 rows=7943 loops=1)
+                                       Group Key: fact_rf.did
+                                       ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..0.000 rows=33462 loops=1)
+                     ->  Hash  (cost=431.31..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                           Buckets: 131072  Batches: 1  Memory Usage: 1027kB
+                           ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=80 loops=1)
+                                 Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                 Rows Removed by Filter: 3288
+ Planning Time: 9.647 ms
+   (slice0)    Executor memory: 280K bytes.
+   (slice1)    Executor memory: 1307K bytes avg x 3x(0) workers, 1308K bytes max (seg1).  Work_mem: 1027K bytes max.
+   (slice2)    Executor memory: 825K bytes avg x 3x(0) workers, 832K bytes max (seg2).  Work_mem: 913K bytes max.
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 8.130 ms
+(25 rows)
+
+-- Test correctness
+SELECT * FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND dim_rf.filter_val = 1
+    ORDER BY fid;
+  fid  | did |  val  | did | proj_id | filter_val 
+-------+-----+-------+-----+---------+------------
+  8000 |   1 |  8000 |   1 |       1 |          1
+ 16000 |   1 | 16000 |   1 |       1 |          1
+ 24000 |   1 | 24000 |   1 |       1 |          1
+ 32000 |   1 | 32000 |   1 |       1 |          1
+ 40000 |   1 | 40000 |   1 |       1 |          1
+ 48000 |   1 | 48000 |   1 |       1 |          1
+ 56000 |   1 | 56000 |   1 |       1 |          1
+ 64000 |   1 | 64000 |   1 |       1 |          1
+ 72000 |   1 | 72000 |   1 |       1 |          1
+ 80000 |   1 | 80000 |   1 |       1 |          1
+ 88000 |   1 | 88000 |   1 |       1 |          1
+ 96000 |   1 | 96000 |   1 |       1 |          1
+(12 rows)
+
+SELECT * FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE dim_rf.filter_val = 1
+    ORDER BY fid;
+  fid  | did |  val  | did | proj_id | filter_val 
+-------+-----+-------+-----+---------+------------
+  8000 |   1 |  8000 |   1 |       1 |          1
+ 16000 |   1 | 16000 |   1 |       1 |          1
+ 24000 |   1 | 24000 |   1 |       1 |          1
+ 32000 |   1 | 32000 |   1 |       1 |          1
+ 40000 |   1 | 40000 |   1 |       1 |          1
+ 48000 |   1 | 48000 |   1 |       1 |          1
+ 56000 |   1 | 56000 |   1 |       1 |          1
+ 64000 |   1 | 64000 |   1 |       1 |          1
+ 72000 |   1 | 72000 |   1 |       1 |          1
+ 80000 |   1 | 80000 |   1 |       1 |          1
+ 88000 |   1 | 88000 |   1 |       1 |          1
+ 96000 |   1 | 96000 |   1 |       1 |          1
+(12 rows)
+
+SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2 AND filter_val <= 1000;
+ count 
+-------
+  2599
+(1 row)
+
+SELECT COUNT(*) FROM
+    fact_rf LEFT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id IS NULL OR proj_id < 2 AND filter_val <= 1000;
+ count 
+-------
+  2599
+(1 row)
+
+SELECT COUNT(*) FROM
+    fact_rf RIGHT JOIN dim_rf ON fact_rf.did = dim_rf.did
+    WHERE proj_id < 2 AND filter_val <= 1000;
+ count 
+-------
+  2599
+(1 row)
+
+SELECT COUNT(*) FROM fact_rf
+    WHERE fact_rf.did IN (SELECT did FROM dim_rf WHERE proj_id < 2 AND filter_val <= 1000);
+ count 
+-------
+  2599
+(1 row)
+
+SELECT COUNT(*) FROM dim_rf
+    WHERE dim_rf.did IN (SELECT did FROM fact_rf) AND proj_id < 2 AND filter_val <= 1000;
+ count 
+-------
+   200
+(1 row)
+
+-- Test contain null values
+INSERT INTO dim_rf VALUES (NULL,1, 1);
+EXPLAIN ANALYZE SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 2 AND filter_val <= 1000;
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=3 loops=1)
+         ->  Partial Aggregate  (cost=0.00..869.37 rows=1 width=8) (actual time=8.000..8.000 rows=1 loops=1)
+               ->  Hash Join  (cost=0.00..869.37 rows=1486 width=1) (actual time=0.000..8.000 rows=898 loops=1)
+                     Hash Cond: (fact_rf.did = dim_rf.did)
+                     Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 200 of 524288 buckets.
+                     ->  Seq Scan on fact_rf  (cost=0.00..431.84 rows=33334 width=4) (actual time=0.000..0.000 rows=33462 loops=1)
+                     ->  Hash  (cost=431.33..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=200 loops=1)
+                           Buckets: 524288  Batches: 1  Memory Usage: 4104kB
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.33 rows=356 width=4) (actual time=0.000..0.000 rows=201 loops=1)
+                                 ->  Seq Scan on dim_rf  (cost=0.00..431.31 rows=119 width=4) (actual time=0.000..0.000 rows=81 loops=1)
+                                       Filter: ((proj_id < 2) AND (filter_val <= 1000))
+                                       Rows Removed by Filter: 3288
+ Planning Time: 13.072 ms
+   (slice0)    Executor memory: 63K bytes.
+   (slice1)    Executor memory: 4398K bytes avg x 3x(0) workers, 4398K bytes max (seg0).  Work_mem: 4104K bytes max.
+   (slice2)    Executor memory: 119K bytes avg x 3x(0) workers, 119K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: GPORCA
+ Execution Time: 8.964 ms
+(20 rows)
+
+SELECT COUNT(*) FROM fact_rf, dim_rf
+    WHERE fact_rf.did = dim_rf.did AND proj_id < 2 AND filter_val <= 1000;
+ count 
+-------
+  2599
+(1 row)
+
+-- Clean up: reset guc
+SET gp_enable_runtime_filter_pushdown TO off;
+RESET optimizer;
