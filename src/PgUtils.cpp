@@ -7,31 +7,35 @@ extern "C" {
 #include "cdb/cdbvars.h"
 }
 
-std::string *get_user_name() {
+std::string get_user_name() {
+  // username is allocated on stack, we don't need to pfree it.
   const char *username =
       ya_gpdb::get_config_option("session_authorization", false, false);
-  // username is not to be freed
-  return username ? new std::string(username) : nullptr;
+  return username ? std::string(username) : "";
 }
 
-std::string *get_db_name() {
+std::string get_db_name() {
   char *dbname = ya_gpdb::get_database_name(MyDatabaseId);
-  std::string *result = nullptr;
   if (dbname) {
-    result = new std::string(dbname);
+    std::string result(dbname);
     ya_gpdb::pfree(dbname);
+    return result;
   }
-  return result;
+  return "";
 }
 
-std::string *get_rg_name() {
+std::string get_rg_name() {
   auto groupId = ya_gpdb::get_rg_id_by_session_id(MySessionState->sessionId);
   if (!OidIsValid(groupId))
-    return nullptr;
+    return "";
+
   char *rgname = ya_gpdb::get_rg_name_for_id(groupId);
   if (rgname == nullptr)
-    return nullptr;
-  return new std::string(rgname);
+    return "";
+
+  std::string result(rgname);
+  ya_gpdb::pfree(rgname);
+  return result;
 }
 
 /**

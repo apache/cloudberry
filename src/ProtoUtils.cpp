@@ -102,9 +102,9 @@ void clear_big_fields(yagpcc::SetQueryReq *req) {
 void set_query_info(yagpcc::SetQueryReq *req) {
   if (Gp_session_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
-    qi->set_allocated_username(get_user_name());
-    qi->set_allocated_databasename(get_db_name());
-    qi->set_allocated_rsgname(get_rg_name());
+    qi->set_username(get_user_name());
+    qi->set_databasename(get_db_name());
+    qi->set_rsgname(get_rg_name());
   }
 }
 
