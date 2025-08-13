@@ -56,14 +56,14 @@ std::string *get_rg_name() {
  */
 
 bool is_top_level_query(QueryDesc *query_desc, int nesting_level) {
-  return (query_desc->gpmon_pkt &&
-          query_desc->gpmon_pkt->u.qexec.key.tmid == 0) ||
-         nesting_level == 0;
+  if (query_desc->yagp_query_key == NULL) {
+    return nesting_level == 0;
+  }
+  return query_desc->yagp_query_key->nesting_level == 0;
 }
 
 bool nesting_is_valid(QueryDesc *query_desc, int nesting_level) {
-  return (Gp_session_role == GP_ROLE_DISPATCH &&
-          Config::report_nested_queries()) ||
+  return need_report_nested_query() ||
          is_top_level_query(query_desc, nesting_level);
 }
 
