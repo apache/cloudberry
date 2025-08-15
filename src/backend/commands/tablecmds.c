@@ -1038,6 +1038,15 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	/* Greenplum specific code */
 	if (list_length(schema) == 0)
 	{
+		/*
+		 * Issue #1055: AO column storage not supported for zero-column tables,
+		 * report error.
+		 */
+		if (accessMethodId == AO_COLUMN_TABLE_AM_OID)
+			ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("AO column storage is not supported for zero-column tables")));
+
 		elogif(Gp_role == GP_ROLE_DISPATCH, LOG,
 			   "creating a table with no columns.");
 
@@ -6849,6 +6858,13 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			else
 				NewAccessMethod = OldHeap->rd_rel->relam;
 
+			if (OldHeap->rd_rel->relnatts == 0 && NewAccessMethod == AO_COLUMN_TABLE_AM_OID)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot rewrite empty table \"%s\" as an AO columnar table",
+								RelationGetRelationName(OldHeap))));
+			}
 			/*
 			 * Select persistence of transient table (same as original unless
 			 * user requested a change)
