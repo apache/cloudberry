@@ -37,6 +37,8 @@ extern char *gp_etcd_cluster_id;
 extern char *gp_etcd_namespace;
 extern char *gp_etcd_endpoints;
 
+extern char *gp_segment_configuration_file;
+
 typedef struct GpSegConfigEntryForUDF
 {
 	GpSegConfigEntry * config_entry;
@@ -132,6 +134,9 @@ extern char *getDnsAddress(char *name, int port, int elevel);
 
 #ifdef USE_INTERNAL_FTS
 extern void writeGpSegConfigToFTSFiles(void);
+extern void add_segment_config_entry(GpSegConfigEntry *i);
+extern void remove_segment_config_entry(int16 dbid);
+extern void write_gp_segment_configuration(void);
 #else
 
 GpSegConfigEntry * readGpSegConfig(char * buff, int *total_dbs);
