@@ -340,7 +340,15 @@ EventSender::EventSender() {
 #endif
 }
 
-EventSender::~EventSender() { delete connector; }
+EventSender::~EventSender() {
+  for (const auto &[qkey, _] : queries) {
+    ereport(LOG,
+            (errmsg("YAGPCC query with missing done event: "
+                    "tmid=%d ssid=%d ccnt=%d nlvl=%d",
+                    qkey.tmid, qkey.ssid, qkey.ccnt, qkey.nesting_level)));
+  }
+  delete connector;
+}
 
 // That's basically a very simplistic state machine to fix or highlight any bugs
 // coming from GP
