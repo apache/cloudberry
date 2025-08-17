@@ -147,19 +147,9 @@ struct BitmapRaw final {
     raw.bitmap = nullptr;
     raw.size = 0;
   }
-  BitmapRaw &operator=(BitmapRaw) = delete;
   BitmapRaw &operator=(BitmapRaw &) = delete;
   BitmapRaw &operator=(const BitmapRaw &) = delete;
-  BitmapRaw &operator=(BitmapRaw &&raw) {
-    if (this != &raw) {
-      PAX_DELETE_ARRAY(bitmap);
-      bitmap = raw.bitmap;
-      size = raw.size;
-      raw.bitmap = nullptr;
-      raw.size = 0;
-    }
-    return *this;
-  }
+  BitmapRaw &operator=(BitmapRaw &&raw) = delete;
 
   ~BitmapRaw() = default;
 
@@ -171,40 +161,46 @@ template <typename T>
 class BitmapTpl final {
  public:
   using BitmapMemoryPolicy = void (*)(BitmapRaw<T> &, uint32);
-  explicit BitmapTpl(uint32 initial_size = 16,
-                     BitmapMemoryPolicy policy = DefaultBitmapMemoryPolicy) {
+  explicit BitmapTpl(uint32 initial_size = 16) {
     static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 ||
                   sizeof(T) == 8);
     static_assert(BM_WORD_BITS == (1 << BM_WORD_SHIFTS));
-    policy_ = policy;
-    policy(raw_, Max(initial_size, 16));
+    policy_ = DefaultBitmapMemoryPolicy;
+    policy_(raw_, Max(initial_size, 16));
   }
-  explicit BitmapTpl(const BitmapRaw<T> &raw, BitmapMemoryPolicy policy) {
+  explicit BitmapTpl(const BitmapRaw<T> &raw) {
     static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 ||
                   sizeof(T) == 8);
     static_assert(BM_WORD_BITS == (1 << BM_WORD_SHIFTS));
-    Assert(policy == ReadOnlyRefBitmap || policy == ReadOnlyOwnBitmap);
-    policy_ = policy;
+    policy_ = ReadOnlyRefBitmap;
     raw_.bitmap = raw.bitmap;
     raw_.size = raw.size;
   }
   BitmapTpl(const BitmapTpl &tpl) = delete;
   BitmapTpl(BitmapTpl &&tpl)
-      : raw_(std::move(tpl.raw_)), policy_(tpl.policy_) {}
+      : raw_(std::move(tpl.raw_)), policy_(tpl.policy_) {
+    tpl.raw_.bitmap = nullptr;
+    tpl.policy_ = ReadOnlyRefBitmap;
+  }
   BitmapTpl(BitmapRaw<T> &&raw)
-      : raw_(std::move(raw)), policy_(DefaultBitmapMemoryPolicy) {}
+      : raw_(std::move(raw)), policy_(ReadOnlyRefBitmap) {}
   BitmapTpl &operator=(const BitmapTpl &tpl) = delete;
   BitmapTpl &operator=(BitmapTpl &&tpl) = delete;
   ~BitmapTpl() {
     // Reference doesn't free the memory
-    if (policy_ == ReadOnlyRefBitmap) raw_.bitmap = nullptr;
+    if (policy_ == DefaultBitmapMemoryPolicy)
+      PAX_DELETE_ARRAY(raw_.bitmap);
+    raw_.bitmap = nullptr;
   }
 
   std::unique_ptr<BitmapTpl> Clone() const {
+    auto bm = std::make_unique<BitmapTpl>(raw_);
     auto p = PAX_NEW_ARRAY<T>(raw_.size);
     memcpy(p, raw_.bitmap, sizeof(T) * raw_.size);
-    BitmapRaw<T> bm_raw(p, raw_.size);
-    return std::make_unique<BitmapTpl>(std::move(bm_raw));
+    bm->raw_.bitmap = p;
+    bm->raw_.size = raw_.size;
+    bm->policy_ = DefaultBitmapMemoryPolicy;
+    return bm;
   }
 
   inline size_t WordBits() const { return BM_WORD_BITS; }
@@ -270,9 +266,6 @@ class BitmapTpl final {
   }
   static void ReadOnlyRefBitmap(BitmapRaw<T> & /*raw*/, uint32 /*index*/) {
     // raise
-    CBDB_RAISE(cbdb::CException::kExTypeInvalidMemoryOperation);
-  }
-  static void ReadOnlyOwnBitmap(BitmapRaw<T> & /*raw*/, uint32 /*index*/) {
     CBDB_RAISE(cbdb::CException::kExTypeInvalidMemoryOperation);
   }
 

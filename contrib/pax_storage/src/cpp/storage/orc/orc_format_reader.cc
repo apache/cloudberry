@@ -909,8 +909,7 @@ std::unique_ptr<PaxColumns> OrcFormatReader::ReadStripe(
           reinterpret_cast<uint8 *>(data_buffer->GetAvailableBuffer());
 
       Assert(non_null_stream.kind() == pax::porc::proto::Stream_Kind_PRESENT);
-      non_null_bitmap = std::make_unique<Bitmap8>(BitmapRaw<uint8>(bm_bytes, bm_nbytes),
-                                         BitmapTpl<uint8>::ReadOnlyRefBitmap);
+      non_null_bitmap = std::make_unique<Bitmap8>(BitmapRaw<uint8>(bm_bytes, bm_nbytes));
       data_buffer->Brush(bm_nbytes);
     }
 
