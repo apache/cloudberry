@@ -615,8 +615,7 @@ void TableDeleter::DeleteWithVisibilityMap(
         auto buffer = LoadVisimap(file_system_, file_system_options_,
                                   visibility_map_filename);
         auto visibility_file_bitmap =
-            Bitmap8(BitmapRaw<uint8>(buffer->data(), buffer->size()),
-                    Bitmap8::ReadOnlyOwnBitmap);
+            Bitmap8(BitmapRaw<uint8>(buffer->data(), buffer->size()));
         visi_bitmap =
             Bitmap8::Union(&visibility_file_bitmap, delete_visi_bitmap.get());
 
@@ -664,8 +663,7 @@ void TableDeleter::DeleteWithVisibilityMap(
     // Update the stats in pax aux table
     // Notice that: PAX won't update the stats in group
     UpdateStatsInAuxTable(catalog_update, micro_partition_metadata,
-                          std::make_shared<Bitmap8>(visi_bitmap->Raw(),
-                                                    Bitmap8::ReadOnlyOwnBitmap),
+                          std::make_shared<Bitmap8>(visi_bitmap->Raw()),
                           min_max_col_idxs,
                           cbdb::GetBloomFilterColumnIndexes(rel_),
                           stats_updater_projection);
