@@ -364,7 +364,15 @@ gz_file_read(gfile_t* fd, void* ptr, size_t len)
 		 */
 		while (z->in_size < sizeof z->in)
 		{
-			s = read_and_retry(fd, z->in + z->in_size, sizeof z->in - z->in_size);
+			if (fd->is_sftp)
+			{
+#ifdef LIBSSH2
+				gfile_printf_then_putc_newline("sftp_read : Read gz files from an SFTP server");
+				s = sftp_read(fd, z->in + z->in_size, sizeof z->in - z->in_size);
+#endif
+			}
+	        else 
+				s = read_and_retry(fd, z->in + z->in_size, sizeof z->in - z->in_size);
 			
 			if (s == 0)
 			{
