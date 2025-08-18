@@ -361,6 +361,7 @@ struct request_t
 static int ggetpid();
 static void log_gpfdist_status();
 static void log_request_header(const request_t *r);
+static void log_aging_gpfdist();
 
 static void gprint(const request_t *r, const char* fmt, ...)
 pg_attribute_printf(2, 3);
@@ -2077,6 +2078,55 @@ static void log_request_header(const request_t *r)
 	gprintln(r, "request headers:");
 	for (i = 0; i < r->in.req->hc; i++)
 		gprintln(r, "%s:%s", r->in.req->hname[i], r->in.req->hvalue[i]);
+}
+
+static void log_aging_gpfdist()
+{
+    struct stat filestats; // Structure to hold file statistics
+    char newfilename[256]; // Buffer to store the new filename
+
+    if (stat(opt.l, &filestats) == 0 && filestats.st_size >= MAX_GPFDIST_LOGSIZE) 
+    {
+        if(strlen(opt.l) > 256)
+        {
+            fprintf(stderr, "log file name is too long. please change log name under log_aging!\n");
+            exit(1);
+        }
+            
+		snprintf(newfilename, sizeof(newfilename), "%s.old", opt.l);
+
+        if(stat(newfilename, &filestats))
+            remove(newfilename);
+
+        rename(opt.l, newfilename);
+
+        /* Redirect stderr and stdout to the log file */
+        if (opt.l)
+        {
+            FILE *f_stderr;
+            FILE *f_stdout;
+
+            f_stderr = freopen(opt.l, "a", stderr);
+            if (f_stderr == NULL)
+            {
+                fprintf(stderr, "failed to redirect stderr to log: %s under log_aging.\n", strerror(errno));
+                exit(1);
+            }
+#ifndef WIN32
+            setlinebuf(stderr);
+#endif
+
+            f_stdout = freopen(opt.l, "a", stdout);
+            if (f_stdout == NULL)
+            {
+                fprintf(stderr, "failed to redirect stdout to log: %s under log_aging.\n", strerror(errno));
+                exit(1);
+            }
+#ifndef WIN32
+            setlinebuf(stdout);
+#endif
+        }
+    }
 }
 
 /*
@@ -4704,6 +4754,8 @@ static void do_close(int fd, short event, void *arg)
 	apr_pool_destroy(r->pool);
 
 	fflush(stdout);
+
+	log_aging_gpfdist();
 }
 
 /*
