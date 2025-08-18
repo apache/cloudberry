@@ -171,6 +171,19 @@ sftp_read(gfile_t *fd, void *ptr, size_t size)
 	return i;
 }
 
+static ssize_t
+sftp_write(gfile_t *fd, void *ptr, size_t size)
+{
+	ssize_t i = 0;
+	do
+		i = libssh2_sftp_write(fd->sftp_handle, ptr, size);
+	while (i < 0 && errno == EINTR);
+
+	if (i > 0)
+		fd->compressed_position += i;
+	return i;
+}
+
 static int
 sftp_close(gfile_t *fd)
 {
@@ -452,7 +465,19 @@ gz_file_write_one_chunk(gfile_t *fd, int do_flush)
 		}
 		have = COMPRESSION_BUFFER_SIZE - z->s.avail_out;
 		
-		if ( write_and_retry(fd, z->out, have) != have ) 
+		if (fd->is_sftp)
+		{
+#ifdef LIBSSH2			
+			if (sftp_write(fd, z->out, have) != have)
+			{
+				gfile_printf_then_putc_newline("failed to sftp write, the stream ends");
+				(void)deflateEnd(&(z->s));
+				ret = -1;
+				break;
+			}
+#endif
+		}
+		else if ( write_and_retry(fd, z->out, have) != have ) 
 		{
 			/*
 			 * presently gfile_close calls gz_file_close only for the on_write case so we don't need
@@ -1446,6 +1471,11 @@ int gfile_open_sftp(gfile_t *fd, const char *fpath, const char *sftp_uname, cons
 	memset(fd, 0, sizeof *fd);
 	fd->is_sftp = TRUE;
 
+	if (flags != GFILE_OPEN_FOR_READ)
+    {
+        fd->is_write = TRUE;
+    }
+
 	int ans = sftp_open(fd, fpath, sftp_uname, sftp_passwd, sftp_hostaddr, sftp_port);
 	if (ans == 0)
 	{
@@ -1474,6 +1504,7 @@ int gfile_open_sftp(gfile_t *fd, const char *fpath, const char *sftp_uname, cons
 	fd->compressed_size = sta.filesize;
 
 	fd->read = sftp_read;
+	fd->write = sftp_write;
 	fd->close = sftp_close;
 
 	/*
@@ -1641,7 +1672,7 @@ int sftp_open(gfile_t *fd, const char *fpath, const char *sftp_uname, const char
 			return -1;
 		}
 	}
-	
+
 	fd->session = libssh2_session_init();
 	if (!fd->session)
 		return -1;
@@ -1684,8 +1715,18 @@ int sftp_open(gfile_t *fd, const char *fpath, const char *sftp_uname, const char
 		return -2;
 	}
 
-	fd->sftp_handle =
-		libssh2_sftp_open(fd->sftp_session, fpath, LIBSSH2_FXF_READ, 0);
+	if (fd->is_write)
+    {
+        fd->sftp_handle = libssh2_sftp_open(fd->sftp_session, fpath,
+                                                                                    LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC,
+                                                                                    LIBSSH2_SFTP_S_IRUSR | LIBSSH2_SFTP_S_IWUSR |
+                                                                                    LIBSSH2_SFTP_S_IRGRP | LIBSSH2_SFTP_S_IROTH);
+    }
+    else 
+    {
+            fd->sftp_handle = libssh2_sftp_open(fd->sftp_session, fpath, LIBSSH2_FXF_READ, 0);
+    }
+
 	if (!(fd->sftp_handle))
 	{
 		gfile_printf_then_putc_newline("Unable to open file with SFTP: %ld\n",
