@@ -1584,8 +1584,23 @@ int sftp_open(gfile_t *fd, const char *fpath, const char *sftp_uname, const char
 	uint16_t port;
 	unsigned long hostaddr;
 	struct sockaddr_in sin;
+	struct sockaddr_in6 sin6;
+	int is_ipv6 = 0;
 
-	hostaddr = inet_addr(sftp_hostaddr);
+	if (strchr(sftp_hostaddr, ':'))
+	{
+		is_ipv6 = 1;
+	}
+	if (!is_ipv6)
+	{
+		hostaddr = inet_addr(sftp_hostaddr);
+	}
+
+	else
+	{
+		bzero(&sin6, sizeof(sin6));
+		inet_pton(AF_INET6, sftp_hostaddr, &sin6.sin6_addr);
+	}
 
 	sscanf(sftp_port, "%hu", &port);
 
@@ -1599,18 +1614,34 @@ int sftp_open(gfile_t *fd, const char *fpath, const char *sftp_uname, const char
 	
 	fd->sock = -1;
 
-	fd->sock = socket(AF_INET, SOCK_STREAM, 0);
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons(port);
-	sin.sin_addr.s_addr = hostaddr;
-
-	if (connect(fd->sock, (struct sockaddr *)(&sin),
-				sizeof(struct sockaddr_in)) != 0)
+	if (!is_ipv6)
 	{
-		gfile_printf_then_putc_newline("failed to connect!\n");
-		return -1;
+		fd->sock = socket(AF_INET, SOCK_STREAM, 0);
+		sin.sin_family = AF_INET;
+		sin.sin_port = htons(port);
+		sin.sin_addr.s_addr = hostaddr;
+
+		if (connect(fd->sock, (struct sockaddr *)(&sin),
+					sizeof(struct sockaddr_in)) != 0)
+		{
+			gfile_printf_then_putc_newline("failed to connect!\n");
+			return -1;
+		}
 	}
 
+	else
+	{
+		fd->sock = socket(AF_INET6, SOCK_STREAM, 0);
+		sin6.sin6_family = AF_INET6;
+		sin6.sin6_port = htons(port);
+		if (connect(fd->sock, (struct sockaddr *)(&sin6),
+					sizeof(struct sockaddr_in6)) != 0)
+		{
+			gfile_printf_then_putc_newline("failed to connect!\n");
+			return -1;
+		}
+	}
+	
 	fd->session = libssh2_session_init();
 	if (!fd->session)
 		return -1;
