@@ -2875,6 +2875,20 @@ copytup_heap(Tuplesortstate_mk *state, MKEntry *e, void *tup)
 static long
 writetup_heap(Tuplesortstate_mk *state, LogicalTape *lt, MKEntry *e)
 {
+	if (!memtuple_lead_bit_set(e->ptr) || memtuple_get_size(e->ptr) <= sizeof(uint32))
+	{
+		const char *sortMethod = "";
+		const char *sortSpaceType = "";
+		long sortSpaceUsed = 0;
+		
+		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
+		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld, "
+			"sort nkeys=%d, randomAccess=%d, memAllowed=" INT64_FORMAT ", maxTapes=%d, tapeRange=%d",
+			memtuple_get_size(e->ptr), sortMethod, sortSpaceType, sortSpaceUsed,
+			state->nKeys,  state->randomAccess, state->memAllowed, state->maxTapes,
+			state->tapeRange);
+	}
+
 	uint32		tuplen = memtuple_get_size(e->ptr);
 	long		ret = tuplen;
 
@@ -2906,6 +2920,20 @@ readtup_heap(Tuplesortstate_mk *state, TuplesortPos_mk *pos, MKEntry *e, Logical
 	size_t		readSize;
 
 	Assert(is_under_sort_or_exec_ctxt(state));
+	
+	if (!is_len_memtuplen(len) || (memtuple_size_from_uint32(len) <= sizeof(uint32))) 
+	{
+		const char *sortMethod = "";
+		const char *sortSpaceType = "";
+		long sortSpaceUsed = 0;
+		
+		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
+		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld, "
+			"sort nkeys=%d, randomAccess=%d, memAllowed=" INT64_FORMAT ", maxTapes=%d, tapeRange=%d",
+			len, sortMethod, sortSpaceType, sortSpaceUsed,
+			state->nKeys,  state->randomAccess, state->memAllowed, state->maxTapes,
+			state->tapeRange);
+	}
 
 	MemSet(e, 0, sizeof(MKEntry));
 	e->ptr = palloc(memtuple_size_from_uint32(len));
