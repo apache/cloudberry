@@ -74,6 +74,8 @@
 #define DEFAULT_COMPRESS_LEVEL 3
 #define MAX_FRAME_SIZE 65536
 
+#define  MAX_GPFDIST_LOGSIZE (512 * 1024 * 1024) // 512MB
+
 /*  A data block */
 typedef struct blockhdr_t blockhdr_t;
 struct blockhdr_t
