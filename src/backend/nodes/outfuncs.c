@@ -1469,8 +1469,8 @@ _outFuncExpr(StringInfo str, const FuncExpr *node)
 	WRITE_OID_FIELD(funccollid);
 	WRITE_OID_FIELD(inputcollid);
 	WRITE_NODE_FIELD(args);
-	WRITE_BOOL_FIELD(is_tablefunc);  /* GPDB */
 	WRITE_LOCATION_FIELD(location);
+	WRITE_BOOL_FIELD(is_tablefunc);  /* GPDB */
 }
 
 static void

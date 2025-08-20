@@ -4153,29 +4153,23 @@ simplify_function(Oid funcid, Oid result_type, int32 result_typmod,
 		 * function is actually being invoked.
 		 */
 		SupportRequestSimplify req;
-		FuncExpr	fexpr;
+		FuncExpr *fexpr = makeFuncExpr(funcid, result_type, args,
+									   result_collid, input_collid,
+									   COERCE_EXPLICIT_CALL);
 
-		fexpr.xpr.type = T_FuncExpr;
-		fexpr.funcid = funcid;
-		fexpr.funcresulttype = result_type;
-		fexpr.funcretset = func_form->proretset;
-		fexpr.funcvariadic = funcvariadic;
-		fexpr.funcformat = COERCE_EXPLICIT_CALL;
-		fexpr.funccollid = result_collid;
-		fexpr.inputcollid = input_collid;
-		fexpr.args = args;
-		fexpr.location = -1;
+		fexpr->funcvariadic = funcvariadic;
+		fexpr->funcretset = func_form->proretset;
 
 		req.type = T_SupportRequestSimplify;
 		req.root = context->root;
-		req.fcall = &fexpr;
+		req.fcall = fexpr;
 
 		newexpr = (Expr *)
 			DatumGetPointer(OidFunctionCall1(func_form->prosupport,
 											 PointerGetDatum(&req)));
 
 		/* catch a possible API misunderstanding */
-		Assert(newexpr != (Expr *) &fexpr);
+		Assert(newexpr != (Expr *) fexpr);
 	}
 
 	if (!newexpr && allow_non_const)

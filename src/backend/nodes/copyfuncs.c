@@ -2203,8 +2203,8 @@ _copyFuncExpr(const FuncExpr *from)
 	COPY_SCALAR_FIELD(funccollid);
 	COPY_SCALAR_FIELD(inputcollid);
 	COPY_NODE_FIELD(args);
-	COPY_SCALAR_FIELD(is_tablefunc);
 	COPY_LOCATION_FIELD(location);
+	COPY_SCALAR_FIELD(is_tablefunc);
 
 	return newnode;
 }
