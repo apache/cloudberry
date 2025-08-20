@@ -50,6 +50,7 @@ extern "C" {
 #include "partitioning/partdesc.h"
 #include "storage/lmgr.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/partcache.h"
 }
@@ -345,6 +346,30 @@ gpdb::FuncStability(Oid funcid)
 	}
 	GP_WRAP_END;
 	return '\0';
+}
+
+RegProcedure
+gpdb::FuncSupport(Oid funcid)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_proc */
+		return get_func_support(funcid);
+	}
+	GP_WRAP_END;
+	return InvalidOid;
+}
+
+Oid
+gpdb::FuncNamespace(Oid funcid)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_proc */
+		return get_func_namespace(funcid);
+	}
+	GP_WRAP_END;
+	return InvalidOid;
 }
 
 char
