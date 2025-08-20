@@ -338,6 +338,12 @@ bool IsFuncNDVPreserving(Oid funcid);
 // stability property of given function
 char FuncStability(Oid funcid);
 
+// support function of given function
+RegProcedure FuncSupport(Oid funcid);
+
+// namespace of given function
+Oid FuncNamespace(Oid funcid);
+
 // exec location property of given function
 char FuncExecLocation(Oid funcid);
 
