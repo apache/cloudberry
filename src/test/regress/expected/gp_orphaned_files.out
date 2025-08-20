@@ -261,6 +261,22 @@ begin
   return cmd;
 end
 $$ language plpgsql;
+create or replace function resetInjectFaults(p_contentid int) returns void as
+$$
+begin
+  perform gp_inject_fault('qe_exec_finished', 'reset', dbid),
+          gp_inject_fault('checkpoint',       'reset', dbid)
+  from gp_segment_configuration
+  where role = 'p' and content = p_contentid;
+end
+$$ language plpgsql;
+-- Skip FTS probes
+select gp_inject_fault_infinite('fts_probe', 'skip', 1);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
 -- Test case 3.1
 -- Segfault on all segments
 checkpoint;
@@ -318,6 +334,9 @@ select force_mirrors_to_catch_up();
  
 (1 row)
 
+-- Make a checkpoint to remove orphaned files from segments where segfault did
+-- not happen
+checkpoint;
 -- Check that the tables files don't exist on the segments
 :check_files
 0
@@ -428,10 +447,17 @@ table t_sub2;
 ---
 (0 rows)
 
+select gp_inject_fault_infinite('fts_probe', 'reset', 1);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
 -- Clean up
 \unset check_files
 drop table t_top, t_sub1, t_sub2;
 drop function createTables();
+drop function resetInjectFaults(p_contentid int);
 drop function getTableSegFiles(t regclass, out gp_contentid smallint, out filepath text);
 -- start_ignore
 -- end_ignore
