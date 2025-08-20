@@ -91,7 +91,7 @@ size_t MicroPartitionReaderProxy::GetTupleCountsInGroup(size_t group_index) {
 
 std::unique_ptr<ColumnStatsProvider>
 MicroPartitionReaderProxy::GetGroupStatsInfo(size_t group_index) {
-  return std::move(reader_->GetGroupStatsInfo(group_index));
+  return reader_->GetGroupStatsInfo(group_index);
 }
 
 std::unique_ptr<MicroPartitionReader::Group>
