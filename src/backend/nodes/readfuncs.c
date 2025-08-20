@@ -749,9 +749,8 @@ _readFuncExpr(void)
 	READ_OID_FIELD(funccollid);
 	READ_OID_FIELD(inputcollid);
 	READ_NODE_FIELD(args);
-	READ_BOOL_FIELD(is_tablefunc);  /* GPDB */
 	READ_LOCATION_FIELD(location);
-
+	READ_BOOL_FIELD(is_tablefunc);  /* GPDB */
 	READ_DONE();
 }
 
