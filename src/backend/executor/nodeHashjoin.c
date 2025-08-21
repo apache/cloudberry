@@ -2303,7 +2303,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	HashState	*hstate;
 	AttrFilter	*attr_filter;
 	ListCell	*lc;
-	ListCell	*lc2;
+	ListCell	*lc_targets;
 	List		*targets;
 
 	/*
@@ -2349,9 +2349,9 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		if (lattno == -1 || targets == NULL)
 			continue;
 
-		foreach(lc2, targets)
+		foreach(lc_targets, targets)
 		{
-			PlanState *target = lfirst(lc2);
+			PlanState *target = lfirst(lc_targets);
 			Assert(IsA(target, SeqScanState) || IsA(target, DynamicSeqScanState));
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
@@ -2453,12 +2453,6 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	te = (TargetEntry *)list_nth(node->plan->targetlist, attno - 1);
 	if (!IsA(te->expr, Var))
 		return false;
-
-	if (IsA(node, DynamicSeqScanState))
-	{
-		*lattno = te->resno;
-		return true;
-	}
 
 	/*
 	 * seqscan is a special case, it's targetlist is a projection of the
