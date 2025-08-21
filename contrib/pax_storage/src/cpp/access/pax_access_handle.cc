@@ -453,6 +453,7 @@ uint32 PaxAccessMethod::ScanFlags(Relation relation) {
   flags |= SCAN_FORCE_BIG_WRITE_LOCK;
 #endif
 
+  flags |= SCAN_SUPPORT_RUNTIME_FILTER;
   return flags;
 }
 
