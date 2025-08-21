@@ -1093,10 +1093,23 @@ alterResgroupCallback(XactEvent event, void *arg)
 	if (event == XACT_EVENT_COMMIT)
 		ResGroupAlterOnCommit(callbackCtx);
 
+	/*
+	 * Free io_limit resources allocated in AlterResourceGroup().
+	 *
+	 * We need to handle two cases:
+	 * 1. caps.io_limit != oldCaps.io_limit: case RESGROUP_LIMIT_TYPE_IO_LIMIT
+	 * 2. caps.io_limit == oldCaps.io_limit: other cases
+	 *
+	 * The pointer comparison (oldCaps.io_limit != caps.io_limit) is crucial to
+	 * avoid double free errors. When "other cases", both pointers might
+	 * reference the same memory location, so we only free oldCaps.io_limit if
+	 * it's different from caps.io_limit.
+	 */
 	if (callbackCtx->caps.io_limit != NIL)
 		cgroupOpsRoutine->freeio(callbackCtx->caps.io_limit);
 
-	if (callbackCtx->caps.io_limit != NIL)
+	if (callbackCtx->oldCaps.io_limit != NIL &&
+		callbackCtx->oldCaps.io_limit != callbackCtx->caps.io_limit)
 		cgroupOpsRoutine->freeio(callbackCtx->oldCaps.io_limit);
 
 	pfree(callbackCtx);
