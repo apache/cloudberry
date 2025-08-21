@@ -4552,28 +4552,27 @@ analyze bar;
 set optimizer_segments = 3;
 set optimizer_nestloop_factor = 1.0;
 explain select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = (array[1])[1];
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
- Hash Right Join  (cost=17.62..445.93 rows=13416 width=31)
-   Hash Cond: (bar.k = foo_p.a)
-   ->  Seq Scan on bar  (cost=0.00..288.25 rows=2236 width=4)
-         Filter: (k = 1)
-   ->  Hash  (cost=17.54..17.54 rows=6 width=35)
-         ->  Append  (cost=0.00..17.54 rows=6 width=35)
-               ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..3.50 rows=1 width=34)
-                     Filter: ((t IS NOT NULL) AND (a = 1))
-               ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..3.50 rows=1 width=34)
-                     Filter: ((t IS NOT NULL) AND (a = 1))
-               ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..3.50 rows=1 width=34)
-                     Filter: ((t IS NOT NULL) AND (a = 1))
-               ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..3.50 rows=1 width=34)
-                     Filter: ((t IS NOT NULL) AND (a = 1))
-               ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..3.50 rows=1 width=34)
-                     Filter: ((t IS NOT NULL) AND (a = 1))
-               ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..0.01 rows=1 width=40)
-                     Filter: ((t IS NOT NULL) AND (a = 1))
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=10000000000.00..10000000479.08 rows=13416 width=31)
+   ->  Append  (cost=0.00..17.54 rows=6 width=35)
+         ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..3.50 rows=1 width=34)
+               Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..3.50 rows=1 width=34)
+               Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..3.50 rows=1 width=34)
+               Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..3.50 rows=1 width=34)
+               Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..3.50 rows=1 width=34)
+               Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..0.01 rows=1 width=40)
+               Filter: ((t IS NOT NULL) AND (a = 1))
+   ->  Materialize  (cost=0.00..299.43 rows=2236 width=4)
+         ->  Seq Scan on bar  (cost=0.00..288.25 rows=2236 width=4)
+               Filter: (k = 1)
  Optimizer: Postgres query optimizer
-(19 rows)
+(18 rows)
 
 reset optimizer_segments;
 drop table if exists foo_p;

@@ -262,7 +262,7 @@ extern DatumStreamWrite *create_datumstreamwrite(
 						Oid reloid,
 						char *title,
 						bool needsWAL,
-						RelFileNodeBackend *rnode,
+						RelFileLocatorBackend *rnode,
 						const struct f_smgr_ao *smgrAO);
 
 extern DatumStreamRead *create_datumstreamread(
@@ -274,7 +274,7 @@ extern DatumStreamRead *create_datumstreamread(
 					   char *relname,
 					   Oid reloid,
 					   char *title,
-					   RelFileNode *relFileNode,
+					   RelFileLocator *relFileNode,
 					   const struct f_smgr_ao *smgrAO);
 
 extern void datumstreamwrite_open_file(
@@ -282,7 +282,7 @@ extern void datumstreamwrite_open_file(
 						   char *fn,
 						   int64 eof,
 						   int64 eofUncompressed,
-						   RelFileNodeBackend *relFileNode,
+						   RelFileLocatorBackend *relFileNode,
 						   int32 segmentFileNum,
 						   int version);
 
@@ -291,8 +291,6 @@ extern void datumstreamread_open_file(
 						  char *fn,
 						  int64 eof,
 						  int64 eofUncompressed,
-						  RelFileNode relFileNode,
-						  int32 segmentFileNum,
 						  int version);
 
 extern void datumstreamwrite_close_file(DatumStreamWrite * ds);

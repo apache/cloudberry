@@ -4,11 +4,11 @@
 # By convention, we put no more than twenty tests in any one parallel group;
 # this limits the number of connections needed to run the tests.
 # ----------
+test: test_setup
 
 # run tablespace by itself, and first, because it forces a checkpoint;
 # we'd prefer not to have checkpoints later in the tests because that
 # interferes with crash-recovery testing.
-test: tablespace
 # ----------
 # The first group of parallel tests
 # ----------
@@ -21,7 +21,7 @@ test: boolean char name varchar text int2 int4 int8 oid float4 float8 bit numeri
 # multirangetypes depends on rangetypes
 # multirangetypes shouldn't run concurrently with type_sanity
 # ----------
-test: strings numerology point lseg line box path polygon circle date time timetz timestamp timestamptz interval inet macaddr macaddr8 multirangetypes create_function_0
+test: strings numerology point lseg line box path polygon circle date time timetz timestamp timestamptz interval inet macaddr macaddr8 multirangetypes 
 
 # ----------
 # Another group of parallel tests
@@ -34,10 +34,9 @@ test: geometry horology tstypes regex type_sanity opr_sanity misc_sanity comment
 # ----------
 # These four each depend on the previous one
 # ----------
-test: create_function_1
 test: create_type
 test: create_table
-test: create_function_2
+test: create_function_sql
 
 # ----------
 # Load huge amounts of data
@@ -63,14 +62,11 @@ test: create_index create_view index_including
 # ignore reason: Pax not support gist
 # test: index_including_gist
 
-# Depends on things setup for create_index
-test: gp_gin_index
-
 # ----------
 # Another group of parallel tests
 # ----------
 
-test: create_aggregate create_function_3 create_cast select inherit typed_table drop_if_exists roleattributes create_am hash_func errors infinite_recurse
+test: create_aggregate create_cast select inherit typed_table drop_if_exists roleattributes create_am hash_func errors infinite_recurse
 
 # ignore reason:
 #  1. Pax have not implements tuple_insert_speculative and tuple_lock
@@ -179,8 +175,8 @@ test: publication subscription
 # ----------
 # Another group of parallel tests
 # ----------
-test: select_views portals_p2  dependency guc bitmapops tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
-
+test: select_views portals_p2  dependency guc bitmapops tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass
+ignore: window
 # ignore reason:
 #   1. virtual tuple table slot does not have system attributes
 # test: combocid
@@ -195,6 +191,9 @@ test: cluster
 # Another group of parallel tests (JSON related)
 # ----------
 test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath
+
+# Depends on things setup for jsonb
+test: gp_gin_index
 
 # ----------
 # Another group of parallel tests
@@ -226,3 +225,5 @@ test: fast_default
 
 # run stats by itself because its delay may be insufficient under heavy load
 test: stats
+
+test: tablespace

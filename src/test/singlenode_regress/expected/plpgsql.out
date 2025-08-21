@@ -3457,15 +3457,15 @@ begin
 end;
 $$ language plpgsql;
 select forc01();
-NOTICE:  5 from c
-NOTICE:  6 from c
-NOTICE:  7 from c
-NOTICE:  9 from c
-NOTICE:  10 from c
-NOTICE:  41 from c2
-NOTICE:  42 from c2
-NOTICE:  43 from c2
-NOTICE:  after loop, c2 = c2
+NOTICE:  5 from <unnamed portal 21>
+NOTICE:  6 from <unnamed portal 21>
+NOTICE:  7 from <unnamed portal 21>
+NOTICE:  9 from <unnamed portal 22>
+NOTICE:  10 from <unnamed portal 22>
+NOTICE:  41 from <unnamed portal 23>
+NOTICE:  42 from <unnamed portal 23>
+NOTICE:  43 from <unnamed portal 23>
+NOTICE:  after loop, c2 = <NULL>
 NOTICE:  41 from special_name
 NOTICE:  42 from special_name
 NOTICE:  43 from special_name

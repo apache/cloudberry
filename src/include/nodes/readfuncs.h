@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/readfuncs.h
@@ -22,7 +22,7 @@
  * variable in read.c that needs to be accessible to readfuncs.c
  */
 #ifdef WRITE_READ_PARSE_PLAN_TREES
-extern bool restore_location_fields;
+extern PGDLLIMPORT bool restore_location_fields;
 #endif
 
 /*

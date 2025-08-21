@@ -1,3 +1,47 @@
+-- basic tests for the TID data type
+SELECT
+  '(0,0)'::tid as tid00,
+  '(0,1)'::tid as tid01,
+  '(-1,0)'::tid as tidm10,
+  '(4294967295,65535)'::tid as tidmax;
+ tid00 | tid01 |     tidm10     |       tidmax       
+-------+-------+----------------+--------------------
+ (0,0) | (0,1) | (4294967295,0) | (4294967295,65535)
+(1 row)
+
+SELECT '(4294967296,1)'::tid;  -- error
+ERROR:  invalid input syntax for type tid: "(4294967296,1)"
+LINE 1: SELECT '(4294967296,1)'::tid;
+               ^
+SELECT '(1,65536)'::tid;  -- error
+ERROR:  invalid input syntax for type tid: "(1,65536)"
+LINE 1: SELECT '(1,65536)'::tid;
+               ^
+-- Also try it with non-error-throwing API
+SELECT pg_input_is_valid('(0)', 'tid');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('(0)', 'tid');
+                 message                  | detail | hint | sql_error_code 
+------------------------------------------+--------+------+----------------
+ invalid input syntax for type tid: "(0)" |        |      | 22P02
+(1 row)
+
+SELECT pg_input_is_valid('(0,-1)', 'tid');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('(0,-1)', 'tid');
+                   message                   | detail | hint | sql_error_code 
+---------------------------------------------+--------+------+----------------
+ invalid input syntax for type tid: "(0,-1)" |        |      | 22P02
+(1 row)
+
 -- tests for functions related to TID handling
 CREATE TABLE tid_tab (a int);
 -- min() and max() for TIDs

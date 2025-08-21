@@ -387,50 +387,34 @@ explain select * from srf_testtab, test_srf() where test_srf = srf_testtab.t;
 
 -- Test ALTER FUNCTION, and that \df displays the EXECUTE ON correctly
 \df+ test_srf
-                                                                                                 List of functions
- Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
---------+----------+------------------+---------------------+------+-------------+------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
- public | test_srf | SETOF text       |                     | func | no sql      | any        | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          | begin               +| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          |   return next 'foo';+| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          | end;                +| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          |                      | 
+                                                                                             List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on | Volatility | Parallel |    Owner    | Security | Access privileges | Language | Internal name | Description 
+--------+----------+------------------+---------------------+------+-------------+------------+------------+----------+-------------+----------+-------------------+----------+---------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | any        | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |               | 
 (1 row)
 
 alter function test_srf() EXECUTE ON COORDINATOR;
 \df+ test_srf
-                                                                                                 List of functions
- Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on  | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
---------+----------+------------------+---------------------+------+-------------+-------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
- public | test_srf | SETOF text       |                     | func | no sql      | coordinator | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
-        |          |                  |                     |      |             |             |            |          |             |          |                   |          | begin               +| 
-        |          |                  |                     |      |             |             |            |          |             |          |                   |          |   return next 'foo';+| 
-        |          |                  |                     |      |             |             |            |          |             |          |                   |          | end;                +| 
-        |          |                  |                     |      |             |             |            |          |             |          |                   |          |                      | 
+                                                                                              List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on  | Volatility | Parallel |    Owner    | Security | Access privileges | Language | Internal name | Description 
+--------+----------+------------------+---------------------+------+-------------+-------------+------------+----------+-------------+----------+-------------------+----------+---------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | coordinator | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |               | 
 (1 row)
 
 alter function test_srf() EXECUTE ON ALL SEGMENTS;
 \df+ test_srf
-                                                                                                  List of functions
- Schema |   Name   | Result data type | Argument data types | Type | Data access |  Execute on  | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
---------+----------+------------------+---------------------+------+-------------+--------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
- public | test_srf | SETOF text       |                     | func | no sql      | all segments | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
-        |          |                  |                     |      |             |              |            |          |             |          |                   |          | begin               +| 
-        |          |                  |                     |      |             |              |            |          |             |          |                   |          |   return next 'foo';+| 
-        |          |                  |                     |      |             |              |            |          |             |          |                   |          | end;                +| 
-        |          |                  |                     |      |             |              |            |          |             |          |                   |          |                      | 
+                                                                                              List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access |  Execute on  | Volatility | Parallel |    Owner    | Security | Access privileges | Language | Internal name | Description 
+--------+----------+------------------+---------------------+------+-------------+--------------+------------+----------+-------------+----------+-------------------+----------+---------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | all segments | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |               | 
 (1 row)
 
 alter function test_srf() EXECUTE ON ANY;
 \df+ test_srf
-                                                                                                 List of functions
- Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on | Volatility | Parallel |    Owner    | Security | Access privileges | Language |     Source code      | Description 
---------+----------+------------------+---------------------+------+-------------+------------+------------+----------+-------------+----------+-------------------+----------+----------------------+-------------
- public | test_srf | SETOF text       |                     | func | no sql      | any        | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |                     +| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          | begin               +| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          |   return next 'foo';+| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          | end;                +| 
-        |          |                  |                     |      |             |            |            |          |             |          |                   |          |                      | 
+                                                                                             List of functions
+ Schema |   Name   | Result data type | Argument data types | Type | Data access | Execute on | Volatility | Parallel |    Owner    | Security | Access privileges | Language | Internal name | Description 
+--------+----------+------------------+---------------------+------+-------------+------------+------------+----------+-------------+----------+-------------------+----------+---------------+-------------
+ public | test_srf | SETOF text       |                     | func | no sql      | any        | immutable  | unsafe   | srftestuser | invoker  |                   | plpgsql  |               | 
 (1 row)
 
 DROP FUNCTION test_srf();

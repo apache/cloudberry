@@ -13,7 +13,7 @@
 
  <para>
   JSON data types are for storing JSON (JavaScript Object Notation)
-  data, as specified in <ulink url="https://tools.ietf.org/html/rfc7159">RFC
+  data, as specified in <ulink url="https://datatracker.ietf.org/doc/html/rfc7159">RFC
   7159</ulink>. Such data can also be stored as <type>text</type>, but
   the JSON data types have the advantage of enforcing that each
   stored value is valid according to the JSON rules.  There are also
@@ -200,13 +200,13 @@ SELECT '{"foo": [true, "bar"], "tags": {"a": 1, "b": null}}'::json;
    details such as whitespace.  For example, note the differences here:
 <programlisting>
 SELECT '{"bar": "baz", "balance": 7.77, "active":false}'::json;
-                      json                       
+                      json
 -------------------------------------------------
  {"bar": "baz", "balance": 7.77, "active":false}
 (1 row)
 
 SELECT '{"bar": "baz", "balance": 7.77, "active":false}'::jsonb;
-                      jsonb                       
+                      jsonb
 --------------------------------------------------
  {"bar": "baz", "active": false, "balance": 7.77}
 (1 row)
@@ -218,7 +218,7 @@ SELECT '{"bar": "baz", "balance": 7.77, "active":false}'::jsonb;
    example:
 <programlisting>
 SELECT '{"reading": 1.230e-5}'::json, '{"reading": 1.230e-5}'::jsonb;
-         json          |          jsonb          
+         json          |          jsonb
 -----------------------+-------------------------
  {"reading": 1.230e-5} | {"reading": 0.00001230}
 (1 row)
@@ -584,12 +584,13 @@ SELECT jdoc->'guid', jdoc->'name' FROM api WHERE jdoc @@ '$.tags[*] == "qui"';
     The <literal>btree</literal> ordering for <type>jsonb</type> datums is seldom
     of great interest, but for completeness it is:
 <synopsis>
-<replaceable>Object</replaceable> > <replaceable>Array</replaceable> > <replaceable>Boolean</replaceable> > <replaceable>Number</replaceable> > <replaceable>String</replaceable> > <replaceable>Null</replaceable>
+<replaceable>Object</replaceable> > <replaceable>Array</replaceable> > <replaceable>Boolean</replaceable> > <replaceable>Number</replaceable> > <replaceable>String</replaceable> > <replaceable>null</replaceable>
 
 <replaceable>Object with n pairs</replaceable> > <replaceable>object with n - 1 pairs</replaceable>
 
 <replaceable>Array with n elements</replaceable> > <replaceable>array with n - 1 elements</replaceable>
 </synopsis>
+      with the exception that (for historical reasons) an empty top level array sorts less than <replaceable>null</replaceable>.
       Objects with equal numbers of pairs are compared in the order:
 <synopsis>
 <replaceable>key-1</replaceable>, <replaceable>value-1</replaceable>, <replaceable>key-2</replaceable> ...
@@ -701,17 +702,17 @@ UPDATE table_name SET jsonb_field[2] = '2';
    assigned value can be placed.
 
 <programlisting>
--- Where jsonb_field was {}, it is now {'a': [{'b': 1}]}
+-- Where jsonb_field was {}, it is now {"a": [{"b": 1}]}
 UPDATE table_name SET jsonb_field['a'][0]['b'] = '1';
 
--- Where jsonb_field was [], it is now [null, {'a': 1}]
+-- Where jsonb_field was [], it is now [null, {"a": 1}]
 UPDATE table_name SET jsonb_field[1]['a'] = '1';
 </programlisting>
 
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="datatype-json-transforms">
   <title>Transforms</title>
 
   <para>
@@ -726,12 +727,9 @@ UPDATE table_name SET jsonb_field[1]['a'] = '1';
   </para>
 
   <para>
-   The extensions for PL/Python are called <literal>jsonb_plpythonu</literal>,
-   <literal>jsonb_plpython2u</literal>, and
-   <literal>jsonb_plpython3u</literal> (see <xref
-   linkend="plpython-python23"/> for the PL/Python naming convention).  If you
-   use them, <type>jsonb</type> values are mapped to Python dictionaries,
-   lists, and scalars, as appropriate.
+   The extension for PL/Python is called <literal>jsonb_plpython3u</literal>.
+   If you use it, <type>jsonb</type> values are mapped to Python
+   dictionaries, lists, and scalars, as appropriate.
   </para>
 
   <para>
@@ -783,6 +781,18 @@ UPDATE table_name SET jsonb_field[1]['a'] = '1';
   </itemizedlist>
 
   <para>
+   Numeric literals in SQL/JSON path expressions follow JavaScript rules,
+   which are different from both SQL and JSON in some minor details.  For
+   example, SQL/JSON path allows <literal>.1</literal> and
+   <literal>1.</literal>, which are invalid in JSON.  Non-decimal integer
+   literals and underscore separators are supported, for example,
+   <literal>1_000_000</literal>, <literal>0x1EEE_FFFF</literal>,
+   <literal>0o273</literal>, <literal>0b100101</literal>.  In SQL/JSON path
+   (and in JavaScript, but not in SQL proper), there must not be an underscore
+   separator directly after the radix prefix.
+  </para>
+
+  <para>
    An SQL/JSON path expression is typically written in an SQL query as an
    SQL character string literal, so it must be enclosed in single quotes,
    and any single quotes desired within the value must be doubled
@@ -794,21 +804,20 @@ UPDATE table_name SET jsonb_field[1]['a'] = '1';
    In particular, the way to write a double quote within an embedded string
    literal is <literal>\"</literal>, and to write a backslash itself, you
    must write <literal>\\</literal>.  Other special backslash sequences
-   include those recognized in JSON strings:
+   include those recognized in JavaScript strings:
    <literal>\b</literal>,
    <literal>\f</literal>,
    <literal>\n</literal>,
    <literal>\r</literal>,
    <literal>\t</literal>,
    <literal>\v</literal>
-   for various ASCII control characters, and
-   <literal>\u<replaceable>NNNN</replaceable></literal> for a Unicode
-   character identified by its 4-hex-digit code point.  The backslash
-   syntax also includes two cases not allowed by JSON:
+   for various ASCII control characters,
    <literal>\x<replaceable>NN</replaceable></literal> for a character code
-   written with only two hex digits, and
-   <literal>\u{<replaceable>N...</replaceable>}</literal> for a character
-   code written with 1 to 6 hex digits.
+   written with only two hex digits,
+   <literal>\u<replaceable>NNNN</replaceable></literal> for a Unicode
+   character identified by its 4-hex-digit code point, and
+   <literal>\u{<replaceable>N...</replaceable>}</literal> for a Unicode
+   character code point written with 1 to 6 hex digits.
   </para>
 
   <para>

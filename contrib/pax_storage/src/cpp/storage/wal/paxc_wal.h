@@ -39,18 +39,18 @@ extern "C" {
 namespace paxc {
 void RegisterPaxRmgr();
 
-void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
+void XLogPaxInsert(RelFileLocator node, const char *filename, int64 offset,
                    void *buffer, int32 bufferLen);
 
-void XLogPaxCreateDirectory(RelFileNode node);
+void XLogPaxCreateDirectory(RelFileLocator node);
 
-void XLogPaxTruncate(RelFileNode node);
+void XLogPaxTruncate(RelFileLocator node);
 
 void XLogConsistencyCheck();
 
-void XLogForgetInvalidPaxFile(RelFileNode node, const char *filename);
+void XLogForgetInvalidPaxFile(RelFileLocator node, const char *filename);
 
-void XLogForgetRelation(RelFileNode node);
+void XLogForgetRelation(RelFileLocator node);
 
 void XLogForgetDatabase(Oid dbId);
 

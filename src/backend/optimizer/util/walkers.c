@@ -529,6 +529,8 @@ plan_tree_walker(Node *node,
 				return true;
 			if (walker((Node *) ((ModifyTable *) node)->returningLists, context))
 				return true;
+			if (walker((Node *) ((ModifyTable *) node)->mergeActionLists, context))
+				return true;
 
 			break;
 
@@ -538,6 +540,7 @@ plan_tree_walker(Node *node,
 			break;
 
 		case T_SplitUpdate:
+		case T_SplitMerge:
 		case T_AssertOp:
 			if (walk_plan_node_fields((Plan *) node, walker, context))
 				return true;

@@ -11,13 +11,14 @@ select * from (select * from tenk1 order by four) t order by four, ten;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.four, tenk1.ten
-   ->  Sort
+   ->  Incremental Sort
          Sort Key: tenk1.four, tenk1.ten
+         Presorted Key: tenk1.four
          ->  Sort
                Sort Key: tenk1.four
                ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 -- When there is a LIMIT clause, incremental sort is beneficial because
 -- it only has to sort some of the groups, and not the entire table.
@@ -48,13 +49,14 @@ select * from (select * from tenk1 order by four) t order by four, ten;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.four, tenk1.ten
-   ->  Sort
+   ->  Incremental Sort
          Sort Key: tenk1.four, tenk1.ten
+         Presorted Key: tenk1.four
          ->  Sort
                Sort Key: tenk1.four
                ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 reset planner_work_mem;
 create table t(a integer, b integer);
@@ -1575,17 +1577,13 @@ explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: a, b, (sum(c))
          ->  Limit
-               ->  Incremental Sort
+               ->  Sort
                      Sort Key: a, b, (sum(c))
-                     Presorted Key: a, b
-                     ->  GroupAggregate
+                     ->  HashAggregate
                            Group Key: a, b
-                           ->  Incremental Sort
-                                 Sort Key: a, b
-                                 Presorted Key: a
-                                 ->  Index Scan using t_a_idx on t
+                           ->  Seq Scan on t
  Optimizer: Postgres query optimizer
-(14 rows)
+(10 rows)
 
 -- Incremental sort vs. set operations with varno 0
 set enable_hashagg to off;
@@ -1620,7 +1618,8 @@ explain (costs off) select distinct a,b from t;
          ->  Sort
                Sort Key: a, b
                ->  Seq Scan on t
-(7 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 drop table t;
 -- Sort pushdown can't go below where expressions are part of the rel target.
@@ -1634,11 +1633,6 @@ set parallel_tuple_cost=0;
 set parallel_setup_cost=0;
 set min_parallel_table_scan_size = 0;
 set min_parallel_index_scan_size = 0;
--- The execution plan of pax will be inaccurate if it involves bitmap heap scan.
--- This depends on the fact that the pg cost estimate will be calculated based on page
--- but pax cannot give an accurate number of pages.
-set enable_bitmapscan=off;
-set optimizer_enable_bitmapscan=off;
 -- Parallel sort below join.
 explain (costs off) select distinct sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
@@ -1710,8 +1704,8 @@ from tenk1 t1
 join tenk1 t2 on t1.unique1 = t2.unique2
 join tenk1 t3 on t2.unique1 = t3.unique1
 order by count(*);
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -1720,14 +1714,16 @@ order by count(*);
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Hash Key: t2.unique2
                            ->  Hash Join
-                                 Hash Cond: (t3.unique1 = t2.unique1)
-                                 ->  Index Only Scan using tenk1_unique1 on tenk1 t3
+                                 Hash Cond: (t2.unique1 = t3.unique1)
+                                 ->  Index Scan using tenk1_unique2 on tenk1 t2
                                  ->  Hash
-                                       ->  Index Scan using tenk1_unique2 on tenk1 t2
+                                       ->  Bitmap Heap Scan on tenk1 t3
+                                             ->  Bitmap Index Scan on tenk1_unique1
                      ->  Hash
-                           ->  Index Only Scan using tenk1_unique1 on tenk1 t1
+                           ->  Bitmap Heap Scan on tenk1 t1
+                                 ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(15 rows)
+(17 rows)
 
 -- Parallel sort but with expression (correlated subquery) that
 -- is prohibited in parallel plans.
@@ -1735,8 +1731,8 @@ explain (costs off) select distinct
   unique1,
   (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
 from tenk1 t, generate_series(1, 1000);
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t.unique1, ((SubPlan 1))
    ->  Unique
@@ -1751,17 +1747,18 @@ from tenk1 t, generate_series(1, 1000);
                              Filter: (tenk1.unique1 = t.unique1)
                              ->  Materialize
                                    ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                         ->  Index Only Scan using tenk1_unique1 on tenk1
+                                         ->  Bitmap Heap Scan on tenk1
+                                               ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(16 rows)
+(17 rows)
 
 explain (costs off) select
   unique1,
   (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
 from tenk1 t, generate_series(1, 1000)
 order by 1, 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t.unique1, ((SubPlan 1))
    ->  Sort
@@ -1774,9 +1771,10 @@ order by 1, 2;
                        Filter: (tenk1.unique1 = t.unique1)
                        ->  Materialize
                              ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                   ->  Index Only Scan using tenk1_unique1 on tenk1
+                                   ->  Bitmap Heap Scan on tenk1
+                                         ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(14 rows)
+(15 rows)
 
 -- Parallel sort but with expression not available until the upper rel.
 explain (costs off) select distinct sub.unique1, stringu1 || random()::text
@@ -1798,8 +1796,8 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
 explain (costs off) select sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
 order by 1, 2;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, (((tenk1.stringu1)::text || (random())::text))
    ->  Sort
@@ -1810,18 +1808,3 @@ order by 1, 2;
  Optimizer: Postgres query optimizer
 (8 rows)
 
--- Disallow pushing down sort when pathkey is an SRF.
-explain (costs off) select unique1 from tenk1 order by unnest('{1,2}'::int[]);
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (unnest('{1,2}'::anyarray))
-   ->  Sort
-         Sort Key: (unnest('{1,2}'::anyarray))
-         ->  ProjectSet
-               ->  Index Only Scan using tenk1_unique1 on tenk1
- Optimizer: Postgres query optimizer
-(7 rows)
-
-reset enable_bitmapscan;
-reset optimizer_enable_bitmapscan;

@@ -325,27 +325,54 @@ CREATE TABLE people (
      </para>
     </listitem>
     <listitem>
-     <para>For inheritance:</para>
+     <para>For inheritance and partitioning:</para>
      <itemizedlist>
       <listitem>
        <para>
-        If a parent column is a generated column, a child column must also be
-        a generated column using the same expression.  In the definition of
-        the child column, leave off the <literal>GENERATED</literal> clause,
-        as it will be copied from the parent.
+        If a parent column is a generated column, its child column must also
+        be a generated column; however, the child column can have a
+        different generation expression.  The generation expression that is
+        actually applied during insert or update of a row is the one
+        associated with the table that the row is physically in.
+        (This is unlike the behavior for column defaults: for those, the
+        default value associated with the table named in the query applies.)
+       </para>
+      </listitem>
+      <listitem>
+       <para>
+        If a parent column is not a generated column, its child column must
+        not be generated either.
+       </para>
+      </listitem>
+      <listitem>
+       <para>
+        For inherited tables, if you write a child column definition without
+        any <literal>GENERATED</literal> clause in <command>CREATE TABLE
+        ... INHERITS</command>, then its <literal>GENERATED</literal> clause
+        will automatically be copied from the parent.  <command>ALTER TABLE
+        ... INHERIT</command> will insist that parent and child columns
+        already match as to generation status, but it will not require their
+        generation expressions to match.
+       </para>
+      </listitem>
+      <listitem>
+       <para>
+        Similarly for partitioned tables, if you write a child column
+        definition without any <literal>GENERATED</literal> clause
+        in <command>CREATE TABLE ... PARTITION OF</command>, then
+        its <literal>GENERATED</literal> clause will automatically be copied
+        from the parent.  <command>ALTER TABLE ... ATTACH PARTITION</command>
+        will insist that parent and child columns already match as to
+        generation status, but it will not require their generation
+        expressions to match.
        </para>
       </listitem>
       <listitem>
        <para>
         In case of multiple inheritance, if one parent column is a generated
-        column, then all parent columns must be generated columns and with the
-        same expression.
-       </para>
-      </listitem>
-      <listitem>
-       <para>
-        If a parent column is not a generated column, a child column may be
-        defined to be a generated column or not.
+        column, then all parent columns must be generated columns.  If they
+        do not all have the same generation expression, then the desired
+        expression for the child must be specified explicitly.
        </para>
       </listitem>
      </itemizedlist>
@@ -371,6 +398,12 @@ CREATE TABLE people (
       base columns in a <literal>BEFORE</literal> trigger will be reflected in
       generated columns.  But conversely, it is not allowed to access
       generated columns in <literal>BEFORE</literal> triggers.
+     </para>
+    </listitem>
+    <listitem>
+     <para>
+      Generated columns are skipped for logical replication and cannot be
+      specified in a <command>CREATE PUBLICATION</command> column list.
      </para>
     </listitem>
    </itemizedlist>
@@ -557,7 +590,7 @@ CREATE TABLE products (
      tests, it cannot guarantee that the database will not reach a state
      in which the constraint condition is false (due to subsequent changes
      of the other row(s) involved).  This would cause a database dump and
-     reload to fail.  The reload could fail even when the complete
+     restore to fail.  The restore could fail even when the complete
      database state is consistent with the constraint, due to rows not
      being loaded in an order that will satisfy the constraint.  If
      possible, use <literal>UNIQUE</literal>, <literal>EXCLUDE</literal>,
@@ -569,10 +602,10 @@ CREATE TABLE products (
      If what you desire is a one-time check against other rows at row
      insertion, rather than a continuously-maintained consistency
      guarantee, a custom <link linkend="triggers">trigger</link> can be used
-     to implement that.  (This approach avoids the dump/reload problem because
+     to implement that.  (This approach avoids the dump/restore problem because
      <application>pg_dump</application> does not reinstall triggers until after
-     reloading data, so that the check will not be enforced during a
-     dump/reload.)
+     restoring data, so that the check will not be enforced during a
+     dump/restore.)
     </para>
    </note>
 
@@ -594,7 +627,7 @@ CREATE TABLE products (
      function.  <productname>PostgreSQL</productname> does not disallow
      that, but it will not notice if there are rows in the table that now
      violate the <literal>CHECK</literal> constraint. That would cause a
-     subsequent database dump and reload to fail.
+     subsequent database dump and restore to fail.
      The recommended way to handle such a change is to drop the constraint
      (using <command>ALTER TABLE</command>), adjust the function definition,
      and re-add the constraint, thereby rechecking it against all table rows.
@@ -602,7 +635,7 @@ CREATE TABLE products (
    </note>
   </sect2>
 
-  <sect2>
+  <sect2 id="ddl-constraints-not-null">
    <title>Not-Null Constraints</title>
 
    <indexterm>
@@ -759,14 +792,33 @@ CREATE TABLE products (
     In general, a unique constraint is violated if there is more than
     one row in the table where the values of all of the
     columns included in the constraint are equal.
-    However, two null values are never considered equal in this
+    By default, two null values are not considered equal in this
     comparison.  That means even in the presence of a
     unique constraint it is possible to store duplicate
     rows that contain a null value in at least one of the constrained
-    columns.  This behavior conforms to the SQL standard, but we have
-    heard that other SQL databases might not follow this rule.  So be
-    careful when developing applications that are intended to be
-    portable.
+    columns.  This behavior can be changed by adding the clause <literal>NULLS
+    NOT DISTINCT</literal>, like
+<programlisting>
+CREATE TABLE products (
+    product_no integer UNIQUE <emphasis>NULLS NOT DISTINCT</emphasis>,
+    name text,
+    price numeric
+);
+</programlisting>
+    or
+<programlisting>
+CREATE TABLE products (
+    product_no integer,
+    name text,
+    price numeric,
+    UNIQUE <emphasis>NULLS NOT DISTINCT</emphasis> (product_no)
+);
+</programlisting>
+    The default behavior can be specified explicitly using <literal>NULLS
+    DISTINCT</literal>.  The default null treatment in unique constraints is
+    implementation-defined according to the SQL standard, and other
+    implementations have a different behavior.  So be careful when developing
+    applications that are intended to be portable.
    </para>
   </sect2>
 
@@ -1063,9 +1115,61 @@ CREATE TABLE order_items (
    </para>
 
    <para>
+    The appropriate choice of <literal>ON DELETE</literal> action depends on
+    what kinds of objects the related tables represent.  When the referencing
+    table represents something that is a component of what is represented by
+    the referenced table and cannot exist independently, then
+    <literal>CASCADE</literal> could be appropriate.  If the two tables
+    represent independent objects, then <literal>RESTRICT</literal> or
+    <literal>NO ACTION</literal> is more appropriate; an application that
+    actually wants to delete both objects would then have to be explicit about
+    this and run two delete commands.  In the above example, order items are
+    part of an order, and it is convenient if they are deleted automatically
+    if an order is deleted.  But products and orders are different things, and
+    so making a deletion of a product automatically cause the deletion of some
+    order items could be considered problematic.  The actions <literal>SET
+    NULL</literal> or <literal>SET DEFAULT</literal> can be appropriate if a
+    foreign-key relationship represents optional information.  For example, if
+    the products table contained a reference to a product manager, and the
+    product manager entry gets deleted, then setting the product's product
+    manager to null or a default might be useful.
+   </para>
+
+   <para>
+    The actions <literal>SET NULL</literal> and <literal>SET DEFAULT</literal>
+    can take a column list to specify which columns to set.  Normally, all
+    columns of the foreign-key constraint are set; setting only a subset is
+    useful in some special cases.  Consider the following example:
+<programlisting>
+CREATE TABLE tenants (
+    tenant_id integer PRIMARY KEY
+);
+
+CREATE TABLE users (
+    tenant_id integer REFERENCES tenants ON DELETE CASCADE,
+    user_id integer NOT NULL,
+    PRIMARY KEY (tenant_id, user_id)
+);
+
+CREATE TABLE posts (
+    tenant_id integer REFERENCES tenants ON DELETE CASCADE,
+    post_id integer NOT NULL,
+    author_id integer,
+    PRIMARY KEY (tenant_id, post_id),
+    FOREIGN KEY (tenant_id, author_id) REFERENCES users ON DELETE SET NULL <emphasis>(author_id)</emphasis>
+);
+</programlisting>
+    Without the specification of the column, the foreign key would also set
+    the column <literal>tenant_id</literal> to null, but that column is still
+    required as part of the primary key.
+   </para>
+
+   <para>
     Analogous to <literal>ON DELETE</literal> there is also
     <literal>ON UPDATE</literal> which is invoked when a referenced
-    column is changed (updated).  The possible actions are the same.
+    column is changed (updated).  The possible actions are the same,
+    except that column lists cannot be specified for <literal>SET
+    NULL</literal> and <literal>SET DEFAULT</literal>.
     In this case, <literal>CASCADE</literal> means that the updated values of the
     referenced column(s) should be copied into the referencing row(s).
    </para>
@@ -1083,16 +1187,16 @@ CREATE TABLE order_items (
 
    <para>
     A foreign key must reference columns that either are a primary key or
-    form a unique constraint.  This means that the referenced columns always
-    have an index (the one underlying the primary key or unique constraint);
-    so checks on whether a referencing row has a match will be efficient.
-    Since a <command>DELETE</command> of a row from the referenced table
-    or an <command>UPDATE</command> of a referenced column will require
-    a scan of the referencing table for rows matching the old value, it
-    is often a good idea to index the referencing columns too.  Because this
-    is not always needed, and there are many choices available on how
-    to index, declaration of a foreign key constraint does not
-    automatically create an index on the referencing columns.
+    form a unique constraint, or are columns from a non-partial unique index.
+    This means that the referenced columns always have an index to allow
+    efficient lookups on whether a referencing row has a match.  Since a
+    <command>DELETE</command> of a row from the referenced table or an
+    <command>UPDATE</command> of a referenced column will require a scan of
+    the referencing table for rows matching the old value, it is often a good
+    idea to index the referencing columns too.  Because this is not always
+    needed, and there are many choices available on how to index, the
+    declaration of a foreign key constraint does not automatically create an
+    index on the referencing columns.
    </para>
 
    <para>
@@ -1159,7 +1263,7 @@ CREATE TABLE circles (
   </indexterm>
 
   <variablelist>
-   <varlistentry>
+   <varlistentry id="ddl-system-columns-tableoid">
     <term><structfield>tableoid</structfield></term>
     <listitem>
      <indexterm>
@@ -1179,7 +1283,7 @@ CREATE TABLE circles (
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="ddl-system-columns-xmin">
     <term><structfield>xmin</structfield></term>
     <listitem>
      <indexterm>
@@ -1195,7 +1299,7 @@ CREATE TABLE circles (
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="ddl-system-columns-cmin">
     <term><structfield>cmin</structfield></term>
     <listitem>
      <indexterm>
@@ -1209,7 +1313,7 @@ CREATE TABLE circles (
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="ddl-system-columns-xmax">
     <term><structfield>xmax</structfield></term>
     <listitem>
      <indexterm>
@@ -1226,7 +1330,7 @@ CREATE TABLE circles (
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="ddl-system-columns-cmax">
     <term><structfield>cmax</structfield></term>
     <listitem>
      <indexterm>
@@ -1239,7 +1343,7 @@ CREATE TABLE circles (
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="ddl-system-columns-ctid">
     <term><structfield>ctid</structfield></term>
     <listitem>
      <indexterm>
@@ -1465,9 +1569,6 @@ ALTER TABLE products ALTER COLUMN product_no SET NOT NULL;
 <programlisting>
 ALTER TABLE products DROP CONSTRAINT some_name;
 </programlisting>
-    (If you are dealing with a generated constraint name like <literal>$2</literal>,
-    don't forget that you'll need to double-quote it to make it a valid
-    identifier.)
    </para>
 
    <para>
@@ -1487,7 +1588,7 @@ ALTER TABLE products ALTER COLUMN product_no DROP NOT NULL;
    </para>
   </sect2>
 
-  <sect2>
+  <sect2 id="ddl-alter-column-default">
    <title>Changing a Column's Default Value</title>
 
    <indexterm>
@@ -1516,7 +1617,7 @@ ALTER TABLE products ALTER COLUMN price DROP DEFAULT;
    </para>
   </sect2>
 
-  <sect2>
+  <sect2 id="ddl-alter-column-type">
    <title>Changing a Column's Data Type</title>
 
    <indexterm>
@@ -1545,7 +1646,7 @@ ALTER TABLE products ALTER COLUMN price TYPE numeric(10,2);
    </para>
   </sect2>
 
-  <sect2>
+  <sect2 id="ddl-alter-renaming-column">
    <title>Renaming a Column</title>
 
    <indexterm>
@@ -1561,7 +1662,7 @@ ALTER TABLE products RENAME COLUMN product_no TO product_number;
    </para>
   </sect2>
 
-  <sect2>
+  <sect2 id="ddl-alter-renaming-table">
    <title>Renaming a Table</title>
 
    <indexterm>
@@ -1620,9 +1721,10 @@ ALTER TABLE products RENAME TO items;
    <literal>INSERT</literal>, <literal>UPDATE</literal>, <literal>DELETE</literal>,
    <literal>TRUNCATE</literal>, <literal>REFERENCES</literal>, <literal>TRIGGER</literal>,
    <literal>CREATE</literal>, <literal>CONNECT</literal>, <literal>TEMPORARY</literal>,
-   <literal>EXECUTE</literal>, and <literal>USAGE</literal>.
+   <literal>EXECUTE</literal>, <literal>USAGE</literal>, <literal>SET</literal>
+   and <literal>ALTER SYSTEM</literal>.
    The privileges applicable to a particular
-   object vary depending on the object's type (table, function, etc).
+   object vary depending on the object's type (table, function, etc.).
    More detail about the meanings of these privileges appears below.
    The following sections and chapters will also show you how
    these privileges are used.
@@ -1642,8 +1744,8 @@ ALTER TABLE products RENAME TO items;
 ALTER TABLE <replaceable>table_name</replaceable> OWNER TO <replaceable>new_owner</replaceable>;
 </programlisting>
    Superusers can always do this; ordinary roles can only do it if they are
-   both the current owner of the object (or a member of the owning role) and
-   a member of the new owning role.
+   both the current owner of the object (or inherit the privileges of the
+   owning role) and able to <literal>SET ROLE</literal> to the new owning role.
   </para>
 
   <para>
@@ -1696,7 +1798,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
    The available privileges are:
 
    <variablelist>
-    <varlistentry>
+    <varlistentry id="ddl-priv-select">
      <term><literal>SELECT</literal></term>
      <listitem>
       <para>
@@ -1705,7 +1807,8 @@ REVOKE ALL ON accounts FROM PUBLIC;
        view, or other table-like object.
        Also allows use of <command>COPY TO</command>.
        This privilege is also needed to reference existing column values in
-       <command>UPDATE</command> or <command>DELETE</command>.
+       <command>UPDATE</command>, <command>DELETE</command>,
+       or <command>MERGE</command>.
        For sequences, this privilege also allows use of the
        <function>currval</function> function.
        For large objects, this privilege allows the object to be read.
@@ -1713,7 +1816,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-insert">
      <term><literal>INSERT</literal></term>
      <listitem>
       <para>
@@ -1726,7 +1829,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-update">
      <term><literal>UPDATE</literal></term>
      <listitem>
       <para>
@@ -1748,7 +1851,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-delete">
      <term><literal>DELETE</literal></term>
      <listitem>
       <para>
@@ -1760,7 +1863,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-truncate">
      <term><literal>TRUNCATE</literal></term>
      <listitem>
       <para>
@@ -1769,7 +1872,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-references">
      <term><literal>REFERENCES</literal></term>
      <listitem>
       <para>
@@ -1779,7 +1882,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-trigger">
      <term><literal>TRIGGER</literal></term>
      <listitem>
       <para>
@@ -1788,7 +1891,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-create">
      <term><literal>CREATE</literal></term>
      <listitem>
       <para>
@@ -1814,7 +1917,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-connect">
      <term><literal>CONNECT</literal></term>
      <listitem>
       <para>
@@ -1825,7 +1928,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-temporary">
      <term><literal>TEMPORARY</literal></term>
      <listitem>
       <para>
@@ -1834,7 +1937,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-execute">
      <term><literal>EXECUTE</literal></term>
      <listitem>
       <para>
@@ -1845,7 +1948,7 @@ REVOKE ALL ON accounts FROM PUBLIC;
      </listitem>
     </varlistentry>
 
-    <varlistentry>
+    <varlistentry id="ddl-priv-usage">
      <term><literal>USAGE</literal></term>
      <listitem>
       <para>
@@ -1888,6 +1991,28 @@ REVOKE ALL ON accounts FROM PUBLIC;
       </para>
      </listitem>
     </varlistentry>
+
+    <varlistentry id="ddl-priv-set">
+     <term><literal>SET</literal></term>
+     <listitem>
+      <para>
+       Allows a server configuration parameter to be set to a new value
+       within the current session.  (While this privilege can be granted
+       on any parameter, it is meaningless except for parameters that would
+       normally require superuser privilege to set.)
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry id="ddl-priv-alter-system">
+     <term><literal>ALTER SYSTEM</literal></term>
+     <listitem>
+      <para>
+       Allows a server configuration parameter to be configured to a new
+       value using the <xref linkend="sql-altersystem"/> command.
+      </para>
+     </listitem>
+    </varlistentry>
    </variablelist>
 
    The privileges required by other commands are listed on the
@@ -1905,7 +2030,8 @@ REVOKE ALL ON accounts FROM PUBLIC;
    foreign servers,
    large objects,
    schemas,
-   or tablespaces.
+   tablespaces,
+   or configuration parameters.
    For other types of objects, the default privileges
    granted to <literal>PUBLIC</literal> are as follows:
    <literal>CONNECT</literal> and <literal>TEMPORARY</literal> (create
@@ -2026,6 +2152,16 @@ REVOKE ALL ON accounts FROM PUBLIC;
        <literal>TYPE</literal>
       </entry>
      </row>
+     <row>
+      <entry><literal>SET</literal></entry>
+      <entry><literal>s</literal></entry>
+      <entry><literal>PARAMETER</literal></entry>
+     </row>
+     <row>
+      <entry><literal>ALTER SYSTEM</literal></entry>
+      <entry><literal>A</literal></entry>
+      <entry><literal>PARAMETER</literal></entry>
+     </row>
      </tbody>
    </tgroup>
   </table>
@@ -2094,7 +2230,13 @@ REVOKE ALL ON accounts FROM PUBLIC;
       <entry><literal>LARGE OBJECT</literal></entry>
       <entry><literal>rw</literal></entry>
       <entry>none</entry>
-      <entry></entry>
+      <entry><literal>\dl+</literal></entry>
+     </row>
+     <row>
+      <entry><literal>PARAMETER</literal></entry>
+      <entry><literal>sA</literal></entry>
+      <entry>none</entry>
+      <entry><literal>\dconfig+</literal></entry>
      </row>
      <row>
       <entry><literal>SCHEMA</literal></entry>
@@ -2141,9 +2283,16 @@ REVOKE ALL ON accounts FROM PUBLIC;
     <primary><type>aclitem</type></primary>
    </indexterm>
    The privileges that have been granted for a particular object are
-   displayed as a list of <type>aclitem</type> entries, where each
-   <type>aclitem</type> describes the permissions of one grantee that
-   have been granted by a particular grantor.  For example,
+   displayed as a list of <type>aclitem</type> entries, each having the
+   format:
+<synopsis>
+<replaceable>grantee</replaceable><literal>=</literal><replaceable>privilege-abbreviation</replaceable><optional><literal>*</literal></optional>...<literal>/</literal><replaceable>grantor</replaceable>
+</synopsis>
+   Each <type>aclitem</type> lists all the permissions of one grantee that
+   have been granted by a particular grantor.  Specific privileges are
+   represented by one-letter abbreviations from
+   <xref linkend="privilege-abbrevs-table"/>, with <literal>*</literal>
+   appended if the privilege was granted with grant option.  For example,
    <literal>calvin=r*w/hobbes</literal> specifies that the role
    <literal>calvin</literal> has the privilege
    <literal>SELECT</literal> (<literal>r</literal>) with grant option
@@ -2457,7 +2606,7 @@ postgres=&gt; table passwd;
 postgres=&gt; set role alice;
 SET
 postgres=&gt; table passwd;
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 postgres=&gt; select user_name,real_name,home_phone,extra_info,home_dir,shell from passwd;
  user_name | real_name |  home_phone  | extra_info | home_dir    |   shell
 -----------+-----------+--------------+------------+-------------+-----------
@@ -2467,7 +2616,7 @@ postgres=&gt; select user_name,real_name,home_phone,extra_info,home_dir,shell fr
 (3 rows)
 
 postgres=&gt; update passwd set user_name = 'joe';
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 -- Alice is allowed to change her own real_name, but no others
 postgres=&gt; update passwd set real_name = 'Alice Doe';
 UPDATE 1
@@ -2476,9 +2625,9 @@ UPDATE 0
 postgres=&gt; update passwd set shell = '/bin/xx';
 ERROR:  new row violates WITH CHECK OPTION for "passwd"
 postgres=&gt; delete from passwd;
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 postgres=&gt; insert into passwd (user_name) values ('xxx');
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 -- Alice can change her own password; RLS silently prevents updating other rows
 postgres=&gt; update passwd set pwhash = 'abc';
 UPDATE 1
@@ -2508,13 +2657,13 @@ CREATE POLICY admin_local_only ON passwd AS RESTRICTIVE TO admin
 
 <programlisting>
 =&gt; SELECT current_user;
- current_user 
+ current_user
 --------------
  admin
 (1 row)
 
 =&gt; select inet_client_addr();
- inet_client_addr 
+ inet_client_addr
 ------------------
  127.0.0.1
 (1 row)
@@ -3001,20 +3150,18 @@ SELECT 3 OPERATOR(pg_catalog.+) 4;
    <para>
     By default, users cannot access any objects in schemas they do not
     own.  To allow that, the owner of the schema must grant the
-    <literal>USAGE</literal> privilege on the schema.  To allow users
-    to make use of the objects in the schema, additional privileges
-    might need to be granted, as appropriate for the object.
+    <literal>USAGE</literal> privilege on the schema.  By default, everyone
+    has that privilege on the schema <literal>public</literal>.  To allow
+    users to make use of the objects in a schema, additional privileges might
+    need to be granted, as appropriate for the object.
    </para>
 
    <para>
-    A user can also be allowed to create objects in someone else's
-    schema.  To allow that, the <literal>CREATE</literal> privilege on
-    the schema needs to be granted.  Note that by default, everyone
-    has <literal>CREATE</literal> and <literal>USAGE</literal> privileges on
-    the schema
-    <literal>public</literal>.  This allows all users that are able to
-    connect to a given database to create objects in its
-    <literal>public</literal> schema.
+    A user can also be allowed to create objects in someone else's schema.  To
+    allow that, the <literal>CREATE</literal> privilege on the schema needs to
+    be granted.  In databases upgraded from
+    <productname>PostgreSQL</productname> 14 or earlier, everyone has that
+    privilege on the schema <literal>public</literal>.
     Some <link linkend="ddl-schemas-patterns">usage patterns</link> call for
     revoking that privilege:
 <programlisting>
@@ -3073,35 +3220,41 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     query that database would take protective action at the beginning of each
     session.  Specifically, they would begin each session by
     setting <varname>search_path</varname> to the empty string or otherwise
-    removing non-superuser-writable schemas
+    removing schemas that are writable by non-superusers
     from <varname>search_path</varname>.  There are a few usage patterns
     easily supported by the default configuration:
     <itemizedlist>
      <listitem>
-      <!-- "DROP SCHEMA public" is inferior to this REVOKE, because pg_dump
-           doesn't preserve that DROP.
+      <para>
+       Constrain ordinary users to user-private schemas.
+       To implement this pattern, first ensure that no schemas have
+       public <literal>CREATE</literal> privileges.  Then, for every user
+       needing to create non-temporary objects, create a schema with the
+       same name as that user, for example
+       <literal>CREATE SCHEMA alice AUTHORIZATION alice</literal>.
+       (Recall that the default search path starts
+       with <literal>$user</literal>, which resolves to the user
+       name. Therefore, if each user has a separate schema, they access
+       their own schemas by default.)  This pattern is a secure schema
+       usage pattern unless an untrusted user is the database owner or
+       has been granted <literal>ADMIN OPTION</literal> on a relevant role,
+       in which case no secure schema usage pattern exists.
+      </para>
+      <!-- A database owner can attack the database's users via "CREATE SCHEMA
+           trojan; ALTER DATABASE $mydb SET search_path = trojan, public;". -->
 
-           A database owner can attack the database's users via "CREATE SCHEMA
-           trojan; ALTER DATABASE $mydb SET search_path = trojan, public;".  A
-           CREATEROLE user can issue "GRANT $dbowner TO $me" and then use the
-           database owner attack. -->
       <para>
-       Constrain ordinary users to user-private schemas.  To implement this,
-       issue <literal>REVOKE CREATE ON SCHEMA public FROM PUBLIC</literal>,
-       and create a schema for each user with the same name as that user.
-       Recall that the default search path starts
-       with <literal>$user</literal>, which resolves to the user name.
-       Therefore, if each user has a separate schema, they access their own
-       schemas by default.  After adopting this pattern in a database where
-       untrusted users had already logged in, consider auditing the public
-       schema for objects named like objects in
-       schema <literal>pg_catalog</literal>.  This pattern is a secure schema
-       usage pattern unless an untrusted user is the database owner or holds
-       the <literal>CREATEROLE</literal> privilege, in which case no secure
-       schema usage pattern exists.
+       In <productname>PostgreSQL</productname> 15 and later, the default
+       configuration supports this usage pattern.  In prior versions, or
+       when using a database that has been upgraded from a prior version,
+       you will need to remove the public <literal>CREATE</literal>
+       privilege from the <literal>public</literal> schema (issue
+       <literal>REVOKE CREATE ON SCHEMA public FROM PUBLIC</literal>).
+       Then consider auditing the <literal>public</literal> schema for
+       objects named like objects in schema <literal>pg_catalog</literal>.
       </para>
-      <para>
-      </para>
+      <!-- "DROP SCHEMA public" is inferior to this REVOKE, because pg_dump
+           doesn't preserve that DROP. -->
      </listitem>
 
      <listitem>
@@ -3109,24 +3262,27 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
        Remove the public schema from the default search path, by modifying
        <link linkend="config-setting-configuration-file"><filename>postgresql.conf</filename></link>
        or by issuing <literal>ALTER ROLE ALL SET search_path =
-       "$user"</literal>.  Everyone retains the ability to create objects in
-       the public schema, but only qualified names will choose those objects.
-       While qualified table references are fine, calls to functions in the
-       public schema <link linkend="typeconv-func">will be unsafe or
+       "$user"</literal>.  Then, grant privileges to create in the public
+       schema.  Only qualified names will choose public schema objects.  While
+       qualified table references are fine, calls to functions in the public
+       schema <link linkend="typeconv-func">will be unsafe or
        unreliable</link>.  If you create functions or extensions in the public
        schema, use the first pattern instead.  Otherwise, like the first
        pattern, this is secure unless an untrusted user is the database owner
-       or holds the <literal>CREATEROLE</literal> privilege.
+       or has been granted <literal>ADMIN OPTION</literal> on a relevant role.
       </para>
      </listitem>
 
      <listitem>
       <para>
-       Keep the default.  All users access the public schema implicitly.  This
+       Keep the default search path, and grant privileges to create in the
+       public schema.  All users access the public schema implicitly.  This
        simulates the situation where schemas are not available at all, giving
        a smooth transition from the non-schema-aware world.  However, this is
        never a secure pattern.  It is acceptable only when the database has a
-       single user or a few mutually-trusting users.
+       single user or a few mutually-trusting users.  In databases upgraded
+       from <productname>PostgreSQL</productname> 14 or earlier, this is the
+       default.
       </para>
      </listitem>
     </itemizedlist>
@@ -3611,7 +3767,7 @@ VALUES ('Albany', NULL, NULL, 'NY');
      following forms of partitioning:
 
      <variablelist>
-      <varlistentry>
+      <varlistentry id="ddl-partitioning-overview-range">
        <term>Range Partitioning</term>
 
        <listitem>
@@ -3632,7 +3788,7 @@ VALUES ('Albany', NULL, NULL, 'NY');
        </listitem>
       </varlistentry>
 
-      <varlistentry>
+      <varlistentry id="ddl-partitioning-overview-list">
        <term>List Partitioning</term>
 
        <listitem>
@@ -3643,7 +3799,7 @@ VALUES ('Albany', NULL, NULL, 'NY');
        </listitem>
       </varlistentry>
 
-      <varlistentry>
+      <varlistentry id="ddl-partitioning-overview-hash">
        <term>Hash Partitioning</term>
 
        <listitem>
@@ -3951,9 +4107,15 @@ CREATE TABLE measurement_y2008m02 PARTITION OF measurement
 </programlisting>
 
      As an alternative, it is sometimes more convenient to create the
-     new table outside the partition structure, and make it a proper
+     new table outside the partition structure, and attach it as a
      partition later. This allows new data to be loaded, checked, and
      transformed prior to it appearing in the partitioned table.
+     Moreover, the <literal>ATTACH PARTITION</literal> operation requires
+     only <literal>SHARE UPDATE EXCLUSIVE</literal> lock on the
+     partitioned table, as opposed to the <literal>ACCESS
+     EXCLUSIVE</literal> lock that is required by <command>CREATE TABLE
+     ... PARTITION OF</command>, so it is more friendly to concurrent
+     operations on the partitioned table.
      The <literal>CREATE TABLE ... LIKE</literal> option is helpful
      to avoid tediously repeating the parent table's definition:
 
@@ -4028,7 +4190,7 @@ ALTER TABLE measurement ATTACH PARTITION measurement_y2008m02
 <programlisting>
 CREATE INDEX measurement_usls_idx ON ONLY measurement (unitsales);
 
-CREATE INDEX measurement_usls_200602_idx
+CREATE INDEX CONCURRENTLY measurement_usls_200602_idx
     ON measurement_y2006m02 (unitsales);
 ALTER INDEX measurement_usls_idx
     ATTACH PARTITION measurement_usls_200602_idx;
@@ -4057,12 +4219,13 @@ ALTER INDEX measurement_city_id_logdate_key
     <itemizedlist>
      <listitem>
       <para>
-       Unique constraints (and hence primary keys) on partitioned tables must
-       include all the partition key columns.  This limitation exists because
-       the individual indexes making up the constraint can only directly
-       enforce uniqueness within their own partitions; therefore, the
-       partition structure itself must guarantee that there are not
-       duplicates in different partitions.
+       To create a unique or primary key constraint on a partitioned table,
+       the partition keys must not include any expressions or function calls
+       and the constraint's columns must include all of the partition key
+       columns.  This limitation exists because the individual indexes making
+       up the constraint can only directly enforce uniqueness within their own
+       partitions; therefore, the partition structure itself must guarantee
+       that there are not duplicates in different partitions.
       </para>
      </listitem>
 
@@ -4144,7 +4307,9 @@ ALTER INDEX measurement_city_id_logdate_key
         Using <literal>ONLY</literal> to add or drop a constraint on only
         the partitioned table is supported as long as there are no
         partitions.  Once partitions exist, using <literal>ONLY</literal>
-        will result in an error.  Instead, constraints on the partitions
+        will result in an error for any constraints other than
+        <literal>UNIQUE</literal> and <literal>PRIMARY KEY</literal>.
+        Instead, constraints on the partitions
         themselves can be added and (if they are not present in the parent
         table) dropped.
        </para>
@@ -4674,7 +4839,9 @@ EXPLAIN SELECT count(*) FROM measurement WHERE logdate &gt;= DATE '2008-01-01';
        It is possible to determine the number of partitions which were
        removed during this phase by observing the
        <quote>Subplans Removed</quote> property in the
-       <command>EXPLAIN</command> output.
+       <command>EXPLAIN</command> output.  It's important to note that any
+       partitions removed by the partition pruning done at this stage are
+       still locked at the beginning of execution.
       </para>
      </listitem>
 
@@ -5070,8 +5237,9 @@ DROP TABLE products CASCADE;
   </para>
 
   <para>
-   For user-defined functions, <productname>PostgreSQL</productname> tracks
-   dependencies associated with a function's externally-visible properties,
+   For a user-defined function or procedure whose body is defined as a string
+   literal, <productname>PostgreSQL</productname> tracks
+   dependencies associated with the function's externally-visible properties,
    such as its argument and result types, but <emphasis>not</emphasis> dependencies
    that could only be known by examining the function body.  As an example,
    consider this situation:
@@ -5098,6 +5266,23 @@ CREATE FUNCTION get_color_note (rainbow) RETURNS text AS
    there are also benefits.  The function is still valid in some sense if the
    table is missing, though executing it would cause an error; creating a new
    table of the same name would allow the function to work again.
+  </para>
+
+  <para>
+   On the other hand, for a SQL-language function or procedure whose body
+   is written in SQL-standard style, the body is parsed at function
+   definition time and all dependencies recognized by the parser are
+   stored.  Thus, if we write the function above as
+
+<programlisting>
+CREATE FUNCTION get_color_note (rainbow) RETURNS text
+BEGIN ATOMIC
+  SELECT note FROM my_colors WHERE color = $1;
+END;
+</programlisting>
+
+   then the function's dependency on the <structname>my_colors</structname>
+   table will be known and enforced by <command>DROP</command>.
   </para>
  </sect1>
 

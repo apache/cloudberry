@@ -4,7 +4,7 @@
  *	  XML data type support.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/utils/adt/xml.c
@@ -52,6 +52,7 @@
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libxml/xmlerror.h>
+#include <libxml/xmlsave.h>
 #include <libxml/xmlversion.h>
 #include <libxml/xmlwriter.h>
 #include <libxml/xpath.h>
@@ -65,6 +66,16 @@
 #if LIBXML_VERSION >= 20704
 #define HAVE_XMLSTRUCTUREDERRORCONTEXT 1
 #endif
+
+/*
+ * libxml2 2.12 decided to insert "const" into the error handler API.
+ */
+#if LIBXML_VERSION >= 21200
+#define PgXmlErrorPtr const xmlError *
+#else
+#define PgXmlErrorPtr xmlErrorPtr
+#endif
+
 #endif							/* USE_LIBXML */
 
 #include "access/htup_details.h"
@@ -81,6 +92,7 @@
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/execnodes.h"
+#include "nodes/miscnodes.h"
 #include "nodes/nodeFuncs.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
@@ -94,8 +106,8 @@
 
 
 /* GUC variables */
-int			xmlbinary;
-int			xmloption;
+int			xmlbinary = XMLBINARY_BASE64;
+int			xmloption = XMLOPTION_CONTENT;
 
 #ifdef USE_LIBXML
 
@@ -121,9 +133,10 @@ struct PgXmlErrorContext
 
 static xmlParserInputPtr xmlPgEntityLoader(const char *URL, const char *ID,
 										   xmlParserCtxtPtr ctxt);
-static void xml_errorHandler(void *data, xmlErrorPtr error);
-static void xml_ereport_by_code(int level, int sqlcode,
-								const char *msg, int errcode);
+static void xml_errsave(Node *escontext, PgXmlErrorContext *errcxt,
+						int sqlcode, const char *msg);
+static void xml_errorHandler(void *data, PgXmlErrorPtr error);
+static int	errdetail_for_xml_code(int code);
 static void chopStringInfoNewlines(StringInfo str);
 static void appendStringInfoLineSeparator(StringInfo str);
 
@@ -145,7 +158,10 @@ static bool print_xml_decl(StringInfo buf, const xmlChar *version,
 						   pg_enc encoding, int standalone);
 static bool xml_doctype_in_content(const xmlChar *str);
 static xmlDocPtr xml_parse(text *data, XmlOptionType xmloption_arg,
-						   bool preserve_whitespace, int encoding);
+						   bool preserve_whitespace, int encoding,
+						   XmlOptionType *parsed_xmloptiontype,
+						   xmlNodePtr *parsed_nodes,
+						   Node *escontext);
 static text *xml_xmlnodetoxmltype(xmlNodePtr cur, PgXmlErrorContext *xmlerrcxt);
 static int	xml_xpathobjtoxmlarray(xmlXPathObjectPtr xpathobj,
 								   ArrayBuildState *astate,
@@ -222,8 +238,7 @@ const TableFuncRoutine XmlTableRoutine =
 	ereport(ERROR, \
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), \
 			 errmsg("unsupported XML feature"), \
-			 errdetail("This functionality requires the server to be built with libxml support."), \
-			 errhint("You need to rebuild PostgreSQL using %s.", "--with-libxml")))
+			 errdetail("This functionality requires the server to be built with libxml support.")))
 
 
 /* from SQL/XML:2008 section 4.9 */
@@ -264,14 +279,18 @@ xml_in(PG_FUNCTION_ARGS)
 	xmltype    *vardata;
 	xmlDocPtr	doc;
 
+	/* Build the result object. */
 	vardata = (xmltype *) cstring_to_text(s);
 
 	/*
-	 * Parse the data to check if it is well-formed XML data.  Assume that
-	 * ERROR occurred if parsing failed.
+	 * Parse the data to check if it is well-formed XML data.
+	 *
+	 * Note: we don't need to worry about whether a soft error is detected.
 	 */
-	doc = xml_parse(vardata, xmloption, true, GetDatabaseEncoding());
-	xmlFreeDoc(doc);
+	doc = xml_parse(vardata, xmloption, true, GetDatabaseEncoding(),
+					NULL, NULL, fcinfo->context);
+	if (doc != NULL)
+		xmlFreeDoc(doc);
 
 	PG_RETURN_XML_P(vardata);
 #else
@@ -326,9 +345,10 @@ xml_out_internal(xmltype *x, pg_enc target_encoding)
 		return buf.data;
 	}
 
-	xml_ereport_by_code(WARNING, ERRCODE_INTERNAL_ERROR,
-						"could not parse XML declaration in stored value",
-						res_code);
+	ereport(WARNING,
+			errcode(ERRCODE_INTERNAL_ERROR),
+			errmsg_internal("could not parse XML declaration in stored value"),
+			errdetail_for_xml_code(res_code));
 #endif
 	return str;
 }
@@ -395,7 +415,7 @@ xml_recv(PG_FUNCTION_ARGS)
 	 * Parse the data to check if it is well-formed XML data.  Assume that
 	 * xml_parse will throw ERROR if not.
 	 */
-	doc = xml_parse(result, xmloption, true, encoding);
+	doc = xml_parse(result, xmloption, true, encoding, NULL, NULL, NULL);
 	xmlFreeDoc(doc);
 
 	/* Now that we know what we're dealing with, convert to server encoding */
@@ -614,15 +634,203 @@ xmltotext(PG_FUNCTION_ARGS)
 
 
 text *
-xmltotext_with_xmloption(xmltype *data, XmlOptionType xmloption_arg)
+xmltotext_with_options(xmltype *data, XmlOptionType xmloption_arg, bool indent)
 {
-	if (xmloption_arg == XMLOPTION_DOCUMENT && !xml_is_document(data))
+#ifdef USE_LIBXML
+	text	   *volatile result;
+	xmlDocPtr	doc;
+	XmlOptionType parsed_xmloptiontype;
+	xmlNodePtr	content_nodes;
+	volatile xmlBufferPtr buf = NULL;
+	volatile xmlSaveCtxtPtr ctxt = NULL;
+	ErrorSaveContext escontext = {T_ErrorSaveContext};
+	PgXmlErrorContext *xmlerrcxt;
+#endif
+
+	if (xmloption_arg != XMLOPTION_DOCUMENT && !indent)
+	{
+		/*
+		 * We don't actually need to do anything, so just return the
+		 * binary-compatible input.  For backwards-compatibility reasons,
+		 * allow such cases to succeed even without USE_LIBXML.
+		 */
+		return (text *) data;
+	}
+
+#ifdef USE_LIBXML
+
+	/*
+	 * Parse the input according to the xmloption.
+	 *
+	 * preserve_whitespace is set to false in case we are indenting, otherwise
+	 * libxml2 will fail to indent elements that have whitespace between them.
+	 */
+	doc = xml_parse(data, xmloption_arg, !indent, GetDatabaseEncoding(),
+					&parsed_xmloptiontype, &content_nodes,
+					(Node *) &escontext);
+	if (doc == NULL || escontext.error_occurred)
+	{
+		if (doc)
+			xmlFreeDoc(doc);
+		/* A soft error must be failure to conform to XMLOPTION_DOCUMENT */
 		ereport(ERROR,
 				(errcode(ERRCODE_NOT_AN_XML_DOCUMENT),
 				 errmsg("not an XML document")));
+	}
 
-	/* It's actually binary compatible, save for the above check. */
-	return (text *) data;
+	/* If we weren't asked to indent, we're done. */
+	if (!indent)
+	{
+		xmlFreeDoc(doc);
+		return (text *) data;
+	}
+
+	/* Otherwise, we gotta spin up some error handling. */
+	xmlerrcxt = pg_xml_init(PG_XML_STRICTNESS_ALL);
+
+	PG_TRY();
+	{
+		size_t		decl_len = 0;
+
+		/* The serialized data will go into this buffer. */
+		buf = xmlBufferCreate();
+
+		if (buf == NULL || xmlerrcxt->err_occurred)
+			xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+						"could not allocate xmlBuffer");
+
+		/* Detect whether there's an XML declaration */
+		parse_xml_decl(xml_text2xmlChar(data), &decl_len, NULL, NULL, NULL);
+
+		/*
+		 * Emit declaration only if the input had one.  Note: some versions of
+		 * xmlSaveToBuffer leak memory if a non-null encoding argument is
+		 * passed, so don't do that.  We don't want any encoding conversion
+		 * anyway.
+		 */
+		if (decl_len == 0)
+			ctxt = xmlSaveToBuffer(buf, NULL,
+								   XML_SAVE_NO_DECL | XML_SAVE_FORMAT);
+		else
+			ctxt = xmlSaveToBuffer(buf, NULL,
+								   XML_SAVE_FORMAT);
+
+		if (ctxt == NULL || xmlerrcxt->err_occurred)
+			xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+						"could not allocate xmlSaveCtxt");
+
+		if (parsed_xmloptiontype == XMLOPTION_DOCUMENT)
+		{
+			/* If it's a document, saving is easy. */
+			if (xmlSaveDoc(ctxt, doc) == -1 || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_INTERNAL_ERROR,
+							"could not save document to xmlBuffer");
+		}
+		else if (content_nodes != NULL)
+		{
+			/*
+			 * Deal with the case where we have non-singly-rooted XML.
+			 * libxml's dump functions don't work well for that without help.
+			 * We build a fake root node that serves as a container for the
+			 * content nodes, and then iterate over the nodes.
+			 */
+			xmlNodePtr	root;
+			xmlNodePtr	newline;
+
+			root = xmlNewNode(NULL, (const xmlChar *) "content-root");
+			if (root == NULL || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+							"could not allocate xml node");
+
+			/* This attaches root to doc, so we need not free it separately. */
+			xmlDocSetRootElement(doc, root);
+			xmlAddChildList(root, content_nodes);
+
+			/*
+			 * We use this node to insert newlines in the dump.  Note: in at
+			 * least some libxml versions, xmlNewDocText would not attach the
+			 * node to the document even if we passed it.  Therefore, manage
+			 * freeing of this node manually, and pass NULL here to make sure
+			 * there's not a dangling link.
+			 */
+			newline = xmlNewDocText(NULL, (const xmlChar *) "\n");
+			if (newline == NULL || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+							"could not allocate xml node");
+
+			for (xmlNodePtr node = root->children; node; node = node->next)
+			{
+				/* insert newlines between nodes */
+				if (node->type != XML_TEXT_NODE && node->prev != NULL)
+				{
+					if (xmlSaveTree(ctxt, newline) == -1 || xmlerrcxt->err_occurred)
+					{
+						xmlFreeNode(newline);
+						xml_ereport(xmlerrcxt, ERROR, ERRCODE_INTERNAL_ERROR,
+									"could not save newline to xmlBuffer");
+					}
+				}
+
+				if (xmlSaveTree(ctxt, node) == -1 || xmlerrcxt->err_occurred)
+				{
+					xmlFreeNode(newline);
+					xml_ereport(xmlerrcxt, ERROR, ERRCODE_INTERNAL_ERROR,
+								"could not save content to xmlBuffer");
+				}
+			}
+
+			xmlFreeNode(newline);
+		}
+
+		if (xmlSaveClose(ctxt) == -1 || xmlerrcxt->err_occurred)
+		{
+			ctxt = NULL;		/* don't try to close it again */
+			xml_ereport(xmlerrcxt, ERROR, ERRCODE_INTERNAL_ERROR,
+						"could not close xmlSaveCtxtPtr");
+		}
+
+		/*
+		 * xmlDocContentDumpOutput may add a trailing newline, so remove that.
+		 */
+		if (xmloption_arg == XMLOPTION_DOCUMENT)
+		{
+			const char *str = (const char *) xmlBufferContent(buf);
+			int			len = xmlBufferLength(buf);
+
+			while (len > 0 && (str[len - 1] == '\n' ||
+							   str[len - 1] == '\r'))
+				len--;
+
+			result = cstring_to_text_with_len(str, len);
+		}
+		else
+			result = (text *) xmlBuffer_to_xmltype(buf);
+	}
+	PG_CATCH();
+	{
+		if (ctxt)
+			xmlSaveClose(ctxt);
+		if (buf)
+			xmlBufferFree(buf);
+		if (doc)
+			xmlFreeDoc(doc);
+
+		pg_xml_done(xmlerrcxt, true);
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	xmlBufferFree(buf);
+	xmlFreeDoc(doc);
+
+	pg_xml_done(xmlerrcxt, false);
+
+	return result;
+#else
+	NO_XML_SUPPORT();
+	return NULL;
+#endif
 }
 
 
@@ -757,7 +965,7 @@ xmlparse(text *data, XmlOptionType xmloption_arg, bool preserve_whitespace)
 	xmlDocPtr	doc;
 
 	doc = xml_parse(data, xmloption_arg, preserve_whitespace,
-					GetDatabaseEncoding());
+					GetDatabaseEncoding(), NULL, NULL, NULL);
 	xmlFreeDoc(doc);
 
 	return (xmltype *) data;
@@ -890,41 +1098,18 @@ bool
 xml_is_document(xmltype *arg)
 {
 #ifdef USE_LIBXML
-	bool		result;
-	volatile xmlDocPtr doc = NULL;
-	MemoryContext ccxt = CurrentMemoryContext;
+	xmlDocPtr	doc;
+	ErrorSaveContext escontext = {T_ErrorSaveContext};
 
-	/* We want to catch ereport(INVALID_XML_DOCUMENT) and return false */
-	PG_TRY();
-	{
-		doc = xml_parse((text *) arg, XMLOPTION_DOCUMENT, true,
-						GetDatabaseEncoding());
-		result = true;
-	}
-	PG_CATCH();
-	{
-		ErrorData  *errdata;
-		MemoryContext ecxt;
-
-		ecxt = MemoryContextSwitchTo(ccxt);
-		errdata = CopyErrorData();
-		if (errdata->sqlerrcode == ERRCODE_INVALID_XML_DOCUMENT)
-		{
-			FlushErrorState();
-			result = false;
-		}
-		else
-		{
-			MemoryContextSwitchTo(ecxt);
-			PG_RE_THROW();
-		}
-	}
-	PG_END_TRY();
-
+	/*
+	 * We'll report "true" if no soft error is reported by xml_parse().
+	 */
+	doc = xml_parse((text *) arg, XMLOPTION_DOCUMENT, true,
+					GetDatabaseEncoding(), NULL, NULL, (Node *) &escontext);
 	if (doc)
 		xmlFreeDoc(doc);
 
-	return result;
+	return !escontext.error_occurred;
 #else							/* not USE_LIBXML */
 	NO_XML_SUPPORT();
 	return false;
@@ -961,8 +1146,8 @@ pg_xml_init_library(void)
 		if (sizeof(char) != sizeof(xmlChar))
 			ereport(ERROR,
 					(errmsg("could not initialize XML library"),
-					 errdetail("libxml2 has incompatible char type: sizeof(char)=%u, sizeof(xmlChar)=%u.",
-							   (int) sizeof(char), (int) sizeof(xmlChar))));
+					 errdetail("libxml2 has incompatible char type: sizeof(char)=%zu, sizeof(xmlChar)=%zu.",
+							   sizeof(char), sizeof(xmlChar))));
 
 #ifdef USE_LIBXMLCONTEXT
 		/* Set up libxml's memory allocation our way */
@@ -1513,17 +1698,36 @@ xml_doctype_in_content(const xmlChar *str)
 
 
 /*
- * Convert a C string to XML internal representation
+ * Convert a text object to XML internal representation
+ *
+ * data is the source data (must not be toasted!), encoding is its encoding,
+ * and xmloption_arg and preserve_whitespace are options for the
+ * transformation.
+ *
+ * If parsed_xmloptiontype isn't NULL, *parsed_xmloptiontype is set to the
+ * XmlOptionType actually used to parse the input (typically the same as
+ * xmloption_arg, but a DOCTYPE node in the input can force DOCUMENT mode).
+ *
+ * If parsed_nodes isn't NULL and we parse in CONTENT mode, the list
+ * of parsed nodes from the xmlParseInNodeContext call will be returned
+ * to *parsed_nodes.  (It is caller's responsibility to free that.)
+ *
+ * Errors normally result in ereport(ERROR), but if escontext is an
+ * ErrorSaveContext, then "safe" errors are reported there instead, and the
+ * caller must check SOFT_ERROR_OCCURRED() to see whether that happened.
  *
  * Note: it is caller's responsibility to xmlFreeDoc() the result,
- * else a permanent memory leak will ensue!
+ * else a permanent memory leak will ensue!  But note the result could
+ * be NULL after a soft error.
  *
  * TODO maybe libxml2's xmlreader is better? (do not construct DOM,
  * yet do not use SAX - see xmlreader.c)
  */
 static xmlDocPtr
-xml_parse(text *data, XmlOptionType xmloption_arg, bool preserve_whitespace,
-		  int encoding)
+xml_parse(text *data, XmlOptionType xmloption_arg,
+		  bool preserve_whitespace, int encoding,
+		  XmlOptionType *parsed_xmloptiontype, xmlNodePtr *parsed_nodes,
+		  Node *escontext)
 {
 	int32		len;
 	xmlChar    *string;
@@ -1532,9 +1736,20 @@ xml_parse(text *data, XmlOptionType xmloption_arg, bool preserve_whitespace,
 	volatile xmlParserCtxtPtr ctxt = NULL;
 	volatile xmlDocPtr doc = NULL;
 
+	/*
+	 * This step looks annoyingly redundant, but we must do it to have a
+	 * null-terminated string in case encoding conversion isn't required.
+	 */
 	len = VARSIZE_ANY_EXHDR(data);	/* will be useful later */
 	string = xml_text2xmlChar(data);
 
+	/*
+	 * If the data isn't UTF8, we must translate before giving it to libxml.
+	 *
+	 * XXX ideally, we'd catch any encoding conversion failure and return a
+	 * soft error.  However, failure to convert to UTF8 should be pretty darn
+	 * rare, so for now this is left undone.
+	 */
 	utf8string = pg_do_encoding_conversion(string,
 										   len,
 										   encoding,
@@ -1547,17 +1762,14 @@ xml_parse(text *data, XmlOptionType xmloption_arg, bool preserve_whitespace,
 	PG_TRY();
 	{
 		bool		parse_as_document = false;
+		int			options;
 		int			res_code;
 		size_t		count = 0;
 		xmlChar    *version = NULL;
 		int			standalone = 0;
 
+		/* Any errors here are reported as hard ereport's */
 		xmlInitParser();
-
-		ctxt = xmlNewParserCtxt();
-		if (ctxt == NULL || xmlerrcxt->err_occurred)
-			xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
-						"could not allocate parser context");
 
 		/* Decide whether to parse as document or content */
 		if (xmloption_arg == XMLOPTION_DOCUMENT)
@@ -1568,57 +1780,118 @@ xml_parse(text *data, XmlOptionType xmloption_arg, bool preserve_whitespace,
 			res_code = parse_xml_decl(utf8string,
 									  &count, &version, NULL, &standalone);
 			if (res_code != 0)
-				xml_ereport_by_code(ERROR, ERRCODE_INVALID_XML_CONTENT,
-									"invalid XML content: invalid XML declaration",
-									res_code);
+			{
+				errsave(escontext,
+						errcode(ERRCODE_INVALID_XML_CONTENT),
+						errmsg_internal("invalid XML content: invalid XML declaration"),
+						errdetail_for_xml_code(res_code));
+				goto fail;
+			}
 
 			/* Is there a DOCTYPE element? */
 			if (xml_doctype_in_content(utf8string + count))
 				parse_as_document = true;
 		}
 
+		/*
+		 * Select parse options.
+		 *
+		 * Note that here we try to apply DTD defaults (XML_PARSE_DTDATTR)
+		 * according to SQL/XML:2008 GR 10.16.7.d: 'Default values defined by
+		 * internal DTD are applied'.  As for external DTDs, we try to support
+		 * them too (see SQL/XML:2008 GR 10.16.7.e), but that doesn't really
+		 * happen because xmlPgEntityLoader prevents it.
+		 */
+		options = XML_PARSE_NOENT | XML_PARSE_DTDATTR
+			| (preserve_whitespace ? 0 : XML_PARSE_NOBLANKS);
+
+		/* initialize output parameters */
+		if (parsed_xmloptiontype != NULL)
+			*parsed_xmloptiontype = parse_as_document ? XMLOPTION_DOCUMENT :
+				XMLOPTION_CONTENT;
+		if (parsed_nodes != NULL)
+			*parsed_nodes = NULL;
+
 		if (parse_as_document)
 		{
-			/*
-			 * Note, that here we try to apply DTD defaults
-			 * (XML_PARSE_DTDATTR) according to SQL/XML:2008 GR 10.16.7.d:
-			 * 'Default values defined by internal DTD are applied'. As for
-			 * external DTDs, we try to support them too, (see SQL/XML:2008 GR
-			 * 10.16.7.e)
-			 */
+			ctxt = xmlNewParserCtxt();
+			if (ctxt == NULL || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+							"could not allocate parser context");
+
 			doc = xmlCtxtReadDoc(ctxt, utf8string,
-								 NULL,
+								 NULL,	/* no URL */
 								 "UTF-8",
-								 XML_PARSE_NOENT | XML_PARSE_DTDATTR
-								 | (preserve_whitespace ? 0 : XML_PARSE_NOBLANKS));
+								 options);
+
 			if (doc == NULL || xmlerrcxt->err_occurred)
 			{
-				/* Use original option to decide which error code to throw */
+				/* Use original option to decide which error code to report */
 				if (xmloption_arg == XMLOPTION_DOCUMENT)
-					xml_ereport(xmlerrcxt, ERROR, ERRCODE_INVALID_XML_DOCUMENT,
+					xml_errsave(escontext, xmlerrcxt,
+								ERRCODE_INVALID_XML_DOCUMENT,
 								"invalid XML document");
 				else
-					xml_ereport(xmlerrcxt, ERROR, ERRCODE_INVALID_XML_CONTENT,
+					xml_errsave(escontext, xmlerrcxt,
+								ERRCODE_INVALID_XML_CONTENT,
 								"invalid XML content");
+				goto fail;
 			}
 		}
 		else
 		{
+			xmlNodePtr	root;
+
+			/* set up document with empty root node to be the context node */
 			doc = xmlNewDoc(version);
+			if (doc == NULL || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+							"could not allocate XML document");
+
 			Assert(doc->encoding == NULL);
 			doc->encoding = xmlStrdup((const xmlChar *) "UTF-8");
+			if (doc->encoding == NULL || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+							"could not allocate XML document");
 			doc->standalone = standalone;
+
+			root = xmlNewNode(NULL, (const xmlChar *) "content-root");
+			if (root == NULL || xmlerrcxt->err_occurred)
+				xml_ereport(xmlerrcxt, ERROR, ERRCODE_OUT_OF_MEMORY,
+							"could not allocate xml node");
+			/* This attaches root to doc, so we need not free it separately. */
+			xmlDocSetRootElement(doc, root);
 
 			/* allow empty content */
 			if (*(utf8string + count))
 			{
-				res_code = xmlParseBalancedChunkMemory(doc, NULL, NULL, 0,
-													   utf8string + count, NULL);
-				if (res_code != 0 || xmlerrcxt->err_occurred)
-					xml_ereport(xmlerrcxt, ERROR, ERRCODE_INVALID_XML_CONTENT,
+				xmlNodePtr	node_list = NULL;
+				xmlParserErrors res;
+
+				res = xmlParseInNodeContext(root,
+											(char *) utf8string + count,
+											strlen((char *) utf8string + count),
+											options,
+											&node_list);
+
+				if (res != XML_ERR_OK || xmlerrcxt->err_occurred)
+				{
+					xmlFreeNodeList(node_list);
+					xml_errsave(escontext, xmlerrcxt,
+								ERRCODE_INVALID_XML_CONTENT,
 								"invalid XML content");
+					goto fail;
+				}
+
+				if (parsed_nodes != NULL)
+					*parsed_nodes = node_list;
+				else
+					xmlFreeNodeList(node_list);
 			}
 		}
+
+fail:
+		;
 	}
 	PG_CATCH();
 	{
@@ -1633,7 +1906,8 @@ xml_parse(text *data, XmlOptionType xmloption_arg, bool preserve_whitespace,
 	}
 	PG_END_TRY();
 
-	xmlFreeParserCtxt(ctxt);
+	if (ctxt != NULL)
+		xmlFreeParserCtxt(ctxt);
 
 	pg_xml_done(xmlerrcxt, false);
 
@@ -1759,10 +2033,48 @@ xml_ereport(PgXmlErrorContext *errcxt, int level, int sqlcode, const char *msg)
 
 
 /*
+ * xml_errsave --- save an XML-related error
+ *
+ * If escontext is an ErrorSaveContext, error details are saved into it,
+ * and control returns normally.
+ *
+ * Otherwise, the error is thrown, so that this is equivalent to
+ * xml_ereport() with level == ERROR.
+ *
+ * This should be used only for errors that we're sure we do not need
+ * a transaction abort to clean up after.
+ */
+static void
+xml_errsave(Node *escontext, PgXmlErrorContext *errcxt,
+			int sqlcode, const char *msg)
+{
+	char	   *detail;
+
+	/* Defend against someone passing us a bogus context struct */
+	if (errcxt->magic != ERRCXT_MAGIC)
+		elog(ERROR, "xml_errsave called with invalid PgXmlErrorContext");
+
+	/* Flag that the current libxml error has been reported */
+	errcxt->err_occurred = false;
+
+	/* Include detail only if we have some text from libxml */
+	if (errcxt->err_buf.len > 0)
+		detail = errcxt->err_buf.data;
+	else
+		detail = NULL;
+
+	errsave(escontext,
+			(errcode(sqlcode),
+			 errmsg_internal("%s", msg),
+			 detail ? errdetail_internal("%s", detail) : 0));
+}
+
+
+/*
  * Error handler for libxml errors and warnings
  */
 static void
-xml_errorHandler(void *data, xmlErrorPtr error)
+xml_errorHandler(void *data, PgXmlErrorPtr error)
 {
 	PgXmlErrorContext *xmlerrcxt = (PgXmlErrorContext *) data;
 	xmlParserCtxtPtr ctxt = (xmlParserCtxtPtr) error->ctxt;
@@ -1814,6 +2126,19 @@ xml_errorHandler(void *data, xmlErrorPtr error)
 	switch (domain)
 	{
 		case XML_FROM_PARSER:
+
+			/*
+			 * XML_ERR_NOT_WELL_BALANCED is typically reported after some
+			 * other, more on-point error.  Furthermore, libxml2 2.13 reports
+			 * it under a completely different set of rules than prior
+			 * versions.  To avoid cross-version behavioral differences,
+			 * suppress it so long as we already logged some error.
+			 */
+			if (error->code == XML_ERR_NOT_WELL_BALANCED &&
+				xmlerrcxt->err_occurred)
+				return;
+			/* fall through */
+
 		case XML_FROM_NONE:
 		case XML_FROM_MEMORY:
 		case XML_FROM_IO:
@@ -1930,15 +2255,16 @@ xml_errorHandler(void *data, xmlErrorPtr error)
 
 
 /*
- * Wrapper for "ereport" function for XML-related errors.  The "msg"
- * is the SQL-level message; some can be adopted from the SQL/XML
- * standard.  This function uses "code" to create a textual detail
- * message.  At the moment, we only need to cover those codes that we
+ * Convert libxml error codes into textual errdetail messages.
+ *
+ * This should be called within an ereport or errsave invocation,
+ * just as errdetail would be.
+ *
+ * At the moment, we only need to cover those codes that we
  * may raise in this file.
  */
-static void
-xml_ereport_by_code(int level, int sqlcode,
-					const char *msg, int code)
+static int
+errdetail_for_xml_code(int code)
 {
 	const char *det;
 
@@ -1967,10 +2293,7 @@ xml_ereport_by_code(int level, int sqlcode,
 			break;
 	}
 
-	ereport(level,
-			(errcode(sqlcode),
-			 errmsg_internal("%s", msg),
-			 errdetail(det, code)));
+	return errdetail(det, code);
 }
 
 
@@ -2776,6 +3099,10 @@ cursor_to_xmlschema(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_CURSOR),
 				 errmsg("cursor \"%s\" does not exist", name)));
+	if (portal->tupDesc == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_CURSOR_STATE),
+				 errmsg("portal \"%s\" does not return tuples", name)));
 
 	xmlschema = _SPI_strdup(map_sql_table_to_xmlschema(portal->tupDesc,
 													   InvalidOid, nulls,
@@ -3651,8 +3978,8 @@ map_sql_type_to_xmlschema_type(Oid typeoid, int typmod)
 								 "    <xsd:maxInclusive value=\"" INT64_FORMAT "\"/>\n"
 								 "    <xsd:minInclusive value=\"" INT64_FORMAT "\"/>\n"
 								 "  </xsd:restriction>\n",
-								 (((uint64) 1) << (sizeof(int64) * 8 - 1)) - 1,
-								 (((uint64) 1) << (sizeof(int64) * 8 - 1)));
+								 PG_INT64_MAX,
+								 PG_INT64_MIN);
 				break;
 
 			case FLOAT4OID:
@@ -4032,9 +4359,9 @@ xpath_internal(text *xpath_expr_text, xmltype *data, ArrayType *namespaces,
 
 		Assert(ARR_ELEMTYPE(namespaces) == TEXTOID);
 
-		deconstruct_array(namespaces, TEXTOID, -1, false, TYPALIGN_INT,
-						  &ns_names_uris, &ns_names_uris_nulls,
-						  &ns_count);
+		deconstruct_array_builtin(namespaces, TEXTOID,
+								  &ns_names_uris, &ns_names_uris_nulls,
+								  &ns_count);
 
 		Assert((ns_count % 2) == 0);	/* checked above */
 		ns_count /= 2;			/* count pairs only */
@@ -4126,7 +4453,13 @@ xpath_internal(text *xpath_expr_text, xmltype *data, ArrayType *namespaces,
 			}
 		}
 
-		xpathcomp = xmlXPathCompile(xpath_expr);
+		/*
+		 * Note: here and elsewhere, be careful to use xmlXPathCtxtCompile not
+		 * xmlXPathCompile.  In libxml2 2.13.3 and older, the latter function
+		 * fails to defend itself against recursion-to-stack-overflow.  See
+		 * https://gitlab.gnome.org/GNOME/libxml2/-/issues/799
+		 */
+		xpathcomp = xmlXPathCtxtCompile(xpathctx, xpath_expr);
 		if (xpathcomp == NULL || xmlerrcxt->err_occurred)
 			xml_ereport(xmlerrcxt, ERROR, ERRCODE_INTERNAL_ERROR,
 						"invalid XPath expression");
@@ -4199,7 +4532,7 @@ xpath(PG_FUNCTION_ARGS)
 	astate = initArrayResult(XMLOID, CurrentMemoryContext, true);
 	xpath_internal(xpath_expr_text, data, namespaces,
 				   NULL, astate);
-	PG_RETURN_ARRAYTYPE_P(makeArrayResult(astate, CurrentMemoryContext));
+	PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
 #else
 	NO_XML_SUPPORT();
 	return 0;
@@ -4260,26 +4593,18 @@ xpath_exists(PG_FUNCTION_ARGS)
 static bool
 wellformed_xml(text *data, XmlOptionType xmloption_arg)
 {
-	bool		result;
-	volatile xmlDocPtr doc = NULL;
+	xmlDocPtr	doc;
+	ErrorSaveContext escontext = {T_ErrorSaveContext};
 
-	/* We want to catch any exceptions and return false */
-	PG_TRY();
-	{
-		doc = xml_parse(data, xmloption_arg, true, GetDatabaseEncoding());
-		result = true;
-	}
-	PG_CATCH();
-	{
-		FlushErrorState();
-		result = false;
-	}
-	PG_END_TRY();
-
+	/*
+	 * We'll report "true" if no soft error is reported by xml_parse().
+	 */
+	doc = xml_parse(data, xmloption_arg, true,
+					GetDatabaseEncoding(), NULL, NULL, (Node *) &escontext);
 	if (doc)
 		xmlFreeDoc(doc);
 
-	return result;
+	return !escontext.error_occurred;
 }
 #endif
 
@@ -4505,7 +4830,10 @@ XmlTableSetRowFilter(TableFuncScanState *state, const char *path)
 
 	xstr = pg_xmlCharStrndup(path, strlen(path));
 
-	xtCxt->xpathcomp = xmlXPathCompile(xstr);
+	/* We require XmlTableSetDocument to have been done already */
+	Assert(xtCxt->xpathcxt != NULL);
+
+	xtCxt->xpathcomp = xmlXPathCtxtCompile(xtCxt->xpathcxt, xstr);
 	if (xtCxt->xpathcomp == NULL || xtCxt->xmlerrcxt->err_occurred)
 		xml_ereport(xtCxt->xmlerrcxt, ERROR, ERRCODE_SYNTAX_ERROR,
 					"invalid XPath expression");
@@ -4525,7 +4853,7 @@ XmlTableSetColumnFilter(TableFuncScanState *state, const char *path, int colnum)
 	XmlTableBuilderData *xtCxt;
 	xmlChar    *xstr;
 
-	AssertArg(PointerIsValid(path));
+	Assert(PointerIsValid(path));
 
 	xtCxt = GetXmlTableBuilderPrivateData(state, "XmlTableSetColumnFilter");
 
@@ -4536,7 +4864,10 @@ XmlTableSetColumnFilter(TableFuncScanState *state, const char *path, int colnum)
 
 	xstr = pg_xmlCharStrndup(path, strlen(path));
 
-	xtCxt->xpathscomp[colnum] = xmlXPathCompile(xstr);
+	/* We require XmlTableSetDocument to have been done already */
+	Assert(xtCxt->xpathcxt != NULL);
+
+	xtCxt->xpathscomp[colnum] = xmlXPathCtxtCompile(xtCxt->xpathcxt, xstr);
 	if (xtCxt->xpathscomp[colnum] == NULL || xtCxt->xmlerrcxt->err_occurred)
 		xml_ereport(xtCxt->xmlerrcxt, ERROR, ERRCODE_DATA_EXCEPTION,
 					"invalid XPath expression");

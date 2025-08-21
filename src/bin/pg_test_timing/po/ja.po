@@ -5,10 +5,17 @@
 #
 msgid ""
 msgstr ""
+<<<<<<< HEAD
 "Project-Id-Version: pg_test_timing (PostgreSQL 14)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2021-08-20 15:40+0900\n"
 "PO-Revision-Date: 2021-05-17 14:59+0900\n"
+=======
+"Project-Id-Version: pg_test_timing (PostgreSQL 16)\n"
+"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
+"POT-Creation-Date: 2022-07-14 10:48+0900\n"
+"PO-Revision-Date: 2022-05-10 15:27+0900\n"
+>>>>>>> REL_16_9
 "Last-Translator: Michihide Hotta <hotta@net-newbie.com>\n"
 "Language-Team: \n"
 "Language: ja\n"
@@ -26,7 +33,11 @@ msgstr "使用方法: %s [-d 期間]\n"
 #: pg_test_timing.c:81
 #, c-format
 msgid "%s: invalid argument for option %s\n"
+<<<<<<< HEAD
 msgstr "%s: オプション%sの引数が不正です\n"
+=======
+msgstr "%s: オプション%sの引数が無効です\n"
+>>>>>>> REL_16_9
 
 #: pg_test_timing.c:83 pg_test_timing.c:97 pg_test_timing.c:109
 #, c-format
@@ -36,7 +47,11 @@ msgstr "詳細は\"%s --help\"で確認してください。\n"
 #: pg_test_timing.c:90
 #, c-format
 msgid "%s: %s must be in range %u..%u\n"
+<<<<<<< HEAD
 msgstr "%s: %sは%u..%uの範囲になければなりません\n"
+=======
+msgstr "%s: %sは%u..%uの範囲でなければなりません\n"
+>>>>>>> REL_16_9
 
 #: pg_test_timing.c:107
 #, c-format
@@ -47,7 +62,11 @@ msgstr "%s: コマンドライン引数が多すぎます (先頭は\"%s\")\n"
 #, c-format
 msgid "Testing timing overhead for %u second.\n"
 msgid_plural "Testing timing overhead for %u seconds.\n"
+<<<<<<< HEAD
 msgstr[0] "%u秒のタイミングのオーバーヘッドをテストしています。\n"
+=======
+msgstr[0] "%u秒に対するタイミングのオーバーヘッドをテストしています。\n"
+>>>>>>> REL_16_9
 
 #: pg_test_timing.c:151
 #, c-format
@@ -81,3 +100,6 @@ msgstr "回数"
 #, c-format
 msgid "Histogram of timing durations:\n"
 msgstr "タイミング持続時間のヒストグラム:\n"
+
+#~ msgid "%s: duration must be a positive integer (duration is \"%d\")\n"
+#~ msgstr "%s: 持続時間は正の整数にする必要があります (持続時間は\"%d\")\n"

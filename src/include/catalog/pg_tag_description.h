@@ -60,11 +60,8 @@ CATALOG(pg_tag_description,6485,TagDescriptionRelationId) BKI_SHARED_RELATION BK
  */
 typedef FormData_pg_tag_description *Form_pg_tag_description;
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_tag_description_d_c_o_t_index, 6487, on pg_tag_description using btree(tddatabaseid oid_ops, tdclassid oid_ops, tdobjid oid_ops, tagid oid_ops));
-#define TagDescriptionIndexId	6487
-DECLARE_UNIQUE_INDEX(pg_tag_description_oid_index, 6488, on pg_tag_description using btree(oid oid_ops));
-#define TagDescriptionOidIndexId	6488
-DECLARE_INDEX(pg_tag_description_tagidvalue_index, 6489, on pg_tag_description using btree(tagid oid_ops, tagvalue text_ops));
-#define TagDescriptionTagidvalueIndexId	6489
+DECLARE_UNIQUE_INDEX_PKEY(pg_tag_description_d_c_o_t_index, 6487, TagDescriptionIndexId, on pg_tag_description using btree(tddatabaseid oid_ops, tdclassid oid_ops, tdobjid oid_ops, tagid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_tag_description_oid_index, 6488, TagDescriptionOidIndexId, on pg_tag_description using btree(oid oid_ops));
+DECLARE_INDEX(pg_tag_description_tagidvalue_index, 6489, TagDescriptionTagidvalueIndexId, on pg_tag_description using btree(tagid oid_ops, tagvalue text_ops));
 
 #endif							/* PG_TAG_DESCRIPTION_H */

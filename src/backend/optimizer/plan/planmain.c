@@ -11,7 +11,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -86,6 +86,8 @@ query_planner(PlannerInfo *root,
 	root->full_join_clauses = NIL;
 	root->join_info_list = NIL;
 	root->placeholder_list = NIL;
+	root->placeholder_array = NULL;
+	root->placeholder_array_size = 0;
 	root->grouped_var_list = NIL;
 	root->fkey_list = NIL;
 	root->initial_rels = NIL;
@@ -124,12 +126,12 @@ query_planner(PlannerInfo *root,
 				 * Anything parallel-restricted in the query tlist will be
 				 * dealt with later.)  This is normally pretty silly, because
 				 * a Result-only plan would never be interesting to
-				 * parallelize.  However, if force_parallel_mode is on, then
+				 * parallelize.  However, if debug_parallel_query is on, then
 				 * we want to execute the Result in a parallel worker if
 				 * possible, so we must do this.
 				 */
 				if (root->glob->parallelModeOK &&
-					force_parallel_mode != FORCE_PARALLEL_OFF)
+					debug_parallel_query != DEBUG_PARALLEL_OFF)
 					final_rel->consider_parallel =
 						is_parallel_safe(root, parse->jointree->quals);
 
@@ -316,7 +318,7 @@ query_planner(PlannerInfo *root,
 	add_other_rels_to_query(root);
 
 	/*
-	 * Distribute any UPDATE/DELETE row identity variables to the target
+	 * Distribute any UPDATE/DELETE/MERGE row identity variables to the target
 	 * relations.  This can't be done till we've finished expansion of
 	 * appendrels.
 	 */

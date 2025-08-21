@@ -3,7 +3,7 @@
  *
  *	server checks and output routines
  *
- *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/check.c
  */
 
@@ -18,17 +18,16 @@
 #include "greenplum/pg_upgrade_greenplum.h"
 
 static void check_new_cluster_is_empty(void);
-static void check_databases_are_compatible(void);
-static void check_locale_and_encoding(DbInfo *olddb, DbInfo *newdb);
-static bool equivalent_locale(int category, const char *loca, const char *locb);
 static void check_is_install_user(ClusterInfo *cluster);
 static void check_proper_datallowconn(ClusterInfo *cluster);
 static void check_for_prepared_transactions(ClusterInfo *cluster);
 static void check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster);
 static void check_for_user_defined_postfix_ops(ClusterInfo *cluster);
+static void check_for_incompatible_polymorphics(ClusterInfo *cluster);
 static void check_for_tables_with_oids(ClusterInfo *cluster);
 static void check_for_composite_data_type_usage(ClusterInfo *cluster);
 static void check_for_reg_data_type_usage(ClusterInfo *cluster);
+static void check_for_aclitem_data_type_usage(ClusterInfo *cluster);
 static void check_for_removed_data_type_usage(ClusterInfo *cluster,
 											  const char *version,
 											  const char *datatype);
@@ -37,7 +36,6 @@ static void check_for_pg_role_prefix(ClusterInfo *cluster);
 static void check_for_cluster_key_failure(ClusterInfo *cluster);
 static void check_for_new_tablespace_dir(ClusterInfo *new_cluster);
 static void check_for_user_defined_encoding_conversions(ClusterInfo *cluster);
-static char *get_canonical_locale_name(int category, const char *locale);
 
 /*
  * fix_path_separator
@@ -74,13 +72,13 @@ output_check_banner(bool live_check)
 	{
 		pg_log(PG_REPORT,
 			   "Performing Consistency Checks on Old Live Server\n"
-			   "------------------------------------------------\n");
+			   "------------------------------------------------");
 	}
 	else
 	{
 		pg_log(PG_REPORT,
 			   "Performing Consistency Checks\n"
-			   "-----------------------------\n");
+			   "-----------------------------");
 	}
 }
 
@@ -128,6 +126,24 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	/* GPDB 7 removed support for SHA-256 hashed passwords */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 905)
 		old_GPDB6_check_for_unsupported_sha256_password_hashes();
+
+	/*
+	 * PG 16 increased the size of the 'aclitem' type, which breaks the
+	 * on-disk format for existing data.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1500)
+		check_for_aclitem_data_type_usage(&old_cluster);
+
+	/*
+	 * PG 12 removed types abstime, reltime, tinterval.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1100)
+	{
+		check_for_removed_data_type_usage(&old_cluster, "12", "abstime");
+		check_for_removed_data_type_usage(&old_cluster, "12", "reltime");
+		check_for_removed_data_type_usage(&old_cluster, "12", "tinterval");
+	}
+
 	/*
 	 * PG 14 changed the function signature of encoding conversion functions.
 	 * Conversions from older versions cannot be upgraded automatically
@@ -154,6 +170,13 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 		check_for_removed_data_type_usage(&old_cluster, "12", "reltime");
 		check_for_removed_data_type_usage(&old_cluster, "12", "tinterval");
 	}
+
+	/*
+	 * PG 14 changed polymorphic functions from anyarray to
+	 * anycompatiblearray.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1300)
+		check_for_incompatible_polymorphics(&old_cluster);
 
 	/*
 	 * Pre-PG 12 allowed tables to be declared WITH OIDS, which is not
@@ -220,7 +243,6 @@ check_new_cluster(void)
 	get_db_and_rel_infos(&new_cluster);
 
 	check_new_cluster_is_empty();
-	check_databases_are_compatible();
 
 	check_loadable_libraries();
 
@@ -274,7 +296,7 @@ report_clusters_compatible(void)
 
 	pg_log(PG_REPORT, "\n"
 		   "If pg_upgrade fails after this point, you must re-initdb the\n"
-		   "new cluster before continuing.\n");
+		   "new cluster before continuing.");
 }
 
 
@@ -315,19 +337,19 @@ output_completion_banner(char *deletion_script_file_name)
 	pg_log(PG_REPORT,
 		   "Optimizer statistics are not transferred by pg_upgrade.\n"
 		   "Once you start the new server, consider running:\n"
-		   "    %s/vacuumdb %s--all --analyze-in-stages\n\n", new_cluster.bindir, user_specification.data);
+		   "    %s/vacuumdb %s--all --analyze-in-stages", new_cluster.bindir, user_specification.data);
 
 	if (deletion_script_file_name)
 		pg_log(PG_REPORT,
 			   "Running this script will delete the old cluster's data files:\n"
-			   "    %s\n",
+			   "    %s",
 			   deletion_script_file_name);
 	else
 		pg_log(PG_REPORT,
 			   "Could not create a script to delete the old cluster's data files\n"
 			   "because user-defined tablespaces or the new cluster's data directory\n"
 			   "exist in the old cluster directory.  The old cluster's contents must\n"
-			   "be deleted manually.\n");
+			   "be deleted manually.");
 
 	termPQExpBuffer(&user_specification);
 }
@@ -352,6 +374,10 @@ check_cluster_versions(void)
 
 	if (GET_MAJOR_VERSION(old_cluster.major_version) < 904)
 		pg_fatal("This utility can only upgrade from Greenplum version 6 and later.\n");
+
+	if (GET_MAJOR_VERSION(old_cluster.major_version) < 902)
+		pg_fatal("This utility can only upgrade from PostgreSQL version %s and later.",
+				 "9.2");
 
 	/* Ensure binaries match the designated data directories */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) !=
@@ -381,9 +407,12 @@ check_cluster_versions(void)
 		pg_fatal("This utility cannot be used to downgrade to older major Greenplum versions.\n");
 
 	/* Ensure binaries match the designated data directories */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) !=
+		GET_MAJOR_VERSION(old_cluster.bin_version))
+		pg_fatal("Old cluster data and binary directories are from different major versions.");
 	if (GET_MAJOR_VERSION(new_cluster.major_version) !=
 		GET_MAJOR_VERSION(new_cluster.bin_version))
-		pg_fatal("New cluster data and binary directories are from different major versions.\n");
+		pg_fatal("New cluster data and binary directories are from different major versions.");
 
 	check_ok();
 }
@@ -408,83 +437,6 @@ check_cluster_compatibility(bool live_check)
 					 "the old and new port numbers must be different.\n");
 	}
 }
-
-
-/*
- * check_locale_and_encoding()
- *
- * Check that locale and encoding of a database in the old and new clusters
- * are compatible.
- */
-static void
-check_locale_and_encoding(DbInfo *olddb, DbInfo *newdb)
-{
-	if (olddb->db_encoding != newdb->db_encoding)
-		pg_fatal("encodings for database \"%s\" do not match:  old \"%s\", new \"%s\"\n",
-				 olddb->db_name,
-				 pg_encoding_to_char(olddb->db_encoding),
-				 pg_encoding_to_char(newdb->db_encoding));
-	if (!equivalent_locale(LC_COLLATE, olddb->db_collate, newdb->db_collate))
-		gp_fatal_log("lc_collate values for database \"%s\" do not match:  old \"%s\", new \"%s\"\n",
-				 olddb->db_name, olddb->db_collate, newdb->db_collate);
-	if (!equivalent_locale(LC_CTYPE, olddb->db_ctype, newdb->db_ctype))
-		gp_fatal_log("lc_ctype values for database \"%s\" do not match:  old \"%s\", new \"%s\"\n",
-				 olddb->db_name, olddb->db_ctype, newdb->db_ctype);
-}
-
-/*
- * equivalent_locale()
- *
- * Best effort locale-name comparison.  Return false if we are not 100% sure
- * the locales are equivalent.
- *
- * Note: The encoding parts of the names are ignored. This function is
- * currently used to compare locale names stored in pg_database, and
- * pg_database contains a separate encoding field. That's compared directly
- * in check_locale_and_encoding().
- */
-static bool
-equivalent_locale(int category, const char *loca, const char *locb)
-{
-	const char *chara;
-	const char *charb;
-	char	   *canona;
-	char	   *canonb;
-	int			lena;
-	int			lenb;
-
-	/*
-	 * If the names are equal, the locales are equivalent. Checking this first
-	 * avoids calling setlocale() in the common case that the names are equal.
-	 * That's a good thing, if setlocale() is buggy, for example.
-	 */
-	if (pg_strcasecmp(loca, locb) == 0)
-		return true;
-
-	/*
-	 * Not identical. Canonicalize both names, remove the encoding parts, and
-	 * try again.
-	 */
-	canona = get_canonical_locale_name(category, loca);
-	chara = strrchr(canona, '.');
-	lena = chara ? (chara - canona) : strlen(canona);
-
-	canonb = get_canonical_locale_name(category, locb);
-	charb = strrchr(canonb, '.');
-	lenb = charb ? (charb - canonb) : strlen(canonb);
-
-	if (lena == lenb && pg_strncasecmp(canona, canonb, lena) == 0)
-	{
-		pg_free(canona);
-		pg_free(canonb);
-		return true;
-	}
-
-	pg_free(canona);
-	pg_free(canonb);
-	return false;
-}
-
 
 static void
 check_new_cluster_is_empty(void)
@@ -518,35 +470,6 @@ check_new_cluster_is_empty(void)
 }
 
 /*
- * Check that every database that already exists in the new cluster is
- * compatible with the corresponding database in the old one.
- */
-static void
-check_databases_are_compatible(void)
-{
-	int			newdbnum;
-	int			olddbnum;
-	DbInfo	   *newdbinfo;
-	DbInfo	   *olddbinfo;
-
-	for (newdbnum = 0; newdbnum < new_cluster.dbarr.ndbs; newdbnum++)
-	{
-		newdbinfo = &new_cluster.dbarr.dbs[newdbnum];
-
-		/* Find the corresponding database in the old cluster */
-		for (olddbnum = 0; olddbnum < old_cluster.dbarr.ndbs; olddbnum++)
-		{
-			olddbinfo = &old_cluster.dbarr.dbs[olddbnum];
-			if (strcmp(newdbinfo->db_name, olddbinfo->db_name) == 0)
-			{
-				check_locale_and_encoding(olddbinfo, newdbinfo);
-				break;
-			}
-		}
-	}
-}
-
-/*
  * A previous run of pg_upgrade might have failed and the new cluster
  * directory recreated, but they might have forgotten to remove
  * the new cluster's tablespace directories.  Therefore, check that
@@ -554,11 +477,6 @@ check_databases_are_compatible(void)
  * they do, it would cause an error while restoring global objects.
  * This allows the failure to be detected at check time, rather than
  * during schema restore.
- *
- * Note, v8.4 has no tablespace_suffix, which is fine so long as the
- * version being upgraded *to* has a suffix, since it's not allowed
- * to pg_upgrade from a version to the same version if tablespaces are
- * in use.
  */
 static void
 check_for_new_tablespace_dir(ClusterInfo *new_cluster)
@@ -700,7 +618,7 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 	if (path_is_prefix_of_path(old_cluster_pgdata, new_cluster_pgdata))
 	{
 		pg_log(PG_WARNING,
-			   "\nWARNING:  new data directory should not be inside the old data directory, e.g. %s\n", old_cluster_pgdata);
+			   "\nWARNING:  new data directory should not be inside the old data directory, i.e. %s", old_cluster_pgdata);
 
 		/* Unlink file in case it is left over from a previous run. */
 		unlink(*deletion_script_file_name);
@@ -724,7 +642,7 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 		{
 			/* reproduce warning from CREATE TABLESPACE that is in the log */
 			pg_log(PG_WARNING,
-				   "\nWARNING:  user-defined tablespace locations should not be inside the data directory, e.g. %s\n", old_tablespace_dir);
+				   "\nWARNING:  user-defined tablespace locations should not be inside the data directory, i.e. %s", old_tablespace_dir);
 
 			/* Unlink file in case it is left over from a previous run. */
 			unlink(*deletion_script_file_name);
@@ -737,7 +655,7 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 	prep_status("Creating script to delete old cluster");
 
 	if ((script = fopen_priv(*deletion_script_file_name, "w")) == NULL)
-		pg_fatal("could not open file \"%s\": %s\n",
+		pg_fatal("could not open file \"%s\": %s",
 				 *deletion_script_file_name, strerror(errno));
 
 #ifndef WIN32
@@ -788,7 +706,7 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 
 #ifndef WIN32
 	if (chmod(*deletion_script_file_name, S_IRWXU) != 0)
-		pg_fatal("could not add execute permission to file \"%s\": %s\n",
+		pg_fatal("could not add execute permission to file \"%s\": %s",
 				 *deletion_script_file_name, strerror(errno));
 #endif
 
@@ -908,7 +826,7 @@ check_proper_datallowconn(ClusterInfo *cluster)
 			/* avoid restore failure when pg_dumpall tries to create template0 */
 			if (strcmp(datallowconn, "t") == 0)
 				pg_fatal("template0 must not allow connections, "
-						 "i.e. its pg_database.datallowconn must be false\n");
+						 "i.e. its pg_database.datallowconn must be false");
 		}
 		else
 		{
@@ -998,7 +916,6 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 {
 	int			dbnum;
 	FILE	   *script = NULL;
-	bool		found = false;
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for contrib/isn with bigint-passing mismatch");
@@ -1039,9 +956,8 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 		i_proname = PQfnumber(res, "proname");
 		for (rowno = 0; rowno < ntups; rowno++)
 		{
-			found = true;
 			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
-				pg_fatal("could not open file \"%s\": %s\n",
+				pg_fatal("could not open file \"%s\": %s",
 						 output_path, strerror(errno));
 			if (!db_used)
 			{
@@ -1059,9 +975,6 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 	}
 
 	if (script)
-		fclose(script);
-
-	if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -1085,12 +998,12 @@ check_for_user_defined_postfix_ops(ClusterInfo *cluster)
 {
 	int			dbnum;
 	FILE	   *script = NULL;
-	bool		found = false;
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for user-defined postfix operators");
 
-	snprintf(output_path, sizeof(output_path),
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
 			 "postfix_ops.txt");
 
 	/* Find any user defined postfix operators */
@@ -1137,10 +1050,9 @@ check_for_user_defined_postfix_ops(ClusterInfo *cluster)
 		i_typname = PQfnumber(res, "typname");
 		for (rowno = 0; rowno < ntups; rowno++)
 		{
-			found = true;
 			if (script == NULL &&
 				(script = fopen_priv(output_path, "w")) == NULL)
-				pg_fatal("could not open file \"%s\": %s\n",
+				pg_fatal("could not open file \"%s\": %s",
 						 output_path, strerror(errno));
 			if (!db_used)
 			{
@@ -1161,19 +1073,147 @@ check_for_user_defined_postfix_ops(ClusterInfo *cluster)
 	}
 
 	if (script)
-		fclose(script);
-
-	if (found)
 	{
-		pg_log(PG_REPORT, "fatal\n");
+		fclose(script);
+		pg_log(PG_REPORT, "fatal");
 		pg_fatal("Your installation contains user-defined postfix operators, which are not\n"
 				 "supported anymore.  Consider dropping the postfix operators and replacing\n"
 				 "them with prefix operators or function calls.\n"
 				 "A list of user-defined postfix operators is in the file:\n"
-				 "    %s\n\n", output_path);
+				 "    %s", output_path);
 	}
 	else
 		check_ok();
+}
+
+/*
+ *	check_for_incompatible_polymorphics()
+ *
+ *	Make sure nothing is using old polymorphic functions with
+ *	anyarray/anyelement rather than the new anycompatible variants.
+ */
+static void
+check_for_incompatible_polymorphics(ClusterInfo *cluster)
+{
+	PGresult   *res;
+	FILE	   *script = NULL;
+	char		output_path[MAXPGPATH];
+	PQExpBufferData old_polymorphics;
+
+	prep_status("Checking for incompatible polymorphic functions");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "incompatible_polymorphics.txt");
+
+	/* The set of problematic functions varies a bit in different versions */
+	initPQExpBuffer(&old_polymorphics);
+
+	appendPQExpBufferStr(&old_polymorphics,
+						 "'array_append(anyarray,anyelement)'"
+						 ", 'array_cat(anyarray,anyarray)'"
+						 ", 'array_prepend(anyelement,anyarray)'");
+
+	if (GET_MAJOR_VERSION(cluster->major_version) >= 903)
+		appendPQExpBufferStr(&old_polymorphics,
+							 ", 'array_remove(anyarray,anyelement)'"
+							 ", 'array_replace(anyarray,anyelement,anyelement)'");
+
+	if (GET_MAJOR_VERSION(cluster->major_version) >= 905)
+		appendPQExpBufferStr(&old_polymorphics,
+							 ", 'array_position(anyarray,anyelement)'"
+							 ", 'array_position(anyarray,anyelement,integer)'"
+							 ", 'array_positions(anyarray,anyelement)'"
+							 ", 'width_bucket(anyelement,anyarray)'");
+
+	for (int dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		bool		db_used = false;
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+		int			ntups;
+		int			i_objkind,
+					i_objname;
+
+		/*
+		 * The query below hardcodes FirstNormalObjectId as 16384 rather than
+		 * interpolating that C #define into the query because, if that
+		 * #define is ever changed, the cutoff we want to use is the value
+		 * used by pre-version 14 servers, not that of some future version.
+		 */
+		res = executeQueryOrDie(conn,
+		/* Aggregate transition functions */
+								"SELECT 'aggregate' AS objkind, p.oid::regprocedure::text AS objname "
+								"FROM pg_proc AS p "
+								"JOIN pg_aggregate AS a ON a.aggfnoid=p.oid "
+								"JOIN pg_proc AS transfn ON transfn.oid=a.aggtransfn "
+								"WHERE p.oid >= 16384 "
+								"AND a.aggtransfn = ANY(ARRAY[%s]::regprocedure[]) "
+								"AND a.aggtranstype = ANY(ARRAY['anyarray', 'anyelement']::regtype[]) "
+
+		/* Aggregate final functions */
+								"UNION ALL "
+								"SELECT 'aggregate' AS objkind, p.oid::regprocedure::text AS objname "
+								"FROM pg_proc AS p "
+								"JOIN pg_aggregate AS a ON a.aggfnoid=p.oid "
+								"JOIN pg_proc AS finalfn ON finalfn.oid=a.aggfinalfn "
+								"WHERE p.oid >= 16384 "
+								"AND a.aggfinalfn = ANY(ARRAY[%s]::regprocedure[]) "
+								"AND a.aggtranstype = ANY(ARRAY['anyarray', 'anyelement']::regtype[]) "
+
+		/* Operators */
+								"UNION ALL "
+								"SELECT 'operator' AS objkind, op.oid::regoperator::text AS objname "
+								"FROM pg_operator AS op "
+								"WHERE op.oid >= 16384 "
+								"AND oprcode = ANY(ARRAY[%s]::regprocedure[]) "
+								"AND oprleft = ANY(ARRAY['anyarray', 'anyelement']::regtype[]);",
+								old_polymorphics.data,
+								old_polymorphics.data,
+								old_polymorphics.data);
+
+		ntups = PQntuples(res);
+
+		i_objkind = PQfnumber(res, "objkind");
+		i_objname = PQfnumber(res, "objname");
+
+		for (int rowno = 0; rowno < ntups; rowno++)
+		{
+			if (script == NULL &&
+				(script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s",
+						 output_path, strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+
+			fprintf(script, "  %s: %s\n",
+					PQgetvalue(res, rowno, i_objkind),
+					PQgetvalue(res, rowno, i_objname));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (script)
+	{
+		fclose(script);
+		pg_log(PG_REPORT, "fatal");
+		pg_fatal("Your installation contains user-defined objects that refer to internal\n"
+				 "polymorphic functions with arguments of type \"anyarray\" or \"anyelement\".\n"
+				 "These user-defined objects must be dropped before upgrading and restored\n"
+				 "afterwards, changing them to refer to the new corresponding functions with\n"
+				 "arguments of type \"anycompatiblearray\" and \"anycompatible\".\n"
+				 "A list of the problematic objects is in the file:\n"
+				 "    %s", output_path);
+	}
+	else
+		check_ok();
+
+	termPQExpBuffer(&old_polymorphics);
 }
 
 /*
@@ -1184,7 +1224,6 @@ check_for_tables_with_oids(ClusterInfo *cluster)
 {
 	int			dbnum;
 	FILE	   *script = NULL;
-	bool		found = false;
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for tables WITH OIDS");
@@ -1218,9 +1257,8 @@ check_for_tables_with_oids(ClusterInfo *cluster)
 		i_relname = PQfnumber(res, "relname");
 		for (rowno = 0; rowno < ntups; rowno++)
 		{
-			found = true;
 			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
-				pg_fatal("could not open file \"%s\": %s\n",
+				pg_fatal("could not open file \"%s\": %s",
 						 output_path, strerror(errno));
 			if (!db_used)
 			{
@@ -1238,9 +1276,6 @@ check_for_tables_with_oids(ClusterInfo *cluster)
 	}
 
 	if (script)
-		fclose(script);
-
-	if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -1377,6 +1412,35 @@ check_for_reg_data_type_usage(ClusterInfo *cluster)
 }
 
 /*
+ * check_for_aclitem_data_type_usage
+ *
+ *	aclitem changed its storage format in 16, so check for it.
+ */
+static void
+check_for_aclitem_data_type_usage(ClusterInfo *cluster)
+{
+	char		output_path[MAXPGPATH];
+
+	prep_status("Checking for incompatible \"%s\" data type in user tables",
+				"aclitem");
+
+	snprintf(output_path, sizeof(output_path), "tables_using_aclitem.txt");
+
+	if (check_for_data_type_usage(cluster, "pg_catalog.aclitem", output_path))
+	{
+		pg_log(PG_REPORT, "fatal");
+		pg_fatal("Your installation contains the \"aclitem\" data type in user tables.\n"
+				 "The internal format of \"aclitem\" changed in PostgreSQL version 16\n"
+				 "so this cluster cannot currently be upgraded.  You can drop the\n"
+				 "problem columns and restart the upgrade.  A list of the problem\n"
+				 "columns is in the file:\n"
+				 "    %s", output_path);
+	}
+	else
+		check_ok();
+}
+
+/*
  * check_for_removed_data_type_usage
  *
  *	Check for in-core data types that have been removed.  Callers know
@@ -1392,8 +1456,7 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 	prep_status("Checking for removed \"%s\" data type in user tables",
 				datatype);
 
-	snprintf(output_path, sizeof(output_path), "%s/tables_using_%s.txt",
-			 log_opts.basedir,
+	snprintf(output_path, sizeof(output_path), "tables_using_%s.txt",
 			 datatype);
 	snprintf(typename, sizeof(typename), "pg_catalog.%s", datatype);
 
@@ -1510,12 +1573,12 @@ check_for_user_defined_encoding_conversions(ClusterInfo *cluster)
 {
 	int			dbnum;
 	FILE	   *script = NULL;
-	bool		found = false;
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for user-defined encoding conversions");
 
-	snprintf(output_path, sizeof(output_path),
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
 			 "encoding_conversions.txt");
 
 	/* Find any user defined encoding conversions */
@@ -1549,10 +1612,9 @@ check_for_user_defined_encoding_conversions(ClusterInfo *cluster)
 		i_nspname = PQfnumber(res, "nspname");
 		for (rowno = 0; rowno < ntups; rowno++)
 		{
-			found = true;
 			if (script == NULL &&
 				(script = fopen_priv(output_path, "w")) == NULL)
-				pg_fatal("could not open file \"%s\": %s\n",
+				pg_fatal("could not open file \"%s\": %s",
 						 output_path, strerror(errno));
 			if (!db_used)
 			{
@@ -1571,17 +1633,15 @@ check_for_user_defined_encoding_conversions(ClusterInfo *cluster)
 	}
 
 	if (script)
-		fclose(script);
-
-	if (found)
 	{
-		pg_log(PG_REPORT, "fatal\n");
+		fclose(script);
+		pg_log(PG_REPORT, "fatal");
 		pg_fatal("Your installation contains user-defined encoding conversions.\n"
 				 "The conversion function parameters changed in PostgreSQL version 14\n"
 				 "so this cluster cannot currently be upgraded.  You can remove the\n"
 				 "encoding conversions in the old cluster and restart the upgrade.\n"
 				 "A list of user-defined encoding conversions is in the file:\n"
-				 "    %s\n\n", output_path);
+				 "    %s", output_path);
 	}
 	else
 		check_ok();
@@ -1613,40 +1673,3 @@ check_for_cluster_key_failure(ClusterInfo *cluster)
 	check_ok();
 }
 
-
-/*
- * get_canonical_locale_name
- *
- * Send the locale name to the system, and hope we get back a canonical
- * version.  This should match the backend's check_locale() function.
- */
-static char *
-get_canonical_locale_name(int category, const char *locale)
-{
-	char	   *save;
-	char	   *res;
-
-	/* get the current setting, so we can restore it. */
-	save = setlocale(category, NULL);
-	if (!save)
-		pg_fatal("failed to get the current locale\n");
-
-	/* 'save' may be pointing at a modifiable scratch variable, so copy it. */
-	save = (char *) pg_strdup(save);
-
-	/* set the locale with setlocale, to see if it accepts it. */
-	res = setlocale(category, locale);
-
-	if (!res)
-		pg_fatal("failed to get system locale name for \"%s\"\n", locale);
-
-	res = pg_strdup(res);
-
-	/* restore old value. */
-	if (!setlocale(category, save))
-		pg_fatal("failed to restore old locale \"%s\"\n", save);
-
-	pg_free(save);
-
-	return res;
-}

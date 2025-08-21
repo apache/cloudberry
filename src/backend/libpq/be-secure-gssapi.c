@@ -3,7 +3,7 @@
  * be-secure-gssapi.c
  *  GSSAPI encryption support
  *
- * Portions Copyright (c) 2018-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2018-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *  src/backend/libpq/be-secure-gssapi.c
@@ -60,8 +60,8 @@ static char *PqGSSSendBuffer;	/* Encrypted data waiting to be sent */
 static int	PqGSSSendLength;	/* End of data available in PqGSSSendBuffer */
 static int	PqGSSSendNext;		/* Next index to send a byte from
 								 * PqGSSSendBuffer */
-static int	PqGSSSendConsumed;	/* Number of *unencrypted* bytes consumed for
-								 * current contents of PqGSSSendBuffer */
+static int	PqGSSSendConsumed;	/* Number of source bytes encrypted but not
+								 * yet reported as sent */
 
 static char *PqGSSRecvBuffer;	/* Received, encrypted data */
 static int	PqGSSRecvLength;	/* End of data available in PqGSSRecvBuffer */
@@ -83,8 +83,8 @@ static uint32 PqGSSMaxPktSize;	/* Maximum size we can encrypt and fit the
  *
  * On success, returns the number of data bytes consumed (possibly less than
  * len).  On failure, returns -1 with errno set appropriately.  For retryable
- * errors, caller should call again (passing the same data) once the socket
- * is ready.
+ * errors, caller should call again (passing the same or more data) once the
+ * socket is ready.
  *
  * Dealing with fatal errors here is a bit tricky: we can't invoke elog(FATAL)
  * since it would try to write to the client, probably resulting in infinite
@@ -98,19 +98,25 @@ be_gssapi_write(Port *port, void *ptr, size_t len)
 				minor;
 	gss_buffer_desc input,
 				output;
-	size_t		bytes_sent = 0;
 	size_t		bytes_to_encrypt;
 	size_t		bytes_encrypted;
 	gss_ctx_id_t gctx = port->gss->ctx;
 
 	/*
-	 * When we get a failure, we must not tell the caller we have successfully
-	 * transmitted everything, else it won't retry.  Hence a "success"
-	 * (positive) return value must only count source bytes corresponding to
-	 * fully-transmitted encrypted packets.  The amount of source data
-	 * corresponding to the current partly-transmitted packet is remembered in
+	 * When we get a retryable failure, we must not tell the caller we have
+	 * successfully transmitted everything, else it won't retry.  For
+	 * simplicity, we claim we haven't transmitted anything until we have
+	 * successfully transmitted all "len" bytes.  Between calls, the amount of
+	 * the current input data that's already been encrypted and placed into
+	 * PqGSSSendBuffer (and perhaps transmitted) is remembered in
 	 * PqGSSSendConsumed.  On a retry, the caller *must* be sending that data
 	 * again, so if it offers a len less than that, something is wrong.
+	 *
+	 * Note: it may seem attractive to report partial write completion once
+	 * we've successfully sent any encrypted packets.  However, that can cause
+	 * problems for callers; notably, pqPutMsgEnd's heuristic to send only
+	 * full 8K blocks interacts badly with such a hack.  We won't save much,
+	 * typically, by letting callers discard data early, so don't risk it.
 	 */
 	if (len < PqGSSSendConsumed)
 	{
@@ -118,6 +124,7 @@ be_gssapi_write(Port *port, void *ptr, size_t len)
 		errno = ECONNRESET;
 		return -1;
 	}
+
 	/* Discount whatever source data we already encrypted. */
 	bytes_to_encrypt = len - PqGSSSendConsumed;
 	bytes_encrypted = PqGSSSendConsumed;
@@ -146,33 +153,20 @@ be_gssapi_write(Port *port, void *ptr, size_t len)
 
 			ret = secure_raw_write(port, PqGSSSendBuffer + PqGSSSendNext, amount);
 			if (ret <= 0)
-			{
-				/*
-				 * Report any previously-sent data; if there was none, reflect
-				 * the secure_raw_write result up to our caller.  When there
-				 * was some, we're effectively assuming that any interesting
-				 * failure condition will recur on the next try.
-				 */
-				if (bytes_sent)
-					return bytes_sent;
 				return ret;
-			}
 
 			/*
 			 * Check if this was a partial write, and if so, move forward that
 			 * far in our buffer and try again.
 			 */
-			if (ret != amount)
+			if (ret < amount)
 			{
 				PqGSSSendNext += ret;
 				continue;
 			}
 
-			/* We've successfully sent whatever data was in that packet. */
-			bytes_sent += PqGSSSendConsumed;
-
-			/* All encrypted data was sent, our buffer is empty now. */
-			PqGSSSendLength = PqGSSSendNext = PqGSSSendConsumed = 0;
+			/* We've successfully sent whatever data was in the buffer. */
+			PqGSSSendLength = PqGSSSendNext = 0;
 		}
 
 		/*
@@ -196,7 +190,10 @@ be_gssapi_write(Port *port, void *ptr, size_t len)
 		output.value = NULL;
 		output.length = 0;
 
-		/* Create the next encrypted packet */
+		/*
+		 * Create the next encrypted packet.  Any failure here is considered a
+		 * hard failure, so we return -1 even if some data has been sent.
+		 */
 		major = gss_wrap(&minor, gctx, 1, GSS_C_QOP_DEFAULT,
 						 &input, &conf_state, &output);
 		if (major != GSS_S_COMPLETE)
@@ -240,10 +237,13 @@ be_gssapi_write(Port *port, void *ptr, size_t len)
 	}
 
 	/* If we get here, our counters should all match up. */
-	Assert(bytes_sent == len);
-	Assert(bytes_sent == bytes_encrypted);
+	Assert(len == PqGSSSendConsumed);
+	Assert(len == bytes_encrypted);
 
-	return bytes_sent;
+	/* We're reporting all the data as sent, so reset PqGSSSendConsumed. */
+	PqGSSSendConsumed = 0;
+
+	return bytes_encrypted;
 }
 
 /*
@@ -498,12 +498,16 @@ secure_open_gssapi(Port *port)
 	bool		complete_next = false;
 	OM_uint32	major,
 				minor;
+	gss_cred_id_t delegated_creds;
 
 	/*
 	 * Allocate subsidiary Port data for GSSAPI operations.
 	 */
 	port->gss = (pg_gssinfo *)
 		MemoryContextAllocZero(TopMemoryContext, sizeof(pg_gssinfo));
+
+	delegated_creds = GSS_C_NO_CREDENTIAL;
+	port->gss->delegated_creds = false;
 
 	/*
 	 * Allocate buffers and initialize state variables.  By malloc'ing the
@@ -523,8 +527,9 @@ secure_open_gssapi(Port *port)
 	PqGSSRecvLength = PqGSSResultLength = PqGSSResultNext = 0;
 
 	/*
-	 * Use the configured keytab, if there is one.  Unfortunately, Heimdal
-	 * doesn't support the cred store extensions, so use the env var.
+	 * Use the configured keytab, if there is one.  As we now require MIT
+	 * Kerberos, we might consider using the credential store extensions in
+	 * the future instead of the environment variable.
 	 */
 	if (pg_krb_server_keyfile != NULL && pg_krb_server_keyfile[0] != '\0')
 	{
@@ -589,7 +594,8 @@ secure_open_gssapi(Port *port)
 									   GSS_C_NO_CREDENTIAL, &input,
 									   GSS_C_NO_CHANNEL_BINDINGS,
 									   &port->gss->name, NULL, &output, NULL,
-									   NULL, NULL);
+									   NULL, pg_gss_accept_delegation ? &delegated_creds : NULL);
+
 		if (GSS_ERROR(major))
 		{
 			pg_GSS_error_be(_("could not accept GSSAPI security context"),
@@ -605,6 +611,12 @@ secure_open_gssapi(Port *port)
 			 * both with and without a packet to be sent.
 			 */
 			complete_next = true;
+		}
+
+		if (delegated_creds != GSS_C_NO_CREDENTIAL)
+		{
+			pg_store_delegated_credential(delegated_creds);
+			port->gss->delegated_creds = true;
 		}
 
 		/* Done handling the incoming packet, reset our buffer */
@@ -732,4 +744,17 @@ be_gssapi_get_princ(Port *port)
 		return NULL;
 
 	return port->gss->princ;
+}
+
+/*
+ * Return if GSSAPI delegated credentials were included on this
+ * connection.
+ */
+bool
+be_gssapi_get_delegation(Port *port)
+{
+	if (!port || !port->gss)
+		return false;
+
+	return port->gss->delegated_creds;
 }

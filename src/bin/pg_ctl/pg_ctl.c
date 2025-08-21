@@ -2,7 +2,7 @@
  *
  * pg_ctl --- start/stops/restarts the PostgreSQL server
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  * src/bin/pg_ctl/pg_ctl.c
  *
@@ -14,14 +14,12 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/time.h>
-#include <sys/resource.h>
-#endif
 
 #include "catalog/pg_control.h"
 #include "common/controldata_utils.h"
@@ -34,9 +32,6 @@
 #ifdef WIN32					/* on Unix, we don't need libpq */
 #include "pqexpbuffer.h"
 #endif
-
-/* PID can be negative for standalone backend */
-typedef long pgpid_t;
 
 
 /* postgres version ident string */
@@ -112,7 +107,7 @@ static char backup_file[MAXPGPATH];
 static char promote_file[MAXPGPATH];
 static char logrotate_file[MAXPGPATH];
 
-static volatile pgpid_t postmasterPID = -1;
+static volatile pid_t postmasterPID = -1;
 
 #ifdef WIN32
 static DWORD pgctl_start_type = SERVICE_AUTO_START;
@@ -138,7 +133,7 @@ static void do_reload(void);
 static void do_status(void);
 static void do_promote(void);
 static void do_logrotate(void);
-static void do_kill(pgpid_t pid);
+static void do_kill(pid_t pid);
 static void print_msg(const char *msg);
 static void adjust_data_dir(void);
 
@@ -160,19 +155,19 @@ static bool pgwin32_get_dynamic_tokeninfo(HANDLE token,
 static int pgwin32_is_service(void);
 #endif
 
-static pgpid_t get_pgpid(bool is_status_request);
+static pid_t get_pgpid(bool is_status_request);
 static char **readfile(const char *path, int *numlines);
 static void free_readfile(char **optlines);
-static pgpid_t start_postmaster(void);
+static pid_t start_postmaster(void);
 static void read_post_opts(void);
 
 static bool is_secondary_instance(const char *pg_data);
-static WaitPMResult wait_for_postmaster_start(pgpid_t pm_pid, bool do_checkpoint);
+static WaitPMResult wait_for_postmaster_start(pid_t pm_pid, bool do_checkpoint);
 static bool wait_for_postmaster_stop(void);
 static bool wait_for_postmaster_promote(void);
 static bool postmaster_is_alive(pid_t pid);
 
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 static void unlimit_core_size(void);
 #endif
 
@@ -259,11 +254,11 @@ print_msg(const char *msg)
 	}
 }
 
-static pgpid_t
+static pid_t
 get_pgpid(bool is_status_request)
 {
 	FILE	   *pidf;
-	long		pid;
+	int			pid;
 	struct stat statbuf;
 
 	if (stat(pg_data, &statbuf) != 0)
@@ -303,7 +298,7 @@ get_pgpid(bool is_status_request)
 			exit(1);
 		}
 	}
-	if (fscanf(pidf, "%ld", &pid) != 1)
+	if (fscanf(pidf, "%d", &pid) != 1)
 	{
 		/* Is the file empty? */
 		if (ftell(pidf) == 0 && feof(pidf))
@@ -315,7 +310,7 @@ get_pgpid(bool is_status_request)
 		exit(1);
 	}
 	fclose(pidf);
-	return (pgpid_t) pid;
+	return (pid_t) pid;
 }
 
 
@@ -453,18 +448,21 @@ free_readfile(char **optlines)
  * On Windows, we also save aside a handle to the shell process in
  * "postmasterProcess", which the caller should close when done with it.
  */
-static pgpid_t
+static pid_t
 start_postmaster(void)
 {
 	char		launcher[MAXPGPATH] = "";
 	char	   *cmd, *term_fd_opt = NULL;
 
 #ifndef WIN32
-	pgpid_t		pm_pid;
+	pid_t		pm_pid;
 
 	/* Flush stdio channels just before fork, to avoid double-output problems */
-	fflush(stdout);
-	fflush(stderr);
+	fflush(NULL);
+
+#ifdef EXEC_BACKEND
+	pg_disable_aslr();
+#endif
 
 	pm_pid = fork();
 	if (pm_pid < 0)
@@ -659,7 +657,7 @@ is_secondary_instance(const char *pg_data)
  * manager checkpoint, it's got nothing to do with database checkpoints!!
  */
 static WaitPMResult
-wait_for_postmaster_start(pgpid_t pm_pid, bool do_checkpoint)
+wait_for_postmaster_start(pid_t pm_pid, bool do_checkpoint)
 {
 	int			i;
 	bool		is_coordinator;
@@ -681,7 +679,7 @@ wait_for_postmaster_start(pgpid_t pm_pid, bool do_checkpoint)
 			numlines >= LOCK_FILE_LINE_PM_STATUS)
 		{
 			/* File is complete enough for us, parse it */
-			pgpid_t		pmpid;
+			pid_t		pmpid;
 			time_t		pmstart;
 
 			/*
@@ -692,7 +690,7 @@ wait_for_postmaster_start(pgpid_t pm_pid, bool do_checkpoint)
 			 * Allow 2 seconds slop for possible cross-process clock skew.
 			 */
 			pmpid = atol(optlines[LOCK_FILE_LINE_PID - 1]);
-			pmstart = atol(optlines[LOCK_FILE_LINE_START_TIME - 1]);
+			pmstart = atoll(optlines[LOCK_FILE_LINE_START_TIME - 1]);
 			if (pmstart >= start_time - 2 &&
 #ifndef WIN32
 				pmpid == pm_pid
@@ -740,7 +738,7 @@ wait_for_postmaster_start(pgpid_t pm_pid, bool do_checkpoint)
 		{
 			int			exitstatus;
 
-			if (waitpid((pid_t) pm_pid, &exitstatus, WNOHANG) == (pid_t) pm_pid)
+			if (waitpid(pm_pid, &exitstatus, WNOHANG) == pm_pid)
 				return POSTMASTER_FAILED;
 		}
 #else
@@ -792,12 +790,12 @@ wait_for_postmaster_stop(void)
 
 	for (cnt = 0; cnt < wait_seconds * WAITS_PER_SEC; cnt++)
 	{
-		pgpid_t		pid;
+		pid_t		pid;
 
 		if ((pid = get_pgpid(false)) == 0)
 			return true;		/* pid file is gone */
 
-		if (kill((pid_t) pid, 0) != 0)
+		if (kill(pid, 0) != 0)
 		{
 			/*
 			 * Postmaster seems to have died.  Check the pid file once more to
@@ -829,12 +827,12 @@ wait_for_postmaster_promote(void)
 
 	for (cnt = 0; cnt < wait_seconds * WAITS_PER_SEC; cnt++)
 	{
-		pgpid_t		pid;
+		pid_t		pid;
 		DBState		state;
 
 		if ((pid = get_pgpid(false)) == 0)
 			return false;		/* pid file is gone */
-		if (kill((pid_t) pid, 0) != 0)
+		if (kill(pid, 0) != 0)
 			return false;		/* postmaster died */
 
 		state = get_control_dbstate();
@@ -849,7 +847,7 @@ wait_for_postmaster_promote(void)
 }
 
 
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 static void
 unlimit_core_size(void)
 {
@@ -926,21 +924,21 @@ read_post_opts(void)
  * waiting for the server to start up, the server launch is aborted.
  */
 static void
-trap_sigint_during_startup(int sig)
+trap_sigint_during_startup(SIGNAL_ARGS)
 {
 	if (postmasterPID != -1)
 	{
 		if (kill(postmasterPID, SIGINT) != 0)
-			write_stderr(_("%s: could not send stop signal (PID: %ld): %s\n"),
-						 progname, (pgpid_t) postmasterPID, strerror(errno));
+			write_stderr(_("%s: could not send stop signal (PID: %d): %s\n"),
+						 progname, (int) postmasterPID, strerror(errno));
 	}
 
 	/*
 	 * Clear the signal handler, and send the signal again, to terminate the
 	 * process as normal.
 	 */
-	pqsignal(SIGINT, SIG_DFL);
-	raise(SIGINT);
+	pqsignal(postgres_signal_arg, SIG_DFL);
+	raise(postgres_signal_arg);
 }
 
 static char *
@@ -959,14 +957,10 @@ find_other_exec_or_die(const char *argv0, const char *target, const char *versio
 			strlcpy(full_path, progname, sizeof(full_path));
 
 		if (ret == -1)
-			write_stderr(_("The program \"%s\" is needed by %s but was not found in the\n"
-						   "same directory as \"%s\".\n"
-						   "Check your installation.\n"),
+			write_stderr(_("program \"%s\" is needed by %s but was not found in the same directory as \"%s\"\n"),
 						 target, progname, full_path);
 		else
-			write_stderr(_("The program \"%s\" was found by \"%s\"\n"
-						   "but was not the same version as %s.\n"
-						   "Check your installation.\n"),
+			write_stderr(_("program \"%s\" was found by \"%s\" but was not the same version as %s\n"),
 						 target, full_path, progname);
 		exit(1);
 	}
@@ -995,6 +989,7 @@ do_init(void)
 		cmd = psprintf("\"%s\" %s%s > \"%s\"",
 					   exec_path, pgdata_opt, post_opts, DEVNULL);
 
+	fflush(NULL);
 	if (system(cmd) != 0)
 	{
 		write_stderr(_("%s: database system initialization failed\n"), progname);
@@ -1005,8 +1000,8 @@ do_init(void)
 static void
 do_start(void)
 {
-	pgpid_t		old_pid = 0;
-	pgpid_t		pm_pid;
+	pid_t		old_pid = 0;
+	pid_t		pm_pid;
 
 	if (ctl_command != RESTART_COMMAND)
 	{
@@ -1026,7 +1021,7 @@ do_start(void)
 	if (exec_path == NULL)
 		exec_path = find_other_exec_or_die(argv0, "postgres", PG_BACKEND_VERSIONSTR);
 
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 	if (allow_core_files)
 		unlimit_core_size();
 #endif
@@ -1097,8 +1092,7 @@ do_start(void)
 static void
 do_stop(void)
 {
-	pgpid_t		pid;
-	struct stat statbuf;
+	pid_t		pid;
 
 	pid = get_pgpid(false);
 
@@ -1112,14 +1106,14 @@ do_stop(void)
 	{
 		pid = -pid;
 		write_stderr(_("%s: cannot stop server; "
-					   "single-user server is running (PID: %ld)\n"),
-					 progname, pid);
+					   "single-user server is running (PID: %d)\n"),
+					 progname, (int) pid);
 		exit(1);
 	}
 
-	if (kill((pid_t) pid, sig) != 0)
+	if (kill(pid, sig) != 0)
 	{
-		write_stderr(_("%s: could not send stop signal (PID: %ld): %s\n"), progname, pid,
+		write_stderr(_("%s: could not send stop signal (PID: %d): %s\n"), progname, (int) pid,
 					 strerror(errno));
 		exit(1);
 	}
@@ -1131,20 +1125,6 @@ do_stop(void)
 	}
 	else
 	{
-		/*
-		 * If backup_label exists, an online backup is running. Warn the user
-		 * that smart shutdown will wait for it to finish. However, if the
-		 * server is in archive recovery, we're recovering from an online
-		 * backup instead of performing one.
-		 */
-		if (shutdown_mode == SMART_MODE &&
-			stat(backup_file, &statbuf) == 0 &&
-			get_control_dbstate() != DB_IN_ARCHIVE_RECOVERY)
-		{
-			print_msg(_("WARNING: online backup mode is active\n"
-						"Shutdown will not complete until pg_stop_backup() is called.\n\n"));
-		}
-
 		print_msg(_("waiting for server to shut down..."));
 
 		if (!wait_for_postmaster_stop())
@@ -1171,8 +1151,7 @@ do_stop(void)
 static void
 do_restart(void)
 {
-	pgpid_t		pid;
-	struct stat statbuf;
+	pid_t		pid;
 
 	pid = get_pgpid(false);
 
@@ -1188,37 +1167,23 @@ do_restart(void)
 	else if (pid < 0)			/* standalone backend, not postmaster */
 	{
 		pid = -pid;
-		if (postmaster_is_alive((pid_t) pid))
+		if (postmaster_is_alive(pid))
 		{
 			write_stderr(_("%s: cannot restart server; "
-						   "single-user server is running (PID: %ld)\n"),
-						 progname, pid);
+						   "single-user server is running (PID: %d)\n"),
+						 progname, (int) pid);
 			write_stderr(_("Please terminate the single-user server and try again.\n"));
 			exit(1);
 		}
 	}
 
-	if (postmaster_is_alive((pid_t) pid))
+	if (postmaster_is_alive(pid))
 	{
-		if (kill((pid_t) pid, sig) != 0)
+		if (kill(pid, sig) != 0)
 		{
-			write_stderr(_("%s: could not send stop signal (PID: %ld): %s\n"), progname, pid,
+			write_stderr(_("%s: could not send stop signal (PID: %d): %s\n"), progname, (int) pid,
 						 strerror(errno));
 			exit(1);
-		}
-
-		/*
-		 * If backup_label exists, an online backup is running. Warn the user
-		 * that smart shutdown will wait for it to finish. However, if the
-		 * server is in archive recovery, we're recovering from an online
-		 * backup instead of performing one.
-		 */
-		if (shutdown_mode == SMART_MODE &&
-			stat(backup_file, &statbuf) == 0 &&
-			get_control_dbstate() != DB_IN_ARCHIVE_RECOVERY)
-		{
-			print_msg(_("WARNING: online backup mode is active\n"
-						"Shutdown will not complete until pg_stop_backup() is called.\n\n"));
 		}
 
 		print_msg(_("waiting for server to shut down..."));
@@ -1240,8 +1205,8 @@ do_restart(void)
 	}
 	else
 	{
-		write_stderr(_("%s: old server process (PID: %ld) seems to be gone\n"),
-					 progname, pid);
+		write_stderr(_("%s: old server process (PID: %d) seems to be gone\n"),
+					 progname, (int) pid);
 		write_stderr(_("starting server anyway\n"));
 	}
 
@@ -1251,7 +1216,7 @@ do_restart(void)
 static void
 do_reload(void)
 {
-	pgpid_t		pid;
+	pid_t		pid;
 
 	pid = get_pgpid(false);
 	if (pid == 0)				/* no pid file */
@@ -1264,16 +1229,16 @@ do_reload(void)
 	{
 		pid = -pid;
 		write_stderr(_("%s: cannot reload server; "
-					   "single-user server is running (PID: %ld)\n"),
-					 progname, pid);
+					   "single-user server is running (PID: %d)\n"),
+					 progname, (int) pid);
 		write_stderr(_("Please terminate the single-user server and try again.\n"));
 		exit(1);
 	}
 
-	if (kill((pid_t) pid, sig) != 0)
+	if (kill(pid, sig) != 0)
 	{
-		write_stderr(_("%s: could not send reload signal (PID: %ld): %s\n"),
-					 progname, pid, strerror(errno));
+		write_stderr(_("%s: could not send reload signal (PID: %d): %s\n"),
+					 progname, (int) pid, strerror(errno));
 		exit(1);
 	}
 
@@ -1289,7 +1254,7 @@ static void
 do_promote(void)
 {
 	FILE	   *prmfile;
-	pgpid_t		pid;
+	pid_t		pid;
 
 	pid = get_pgpid(false);
 
@@ -1303,8 +1268,8 @@ do_promote(void)
 	{
 		pid = -pid;
 		write_stderr(_("%s: cannot promote server; "
-					   "single-user server is running (PID: %ld)\n"),
-					 progname, pid);
+					   "single-user server is running (PID: %d)\n"),
+					 progname, (int) pid);
 		exit(1);
 	}
 
@@ -1332,10 +1297,10 @@ do_promote(void)
 	}
 
 	sig = SIGUSR1;
-	if (kill((pid_t) pid, sig) != 0)
+	if (kill(pid, sig) != 0)
 	{
-		write_stderr(_("%s: could not send promote signal (PID: %ld): %s\n"),
-					 progname, pid, strerror(errno));
+		write_stderr(_("%s: could not send promote signal (PID: %d): %s\n"),
+					 progname, (int) pid, strerror(errno));
 		if (unlink(promote_file) != 0)
 			write_stderr(_("%s: could not remove promote signal file \"%s\": %s\n"),
 						 progname, promote_file, strerror(errno));
@@ -1370,7 +1335,7 @@ static void
 do_logrotate(void)
 {
 	FILE	   *logrotatefile;
-	pgpid_t		pid;
+	pid_t		pid;
 
 	pid = get_pgpid(false);
 
@@ -1384,8 +1349,8 @@ do_logrotate(void)
 	{
 		pid = -pid;
 		write_stderr(_("%s: cannot rotate log file; "
-					   "single-user server is running (PID: %ld)\n"),
-					 progname, pid);
+					   "single-user server is running (PID: %d)\n"),
+					 progname, (int) pid);
 		exit(1);
 	}
 
@@ -1405,10 +1370,10 @@ do_logrotate(void)
 	}
 
 	sig = SIGUSR1;
-	if (kill((pid_t) pid, sig) != 0)
+	if (kill(pid, sig) != 0)
 	{
-		write_stderr(_("%s: could not send log rotation signal (PID: %ld): %s\n"),
-					 progname, pid, strerror(errno));
+		write_stderr(_("%s: could not send log rotation signal (PID: %d): %s\n"),
+					 progname, (int) pid, strerror(errno));
 		if (unlink(logrotate_file) != 0)
 			write_stderr(_("%s: could not remove log rotation signal file \"%s\": %s\n"),
 						 progname, logrotate_file, strerror(errno));
@@ -1450,7 +1415,7 @@ postmaster_is_alive(pid_t pid)
 static void
 do_status(void)
 {
-	pgpid_t		pid;
+	pid_t		pid;
 
 	pid = get_pgpid(true);
 	/* Is there a pid file? */
@@ -1460,24 +1425,24 @@ do_status(void)
 		if (pid < 0)
 		{
 			pid = -pid;
-			if (postmaster_is_alive((pid_t) pid))
+			if (postmaster_is_alive(pid))
 			{
-				printf(_("%s: single-user server is running (PID: %ld)\n"),
-					   progname, pid);
+				printf(_("%s: single-user server is running (PID: %d)\n"),
+					   progname, (int) pid);
 				return;
 			}
 		}
 		else
 			/* must be a postmaster */
 		{
-			if (postmaster_is_alive((pid_t) pid))
+			if (postmaster_is_alive(pid))
 			{
 				char	  **optlines;
 				char	  **curr_line;
 				int			numlines;
 
-				printf(_("%s: server is running (PID: %ld)\n"),
-					   progname, pid);
+				printf(_("%s: server is running (PID: %d)\n"),
+					   progname, (int) pid);
 
 				optlines = readfile(postopts_file, &numlines);
 				if (optlines != NULL)
@@ -1505,12 +1470,12 @@ do_status(void)
 
 
 static void
-do_kill(pgpid_t pid)
+do_kill(pid_t pid)
 {
-	if (kill((pid_t) pid, sig) != 0)
+	if (kill(pid, sig) != 0)
 	{
-		write_stderr(_("%s: could not send signal %d (PID: %ld): %s\n"),
-					 progname, sig, pid, strerror(errno));
+		write_stderr(_("%s: could not send signal %d (PID: %d): %s\n"),
+					 progname, sig, (int) pid, strerror(errno));
 		exit(1);
 	}
 }
@@ -1988,26 +1953,35 @@ pgwin32_is_service(void)
 
 
 /*
- * Mingw headers are incomplete, and so are the libraries. So we have to load
- * a whole lot of API functions dynamically. Since we have to do this anyway,
- * also load the couple of functions that *do* exist in mingw headers but not
- * on NT4. That way, we don't break on NT4.
+ * Set up STARTUPINFO for the new process to inherit this process' handles.
+ *
+ * Process started as services appear to have "empty" handles (GetStdHandle()
+ * returns NULL) rather than invalid ones. But passing down NULL ourselves
+ * doesn't work, it's interpreted as STARTUPINFO->hStd* not being set. But we
+ * can pass down INVALID_HANDLE_VALUE - which makes GetStdHandle() in the new
+ * process (and its child processes!) return INVALID_HANDLE_VALUE. Which
+ * achieves the goal of postmaster running in a similar environment as pg_ctl.
  */
-typedef BOOL (WINAPI * __CreateRestrictedToken) (HANDLE, DWORD, DWORD, PSID_AND_ATTRIBUTES, DWORD, PLUID_AND_ATTRIBUTES, DWORD, PSID_AND_ATTRIBUTES, PHANDLE);
-typedef BOOL (WINAPI * __IsProcessInJob) (HANDLE, HANDLE, PBOOL);
-typedef HANDLE (WINAPI * __CreateJobObject) (LPSECURITY_ATTRIBUTES, LPCTSTR);
-typedef BOOL (WINAPI * __SetInformationJobObject) (HANDLE, JOBOBJECTINFOCLASS, LPVOID, DWORD);
-typedef BOOL (WINAPI * __AssignProcessToJobObject) (HANDLE, HANDLE);
-typedef BOOL (WINAPI * __QueryInformationJobObject) (HANDLE, JOBOBJECTINFOCLASS, LPVOID, DWORD, LPDWORD);
+static void
+InheritStdHandles(STARTUPINFO *si)
+{
+	si->dwFlags |= STARTF_USESTDHANDLES;
+	si->hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+	if (si->hStdInput == NULL)
+		si->hStdInput = INVALID_HANDLE_VALUE;
+	si->hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (si->hStdOutput == NULL)
+		si->hStdOutput = INVALID_HANDLE_VALUE;
+	si->hStdError = GetStdHandle(STD_ERROR_HANDLE);
+	if (si->hStdError == NULL)
+		si->hStdError = INVALID_HANDLE_VALUE;
+}
 
 /*
  * Create a restricted token, a job object sandbox, and execute the specified
  * process with it.
  *
  * Returns 0 on success, non-zero on failure, same as CreateProcess().
- *
- * On NT4, or any other system not containing the required functions, will
- * launch the process under the current token without doing any modifications.
  *
  * NOTE! Job object will only work when running as a service, because it's
  * automatically destroyed when pg_ctl exits.
@@ -2020,40 +1994,21 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, bool as_ser
 	STARTUPINFO si;
 	HANDLE		origToken;
 	HANDLE		restrictedToken;
+	BOOL		inJob;
 	SID_IDENTIFIER_AUTHORITY NtAuthority = {SECURITY_NT_AUTHORITY};
 	SID_AND_ATTRIBUTES dropSids[2];
 	PTOKEN_PRIVILEGES delPrivs;
 
-	/* Functions loaded dynamically */
-	__CreateRestrictedToken _CreateRestrictedToken = NULL;
-	__IsProcessInJob _IsProcessInJob = NULL;
-	__CreateJobObject _CreateJobObject = NULL;
-	__SetInformationJobObject _SetInformationJobObject = NULL;
-	__AssignProcessToJobObject _AssignProcessToJobObject = NULL;
-	__QueryInformationJobObject _QueryInformationJobObject = NULL;
-	HANDLE		Kernel32Handle;
-	HANDLE		Advapi32Handle;
-
 	ZeroMemory(&si, sizeof(si));
 	si.cb = sizeof(si);
 
-	Advapi32Handle = LoadLibrary("ADVAPI32.DLL");
-	if (Advapi32Handle != NULL)
-	{
-		_CreateRestrictedToken = (__CreateRestrictedToken) (pg_funcptr_t) GetProcAddress(Advapi32Handle, "CreateRestrictedToken");
-	}
-
-	if (_CreateRestrictedToken == NULL)
-	{
-		/*
-		 * NT4 doesn't have CreateRestrictedToken, so just call ordinary
-		 * CreateProcess
-		 */
-		write_stderr(_("%s: WARNING: cannot create restricted tokens on this platform\n"), progname);
-		if (Advapi32Handle != NULL)
-			FreeLibrary(Advapi32Handle);
-		return CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, processInfo);
-	}
+	/*
+	 * Set stdin/stdout/stderr handles to be inherited in the child process.
+	 * That allows postmaster and the processes it starts to perform
+	 * additional checks to see if running in a service (otherwise they get
+	 * the default console handles - which point to "somewhere").
+	 */
+	InheritStdHandles(&si);
 
 	/* Open the current token to use as a base for the restricted one */
 	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &origToken))
@@ -2087,19 +2042,18 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, bool as_ser
 		/* Error message already printed */
 		return 0;
 
-	b = _CreateRestrictedToken(origToken,
-							   0,
-							   sizeof(dropSids) / sizeof(dropSids[0]),
-							   dropSids,
-							   delPrivs->PrivilegeCount, delPrivs->Privileges,
-							   0, NULL,
-							   &restrictedToken);
+	b = CreateRestrictedToken(origToken,
+							  0,
+							  sizeof(dropSids) / sizeof(dropSids[0]),
+							  dropSids,
+							  delPrivs->PrivilegeCount, delPrivs->Privileges,
+							  0, NULL,
+							  &restrictedToken);
 
 	free(delPrivs);
 	FreeSid(dropSids[1].Sid);
 	FreeSid(dropSids[0].Sid);
 	CloseHandle(origToken);
-	FreeLibrary(Advapi32Handle);
 
 	if (!b)
 	{
@@ -2111,90 +2065,47 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, bool as_ser
 	AddUserToTokenDacl(restrictedToken);
 	r = CreateProcessAsUser(restrictedToken, NULL, cmd, NULL, NULL, TRUE, CREATE_SUSPENDED, NULL, NULL, &si, processInfo);
 
-	Kernel32Handle = LoadLibrary("KERNEL32.DLL");
-	if (Kernel32Handle != NULL)
+	if (IsProcessInJob(processInfo->hProcess, NULL, &inJob))
 	{
-		_IsProcessInJob = (__IsProcessInJob) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "IsProcessInJob");
-		_CreateJobObject = (__CreateJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "CreateJobObjectA");
-		_SetInformationJobObject = (__SetInformationJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "SetInformationJobObject");
-		_AssignProcessToJobObject = (__AssignProcessToJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "AssignProcessToJobObject");
-		_QueryInformationJobObject = (__QueryInformationJobObject) (pg_funcptr_t) GetProcAddress(Kernel32Handle, "QueryInformationJobObject");
-	}
-
-	/* Verify that we found all functions */
-	if (_IsProcessInJob == NULL || _CreateJobObject == NULL || _SetInformationJobObject == NULL || _AssignProcessToJobObject == NULL || _QueryInformationJobObject == NULL)
-	{
-		/*
-		 * IsProcessInJob() is not available on < WinXP, so there is no need
-		 * to log the error every time in that case
-		 */
-		if (IsWindowsXPOrGreater())
-
-			/*
-			 * Log error if we can't get version, or if we're on WinXP/2003 or
-			 * newer
-			 */
-			write_stderr(_("%s: WARNING: could not locate all job object functions in system API\n"), progname);
-	}
-	else
-	{
-		BOOL		inJob;
-
-		if (_IsProcessInJob(processInfo->hProcess, NULL, &inJob))
+		if (!inJob)
 		{
-			if (!inJob)
+			/*
+			 * Job objects are working, and the new process isn't in one, so
+			 * we can create one safely. If any problems show up when setting
+			 * it, we're going to ignore them.
+			 */
+			HANDLE		job;
+			char		jobname[128];
+
+			sprintf(jobname, "PostgreSQL_%lu",
+					(unsigned long) processInfo->dwProcessId);
+
+			job = CreateJobObject(NULL, jobname);
+			if (job)
 			{
-				/*
-				 * Job objects are working, and the new process isn't in one,
-				 * so we can create one safely. If any problems show up when
-				 * setting it, we're going to ignore them.
-				 */
-				HANDLE		job;
-				char		jobname[128];
+				JOBOBJECT_BASIC_LIMIT_INFORMATION basicLimit;
+				JOBOBJECT_BASIC_UI_RESTRICTIONS uiRestrictions;
+				JOBOBJECT_SECURITY_LIMIT_INFORMATION securityLimit;
 
-				sprintf(jobname, "PostgreSQL_%lu",
-						(unsigned long) processInfo->dwProcessId);
+				ZeroMemory(&basicLimit, sizeof(basicLimit));
+				ZeroMemory(&uiRestrictions, sizeof(uiRestrictions));
+				ZeroMemory(&securityLimit, sizeof(securityLimit));
 
-				job = _CreateJobObject(NULL, jobname);
-				if (job)
-				{
-					JOBOBJECT_BASIC_LIMIT_INFORMATION basicLimit;
-					JOBOBJECT_BASIC_UI_RESTRICTIONS uiRestrictions;
-					JOBOBJECT_SECURITY_LIMIT_INFORMATION securityLimit;
+				basicLimit.LimitFlags = JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION | JOB_OBJECT_LIMIT_PRIORITY_CLASS;
+				basicLimit.PriorityClass = NORMAL_PRIORITY_CLASS;
+				SetInformationJobObject(job, JobObjectBasicLimitInformation, &basicLimit, sizeof(basicLimit));
 
-					ZeroMemory(&basicLimit, sizeof(basicLimit));
-					ZeroMemory(&uiRestrictions, sizeof(uiRestrictions));
-					ZeroMemory(&securityLimit, sizeof(securityLimit));
+				uiRestrictions.UIRestrictionsClass = JOB_OBJECT_UILIMIT_DESKTOP | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS |
+					JOB_OBJECT_UILIMIT_EXITWINDOWS | JOB_OBJECT_UILIMIT_READCLIPBOARD |
+					JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS | JOB_OBJECT_UILIMIT_WRITECLIPBOARD;
 
-					basicLimit.LimitFlags = JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION | JOB_OBJECT_LIMIT_PRIORITY_CLASS;
-					basicLimit.PriorityClass = NORMAL_PRIORITY_CLASS;
-					_SetInformationJobObject(job, JobObjectBasicLimitInformation, &basicLimit, sizeof(basicLimit));
+				SetInformationJobObject(job, JobObjectBasicUIRestrictions, &uiRestrictions, sizeof(uiRestrictions));
 
-					uiRestrictions.UIRestrictionsClass = JOB_OBJECT_UILIMIT_DESKTOP | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS |
-						JOB_OBJECT_UILIMIT_EXITWINDOWS | JOB_OBJECT_UILIMIT_READCLIPBOARD |
-						JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS | JOB_OBJECT_UILIMIT_WRITECLIPBOARD;
+				securityLimit.SecurityLimitFlags = JOB_OBJECT_SECURITY_NO_ADMIN | JOB_OBJECT_SECURITY_ONLY_TOKEN;
+				securityLimit.JobToken = restrictedToken;
+				SetInformationJobObject(job, JobObjectSecurityLimitInformation, &securityLimit, sizeof(securityLimit));
 
-					if (as_service)
-					{
-						if (!IsWindows7OrGreater())
-						{
-							/*
-							 * On Windows 7 (and presumably later),
-							 * JOB_OBJECT_UILIMIT_HANDLES prevents us from
-							 * starting as a service. So we only enable it on
-							 * Vista and earlier (version <= 6.0)
-							 */
-							uiRestrictions.UIRestrictionsClass |= JOB_OBJECT_UILIMIT_HANDLES;
-						}
-					}
-					_SetInformationJobObject(job, JobObjectBasicUIRestrictions, &uiRestrictions, sizeof(uiRestrictions));
-
-					securityLimit.SecurityLimitFlags = JOB_OBJECT_SECURITY_NO_ADMIN | JOB_OBJECT_SECURITY_ONLY_TOKEN;
-					securityLimit.JobToken = restrictedToken;
-					_SetInformationJobObject(job, JobObjectSecurityLimitInformation, &securityLimit, sizeof(securityLimit));
-
-					_AssignProcessToJobObject(job, processInfo->hProcess);
-				}
+				AssignProcessToJobObject(job, processInfo->hProcess);
 			}
 		}
 	}
@@ -2204,8 +2115,6 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, bool as_ser
 	CloseHandle(restrictedToken);
 
 	ResumeThread(processInfo->hThread);
-
-	FreeLibrary(Kernel32Handle);
 
 	/*
 	 * We intentionally don't close the job object handle, because we want the
@@ -2322,7 +2231,7 @@ do_help(void)
 	printf(_("If the -D option is omitted, the environment variable PGDATA is used.\n"));
 
 	printf(_("\nOptions for start or restart:\n"));
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 	printf(_("  -c, --core-files       allow postgres to produce core files\n"));
 #else
 	printf(_("  -c, --core-files       not applicable on this platform\n"));
@@ -2478,14 +2387,14 @@ adjust_data_dir(void)
 				   my_exec_path,
 				   pgdata_opt ? pgdata_opt : "",
 				   post_opts ? post_opts : "");
+	fflush(NULL);
 
 	fd = popen(cmd, "r");
-	if (fd == NULL || fgets(filename, sizeof(filename), fd) == NULL)
+	if (fd == NULL || fgets(filename, sizeof(filename), fd) == NULL || pclose(fd) != 0)
 	{
 		write_stderr(_("%s: could not determine the data directory using command \"%s\"\n"), progname, cmd);
 		exit(1);
 	}
-	pclose(fd);
 	free(my_exec_path);
 
 	/* strip trailing newline and carriage return */
@@ -2539,7 +2448,7 @@ main(int argc, char **argv)
 
 	char	   *env_wait;
 	int			c;
-	pgpid_t		killproc = 0;
+	pid_t		killproc = 0;
 
 	pg_logging_init(argv[0]);
 	progname = get_progname(argv[0]);

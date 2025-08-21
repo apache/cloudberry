@@ -4,7 +4,7 @@
  *	  Sort the items of a dump into a safe order for dumping
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -75,11 +75,11 @@ enum dbObjectTypePriorities
 	PRIO_TABLE_ATTACH,
 	PRIO_DUMMY_TYPE,
 	PRIO_ATTRDEF,
-	PRIO_BLOB,
+	PRIO_LARGE_OBJECT,
 	PRIO_PRE_DATA_BOUNDARY,		/* boundary! */
 	PRIO_TABLE_DATA,
 	PRIO_SEQUENCE_SET,
-	PRIO_BLOB_DATA,
+	PRIO_LARGE_OBJECT_DATA,
 	PRIO_POST_DATA_BOUNDARY,	/* boundary! */
 	PRIO_CONSTRAINT,
 	PRIO_INDEX,
@@ -91,6 +91,7 @@ enum dbObjectTypePriorities
 	PRIO_POLICY,
 	PRIO_PUBLICATION,
 	PRIO_PUBLICATION_REL,
+	PRIO_PUBLICATION_TABLE_IN_SCHEMA,
 	PRIO_SUBSCRIPTION,
 	PRIO_DEFAULT_ACL,			/* done in ACL pass */
 	PRIO_EVENT_TRIGGER,			/* must be next to last! */
@@ -133,7 +134,7 @@ static const int dbObjectTypePriority[] =
 	15,							/* DO_TSCONFIG */
 	16,							/* DO_FDW */
 	17,							/* DO_FOREIGN_SERVER */
-	38,							/* DO_DEFAULT_ACL --- done in ACL pass */
+	39,							/* DO_DEFAULT_ACL --- done in ACL pass */
 	3,							/* DO_TRANSFORM */
 	21,							/* DO_BLOB */
 	25,							/* DO_BLOB_DATA */
@@ -142,12 +143,13 @@ static const int dbObjectTypePriority[] =
 	1,							/* DO_BINARY_UPGRADE */
 	22,							/* DO_PRE_DATA_BOUNDARY */
 	26,							/* DO_POST_DATA_BOUNDARY */
-	39,							/* DO_EVENT_TRIGGER --- next to last! */
-	40,							/* DO_REFRESH_MATVIEW --- last! */
+	40,							/* DO_EVENT_TRIGGER --- next to last! */
+	41,							/* DO_REFRESH_MATVIEW --- last! */
 	34,							/* DO_POLICY */
 	35,							/* DO_PUBLICATION */
 	36,							/* DO_PUBLICATION_REL */
-	37							/* DO_SUBSCRIPTION */
+	37, 						/* DO_PUBLICATION_TABLE_IN_SCHEMA */
+	38							/* DO_SUBSCRIPTION */
 };
 
 StaticAssertDecl(lengthof(dbObjectTypePriority) == (DO_SUBSCRIPTION + 1),
@@ -187,7 +189,7 @@ void
 sortDumpableObjectsByTypeName(DumpableObject **objs, int numObjs)
 {
 	if (numObjs > 1)
-		qsort((void *) objs, numObjs, sizeof(DumpableObject *),
+		qsort(objs, numObjs, sizeof(DumpableObject *),
 			  DOTypeNameCompare);
 }
 
@@ -419,13 +421,13 @@ TopoSort(DumpableObject **objs,
 		obj = objs[i];
 		j = obj->dumpId;
 		if (j <= 0 || j > maxDumpId)
-			fatal("invalid dumpId %d", j);
+			pg_fatal("invalid dumpId %d", j);
 		idMap[j] = i;
 		for (j = 0; j < obj->nDeps; j++)
 		{
 			k = obj->dependencies[j];
 			if (k <= 0 || k > maxDumpId)
-				fatal("invalid dependency %d", k);
+				pg_fatal("invalid dependency %d", k);
 			beforeConstraints[k]++;
 		}
 	}
@@ -658,7 +660,7 @@ findDependencyLoops(DumpableObject **objs, int nObjs, int totObjs)
 
 	/* We'd better have fixed at least one loop */
 	if (!fixedloop)
-		fatal("could not identify dependency loop");
+		pg_fatal("could not identify dependency loop");
 
 	free(workspace);
 	free(searchFailed);
@@ -869,6 +871,28 @@ repairMatViewBoundaryMultiLoop(DumpableObject *boundaryobj,
 }
 
 /*
+ * If a function is involved in a multi-object loop, we can't currently fix
+ * that by splitting it into two DumpableObjects.  As a stopgap, we try to fix
+ * it by dropping the constraint that the function be dumped in the pre-data
+ * section.  This is sufficient to handle cases where a function depends on
+ * some unique index, as can happen if it has a GROUP BY for example.
+ */
+static void
+repairFunctionBoundaryMultiLoop(DumpableObject *boundaryobj,
+								DumpableObject *nextobj)
+{
+	/* remove boundary's dependency on object after it in loop */
+	removeObjectDependency(boundaryobj, nextobj->dumpId);
+	/* if that object is a function, mark it as postponed into post-data */
+	if (nextobj->objType == DO_FUNC)
+	{
+		FuncInfo   *nextinfo = (FuncInfo *) nextobj;
+
+		nextinfo->postponed_def = true;
+	}
+}
+
+/*
  * Because we make tables depend on their CHECK constraints, while there
  * will be an automatic dependency in the other direction, we need to break
  * the loop.  If there are no other objects in the loop then we can remove
@@ -1062,6 +1086,28 @@ repairDependencyLoop(DumpableObject **loop,
 		}
 	}
 
+	/* Indirect loop involving function and data boundary */
+	if (nLoop > 2)
+	{
+		for (i = 0; i < nLoop; i++)
+		{
+			if (loop[i]->objType == DO_FUNC)
+			{
+				for (j = 0; j < nLoop; j++)
+				{
+					if (loop[j]->objType == DO_PRE_DATA_BOUNDARY)
+					{
+						DumpableObject *nextobj;
+
+						nextobj = (j < nLoop - 1) ? loop[j + 1] : loop[0];
+						repairFunctionBoundaryMultiLoop(loop[j], nextobj);
+						return;
+					}
+				}
+			}
+		}
+	}
+
 	/* Table and CHECK constraint */
 	if (nLoop == 2 &&
 		loop[0]->objType == DO_TABLE &&
@@ -1203,10 +1249,10 @@ repairDependencyLoop(DumpableObject **loop,
 	 * Loop of table with itself --- just ignore it.
 	 *
 	 * (Actually, what this arises from is a dependency of a table column on
-	 * another column, which happens with generated columns; or a dependency
-	 * of a table column on the whole table, which happens with partitioning.
-	 * But we didn't pay attention to sub-object IDs while collecting the
-	 * dependency data, so we can't see that here.)
+	 * another column, which happened with generated columns before v15; or a
+	 * dependency of a table column on the whole table, which happens with
+	 * partitioning.  But we didn't pay attention to sub-object IDs while
+	 * collecting the dependency data, so we can't see that here.)
 	 */
 	if (nLoop == 1)
 	{
@@ -1233,9 +1279,9 @@ repairDependencyLoop(DumpableObject **loop,
 								"there are circular foreign-key constraints among these tables:",
 								nLoop));
 		for (i = 0; i < nLoop; i++)
-			pg_log_generic(PG_LOG_INFO, "  %s", loop[i]->name);
-		pg_log_generic(PG_LOG_INFO, "You might not be able to restore the dump without using --disable-triggers or temporarily dropping the constraints.");
-		pg_log_generic(PG_LOG_INFO, "Consider using a full dump instead of a --data-only dump to avoid this problem.");
+			pg_log_warning_detail("%s", loop[i]->name);
+		pg_log_warning_hint("You might not be able to restore the dump without using --disable-triggers or temporarily dropping the constraints.");
+		pg_log_warning_hint("Consider using a full dump instead of a --data-only dump to avoid this problem.");
 		if (nLoop > 1)
 			removeObjectDependency(loop[0], loop[1]->dumpId);
 		else					/* must be a self-dependency */
@@ -1253,7 +1299,7 @@ repairDependencyLoop(DumpableObject **loop,
 		char		buf[1024];
 
 		describeDumpableObject(loop[i], buf, sizeof(buf));
-		pg_log_generic(PG_LOG_INFO, "  %s", buf);
+		pg_log_warning_detail("%s", buf);
 	}
 
 	if (nLoop > 1)
@@ -1289,8 +1335,8 @@ describeDumpableObject(DumpableObject *obj, char *buf, int bufsize)
 			return;
 		case DO_TYPE_STORAGE_OPTIONS:
 			snprintf(buf, bufsize,
-					 "TYPE STORAGE OPTIONS FOR TYPE %s.%s  (ID %d OID %u) OPTIONS %s",
-					 ((TypeStorageOptions *)obj)->typnamespace, obj->name, obj->dumpId, obj->catId.oid, ((TypeStorageOptions *)obj)->typoptions);
+					 "TYPE STORAGE OPTIONS %s (ID %d OID %u)",
+					 obj->name, obj->dumpId, obj->catId.oid);
 			return;
 		case DO_SHELL_TYPE:
 			snprintf(buf, bufsize,
@@ -1473,14 +1519,14 @@ describeDumpableObject(DumpableObject *obj, char *buf, int bufsize)
 					 "DEFAULT ACL %s  (ID %d OID %u)",
 					 obj->name, obj->dumpId, obj->catId.oid);
 			return;
-		case DO_BLOB:
+		case DO_LARGE_OBJECT:
 			snprintf(buf, bufsize,
-					 "BLOB  (ID %d OID %u)",
+					 "LARGE OBJECT  (ID %d OID %u)",
 					 obj->dumpId, obj->catId.oid);
 			return;
-		case DO_BLOB_DATA:
+		case DO_LARGE_OBJECT_DATA:
 			snprintf(buf, bufsize,
-					 "BLOB DATA  (ID %d)",
+					 "LARGE OBJECT DATA  (ID %d)",
 					 obj->dumpId);
 			return;
 		case DO_POLICY:
@@ -1496,6 +1542,11 @@ describeDumpableObject(DumpableObject *obj, char *buf, int bufsize)
 		case DO_PUBLICATION_REL:
 			snprintf(buf, bufsize,
 					 "PUBLICATION TABLE (ID %d OID %u)",
+					 obj->dumpId, obj->catId.oid);
+			return;
+		case DO_PUBLICATION_TABLE_IN_SCHEMA:
+			snprintf(buf, bufsize,
+					 "PUBLICATION TABLES IN SCHEMA (ID %d OID %u)",
 					 obj->dumpId, obj->catId.oid);
 			return;
 		case DO_SUBSCRIPTION:

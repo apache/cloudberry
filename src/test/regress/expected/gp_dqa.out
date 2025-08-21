@@ -1937,7 +1937,7 @@ explain (costs off) select count(distinct d) from dqa_t1 group by i;
          ->  Partial GroupAggregate
                Group Key: i
                ->  Sort
-                     Sort Key: i
+                     Sort Key: i, d
                      ->  Seq Scan on dqa_t1
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -2691,7 +2691,7 @@ explain (verbose on, costs off)select sum(Distinct a), count(b), sum(c) from dqa
          Group Key: dqa_f3.e
          ->  Sort
                Output: e, a, b, c
-               Sort Key: dqa_f3.e
+               Sort Key: dqa_f3.e, dqa_f3.a
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: e, a, b, c
                      Hash Key: e
@@ -2723,7 +2723,7 @@ explain (verbose on, costs off) select sum(Distinct e), count(b), sum(c) from dq
          Group Key: dqa_f3.a
          ->  Sort
                Output: a, e, b, c
-               Sort Key: dqa_f3.a
+               Sort Key: dqa_f3.a, dqa_f3.e
                ->  Seq Scan on public.dqa_f3
                      Output: a, e, b, c
  Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
@@ -2772,7 +2772,7 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
          Group Key: dqa_f3.b
          ->  Sort
                Output: b, c, a, d
-               Sort Key: dqa_f3.b
+               Sort Key: dqa_f3.b, dqa_f3.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: b, c, a, d
                      Hash Key: b
@@ -2803,7 +2803,7 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
          Group Key: dqa_f3.b
          ->  Sort
                Output: b, c, a, d
-               Sort Key: dqa_f3.b
+               Sort Key: dqa_f3.b, dqa_f3.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: b, c, a, d
                      Hash Key: b
@@ -2839,7 +2839,7 @@ explain (verbose on, costs off) select distinct sum(Distinct c), count(a), sum(d
                      Group Key: dqa_f3.b
                      ->  Sort
                            Output: b, c, a, d
-                           Sort Key: dqa_f3.b
+                           Sort Key: dqa_f3.b, dqa_f3.c
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                  Output: b, c, a, d
                                  Hash Key: b
@@ -2870,7 +2870,7 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
          Filter: (avg(dqa_f3.e) > '3'::numeric)
          ->  Sort
                Output: b, c, a, d, e
-               Sort Key: dqa_f3.b
+               Sort Key: dqa_f3.b, dqa_f3.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: b, c, a, d, e
                      Hash Key: b
@@ -2908,7 +2908,7 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
          Group Key: dqa_f3.b
          ->  Sort
                Output: b, c, a, d
-               Sort Key: dqa_f3.b
+               Sort Key: dqa_f3.b, dqa_f3.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: b, c, a, d
                      Hash Key: b

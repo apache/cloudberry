@@ -3,7 +3,7 @@
  * syncrep.h
  *	  Exports from replication/syncrep.c.
  *
- * Portions Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/include/replication/syncrep.h
@@ -72,7 +72,7 @@ typedef struct SyncRepConfigData
 	char		member_names[FLEXIBLE_ARRAY_MEMBER];
 } SyncRepConfigData;
 
-extern SyncRepConfigData *SyncRepConfig;
+extern PGDLLIMPORT SyncRepConfigData *SyncRepConfig;
 
 #ifndef USE_INTERNAL_FTS
 extern Size ShmemStandbyPromoteReadySize(void);
@@ -80,11 +80,11 @@ extern void ShmemStandbyPromoteReadyAllocation(void);
 #endif
 
 /* communication variables for parsing synchronous_standby_names GUC */
-extern SyncRepConfigData *syncrep_parse_result;
-extern char *syncrep_parse_error_msg;
+extern PGDLLIMPORT SyncRepConfigData *syncrep_parse_result;
+extern PGDLLIMPORT char *syncrep_parse_error_msg;
 
 /* user-settable parameters for synchronous replication */
-extern char *SyncRepStandbyNames;
+extern PGDLLIMPORT char *SyncRepStandbyNames;
 
 /* called by user backend */
 extern void SyncRepWaitForLSN(XLogRecPtr lsn, bool commit);
@@ -117,6 +117,6 @@ extern void assign_synchronous_commit(int newval, void *extra);
 extern int	syncrep_yyparse(void);
 extern int	syncrep_yylex(void);
 extern void syncrep_yyerror(const char *str);
-extern void syncrep_scanner_init(const char *query_string);
+extern void syncrep_scanner_init(const char *str);
 extern void syncrep_scanner_finish(void);
 #endif							/* _SYNCREP_H */

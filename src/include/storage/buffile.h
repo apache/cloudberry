@@ -17,7 +17,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/buffile.h
@@ -28,6 +28,7 @@
 #ifndef BUFFILE_H
 #define BUFFILE_H
 
+#include "storage/fileset.h"
 #include "storage/sharedfileset.h"
 #include "utils/workfile_mgr.h"
 
@@ -44,20 +45,23 @@ struct workfile_set;
 extern BufFile *BufFileCreateTemp(char *operation_name, bool interXact);
 extern BufFile *BufFileCreateTempInSet(char *operation_name, bool interXact, struct workfile_set *work_set);
 extern void BufFileClose(BufFile *file);
-extern size_t BufFileRead(BufFile *file, void *ptr, size_t size);
-extern void BufFileWrite(BufFile *file, void *ptr, size_t size);
+extern pg_nodiscard size_t BufFileRead(BufFile *file, void *ptr, size_t size);
+extern void BufFileReadExact(BufFile *file, void *ptr, size_t size);
+extern size_t BufFileReadMaybeEOF(BufFile *file, void *ptr, size_t size, bool eofOK);
+extern void BufFileWrite(BufFile *file, const void *ptr, size_t size);
 extern int	BufFileSeek(BufFile *file, int fileno, off_t offset, int whence);
 extern void BufFileTell(BufFile *file, int *fileno, off_t *offset);
 extern int	BufFileSeekBlock(BufFile *file, int64 blknum);
 extern int64 BufFileSize(BufFile *file);
 extern long BufFileAppend(BufFile *target, BufFile *source);
 
-extern BufFile *BufFileCreateShared(SharedFileSet *fileset, const char *name, struct workfile_set *work_set);
-extern void BufFileExportShared(BufFile *file);
-extern BufFile *BufFileOpenShared(SharedFileSet *fileset, const char *name,
-								  int mode);
-extern void BufFileDeleteShared(SharedFileSet *fileset, const char *name);
-extern void BufFileTruncateShared(BufFile *file, int fileno, off_t offset);
+extern BufFile *BufFileCreateFileSet(FileSet *fileset, const char *name, workfile_set *work_set);
+extern void BufFileExportFileSet(BufFile *file);
+extern BufFile *BufFileOpenFileSet(FileSet *fileset, const char *name,
+								   int mode, bool missing_ok);
+extern void BufFileDeleteFileSet(FileSet *fileset, const char *name,
+								 bool missing_ok);
+extern void BufFileTruncateFileSet(BufFile *file, int fileno, off_t offset);
 
 extern void *BufFileReadFromBuffer(BufFile *file, size_t size);
 

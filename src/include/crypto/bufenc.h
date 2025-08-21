@@ -26,9 +26,9 @@ extern void DecryptPage(Page page,
 						BlockNumber blkno);
 extern void
 EncryptAOBLock(unsigned char *data_buf, const int buf_len,
-				  RelFileNode *file_node);
+				  RelFileLocator *file_node);
 extern void
 DecryptAOBlock(unsigned char *data_buf, const int buf_len,
-				  RelFileNode *file_node);
+				  RelFileLocator *file_node);
 
 #endif							/* BUFENC_H */

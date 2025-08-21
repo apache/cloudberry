@@ -66,7 +66,7 @@
  *
  * Portions Copyright (c) 2007-2010, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -547,7 +547,7 @@ tuplestore_end(Tuplestorestate *state)
 	if (state->myfile)
 		BufFileClose(state->myfile);
 	if (state->share_status == TSHARE_WRITER)
-		BufFileDeleteShared(state->fileset, state->shared_filename);
+		BufFileDeleteFileSet(&state->fileset->fs, state->shared_filename, false);
 	if (state->work_set)
 		workfile_mgr_close_set(state->work_set);
 	if (state->shared_filename)
@@ -1371,11 +1371,11 @@ tuplestore_rescan(Tuplestorestate *state)
 		case TSS_WRITEFILE:
 			readptr->eof_reached = false;
 			readptr->file = 0;
-			readptr->offset = 0L;
+			readptr->offset = 0;
 			break;
 		case TSS_READFILE:
 			readptr->eof_reached = false;
-			if (BufFileSeek(state->myfile, 0, 0L, SEEK_SET) != 0)
+			if (BufFileSeek(state->myfile, 0, 0, SEEK_SET) != 0)
 				ereport(ERROR,
 						(errcode_for_file_access(),
 						 errmsg("could not seek in tuplestore temporary file")));
@@ -1597,15 +1597,11 @@ getlen(Tuplestorestate *state, bool eofOK)
 	unsigned int len;
 	size_t		nbytes;
 
-	nbytes = BufFileRead(state->myfile, (void *) &len, sizeof(len));
-	if (nbytes == sizeof(len))
+	nbytes = BufFileReadMaybeEOF(state->myfile, &len, sizeof(len), eofOK);
+	if (nbytes == 0)
+		return 0;
+	else
 		return len;
-	if (nbytes != 0 || !eofOK)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not read from tuplestore temporary file: read only %zu of %zu bytes",
-						nbytes, sizeof(len))));
-	return 0;
 }
 
 
@@ -1641,10 +1637,10 @@ writetup_heap(Tuplestorestate *state, void *tup)
 	/* total on-disk footprint: */
 	unsigned int tuplen = tupbodylen + sizeof(int);
 
-	BufFileWrite(state->myfile, (void *) &tuplen, sizeof(tuplen));
-	BufFileWrite(state->myfile, (void *) tupbody, tupbodylen);
+	BufFileWrite(state->myfile, &tuplen, sizeof(tuplen));
+	BufFileWrite(state->myfile, tupbody, tupbodylen);
 	if (state->backward)		/* need trailing length word? */
-		BufFileWrite(state->myfile, (void *) &tuplen, sizeof(tuplen));
+		BufFileWrite(state->myfile, &tuplen, sizeof(tuplen));
 
 	Size		memsize = GetMemoryChunkSpace(tuple);
 	state->spilledBytes += memsize;
@@ -1659,26 +1655,13 @@ readtup_heap(Tuplestorestate *state, unsigned int len)
 	unsigned int tuplen = tupbodylen + MINIMAL_TUPLE_DATA_OFFSET;
 	MinimalTuple tuple = (MinimalTuple) palloc(tuplen);
 	char	   *tupbody = (char *) tuple + MINIMAL_TUPLE_DATA_OFFSET;
-	size_t		nread;
 
 	USEMEM(state, GetMemoryChunkSpace(tuple));
 	/* read in the tuple proper */
 	tuple->t_len = tuplen;
-	nread = BufFileRead(state->myfile, (void *) tupbody, tupbodylen);
-	if (nread != (size_t) tupbodylen)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not read from tuplestore temporary file: read only %zu of %zu bytes",
-						nread, (size_t) tupbodylen)));
+	BufFileReadExact(state->myfile, tupbody, tupbodylen);
 	if (state->backward)		/* need trailing length word? */
-	{
-		nread = BufFileRead(state->myfile, (void *) &tuplen, sizeof(tuplen));
-		if (nread != sizeof(tuplen))
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not read from tuplestore temporary file: read only %zu of %zu bytes",
-							nread, sizeof(tuplen))));
-	}
+		BufFileReadExact(state->myfile, &tuplen, sizeof(tuplen));
 	return (void *) tuple;
 }
 
@@ -1733,7 +1716,7 @@ tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const cha
 	oldowner = CurrentResourceOwner;
 	CurrentResourceOwner = state->resowner;
 
-	state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
+	state->myfile = BufFileCreateFileSet(&fileset->fs, filename, state->work_set);
 	CurrentResourceOwner = oldowner;
 
 	/*
@@ -1764,7 +1747,7 @@ tuplestore_freeze(Tuplestorestate *state)
 	Assert(state->share_status == TSHARE_WRITER);
 	Assert(!state->frozen);
 	dumptuples(state);
-	BufFileExportShared(state->myfile);
+	BufFileExportFileSet(state->myfile);
 	state->frozen = true;
 }
 
@@ -1792,7 +1775,7 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	state->writetup = writetup_forbidden;
 	state->readtup = readtup_heap;
 
-	state->myfile = BufFileOpenShared(fileset, filename, O_RDONLY);
+	state->myfile = BufFileOpenFileSet(&fileset->fs, filename, O_RDONLY, false);
 	state->readptrs[0].file = 0;
 	state->readptrs[0].offset = 0L;
 	state->status = TSS_READFILE;
@@ -1902,7 +1885,7 @@ tuplestore_make_sharedV2(Tuplestorestate *state, SharedFileSet *fileset,
 	oldowner = CurrentResourceOwner;
 	CurrentResourceOwner = owner;
 
-	state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
+	state->myfile = BufFileCreateFileSet(&fileset->fs, filename, state->work_set);
 	CurrentResourceOwner = oldowner;
 
 	/*

@@ -102,6 +102,7 @@ ANALYZE wide;
 savepoint settings;
 set local max_parallel_workers_per_gather = 0;
 set local work_mem = '4MB';
+set local hash_mem_multiplier = 1.0;
 explain (costs off)
   select count(*) from simple r join simple s using (id);
 select count(*) from simple r join simple s using (id);
@@ -116,6 +117,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '4MB';
+set local hash_mem_multiplier = 1.0;
 set local enable_parallel_hash = off;
 explain (costs off)
   select count(*) from simple r join simple s using (id);
@@ -131,6 +133,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '4MB';
+set local hash_mem_multiplier = 1.0;
 set local enable_parallel_hash = on;
 explain (costs off)
   select count(*) from simple r join simple s using (id);
@@ -150,6 +153,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 0;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 explain (costs off)
   select count(*) from simple r join simple s using (id);
@@ -165,6 +169,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 set local enable_parallel_hash = off;
 explain (costs off)
@@ -181,6 +186,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '192kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 set local enable_parallel_hash = on;
 explain (costs off)
@@ -191,6 +197,8 @@ select original > 1 as initially_multibatch, final > original as increased_batch
 $$
   select count(*) from simple r join simple s using (id);
 $$);
+-- parallel full multi-batch hash join
+select count(*) from simple r full outer join simple s using (id);
 rollback to settings;
 
 -- The "bad" case: during execution we need to increase number of
@@ -202,6 +210,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 0;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 explain (costs off)
   select count(*) FROM simple r JOIN bigger_than_it_looks s USING (id);
@@ -217,6 +226,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 set local enable_parallel_hash = off;
 explain (costs off)
@@ -233,6 +243,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 1;
 set local work_mem = '192kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 set local enable_parallel_hash = on;
 explain (costs off)
@@ -255,6 +266,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 0;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 explain (costs off)
   select count(*) from simple r join extremely_skewed s using (id);
@@ -269,6 +281,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 set local enable_parallel_hash = off;
 explain (costs off)
@@ -284,6 +297,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 1;
 set local work_mem = '128kB';
+set local hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 set local enable_parallel_hash = on;
 explain (costs off)
@@ -301,6 +315,7 @@ rollback to settings;
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 set local work_mem = '4MB';
+set local hash_mem_multiplier = 1.0;
 set local parallel_leader_participation = off;
 select * from hash_join_batches(
 $$
@@ -329,6 +344,7 @@ set max_parallel_workers_per_gather = 2;
 set enable_material = off;
 set enable_mergejoin = off;
 set work_mem = '64kB';
+set hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 explain (costs off)
   select count(*) from join_foo
@@ -357,6 +373,7 @@ set max_parallel_workers_per_gather = 2;
 set enable_material = off;
 set enable_mergejoin = off;
 set work_mem = '4MB';
+set hash_mem_multiplier = 1.0;
 explain (costs off)
   select count(*) from join_foo
     left join (select b1.id, b1.t from join_bar b1 join join_bar b2 using (id)) ss
@@ -384,6 +401,7 @@ set max_parallel_workers_per_gather = 2;
 set enable_material = off;
 set enable_mergejoin = off;
 set work_mem = '64kB';
+set hash_mem_multiplier = 1.0;
 set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_mem
 explain (costs off)
   select count(*) from join_foo
@@ -412,6 +430,7 @@ set max_parallel_workers_per_gather = 2;
 set enable_material = off;
 set enable_mergejoin = off;
 set work_mem = '4MB';
+set hash_mem_multiplier = 1.0;
 explain (costs off)
   select count(*) from join_foo
     left join (select b1.id, b1.t from join_bar b1 join join_bar b2 using (id)) ss
@@ -438,7 +457,16 @@ explain (costs off)
 select  count(*) from simple r full outer join simple s using (id);
 rollback to settings;
 
--- parallelism not possible with parallel-oblivious outer hash join
+-- parallelism not possible with parallel-oblivious full hash join
+savepoint settings;
+set enable_parallel_hash = off;
+set local max_parallel_workers_per_gather = 2;
+explain (costs off)
+     select  count(*) from simple r full outer join simple s using (id);
+select  count(*) from simple r full outer join simple s using (id);
+rollback to settings;
+
+-- parallelism is possible with parallel-aware full hash join
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 explain (costs off)
@@ -446,7 +474,7 @@ explain (costs off)
 select  count(*) from simple r full outer join simple s using (id);
 rollback to settings;
 
--- An full outer join where every record is not matched.
+-- A full outer join where every record is not matched.
 
 -- non-parallel
 savepoint settings;
@@ -456,13 +484,23 @@ explain (costs off)
 select  count(*) from simple r full outer join simple s on (r.id = 0 - s.id);
 rollback to settings;
 
--- parallelism not possible with parallel-oblivious outer hash join
+-- parallelism not possible with parallel-oblivious full hash join
+savepoint settings;
+set enable_parallel_hash = off;
+set local max_parallel_workers_per_gather = 2;
+explain (costs off)
+     select  count(*) from simple r full outer join simple s on (r.id = 0 - s.id);
+select  count(*) from simple r full outer join simple s on (r.id = 0 - s.id);
+rollback to settings;
+
+-- parallelism is possible with parallel-aware full hash join
 savepoint settings;
 set local max_parallel_workers_per_gather = 2;
 explain (costs off)
      select  count(*) from simple r full outer join simple s on (r.id = 0 - s.id);
 select  count(*) from simple r full outer join simple s on (r.id = 0 - s.id);
 rollback to settings;
+
 
 -- exercise special code paths for huge tuples (note use of non-strict
 -- expression and left join required to get the detoasted tuple into
@@ -483,6 +521,7 @@ savepoint settings;
 set max_parallel_workers_per_gather = 2;
 set enable_parallel_hash = on;
 set work_mem = '128kB';
+set hash_mem_multiplier = 1.0;
 insert into wide select generate_series(3, 100) as id, rpad('', 320000, 'x') as t;
 explain (costs off)
   select length(max(s.t))
@@ -516,8 +555,35 @@ analyze join_hash_t_big;
 explain (costs off) select * from join_hash_t_small, join_hash_t_big where a = b;
 rollback to settings;
 
-rollback;
 
+-- Hash join reuses the HOT status bit to indicate match status. This can only
+-- be guaranteed to produce correct results if all the hash join tuple match
+-- bits are reset before reuse. This is done upon loading them into the
+-- hashtable.
+SAVEPOINT settings;
+SET enable_parallel_hash = on;
+SET min_parallel_table_scan_size = 0;
+SET parallel_setup_cost = 0;
+SET parallel_tuple_cost = 0;
+CREATE TABLE hjtest_matchbits_t1(id int);
+CREATE TABLE hjtest_matchbits_t2(id int);
+INSERT INTO hjtest_matchbits_t1 VALUES (1);
+INSERT INTO hjtest_matchbits_t2 VALUES (2);
+-- Update should create a HOT tuple. If this status bit isn't cleared, we won't
+-- correctly emit the NULL-extended unmatching tuple in full hash join.
+UPDATE hjtest_matchbits_t2 set id = 2;
+SELECT * FROM hjtest_matchbits_t1 t1 FULL JOIN hjtest_matchbits_t2 t2 ON t1.id = t2.id
+  ORDER BY t1.id;
+-- Test serial full hash join.
+-- Resetting parallel_setup_cost should force a serial plan.
+-- Just to be safe, however, set enable_parallel_hash to off, as parallel full
+-- hash joins are only supported with shared hashtables.
+RESET parallel_setup_cost;
+SET enable_parallel_hash = off;
+SELECT * FROM hjtest_matchbits_t1 t1 FULL JOIN hjtest_matchbits_t2 t2 ON t1.id = t2.id;
+ROLLBACK TO settings;
+
+rollback;
 
 -- Verify that hash key expressions reference the correct
 -- nodes. Hashjoin's hashkeys need to reference its outer plan, Hash's
@@ -587,3 +653,22 @@ WHERE
     AND hjtest_1.a <> hjtest_2.b;
 
 ROLLBACK;
+
+-- Verify that we behave sanely when the inner hash keys contain parameters
+-- (that is, outer or lateral references).  This situation has to defeat
+-- re-use of the inner hash table across rescans.
+begin;
+set local enable_hashjoin = on;
+
+explain (costs off)
+select i8.q2, ss.* from
+int8_tbl i8,
+lateral (select t1.fivethous, i4.f1 from tenk1 t1 join int4_tbl i4
+         on t1.fivethous = i4.f1+i8.q2 order by 1,2) ss;
+
+select i8.q2, ss.* from
+int8_tbl i8,
+lateral (select t1.fivethous, i4.f1 from tenk1 t1 join int4_tbl i4
+         on t1.fivethous = i4.f1+i8.q2 order by 1,2) ss;
+
+rollback;

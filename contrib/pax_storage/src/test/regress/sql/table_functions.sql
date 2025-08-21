@@ -1,0 +1,1027 @@
+-- =================== -*- mode: sql; -*- ===================
+-- table_functions.sql
+--
+-- Test for enhancements to table function support
+-- ===================
+CREATE SCHEMA table_function;
+SET search_path TO table_function, public;
+
+CREATE TABLE example(a int, b text) DISTRIBUTED by (a);
+COPY example FROM stdin;
+1	 value1.1/4
+2	 value2.1/3
+3	 value3.1/2
+4	 value4.1/1
+1	 value1.2/4
+2	 value2.2/3
+3	 value3.2/2
+1	 value1.3/4
+2	 value2.3/3
+1	 value1.4/4
+\.
+
+CREATE TABLE history(id integer, time timestamp) DISTRIBUTED BY (id);
+COPY history FROM stdin;
+1	 2011/08/21 10:15:02am
+1	 2011/08/21 10:15:30am
+1	 2011/08/22 10:15:04am
+1	 2011/08/22 10:16:10am
+2	 2011/08/21 10:15:02am
+2	 2011/08/21 10:15:02pm
+2	 2011/08/21 10:16:02am
+2	 2011/08/21 10:16:02pm
+3	 2011-08-19 19:05:13
+3	 2011-08-19 19:06:50
+3	 2011-08-19 19:07:35
+3	 2011-08-19 19:08:18
+3	 2011-08-19 19:09:07
+3 	 2011-08-20 10:07:10
+3	 2011-08-20 10:07:35
+3	 2011-08-20 10:11:29
+3	 2011-08-20 10:17:10
+3	 2011-08-20 10:17:42
+\.
+
+CREATE TABLE example_r AS SELECT * FROM example DISTRIBUTED RANDOMLY;
+
+CREATE VIEW example_v AS SELECT * FROM example;
+
+/* Attempt to get relatively stable plans */
+set gp_segments_for_planner=8;
+analyze example;
+analyze example_r;
+
+
+/* Create some normal scalar input / scalar output functions */
+CREATE FUNCTION scalar_1(int) RETURNS int
+    AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+
+CREATE FUNCTION scalar_2(IN int) RETURNS int
+    AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+
+CREATE FUNCTION scalar_3(IN a int, OUT b INT)
+    AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+
+CREATE FUNCTION scalar_4(INOUT x int)
+    AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+
+CREATE FUNCTION scalar_5(anyelement) RETURNS anyelement
+    AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+
+
+/* Create some normal scalar input / table output functions */
+CREATE FUNCTION scalar_tf_1(int) RETURNS TABLE(a int, b text)
+    AS $$ SELECT a+$1, b from example $$ LANGUAGE SQL READS SQL DATA;
+
+CREATE FUNCTION scalar_tf_2(IN int) RETURNS TABLE(a int, b text)
+    AS $$ SELECT a+$1, b from example $$ LANGUAGE SQL READS SQL DATA;
+
+CREATE FUNCTION scalar_tf_3(IN a int) RETURNS TABLE(a int, b text)
+    AS $$ SELECT a+$1, b from example $$ LANGUAGE SQL READS SQL DATA;
+
+CREATE FUNCTION scalar_tf_4(IN a int, OUT a int, OUT b text) RETURNS SETOF RECORD
+    AS $$ SELECT a+$1, b from example $$ LANGUAGE SQL READS SQL DATA;
+
+CREATE FUNCTION scalar_tf_5(IN a int) RETURNS SETOF RECORD
+    AS $$ SELECT a+$1, b from example $$ LANGUAGE SQL READS SQL DATA;
+
+CREATE FUNCTION scalar_tf_6(IN a anyelement) RETURNS SETOF example
+    AS $$ SELECT a+$1, b from example $$ LANGUAGE SQL READS SQL DATA;
+
+
+/* CREATE some multiset input table functions */
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
+
+/* scalar value outputs */
+CREATE FUNCTION multiset_scalar_null(anytable) RETURNS int
+    AS :'regress_dll', 'multiset_scalar_null' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_scalar_value(anytable) RETURNS int
+    AS :'regress_dll', 'multiset_scalar_value' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_scalar_tuple(anytable) RETURNS example
+    AS :'regress_dll', 'multiset_scalar_tuple' LANGUAGE C READS SQL DATA;
+
+
+/* set value outputs */
+CREATE FUNCTION multiset_setof_null(anytable) RETURNS setof int
+    AS :'regress_dll', 'multiset_setof_null' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_setof_value(anytable) RETURNS setof int
+    AS :'regress_dll', 'multiset_setof_value' LANGUAGE C READS SQL DATA;
+
+
+/* Bunches of different ways of saying "returns a setof rows */
+CREATE FUNCTION multiset_materialize_good(anytable)
+	   RETURNS TABLE(a int, b text)
+    AS :'regress_dll', 'multiset_materialize_good' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_materialize_bad(anytable)
+	   RETURNS TABLE(a int, b text)
+    AS :'regress_dll', 'multiset_materialize_bad' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_1(a anytable) RETURNS TABLE(a int, b text)
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_2(a anytable) RETURNS TABLE(a int, b text)
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_3(a anytable, out a int, out b text) RETURNS SETOF RECORD
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_4(a anytable) RETURNS SETOF RECORD
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_5(a anytable) RETURNS SETOF example
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION multiset_6(a anytable) RETURNS SETOF record
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+
+/* Negative test cases around CREATE FUNCTION */
+
+/* ERROR: TABLE output not allowed with OUT parameters */
+CREATE FUNCTION error(OUT a int) RETURNS TABLE(a int, b text)
+    AS $$ SELECT * from example $$ LANGUAGE SQL READS SQL DATA;
+
+/* ERROR: Multiple multiset inputs not supported */
+CREATE FUNCTION error(a anytable, b anytable) RETURNS TABLE(a int, b text)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+
+/* ERROR: Multiset outputs not supported */
+CREATE FUNCTION error(OUT anytable)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+CREATE FUNCTION error() RETURNS TABLE(x anytable)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+
+/* ERROR: SETOF as IN/OUT/TABLE parameters is not supported */
+CREATE FUNCTION error(OUT setof example)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+CREATE FUNCTION error(IN setof example)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+CREATE FUNCTION error(INOUT setof example)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+CREATE FUNCTION error() RETURNS TABLE(a setof example)
+    AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;
+
+/* ERROR: anytable cannot have default value */
+CREATE FUNCTION error(a anytable DEFAULT TABLE(select 1,'test')) RETURNS TABLE(a int, b text)
+    AS :'regress_dll', 'multiset_example' LANGUAGE C;
+
+/* Negative test cases around the "anytable" type */
+CREATE TABLE fail(x anytable);
+CREATE TYPE  fail AS (x anytable);
+
+
+/* Observe how they are represented in the catalog */
+select
+  p.proname,
+  p.oid::regproc,
+  p.oid::regprocedure,
+  p.proretset,
+  (p.proargtypes::regtype[])[0:0],
+  p.prorettype::regtype,
+  p.proargmodes
+FROM pg_proc p join pg_namespace n ON (p.pronamespace = n.oid)
+WHERE n.nspname = 'table_function'
+ORDER BY p.proname;
+
+
+/* Observe how psql reports them */
+\df (scalar_*|multiset_*)
+
+-- Normal function use:
+
+-- Normal scalar input / scalar output functions
+-- begin equivalent
+SELECT scalar_1(5) as b;
+SELECT scalar_2(5) as b;
+SELECT scalar_3(5) as b;
+SELECT scalar_4(5) as b;
+SELECT scalar_5(5) as b;
+SELECT scalar_1((select 5)) as b;
+SELECT scalar_2((select 5)) as b;
+SELECT scalar_3((select 5)) as b;
+SELECT scalar_4((select 5)) as b;
+SELECT scalar_5((select 5)) as b;
+SELECT b FROM scalar_1(5) as b;
+SELECT b FROM scalar_2(5) as b;
+SELECT b FROM scalar_3(5);
+SELECT x as b FROM scalar_4(5);
+SELECT b FROM scalar_5(5) as b;
+SELECT b FROM scalar_1((select 5)) as b;
+SELECT b FROM scalar_2((select 5)) as b;
+SELECT b FROM scalar_3((select 5));
+SELECT x as b FROM scalar_4((select 5));
+SELECT b FROM scalar_5((select 5)) as b;
+-- end equivalent
+
+-- ERROR cases for simple scalar functions
+SELECT scalar_1((select 1, 2));  -- subquery returns multiple columns
+SELECT scalar_1((select 1 union select 2));  -- subquery returns multiple rows
+SELECT scalar_1(TABLE(select 1));  -- TableValue expression does not match type
+SELECT scalar_5(TABLE(select 1));  -- TableValue shouldn't match "anyelement"
+
+
+-- Normal scalar input / table output functions
+-- begin equivalent */
+SELECT row(a+5, b)::example from example;
+SELECT scalar_tf_1(5);
+SELECT scalar_tf_2(5);
+SELECT scalar_tf_3(5);
+SELECT scalar_tf_4(5);
+SELECT scalar_tf_5(5);
+SELECT scalar_tf_6(5);
+SELECT scalar_tf_1((select 5));
+SELECT scalar_tf_2((select 5));
+SELECT scalar_tf_3((select 5));
+SELECT scalar_tf_4((select 5));
+SELECT scalar_tf_5((select 5));
+SELECT scalar_tf_6((select 5));
+-- end equivalent
+
+-- begin equivalent
+SELECT a+5 as a, b from example order by a, b;
+SELECT * FROM scalar_tf_1(5) order by a, b;
+SELECT * FROM scalar_tf_2(5) order by a, b;
+SELECT * FROM scalar_tf_3(5) order by a, b;
+SELECT * FROM scalar_tf_4(5) order by a, b;
+SELECT * FROM scalar_tf_5(5) e(a int, b text)  order by a, b;
+SELECT * FROM scalar_tf_6(5) order by a, b;
+SELECT * FROM scalar_tf_1((select 5)) order by a, b;
+SELECT * FROM scalar_tf_2((select 5)) order by a, b;
+SELECT * FROM scalar_tf_3((select 5)) order by a, b;
+SELECT * FROM scalar_tf_4((select 5)) order by a, b;
+SELECT * FROM scalar_tf_5((select 5)) e(a int, b text)  order by a, b;
+SELECT * FROM scalar_tf_6((select 5)) order by a, b;
+/*
+  ERROR:  Statement Error, writer gang busy: possible attempt to execute volatile function in unsupported context.
+
+    Fixed if we switch away from SQL language functions?
+
+SELECT (scalar_tf_1(5)).*;
+SELECT (scalar_tf_2(5)).*;
+SELECT (scalar_tf_3(5)).*;
+SELECT (scalar_tf_4(5)).*;
+SELECT (scalar_tf_5(5)).*;
+SELECT (scalar_tf_6(5)).*;
+SELECT (scalar_tf_1((select 5))).*;
+SELECT (scalar_tf_2((select 5))).*;
+SELECT (scalar_tf_3((select 5))).*;
+SELECT (scalar_tf_4((select 5))).*;
+SELECT (scalar_tf_5((select 5))).*;
+SELECT (scalar_tf_6((select 5))).*;
+*/
+-- end equivalent
+
+-- ERROR cases for simple table output functions
+SELECT scalar_tf_1((select 1, 2));  -- subquery returns multiple columns
+SELECT scalar_tf_1((select 1 union select 2));  -- subquery returns multiple rows
+SELECT scalar_tf_1(TABLE(select 1));  -- TableValue expression does not match type
+SELECT scalar_tf_6(TABLE(select 1));  -- TableValue expression does not anyelement
+
+-- Table Functions   table input / table output
+-- begin equivalent
+SELECT * FROM example order by a, b;
+SELECT * FROM multiset_2( TABLE( SELECT * from example) ) order by a, b;
+SELECT * FROM multiset_3( TABLE( SELECT * from example) ) order by a, b;
+SELECT * FROM multiset_4( TABLE( SELECT * from example) ) e(a int, b text) order by a, b;
+SELECT * FROM multiset_6( TABLE( SELECT * from example) ) e(a int, b text)  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * from example) ) order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example SCATTER by a) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example SCATTER by b) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example SCATTER RANDOMLY) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example ORDER BY a, b SCATTER by a) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example ORDER BY b, a SCATTER by b) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example ORDER BY a, b SCATTER RANDOMLY) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * from example_r) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example_r SCATTER by a||b) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example_r SCATTER by b, a, a||b) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example_r SCATTER RANDOMLY) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * from example_v) )  order by a, b;
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example WHERE a >= (SELECT min(a) FROM example))) order by a,b;
+WITH cte AS (SELECT * FROM example) SELECT * FROM multiset_5( TABLE ( SELECT * FROM cte ) )  order by a, b;
+WITH cte AS (SELECT * FROM example) SELECT x.* FROM multiset_5( TABLE ( SELECT * FROM cte ) ) x, (SELECT count(*) FROM cte) y order by x.a, x.b;
+SELECT x.* FROM multiset_5( TABLE ( SELECT * FROM example ) ) x right join (SELECT 1) y on (true) order by x.a, x.b;
+-- end equivalent
+
+-- Table functions with quals
+-- begin equivalent
+SELECT * FROM example WHERE a = 2;
+SELECT * FROM multiset_2( TABLE ( SELECT * FROM example ) ) WHERE a = 2;
+SELECT * FROM multiset_2( TABLE ( SELECT * FROM example WHERE a = 2) ) ;
+SELECT * FROM multiset_2( TABLE ( SELECT * FROM (SELECT * FROM example) example2 WHERE a = 2) );
+SELECT * FROM multiset_2( TABLE ( SELECT * FROM (SELECT * FROM example WHERE a > 1) example2 ) ) WHERE a < 3;
+-- end equivalent
+
+-- Table Functions with a focused subplan plan
+SELECT * FROM multiset_5( TABLE( SELECT count(*)::integer, 'hello'::text from example_r ) );
+
+SELECT * FROM example_r WHERE (10, 'hello') in (SELECT * FROM multiset_5( TABLE( SELECT count(*)::integer, 'hello'::text from example_r ))) order by a, b;
+
+-- Table Functions + Projection
+-- begin equivalent
+SELECT b FROM example order by b;
+SELECT b FROM multiset_2( TABLE( SELECT * from example) ) order by b;
+SELECT b FROM multiset_3( TABLE( SELECT * from example) ) order by b;
+SELECT b FROM multiset_4( TABLE( SELECT * from example) ) e(a int, b text) order by b;
+SELECT b FROM multiset_6( TABLE( SELECT * from example) ) e(a int, b text)  order by b;
+SELECT b FROM multiset_5( TABLE( SELECT * from example) ) order by b;
+-- end equivalent
+
+-- Different cases of joins in the subplan
+-- begin equivalent
+SELECT distinct a.a, b.b from example a, example b where a.a = b.a order by 1,2;
+select * from multiset_2( TABLE( SELECT distinct a.a, b.b from example a, example b where a.a = b.a) ) order by 1,2;
+select * from multiset_2( TABLE( SELECT distinct a.a, b.b from example a join example b using (a) ) ) order by 1,2;
+-- end equivalent
+
+-- Support for different backend code
+
+-- this function always returns a single scalar null value
+-- begin equivalent
+SELECT null as a;
+SELECT * FROM multiset_scalar_null( TABLE(SELECT 1) );
+-- end equivalent
+
+-- this function always returns a single scalar value of 42
+-- begin equivalent
+SELECT 42 as fortytwo;
+SELECT * FROM multiset_scalar_value( TABLE(SELECT 42) ) fortytwo;
+-- end equivalent
+
+
+-- This function always returns a single "(1,Example)" tuple
+-- begin equivalent
+SELECT 1 as a, 'Example' as b;
+SELECT * from multiset_scalar_tuple( TABLE(SELECT 1) );
+-- end equivalent
+
+
+-- ERROR: functions returning SETOF x cannot return null
+SELECT * FROM multiset_setof_null( TABLE(SELECT 1) );
+
+-- This function returns a setof values [1,2,3]
+-- begin equivalent
+SELECT a from generate_series(1,3) as a;
+SELECT a from multiset_setof_value( TABLE(SELECT 1) ) as a;
+-- end equivalent
+
+-- ERROR: Table Functions do not currently support SFRM_Materialize
+SELECT * FROM multiset_materialize_good( TABLE( SELECT * from example ) );
+SELECT * FROM multiset_materialize_bad( TABLE( SELECT * from example ) );
+
+
+
+-- name resolution rules should work correctly between scalar and anytable,
+-- i.e. there cannot be any automatic conversion.
+CREATE FUNCTION nameres(int) RETURNS int
+    AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+SELECT * from nameres(5);                -- should work
+SELECT * from nameres(TABLE(SELECT 5));  -- should fail
+
+CREATE FUNCTION nameres(anytable) RETURNS int
+    AS :'regress_dll', 'multiset_scalar_value' LANGUAGE C READS SQL DATA;
+SELECT * from nameres(5);                -- should work
+SELECT * from nameres(TABLE(SELECT 5));  -- should work
+
+DROP FUNCTION nameres(int);
+SELECT * from nameres(5);                -- should fail
+SELECT * from nameres(TABLE(SELECT 5));  -- should work
+
+DROP FUNCTION nameres(anytable);
+SELECT * from nameres(5);                -- should fail
+SELECT * from nameres(TABLE(SELECT 5));  -- should fail
+
+-- Error: anytable does NOT match anyelement
+CREATE FUNCTION nameres(anyelement) returns int
+  AS $$ SELECT $1 $$ LANGUAGE SQL CONTAINS SQL;
+SELECT * FROM nameres( TABLE( SELECT 1) ); -- should fail
+DROP FUNCTION nameres(anyelement);
+
+
+-- Must support resjunk scatter by clauses
+explain SELECT * FROM multiset_5( TABLE( SELECT * FROM example SCATTER BY a+1) );
+SELECT * FROM multiset_5( TABLE( SELECT * FROM example SCATTER BY a+1) ) order by a,b;
+
+
+-- Use of a select list table value expression subquery
+-- begin equivalent
+SELECT a FROM example ORDER BY a;
+SELECT UNNEST(ARRAY(SELECT a FROM example)) ORDER BY 1;
+SELECT UNNEST(ARRAY(SELECT a FROM multiset_5( TABLE ( SELECT a, b from example)))) ORDER BY 1;
+-- end equivalent
+
+
+-- Use of a where clause table value expression subquery
+-- begin equivalent
+SELECT * FROM example order by a, b;
+SELECT * FROM example where (a,b) in (select * from example) order by a, b;
+SELECT * FROM example where (a,b) in (select * from multiset_5( TABLE(SELECT a, b from example) )) order by a, b;
+SELECT * FROM multiset_5( TABLE(SELECT a, b from example)) where (a,b) in (select a,b from example) order by a, b;
+-- end equivalent
+
+-- Explain a couple interesting cases
+explain SELECT * FROM multiset_5( TABLE (SELECT dbid, gpname FROM gp_id) );
+explain SELECT * FROM multiset_5( TABLE (SELECT dbid, gpname FROM gp_id SCATTER BY dbid) );
+explain SELECT * FROM multiset_5( TABLE (SELECT dbid, gpname FROM gp_id SCATTER RANDOMLY) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example) );
+explain SELECT * from multiset_5( TABLE (SELECT * FROM example ORDER BY a limit 10 ) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example SCATTER BY a) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example SCATTER BY b) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example SCATTER RANDOMLY) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY a, b) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY a, b SCATTER BY a) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY b, a SCATTER BY b) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY b, a SCATTER RANDOMLY) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY a, b LIMIT 10 SCATTER BY a) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY b, a LIMIT 10 SCATTER BY b) );
+explain SELECT * FROM multiset_5( TABLE (SELECT * FROM example ORDER BY b, a LIMIT 10 SCATTER RANDOMLY) );
+explain SELECT ARRAY(SELECT a FROM multiset_5( TABLE ( SELECT a, b from example)) order by a);
+explain SELECT ARRAY(SELECT a FROM multiset_5( TABLE ( SELECT a, b from example order by a)));
+explain SELECT * FROM example where (a,b) in (select * from multiset_5( TABLE(SELECT a, b from example) ));
+explain SELECT * FROM example where (a,b) in (select * from multiset_5( TABLE(SELECT a, b from example scatter by b) ));
+explain SELECT * FROM multiset_5( TABLE(SELECT a, b from example)) where (a,b) in (select a,b from example);
+explain SELECT * FROM multiset_5( TABLE(SELECT a, b from example scatter by b)) where (a,b) in (select a,b from example);
+explain SELECT * FROM multiset_5( TABLE( SELECT * from example_r) );
+explain SELECT * FROM multiset_5( TABLE( SELECT * FROM example_r SCATTER by a||b) );
+explain SELECT * FROM multiset_5( TABLE( SELECT * FROM example_r SCATTER by b, a, a||b) );
+explain SELECT * FROM multiset_5( TABLE( SELECT * FROM example_r SCATTER RANDOMLY) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example SCATTER BY a) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a / 2, b FROM example SCATTER BY a / 2) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example SCATTER BY b) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example ORDER BY b, a SCATTER RANDOMLY) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example ORDER BY a, b SCATTER BY a) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example ORDER BY b, a SCATTER BY b) );
+explain SELECT * FROM multiset_5( TABLE (SELECT DISTINCT a, b FROM example ORDER BY b, a LIMIT 2 SCATTER RANDOMLY) );
+explain SELECT * FROM multiset_5( TABLE( SELECT count(*)::integer, 'hello'::text from example_r ) );
+explain SELECT * FROM example_r WHERE (10, 'hello') in (SELECT * FROM multiset_5( TABLE( SELECT count(*)::integer, 'hello'::text from example_r )));
+explain SELECT * FROM multiset_5( TABLE( SELECT * from example_v) );
+explain SELECT * FROM multiset_5( TABLE( SELECT * FROM example WHERE a >= (SELECT min(a) FROM example)));
+explain WITH cte AS (SELECT * FROM example) SELECT * FROM multiset_5( TABLE ( SELECT * FROM cte ) )  order by a, b;
+explain WITH cte AS (SELECT * FROM example) SELECT x.* FROM multiset_5( TABLE ( SELECT * FROM cte ) ) x, (SELECT count(*) FROM cte) y order by x.a, x.b;
+explain select * from multiset_2( TABLE( SELECT distinct a.a, b.b from example a, example b where a.a = b.a) ) order by 1,2;
+explain select * from multiset_2( TABLE( SELECT distinct a.a, b.b from example a join example b using (a) ) ) order by 1,2;
+explain select * from multiset_2( TABLE ( SELECT * FROM example WHERE a = 2 ) ) WHERE a = 2;
+-- Not rescannable, should produce materialize node
+explain SELECT x.* FROM multiset_5( TABLE ( SELECT 1 ) ) x right join (SELECT 1) y on (true);
+
+-- Do an explain analyze while we are at it:
+explain analyze SELECT * FROM multiset_5( TABLE( SELECT count(*)::integer, 'hello'::text from example_r scatter randomly) );
+
+-- Test for an old bug in aggregate planning - this used to crash.
+select count(*) from multiset_5(table(select * from example)) s ;
+
+-- Test for 'select for update'
+begin;
+select count(*) from multiset_5(table(select * from example for update)) s ;
+abort;
+
+-- ===========================================
+-- Test invalid use of table value expressions
+-- ===========================================
+
+-- ERROR cases for table functions over table value input
+SELECT multiset_2( (SELECT * from example) );       -- not a valid subselect
+SELECT multiset_2( (SELECT a from example) );       -- not a TableValue expression / no such function
+SELECT multiset_2( TABLE(SELECT * from example) );  -- not in the from clause
+SELECT multiset_3( TABLE(SELECT a from example) );  -- not in the from clause
+SELECT multiset_5( TABLE(SELECT * from example) ) over (order by 1);
+SELECT * from example where 3 = multiset_scalar_value( TABLE(select a from example) ); -- not in from
+SELECT count(*) FROM example GROUP BY multiset_scalar_value( TABLE(select a from example) );
+SELECT count(*) FROM example HAVING multiset_scalar_value( TABLE(select a from example) ) > 4;
+SELECT sum(a) over (partition by multiset_scalar_value( TABLE(select a from example)) order by b) from example;
+
+-- Error: multiset_5 expects (int, text) records as input
+SELECT * FROM multiset_5( TABLE(SELECT 1) );
+
+-- ERROR cases for simple TableValue Expressions (anything not a parameter to function)
+SELECT TABLE( SELECT * from example );
+SELECT ARRAY( TABLE( SELECT * from example) );
+SELECT * FROM TABLE( SELECT * from example) );
+SELECT * from example where TABLE( SELECT * from example) is not null;
+SELECT count(*) FROM example GROUP BY TABLE(select a from example);
+SELECT count(*) FROM example HAVING TABLE(select a from example) is not null;
+SELECT sum(a) over (partition by TABLE(select * from example) order by b) from example;
+
+-- ERROR raised internally by user code when we don't see an output tuple
+-- that matches expectations
+SELECT * FROM multiset_4( TABLE( SELECT 1::integer, 'hello'::text) ) as tf(a int);
+
+-- ERROR no support for SELECT INTO in a TableValueExpression
+SELECT * FROM multiset_2( TABLE( SELECT * INTO should_error FROM example ) );
+
+-- MPP-14180  ERROR: We don't support TableValueExpressions with external correlations
+SELECT * from example e1
+WHERE a > (SELECT a FROM multiset_2( TABLE( SELECT * FROM example e2 WHERE e1.a=e2.a))) ;
+
+-- ===========================================
+-- Views and view display
+-- ===========================================
+
+CREATE VIEW v1 AS
+  SELECT * FROM multiset_2( TABLE( SELECT * from example) ) as tf;
+
+SELECT * FROM v1 order by a, b;
+
+\d+ v1
+
+SELECT pg_get_viewdef('v1'::regclass);
+
+
+CREATE VIEW v2 AS
+  SELECT * FROM multiset_2( TABLE( SELECT * from example SCATTER BY a||b, 5) ) as tf;
+
+SELECT * FROM v2 order by a, b;
+
+\d+ v2
+
+SELECT pg_get_viewdef('v2'::regclass);
+
+CREATE VIEW v3 AS
+  SELECT * FROM multiset_2( TABLE( SELECT * from example SCATTER RANDOMLY) ) as tf;
+
+SELECT * FROM v3 order by a, b;
+
+\d+ v3
+
+SELECT pg_get_viewdef('v3'::regclass);
+
+DROP view v1;
+DROP view v2;
+DROP view v3;
+
+-- ========================================
+-- Interaction with set returning functions
+-- ========================================
+CREATE FUNCTION multi_args(a anytable, x int) RETURNS SETOF example
+    AS :'regress_dll', 'multiset_example' LANGUAGE C READS SQL DATA;
+
+-- In select list requires some extra setrefs logic in planning
+SELECT *, generate_series(1,2) FROM multi_args( TABLE(SELECT 1::int, 'hello'::text), 2);
+
+-- Note the extra "ProjectSet" node when the srf is in the select list
+explain SELECT *, generate_series(1,2) FROM multi_args( TABLE(SELECT 1::int, 'hello'::text), 2);
+explain SELECT * FROM multi_args( TABLE(SELECT 1::int, 'hello'::text), 2);
+
+-- Error: don't support sets as arguments that are not TableValueExpr
+SELECT * FROM multi_args( TABLE(SELECT 1::int, 'hello'::text), generate_series(1,2));
+
+-- And use it with a CTAS as well
+explain CREATE TABLE example_out AS SELECT * FROM multi_args( TABLE(SELECT 1::int, 'hello'::text), 2);
+CREATE TABLE example_out AS SELECT * FROM multi_args( TABLE(SELECT 1::int, 'hello'::text), 2);
+SELECT * FROM example_out;
+DROP TABLE example_out;
+
+-- ===============
+-- Dropped Columns
+-- ===============
+DROP VIEW example_v;
+ALTER TABLE example DROP column a;
+
+-- ERROR: input tuple does not conform to expectations of multiset_5
+SELECT * FROM multiset_5( TABLE( SELECT 'hello'::text) ) as tf;
+
+-- However, this should work despite the output tupdesc having a dropped column.
+SELECT * FROM multiset_5( TABLE( SELECT 1::integer, 'hello'::text) ) as tf;
+
+-- ============================================
+-- Currently on "C" is supported for "anytable"
+-- ============================================
+-- start_ignore
+-- These may have been created by previous test
+create language plpython3u;
+-- end_ignore
+
+CREATE FUNCTION tf_sql(anytable) returns int AS $$ SELECT 1 $$ language sql CONTAINS SQL;
+
+CREATE FUNCTION tf_pgsql(anytable) returns int AS $$
+BEGIN
+  RETURN 1;
+END;
+$$ language plpgsql NO SQL;
+
+CREATE FUNCTION tf_python(anytable) returns int AS $$ return 1 $$ language plpython3u NO SQL;
+
+
+-- ====================================
+-- Test support of dynamic return types (aka the DESCRIBE callback)
+-- ====================================
+
+-- Create a function and a describe method
+CREATE FUNCTION sessionize_describe(internal)
+  RETURNS internal
+  AS :'regress_dll', 'describe'
+  LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION sessionize(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA;
+
+-- No dependency yet, all three queries should return 0 rows
+SELECT * FROM pg_proc_callback where profnoid = 'sessionize'::regproc;
+SELECT * FROM pg_proc_callback where profnoid not in (select oid from pg_proc);
+SELECT * FROM pg_proc_callback where procallback not in (select oid from pg_proc);
+
+-- Should be able to drop the describe function, no ref yet
+DROP FUNCTION sessionize_describe(internal);
+
+-- Should fail, no such function
+CREATE OR REPLACE FUNCTION sessionize(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- Recreate describe function
+CREATE OR REPLACE FUNCTION sessionize_describe(internal)
+  RETURNS internal
+  AS :'regress_dll', 'describe'
+  LANGUAGE C READS SQL DATA;
+
+-- Alter the existing function to add the describe callback
+CREATE OR REPLACE FUNCTION sessionize(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- Observe the relationship now recorded in pg_proc_callback
+SELECT * FROM pg_proc_callback where profnoid = 'sessionize'::regproc;
+
+-- Should fail due to dependency on sessionize
+DROP FUNCTION sessionize_describe(internal);
+SELECT * FROM pg_proc_callback where profnoid = 'sessionize'::regproc;
+
+-- Should cascade to main function and cleanup pg_proc_callback entries.
+DROP FUNCTION sessionize_describe(internal) CASCADE;
+SELECT * FROM pg_proc_callback where profnoid = 'sessionize'::regproc;
+SELECT * FROM pg_proc_callback where profnoid not in (select oid from pg_proc);
+SELECT * FROM pg_proc_callback where procallback not in (select oid from pg_proc);
+
+-- Recreate both functions
+CREATE OR REPLACE FUNCTION sessionize_describe(internal)
+  RETURNS internal
+  AS :'regress_dll', 'describe'
+  LANGUAGE C READS SQL DATA;
+
+CREATE OR REPLACE FUNCTION sessionize(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- Check the dependency again, drop should fail
+DROP FUNCTION sessionize_describe(internal);
+SELECT * FROM pg_proc_callback where profnoid = 'sessionize'::regproc;
+
+-- Alter existing function to remove the describe callback
+CREATE OR REPLACE FUNCTION sessionize(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA;
+
+-- Check the dependency again, drop should succeed
+DROP FUNCTION sessionize_describe(internal);
+SELECT * FROM pg_proc_callback where profnoid = 'sessionize'::regproc;
+DROP FUNCTION sessionize(anytable, interval);
+
+-- Shouldn't have any integrity constraint violations
+SELECT * FROM pg_proc_callback where profnoid not in (select oid from pg_proc);
+SELECT * FROM pg_proc_callback where procallback not in (select oid from pg_proc);
+
+-- One more time, creating without using "OR REPLACE"
+CREATE FUNCTION sessionize_describe(internal)
+  RETURNS internal
+  AS :'regress_dll', 'describe'
+  LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION sessionize_plain(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION sessionize_static(anytable, interval)
+  RETURNS TABLE(id integer, "time" timestamp, sessionnum integer)
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION sessionize_dynamic(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- Check catalog for the new functions, should only see sessionize_describe
+SELECT * FROM pg_proc_callback
+WHERE profnoid in (
+        'sessionize_plain'::regproc,
+        'sessionize_static'::regproc,
+        'sessionize_dynamic'::regproc
+        );
+
+-- Plain without qualification fails
+SELECT *
+FROM sessionize_plain(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) as sessionize
+ORDER BY id, time; -- FAILS, no record type
+
+-- Static with qualification fails
+SELECT *
+FROM sessionize_static(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) AS sessionize(id integer, "time" timestamp, sessionnum integer)
+ORDER BY id, time; -- FAIL, double qualified
+
+-- Describe with qualification fails
+SELECT *
+FROM sessionize_dynamic(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) AS sessionize(id integer, "time" timestamp, sessionnum integer)
+ORDER BY id, time; -- FAIL, double qualified
+
+-- Otherwise results should match
+SELECT *
+FROM sessionize_plain(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) AS sessionize(id integer, "time" timestamp, sessionnum integer)
+ORDER BY id, time; -- SUCCESS, qualified record
+
+SELECT *
+FROM sessionize_static(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) as sessionize
+ORDER BY id, time; -- SUCCESS, qualified in function
+
+SELECT *
+FROM (SELECT sessionize.id, sessionize."time", sessionize.sessionnum
+      FROM sessionize_static(TABLE( SELECT history.id, history."time"
+                                    FROM history
+                                    ORDER BY history.id, history."time"
+                                    SCATTER BY history.id),
+                             '00:01:00'::interval) sessionize
+      ORDER BY sessionize.id, sessionize."time") q
+ORDER BY 1, 2; -- SUCCESS, qualified in function
+
+SELECT *
+FROM sessionize_dynamic(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) as sessionize
+ORDER BY id, time; -- SUCCESS, qualified in describe
+
+-- Also test subqueries in non TABLE() parameters
+SELECT *
+FROM sessionize_dynamic(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    (select '1 minute'::interval) ) as sessionize
+ORDER BY id, time;
+
+-- ===================================
+-- Dynamic type interaction with VIEWS
+--
+--
+-- Because qualification is not guaranteed stable views over functions
+-- with dynamic types are *not* supported.
+--
+-- There are multiple ways this could cause issues:
+--    - DESCRIBE function is not immutable and could return different
+--      descriptors at later points in time.
+--    - DESCRIBE function could have the source code change resulting
+--      in a different descriptor
+--    - DESCRIBE function could be replaced with a different function
+--      resulting in a different descriptor.
+--
+-- ===================================
+CREATE VIEW not_supported
+AS SELECT *
+FROM sessionize_dynamic(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) as sessionize;   -- ERROR, view over dynamic typed function
+
+-- The call is in a subquery, not the main query
+CREATE VIEW not_supported
+AS SELECT * FROM (
+      SELECT *
+      FROM sessionize_dynamic(
+              TABLE
+              (
+                  SELECT id, time
+                  FROM history
+                  ORDER BY id, time
+                  SCATTER BY id
+              ),
+              '1 minute' ) as sessionize
+      ) subq;   -- ERROR, view over dynamic typed function
+
+
+--
+-- An existing function that has views defined over it can not be allowed to
+-- be altered to have a describe function for similar reasons outlined above.
+--
+CREATE VIEW supported
+AS SELECT *
+FROM sessionize_plain(
+    TABLE
+    (
+        SELECT id, time
+        FROM history
+        ORDER BY id, time
+        SCATTER BY id
+    ),
+    '1 minute' ) as sessionize(id integer, "time" timestamp, sessionnum integer);
+
+CREATE OR REPLACE FUNCTION sessionize_plain(anytable, interval)
+  RETURNS setof record
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);  -- ERROR: views exist
+
+DROP VIEW supported;
+
+-- ========================
+-- The above describe is still pretty static, test a more dynamic describe function
+-- ========================
+CREATE FUNCTION project_describe(internal)
+  RETURNS internal
+  AS :'regress_dll', 'project_describe'
+  LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION project(anytable, integer)
+  RETURNS setof record
+  AS :'regress_dll', 'project'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = project_describe);
+
+SELECT * FROM project( TABLE( SELECT * FROM history ), 1) order by 1;
+SELECT * FROM project( TABLE( SELECT * FROM history ), 2) order by 1;
+
+
+-- Valid operations on results
+SELECT id+1  FROM project( TABLE( SELECT * FROM history ), 1) order by 1;
+SELECT extract(day from "time") FROM project( TABLE( SELECT * FROM history ), 2) order by 1;
+SELECT * FROM project( TABLE( SELECT * FROM pg_am WHERE amname not in ('pax') ),
+  CASE 1 WHEN 2 THEN 1 ELSE GREATEST(1, COALESCE(1+1)) END);
+SELECT * FROM project( TABLE( SELECT * FROM pg_am WHERE amname not in ('pax') ),
+  CASE WHEN 3 IS NOT NULL AND 1 IN (1, 2) THEN floor(NULLIF(2, 3))::int END);
+
+-- ERROR: invalid operations demonstrating different return types
+SELECT extract(day from id) FROM project( TABLE( SELECT * FROM history ), 1);
+SELECT "time"+1 FROM project( TABLE( SELECT * FROM history ), 2);
+
+-- ERROR: select columns projected out by the function
+SELECT id  FROM project( TABLE( SELECT * FROM history ), 2);
+SELECT "time" FROM project( TABLE( SELECT * FROM history ), 1);
+
+/* Invalid projection position */
+SELECT * FROM project( TABLE( SELECT * FROM pg_am ), NULL);
+SELECT * FROM project( TABLE( SELECT * FROM pg_am ), -1);
+SELECT * FROM project( TABLE( SELECT * FROM pg_am ), 0);
+SELECT * FROM project( TABLE( SELECT * FROM pg_am ), 100);
+SELECT * FROM project( TABLE( SELECT * FROM pg_am ), (ARRAY[2,3])[1]);
+SELECT * FROM project( TABLE( SELECT * FROM pg_am ), (ROW(1, '')::example_r).a);
+
+-- ========================
+-- User data exmaple
+-- ========================
+CREATE FUNCTION ud_describe(internal) RETURNS internal
+  AS :'regress_dll', 'userdata_describe'
+  LANGUAGE C READS SQL DATA;
+
+CREATE FUNCTION ud_project(anytable) RETURNS setof RECORD
+  AS :'regress_dll', 'userdata_project'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = ud_describe);
+
+SELECT * FROM ud_project( TABLE( SELECT * FROM history ) );
+
+-- ========================
+-- Passing input without modification
+-- ========================
+CREATE FUNCTION noop_project(anytable) RETURNS setof RECORD
+  AS :'regress_dll'
+  LANGUAGE C READS SQL DATA;
+
+SELECT * FROM noop_project( TABLE( SELECT * FROM history ) ) AS s (id integer, time timestamp);
+-- SCATTER BY vs MEDIAN
+SELECT * FROM noop_project( TABLE( SELECT median(id) FROM history SCATTER BY median(id) ) ) AS s (med float);
+SELECT * FROM noop_project( TABLE( SELECT median(id) FROM history SCATTER BY count(*) ) ) AS s (med float);
+SELECT * FROM noop_project( TABLE( SELECT count(*) FROM history SCATTER BY median(id) ) ) AS s (cnt bigint);
+SELECT * FROM noop_project( TABLE( SELECT count(*) FROM history GROUP BY time SCATTER BY median(id) ) ) AS s (cnt bigint);
+
+-- ========================
+-- More negative test cases
+-- ========================
+
+-- explicit return type not suitable for dynamic type resolution
+CREATE FUNCTION x() returns int
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- explicit return type (setof) not suitable for dynamic type resolution
+CREATE FUNCTION x() returns setof int
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- explicit return type (TABLE) not suitable for dynamic type resolution
+CREATE FUNCTION x() returns TABLE(id integer, "time" timestamp, sessionnum integer)
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- explicit return type (OUT PARAMS) not suitable for dynamic type resolution
+CREATE FUNCTION x(OUT id integer, OUT "time" timestamp, OUT sessionnum integer)
+  AS :'regress_dll', 'sessionize'
+  LANGUAGE C READS SQL DATA
+  WITH (describe = sessionize_describe);
+
+-- ========================
+-- Interaction with PREPARE
+-- ========================
+
+-- PASS: completely defined at prepare time
+PREPARE p1 AS SELECT * FROM multiset_2( TABLE(SELECT * FROM example_r) ) order by a, b;
+EXECUTE p1;
+DEALLOCATE p1;
+
+-- FAIL: can't pass anytable as prepare argument
+PREPARE p2 AS SELECT * FROM multiset_2( $1 ) order by a, b;
+-- This actually passes currently. You can't do anything useful with the prepared
+-- statement though, as anytable's input function just throws an error.
+PREPARE p3(anytable) AS SELECT * FROM multiset_5( $1 );
+
+-- FAIL: $1 is not a constant
+PREPARE p4 AS SELECT * FROM project( TABLE( SELECT * FROM pg_am ), $1);
+PREPARE p5(integer) AS SELECT * FROM project( TABLE( SELECT * FROM pg_am ), $1);
+
+-- PASS: We allow table functions with describe to be prepared.  This can
+-- theoretically require need for reparse/replan, but that requires more
+-- general support of prepared statements in conjunction with a plan cache.
+PREPARE p6 AS SELECT * FROM project( TABLE( SELECT * FROM example_r ), 2) ORDER BY 1;
+EXECUTE p6;
+
+-- PASS: Check that the prepared statement is re-planned when the underlying
+-- table changes.
+ALTER TABLE example_r ALTER COLUMN a TYPE numeric;
+EXECUTE p6;
+DEALLOCATE p6;
+
+-- =======
+-- Cleanup
+-- =======
+DROP SCHEMA table_function CASCADE;
+SET search_path TO public;

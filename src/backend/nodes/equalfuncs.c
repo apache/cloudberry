@@ -196,6 +196,7 @@ _equalVar(const Var *a, const Var *b)
 	COMPARE_SCALAR_FIELD(vartypmod);
 	COMPARE_SCALAR_FIELD(varcollid);
 	COMPARE_SCALAR_FIELD(varlevelsup);
+	COMPARE_BITMAPSET_FIELD(varnullingrels);
 
 	/*
 	 * varnosyn/varattnosyn are intentionally ignored here, because Vars with
@@ -915,11 +916,13 @@ _equalRestrictInfo(const RestrictInfo *a, const RestrictInfo *b)
 {
 	COMPARE_NODE_FIELD(clause);
 	COMPARE_SCALAR_FIELD(is_pushed_down);
-	COMPARE_SCALAR_FIELD(outerjoin_delayed);
+	COMPARE_SCALAR_FIELD(has_clone);
+	COMPARE_SCALAR_FIELD(is_clone);
 	COMPARE_SCALAR_FIELD(security_level);
 	COMPARE_BITMAPSET_FIELD(required_relids);
+	COMPARE_BITMAPSET_FIELD(incompatible_relids);
 	COMPARE_BITMAPSET_FIELD(outer_relids);
-	COMPARE_BITMAPSET_FIELD(nullable_relids);
+	COMPARE_SCALAR_FIELD(rinfo_serial);
 
 	/*
 	 * We ignore all the remaining fields, since they may not be set yet, and
@@ -962,8 +965,12 @@ _equalSpecialJoinInfo(const SpecialJoinInfo *a, const SpecialJoinInfo *b)
 	COMPARE_BITMAPSET_FIELD(syn_lefthand);
 	COMPARE_BITMAPSET_FIELD(syn_righthand);
 	COMPARE_SCALAR_FIELD(jointype);
+	COMPARE_SCALAR_FIELD(ojrelid);
+	COMPARE_BITMAPSET_FIELD(commute_above_l);
+	COMPARE_BITMAPSET_FIELD(commute_above_r);
+	COMPARE_BITMAPSET_FIELD(commute_below_l);
+	COMPARE_BITMAPSET_FIELD(commute_below_r);
 	COMPARE_SCALAR_FIELD(lhs_strict);
-	COMPARE_SCALAR_FIELD(delay_upper_joins);
 	COMPARE_SCALAR_FIELD(semi_can_btree);
 	COMPARE_SCALAR_FIELD(semi_can_hash);
 	COMPARE_NODE_FIELD(semi_operators);
@@ -1048,7 +1055,10 @@ _equalQuery(const Query *a, const Query *b)
 	COMPARE_SCALAR_FIELD(isReturn);
 	COMPARE_NODE_FIELD(cteList);
 	COMPARE_NODE_FIELD(rtable);
+	COMPARE_NODE_FIELD(rteperminfos);
 	COMPARE_NODE_FIELD(jointree);
+	COMPARE_NODE_FIELD(mergeActionList);
+	COMPARE_SCALAR_FIELD(mergeUseOuterJoin);
 	COMPARE_NODE_FIELD(targetList);
 	COMPARE_SCALAR_FIELD(override);
 	COMPARE_NODE_FIELD(onConflict);
@@ -1289,7 +1299,7 @@ _equalGrantRoleStmt(const GrantRoleStmt *a, const GrantRoleStmt *b)
 	COMPARE_NODE_FIELD(granted_roles);
 	COMPARE_NODE_FIELD(grantee_roles);
 	COMPARE_SCALAR_FIELD(is_grant);
-	COMPARE_SCALAR_FIELD(admin_opt);
+	COMPARE_NODE_FIELD(opt);
 	COMPARE_NODE_FIELD(grantor);
 	COMPARE_SCALAR_FIELD(behavior);
 
@@ -1553,10 +1563,11 @@ _equalIndexStmt(const IndexStmt *a, const IndexStmt *b)
 	COMPARE_NODE_FIELD(excludeOpNames);
 	COMPARE_STRING_FIELD(idxcomment);
 	COMPARE_SCALAR_FIELD(indexOid);
-	COMPARE_SCALAR_FIELD(oldNode);
+	COMPARE_SCALAR_FIELD(oldNumber);
 	COMPARE_SCALAR_FIELD(oldCreateSubid);
-	COMPARE_SCALAR_FIELD(oldFirstRelfilenodeSubid);
+	COMPARE_SCALAR_FIELD(oldFirstRelfilelocatorSubid);
 	COMPARE_SCALAR_FIELD(unique);
+	COMPARE_SCALAR_FIELD(nulls_not_distinct);
 	COMPARE_SCALAR_FIELD(primary);
 	COMPARE_SCALAR_FIELD(isconstraint);
 	COMPARE_SCALAR_FIELD(deferrable);
@@ -2706,7 +2717,7 @@ _equalCreatePublicationStmt(const CreatePublicationStmt *a,
 {
 	COMPARE_STRING_FIELD(pubname);
 	COMPARE_NODE_FIELD(options);
-	COMPARE_NODE_FIELD(tables);
+	COMPARE_NODE_FIELD(pubobjects);
 	COMPARE_SCALAR_FIELD(for_all_tables);
 
 	return true;
@@ -2718,9 +2729,9 @@ _equalAlterPublicationStmt(const AlterPublicationStmt *a,
 {
 	COMPARE_STRING_FIELD(pubname);
 	COMPARE_NODE_FIELD(options);
-	COMPARE_NODE_FIELD(tables);
+	COMPARE_NODE_FIELD(pubobjects);
 	COMPARE_SCALAR_FIELD(for_all_tables);
-	COMPARE_SCALAR_FIELD(tableAction);
+	COMPARE_SCALAR_FIELD(action);
 
 	return true;
 }
@@ -3091,6 +3102,7 @@ _equalConstraint(const Constraint *a, const Constraint *b)
 	COMPARE_NODE_FIELD(raw_expr);
 	COMPARE_STRING_FIELD(cooked_expr);
 	COMPARE_SCALAR_FIELD(generated_when);
+	COMPARE_SCALAR_FIELD(nulls_not_distinct);
 	COMPARE_NODE_FIELD(keys);
 	COMPARE_NODE_FIELD(including);
 	COMPARE_NODE_FIELD(exclusions);
@@ -3144,6 +3156,7 @@ _equalRangeTblEntry(const RangeTblEntry *a, const RangeTblEntry *b)
 	COMPARE_SCALAR_FIELD(relkind);
 	COMPARE_SCALAR_FIELD(rellockmode);
 	COMPARE_NODE_FIELD(tablesample);
+	COMPARE_SCALAR_FIELD(perminfoindex);
 	COMPARE_SCALAR_FIELD(relisivm);
 	COMPARE_NODE_FIELD(subquery);
 	COMPARE_SCALAR_FIELD(security_barrier);
@@ -3170,12 +3183,6 @@ _equalRangeTblEntry(const RangeTblEntry *a, const RangeTblEntry *b)
 	COMPARE_SCALAR_FIELD(lateral);
 	COMPARE_SCALAR_FIELD(inh);
 	COMPARE_SCALAR_FIELD(inFromCl);
-	COMPARE_SCALAR_FIELD(requiredPerms);
-	COMPARE_SCALAR_FIELD(checkAsUser);
-	COMPARE_BITMAPSET_FIELD(selectedCols);
-	COMPARE_BITMAPSET_FIELD(insertedCols);
-	COMPARE_BITMAPSET_FIELD(updatedCols);
-	COMPARE_BITMAPSET_FIELD(extraUpdatedCols);
 	COMPARE_NODE_FIELD(securityQuals);
 
 	return true;
@@ -3425,7 +3432,7 @@ _equalPartitionElem(const PartitionElem *a, const PartitionElem *b)
 static bool
 _equalPartitionSpec(const PartitionSpec *a, const PartitionSpec *b)
 {
-	COMPARE_STRING_FIELD(strategy);
+	COMPARE_SCALAR_FIELD(strategy);
 	COMPARE_NODE_FIELD(partParams);
 	COMPARE_LOCATION_FIELD(location);
 
@@ -3595,27 +3602,131 @@ _equalList(const List *a, const List *b)
  */
 
 static bool
-_equalValue(const Value *a, const Value *b)
+_equalInteger(const Integer *a, const Integer *b)
+{
+	COMPARE_SCALAR_FIELD(ival);
+
+	return true;
+}
+
+static bool
+_equalFloat(const Float *a, const Float *b)
+{
+	COMPARE_STRING_FIELD(fval);
+
+	return true;
+}
+
+static bool
+_equalBoolean(const Boolean *a, const Boolean *b)
+{
+	COMPARE_SCALAR_FIELD(boolval);
+
+	return true;
+}
+
+static bool
+_equalString(const String *a, const String *b)
+{
+	COMPARE_STRING_FIELD(sval);
+
+	return true;
+}
+
+static bool
+_equalBitString(const BitString *a, const BitString *b)
+{
+	COMPARE_STRING_FIELD(bsval);
+
+	return true;
+}
+
+static bool
+_equalRTEPermissionInfo(const RTEPermissionInfo *a, const RTEPermissionInfo *b)
+{
+	COMPARE_SCALAR_FIELD(relid);
+	COMPARE_SCALAR_FIELD(inh);
+	COMPARE_SCALAR_FIELD(requiredPerms);
+	COMPARE_SCALAR_FIELD(checkAsUser);
+	COMPARE_BITMAPSET_FIELD(selectedCols);
+	COMPARE_BITMAPSET_FIELD(insertedCols);
+	COMPARE_BITMAPSET_FIELD(updatedCols);
+
+	return true;
+}
+
+static bool
+_equalBitmapset(const Bitmapset *a, const Bitmapset *b)
+{
+	return bms_equal(a, b);
+}
+
+static bool
+_equalMergeAction(const MergeAction *a, const MergeAction *b)
+{
+	COMPARE_SCALAR_FIELD(matched);
+	COMPARE_SCALAR_FIELD(commandType);
+	COMPARE_SCALAR_FIELD(override);
+	COMPARE_NODE_FIELD(qual);
+	COMPARE_NODE_FIELD(targetList);
+	COMPARE_NODE_FIELD(updateColnos);
+
+	return true;
+}
+
+static bool
+_equalJsonConstructorExpr(const JsonConstructorExpr *a, const JsonConstructorExpr *b)
 {
 	COMPARE_SCALAR_FIELD(type);
+	COMPARE_NODE_FIELD(args);
+	COMPARE_NODE_FIELD(func);
+	COMPARE_NODE_FIELD(coercion);
+	COMPARE_NODE_FIELD(returning);
+	COMPARE_SCALAR_FIELD(absent_on_null);
+	COMPARE_SCALAR_FIELD(unique);
+	COMPARE_LOCATION_FIELD(location);
 
-	switch (a->type)
-	{
-		case T_Integer:
-			COMPARE_SCALAR_FIELD(val.ival);
-			break;
-		case T_Float:
-		case T_String:
-		case T_BitString:
-			COMPARE_STRING_FIELD(val.str);
-			break;
-		case T_Null:
-			/* nothing to do */
-			break;
-		default:
-			elog(ERROR, "unrecognized node type: %d", (int) a->type);
-			break;
-	}
+	return true;
+}
+
+static bool
+_equalJsonIsPredicate(const JsonIsPredicate *a, const JsonIsPredicate *b)
+{
+	COMPARE_NODE_FIELD(expr);
+	COMPARE_NODE_FIELD(format);
+	COMPARE_SCALAR_FIELD(item_type);
+	COMPARE_SCALAR_FIELD(unique_keys);
+	COMPARE_LOCATION_FIELD(location);
+
+	return true;
+}
+
+static bool
+_equalJsonReturning(const JsonReturning *a, const JsonReturning *b)
+{
+	COMPARE_NODE_FIELD(format);
+	COMPARE_SCALAR_FIELD(typid);
+	COMPARE_SCALAR_FIELD(typmod);
+
+	return true;
+}
+
+static bool
+_equalJsonValueExpr(const JsonValueExpr *a, const JsonValueExpr *b)
+{
+	COMPARE_NODE_FIELD(raw_expr);
+	COMPARE_NODE_FIELD(formatted_expr);
+	COMPARE_NODE_FIELD(format);
+
+	return true;
+}
+
+static bool
+_equalJsonFormat(const JsonFormat *a, const JsonFormat *b)
+{
+	COMPARE_SCALAR_FIELD(format_type);
+	COMPARE_SCALAR_FIELD(encoding);
+	COMPARE_LOCATION_FIELD(location);
 
 	return true;
 }
@@ -3844,11 +3955,19 @@ equal(const void *a, const void *b)
 			break;
 
 		case T_Integer:
+			retval = _equalInteger(a, b);
+			break;
 		case T_Float:
+			retval = _equalFloat(a, b);
+			break;
+		case T_Boolean:
+			retval = _equalBoolean(a, b);
+			break;
 		case T_String:
+			retval = _equalString(a, b);
+			break;
 		case T_BitString:
-		case T_Null:
-			retval = _equalValue(a, b);
+			retval = _equalBitString(a, b);
 			break;
 
 			/*
@@ -4500,7 +4619,30 @@ equal(const void *a, const void *b)
 		case T_DropTaskStmt:
 			retval = _equalDropTaskStmt(a, b);
 			break;
-
+		case T_RTEPermissionInfo:
+			retval = _equalRTEPermissionInfo(a, b);
+			break;
+		case T_Bitmapset:
+			retval = _equalBitmapset(a, b);
+			break;
+		case T_MergeAction:
+			retval = _equalMergeAction(a, b);
+			break;
+		case T_JsonConstructorExpr:
+			retval = _equalJsonConstructorExpr(a, b);
+			break;
+		case T_JsonIsPredicate:
+			retval = _equalJsonIsPredicate(a, b);
+			break;
+		case T_JsonReturning:
+			retval = _equalJsonReturning(a, b);
+			break;
+		case T_JsonValueExpr:
+			retval = _equalJsonValueExpr(a, b);
+			break;
+		case T_JsonFormat:
+			retval = _equalJsonFormat(a, b);
+			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
 				 (int) nodeTag(a));

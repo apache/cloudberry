@@ -677,10 +677,15 @@ ResLockPortal(Portal portal, QueryDesc *qDesc)
 		if (takeLock)
 		{
 #ifdef RESLOCK_DEBUG
-			elog(DEBUG1, "acquire resource lock for queue %u (portal %u)", 
+			elog(DEBUG1, "acquire resource lock for queue %u (portal %u)",
 					queueid, portal->portalId);
 #endif
 			SET_LOCKTAG_RESOURCE_QUEUE(tag, queueid);
+
+			/* Record wait-start and submission for pgstat tracking. */
+			pgstat_resqueue_wait_start(portal->portalId, queueid,
+									   incData.increments[RES_COST_LIMIT],
+									   (int64) (incData.increments[RES_MEMORY_LIMIT] / 1024));
 
 			PG_TRY();
 			{
@@ -688,17 +693,19 @@ ResLockPortal(Portal portal, QueryDesc *qDesc)
 			}
 			PG_CATCH();
 			{
-				/* 
-				 * We might have been waiting for a resource queue lock when we get 
-				 * here. Calling ResLockRelease without calling ResLockWaitCancel will 
+				/*
+				 * We might have been waiting for a resource queue lock when we get
+				 * here. Calling ResLockRelease without calling ResLockWaitCancel will
 				 * cause the locallock to be cleaned up, but will leave the global
-				 * variable lockAwaited still pointing to the locallock hash 
+				 * variable lockAwaited still pointing to the locallock hash
 				 * entry.
 				 */
 				ResLockWaitCancel();
-		
 
-				/* If we had acquired the resource queue lock, release it and clean up */	
+				/* Count this portal as rejected in pgstat. */
+				pgstat_resqueue_rejected(portal->portalId);
+
+				/* If we had acquired the resource queue lock, release it and clean up */
 				if (!ResLockRelease(&tag, portal->portalId))
 				{
 					ereport(LOG,
@@ -709,7 +716,7 @@ ResLockPortal(Portal portal, QueryDesc *qDesc)
 									   tag.locktag_field1, portal->portalId,
 									   portal->name, portal->sourceText)));
 				}
-			
+
 				/* GPDB hook for collecting query info */
 				if (query_info_collect_hook)
 					(*query_info_collect_hook)(METRICS_QUERY_ERROR, qDesc);
@@ -721,23 +728,35 @@ ResLockPortal(Portal portal, QueryDesc *qDesc)
 			}
 			PG_END_TRY();
 
-			/* 
+			/*
 			 * See if query was too small to bother locking at all, i.e had
 			 * cost smaller than the ignore cost threshold for the queue.
 			 */
 			if (lockResult == LOCKACQUIRE_NOT_AVAIL)
 			{
 #ifdef RESLOCK_DEBUG
-				elog(DEBUG1, "cancel resource lock for queue %u (portal %u)", 
+				elog(DEBUG1, "cancel resource lock for queue %u (portal %u)",
 						queueid, portal->portalId);
 #endif
-				/* 
+				/*
+				 * Query cost was below the ignore threshold; the portal won't
+				 * consume a queue slot.  Remove the pgstat portal entry we
+				 * created above without counting it as admitted.
+				 */
+				pgstat_resqueue_rejected(portal->portalId);
+
+				/*
 				 * Reset portalId and queueid for this portal so the queue
 				 * and increment accounting tests continue to work properly.
 				 */
 				portal->queueId = InvalidOid;
 				portal->portalId = INVALID_PORTALID;
 				shouldReleaseLock = false;
+			}
+			else
+			{
+				/* Portal was admitted into the queue; record exec-start time. */
+				pgstat_resqueue_wait_end(portal->portalId);
 			}
 
 			/* Count holdable cursors (if we are locking this one) .*/
@@ -789,6 +808,11 @@ ResLockUtilityPortal(Portal portal, float4 ignoreCostLimit)
 #endif
 		SET_LOCKTAG_RESOURCE_QUEUE(tag, queueid);
 
+		/* Record wait-start for utility statement. */
+		pgstat_resqueue_wait_start(portal->portalId, queueid,
+								   (Cost) incData.increments[RES_COST_LIMIT],
+								   0 /* no memory tracking for utility stmts */);
+
 		PG_TRY();
 		{
 			lockResult = ResLockAcquire(&tag, &incData);
@@ -803,6 +827,9 @@ ResLockUtilityPortal(Portal portal, float4 ignoreCostLimit)
 			 * entry.
 			 */
 			ResLockWaitCancel();
+
+			/* Count this portal as rejected in pgstat. */
+			pgstat_resqueue_rejected(portal->portalId);
 
 			/* If we had acquired the resource queue lock, release it and clean up */
 			if (!ResLockRelease(&tag, portal->portalId))
@@ -826,8 +853,13 @@ ResLockUtilityPortal(Portal portal, float4 ignoreCostLimit)
 			PG_RE_THROW();
 		}
 		PG_END_TRY();
+
+		if (lockResult != LOCKACQUIRE_NOT_AVAIL)
+			pgstat_resqueue_wait_end(portal->portalId);
+		else
+			pgstat_resqueue_rejected(portal->portalId);
 	}
-	
+
 	portal->hasResQueueLock = shouldReleaseLock;
 }
 
@@ -842,15 +874,19 @@ ResUnLockPortal(Portal portal)
 
 	queueid = portal->queueId;
 
-	/* 
+	/*
 	 * Check we have a valid queue before going any further.
 	 */
 	if (queueid != InvalidOid)
 	{
 #ifdef RESLOCK_DEBUG
-		elog(DEBUG1, "release resource lock for queue %u (portal %u)", 
+		elog(DEBUG1, "release resource lock for queue %u (portal %u)",
 			 queueid, portal->portalId);
 #endif
+
+		/* Record execution completion in pgstat. */
+		pgstat_resqueue_exec_end(portal->portalId);
+
 		SET_LOCKTAG_RESOURCE_QUEUE(tag, queueid);
 
 		if (!ResLockRelease(&tag, portal->portalId))

@@ -171,9 +171,9 @@ UFileAddPendingDelete(Relation rel, Oid spcId, char *relativePath, bool atCommit
 	pending->reldelete.atCommit = atCommit; /* delete if abort */
 	pending->reldelete.nestLevel = GetCurrentTransactionNestLevel();
 
-	pending->reldelete.relnode.node = rel->rd_node;
-	pending->reldelete.relnode.isTempRelation = rel->rd_backend == TempRelBackendId;
-	pending->reldelete.relnode.smgr_which = SMGR_INVALID;
+	pending->reldelete.rlocator.node = rel->rd_locator;
+	pending->reldelete.rlocator.isTempRelation = rel->rd_backend == TempRelBackendId;
+	pending->reldelete.rlocator.smgr_which = SMGR_INVALID;
 
 	pending->reldelete.action = &ufile_pending_rel_deletes_action;
 	RegisterPendingDelete(&pending->reldelete);

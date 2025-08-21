@@ -2,7 +2,7 @@
 #
 # Makefile for backend/utils
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/backend/utils/Makefile
@@ -27,9 +27,12 @@ all: distprep probes.h generated-header-symlinks
 
 distprep: fmgr-stamp errcodes.h
 
-.PHONY: generated-header-symlinks
+.PHONY: generated-header-symlinks submake-adt-headers
 
-generated-header-symlinks: $(top_builddir)/src/include/utils/header-stamp $(top_builddir)/src/include/utils/probes.h
+generated-header-symlinks: $(top_builddir)/src/include/utils/header-stamp $(top_builddir)/src/include/utils/probes.h submake-adt-headers
+
+submake-adt-headers:
+	$(MAKE) -C adt jsonpath_gram.h
 
 $(SUBDIRS:%=%-recursive): fmgr-stamp errcodes.h
 
@@ -47,24 +50,18 @@ fmgr-stamp: Gen_fmgrtab.pl $(catalogdir)/Catalog.pm $(top_srcdir)/src/include/ca
 	touch $@
 
 errcodes.h: $(top_srcdir)/src/backend/utils/errcodes.txt generate-errcodes.pl
-	$(PERL) $(srcdir)/generate-errcodes.pl $< > $@
+	$(PERL) $(srcdir)/generate-errcodes.pl --outfile $@ $<
 
-ifneq ($(enable_dtrace), yes)
-probes.h: Gen_dummy_probes.sed
-endif
-
-# We editorialize on dtrace's output to the extent of changing the macro
-# names (from POSTGRESQL_foo to TRACE_POSTGRESQL_foo) and changing any
-# "char *" arguments to "const char *".
-probes.h: probes.d
 ifeq ($(enable_dtrace), yes)
-	$(DTRACE) -C -h -s $< -o $@.tmp
-	sed -e 's/POSTGRESQL_/TRACE_POSTGRESQL_/g' \
-	    -e 's/( *char \*/(const char */g' \
-	    -e 's/, *char \*/, const char */g' $@.tmp >$@
-	rm $@.tmp
+probes.h: postprocess_dtrace.sed probes.h.tmp
+	sed -f $^ >$@
+	rm probes.h.tmp
+
+probes.h.tmp: probes.d
+	$(DTRACE) -C -h -s $< -o $@
 else
-	sed -f $(srcdir)/Gen_dummy_probes.sed $< >$@
+probes.h: Gen_dummy_probes.sed probes.d
+	sed -f $^ >$@
 endif
 
 # These generated headers must be symlinked into builddir/src/include/,
@@ -108,7 +105,7 @@ uninstall-data:
 # fmgroids.h, fmgrprotos.h, fmgrtab.c, fmgr-stamp, and errcodes.h are in the
 # distribution tarball, so they are not cleaned here.
 clean:
-	rm -f probes.h
+	rm -f probes.h probes.h.tmp
 
 maintainer-clean: clean
 	rm -f fmgroids.h fmgrprotos.h fmgrtab.c fmgr-stamp errcodes.h

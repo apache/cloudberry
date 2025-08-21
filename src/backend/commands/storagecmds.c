@@ -324,7 +324,7 @@ storage_user_mapping_ddl_aclcheck(Oid umuserid, Oid serverid, const char *server
 		{
 			AclResult	aclresult;
 
-			aclresult = gp_storage_server_aclcheck(serverid, curuserid, ACL_USAGE);
+			aclresult = object_aclcheck(StorageServerRelationId, serverid, curuserid, ACL_USAGE);
 			if (aclresult != ACLCHECK_OK)
 				aclcheck_error(aclresult, OBJECT_STORAGE_SERVER, servername);
 		}
@@ -569,7 +569,7 @@ RemoveStorageServer(DropStorageServerStmt *stmt)
 		{
 			AclResult	aclresult;
 
-			aclresult = gp_storage_server_aclcheck(serverId, curuserid, ACL_USAGE);
+			aclresult = object_aclcheck(StorageServerRelationId, serverId, curuserid, ACL_USAGE);
 			if (aclresult != ACLCHECK_OK)
 				aclcheck_error(aclresult, OBJECT_STORAGE_SERVER, stmt->servername);
 		}

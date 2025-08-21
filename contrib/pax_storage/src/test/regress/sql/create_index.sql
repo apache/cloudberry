@@ -3,6 +3,9 @@
 -- Create ancillary data structures (i.e. indices)
 --
 
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+
 --
 -- BTREE
 --
@@ -44,22 +47,6 @@ COMMENT ON INDEX six IS 'good index';
 COMMENT ON INDEX six IS NULL;
 
 --
--- BTREE ascending/descending cases
---
--- we load int4/text from pure descending data (each key is a new
--- low key) and name/f8 from pure ascending data (each key is a new
--- high key).  we had a bug where new low keys would sometimes be
--- "lost".
---
-CREATE INDEX bt_i4_index ON bt_i4_heap USING btree (seqno int4_ops);
-
-CREATE INDEX bt_name_index ON bt_name_heap USING btree (seqno name_ops);
-
-CREATE INDEX bt_txt_index ON bt_txt_heap USING btree (seqno text_ops);
-
-CREATE INDEX bt_f8_index ON bt_f8_heap USING btree (seqno float8_ops);
-
---
 -- BTREE partial indices
 --
 CREATE INDEX onek2_u1_prtl ON onek2 USING btree(unique1 int4_ops)
@@ -74,14 +61,29 @@ CREATE INDEX onek2_stu1_prtl ON onek2 USING btree(stringu1 name_ops)
 --
 -- GiST (rtree-equivalent opclasses only)
 --
--- PAX not support gist/spgist/brin indexes
+
+CREATE TABLE slow_emp4000 (
+	home_base	 box
+);
+
+CREATE TABLE fast_emp4000 (
+	home_base	 box
+);
+
+\set filename :abs_srcdir '/data/rect.data'
+COPY slow_emp4000 FROM :'filename';
+
+INSERT INTO fast_emp4000 SELECT * FROM slow_emp4000;
+
+ANALYZE slow_emp4000;
+ANALYZE fast_emp4000;
+
 CREATE INDEX grect2ind ON fast_emp4000 USING gist (home_base);
 
-CREATE INDEX gpolygonind ON polygon_tbl USING gist (f1);
-
-CREATE INDEX gcircleind ON circle_tbl USING gist (f1);
-
+-- we want to work with a point_tbl that includes a null
+CREATE TEMP TABLE point_tbl AS SELECT * FROM public.point_tbl;
 INSERT INTO POINT_TBL(f1) VALUES (NULL);
+ANALYZE POINT_TBL;
 
 CREATE INDEX gpointind ON point_tbl USING gist (f1);
 
@@ -117,12 +119,6 @@ SELECT * FROM fast_emp4000
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
-
-SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
-    ORDER BY (poly_center(f1))[0];
-
-SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
-    ORDER BY area(f1);
 
 SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
 
@@ -187,18 +183,6 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
-
-EXPLAIN (COSTS OFF)
-SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
-    ORDER BY (poly_center(f1))[0];
-SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
-    ORDER BY (poly_center(f1))[0];
-
-EXPLAIN (COSTS OFF)
-SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
-    ORDER BY area(f1);
-SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
-    ORDER BY area(f1);
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
@@ -299,6 +283,21 @@ RESET enable_bitmapscan;
 -- Note: GIN currently supports only bitmap scans, not plain indexscans
 --
 
+CREATE TABLE array_index_op_test (
+	seqno		int4,
+	i			int4[],
+	t			text[]
+);
+
+\set filename :abs_srcdir '/data/array.data'
+COPY array_index_op_test FROM :'filename';
+ANALYZE array_index_op_test;
+
+SELECT * FROM array_index_op_test WHERE i = '{NULL}' ORDER BY seqno;
+SELECT * FROM array_index_op_test WHERE i @> '{NULL}' ORDER BY seqno;
+SELECT * FROM array_index_op_test WHERE i && '{NULL}' ORDER BY seqno;
+SELECT * FROM array_index_op_test WHERE i <@ '{NULL}' ORDER BY seqno;
+
 SET enable_seqscan = OFF;
 SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
@@ -320,10 +319,6 @@ SELECT * FROM array_index_op_test WHERE i = '{}' ORDER BY seqno;
 SELECT * FROM array_index_op_test WHERE i @> '{}' ORDER BY seqno;
 SELECT * FROM array_index_op_test WHERE i && '{}' ORDER BY seqno;
 SELECT * FROM array_index_op_test WHERE i <@ '{}' ORDER BY seqno;
-SELECT * FROM array_op_test WHERE i = '{NULL}' ORDER BY seqno;
-SELECT * FROM array_op_test WHERE i @> '{NULL}' ORDER BY seqno;
-SELECT * FROM array_op_test WHERE i && '{NULL}' ORDER BY seqno;
-SELECT * FROM array_op_test WHERE i <@ '{NULL}' ORDER BY seqno;
 
 CREATE INDEX textarrayidx ON array_index_op_test USING gin (t);
 
@@ -356,8 +351,6 @@ SELECT * FROM array_index_op_test WHERE t && '{AAAAAAA80240}' ORDER BY seqno;
 SELECT * FROM array_index_op_test WHERE i @> '{32}' AND t && '{AAAAAAA80240}' ORDER BY seqno;
 SELECT * FROM array_index_op_test WHERE i && '{32}' AND t @> '{AAAAAAA80240}' ORDER BY seqno;
 SELECT * FROM array_index_op_test WHERE t = '{}' ORDER BY seqno;
-SELECT * FROM array_op_test WHERE i = '{NULL}' ORDER BY seqno;
-SELECT * FROM array_op_test WHERE i <@ '{NULL}' ORDER BY seqno;
 
 RESET enable_seqscan;
 RESET enable_indexscan;
@@ -387,14 +380,6 @@ CREATE INDEX gin_relopts_test ON array_index_op_test USING gin (i)
 --
 -- HASH
 --
-CREATE INDEX hash_i4_index ON hash_i4_heap USING hash (random int4_ops);
-
-CREATE INDEX hash_name_index ON hash_name_heap USING hash (random name_ops);
-
-CREATE INDEX hash_txt_index ON hash_txt_heap USING hash (random text_ops);
-
-CREATE INDEX hash_f8_index ON hash_f8_heap USING hash (random float8_ops) WITH (fillfactor=60);
-
 CREATE UNLOGGED TABLE unlogged_hash_table (id int4);
 CREATE INDEX unlogged_hash_index ON unlogged_hash_table USING hash (id int4_ops);
 DROP TABLE unlogged_hash_table;
@@ -410,6 +395,43 @@ SELECT count(*) FROM tenk1 WHERE stringu1 = 'TVAAAA';
 SELECT count(*) FROM tenk1 WHERE stringu1 = 'TVAAAA';
 DROP INDEX hash_tuplesort_idx;
 RESET maintenance_work_mem;
+
+
+--
+-- Test unique null behavior
+--
+CREATE TABLE unique_tbl (i int, t text);
+
+CREATE UNIQUE INDEX unique_idx1 ON unique_tbl (i) NULLS DISTINCT;
+CREATE UNIQUE INDEX unique_idx2 ON unique_tbl (i) NULLS NOT DISTINCT;
+
+INSERT INTO unique_tbl VALUES (1, 'one');
+INSERT INTO unique_tbl VALUES (2, 'two');
+INSERT INTO unique_tbl VALUES (3, 'three');
+INSERT INTO unique_tbl VALUES (4, 'four');
+INSERT INTO unique_tbl VALUES (5, 'one');
+INSERT INTO unique_tbl (t) VALUES ('six');
+INSERT INTO unique_tbl (t) VALUES ('seven');  -- error from unique_idx2
+
+DROP INDEX unique_idx1, unique_idx2;
+
+INSERT INTO unique_tbl (t) VALUES ('seven');
+
+-- build indexes on filled table
+CREATE UNIQUE INDEX unique_idx3 ON unique_tbl (i) NULLS DISTINCT;  -- ok
+CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- error
+
+DELETE FROM unique_tbl WHERE t = 'seven';
+
+CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- ok now
+
+\d unique_tbl
+\d unique_idx3
+\d unique_idx4
+SELECT pg_get_indexdef('unique_idx3'::regclass);
+SELECT pg_get_indexdef('unique_idx4'::regclass);
+
+DROP TABLE unique_tbl;
 
 
 --
@@ -472,15 +494,6 @@ CREATE UNIQUE INDEX covering_pkey on covering_index_heap (f1,f2) INCLUDE(f3);
 ALTER TABLE covering_index_heap ADD CONSTRAINT covering_pkey PRIMARY KEY USING INDEX
 covering_pkey;
 DROP TABLE covering_index_heap;
-
-
---
--- Also try building functional, expressional, and partial indexes on
--- tables that already contain data.
---
-create index hash_f8_index_1 on hash_f8_heap(abs(random));
-create index hash_f8_index_2 on hash_f8_heap((seqno + 1), random);
-create index hash_f8_index_3 on hash_f8_heap(random) where seqno > 1000;
 
 --
 -- Try some concurrent index builds
@@ -629,6 +642,12 @@ create unique index on cwi_test (a);
 alter table cwi_test add primary key using index cwi_test_a_idx ;
 DROP TABLE cwi_test;
 
+-- PRIMARY KEY constraint cannot be backed by a NULLS NOT DISTINCT index
+CREATE TABLE cwi_test(a int, b int);
+CREATE UNIQUE INDEX cwi_a_nnd ON cwi_test (a) NULLS NOT DISTINCT;
+ALTER TABLE cwi_test ADD PRIMARY KEY USING INDEX cwi_a_nnd;
+DROP TABLE cwi_test;
+
 --
 -- Check handling of indexes on system columns
 --
@@ -751,18 +770,16 @@ CREATE TABLE dupindexcols AS
   SELECT unique1 as id, stringu2::text as f1 FROM tenk1;
 CREATE INDEX dupindexcols_i ON dupindexcols (f1, id, f1 text_pattern_ops);
 ANALYZE dupindexcols;
--- FIXME: It's a unstable case in PAX
--- EXPLAIN (COSTS OFF)
---   SELECT count(*) FROM dupindexcols
---     WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
+
+EXPLAIN (COSTS OFF)
+  SELECT count(*) FROM dupindexcols
+    WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
 SELECT count(*) FROM dupindexcols
   WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
 
 --
 -- Check ordering of =ANY indexqual results (bug in 9.2.0)
 --
-
-vacuum tenk1;		-- ensure we get consistent plans here
 
 explain (costs off)
 SELECT unique1 FROM tenk1
@@ -900,7 +917,6 @@ WHERE classid = 'pg_class'::regclass AND
   ORDER BY 1, 2;
 REINDEX INDEX concur_reindex_ind1;
 REINDEX TABLE concur_reindex_tab;
--- FIXME: The materialized view create by PAX can't do REINDEX
 REINDEX TABLE concur_reindex_matview;
 SELECT pg_describe_object(classid, objid, objsubid) as obj,
        pg_describe_object(refclassid,refobjid,refobjsubid) as objref,
@@ -945,7 +961,6 @@ SELECT indexrelid::regclass, indisreplident FROM pg_index
 DROP TABLE concur_replident;
 -- Check that opclass parameters are preserved
 CREATE TABLE concur_appclass_tab(i tsvector, j tsvector, k tsvector);
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX concur_appclass_ind on concur_appclass_tab
   USING gist (i tsvector_ops (siglen='1000'), j tsvector_ops (siglen='500'));
 CREATE INDEX concur_appclass_ind_2 on concur_appclass_tab
@@ -1118,8 +1133,12 @@ REINDEX INDEX CONCURRENTLY pg_class_oid_index; -- no catalog index
 REINDEX TABLE CONCURRENTLY pg_toast.pg_toast_1260; -- no catalog toast table
 REINDEX INDEX CONCURRENTLY pg_toast.pg_toast_1260_index; -- no catalog toast index
 REINDEX SYSTEM CONCURRENTLY postgres; -- not allowed for SYSTEM
+REINDEX (CONCURRENTLY) SYSTEM postgres; -- ditto
+REINDEX (CONCURRENTLY) SYSTEM;  -- ditto
 -- Warns about catalog relations
 REINDEX SCHEMA CONCURRENTLY pg_catalog;
+-- Not the current database
+REINDEX DATABASE not_current_database;
 
 -- Check the relation status, there should not be invalid indexes
 \d concur_reindex_tab
@@ -1254,7 +1273,6 @@ CREATE TABLE reindex_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
 	FROM pg_class
 	where relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'schema_to_reindex');
--- Pax won't insert anything, because no toast here
 INSERT INTO reindex_before
 SELECT oid, 'pg_toast_TABLE', relfilenode, relkind, reltoastrelid
 FROM pg_class WHERE oid IN

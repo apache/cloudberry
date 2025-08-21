@@ -20,17 +20,15 @@ pg_resetwal: data_checksum_version (-k) must be within 0..1
 -- positive test:
 -- disable the data checksum
 \! pg_resetwal -k 0 -n /tmp/test_pg_resetwal | grep "Data page checksum version"
-pg_resetwal: warning: pg_control exists but is broken or wrong version; ignoring it
-Data page checksum version:           1
-Data page checksum version:           0
+pg_resetwal: error: data directory is of wrong version
+pg_resetwal: detail: File "PG_VERSION" contains "14", which is not compatible with this program's version "16".
 -- enable the data checksum
 \! pg_resetwal -k 1 -n /tmp/test_pg_resetwal | grep "Data page checksum version"
-pg_resetwal: warning: pg_control exists but is broken or wrong version; ignoring it
-Data page checksum version:           1
-Data page checksum version:           1
+pg_resetwal: error: data directory is of wrong version
+pg_resetwal: detail: File "PG_VERSION" contains "14", which is not compatible with this program's version "16".
 -- default the checksum should be on
 \! pg_resetwal -n /tmp/test_pg_resetwal | grep "Data page checksum version"
-pg_resetwal: warning: pg_control exists but is broken or wrong version; ignoring it
-Data page checksum version:           1
+pg_resetwal: error: data directory is of wrong version
+pg_resetwal: detail: File "PG_VERSION" contains "14", which is not compatible with this program's version "16".
 -- cleanup
 \! rm -fr /tmp/test_pg_resetwal

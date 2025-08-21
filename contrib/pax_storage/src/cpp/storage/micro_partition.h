@@ -55,7 +55,7 @@ class MicroPartitionWriter {
     std::string block_id;
     TupleDesc rel_tuple_desc = nullptr;
     Oid rel_oid = InvalidOid;
-    RelFileNode node;
+    RelFileLocator node;
     bool need_wal = false;
     std::vector<std::tuple<ColumnEncoding_Kind, int>> encoding_opts;
     std::pair<ColumnEncoding_Kind, int> offsets_encoding_opts;

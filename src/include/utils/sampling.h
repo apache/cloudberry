@@ -3,7 +3,7 @@
  * sampling.h
  *	  definitions for sampling functions
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/sampling.h
@@ -13,15 +13,14 @@
 #ifndef SAMPLING_H
 #define SAMPLING_H
 
+#include "common/pg_prng.h"
 #include "storage/block.h"		/* for typedef BlockNumber */
 
 
 /* Random generator for sampling code */
-typedef unsigned short SamplerRandomState[3];
-
-extern void sampler_random_init_state(long seed,
-									  SamplerRandomState randstate);
-extern double sampler_random_fract(SamplerRandomState randstate);
+extern void sampler_random_init_state(uint32 seed,
+									  pg_prng_state *randstate);
+extern double sampler_random_fract(pg_prng_state *randstate);
 
 /* Block sampling methods */
 
@@ -32,39 +31,22 @@ typedef struct
 	int			n;				/* desired sample size */
 	BlockNumber t;				/* current block number */
 	int			m;				/* blocks selected so far */
-	SamplerRandomState randstate;	/* random generator state */
+	pg_prng_state randstate;	/* random generator state */
 } BlockSamplerData;
 
 typedef BlockSamplerData *BlockSampler;
 
 extern BlockNumber BlockSampler_Init(BlockSampler bs, BlockNumber nblocks,
-									 int samplesize, long randseed);
+									 int samplesize, uint32 randseed);
 extern bool BlockSampler_HasMore(BlockSampler bs);
 extern BlockNumber BlockSampler_Next(BlockSampler bs);
-
-/* 64 bit version of BlockSampler */
-typedef struct
-{
-	int64           N;				/* number of objects, known in advance */
-	int64			n;				/* desired sample size */
-	int64           t;				/* current object number */
-	int64			m;				/* objects selected so far */
-	SamplerRandomState randstate;	/* random generator state */
-} RowSamplerData;
-
-typedef RowSamplerData *RowSampler;
-
-extern void RowSampler_Init(RowSampler rs, int64 nobjects,
-							   int64 samplesize, long randseed);
-extern bool RowSampler_HasMore(RowSampler rs);
-extern int64 RowSampler_Next(RowSampler rs);
 
 /* Reservoir sampling methods */
 
 typedef struct
 {
 	double		W;
-	SamplerRandomState randstate;	/* random generator state */
+	pg_prng_state randstate;	/* random generator state */
 } ReservoirStateData;
 
 typedef ReservoirStateData *ReservoirState;

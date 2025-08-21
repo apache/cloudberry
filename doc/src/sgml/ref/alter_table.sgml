@@ -59,7 +59,7 @@ ALTER TABLE [ IF EXISTS ] [ONLY] name SET
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET STATISTICS <replaceable class="parameter">integer</replaceable>
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET ( <replaceable class="parameter">attribute_option</replaceable> = <replaceable class="parameter">value</replaceable> [, ... ] )
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> RESET ( <replaceable class="parameter">attribute_option</replaceable> [, ... ] )
-    ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET STORAGE { PLAIN | EXTERNAL | EXTENDED | MAIN }
+    ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET STORAGE { PLAIN | EXTERNAL | EXTENDED | MAIN | DEFAULT }
     ALTER [ COLUMN ] <replaceable class="parameter">column_name</replaceable> SET COMPRESSION <replaceable class="parameter">compression_method</replaceable>
     ADD <replaceable class="parameter">table_constraint</replaceable> [ NOT VALID ]
     ADD <replaceable class="parameter">table_constraint_using_index</replaceable>
@@ -109,7 +109,7 @@ WITH ( MODULUS <replaceable class="parameter">numeric_literal</replaceable>, REM
   DEFAULT <replaceable>default_expr</replaceable> |
   GENERATED ALWAYS AS ( <replaceable>generation_expr</replaceable> ) STORED |
   GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( <replaceable>sequence_options</replaceable> ) ] |
-  UNIQUE <replaceable class="parameter">index_parameters</replaceable> |
+  UNIQUE [ NULLS [ NOT ] DISTINCT ] <replaceable class="parameter">index_parameters</replaceable> |
   PRIMARY KEY <replaceable class="parameter">index_parameters</replaceable> |
   REFERENCES <replaceable class="parameter">reftable</replaceable> [ ( <replaceable class="parameter">refcolumn</replaceable> ) ] [ MATCH FULL | MATCH PARTIAL | MATCH SIMPLE ]
     [ ON DELETE <replaceable class="parameter">referential_action</replaceable> ] [ ON UPDATE <replaceable class="parameter">referential_action</replaceable> ] }
@@ -119,7 +119,7 @@ WITH ( MODULUS <replaceable class="parameter">numeric_literal</replaceable>, REM
 
 [ CONSTRAINT <replaceable class="parameter">constraint_name</replaceable> ]
 { CHECK ( <replaceable class="parameter">expression</replaceable> ) [ NO INHERIT ] |
-  UNIQUE ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> |
+  UNIQUE [ NULLS [ NOT ] DISTINCT ] ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> |
   PRIMARY KEY ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> |
   EXCLUDE [ USING <replaceable class="parameter">index_method</replaceable> ] ( <replaceable class="parameter">exclude_element</replaceable> WITH <replaceable class="parameter">operator</replaceable> [, ... ] ) <replaceable class="parameter">index_parameters</replaceable> [ WHERE ( <replaceable class="parameter">predicate</replaceable> ) ] |
   FOREIGN KEY ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) REFERENCES <replaceable class="parameter">reftable</replaceable> [ ( <replaceable class="parameter">refcolumn</replaceable> [, ... ] ) ]
@@ -140,65 +140,11 @@ WITH ( MODULUS <replaceable class="parameter">numeric_literal</replaceable>, REM
 
 <phrase><replaceable class="parameter">exclude_element</replaceable> in an <literal>EXCLUDE</literal> constraint is:</phrase>
 
-{ <replaceable class="parameter">column_name</replaceable> | ( <replaceable class="parameter">expression</replaceable> ) } [ <replaceable class="parameter">opclass</replaceable> ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
+{ <replaceable class="parameter">column_name</replaceable> | ( <replaceable class="parameter">expression</replaceable> ) } [ COLLATE <replaceable class="parameter">collation</replaceable> ] [ <replaceable class="parameter">opclass</replaceable> [ ( <replaceable class="parameter">opclass_parameter</replaceable> = <replaceable class="parameter">value</replaceable> [, ... ] ) ] ] [ ASC | DESC ] [ NULLS { FIRST | LAST } ]
 
-ALTER TABLE name 
-   [ ALTER PARTITION { partition_name | FOR (value) } ] partition_action [...]
+<phrase><replaceable class="parameter">referential_action</replaceable> in a <literal>FOREIGN KEY</literal>/<literal>REFERENCES</literal> constraint is:</phrase>
 
-where partition_action is one of:
-  ALTER DEFAULT PARTITION
-  DROP DEFAULT PARTITION [IF EXISTS]
-  DROP PARTITION [IF EXISTS] { partition_name | FOR (value) } [CASCADE]
-  TRUNCATE DEFAULT PARTITION
-  TRUNCATE PARTITION { partition_name | FOR (value) }
-  RENAME DEFAULT PARTITION TO new_partition_name
-  RENAME PARTITION { partition_name | FOR (value) } TO new_partition_name
-  ADD DEFAULT PARTITION name [ ( subpartition_spec ) ]
-  ADD PARTITION [name] partition_element
-      [ ( subpartition_spec ) ]
-  EXCHANGE PARTITION { partition_name | FOR (value) } WITH TABLE table_name 
-        [ WITH | WITHOUT VALIDATION ]
-  EXCHANGE DEFAULT PARTITION WITH TABLE table_name
-   [ WITH | WITHOUT VALIDATION ]
-  SET SUBPARTITION TEMPLATE (subpartition_spec)
-  SPLIT DEFAULT PARTITION
-    {  AT (list_value)
-     | START([datatype] range_value) [INCLUSIVE | EXCLUSIVE] 
-        END([datatype] range_value) [INCLUSIVE | EXCLUSIVE] }
-    [ INTO ( PARTITION new_partition_name, 
-             PARTITION default_partition_name ) ]
-  SPLIT PARTITION { partition_name | FOR (value) } AT (value) 
-    [ INTO (PARTITION partition_name, PARTITION partition_name)]  
-
-where partition_element is:
-    VALUES (list_value [,...] )
-  | START ([datatype] 'start_value') [INCLUSIVE | EXCLUSIVE]
-     [ END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE] ]
-  | END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE]
-[ WITH ( partition_storage_parameter=value [, ... ] ) ]
-[ TABLESPACE tablespace ]
-
-where subpartition_spec is:
-subpartition_element [, ...]
-
-and subpartition_element is:
-   DEFAULT SUBPARTITION subpartition_name
-  | [SUBPARTITION subpartition_name] VALUES (list_value [,...] )
-  | [SUBPARTITION subpartition_name] 
-     START ([datatype] 'start_value') [INCLUSIVE | EXCLUSIVE]
-     [ END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE] ]
-     [ EVERY ( [number | datatype] 'interval_value') ]
-  | [SUBPARTITION subpartition_name] 
-     END ([datatype] 'end_value') [INCLUSIVE | EXCLUSIVE]
-     [ EVERY ( [number | datatype] 'interval_value') ]
-[ WITH ( partition_storage_parameter=value [, ... ] ) ]
-[ TABLESPACE tablespace ]
-
-Where column_reference_storage_directive is:
-
-   COLUMN column_name ENCODING ( storage_directive [, ... ] ), ... 
- | DEFAULT COLUMN ENCODING ( storage_directive [, ... ] )
-
+{ NO ACTION | RESTRICT | CASCADE | SET NULL [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] | SET DEFAULT [ ( <replaceable class="parameter">column_name</replaceable> [, ... ] ) ] }
 </synopsis>
  </refsynopsisdiv>
 
@@ -213,7 +159,7 @@ Where column_reference_storage_directive is:
    lock acquired will be the strictest one required by any subcommand.
 
   <variablelist>
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-add-column">
     <term><literal>ADD COLUMN [ IF NOT EXISTS ]</literal></term>
     <listitem>
      <para>
@@ -225,7 +171,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-drop-column">
     <term><literal>DROP COLUMN [ IF EXISTS ]</literal></term>
     <listitem>
      <para>
@@ -244,7 +190,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-data-type">
     <term><literal>SET DATA TYPE</literal></term>
     <listitem>
      <para>
@@ -262,10 +208,16 @@ Where column_reference_storage_directive is:
       clause must be provided if there is no implicit or assignment
       cast from old to new type.
      </para>
+
+     <para>
+      When this form is used, the column's statistics are removed,
+      so running <link linkend="sql-analyze"><command>ANALYZE</command></link>
+      on the table afterwards is recommended.
+     </para>
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-drop-default">
     <term><literal>SET</literal>/<literal>DROP DEFAULT</literal></term>
     <listitem>
      <para>
@@ -278,7 +230,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-drop-not-null">
     <term><literal>SET</literal>/<literal>DROP NOT NULL</literal></term>
     <listitem>
      <para>
@@ -309,7 +261,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-drop-expression">
     <term><literal>DROP EXPRESSION [ IF EXISTS ]</literal></term>
     <listitem>
      <para>
@@ -326,7 +278,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-generated-identity">
     <term><literal>ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY</literal></term>
     <term><literal>SET GENERATED { ALWAYS | BY DEFAULT }</literal></term>
     <term><literal>DROP IDENTITY [ IF EXISTS ]</literal></term>
@@ -349,7 +301,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-sequence-option">
     <term><literal>SET <replaceable>sequence_option</replaceable></literal></term>
     <term><literal>RESTART</literal></term>
     <listitem>
@@ -362,7 +314,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-statistics">
     <term><literal>SET STATISTICS</literal></term>
     <listitem>
      <para>
@@ -383,7 +335,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-attribute-option">
     <term><literal>SET ( <replaceable class="parameter">attribute_option</replaceable> = <replaceable class="parameter">value</replaceable> [, ... ] )</literal></term>
     <term><literal>RESET ( <replaceable class="parameter">attribute_option</replaceable> [, ... ] )</literal></term>
     <listitem>
@@ -419,9 +371,9 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-storage">
     <term>
-     <literal>SET STORAGE</literal>
+     <literal>SET STORAGE { PLAIN | EXTERNAL | EXTENDED | MAIN | DEFAULT }</literal>
      <indexterm>
       <primary>TOAST</primary>
       <secondary>per-column storage settings</secondary>
@@ -430,26 +382,30 @@ Where column_reference_storage_directive is:
     <listitem>
      <para>
       This form sets the storage mode for a column. This controls whether this
-      column is held inline or in a secondary <acronym>TOAST</acronym> table, and
-      whether the data
+      column is held inline or in a secondary <acronym>TOAST</acronym> table,
+      and whether the data
       should be compressed or not. <literal>PLAIN</literal> must be used
       for fixed-length values such as <type>integer</type> and is
       inline, uncompressed. <literal>MAIN</literal> is for inline,
       compressible data. <literal>EXTERNAL</literal> is for external,
       uncompressed data, and <literal>EXTENDED</literal> is for external,
-      compressed data.  <literal>EXTENDED</literal> is the default for most
-      data types that support non-<literal>PLAIN</literal> storage.
+      compressed data.
+      Writing <literal>DEFAULT</literal> sets the storage mode to the default
+      mode for the column's data type.  <literal>EXTENDED</literal> is the
+      default for most data types that support non-<literal>PLAIN</literal>
+      storage.
       Use of <literal>EXTERNAL</literal> will make substring operations on
       very large <type>text</type> and <type>bytea</type> values run faster,
-      at the penalty of increased storage space.  Note that
-      <literal>SET STORAGE</literal> doesn't itself change anything in the table,
-      it just sets the strategy to be pursued during future table updates.
+      at the penalty of increased storage space.
+      Note that <literal>ALTER TABLE ... SET STORAGE</literal> doesn't itself
+      change anything in the table; it just sets the strategy to be pursued
+      during future table updates.
       See <xref linkend="storage-toast"/> for more information.
      </para>
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-compression">
     <term>
      <literal>SET COMPRESSION <replaceable class="parameter">compression_method</replaceable></literal>
     </term>
@@ -479,7 +435,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-add-table-constraint">
     <term><literal>ADD <replaceable class="parameter">table_constraint</replaceable> [ NOT VALID ]</literal></term>
     <listitem>
      <para>
@@ -526,7 +482,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-add-table-constraint-using-index">
     <term><literal>ADD <replaceable class="parameter">table_constraint_using_index</replaceable></literal></term>
     <listitem>
      <para>
@@ -581,7 +537,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-alter-constraint">
     <term><literal>ALTER CONSTRAINT</literal></term>
     <listitem>
      <para>
@@ -591,7 +547,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-validate-constraint">
     <term><literal>VALIDATE CONSTRAINT</literal></term>
     <listitem>
      <para>
@@ -608,7 +564,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-drop-constraint">
     <term><literal>DROP CONSTRAINT [ IF EXISTS ]</literal></term>
     <listitem>
      <para>
@@ -620,18 +576,18 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-disable-enable-trigger">
     <term><literal>DISABLE</literal>/<literal>ENABLE [ REPLICA | ALWAYS ] TRIGGER</literal></term>
     <listitem>
      <para>
       These forms configure the firing of trigger(s) belonging to the table.
       A disabled trigger is still known to the system, but is not executed
-      when its triggering event occurs.  For a deferred trigger, the enable
+      when its triggering event occurs.  (For a deferred trigger, the enable
       status is checked when the event occurs, not when the trigger function
-      is actually executed.  One can disable or enable a single
+      is actually executed.)  One can disable or enable a single
       trigger specified by name, or all triggers on the table, or only
       user triggers (this option excludes internally generated constraint
-      triggers such as those that are used to implement foreign key
+      triggers, such as those that are used to implement foreign key
       constraints or deferrable uniqueness and exclusion constraints).
       Disabling or enabling internally generated constraint triggers
       requires superuser privileges; it should be done with caution since
@@ -653,7 +609,7 @@ Where column_reference_storage_directive is:
       The effect of this mechanism is that in the default configuration,
       triggers do not fire on replicas.  This is useful because if a trigger
       is used on the origin to propagate data between tables, then the
-      replication system will also replicate the propagated data, and the
+      replication system will also replicate the propagated data; so the
       trigger should not fire a second time on the replica, because that would
       lead to duplication.  However, if a trigger is used for another purpose
       such as creating external alerts, then it might be appropriate to set it
@@ -662,12 +618,18 @@ Where column_reference_storage_directive is:
      </para>
 
      <para>
+      When this command is applied to a partitioned table, the states of
+      corresponding clone triggers in the partitions are updated too,
+      unless <literal>ONLY</literal> is specified.
+     </para>
+
+     <para>
       This command acquires a <literal>SHARE ROW EXCLUSIVE</literal> lock.
      </para>
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-disable-enable-rule">
     <term><literal>DISABLE</literal>/<literal>ENABLE [ REPLICA | ALWAYS ] RULE</literal></term>
     <listitem>
      <para>
@@ -687,7 +649,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-disable-enable-row-level-security">
     <term><literal>DISABLE</literal>/<literal>ENABLE ROW LEVEL SECURITY</literal></term>
     <listitem>
      <para>
@@ -702,7 +664,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-force-row-level-security">
     <term><literal>NO FORCE</literal>/<literal>FORCE ROW LEVEL SECURITY</literal></term>
     <listitem>
      <para>
@@ -717,7 +679,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-cluster-on">
     <term><literal>CLUSTER ON</literal></term>
     <listitem>
      <para>
@@ -731,7 +693,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-without-cluster">
     <term><literal>SET WITHOUT CLUSTER</literal></term>
     <listitem>
      <para>
@@ -746,7 +708,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-without-oids">
     <term><literal>SET WITHOUT OIDS</literal></term>
     <listitem>
      <para>
@@ -757,7 +719,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-access-method">
     <term><literal>SET ACCESS METHOD</literal></term>
     <listitem>
      <para>
@@ -767,7 +729,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-tablespace">
     <term><literal>SET TABLESPACE</literal></term>
     <listitem>
      <para>
@@ -799,7 +761,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-logged-unlogged">
     <term><literal>SET { LOGGED | UNLOGGED }</literal></term>
     <listitem>
      <para>
@@ -807,10 +769,16 @@ Where column_reference_storage_directive is:
       (see <xref linkend="sql-createtable-unlogged"/>).  It cannot be applied
       to a temporary table.
      </para>
+
+     <para>
+      This also changes the persistence of any sequences linked to the table
+      (for identity or serial columns).  However, it is also possible to
+      change the persistence of such sequences separately.
+     </para>
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-storage-parameter">
     <term><literal>SET ( <replaceable class="parameter">storage_parameter</replaceable> [= <replaceable class="parameter">value</replaceable>] [, ... ] )</literal></term>
     <listitem>
      <para>
@@ -836,7 +804,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-reset-storage-parameter">
     <term><literal>RESET ( <replaceable class="parameter">storage_parameter</replaceable> [, ... ] )</literal></term>
     <listitem>
      <para>
@@ -847,7 +815,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-inherit">
     <term><literal>INHERIT <replaceable class="parameter">parent_table</replaceable></literal></term>
     <listitem>
      <para>
@@ -875,7 +843,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-no-inherit">
     <term><literal>NO INHERIT <replaceable class="parameter">parent_table</replaceable></literal></term>
     <listitem>
      <para>
@@ -887,7 +855,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-of">
     <term><literal>OF <replaceable class="parameter">type_name</replaceable></literal></term>
     <listitem>
      <para>
@@ -901,7 +869,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-not-of">
     <term><literal>NOT OF</literal></term>
     <listitem>
      <para>
@@ -910,7 +878,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-owner-to">
     <term><literal>OWNER TO</literal></term>
     <listitem>
      <para>
@@ -931,17 +899,17 @@ Where column_reference_storage_directive is:
       always logged regardless of whether it changed.
       This option has no effect except when logical replication is in use.
      <variablelist>
-      <varlistentry>
+      <varlistentry id="sql-altertable-replica-identity-default">
        <term><literal>DEFAULT</literal></term>
        <listitem>
         <para>
          Records the old values of the columns of the primary key, if any.
-         This is the default for non-system tables. 
+         This is the default for non-system tables.
         </para>
        </listitem>
       </varlistentry>
 
-      <varlistentry>
+      <varlistentry id="sql-altertable-replica-identity-using-index">
        <term><literal>USING INDEX <replaceable class="parameter">index_name</replaceable></literal></term>
        <listitem>
         <para>
@@ -953,7 +921,7 @@ Where column_reference_storage_directive is:
        </listitem>
       </varlistentry>
 
-      <varlistentry>
+      <varlistentry id="sql-altertable-replica-identity-full">
        <term><literal>FULL</literal></term>
        <listitem>
         <para>
@@ -962,7 +930,7 @@ Where column_reference_storage_directive is:
        </listitem>
       </varlistentry>
 
-      <varlistentry>
+      <varlistentry id="sql-altertable-replica-identity-nothing">
        <term><literal>NOTHING</literal></term>
        <listitem>
         <para>
@@ -971,12 +939,11 @@ Where column_reference_storage_directive is:
         </para>
        </listitem>
       </varlistentry>
-     </variablelist>
-     </para>
+     </variablelist></para>
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-rename">
     <term><literal>RENAME</literal></term>
     <listitem>
      <para>
@@ -990,7 +957,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="sql-altertable-desc-set-schema">
     <term><literal>SET SCHEMA</literal></term>
     <listitem>
      <para>
@@ -1023,20 +990,18 @@ Where column_reference_storage_directive is:
      <para>
       A partition using <literal>FOR VALUES</literal> uses same syntax for
       <replaceable class="parameter">partition_bound_spec</replaceable> as
-      <link linkend="sql-createtable"><command>CREATE TABLE</command></link>.  The partition bound specification
+      <link linkend="sql-createtable"><command>CREATE TABLE</command></link>.
+      The partition bound specification
       must correspond to the partitioning strategy and partition key of the
       target table.  The table to be attached must have all the same columns
       as the target table and no more; moreover, the column types must also
       match.  Also, it must have all the <literal>NOT NULL</literal> and
-      <literal>CHECK</literal> constraints of the target table.  Currently
+      <literal>CHECK</literal> constraints of the target table, not marked
+      <literal>NO INHERIT</literal>.  Currently
       <literal>FOREIGN KEY</literal> constraints are not considered.
       <literal>UNIQUE</literal> and <literal>PRIMARY KEY</literal> constraints
       from the parent table will be created in the partition, if they don't
       already exist.
-      If any of the <literal>CHECK</literal> constraints of the table being
-      attached are marked <literal>NO INHERIT</literal>, the command will fail;
-      such constraints must be recreated without the
-      <literal>NO INHERIT</literal> clause.
      </para>
 
      <para>
@@ -1050,7 +1015,7 @@ Where column_reference_storage_directive is:
       constraint. This does not work, however, if any of the partition keys
       is an expression and the partition does not accept
       <literal>NULL</literal> values. If attaching a list partition that will
-      not accept <literal>NULL</literal> values, also add
+      not accept <literal>NULL</literal> values, also add a
       <literal>NOT NULL</literal> constraint to the partition key column,
       unless it's an expression.
      </para>
@@ -1159,9 +1124,10 @@ Where column_reference_storage_directive is:
    To add the table as a new child of a parent table, you must own the parent
    table as well.  Also, to attach a table as a new partition of the table,
    you must own the table being attached.
-   To alter the owner, you must also be a direct or indirect member of the new
-   owning role, and that role must have <literal>CREATE</literal> privilege on
-   the table's schema.  (These restrictions enforce that altering the owner
+   To alter the owner, you must be able to <literal>SET ROLE</literal> to the
+   new owning role, and that role must have <literal>CREATE</literal>
+   privilege on the table's schema.
+   (These restrictions enforce that altering the owner
    doesn't do anything you couldn't do by dropping and recreating the table.
    However, a superuser can alter ownership of any table anyway.)
    To add a column or alter a column type or use the <literal>OF</literal>
@@ -1175,7 +1141,7 @@ Where column_reference_storage_directive is:
 
     <variablelist>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-if-exists">
       <term><literal>IF EXISTS</literal></term>
       <listitem>
        <para>
@@ -1185,7 +1151,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-name">
       <term><replaceable class="parameter">name</replaceable></term>
       <listitem>
        <para>
@@ -1199,7 +1165,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-column-name">
       <term><replaceable class="parameter">column_name</replaceable></term>
       <listitem>
        <para>
@@ -1208,7 +1174,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-new-column-name">
       <term><replaceable class="parameter">new_column_name</replaceable></term>
       <listitem>
        <para>
@@ -1217,7 +1183,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-new-name">
       <term><replaceable class="parameter">new_name</replaceable></term>
       <listitem>
        <para>
@@ -1226,7 +1192,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-data-type">
       <term><replaceable class="parameter">data_type</replaceable></term>
       <listitem>
        <para>
@@ -1236,7 +1202,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-table-constraint">
       <term><replaceable class="parameter">table_constraint</replaceable></term>
       <listitem>
        <para>
@@ -1245,7 +1211,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-constraint-name">
       <term><replaceable class="parameter">constraint_name</replaceable></term>
       <listitem>
        <para>
@@ -1254,7 +1220,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-cascade">
       <term><literal>CASCADE</literal></term>
       <listitem>
        <para>
@@ -1266,7 +1232,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-restrict">
       <term><literal>RESTRICT</literal></term>
       <listitem>
        <para>
@@ -1276,7 +1242,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-trigger-name">
       <term><replaceable class="parameter">trigger_name</replaceable></term>
       <listitem>
        <para>
@@ -1285,32 +1251,32 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-all">
       <term><literal>ALL</literal></term>
       <listitem>
        <para>
         Disable or enable all triggers belonging to the table.
         (This requires superuser privilege if any of the triggers are
-        internally generated constraint triggers such as those that are used
+        internally generated constraint triggers, such as those that are used
         to implement foreign key constraints or deferrable uniqueness and
         exclusion constraints.)
        </para>
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-user">
       <term><literal>USER</literal></term>
       <listitem>
        <para>
         Disable or enable all triggers belonging to the table except for
-        internally generated constraint triggers such as those that are used
+        internally generated constraint triggers, such as those that are used
         to implement foreign key constraints or deferrable uniqueness and
         exclusion constraints.
        </para>
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-index-name">
       <term><replaceable class="parameter">index_name</replaceable></term>
       <listitem>
        <para>
@@ -1319,7 +1285,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-storage-parameter">
       <term><replaceable class="parameter">storage_parameter</replaceable></term>
       <listitem>
        <para>
@@ -1328,7 +1294,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-value">
       <term><replaceable class="parameter">value</replaceable></term>
       <listitem>
        <para>
@@ -1338,7 +1304,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-parent-table">
       <term><replaceable class="parameter">parent_table</replaceable></term>
       <listitem>
        <para>
@@ -1347,7 +1313,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-new-owner">
       <term><replaceable class="parameter">new_owner</replaceable></term>
       <listitem>
        <para>
@@ -1356,7 +1322,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-new-access-method">
       <term><replaceable class="parameter">new_access_method</replaceable></term>
       <listitem>
        <para>
@@ -1365,7 +1331,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-new-tablespace">
       <term><replaceable class="parameter">new_tablespace</replaceable></term>
       <listitem>
        <para>
@@ -1374,7 +1340,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-new-schema">
       <term><replaceable class="parameter">new_schema</replaceable></term>
       <listitem>
        <para>
@@ -1383,7 +1349,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-partition-name">
       <term><replaceable class="parameter">partition_name</replaceable></term>
       <listitem>
        <para>
@@ -1392,7 +1358,7 @@ Where column_reference_storage_directive is:
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-altertable-parms-partition-bound-spec">
       <term><replaceable class="parameter">partition_bound_spec</replaceable></term>
       <listitem>
        <para>
@@ -1428,7 +1394,13 @@ Where column_reference_storage_directive is:
     existing column, if the <literal>USING</literal> clause does not change
     the column contents and the old type is either binary coercible to the new
     type or an unconstrained domain over the new type, a table rewrite is not
-    needed; but any indexes on the affected columns must still be rebuilt.
+    needed. However, indexes must always be rebuilt unless the system can
+    verify that the new index would be logically equivalent to the existing
+    one.  For example, if the collation for a column has been changed, an index
+    rebuild is always required because the new sort order might be different.
+    However, in the absence of a collation change, a column can be changed
+    from <type>text</type> to <type>varchar</type> (or vice versa) without
+    rebuilding the indexes because these data types sort identically.
     Table and/or index rebuilds may take a
     significant amount of time for a large table; and will temporarily require
     as much as double the disk space.
@@ -1550,9 +1522,12 @@ Where column_reference_storage_directive is:
     The actions for identity columns (<literal>ADD
     GENERATED</literal>, <literal>SET</literal> etc., <literal>DROP
     IDENTITY</literal>), as well as the actions
-    <literal>TRIGGER</literal>, <literal>CLUSTER</literal>, <literal>OWNER</literal>,
+    <literal>CLUSTER</literal>, <literal>OWNER</literal>,
     and <literal>TABLESPACE</literal> never recurse to descendant tables;
     that is, they always act as though <literal>ONLY</literal> were specified.
+    Actions affecting trigger states recurse to partitions of partitioned
+    tables (unless <literal>ONLY</literal> is specified), but never to
+    traditional-inheritance descendants.
     Adding a constraint recurses only for <literal>CHECK</literal> constraints
     that are not marked <literal>NO INHERIT</literal>.
    </para>

@@ -2,7 +2,7 @@
  * execPartition.h
  *		POSTGRES partitioning executor interface
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -21,6 +21,17 @@
 /* See execPartition.c for the definitions. */
 typedef struct PartitionDispatchData *PartitionDispatch;
 typedef struct PartitionTupleRouting PartitionTupleRouting;
+
+extern PartitionTupleRouting *ExecSetupPartitionTupleRouting(EState *estate,
+															 Relation rel);
+extern ResultRelInfo *ExecFindPartition(ModifyTableState *mtstate,
+										ResultRelInfo *rootResultRelInfo,
+										PartitionTupleRouting *proute,
+										TupleTableSlot *slot,
+										EState *estate);
+extern void ExecCleanupTupleRouting(ModifyTableState *mtstate,
+									PartitionTupleRouting *proute);
+
 
 /*
  * PartitionedRelPruningData - Per-partitioned-table data for run-time pruning
@@ -122,6 +133,7 @@ extern void ExecCleanupTupleRouting(ModifyTableState *mtstate,
 extern PartitionPruneState *ExecCreatePartitionPruneState(PlanState *planstate,
 														  PartitionPruneInfo *partitionpruneinfo);
 extern Bitmapset *ExecFindMatchingSubPlans(PartitionPruneState *prunestate,
+										   bool initial_prune,
 										   EState *estate,
 										   int nplans, List *join_prune_paramids);
 extern Bitmapset *ExecFindInitialMatchingSubPlans(PartitionPruneState *prunestate,
@@ -130,5 +142,13 @@ extern int get_partition_for_tuple(PartitionKey key, PartitionDesc partdesc,
 								   Datum *values, bool *isnull);
 
 extern Bitmapset *ExecAddMatchingSubPlans(PartitionPruneState *prunestate, Bitmapset *result);
+
+extern PartitionPruneState *ExecInitPartitionPruning(PlanState *planstate,
+													 int n_total_subplans,
+													 PartitionPruneInfo *pruneinfo,
+													 Bitmapset **initially_valid_subplans);
+
+extern PartitionPruneState *CreatePartitionPruneState(PlanState *planstate,
+													  PartitionPruneInfo *pruneinfo);
 
 #endif							/* EXECPARTITION_H */

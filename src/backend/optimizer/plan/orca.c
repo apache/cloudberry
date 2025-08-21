@@ -518,6 +518,7 @@ transformGroupedWindows(Node *node, void *context)
 
 		Query	   *subq;
 		RangeTblEntry *rte;
+		RTEPermissionInfo *perminfo;
 		RangeTblRef *ref;
 		Alias	   *alias;
 		bool		hadSubLinks = qry->hasSubLinks;
@@ -576,7 +577,9 @@ transformGroupedWindows(Node *node, void *context)
 		rte->alias = NULL;			/* fill in later */
 		rte->eref = NULL;			/* fill in later */
 		rte->inFromCl = true;
-		rte->requiredPerms = ACL_SELECT;
+
+		perminfo = makeNode(RTEPermissionInfo);
+		perminfo->requiredPerms = ACL_SELECT;
 
 		/*
 		 * Default? rte->inh = 0; rte->checkAsUser = 0;
@@ -602,6 +605,7 @@ transformGroupedWindows(Node *node, void *context)
 
 		/* Core of outer query input table expression: */
 		qry->rtable = list_make1(rte);
+		qry->rteperminfos = list_make1(perminfo);
 		qry->jointree = (FromExpr *) makeNode(FromExpr);
 		qry->jointree->fromlist = list_make1(ref);
 		qry->jointree->quals = NULL;

@@ -1357,9 +1357,9 @@ fetch_outer_exprs(Node *testexpr)
 		 */
 		if (IsA(expr, BoolExpr))
 		{
-			BoolExpr *be    = (BoolExpr *) expr;
 			List     *exprs = NIL;
 			ListCell *lc;
+			BoolExpr *be    = (BoolExpr *) expr;
 
 			/*
 			 * The following cases should not happen, instead of

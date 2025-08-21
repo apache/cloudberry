@@ -506,3 +506,81 @@ with RECURSIVE cte as (
 )
 select id,name from cte;
 
+-- WTIH RECURSIVE and subquery
+with recursive cte (n) as
+(
+  select 1
+  union all
+  select * from
+  (
+    with x(n) as (select n from cte)
+    select n + 1 from x where n < 10
+  ) q
+)
+select * from cte;
+
+-- Test recursive CTE when the non-recursive term is a table scan with a
+-- predicate on the distribution key, and the recursive term joins the CTE with
+-- the same table on its non-distribution key
+create table recursive_table_6(a numeric(4), b int);
+insert into recursive_table_6 values (0::numeric, 3);
+insert into recursive_table_6 values (2::numeric, 0);
+insert into recursive_table_6 values (5::numeric, 0);
+analyze recursive_table_6;
+
+SELECT $query$
+WITH RECURSIVE cte (i, j) AS (
+    SELECT a, b FROM recursive_table_6 WHERE a = 0::numeric::numeric
+    UNION ALL
+    SELECT a, b FROM recursive_table_6, cte WHERE cte.i = recursive_table_6.b
+)
+SELECT i, j FROM cte;
+$query$ AS qry \gset
+
+EXPLAIN (COSTS OFF)
+    :qry ;
+
+:qry ;
+
+-- Test recursive CTE doesnt create a plan with motion on top of worktablescan
+CREATE TABLE t1 (a int, b int) DISTRIBUTED BY (a);
+SET enable_nestloop = off;
+SET enable_hashjoin = off;
+SET enable_mergejoin = on;
+
+explain (costs off) with recursive rcte as
+   (
+      ( select a, b, 1::integer recursion_level from t1 order by 1 )
+      union all
+
+      select parent_table.a, parent_table.b, rcte.recursion_level + 1
+      from
+      ( select a, b from t1 order by 1 ) parent_table
+      join rcte on rcte.b = parent_table.a
+   )
+select count(*) from rcte;
+
+RESET enable_nestloop;
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+
+-- using union rather than union all for recursive union
+CREATE TABLE tmp(a int, b int);
+INSERT INTO tmp SELECT generate_series(1,5);
+INSERT INTO tmp SELECT * FROM tmp;
+EXPLAIN (costs off)
+WITH RECURSIVE x(a) as
+(
+    select a from tmp
+    union
+    select a+1 from x where a<10
+)
+select * from x ;
+
+WITH RECURSIVE x(a) as
+(
+    select a from tmp
+    union
+    select a+1 from x where a<10
+)
+select * from x ;

@@ -3,7 +3,7 @@
  * amapi.h
  *	  API for Postgres index access methods.
  *
- * Copyright (c) 2015-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2015-2023, PostgreSQL Global Development Group
  *
  * src/include/access/amapi.h
  *
@@ -77,6 +77,10 @@ typedef enum IndexAMProperty
  * opfamily.  This allows ALTER OPERATOR FAMILY DROP, and causes that to
  * happen automatically if the operator or support func is dropped.  This
  * is the right behavior for inessential ("loose") objects.
+ *
+ * We also make dependencies on lefttype/righttype, of the same strength as
+ * the dependency on the operator or support func, unless these dependencies
+ * are redundant with the dependency on the operator or support func.
  */
 typedef struct OpFamilyMember
 {
@@ -245,6 +249,8 @@ typedef struct IndexAmRoutine
 	bool		amcaninclude;
 	/* does AM use maintenance_work_mem? */
 	bool		amusemaintenanceworkmem;
+	/* does AM store tuple information only at block granularity? */
+	bool		amsummarizing;
 	/* OR of parallel vacuum flags.  See vacuum.h for flags. */
 	uint8		amparallelvacuumoptions;
 	/* type of data stored in index, or InvalidOid if variable */

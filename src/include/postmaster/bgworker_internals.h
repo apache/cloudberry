@@ -2,7 +2,7 @@
  * bgworker_internals.h
  *		POSTGRES pluggable background workers internals
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -47,7 +47,7 @@ typedef bool (*start_bgworker_func) (RegisteredBgWorker *rw);
 typedef void (*start_bgworkers_hook_type) (bool FatalError, int pmState, start_bgworker_func startBgworkerFunc);
 extern PGDLLIMPORT start_bgworkers_hook_type start_bgworkers_hook;
 
-extern slist_head BackgroundWorkerList;
+extern PGDLLIMPORT slist_head BackgroundWorkerList;
 
 extern Size BackgroundWorkerShmemSize(void);
 extern void BackgroundWorkerShmemInit(void);

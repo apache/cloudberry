@@ -1137,7 +1137,7 @@ static TM_Result
 aoco_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 				  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
 				  bool wait, TM_FailureData *tmfd,
-				  LockTupleMode *lockmode, bool *update_indexes)
+				  LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes)
 {
 	AOCSInsertDesc insertDesc;
 	AOCSDeleteDesc deleteDesc;
@@ -1164,9 +1164,9 @@ aoco_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 
 	aocs_insert(insertDesc, slot);
 
-	pgstat_count_heap_update(relation, false);
+	pgstat_count_heap_update(relation, false, false);
 	/* No HOT updates with AO tables. */
-	*update_indexes = true;
+	*update_indexes = TU_All;
 
 	return result;
 }
@@ -1309,7 +1309,7 @@ aoco_index_delete_tuples(Relation rel,
  */
 static void
 aoco_relation_set_new_filenode(Relation rel,
-							   const RelFileNode *newrnode,
+							   const RelFileLocator *newrnode,
 							   char persistence,
 							   TransactionId *freezeXid,
 							   MultiXactId *minmulti)
@@ -1329,7 +1329,7 @@ aoco_relation_set_new_filenode(Relation rel,
 	 *
 	 * Segment files will be created when / if needed.
 	 */
-	srel = RelationCreateStorage(*newrnode, persistence, SMGR_AO, rel);
+	srel = RelationCreateStorage(*newrnode, persistence, true, SMGR_AO, rel);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can
@@ -1387,7 +1387,7 @@ aoco_relation_nontransactional_truncate(Relation rel)
 }
 
 static void
-aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
+aoco_relation_copy_data(Relation rel, const RelFileLocator *newrnode)
 {
 	SMgrRelation dstrel;
 
@@ -1396,7 +1396,6 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * implementation
 	 */
 	dstrel = smgropen(*newrnode, rel->rd_backend, SMGR_AO, rel);
-	RelationOpenSmgr(rel);
 
 	/*
 	 * Create and copy all forks of the relation, and schedule unlinking of
@@ -1405,9 +1404,9 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * NOTE: any conflict in relfilenode value will be caught in
 	 * RelationCreateStorage().
 	 */
-	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, SMGR_AO, rel);
+	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, true, SMGR_AO, rel);
 
-	copy_append_only_data(rel->rd_node, *newrnode, rel->rd_smgr, dstrel, rel->rd_backend, rel->rd_rel->relpersistence);
+	copy_append_only_data(rel->rd_locator, *newrnode, RelationGetSmgr(rel), dstrel, rel->rd_backend, rel->rd_rel->relpersistence);
 
 	/*
 	 * For append-optimized tables, no forks other than the main fork should
@@ -1416,7 +1415,7 @@ aoco_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 */
 	if (rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED)
 	{
-		Assert (smgrexists(rel->rd_smgr, INIT_FORKNUM));
+		Assert (smgrexists(RelationGetSmgr(rel), INIT_FORKNUM));
 
 		/*
 		 * INIT_FORK is empty, creating it is sufficient, no need to copy
@@ -2581,7 +2580,7 @@ static TableAmRoutine ao_column_methods = {
 	.tuple_satisfies_snapshot = aoco_tuple_satisfies_snapshot,
 	.index_delete_tuples = aoco_index_delete_tuples,
 
-	.relation_set_new_filenode = aoco_relation_set_new_filenode,
+	.relation_set_new_filelocator = aoco_relation_set_new_filenode,
 	.relation_nontransactional_truncate = aoco_relation_nontransactional_truncate,
 	.relation_copy_data = aoco_relation_copy_data,
 	.relation_copy_for_cluster = aoco_relation_copy_for_cluster,

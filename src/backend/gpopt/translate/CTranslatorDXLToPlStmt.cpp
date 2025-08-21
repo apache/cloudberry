@@ -244,6 +244,7 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	planned_stmt->planGen = PLANGEN_OPTIMIZER;
 
 	planned_stmt->rtable = m_dxl_to_plstmt_context->GetRTableEntriesList();
+	planned_stmt->permInfos = m_dxl_to_plstmt_context->GetPermInfosList();
 	planned_stmt->subplans = m_dxl_to_plstmt_context->GetSubplanEntriesList();
 	planned_stmt->planTree = plan;
 
@@ -668,8 +669,8 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 	else
 	{
 		SeqScan *seq_scan = MakeNode(SeqScan);
-		seq_scan->scanrelid = index;
-		plan = &(seq_scan->plan);
+		seq_scan->scan.scanrelid = index;
+		plan = &(seq_scan->scan.plan);
 		plan_return = (Plan *) seq_scan;
 
 		plan->targetlist = targetlist;
@@ -1755,7 +1756,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		String *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -1846,6 +1847,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 	rte->functions = ListMake1(rtfunc);
 
 	rte->inFromCl = true;
+	rte->perminfoindex = 0;
 
 	rte->eref = alias;
 	return rte;
@@ -1868,8 +1870,8 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 	rte->rtekind = RTE_VALUES;
 	rte->inh = false; /* never true for values RTEs */
 	rte->inFromCl = true;
-	rte->requiredPerms = 0;
-	rte->checkAsUser = InvalidOid;
+	/* No permission checks */
+	rte->perminfoindex = 0;
 
 	Alias *alias = MakeNode(Alias);
 	alias->colnames = NIL;
@@ -1893,7 +1895,7 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		String *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -2763,6 +2765,124 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 	}
 
 	return (Plan *) result;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateAggFillInfo
+//
+//	@doc:
+//		Fill the aggregate node with aggno and aggtransno
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
+											 Aggref *aggref)
+{
+	Oid aggtransfn;
+	Oid aggfinalfn;
+	Oid aggcombinefn;
+	Oid aggserialfn;
+	Oid aggdeserialfn;
+	Oid aggtranstype;
+	int32 aggtranstypmod;
+	int32 aggtransspace;
+
+	Datum initValue;
+	bool initValueIsNull;
+	List *same_input_transnos;
+
+	bool shareable;
+	int16 resulttypeLen;
+	bool resulttypeByVal;
+	int16 transtypeLen;
+	bool transtypeByVal;
+
+	int aggno, transno;
+
+	gpdb::GetAggregateInfo(aggref, &aggtransfn, &aggfinalfn,
+						   &aggcombinefn, &aggserialfn, &aggdeserialfn,
+						   &aggtranstype, &aggtransspace, &initValue,
+						   &initValueIsNull, &shareable);
+
+	/*
+	 * If transition state is of same type as first aggregated input, assume
+	 * it's the same typmod (same width) as well.  This works for cases like
+	 * MAX/MIN and is probably somewhat reasonable otherwise.
+	 */
+	aggtranstypmod = -1;
+	if (aggref->args)
+	{
+		TargetEntry *tle = (TargetEntry *) linitial(aggref->args);
+
+		if (aggtranstype == gpdb::ExprType((Node *) tle->expr))
+			aggtranstypmod = gpdb::ExprTypeMod((Node *) tle->expr);
+	}
+
+	gpdb::TypLenByVal(aggref->aggtype, &resulttypeLen, &resulttypeByVal);
+
+	/*
+	 * 1. See if this is identical to another aggregate function call that
+	 * we've seen already.
+	 */
+	aggno = gpdb::FindCompatibleAgg(ctx->GetAggInfos(), aggref,
+									&same_input_transnos);
+	if (aggno != -1)
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::ListNth(ctx->GetAggInfos(), aggno);
+
+		transno = agginfo->transno;
+	}
+	else
+	{
+		AggInfo *agginfo = makeNode(AggInfo);
+
+		agginfo->finalfn_oid = aggfinalfn;
+		agginfo->aggrefs = list_make1(aggref);
+		agginfo->shareable = shareable;
+
+		aggno = gpdb::ListLength(ctx->GetAggInfos());
+		ctx->AppendAggInfos(agginfo);
+
+		gpdb::TypLenByVal(aggtranstype, &transtypeLen, &transtypeByVal);
+
+		/*
+		 * 2. See if this aggregate can share transition state with another
+		 * aggregate that we've initialized already.
+		 */
+		transno = gpdb::FindCompatibleTrans(
+			ctx->GetAggTransInfos(), shareable, aggtransfn, aggtranstype,
+			transtypeLen, transtypeByVal, aggcombinefn, aggserialfn,
+			aggdeserialfn, initValue, initValueIsNull, same_input_transnos);
+		if (transno == -1)
+		{
+			AggTransInfo *transinfo =
+				(AggTransInfo *) gpdb::GPDBAlloc(sizeof(AggTransInfo));
+
+			transinfo->args = aggref->args;
+			transinfo->aggfilter = aggref->aggfilter;
+			transinfo->transfn_oid = aggtransfn;
+			transinfo->combinefn_oid = aggcombinefn;
+			transinfo->serialfn_oid = aggserialfn;
+			transinfo->deserialfn_oid = aggdeserialfn;
+			transinfo->aggtranstype = aggtranstype;
+			transinfo->aggtranstypmod = aggtranstypmod;
+			transinfo->transtypeLen = transtypeLen;
+			transinfo->transtypeByVal = transtypeByVal;
+			transinfo->aggtransspace = aggtransspace;
+			transinfo->initValue = initValue;
+			transinfo->initValueIsNull = initValueIsNull;
+
+			transno = gpdb::ListLength(ctx->GetAggTransInfos());
+			ctx->AppendAggTransInfos(transinfo);
+		}
+		agginfo->transno = transno;
+	}
+
+	// setting the aggno and transno
+	aggref->aggno = aggno;
+	aggref->aggtransno = transno;
 }
 
 //---------------------------------------------------------------------------
@@ -4271,7 +4391,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	// create dynamic scan node
 	DynamicSeqScan *dyn_seq_scan = MakeNode(DynamicSeqScan);
 
-	dyn_seq_scan->seqscan.scanrelid = index;
+	dyn_seq_scan->seqscan.scan.scanrelid = index;
 
 	const CDXLTableDescr *dxl_table_descr =
 		dyn_tbl_scan_dxlop->GetDXLTableDescr();
@@ -4293,7 +4413,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 		TranslateJoinPruneParamids(dyn_tbl_scan_dxlop->GetSelectorIds(),
 								   oid_type, m_dxl_to_plstmt_context);
 
-	Plan *plan = &(dyn_seq_scan->seqscan.plan);
+	Plan *plan = &(dyn_seq_scan->seqscan.scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 	//plan->nMotionNodes = 0;
 
@@ -4510,7 +4630,7 @@ RemapAttrsFromTupDesc(TupleDesc fromDesc, TupleDesc toDesc, Index index,
 					  List *qual, List *targetlist)
 {
 	AttrMap *attMap;
-	attMap = build_attrmap_by_name_if_req(toDesc, fromDesc);
+	attMap = build_attrmap_by_name_if_req(toDesc, fromDesc, false);
 
 	/* If attribute remapping is not necessary, then do not change the varattno */
 	if (attMap)
@@ -5266,16 +5386,25 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	{
 		RangeTblEntry *rte = m_dxl_to_plstmt_context->GetRTEByIndex(index);
 		GPOS_ASSERT(nullptr != rte);
-		rte->requiredPerms |= required_perms;
+
+		if (rte->perminfoindex != 0)
+		{
+			RTEPermissionInfo *pi = m_dxl_to_plstmt_context->GetPermInfoByIndex(rte->perminfoindex);
+			pi->requiredPerms |= required_perms;
+		}
+
 		return index;
 	}
 
 	// create a new RTE (and it's alias) and store it at context rtable list
 	RangeTblEntry *rte = MakeNode(RangeTblEntry);
+	// A perm info entry corresponding this rte.
+	RTEPermissionInfo *pi = MakeNode(RTEPermissionInfo);
 	rte->rtekind = RTE_RELATION;
 	rte->relid = oid;
-	rte->checkAsUser = table_descr->GetExecuteAsUserId();
-	rte->requiredPerms |= required_perms;
+	pi->relid = oid;
+	pi->checkAsUser = table_descr->GetExecuteAsUserId();
+	pi->requiredPerms |= required_perms;
 	rte->rellockmode = table_descr->LockMode();
 
 	Alias *alias = MakeNode(Alias);
@@ -5299,7 +5428,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 			for (INT dropped_col_attno = last_attno + 1;
 				 dropped_col_attno < attno; dropped_col_attno++)
 			{
-				Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+				String *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 				alias->colnames =
 					gpdb::LAppend(alias->colnames, val_dropped_colname);
 			}
@@ -5308,7 +5437,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 			CHAR *col_name_char_array =
 				CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 					dxl_col_descr->MdName()->GetMDName()->GetBuffer());
-			Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+			String *val_colname = gpdb::MakeStringValue(col_name_char_array);
 
 			alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 			last_attno = attno;
@@ -5318,12 +5447,18 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	// if there are any dropped columns at the end, add those too to the RangeTblEntry
 	for (ULONG ul = last_attno + 1; ul <= num_of_non_sys_cols; ul++)
 	{
-		Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+		String *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 		alias->colnames = gpdb::LAppend(alias->colnames, val_dropped_colname);
 	}
 
 	rte->eref = alias;
 	rte->alias = alias;
+
+	m_dxl_to_plstmt_context->AddPerfmInfo(pi);
+
+	// set up rte <> perm info link.
+	rte->perminfoindex = gpdb::ListLength(
+					m_dxl_to_plstmt_context->GetPermInfosList());
 
 	// A new RTE is added to the range table entries list if it's not found in the look
 	// up table. However, it is only added to the look up table if it's a result relation

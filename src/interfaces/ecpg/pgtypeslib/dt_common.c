@@ -1740,7 +1740,6 @@ ParseDateTime(char *timestr, char *lowstr,
 		{
 			(*endstr)++;
 			continue;
-
 		}
 		/* otherwise, something is not right... */
 		else
@@ -1821,16 +1820,16 @@ DecodeDateTime(char **field, int *ftype, int nf,
 				if (ptype == DTK_JULIAN)
 				{
 					char	   *cp;
-					int			val;
+					int			jday;
 
 					if (tzp == NULL)
 						return -1;
 
-					val = strtoint(field[i], &cp, 10);
+					jday = strtoint(field[i], &cp, 10);
 					if (*cp != '-')
 						return -1;
 
-					j2date(val, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+					j2date(jday, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
 					/* Get the time zone from the end of the string */
 					if (DecodeTimezone(cp, tzp) != 0)
 						return -1;
@@ -1959,9 +1958,9 @@ DecodeDateTime(char **field, int *ftype, int nf,
 				if (ptype != 0)
 				{
 					char	   *cp;
-					int			val;
+					int			value;
 
-					val = strtoint(field[i], &cp, 10);
+					value = strtoint(field[i], &cp, 10);
 
 					/*
 					 * only a few kinds are allowed to have an embedded
@@ -1984,7 +1983,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 					switch (ptype)
 					{
 						case DTK_YEAR:
-							tm->tm_year = val;
+							tm->tm_year = value;
 							tmask = DTK_M(YEAR);
 							break;
 
@@ -1997,33 +1996,33 @@ DecodeDateTime(char **field, int *ftype, int nf,
 							if ((fmask & DTK_M(MONTH)) != 0 &&
 								(fmask & DTK_M(HOUR)) != 0)
 							{
-								tm->tm_min = val;
+								tm->tm_min = value;
 								tmask = DTK_M(MINUTE);
 							}
 							else
 							{
-								tm->tm_mon = val;
+								tm->tm_mon = value;
 								tmask = DTK_M(MONTH);
 							}
 							break;
 
 						case DTK_DAY:
-							tm->tm_mday = val;
+							tm->tm_mday = value;
 							tmask = DTK_M(DAY);
 							break;
 
 						case DTK_HOUR:
-							tm->tm_hour = val;
+							tm->tm_hour = value;
 							tmask = DTK_M(HOUR);
 							break;
 
 						case DTK_MINUTE:
-							tm->tm_min = val;
+							tm->tm_min = value;
 							tmask = DTK_M(MINUTE);
 							break;
 
 						case DTK_SECOND:
-							tm->tm_sec = val;
+							tm->tm_sec = value;
 							tmask = DTK_M(SECOND);
 							if (*cp == '.')
 							{
@@ -2047,7 +2046,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 							 * previous field was a label for "julian date"?
 							 ***/
 							tmask = DTK_DATE_M;
-							j2date(val, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+							j2date(value, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
 							/* fractional Julian Day? */
 							if (*cp == '.')
 							{
@@ -2326,10 +2325,10 @@ DecodeDateTime(char **field, int *ftype, int nf,
 			return ((fmask & DTK_TIME_M) == DTK_TIME_M) ? 1 : -1;
 
 		/*
-		 * check for valid day of month, now that we know for sure the month
-		 * and year...
+		 * check for valid day of month and month, now that we know for sure
+		 * the month and year...
 		 */
-		if (tm->tm_mday < 1 || tm->tm_mday > day_tab[isleap(tm->tm_year)][tm->tm_mon - 1])
+		if (tm->tm_mon < 1 || tm->tm_mday < 1 || tm->tm_mday > day_tab[isleap(tm->tm_year)][tm->tm_mon - 1])
 			return -1;
 
 		/*

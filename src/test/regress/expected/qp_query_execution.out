@@ -163,7 +163,7 @@ analyze bar;
 select qx_count_operator('select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = 6;', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = 6 order by 1, 2 desc limit 10;
@@ -346,7 +346,7 @@ select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k  where abbp.t 
 select qx_count_operator('select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k  where abbp.t is not null and abbp.a = E''6SOME NUMBER''', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k  where abbp.t is not null and abbp.a = '6SOME NUMBER' order by 1, 2 desc limit 10;
@@ -441,7 +441,7 @@ select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k where abbp.t i
 select qx_count_operator('select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k where abbp.t is not null and abbp.a = 6;', 'Hash Right Join', 'Hash Left Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k where abbp.t is not null and abbp.a = 6 order by 1, 2 asc limit 10;
@@ -489,7 +489,7 @@ select foo_p.k, foo_p.t from foo_p left outer join bar on foo_p.k = bar.k  where
 select qx_count_operator('select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = 6.00;', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = 6.00 order by 1, 2 desc limit 10;
@@ -544,7 +544,7 @@ select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k  where abbp.t 
 select qx_count_operator('select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k  where abbp.t is not null and abbp.a = E''6SOME NUMBER''', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k  where abbp.t is not null and abbp.a = '6SOME NUMBER' order by 1, 2 asc limit 10;
@@ -600,7 +600,7 @@ select foo_p.k, foo_p.t from foo_p left outer join bar_p on foo_p.k = bar_p.k  w
 select qx_count_operator('select foo_p.b, foo_p.t from foo_p left outer join bar_p on foo_p.a = bar_p.k  where foo_p.t is not null and foo_p.a = 6;', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select foo_p.b, foo_p.t from foo_p left outer join bar_p on foo_p.a = bar_p.k  where foo_p.t is not null and foo_p.a = 6 order by 1, 2 asc limit 10;
@@ -697,7 +697,7 @@ select  foo_p.b, foo_p.t from foo_p left outer join bar_p on foo_p.a = bar_p.k a
 select qx_count_operator('select foo_p.b, foo_p.t from foo_p left outer join bar_p on foo_p.a = bar_p.a  where foo_p.t is not null and foo_p.a = 6;', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select foo_p.b, foo_p.t from foo_p left outer join bar_p on foo_p.a = bar_p.a  where foo_p.t is not null and foo_p.a = 6 order by 1, 2 asc limit 10;
@@ -731,7 +731,7 @@ analyze bar;
 select qx_count_operator('select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = (array[1])[1];', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = (array[1])[1] order by 1, 2 desc limit 10;
@@ -753,7 +753,7 @@ create function mytest(integer) returns integer as 'select $1/100' language sql;
 select qx_count_operator('select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = mytest(100);', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
-                 1
+                 0
 (1 row)
 
 select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = mytest(100) order by 1, 2 asc limit 10;

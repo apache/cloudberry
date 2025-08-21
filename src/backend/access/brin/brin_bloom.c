@@ -2,7 +2,7 @@
  * brin_bloom.c
  *		Implementation of Bloom opclass for BRIN
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -49,7 +49,7 @@
  * We use a scheme requiring only two functions described in this paper:
  *
  * Less Hashing, Same Performance:Building a Better Bloom Filter
- * Adam Kirsch, Michael Mitzenmacher†, Harvard School of Engineering and
+ * Adam Kirsch, Michael Mitzenmacher, Harvard School of Engineering and
  * Applied Sciences, Cambridge, Massachusetts [DOI 10.1002/rsa.20208]
  *
  * The two hash functions h1 and h2 are calculated using hard-coded seeds,
@@ -257,7 +257,6 @@ typedef struct BloomFilter
 
 	/* data of the bloom filter */
 	char		data[FLEXIBLE_ARRAY_MEMBER];
-
 } BloomFilter;
 
 
@@ -280,8 +279,7 @@ bloom_init(int ndistinct, double false_positive_rate)
 	double		k;				/* number of hash functions */
 
 	Assert(ndistinct > 0);
-	Assert((false_positive_rate >= BLOOM_MIN_FALSE_POSITIVE_RATE) &&
-		   (false_positive_rate < BLOOM_MAX_FALSE_POSITIVE_RATE));
+	Assert(false_positive_rate > 0 && false_positive_rate < 1);
 
 	/* sizing bloom filter: -(n * ln(p)) / (ln(2))^2 */
 	nbits = ceil(-(ndistinct * log(false_positive_rate)) / pow(log(2.0), 2));
@@ -413,7 +411,6 @@ typedef struct BloomOpaque
 	 * consistency. We may need additional procs in the future.
 	 */
 	FmgrInfo	extra_procinfos[BLOOM_MAX_PROCNUMS];
-	bool		extra_proc_missing[BLOOM_MAX_PROCNUMS];
 } BloomOpaque;
 
 static FmgrInfo *bloom_get_procinfo(BrinDesc *bdesc, uint16 attno,
@@ -662,6 +659,20 @@ brin_bloom_union(PG_FUNCTION_ARGS)
 	for (i = 0; i < nbytes; i++)
 		filter_a->data[i] |= filter_b->data[i];
 
+	/* update the number of bits set in the filter */
+	filter_a->nbits_set = pg_popcount((const char *) filter_a->data, nbytes);
+
+	/* if we decompressed filter_a, update the summary */
+	if (PointerGetDatum(filter_a) != col_a->bv_values[0])
+	{
+		pfree(DatumGetPointer(col_a->bv_values[0]));
+		col_a->bv_values[0] = PointerGetDatum(filter_a);
+	}
+
+	/* also free filter_b, if it was decompressed */
+	if (PointerGetDatum(filter_b) != col_b->bv_values[0])
+		pfree(filter_b);
+
 	PG_RETURN_VOID();
 }
 
@@ -683,27 +694,19 @@ bloom_get_procinfo(BrinDesc *bdesc, uint16 attno, uint16 procnum)
 	 */
 	opaque = (BloomOpaque *) bdesc->bd_info[attno - 1]->oi_opaque;
 
-	/*
-	 * If we already searched for this proc and didn't find it, don't bother
-	 * searching again.
-	 */
-	if (opaque->extra_proc_missing[basenum])
-		return NULL;
-
 	if (opaque->extra_procinfos[basenum].fn_oid == InvalidOid)
 	{
 		if (RegProcedureIsValid(index_getprocid(bdesc->bd_index, attno,
 												procnum)))
-		{
 			fmgr_info_copy(&opaque->extra_procinfos[basenum],
 						   index_getprocinfo(bdesc->bd_index, attno, procnum),
 						   bdesc->bd_context);
-		}
 		else
-		{
-			opaque->extra_proc_missing[basenum] = true;
-			return NULL;
-		}
+			ereport(ERROR,
+					errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					errmsg_internal("invalid opclass definition"),
+					errdetail_internal("The operator class is missing support function %d for column %d.",
+									   procnum, attno));
 	}
 
 	return &opaque->extra_procinfos[basenum];
@@ -768,7 +771,7 @@ brin_bloom_summary_out(PG_FUNCTION_ARGS)
 	StringInfoData str;
 
 	/* detoast the data to get value with a full 4B header */
-	filter = (BloomFilter *) PG_DETOAST_DATUM(PG_GETARG_BYTEA_PP(0));
+	filter = (BloomFilter *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
 	initStringInfo(&str);
 	appendStringInfoChar(&str, '{');

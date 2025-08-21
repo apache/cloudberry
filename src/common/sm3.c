@@ -81,7 +81,7 @@ SM3_Transform(pg_sm3_ctx *context, const uint8 *data)
 	uint32_t W[68], W_B[64];
 	int		j;
 
-	uint32_t tmp, *tmp_data;
+	uint32_t tmp2, *tmp_data;
 	uint32_t SS1, SS2, TT1, TT2;
 	uint32_t T;
 
@@ -101,8 +101,8 @@ SM3_Transform(pg_sm3_ctx *context, const uint8 *data)
 	}
 
 	for (; j <= 67; j++) {
-		tmp = W[j - 16] ^ W[j - 9] ^ rol32(W[j - 3], 15);
-		W[j] = SM3_P1(tmp) ^ (rol32(W[j - 13], 7)) ^ W[j - 6];
+		tmp2 = W[j - 16] ^ W[j - 9] ^ rol32(W[j - 3], 15);
+		W[j] = SM3_P1(tmp2) ^ (rol32(W[j - 13], 7)) ^ W[j - 6];
 	}
 
 	for (j = 0; j < 64; j++) {

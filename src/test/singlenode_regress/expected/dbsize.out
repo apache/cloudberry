@@ -53,7 +53,7 @@ SELECT size, pg_size_pretty(size), pg_size_pretty(-1 * size) FROM
     10994579406847 | 10239 GB       | -10239 GB
     10994579406848 | 10 TB          | -10 TB
  11258449312612351 | 10239 TB       | -10239 TB
- 11258449312612352 | 10240 TB       | -10240 TB
+ 11258449312612352 | 10 PB          | -10 PB
 (10 rows)
 
 SELECT size, pg_size_pretty(size), pg_size_pretty(-1 * size) FROM
@@ -73,7 +73,7 @@ SELECT size, pg_size_pretty(size), pg_size_pretty(-1 * size) FROM
     10994579406847 | 10239 GB       | -10239 GB
     10994579406848 | 10 TB          | -10 TB
  11258449312612351 | 10239 TB       | -10239 TB
- 11258449312612352 | 10240 TB       | -10240 TB
+ 11258449312612352 | 10 PB          | -10 PB
 (10 rows)
 
 -- pg_size_bytes() tests

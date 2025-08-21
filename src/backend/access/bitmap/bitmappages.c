@@ -88,10 +88,8 @@ _bitmap_getbuf(Relation rel, BlockNumber blkno, int access)
 		if (needLock)
 			LockRelationForExtension(rel, ExclusiveLock);
 
-		buf = ReadBuffer(rel, P_NEW);
-
-		/* Acquire buffer lock on new page */
-		LockBuffer(buf, BM_WRITE);
+		buf = ExtendBufferedRel(BMR_REL(rel), MAIN_FORKNUM, NULL,
+								EB_SKIP_EXTENSION_LOCK | EB_LOCK_FIRST);
 
 		/*
 		 * Release the file-extension lock; it's now OK for someone else to

@@ -316,6 +316,21 @@ SELECT date '1999 08 01';
  1999-08-01
 (1 row)
 
+-- Test guc gp_allow_date_field_width_5digits
+-- should error out
+SELECT date '2020516';
+ERROR:  invalid input syntax for type date: "2020516"
+LINE 1: SELECT date '2020516';
+                    ^
+SET gp_allow_date_field_width_5digits=on;
+-- should parsed to 0202-05-16 ( non-standard YYYMMDD )
+SELECT date '2020516';
+    date    
+------------
+ 0202-05-16
+(1 row)
+
+RESET gp_allow_date_field_width_5digits;
 SET datestyle TO dmy;
 SELECT date 'January 8, 1999';
     date    
@@ -568,6 +583,21 @@ SELECT date '1999 08 01';
  1999-08-01
 (1 row)
 
+-- Test guc gp_allow_date_field_width_5digits
+-- should error out
+SELECT date '2020516';
+ERROR:  invalid input syntax for type date: "2020516"
+LINE 1: SELECT date '2020516';
+                    ^
+SET gp_allow_date_field_width_5digits=on;
+-- should parsed to 0202-05-16 ( non-standard YYYMMDD )
+SELECT date '2020516';
+    date    
+------------
+ 0202-05-16
+(1 row)
+
+RESET gp_allow_date_field_width_5digits;
 SET datestyle TO mdy;
 SELECT date 'January 8, 1999';
     date    
@@ -840,6 +870,52 @@ SELECT date '5874898-01-01';  -- out of range
 ERROR:  date out of range: "5874898-01-01"
 LINE 1: SELECT date '5874898-01-01';
                     ^
+-- Test non-error-throwing API
+SELECT pg_input_is_valid('now', 'date');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('garbage', 'date');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT pg_input_is_valid('6874898-01-01', 'date');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('garbage', 'date');
+                    message                    | detail | hint | sql_error_code 
+-----------------------------------------------+--------+------+----------------
+ invalid input syntax for type date: "garbage" |        |      | 22007
+(1 row)
+
+SELECT * FROM pg_input_error_info('6874898-01-01', 'date');
+              message               | detail | hint | sql_error_code 
+------------------------------------+--------+------+----------------
+ date out of range: "6874898-01-01" |        |      | 22008
+(1 row)
+
+-- Test guc gp_allow_date_field_width_5digits
+-- should error out
+SELECT date '2020516';
+ERROR:  invalid input syntax for type date: "2020516"
+LINE 1: SELECT date '2020516';
+                    ^
+SET gp_allow_date_field_width_5digits=on;
+-- should parsed to 0202-05-16 ( non-standard YYYMMDD )
+SELECT date '2020516';
+    date    
+------------
+ 0202-05-16
+(1 row)
+
+RESET gp_allow_date_field_width_5digits;
 RESET datestyle;
 --
 -- Simple math
@@ -1129,15 +1205,15 @@ SELECT EXTRACT(DECADE FROM DATE '0012-12-31 BC'); --  -2
 -- all possible fields
 --
 SELECT EXTRACT(MICROSECONDS  FROM DATE '2020-08-11');
-ERROR:  date units "microseconds" not supported
+ERROR:  unit "microseconds" not supported for type date
 SELECT EXTRACT(MILLISECONDS  FROM DATE '2020-08-11');
-ERROR:  date units "milliseconds" not supported
+ERROR:  unit "milliseconds" not supported for type date
 SELECT EXTRACT(SECOND        FROM DATE '2020-08-11');
-ERROR:  date units "second" not supported
+ERROR:  unit "second" not supported for type date
 SELECT EXTRACT(MINUTE        FROM DATE '2020-08-11');
-ERROR:  date units "minute" not supported
+ERROR:  unit "minute" not supported for type date
 SELECT EXTRACT(HOUR          FROM DATE '2020-08-11');
-ERROR:  date units "hour" not supported
+ERROR:  unit "hour" not supported for type date
 SELECT EXTRACT(DAY           FROM DATE '2020-08-11');
  extract 
 ---------
@@ -1235,11 +1311,11 @@ SELECT EXTRACT(DOY           FROM DATE '2020-08-11');
 (1 row)
 
 SELECT EXTRACT(TIMEZONE      FROM DATE '2020-08-11');
-ERROR:  date units "timezone" not supported
+ERROR:  unit "timezone" not supported for type date
 SELECT EXTRACT(TIMEZONE_M    FROM DATE '2020-08-11');
-ERROR:  date units "timezone_m" not supported
+ERROR:  unit "timezone_m" not supported for type date
 SELECT EXTRACT(TIMEZONE_H    FROM DATE '2020-08-11');
-ERROR:  date units "timezone_h" not supported
+ERROR:  unit "timezone_h" not supported for type date
 SELECT EXTRACT(EPOCH         FROM DATE '2020-08-11');
   extract   
 ------------
@@ -1264,7 +1340,7 @@ SELECT DATE_TRUNC('MILLENNIUM', TIMESTAMP '1970-03-20 04:30:00.00000'); -- 1001
 SELECT DATE_TRUNC('MILLENNIUM', DATE '1970-03-20'); -- 1001-01-01
           date_trunc          
 ------------------------------
- Thu Jan 01 00:00:00 1001 PST
+ Thu Jan 01 00:00:00 1001 LMT
 (1 row)
 
 SELECT DATE_TRUNC('CENTURY', TIMESTAMP '1970-03-20 04:30:00.00000'); -- 1901
@@ -1288,13 +1364,13 @@ SELECT DATE_TRUNC('CENTURY', DATE '2004-08-10'); -- 2001-01-01
 SELECT DATE_TRUNC('CENTURY', DATE '0002-02-04'); -- 0001-01-01
           date_trunc          
 ------------------------------
- Mon Jan 01 00:00:00 0001 PST
+ Mon Jan 01 00:00:00 0001 LMT
 (1 row)
 
 SELECT DATE_TRUNC('CENTURY', DATE '0055-08-10 BC'); -- 0100-01-01 BC
            date_trunc            
 ---------------------------------
- Tue Jan 01 00:00:00 0100 PST BC
+ Tue Jan 01 00:00:00 0100 LMT BC
 (1 row)
 
 SELECT DATE_TRUNC('DECADE', DATE '1993-12-25'); -- 1990-01-01
@@ -1306,13 +1382,13 @@ SELECT DATE_TRUNC('DECADE', DATE '1993-12-25'); -- 1990-01-01
 SELECT DATE_TRUNC('DECADE', DATE '0004-12-25'); -- 0001-01-01 BC
            date_trunc            
 ---------------------------------
- Sat Jan 01 00:00:00 0001 PST BC
+ Sat Jan 01 00:00:00 0001 LMT BC
 (1 row)
 
 SELECT DATE_TRUNC('DECADE', DATE '0002-12-31 BC'); -- 0011-01-01 BC
            date_trunc            
 ---------------------------------
- Mon Jan 01 00:00:00 0011 PST BC
+ Mon Jan 01 00:00:00 0011 LMT BC
 (1 row)
 
 --
@@ -1340,6 +1416,12 @@ select isfinite('infinity'::date), isfinite('-infinity'::date), isfinite('today'
  isfinite | isfinite | isfinite 
 ----------+----------+----------
  f        | f        | t
+(1 row)
+
+select 'infinity'::date = '+infinity'::date as t;
+ t 
+---
+ t
 (1 row)
 
 --
@@ -1462,7 +1544,7 @@ SELECT EXTRACT(EPOCH      FROM DATE 'infinity');    --  Infinity
 -- wrong fields from non-finite date:
 --
 SELECT EXTRACT(MICROSEC  FROM DATE 'infinity');     -- error
-ERROR:  date units "microsec" not recognized
+ERROR:  unit "microsec" not recognized for type date
 -- test constructors
 select make_date(2013, 7, 15);
  make_date  

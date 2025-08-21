@@ -2,6 +2,22 @@
 -- GPDB internal connection tests
 --
 
+--
+-- Segment connection tests
+--
+
+-- We should not be able to directly connect to a primary segment.
+-- Use a psql subprocess to test connection; its exit code won't affect us.
+-- start_matchsubs
+-- m/at "localhost" \(.*\), port \d+/
+-- s/at "localhost" \(.*\), port \d+/at "localhost" (IP), port PORT/
+-- end_matchsubs
+\! psql -h localhost -p $(psql -t -A -d regression -c "SELECT port FROM gp_segment_configuration WHERE content <> -1 AND role = 'p' LIMIT 1") -d postgres -c "SELECT 1" 2>&1
+
+--
+-- Internal connection tests
+--
+
 -- create a new user
 drop user if exists user_disallowed_via_local;
 create user user_disallowed_via_local with login;
@@ -30,18 +46,3 @@ select * from t1_of_user_disallowed_via_local, pg_sleep(0);
 
 -- cleanup settings if any
 \! sed -i '/user_disallowed_via_local/d' $COORDINATOR_DATA_DIRECTORY/pg_hba.conf;
-
---
--- Segment connection tests
---
-
--- We should not be able to directly connect to a primary segment.
--- start_ignore
-SELECT port FROM gp_segment_configuration
-			WHERE content <> -1 AND role = 'p'
-			LIMIT 1
-\gset
-\connect - - - :port
--- end_ignore
--- DON'T PUT ANYTHING BELOW THIS TEST! It'll be ignored since the above \connect
--- fails and exits the script. Add them above, instead.

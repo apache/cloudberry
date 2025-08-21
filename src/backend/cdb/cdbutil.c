@@ -28,6 +28,7 @@
 #endif
 
 #include <sys/param.h>			/* for MAXHOSTNAMELEN */
+#include <sys/resource.h>
 
 #include "access/genam.h"
 #include "common/ip.h"
@@ -1936,8 +1937,9 @@ IsOnConflictUpdate(PlannedStmt *ps)
 void
 AvoidCorefileGeneration()
 {
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 	struct rlimit lim;
+
 	getrlimit(RLIMIT_CORE, &lim);
 	lim.rlim_cur = 0;
 	if (setrlimit(RLIMIT_CORE, &lim) != 0)
@@ -4151,7 +4153,7 @@ IsOnConflictUpdate(PlannedStmt *ps)
 void
 AvoidCorefileGeneration()
 {
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
+#if defined(HAVE_GETRLIMIT)
 	struct rlimit lim;
 	getrlimit(RLIMIT_CORE, &lim);
 	lim.rlim_cur = 0;

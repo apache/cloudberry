@@ -2,7 +2,7 @@
 -- CBDB PARALLEL
 -- Test CBDB style parallel plan.
 -- GUCs shoule be set with local, do not disturb other parallel plans.
--- Should not use force_parallel_mode as it will ignore plan and check results only.
+-- Should not use debug_parallel_query as it will ignore plan and check results only.
 -- We want to check plan in this file!
 -- If there is need to do that, set it local inside a transaction.
 -- Set optimizer off in this file, ORCA parallel is not supported.
@@ -31,7 +31,7 @@
 --  12  CdbLocusType_HashedWorkers
 --
 --
-set force_parallel_mode = 0;
+set debug_parallel_query=off;
 set optimizer = off;
 create schema test_parallel;
 set search_path to test_parallel;
@@ -628,7 +628,7 @@ set local enable_parallel = on;
 create index on t1(c2);
 insert into t1 select i, i from generate_series(1, 10000000) i;
 analyze t1;
-set local force_parallel_mode = 1;
+set local debug_parallel_query=regress;
 set local enable_seqscan = off;
 explain(locus, costs off) select c2 from t1;
                       QUERY PLAN                      
@@ -2710,7 +2710,7 @@ abort;
 begin;
 set local optimizer=off;
 set local enable_parallel=on;
-set local force_parallel_mode =1 ;
+set local debug_parallel_query=regress;
 set local min_parallel_table_scan_size = 0;
 create table semi_t1 (c1 integer) with(parallel_workers=2) distributed randomly;
 create table semi_t2 (c2 integer) with(parallel_workers=2) distributed randomly;
@@ -3064,14 +3064,683 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
 ---+---
  3 |  
  4 |  
- 1 |  
- 2 |  
+ 2 |
+ 1 |
 (4 rows)
+
+abort;
+--
+-- Test Parallel DISTINCT
+--
+drop table if exists t_distinct_0;
+NOTICE:  table "t_distinct_0" does not exist, skipping
+create table t_distinct_0(a int, b int) using ao_column distributed randomly;
+insert into t_distinct_0 select i, i+1 from generate_series(1, 1000) i;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+analyze t_distinct_0;
+explain(costs off)
+select distinct a from t_distinct_0;
+                         QUERY PLAN
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: a
+               ->  Streaming HashAggregate
+                     Group Key: a
+                     ->  Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+set enable_parallel = on;
+-- first stage HashAgg, second stage GroupAgg
+explain(costs off)
+select distinct a from t_distinct_0;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: a
+   ->  GroupAggregate
+         Group Key: a
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: a
+                     Hash Module: 3
+                     ->  Streaming HashAggregate
+                           Group Key: a
+                           ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+set parallel_query_use_streaming_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: a
+   ->  GroupAggregate
+         Group Key: a
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: a
+                     Hash Module: 3
+                     ->  HashAggregate
+                           Group Key: a
+                           ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+-- GroupAgg
+set enable_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   Merge Key: a
+   ->  GroupAggregate
+         Group Key: a
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: a
+                     Hash Module: 3
+                     ->  GroupAggregate
+                           Group Key: a
+                           ->  Sort
+                                 Sort Key: a
+                                 ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+-- HashAgg
+set enable_hashagg = on;
+set enable_groupagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a
+               Hash Module: 3
+               ->  HashAggregate
+                     Group Key: a
+                     ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+set parallel_query_use_streaming_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a
+               Hash Module: 3
+               ->  Streaming HashAggregate
+                     Group Key: a
+                     ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+-- multi DISTINCT tlist
+explain(costs off)
+select distinct a, b from t_distinct_0;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a, b
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a, b
+               Hash Module: 3
+               ->  Streaming HashAggregate
+                     Group Key: a, b
+                     ->  Parallel Seq Scan on t_distinct_0
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+-- DISTINCT on distribution key 
+drop table if exists t_distinct_1;
+NOTICE:  table "t_distinct_1" does not exist, skipping
+create table t_distinct_1(a int, b int) using ao_column;
+insert into t_distinct_1 select * from t_distinct_0;
+analyze t_distinct_1;
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_1;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: a
+         ->  Seq Scan on t_distinct_1
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+set enable_parallel = on;
+explain(costs off)
+select distinct a from t_distinct_1;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: a
+               Hash Module: 3
+               ->  Streaming HashAggregate
+                     Group Key: a
+                     ->  Parallel Seq Scan on t_distinct_1
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+--
+-- End of test Parallel DISTINCT
+--
+--
+-- Test Parallel UNION
+--
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: t_distinct_0.a
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t_distinct_0.a
+               ->  Append
+                     ->  HashAggregate
+                           Group Key: t_distinct_0.a
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: t_distinct_0.a
+                                 ->  Streaming HashAggregate
+                                       Group Key: t_distinct_0.a
+                                       ->  Seq Scan on t_distinct_0
+                     ->  HashAggregate
+                           Group Key: t_distinct_0_1.b
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                 Hash Key: t_distinct_0_1.b
+                                 ->  Streaming HashAggregate
+                                       Group Key: t_distinct_0_1.b
+                                       ->  Seq Scan on t_distinct_0 t_distinct_0_1
+ Optimizer: Postgres query optimizer
+(21 rows)
+
+set enable_parallel = on;
+set enable_groupagg = off;
+set enable_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: t_distinct_0.a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: t_distinct_0.a
+               Hash Module: 3
+               ->  Append
+                     ->  HashAggregate
+                           Group Key: t_distinct_0.a
+                           ->  Redistribute Motion 6:6  (slice3; segments: 6)
+                                 Hash Key: t_distinct_0.a
+                                 Hash Module: 3
+                                 ->  Streaming HashAggregate
+                                       Group Key: t_distinct_0.a
+                                       ->  Parallel Seq Scan on t_distinct_0
+                     ->  HashAggregate
+                           Group Key: t_distinct_0_1.b
+                           ->  Redistribute Motion 6:6  (slice4; segments: 6)
+                                 Hash Key: t_distinct_0_1.b
+                                 Hash Module: 3
+                                 ->  Streaming HashAggregate
+                                       Group Key: t_distinct_0_1.b
+                                       ->  Parallel Seq Scan on t_distinct_0 t_distinct_0_1
+ Optimizer: Postgres query optimizer
+(24 rows)
+
+reset enable_groupagg;
+set enable_hashagg = off;
+set enable_groupagg = on;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  Unique
+         Group Key: t_distinct_0.a
+         ->  Sort
+               Sort Key: t_distinct_0.a
+               ->  Redistribute Motion 6:6  (slice2; segments: 6)
+                     Hash Key: t_distinct_0.a
+                     Hash Module: 3
+                     ->  Append
+                           ->  GroupAggregate
+                                 Group Key: t_distinct_0.a
+                                 ->  Sort
+                                       Sort Key: t_distinct_0.a
+                                       ->  Redistribute Motion 6:6  (slice3; segments: 6)
+                                             Hash Key: t_distinct_0.a
+                                             Hash Module: 3
+                                             ->  GroupAggregate
+                                                   Group Key: t_distinct_0.a
+                                                   ->  Sort
+                                                         Sort Key: t_distinct_0.a
+                                                         ->  Parallel Seq Scan on t_distinct_0
+                           ->  GroupAggregate
+                                 Group Key: t_distinct_0_1.b
+                                 ->  Sort
+                                       Sort Key: t_distinct_0_1.b
+                                       ->  Redistribute Motion 6:6  (slice4; segments: 6)
+                                             Hash Key: t_distinct_0_1.b
+                                             Hash Module: 3
+                                             ->  GroupAggregate
+                                                   Group Key: t_distinct_0_1.b
+                                                   ->  Sort
+                                                         Sort Key: t_distinct_0_1.b
+                                                         ->  Parallel Seq Scan on t_distinct_0 t_distinct_0_1
+ Optimizer: Postgres query optimizer
+(34 rows)
+
+reset enable_groupagg;
+reset enable_hashagg;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)
+   ->  HashAggregate
+         Group Key: t_distinct_0.a
+         ->  Redistribute Motion 6:6  (slice2; segments: 6)
+               Hash Key: t_distinct_0.a
+               Hash Module: 3
+               ->  Append
+                     ->  GroupAggregate
+                           Group Key: t_distinct_0.a
+                           ->  Sort
+                                 Sort Key: t_distinct_0.a
+                                 ->  Redistribute Motion 6:6  (slice3; segments: 6)
+                                       Hash Key: t_distinct_0.a
+                                       Hash Module: 3
+                                       ->  Streaming HashAggregate
+                                             Group Key: t_distinct_0.a
+                                             ->  Parallel Seq Scan on t_distinct_0
+                     ->  GroupAggregate
+                           Group Key: t_distinct_0_1.b
+                           ->  Sort
+                                 Sort Key: t_distinct_0_1.b
+                                 ->  Redistribute Motion 6:6  (slice4; segments: 6)
+                                       Hash Key: t_distinct_0_1.b
+                                       Hash Module: 3
+                                       ->  Streaming HashAggregate
+                                             Group Key: t_distinct_0_1.b
+                                             ->  Parallel Seq Scan on t_distinct_0 t_distinct_0_1
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+reset enable_parallel;
+--
+-- End of test Parallel UNION
+--
+--
+-- Test Parallel Subquery.
+--
+CREATE TABLE departments (
+    department_id INT PRIMARY KEY,
+    department_name VARCHAR(100)
+);
+CREATE TABLE employees (
+    employee_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    salary NUMERIC,
+    department_id INT
+);
+INSERT INTO departments VALUES 
+(1, 'Sales'),
+(2, 'IT'),
+(3, 'HR');
+INSERT INTO employees VALUES
+(1, 'Alice', 5000, 1),
+(2, 'Bob', 6000, 1),
+(3, 'Charlie', 7000, 2),
+(4, 'David', 8000, 2),
+(5, 'Eve', 9000, 3);
+set enable_parallel = off;
+explain SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=163.42..307.76 rows=3767 width=218)
+   ->  Hash Join  (cost=163.42..257.54 rows=1256 width=218)
+         Hash Cond: (e.department_id = "Expr_SUBQUERY".csq_c0)
+         Join Filter: (e.salary > "Expr_SUBQUERY".csq_c1)
+         ->  Seq Scan on employees e  (cost=0.00..71.67 rows=3767 width=254)
+         ->  Hash  (cost=150.92..150.92 rows=1000 width=36)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=130.09..150.92 rows=1000 width=36)
+                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=130.09..137.59 rows=333 width=36)
+                           ->  Finalize HashAggregate  (cost=130.09..134.26 rows=333 width=36)
+                                 Group Key: employees.department_id
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=90.50..122.67 rows=990 width=36)
+                                       Hash Key: employees.department_id
+                                       ->  Streaming Partial HashAggregate  (cost=90.50..102.87 rows=990 width=36)
+                                             Group Key: employees.department_id
+                                             ->  Seq Scan on employees  (cost=0.00..71.67 rows=3767 width=36)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+ name  
+-------
+ Bob
+ David
+(2 rows)
+
+set enable_parallel = on;
+set min_parallel_table_scan_size = 0;
+explain SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)  (cost=116.58..230.86 rows=3767 width=218)
+   ->  Parallel Hash Join  (cost=116.58..186.92 rows=628 width=218)
+         Hash Cond: (e.department_id = "Expr_SUBQUERY".csq_c0)
+         Join Filter: (e.salary > "Expr_SUBQUERY".csq_c1)
+         ->  Parallel Seq Scan on employees e  (cost=0.00..52.83 rows=1883 width=254)
+         ->  Parallel Hash  (cost=110.33..110.33 rows=500 width=36)
+               ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)  (cost=99.92..110.33 rows=500 width=36)
+                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=99.92..103.67 rows=167 width=36)
+                           ->  HashAggregate  (cost=99.92..102.00 rows=167 width=36)
+                                 Group Key: employees.department_id
+                                 ->  Redistribute Motion 6:6  (slice3; segments: 6)  (cost=0.00..90.50 rows=1883 width=36)
+                                       Hash Key: employees.department_id
+                                       Hash Module: 3
+                                       ->  Parallel Seq Scan on employees  (cost=0.00..52.83 rows=1883 width=36)
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+ name  
+-------
+ Bob
+ David
+(2 rows)
+
+--
+-- Test https://github.com/apache/cloudberry/issues/1376
+--
+create table t1(a int, b int);
+create table t2 (like t1);
+set gp_cte_sharing = on;
+explain(locus, costs off) with x as
+  (select a, count(*) as b from t1 group by a union all
+    select a, count(*) as b from t2 group by a)
+  select count(*) from x a join x b on a.a = b.b;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: Hashed
+               ->  Hash Join
+                     Locus: Hashed
+                     Hash Cond: (b.b = a.a)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Locus: Hashed
+                           Hash Key: b.b
+                           ->  Subquery Scan on b
+                                 Locus: Strewn
+                                 ->  Shared Scan (share slice:id 2:0)
+                                       Locus: Hashed
+                     ->  Hash
+                           Locus: Hashed
+                           ->  Subquery Scan on a
+                                 Locus: Hashed
+                                 ->  Shared Scan (share slice:id 1:0)
+                                       Locus: Hashed
+                                       ->  Append
+                                             Locus: Hashed
+                                             ->  HashAggregate
+                                                   Locus: Hashed
+                                                   Group Key: t1.a
+                                                   ->  Seq Scan on t1
+                                                         Locus: Hashed
+                                             ->  HashAggregate
+                                                   Locus: Hashed
+                                                   Group Key: t2.a
+                                                   ->  Seq Scan on t2
+                                                         Locus: Hashed
+ Optimizer: Postgres query optimizer
+(35 rows)
+
+reset gp_cte_sharing;
+reset enable_parallel;
+reset min_parallel_table_scan_size;
+--
+-- Parallel Hash Full/Right Join
+--
+begin;
+create table pj_t1(id int, v int) with(parallel_workers=2) distributed by (id);
+create table pj_t2(id int, v int) with(parallel_workers=2) distributed by (id);
+create table pj_t3(id int, v int) with(parallel_workers=0) distributed by (id);
+-- pj_t1 is 3x larger than pj_t2 so the planner hashes the smaller pj_t2
+-- and probes with pj_t1, producing a genuine Parallel Hash Right Join plan.
+insert into pj_t1 select i, i from generate_series(1,30000)i;
+insert into pj_t2 select i, i from generate_series(25001,35000)i;
+insert into pj_t3 select i, i from generate_series(1,10000)i;
+analyze pj_t1;
+analyze pj_t2;
+analyze pj_t3;
+set local enable_parallel = on;
+set local min_parallel_table_scan_size = 0;
+-- 12_P_12_10: Parallel Hash Full Join: HashedWorkers FULL JOIN HashedWorkers -> HashedOJ(parallel)
+explain(costs off, locus)
+select count(*) from pj_t1 full join pj_t2 using (id);
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedOJ
+               Parallel Workers: 2
+               ->  Parallel Hash Full Join
+                     Locus: HashedOJ
+                     Parallel Workers: 2
+                     Hash Cond: (pj_t1.id = pj_t2.id)
+                     ->  Parallel Seq Scan on pj_t1
+                           Locus: HashedWorkers
+                           Parallel Workers: 2
+                     ->  Parallel Hash
+                           Locus: Hashed
+                           ->  Parallel Seq Scan on pj_t2
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+-- correctness: parallel result matches non-parallel
+set local enable_parallel = off;
+select count(*) from pj_t1 full join pj_t2 using (id);
+ count 
+-------
+ 35000
+(1 row)
+
+set local enable_parallel = on;
+select count(*) from pj_t1 full join pj_t2 using (id);
+ count 
+-------
+ 35000
+(1 row)
+
+-- Parallel Hash Right Join: pj_t1 (30K) is larger, so the planner hashes the smaller pj_t2
+-- (10K) as the build side and probes with pj_t1; result locus HashedWorkers(parallel)
+explain(costs off, locus)
+select count(*) from pj_t1 right join pj_t2 using (id);
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedWorkers
+               Parallel Workers: 2
+               ->  Parallel Hash Right Join
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
+                     Hash Cond: (pj_t1.id = pj_t2.id)
+                     ->  Parallel Seq Scan on pj_t1
+                           Locus: HashedWorkers
+                           Parallel Workers: 2
+                     ->  Parallel Hash
+                           Locus: Hashed
+                           ->  Parallel Seq Scan on pj_t2
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+-- correctness: parallel result matches non-parallel
+set local enable_parallel = off;
+select count(*) from pj_t1 right join pj_t2 using (id);
+ count 
+-------
+ 10000
+(1 row)
+
+set local enable_parallel = on;
+select count(*) from pj_t1 right join pj_t2 using (id);
+ count 
+-------
+ 10000
+(1 row)
+
+-- Locus propagation: HashedOJ(parallel) followed by INNER JOIN with Hashed(serial)
+-- The full join result (HashedOJ,parallel=2) is joined with pj_t3 (Hashed,serial)
+explain(costs off, locus)
+select count(*) from (pj_t1 full join pj_t2 using (id)) fj inner join pj_t3 using (id);
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedOJ
+               ->  Hash Join
+                     Locus: HashedOJ
+                     Hash Cond: (COALESCE(pj_t1.id, pj_t2.id) = pj_t3.id)
+                     ->  Hash Full Join
+                           Locus: HashedOJ
+                           Hash Cond: (pj_t1.id = pj_t2.id)
+                           ->  Seq Scan on pj_t1
+                                 Locus: Hashed
+                           ->  Hash
+                                 Locus: Hashed
+                                 ->  Seq Scan on pj_t2
+                                       Locus: Hashed
+                     ->  Hash
+                           Locus: Replicated
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 Locus: Replicated
+                                 ->  Seq Scan on pj_t3
+                                       Locus: Hashed
+ Optimizer: Postgres query optimizer
+(25 rows)
+
+-- Locus propagation: HashedOJ(parallel) followed by FULL JOIN with Hashed(serial)
+explain(costs off, locus)
+select count(*) from (pj_t1 full join pj_t2 using (id)) fj full join pj_t3 using (id);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Finalize Aggregate
+   Locus: Entry
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Locus: Entry
+         ->  Partial Aggregate
+               Locus: HashedOJ
+               ->  Hash Full Join
+                     Locus: HashedOJ
+                     Hash Cond: (COALESCE(pj_t1.id, pj_t2.id) = pj_t3.id)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Locus: Hashed
+                           Hash Key: COALESCE(pj_t1.id, pj_t2.id)
+                           ->  Hash Full Join
+                                 Locus: HashedOJ
+                                 Hash Cond: (pj_t1.id = pj_t2.id)
+                                 ->  Seq Scan on pj_t1
+                                       Locus: Hashed
+                                 ->  Hash
+                                       Locus: Hashed
+                                       ->  Seq Scan on pj_t2
+                                             Locus: Hashed
+                     ->  Hash
+                           Locus: Hashed
+                           ->  Seq Scan on pj_t3
+                                 Locus: Hashed
+ Optimizer: Postgres query optimizer
+(26 rows)
 
 abort;
 -- start_ignore
 drop schema test_parallel cascade;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table t_distinct_0
+drop cascades to table t_distinct_1
+drop cascades to table departments
+drop cascades to table employees
+drop cascades to table t1
+drop cascades to table t2
 -- end_ignore
 reset gp_appendonly_insert_files;
-reset force_parallel_mode;
+reset debug_parallel_query;
 reset optimizer;

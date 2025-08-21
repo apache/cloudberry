@@ -61,7 +61,7 @@ GetColumnMapping(Oid oldOid, Oid newOid)
 	TupleDesc	oldTupDesc = oldRel->rd_att;
 	TupleDesc	newTupDesc = newRel->rd_att;
 
-	attMap = build_attrmap_by_name_if_req(oldTupDesc, newTupDesc);
+	attMap = build_attrmap_by_name_if_req(oldTupDesc, newTupDesc, false);
 
 	heap_close(oldRel, AccessShareLock);
 	heap_close(newRel, AccessShareLock);

@@ -3,7 +3,7 @@
  * fe-secure-gssapi.c
  *   The front-end (client) encryption support for GSSAPI
  *
- * Portions Copyright (c) 2016-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2016-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *  src/interfaces/libpq/fe-secure-gssapi.c
@@ -86,8 +86,8 @@
  * On success, returns the number of data bytes consumed (possibly less than
  * len).  On failure, returns -1 with errno set appropriately.  If the errno
  * indicates a non-retryable error, a message is added to conn->errorMessage.
- * For retryable errors, caller should call again (passing the same data)
- * once the socket is ready.
+ * For retryable errors, caller should call again (passing the same or more
+ * data) once the socket is ready.
  */
 ssize_t
 pg_GSS_write(PGconn *conn, const void *ptr, size_t len)
@@ -97,19 +97,25 @@ pg_GSS_write(PGconn *conn, const void *ptr, size_t len)
 	gss_buffer_desc input,
 				output = GSS_C_EMPTY_BUFFER;
 	ssize_t		ret = -1;
-	size_t		bytes_sent = 0;
 	size_t		bytes_to_encrypt;
 	size_t		bytes_encrypted;
 	gss_ctx_id_t gctx = conn->gctx;
 
 	/*
-	 * When we get a failure, we must not tell the caller we have successfully
-	 * transmitted everything, else it won't retry.  Hence a "success"
-	 * (positive) return value must only count source bytes corresponding to
-	 * fully-transmitted encrypted packets.  The amount of source data
-	 * corresponding to the current partly-transmitted packet is remembered in
+	 * When we get a retryable failure, we must not tell the caller we have
+	 * successfully transmitted everything, else it won't retry.  For
+	 * simplicity, we claim we haven't transmitted anything until we have
+	 * successfully transmitted all "len" bytes.  Between calls, the amount of
+	 * the current input data that's already been encrypted and placed into
+	 * PqGSSSendBuffer (and perhaps transmitted) is remembered in
 	 * PqGSSSendConsumed.  On a retry, the caller *must* be sending that data
 	 * again, so if it offers a len less than that, something is wrong.
+	 *
+	 * Note: it may seem attractive to report partial write completion once
+	 * we've successfully sent any encrypted packets.  However, that can cause
+	 * problems for callers; notably, pqPutMsgEnd's heuristic to send only
+	 * full 8K blocks interacts badly with such a hack.  We won't save much,
+	 * typically, by letting callers discard data early, so don't risk it.
 	 */
 	if (len < PqGSSSendConsumed)
 	{
@@ -142,38 +148,25 @@ pg_GSS_write(PGconn *conn, const void *ptr, size_t len)
 		 */
 		if (PqGSSSendLength)
 		{
-			ssize_t		ret;
+			ssize_t		retval;
 			ssize_t		amount = PqGSSSendLength - PqGSSSendNext;
 
-			ret = pqsecure_raw_write(conn, PqGSSSendBuffer + PqGSSSendNext, amount);
-			if (ret <= 0)
-			{
-				/*
-				 * Report any previously-sent data; if there was none, reflect
-				 * the pqsecure_raw_write result up to our caller.  When there
-				 * was some, we're effectively assuming that any interesting
-				 * failure condition will recur on the next try.
-				 */
-				if (bytes_sent)
-					return bytes_sent;
-				return ret;
-			}
+			retval = pqsecure_raw_write(conn, PqGSSSendBuffer + PqGSSSendNext, amount);
+			if (retval <= 0)
+				return retval;
 
 			/*
 			 * Check if this was a partial write, and if so, move forward that
 			 * far in our buffer and try again.
 			 */
-			if (ret != amount)
+			if (retval < amount)
 			{
-				PqGSSSendNext += ret;
+				PqGSSSendNext += retval;
 				continue;
 			}
 
-			/* We've successfully sent whatever data was in that packet. */
-			bytes_sent += PqGSSSendConsumed;
-
-			/* All encrypted data was sent, our buffer is empty now. */
-			PqGSSSendLength = PqGSSSendNext = PqGSSSendConsumed = 0;
+			/* We've successfully sent whatever data was in the buffer. */
+			PqGSSSendLength = PqGSSSendNext = 0;
 		}
 
 		/*
@@ -199,7 +192,7 @@ pg_GSS_write(PGconn *conn, const void *ptr, size_t len)
 
 		/*
 		 * Create the next encrypted packet.  Any failure here is considered a
-		 * hard failure, so we return -1 even if bytes_sent > 0.
+		 * hard failure, so we return -1 even if some data has been sent.
 		 */
 		major = gss_wrap(&minor, gctx, 1, GSS_C_QOP_DEFAULT,
 						 &input, &conf_state, &output);
@@ -212,18 +205,16 @@ pg_GSS_write(PGconn *conn, const void *ptr, size_t len)
 
 		if (conf_state == 0)
 		{
-			appendPQExpBufferStr(&conn->errorMessage,
-								 libpq_gettext("outgoing GSSAPI message would not use confidentiality\n"));
+			libpq_append_conn_error(conn, "outgoing GSSAPI message would not use confidentiality");
 			errno = EIO;		/* for lack of a better idea */
 			goto cleanup;
 		}
 
 		if (output.length > PQ_GSS_SEND_BUFFER_SIZE - sizeof(uint32))
 		{
-			appendPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("client tried to send oversize GSSAPI packet (%zu > %zu)\n"),
-							  (size_t) output.length,
-							  PQ_GSS_SEND_BUFFER_SIZE - sizeof(uint32));
+			libpq_append_conn_error(conn, "client tried to send oversize GSSAPI packet (%zu > %zu)",
+									(size_t) output.length,
+									PQ_GSS_SEND_BUFFER_SIZE - sizeof(uint32));
 			errno = EIO;		/* for lack of a better idea */
 			goto cleanup;
 		}
@@ -245,10 +236,13 @@ pg_GSS_write(PGconn *conn, const void *ptr, size_t len)
 	}
 
 	/* If we get here, our counters should all match up. */
-	Assert(bytes_sent == len);
-	Assert(bytes_sent == bytes_encrypted);
+	Assert(len == PqGSSSendConsumed);
+	Assert(len == bytes_encrypted);
 
-	ret = bytes_sent;
+	/* We're reporting all the data as sent, so reset PqGSSSendConsumed. */
+	PqGSSSendConsumed = 0;
+
+	ret = bytes_encrypted;
 
 cleanup:
 	/* Release GSSAPI buffer storage, if we didn't already */
@@ -357,10 +351,9 @@ pg_GSS_read(PGconn *conn, void *ptr, size_t len)
 
 		if (input.length > PQ_GSS_RECV_BUFFER_SIZE - sizeof(uint32))
 		{
-			appendPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("oversize GSSAPI packet sent by the server (%zu > %zu)\n"),
-							  (size_t) input.length,
-							  PQ_GSS_RECV_BUFFER_SIZE - sizeof(uint32));
+			libpq_append_conn_error(conn, "oversize GSSAPI packet sent by the server (%zu > %zu)",
+									(size_t) input.length,
+									PQ_GSS_RECV_BUFFER_SIZE - sizeof(uint32));
 			errno = EIO;		/* for lack of a better idea */
 			return -1;
 		}
@@ -406,8 +399,7 @@ pg_GSS_read(PGconn *conn, void *ptr, size_t len)
 
 		if (conf_state == 0)
 		{
-			appendPQExpBufferStr(&conn->errorMessage,
-								 libpq_gettext("incoming GSSAPI message did not use confidentiality\n"));
+			libpq_append_conn_error(conn, "incoming GSSAPI message did not use confidentiality");
 			ret = -1;
 			errno = EIO;		/* for lack of a better idea */
 			goto cleanup;
@@ -488,7 +480,8 @@ pqsecure_open_gss(PGconn *conn)
 {
 	ssize_t		ret;
 	OM_uint32	major,
-				minor;
+				minor,
+				gss_flags = GSS_REQUIRED_FLAGS;
 	uint32		netlen;
 	PostgresPollingStatusType result;
 	gss_buffer_desc input = GSS_C_EMPTY_BUFFER,
@@ -507,8 +500,7 @@ pqsecure_open_gss(PGconn *conn)
 		PqGSSResultBuffer = malloc(PQ_GSS_RECV_BUFFER_SIZE);
 		if (!PqGSSSendBuffer || !PqGSSRecvBuffer || !PqGSSResultBuffer)
 		{
-			appendPQExpBufferStr(&conn->errorMessage,
-								 libpq_gettext("out of memory\n"));
+			libpq_append_conn_error(conn, "out of memory");
 			return PGRES_POLLING_FAILED;
 		}
 		PqGSSSendLength = PqGSSSendNext = PqGSSSendConsumed = 0;
@@ -585,6 +577,8 @@ pqsecure_open_gss(PGconn *conn)
 
 			PqGSSRecvLength += ret;
 
+			Assert(PqGSSRecvLength < PQ_GSS_RECV_BUFFER_SIZE);
+			PqGSSRecvBuffer[PqGSSRecvLength] = '\0';
 			appendPQExpBuffer(&conn->errorMessage, "%s\n", PqGSSRecvBuffer + 1);
 
 			return PGRES_POLLING_FAILED;
@@ -599,10 +593,9 @@ pqsecure_open_gss(PGconn *conn)
 		input.length = pg_ntoh32(*(uint32 *) PqGSSRecvBuffer);
 		if (input.length > PQ_GSS_RECV_BUFFER_SIZE - sizeof(uint32))
 		{
-			appendPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("oversize GSSAPI packet sent by the server (%zu > %zu)\n"),
-							  (size_t) input.length,
-							  PQ_GSS_RECV_BUFFER_SIZE - sizeof(uint32));
+			libpq_append_conn_error(conn, "oversize GSSAPI packet sent by the server (%zu > %zu)",
+									(size_t) input.length,
+									PQ_GSS_RECV_BUFFER_SIZE - sizeof(uint32));
 			return PGRES_POLLING_FAILED;
 		}
 
@@ -632,13 +625,30 @@ pqsecure_open_gss(PGconn *conn)
 	if (ret != STATUS_OK)
 		return PGRES_POLLING_FAILED;
 
+	if (conn->gssdelegation && conn->gssdelegation[0] == '1')
+	{
+		/* Acquire credentials if possible */
+		if (conn->gcred == GSS_C_NO_CREDENTIAL)
+			(void) pg_GSS_have_cred_cache(&conn->gcred);
+
+		/*
+		 * We have credentials and gssdelegation is enabled, so request
+		 * credential delegation.  This may or may not actually result in
+		 * credentials being delegated- it depends on if the forwardable flag
+		 * has been set in the credential and if the server is configured to
+		 * accept delegated credentials.
+		 */
+		if (conn->gcred != GSS_C_NO_CREDENTIAL)
+			gss_flags |= GSS_C_DELEG_FLAG;
+	}
+
 	/*
 	 * Call GSS init context, either with an empty input, or with a complete
 	 * packet from the server.
 	 */
 	major = gss_init_sec_context(&minor, conn->gcred, &conn->gctx,
 								 conn->gtarg_nam, GSS_C_NO_OID,
-								 GSS_REQUIRED_FLAGS, 0, 0, &input, NULL,
+								 gss_flags, 0, 0, &input, NULL,
 								 &output, NULL, NULL);
 
 	/* GSS Init Sec Context uses the whole packet, so clear it */
@@ -658,6 +668,7 @@ pqsecure_open_gss(PGconn *conn)
 		 * to do GSS wrapping/unwrapping.
 		 */
 		conn->gssenc = true;
+		conn->gssapi_used = true;
 
 		/* Clean up */
 		gss_release_cred(&minor, &conn->gcred);

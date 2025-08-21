@@ -640,16 +640,16 @@ CREATE VIEW gstest_view AS select a, b, grouping(a,b), sum(c), count(*), max(c)
   from gstest2 group by rollup ((a,b,c),(c,d));
 NOTICE:  view "gstest_view" will be a temporary view
 select pg_get_viewdef('gstest_view'::regclass, true);
-                                pg_get_viewdef                                 
--------------------------------------------------------------------------------
-  SELECT gstest2.a,                                                           +
-     gstest2.b,                                                               +
-     GROUPING(gstest2.a, gstest2.b) AS "grouping",                            +
-     sum(gstest2.c) AS sum,                                                   +
-     count(*) AS count,                                                       +
-     max(gstest2.c) AS max                                                    +
-    FROM gstest2                                                              +
-   GROUP BY ROLLUP((gstest2.a, gstest2.b, gstest2.c), (gstest2.c, gstest2.d));
+            pg_get_viewdef             
+---------------------------------------
+  SELECT a,                           +
+     b,                               +
+     GROUPING(a, b) AS "grouping",    +
+     sum(c) AS sum,                   +
+     count(*) AS count,               +
+     max(c) AS max                    +
+    FROM gstest2                      +
+   GROUP BY ROLLUP((a, b, c), (c, d));
 (1 row)
 
 -- Nested queries with 3 or more levels of nesting
@@ -1793,14 +1793,13 @@ explain (costs off)
    Hash Key: ten
    Hash Key: hundred
    Hash Key: thousand
+   Hash Key: twothousand
    Group Key: unique1
-   Sort Key: twothousand
-     Group Key: twothousand
    ->  Sort
          Sort Key: unique1
          ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 -- check collation-sensitive matching between grouping expressions
 -- (similar to a check for aggregates, but there are additional code
@@ -2069,14 +2068,13 @@ select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
              QUERY PLAN              
 -------------------------------------
- GroupAggregate
+ MixedAggregate
+   Hash Key: g100
+   Hash Key: g100, g10
    Group Key: g1000, g100, g10
    Group Key: g1000, g100
    Group Key: g1000
    Group Key: ()
-   Sort Key: g100, g10
-     Group Key: g100, g10
-     Group Key: g100
    Sort Key: g10, g1000
      Group Key: g10, g1000
      Group Key: g10
@@ -2084,7 +2082,7 @@ from gs_data_1 group by cube (g1000, g100,g10);
          Sort Key: g1000, g100, g10
          ->  Seq Scan on gs_data_1
  Optimizer: Postgres query optimizer
-(15 rows)
+(14 rows)
 
 create table gs_hash_1 as
 select g100, g10, sum(g::numeric), count(*), max(g::text)
@@ -2247,7 +2245,6 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
              QUERY PLAN              
 -------------------------------------
  GroupAggregate
-   Group Key: $2
    InitPlan 1 (returns $1)
      ->  Result
    InitPlan 3 (returns $2)
@@ -2256,7 +2253,7 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
    SubPlan 2
      ->  Result
  Optimizer: Postgres query optimizer
-(10 rows)
+(9 rows)
 
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
  grouping 

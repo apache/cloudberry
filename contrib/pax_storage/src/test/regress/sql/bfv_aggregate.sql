@@ -1469,6 +1469,92 @@ explain (costs off)
 select 1, median(col1) from group_by_const group by 1;
 select 1, median(col1) from group_by_const group by 1;
 
+-- Test GROUP BY with a RelabelType
+create table tx (c1 text);
+insert into tx values('hello');
+EXPLAIN (COSTS OFF, VERBOSE ON)
+SELECT MIN(tx.c1) FROM tx GROUP BY (tx.c1)::VARCHAR;
+SELECT MIN(tx.c1) FROM tx GROUP BY (tx.c1)::VARCHAR;
+drop table tx;
+
+-- ORCA should pick singlestage-agg plan when multistage-agg guc is true
+-- and distribution type is universal/replicated
+
+set optimizer_force_multistage_agg to on;
+
+create table t1_replicated(a int, b int, c float, d float) distributed replicated;
+create table t2_replicated(a int, b int) distributed replicated;
+
+explain select distinct b from t1_replicated;
+explain select sum(a), avg(b) from t1_replicated;
+explain select count(distinct b)  from t1_replicated group by a;
+explain select a, sum(mc) from (select a, b, max(c) mc from t1_replicated group by a,b) t group by a;
+explain SELECT t1.a, sum(c) from t1_replicated as t1 join t2_replicated as t2 on t1.a = t2.a group by t1.a;
+explain select count(a) from t1_replicated where c < (select sum(b) from t2_replicated);
+
+explain SELECT DISTINCT g%10 FROM generate_series(0, 100) g;
+explain select count(*) from generate_series(0, 100) g;
+explain select g%10 as c1, sum(g::numeric)as c2, count(*) as c3 from generate_series(1, 99) g group by g%10;
+
+reset optimizer_force_multistage_agg;
+-- Eliminate unuseful columns of targetlist in multistage-agg
+create table ex1(a int, b int, c int);
+create table ex2(a int, b int, c int);
+insert into ex1 select i,i,i from generate_series(1, 10) i;
+insert into ex2 select i,i,i from generate_series(1, 10) i;
+explain (verbose on, costs off) select ex2.b/2, sum(ex1.a) from ex1, (select a, coalesce(b, 1) b from ex2) ex2 where ex1.a = ex2.a group by ex2.b/2;
+select ex2.b/2, sum(ex1.a) from ex1, (select a, coalesce(b, 1) b from ex2) ex2 where ex1.a = ex2.a group by ex2.b/2;
+explain (verbose on, costs off) SELECT b/2, sum(b) * (b/2) FROM ex1  GROUP BY b/2;
+SELECT b/2, sum(b) * (b/2) FROM ex1  GROUP BY b/2;
+
+-- Test if Motion is placed between the "group by clauses"
+drop table if exists t;
+create table t(a int, b int, c int) distributed by (a);
+insert into t select 1, i, i from generate_series(1, 10)i;
+insert into t select 1, i, i from generate_series(1, 10)i;
+insert into t select 1, i, i from generate_series(1, 10)i;
+insert into t select 1, i, i from generate_series(1, 10)i;
+analyze t;
+
+explain (costs off) select count(distinct(b)), gp_segment_id from t group by gp_segment_id;
+select count(distinct(b)), gp_segment_id from t group by gp_segment_id;
+
+-- The cost of multistage agg is higher than hash agg
+set optimizer_force_multistage_agg to on;
+explain (costs off) select count(distinct(b)), gp_segment_id from t group by gp_segment_id;
+select count(distinct(b)), gp_segment_id from t group by gp_segment_id;
+reset optimizer_force_multistage_agg;
+
+drop table t;
+
+-- Test defferral keyword on primary/unique key
+-- When the grouping columns include a key, the GbAgg operator can be transformed to a Select,
+-- resulting in the dropping of grouping columns. However, it is important to note that if a primary
+-- or unique key has the deferral keyword, ORCA should not optimize (drop grouping columns) in such cases.
+
+drop table if exists t1, t2, t3, t4, t5, t6;
+create table t1 (a int, b int, c int, primary key(a, b));
+create table t2 (a int, b int, c int, primary key(a, b) deferrable);
+create table t3 (a int, b int, c int, primary key(a, b) deferrable initially deferred);
+create table t4 (a int, b int, c int, unique(a, b));
+create table t5 (a int, b int, c int, unique(a, b) deferrable);
+create table t6 (a int, b int, c int, unique(a, b) deferrable initially deferred);
+
+explain (costs off) select * from t1 group by a, b, c;
+explain (costs off) select * from t2 group by a, b, c;
+explain (costs off) select * from t3 group by a, b, c;
+explain (costs off) select * from t4 group by a, b, c;
+explain (costs off) select * from t5 group by a, b, c;
+explain (costs off) select * from t6 group by a, b, c;
+explain (costs off) with cte1 as (select * from t3 group by a, b, c) select * from cte1;
+
+begin;
+insert into t3 values (1, 1, 1), (1, 1, 1), (1, 2, 1), (1, 3, 1), (1, 2, 1);
+select * from t3 group by a, b, c;
+commit;
+
+drop table  t1, t2, t3, t4, t5, t6;
+
 -- CLEANUP
 set client_min_messages='warning';
 drop schema bfv_aggregate cascade;

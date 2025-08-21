@@ -158,14 +158,14 @@ Datum cbdb::DatumFromPointer(const void *p, int16 typlen) {
 
 BpChar *cbdb::BpcharInput(const char *s, size_t len, int32 atttypmod) {
   CBDB_WRAP_START;
-  { return bpchar_input(s, len, atttypmod); }
+  { return bpchar_input(s, len, atttypmod, NULL); }
   CBDB_WRAP_END;
   return nullptr;
 }
 
 VarChar *cbdb::VarcharInput(const char *s, size_t len, int32 atttypmod) {
   CBDB_WRAP_START;
-  { return varchar_input(s, len, atttypmod); }
+  { return varchar_input(s, len, atttypmod, NULL); }
   CBDB_WRAP_END;
   return nullptr;
 }
@@ -302,7 +302,7 @@ void cbdb::MakedirRecursive(const char *path) {
   CBDB_WRAP_END;
 }
 
-std::string cbdb::BuildPaxDirectoryPath(RelFileNode rd_node,
+std::string cbdb::BuildPaxDirectoryPath(RelFileLocator rd_node,
                                         BackendId rd_backend) {
   CBDB_WRAP_START;
   {
@@ -390,7 +390,7 @@ static bool paxc_extractcolumns_walker(  // NOLINT
 
   return expression_tree_walker(
       node,
-      (bool (*)())(void (*)() /* to make -Wcast-function-type happy*/)(
+      (bool (*)(Node *node, void *context))(
           paxc_extractcolumns_walker),
       (void *)ec_ctx);
 }
@@ -574,7 +574,7 @@ void cbdb::RelOpenSmgr(Relation rel) {
     Assert(RelationIsPAX(rel));
     if ((rel)->rd_smgr == NULL)
       smgrsetowner(&((rel)->rd_smgr),
-                   smgropen((rel)->rd_node, (rel)->rd_backend, SMGR_PAX, rel));
+                   smgropen((rel)->rd_locator, (rel)->rd_backend, SMGR_PAX, rel));
   }
   CBDB_WRAP_END;
 }
@@ -591,7 +591,7 @@ void cbdb::RelDropStorage(Relation rel) {
   CBDB_WRAP_END;
 }
 
-void cbdb::PaxRelationCreateStorage(RelFileNode rnode, Relation rel) {
+void cbdb::PaxRelationCreateStorage(RelFileLocator rnode, Relation rel) {
   CBDB_WRAP_START;
   { paxc::PaxRelationCreateStorage(rnode, rel); }
   CBDB_WRAP_END;

@@ -1,11 +1,16 @@
 -- TODO: incremental sort is turned off by default, because it may have
 -- wrong result for some core case. Turn it on to run the existing tests
 -- and minimize the difference from upstream.
+-- start_matchignore
+-- m/INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner/
+-- m/DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation/
+-- end_matchignore
 set enable_incremental_sort=on;
 
 --
 -- WINDOW FUNCTIONS
 --
+SET optimizer_trace_fallback=on;
 
 CREATE TEMPORARY TABLE empsalary (
     depname varchar,
@@ -78,6 +83,48 @@ SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten), ten, four FRO
 SELECT lead(ten * 2, 1, -1.4) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10 ORDER BY four, ten;
 
 SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
+
+-- test split window func
+
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
+set optimizer_force_split_window_function to on;
+-- worked
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+
+-- no worked
+explain SELECT * FROM (SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 1;
+explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
+explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+explain SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
+
+-- verify the split window function result
+set optimizer_force_split_window_function to off;
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+set optimizer_force_split_window_function to on;
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 3;
+
+SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 3;
+reset optimizer_force_split_window_function;
 
 -- last_value returns the last row of the frame, which is CURRENT ROW in ORDER BY window.
 -- the column `ten` is ordered, so we should call last_value on this
@@ -163,6 +210,10 @@ explain (costs off)
 select first_value(max(x)) over (), y
   from (select unique1 as x, ten+four as y from tenk1) ss
   group by y;
+
+-- window functions returning pass-by-ref values from different rows
+select x, lag(x, 1) over (order by x), lead(x, 3) over (order by x)
+from (select x::numeric as x from generate_series(1,10) x);
 
 -- test non-default frame specifications
 SELECT four, ten,
@@ -484,6 +535,72 @@ from
    union all select null, 43) ss
 window w as
   (order by x desc nulls last range between 2 preceding and 2 following);
+
+-- There is a syntactic ambiguity in the SQL standard.  Since
+-- UNBOUNDED is a non-reserved word, it could be the name of a
+-- function parameter and be used as an expression.  There is a
+-- grammar hack to resolve such cases as the keyword.  The following
+-- tests record this behavior.
+
+CREATE FUNCTION unbounded_syntax_test1a(x int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+BEGIN ATOMIC
+  SELECT sum(unique1) over (rows between x preceding and x following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+END;
+
+CREATE FUNCTION unbounded_syntax_test1b(x int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+AS $$
+  SELECT sum(unique1) over (rows between x preceding and x following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+$$;
+
+-- These will apply the argument to the window specification inside the function.
+SELECT * FROM unbounded_syntax_test1a(2);
+SELECT * FROM unbounded_syntax_test1b(2);
+
+CREATE FUNCTION unbounded_syntax_test2a(unbounded int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+BEGIN ATOMIC
+  SELECT sum(unique1) over (rows between unbounded preceding and unbounded following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+END;
+
+CREATE FUNCTION unbounded_syntax_test2b(unbounded int) RETURNS TABLE (a int, b int, c int)
+LANGUAGE SQL
+AS $$
+  SELECT sum(unique1) over (rows between unbounded preceding and unbounded following),
+         unique1, four
+  FROM tenk1 WHERE unique1 < 10;
+$$;
+
+-- These will not apply the argument but instead treat UNBOUNDED as a keyword.
+SELECT * FROM unbounded_syntax_test2a(2);
+SELECT * FROM unbounded_syntax_test2b(2);
+
+DROP FUNCTION unbounded_syntax_test1a, unbounded_syntax_test1b,
+              unbounded_syntax_test2a, unbounded_syntax_test2b;
+
+-- Other tests with token UNBOUNDED in potentially problematic position
+CREATE FUNCTION unbounded(x int) RETURNS int LANGUAGE SQL IMMUTABLE RETURN x;
+
+SELECT sum(unique1) over (rows between 1 preceding and 1 following),
+       unique1, four
+FROM tenk1 WHERE unique1 < 10;
+
+SELECT sum(unique1) over (rows between unbounded(1) preceding and unbounded(1) following),
+       unique1, four
+FROM tenk1 WHERE unique1 < 10;
+
+SELECT sum(unique1) over (rows between unbounded.x preceding and unbounded.x following),
+       unique1, four
+FROM tenk1, (values (1)) as unbounded(x) WHERE unique1 < 10;
+
+DROP FUNCTION unbounded;
 
 -- Check overflow behavior for various integer sizes
 
@@ -918,6 +1035,54 @@ SELECT sum(salary), row_number() OVER (ORDER BY depname), sum(
     depname
 FROM empsalary GROUP BY depname;
 
+--
+-- Test SupportRequestOptimizeWindowClause's ability to de-duplicate
+-- WindowClauses
+--
+
+-- Ensure WindowClause frameOptions are changed so that only a single
+-- WindowAgg exists in the plan.
+EXPLAIN (COSTS OFF)
+SELECT
+    empno,
+    depname,
+    row_number() OVER (PARTITION BY depname ORDER BY enroll_date) rn,
+    rank() OVER (PARTITION BY depname ORDER BY enroll_date ROWS BETWEEN
+                 UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rnk,
+    dense_rank() OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
+                       CURRENT ROW AND CURRENT ROW) drnk,
+    ntile(10) OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
+                    CURRENT ROW AND UNBOUNDED FOLLOWING) nt,
+    percent_rank() OVER (PARTITION BY depname ORDER BY enroll_date ROWS BETWEEN
+                         CURRENT ROW AND UNBOUNDED FOLLOWING) pr,
+    cume_dist() OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
+                      CURRENT ROW AND UNBOUNDED FOLLOWING) cd
+FROM empsalary;
+
+-- Ensure WindowFuncs which cannot support their WindowClause's frameOptions
+-- being changed are untouched
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT
+    empno,
+    depname,
+    row_number() OVER (PARTITION BY depname ORDER BY enroll_date) rn,
+    rank() OVER (PARTITION BY depname ORDER BY enroll_date ROWS BETWEEN
+                 UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rnk,
+    count(*) OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
+                   CURRENT ROW AND CURRENT ROW) cnt
+FROM empsalary;
+
+-- Ensure the above query gives us the expected results
+SELECT
+    empno,
+    depname,
+    row_number() OVER (PARTITION BY depname ORDER BY enroll_date) rn,
+    rank() OVER (PARTITION BY depname ORDER BY enroll_date ROWS BETWEEN
+                 UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) rnk,
+    count(*) OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
+                   CURRENT ROW AND CURRENT ROW) cnt
+FROM empsalary;
+
 -- Test pushdown of quals into a subquery containing window functions
 
 -- pushdown is safe because all PARTITION BY clauses include depname:
@@ -947,6 +1112,269 @@ SELECT * FROM
    FROM empsalary) emp
 WHERE depname = 'sales' OR RANDOM() > 0.5;
 
+-- Test window function run conditions are properly pushed down into the
+-- WindowAgg
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          row_number() OVER (ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE rn < 3;
+
+-- The following 3 statements should result the same result.
+SELECT * FROM
+  (SELECT empno,
+          row_number() OVER (ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE rn < 3;
+
+SELECT * FROM
+  (SELECT empno,
+          row_number() OVER (ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE 3 > rn;
+
+SELECT * FROM
+  (SELECT empno,
+          row_number() OVER (ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE 2 >= rn;
+
+-- Ensure r <= 3 is pushed down into the run condition of the window agg
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          rank() OVER (ORDER BY salary DESC) r
+   FROM empsalary) emp
+WHERE r <= 3;
+
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          rank() OVER (ORDER BY salary DESC) r
+   FROM empsalary) emp
+WHERE r <= 3;
+
+-- Ensure dr = 1 is converted to dr <= 1 to get all rows leading up to dr = 1
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          dense_rank() OVER (ORDER BY salary DESC) dr
+   FROM empsalary) emp
+WHERE dr = 1;
+
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          dense_rank() OVER (ORDER BY salary DESC) dr
+   FROM empsalary) emp
+WHERE dr = 1;
+
+-- Check COUNT() and COUNT(*)
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER (ORDER BY salary DESC) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER (ORDER BY salary DESC) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(1) OVER (ORDER BY salary DESC) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(1) OVER (ORDER BY salary DESC) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER (ORDER BY salary DESC ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) c
+   FROM empsalary) emp
+WHERE c >= 3;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER () c
+   FROM empsalary) emp
+WHERE 11 <= c;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER (ORDER BY salary DESC) c,
+          dense_rank() OVER (ORDER BY salary DESC) dr
+   FROM empsalary) emp
+WHERE dr = 1;
+
+-- Ensure we get a run condition when there's a PARTITION BY clause
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          depname,
+          row_number() OVER (PARTITION BY depname ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE rn < 3;
+
+-- and ensure we get the correct results from the above plan
+SELECT * FROM
+  (SELECT empno,
+          depname,
+          row_number() OVER (PARTITION BY depname ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE rn < 3;
+
+-- ensure that "unused" subquery columns are not removed when the column only
+-- exists in the run condition
+EXPLAIN (COSTS OFF)
+SELECT empno, depname FROM
+  (SELECT empno,
+          depname,
+          row_number() OVER (PARTITION BY depname ORDER BY empno) rn
+   FROM empsalary) emp
+WHERE rn < 3;
+
+-- likewise with count(1) instead of row_number()
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          depname,
+          salary,
+          count(1) OVER (PARTITION BY depname ORDER BY salary DESC) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+-- and again, check the results are what we expect.
+SELECT * FROM
+  (SELECT empno,
+          depname,
+          salary,
+          count(1) OVER (PARTITION BY depname ORDER BY salary DESC) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+-- Ensure we get the correct run condition when the window function is both
+-- monotonically increasing and decreasing.
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          depname,
+          salary,
+          count(1) OVER () c
+   FROM empsalary) emp
+WHERE c = 1;
+
+-- Try another case with a WindowFunc with a byref return type
+SELECT * FROM
+  (SELECT row_number() OVER (PARTITION BY salary) AS rn,
+          lead(depname) OVER (PARTITION BY salary) || ' Department' AS n_dep
+   FROM empsalary) emp
+WHERE rn < 1;
+
+-- Some more complex cases with multiple window clauses
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT *,
+          count(1) OVER (PARTITION BY depname || '') c1, -- w1
+          row_number() OVER (PARTITION BY depname) rn, -- w2
+          count(*) OVER (PARTITION BY depname) c2, -- w2
+          count(*) OVER (PARTITION BY '' || depname) c3, -- w3
+          ntile(2) OVER (PARTITION BY depname) nt -- w2
+   FROM empsalary
+) e WHERE rn <= 1 AND c1 <= 3 AND nt < 2;
+
+-- Ensure we correctly filter out all of the run conditions from each window
+SELECT * FROM
+  (SELECT *,
+          count(1) OVER (PARTITION BY depname || '') c1, -- w1
+          row_number() OVER (PARTITION BY depname) rn, -- w2
+          count(*) OVER (PARTITION BY depname) c2, -- w2
+          count(*) OVER (PARTITION BY '' || depname) c3, -- w3
+          ntile(2) OVER (PARTITION BY depname) nt -- w2
+   FROM empsalary
+) e WHERE rn <= 1 AND c1 <= 3 AND nt < 2;
+
+-- Tests to ensure we don't push down the run condition when it's not valid to
+-- do so.
+
+-- Ensure we don't push down when the frame options show that the window
+-- function is not monotonically increasing
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER (ORDER BY salary DESC ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) c
+   FROM empsalary) emp
+WHERE c <= 3;
+
+-- Ensure we don't push down when the window function's monotonic properties
+-- don't match that of the clauses.
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(*) OVER (ORDER BY salary) c
+   FROM empsalary) emp
+WHERE 3 <= c;
+
+-- Ensure we don't use a run condition when there's a volatile function in the
+-- WindowFunc
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(random()) OVER (ORDER BY empno DESC) c
+   FROM empsalary) emp
+WHERE c = 1;
+
+-- Ensure we don't use a run condition when the WindowFunc arg contains a Var
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count(empno) OVER (ORDER BY empno DESC) c
+   FROM empsalary) emp
+WHERE c = 1;
+
+-- As above but with ntile().
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          ntile(empno::int) OVER (ORDER BY empno DESC) nt
+   FROM empsalary) emp
+WHERE nt = 1;
+
+-- Ensure we don't use a run condition when the WindowFunc contains subplans
+EXPLAIN (COSTS OFF)
+SELECT * FROM
+  (SELECT empno,
+          salary,
+          count((SELECT 1)) OVER (ORDER BY empno DESC) c
+   FROM empsalary) emp
+WHERE c = 1;
+
 -- Test Sort node collapsing
 EXPLAIN (COSTS OFF)
 SELECT * FROM
@@ -955,6 +1383,56 @@ SELECT * FROM
           min(salary) OVER (PARTITION BY depname, empno order by enroll_date) depminsalary
    FROM empsalary) emp
 WHERE depname = 'sales';
+
+-- Ensure that the evaluation order of the WindowAggs results in the WindowAgg
+-- with the same sort order that's required by the ORDER BY is evaluated last.
+EXPLAIN (COSTS OFF)
+SELECT empno,
+       enroll_date,
+       depname,
+       sum(salary) OVER (PARTITION BY depname order by empno) depsalary,
+       min(salary) OVER (PARTITION BY depname order by enroll_date) depminsalary
+FROM empsalary
+ORDER BY depname, empno;
+
+-- As above, but with an adjusted ORDER BY to ensure the above plan didn't
+-- perform only 2 sorts by accident.
+EXPLAIN (COSTS OFF)
+SELECT empno,
+       enroll_date,
+       depname,
+       sum(salary) OVER (PARTITION BY depname order by empno) depsalary,
+       min(salary) OVER (PARTITION BY depname order by enroll_date) depminsalary
+FROM empsalary
+ORDER BY depname, enroll_date;
+
+SET enable_hashagg TO off;
+
+-- Ensure we don't get a sort for both DISTINCT and ORDER BY.  We expect the
+-- sort for the DISTINCT to provide presorted input for the ORDER BY.
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT
+       empno,
+       enroll_date,
+       depname,
+       sum(salary) OVER (PARTITION BY depname order by empno) depsalary,
+       min(salary) OVER (PARTITION BY depname order by enroll_date) depminsalary
+FROM empsalary
+ORDER BY depname, enroll_date;
+
+-- As above but adjust the ORDER BY clause to help ensure the plan with the
+-- minimum amount of sorting wasn't a fluke.
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT
+       empno,
+       enroll_date,
+       depname,
+       sum(salary) OVER (PARTITION BY depname order by empno) depsalary,
+       min(salary) OVER (PARTITION BY depname order by enroll_date) depminsalary
+FROM empsalary
+ORDER BY depname, empno;
+
+RESET enable_hashagg;
 
 -- Test Sort node reordering
 EXPLAIN (COSTS OFF)
@@ -1462,3 +1940,4 @@ $$ LANGUAGE SQL STABLE;
 
 EXPLAIN (costs off) SELECT * FROM pg_temp.f(2);
 SELECT * FROM pg_temp.f(2);
+RESET optimizer_trace_fallback;

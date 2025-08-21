@@ -594,7 +594,8 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 	else if (query->commandType == CMD_SELECT ||
 			 query->commandType == CMD_INSERT ||
 			 query->commandType == CMD_UPDATE ||
-			 query->commandType == CMD_DELETE)
+			 query->commandType == CMD_DELETE ||
+			 query->commandType == CMD_MERGE)
 	{
 		Assert(query->parentStmtType == PARENTSTMTTYPE_NONE);
 

@@ -1,7 +1,7 @@
 <!-- doc/src/sgml/pgcrypto.sgml -->
 
 <sect1 id="pgcrypto" xreflabel="pgcrypto">
- <title>pgcrypto</title>
+ <title>pgcrypto &mdash; cryptographic functions</title>
 
  <indexterm zone="pgcrypto">
   <primary>pgcrypto</primary>
@@ -23,10 +23,15 @@
   on the current database.
  </para>
 
- <sect2>
+ <para>
+  <filename>pgcrypto</filename> requires OpenSSL and won't be installed if
+  OpenSSL support was not selected when PostgreSQL was built.
+ </para>
+
+ <sect2 id="pgcrypto-general-hashing-funcs">
   <title>General Hashing Functions</title>
 
-  <sect3>
+  <sect3 id="pgcrypto-general-hashing-funcs-digest">
    <title><function>digest()</function></title>
 
    <indexterm>
@@ -44,9 +49,8 @@ digest(data bytea, type text) returns bytea
     Standard algorithms are <literal>md5</literal>, <literal>sha1</literal>,
     <literal>sha224</literal>, <literal>sha256</literal>,
     <literal>sha384</literal> and <literal>sha512</literal>.
-    If <filename>pgcrypto</filename> was built with
-    <productname>OpenSSL</productname>, more algorithms are available, as
-    detailed in <xref linkend="pgcrypto-with-without-openssl"/>.
+    Moreover, any digest algorithm <productname>OpenSSL</productname> supports
+    is automatically picked up.
    </para>
 
    <para>
@@ -60,7 +64,7 @@ $$ LANGUAGE SQL STRICT IMMUTABLE;
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-general-hashing-funcs-hmac">
    <title><function>hmac()</function></title>
 
    <indexterm>
@@ -90,7 +94,7 @@ hmac(data bytea, key bytea, type text) returns bytea
   </sect3>
  </sect2>
 
- <sect2>
+ <sect2 id="pgcrypto-password-hashing-funcs">
   <title>Password Hashing Functions</title>
 
   <para>
@@ -189,7 +193,7 @@ hmac(data bytea, key bytea, type text) returns bytea
    </tgroup>
   </table>
 
-  <sect3>
+  <sect3 id="pgcrypto-password-hashing-funcs-crypt">
    <title><function>crypt()</function></title>
 
    <indexterm>
@@ -222,7 +226,7 @@ SELECT (pswhash = crypt('entered password', pswhash)) AS pswmatch FROM ... ;
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-password-hashing-funcs-gen-salt">
    <title><function>gen_salt()</function></title>
 
   <indexterm>
@@ -417,8 +421,8 @@ gen_salt(type text [, iter_count integer ]) returns text
     <listitem>
      <para>
       <literal>crypt-bf</literal> numbers are taken using a simple program that
-      loops over 1000 8-character passwords.  That way I can show the speed
-      with different numbers of iterations.  For reference: <literal>john
+      loops over 1000 8-character passwords.  That way the speed
+      with different numbers of iterations can be shown.  For reference: <literal>john
       -test</literal> shows 13506 loops/sec for <literal>crypt-bf/5</literal>.
       (The very small
       difference in results is in accordance with the fact that the
@@ -439,12 +443,12 @@ gen_salt(type text [, iter_count integer ]) returns text
   </sect3>
  </sect2>
 
- <sect2>
+ <sect2 id="pgcrypto-pgp-enc-funcs">
   <title>PGP Encryption Functions</title>
 
   <para>
    The functions here implement the encryption part of the OpenPGP
-   (<ulink url="https://tools.ietf.org/html/rfc4880">RFC 4880</ulink>)
+   (<ulink url="https://datatracker.ietf.org/doc/html/rfc4880">RFC 4880</ulink>)
    standard.  Supported are both symmetric-key and public-key encryption.
   </para>
 
@@ -537,7 +541,7 @@ gen_salt(type text [, iter_count integer ]) returns text
    </listitem>
   </orderedlist>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-pgp-sym-encrypt">
    <title><function>pgp_sym_encrypt()</function></title>
 
    <indexterm>
@@ -559,7 +563,7 @@ pgp_sym_encrypt_bytea(data bytea, psw text [, options text ]) returns bytea
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-pgp-sym-decrypt">
    <title><function>pgp_sym_decrypt()</function></title>
 
    <indexterm>
@@ -588,7 +592,7 @@ pgp_sym_decrypt_bytea(msg bytea, psw text [, options text ]) returns bytea
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-pgp-pub-encrypt">
    <title><function>pgp_pub_encrypt()</function></title>
 
    <indexterm>
@@ -613,7 +617,7 @@ pgp_pub_encrypt_bytea(data bytea, key bytea [, options text ]) returns bytea
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-pgp-pub-decrypt">
    <title><function>pgp_pub_decrypt()</function></title>
 
    <indexterm>
@@ -646,7 +650,7 @@ pgp_pub_decrypt_bytea(msg bytea, key bytea [, psw text [, options text ]]) retur
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-pgp-key-id">
    <title><function>pgp_key_id()</function></title>
 
    <indexterm>
@@ -692,7 +696,7 @@ pgp_key_id(bytea) returns text
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-armor">
    <title><function>armor()</function>, <function>dearmor()</function></title>
 
    <indexterm>
@@ -721,7 +725,7 @@ dearmor(data text) returns bytea
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-pgp-armor-headers">
    <title><function>pgp_armor_headers</function></title>
 
    <indexterm>
@@ -739,7 +743,7 @@ pgp_armor_headers(data text, key out text, value out text) returns setof record
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-pgp-enc-funcs-opts">
    <title>Options for PGP Functions</title>
 
    <para>
@@ -763,20 +767,20 @@ pgp_sym_encrypt(data, psw, 'compress-algo=1, cipher-algo=aes256')
     The rest should have reasonable defaults.
    </para>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-cipher-algo">
    <title>cipher-algo</title>
 
    <para>
     Which cipher algorithm to use.
    </para>
 <literallayout>
-Values: bf, aes128, aes192, aes256 (OpenSSL-only: <literal>3des</literal>, <literal>cast5</literal>)
+Values: bf, aes128, aes192, aes256, 3des, cast5
 Default: aes128
 Applies to: pgp_sym_encrypt, pgp_pub_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-compress-algo">
    <title>compress-algo</title>
 
    <para>
@@ -793,7 +797,7 @@ Applies to: pgp_sym_encrypt, pgp_pub_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-compress-level">
    <title>compress-level</title>
 
    <para>
@@ -807,7 +811,7 @@ Applies to: pgp_sym_encrypt, pgp_pub_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-convert-crlf">
    <title>convert-crlf</title>
 
    <para>
@@ -824,7 +828,7 @@ Applies to: pgp_sym_encrypt, pgp_pub_encrypt, pgp_sym_decrypt, pgp_pub_decrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-disable-mdc">
    <title>disable-mdc</title>
 
    <para>
@@ -840,7 +844,7 @@ Applies to: pgp_sym_encrypt, pgp_pub_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-sess-key">
    <title>sess-key</title>
 
    <para>
@@ -855,7 +859,7 @@ Applies to: pgp_sym_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-s2k-mode">
    <title>s2k-mode</title>
 
    <para>
@@ -871,7 +875,7 @@ Applies to: pgp_sym_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-s2k-count">
    <title>s2k-count</title>
 
    <para>
@@ -884,7 +888,7 @@ Applies to: pgp_sym_encrypt, only with s2k-mode=3
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-s2k-digest-algo">
    <title>s2k-digest-algo</title>
 
    <para>
@@ -897,7 +901,7 @@ Applies to: pgp_sym_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-s2k-cipher-algo">
    <title>s2k-cipher-algo</title>
 
    <para>
@@ -910,7 +914,7 @@ Applies to: pgp_sym_encrypt
 </literallayout>
   </sect4>
 
-  <sect4>
+  <sect4 id="pgcrypto-pgp-enc-funcs-opts-unicode-mode">
    <title>unicode-mode</title>
 
    <para>
@@ -927,7 +931,7 @@ Applies to: pgp_sym_encrypt, pgp_pub_encrypt
   </sect4>
   </sect3>
 
- <sect3>
+ <sect3 id="pgcrypto-pgp-enc-funcs-gnupg">
   <title>Generating PGP Keys with GnuPG</title>
 
   <para>
@@ -975,7 +979,7 @@ gpg -a --export-secret-keys KEYID > secret.key
   </para>
  </sect3>
 
- <sect3>
+ <sect3 id="pgcrypto-pgp-enc-funcs-limitations">
   <title>Limitations of PGP Code</title>
 
   <itemizedlist>
@@ -1003,7 +1007,7 @@ gpg -a --export-secret-keys KEYID > secret.key
   </sect3>
  </sect2>
 
- <sect2>
+ <sect2 id="pgcrypto-raw-enc-funcs">
   <title>Raw Encryption Functions</title>
 
   <para>
@@ -1121,7 +1125,7 @@ encrypt(data, 'fooz', 'bf-cbc/pad:pkcs')
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="pgcrypto-random-data-funcs">
   <title>Random-Data Functions</title>
 
   <indexterm>
@@ -1145,15 +1149,16 @@ gen_random_bytes(count integer) returns bytea
 gen_random_uuid() returns uuid
 </synopsis>
   <para>
-   Returns a version 4 (random) UUID. (Obsolete, this function is now also
-   included in core <productname>PostgreSQL</productname>.)
+   Returns a version 4 (random) UUID. (Obsolete, this function
+   internally calls the <link linkend="functions-uuid">core
+   function</link> of the same name.)
   </para>
  </sect2>
 
- <sect2>
+ <sect2 id="pgcrypto-notes">
   <title>Notes</title>
 
-  <sect3>
+  <sect3 id="pgcrypto-notes-config">
    <title>Configuration</title>
 
    <para>
@@ -1169,76 +1174,9 @@ gen_random_uuid() returns uuid
    </para>
 
    <para>
-    When compiled with <productname>OpenSSL</productname>, there will be
-    more algorithms available. Also public-key encryption functions will
-    be faster as <productname>OpenSSL</productname> has more optimized
-    BIGNUM functions.
+    <filename>pgcrypto</filename> requires <productname>OpenSSL</productname>.
+    Otherwise, it will not be built or installed.
    </para>
-
-   <table id="pgcrypto-with-without-openssl">
-    <title>Summary of Functionality with and without OpenSSL</title>
-    <tgroup cols="3">
-     <thead>
-      <row>
-       <entry>Functionality</entry>
-       <entry>Built-in</entry>
-       <entry>With OpenSSL</entry>
-      </row>
-     </thead>
-     <tbody>
-      <row>
-       <entry>MD5</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>SHA1</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>SHA224/256/384/512</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>Other digest algorithms</entry>
-       <entry>no</entry>
-       <entry>yes (Note 1)</entry>
-      </row>
-      <row>
-       <entry>Blowfish</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>AES</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>DES/3DES/CAST5</entry>
-       <entry>no</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>Raw encryption</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>PGP Symmetric encryption</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-      <row>
-       <entry>PGP Public-Key encryption</entry>
-       <entry>yes</entry>
-       <entry>yes</entry>
-      </row>
-     </tbody>
-    </tgroup>
-   </table>
 
    <para>
     When compiled against <productname>OpenSSL</productname> 3.0.0 and later
@@ -1246,24 +1184,9 @@ gen_random_uuid() returns uuid
     <filename>openssl.cnf</filename> configuration file in order to use older
     ciphers like DES or Blowfish.
    </para>
-
-   <para>
-    Notes:
-   </para>
-
-   <orderedlist>
-    <listitem>
-     <para>
-      Any digest algorithm <productname>OpenSSL</productname> supports
-      is automatically picked up.
-      This is not possible with ciphers, which need to be supported
-      explicitly.
-     </para>
-    </listitem>
-   </orderedlist>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-notes-null-handling">
    <title>NULL Handling</title>
 
    <para>
@@ -1272,7 +1195,7 @@ gen_random_uuid() returns uuid
    </para>
   </sect3>
 
-  <sect3>
+  <sect3 id="pgcrypto-notes-sec-limits">
    <title>Security Limitations</title>
 
    <para>
@@ -1303,75 +1226,9 @@ gen_random_uuid() returns uuid
     ciphertexts of a given size.
    </para>
   </sect3>
-
-  <sect3>
-   <title>Useful Reading</title>
-
-   <itemizedlist>
-    <listitem>
-     <para><ulink url="https://www.gnupg.org/gph/en/manual.html"></ulink></para>
-     <para>The GNU Privacy Handbook.</para>
-    </listitem>
-    <listitem>
-     <para><ulink url="https://www.openwall.com/crypt/"></ulink></para>
-     <para>Describes the crypt-blowfish algorithm.</para>
-    </listitem>
-    <listitem>
-     <para>
-      <ulink url="https://www.iusmentis.com/security/passphrasefaq/"></ulink>
-     </para>
-     <para>How to choose a good password.</para>
-    </listitem>
-    <listitem>
-     <para><ulink url="http://world.std.com/~reinhold/diceware.html"></ulink></para>
-     <para>Interesting idea for picking passwords.</para>
-    </listitem>
-    <listitem>
-     <para>
-      <ulink url="http://www.interhack.net/people/cmcurtin/snake-oil-faq.html"></ulink>
-     </para>
-     <para>Describes good and bad cryptography.</para>
-    </listitem>
-   </itemizedlist>
-  </sect3>
-
-  <sect3>
-   <title>Technical References</title>
-
-   <itemizedlist>
-    <listitem>
-     <para><ulink url="https://tools.ietf.org/html/rfc4880"></ulink></para>
-     <para>OpenPGP message format.</para>
-    </listitem>
-    <listitem>
-     <para><ulink url="https://tools.ietf.org/html/rfc1321"></ulink></para>
-     <para>The MD5 Message-Digest Algorithm.</para>
-    </listitem>
-    <listitem>
-     <para><ulink url="https://tools.ietf.org/html/rfc2104"></ulink></para>
-     <para>HMAC: Keyed-Hashing for Message Authentication.</para>
-    </listitem>
-    <listitem>
-     <para>
-      <ulink url="https://www.usenix.org/legacy/events/usenix99/provos.html"></ulink>
-     </para>
-     <para>Comparison of crypt-des, crypt-md5 and bcrypt algorithms.</para>
-    </listitem>
-    <listitem>
-     <para>
-      <ulink url="https://en.wikipedia.org/wiki/Fortuna_(PRNG)"></ulink>
-     </para>
-     <para>Description of Fortuna CSPRNG.</para>
-    </listitem>
-    <listitem>
-     <para><ulink url="https://jlcooke.ca/random/"></ulink></para>
-     <para>Jean-Luc Cooke Fortuna-based <filename>/dev/random</filename> driver for Linux.</para>
-    </listitem>
-   </itemizedlist>
-  </sect3>
  </sect2>
 
- <sect2>
+ <sect2 id="pgcrypto-author">
   <title>Author</title>
 
   <para>
@@ -1406,31 +1263,6 @@ gen_random_uuid() returns uuid
       <entry>Blowfish crypt</entry>
       <entry>Solar Designer</entry>
       <entry>www.openwall.com</entry>
-     </row>
-     <row>
-      <entry>Blowfish cipher</entry>
-      <entry>Simon Tatham</entry>
-      <entry>PuTTY</entry>
-     </row>
-     <row>
-      <entry>Rijndael cipher</entry>
-      <entry>Brian Gladman</entry>
-      <entry>OpenBSD sys/crypto</entry>
-     </row>
-     <row>
-      <entry>MD5 hash and SHA1</entry>
-      <entry>WIDE Project</entry>
-      <entry>KAME kame/sys/crypto</entry>
-     </row>
-     <row>
-      <entry>SHA256/384/512</entry>
-      <entry>Aaron D. Gifford</entry>
-      <entry>OpenBSD sys/crypto</entry>
-     </row>
-     <row>
-      <entry>BIGNUM math</entry>
-      <entry>Michael J. Fromberger</entry>
-      <entry>dartmouth.edu/~sting/sw/imath</entry>
      </row>
     </tbody>
    </tgroup>

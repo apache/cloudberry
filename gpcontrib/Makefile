@@ -12,6 +12,8 @@ include $(top_builddir)/src/Makefile.global
 #
 recurse_targets = ""
 
+recurse_targets = gp_exttable_fdw
+
 ifeq "$(enable_debug_extensions)" "yes"
 	recurse_targets = gp_sparse_vector \
 	       gp_distribution_policy \

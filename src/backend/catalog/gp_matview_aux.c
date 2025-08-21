@@ -52,6 +52,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/transform.h"
 #include "parser/parsetree.h"
+#include "storage/lmgr.h"
 
 static void InsertMatviewTablesEntries(Oid mvoid, List *relids);
 
@@ -584,21 +585,23 @@ addRelationMVRefCount(Oid relid, int32 mvrefcount)
 {
 	Relation	pgrel;
 	HeapTuple	tuple;
+	ItemPointerData otid;
 
 	pgrel = table_open(RelationRelationId, RowExclusiveLock);
 	/*
 	 * Update relation's pg_class entry.
 	 */
-	tuple = SearchSysCacheCopy1(RELOID,
-								ObjectIdGetDatum(relid));
+	tuple = SearchSysCacheLockedCopy1(RELOID,
+									  ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for relation %u", relid);
 
+	otid = tuple->t_self;
 	((Form_pg_class) GETSTRUCT(tuple))->relmvrefcount += mvrefcount;
 
-	CatalogTupleUpdate(pgrel, &tuple->t_self, tuple);
+	CatalogTupleUpdate(pgrel, &otid, tuple);
 
-	heap_freetuple(tuple);
+	UnlockTuple(pgrel, &otid, InplaceUpdateTupleLock);
 
 	table_close(pgrel, RowExclusiveLock);
 }

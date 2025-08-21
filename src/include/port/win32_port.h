@@ -6,7 +6,7 @@
  * Note this is read in MinGW as well as native Windows builds,
  * but not in Cygwin builds.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/port/win32_port.h
@@ -43,9 +43,26 @@
 #define _WINSOCKAPI_
 #endif
 
+/*
+ * windows.h includes a lot of other headers, slowing down compilation
+ * significantly.  WIN32_LEAN_AND_MEAN reduces that a bit. It'd be better to
+ * remove the include of windows.h (as well as indirect inclusions of it) from
+ * such a central place, but until then...
+ *
+ * To be able to include ntstatus.h tell windows.h to not declare NTSTATUS by
+ * temporarily defining UMDF_USING_NTSTATUS, otherwise we'll get warning about
+ * macro redefinitions, as windows.h also defines NTSTATUS (yuck). That in
+ * turn requires including ntstatus.h, winternl.h to get common symbols.
+ */
+#define WIN32_LEAN_AND_MEAN
+#define UMDF_USING_NTSTATUS
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <ntstatus.h>
+#include <winternl.h>
+
 #undef small
 #include <process.h>
 #include <signal.h>
@@ -61,8 +78,6 @@
 
 /* Must be here to avoid conflicting with prototype in windows.h */
 #define mkdir(a,b)	mkdir(a)
-
-#define ftruncate(a,b)	chsize(a,b)
 
 /* Windows doesn't have fsync() as such, use _commit() */
 #define fsync(fd) _commit(fd)
@@ -130,7 +145,7 @@
  *			https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55
  *
  *	The comprehensive exception list is included in ntstatus.h from the
- *	Windows	Driver Kit (WDK).  A subset of the list is also included in
+ *	Windows Driver Kit (WDK).  A subset of the list is also included in
  *	winnt.h from the Windows SDK.  Defining WIN32_NO_STATUS before including
  *	windows.h helps to avoid any conflicts.
  *
@@ -171,16 +186,10 @@
 #define SIGUSR1				30
 #define SIGUSR2				31
 
-/*
- * New versions of MinGW have gettimeofday() and also declare
- * struct timezone to support it.
- */
-#ifndef HAVE_GETTIMEOFDAY
-struct timezone
-{
-	int			tz_minuteswest; /* Minutes west of GMT.  */
-	int			tz_dsttime;		/* Nonzero if DST is ever in effect.  */
-};
+/* MinGW has gettimeofday(), but MSVC doesn't */
+#ifdef _MSC_VER
+/* Last parameter not used */
+extern int	gettimeofday(struct timeval *tp, void *tzp);
 #endif
 
 /* for setitimer in backend/port/win32/timer.c */
@@ -193,15 +202,21 @@ struct itimerval
 
 int			setitimer(int which, const struct itimerval *value, struct itimerval *ovalue);
 
+/* Convenience wrapper for GetFileType() */
+extern DWORD pgwin32_get_file_type(HANDLE hFile);
+
 /*
  * WIN32 does not provide 64-bit off_t, but does provide the functions operating
- * with 64-bit offsets.
+ * with 64-bit offsets.  Also, fseek() might not give an error for unseekable
+ * streams, so harden that function with our version.
  */
 #define pgoff_t __int64
 
 #ifdef _MSC_VER
-#define fseeko(stream, offset, origin) _fseeki64(stream, offset, origin)
-#define ftello(stream) _ftelli64(stream)
+extern int	_pgfseeko64(FILE *stream, pgoff_t offset, int origin);
+extern pgoff_t _pgftello64(FILE *stream);
+#define fseeko(stream, offset, origin) _pgfseeko64(stream, offset, origin)
+#define ftello(stream) _pgftello64(stream)
 #else
 #ifndef fseeko
 #define fseeko(stream, offset, origin) fseeko64(stream, offset, origin)
@@ -222,7 +237,6 @@ int			setitimer(int which, const struct itimerval *value, struct itimerval *oval
  */
 extern int	pgsymlink(const char *oldpath, const char *newpath);
 extern int	pgreadlink(const char *path, char *buf, size_t size);
-extern bool pgwin32_is_junction(const char *path);
 
 #define symlink(oldpath, newpath)	pgsymlink(oldpath, newpath)
 #define readlink(path, buf, size)	pgreadlink(path, buf, size)
@@ -270,10 +284,11 @@ struct stat						/* This should match struct __stat64 */
 
 extern int	_pgfstat64(int fileno, struct stat *buf);
 extern int	_pgstat64(const char *name, struct stat *buf);
+extern int	_pglstat64(const char *name, struct stat *buf);
 
 #define fstat(fileno, sb)	_pgfstat64(fileno, sb)
 #define stat(path, sb)		_pgstat64(path, sb)
-#define lstat(path, sb)		_pgstat64(path, sb)
+#define lstat(path, sb)		_pglstat64(path, sb)
 
 /* These macros are not provided by older MinGW, nor by MSVC */
 #ifndef S_IRUSR
@@ -320,12 +335,34 @@ extern int	_pgstat64(const char *name, struct stat *buf);
 #endif
 
 /*
+ * In order for lstat() to be able to report junction points as symlinks, we
+ * need to hijack a bit in st_mode, since neither MSVC nor MinGW provides
+ * S_ISLNK and there aren't any spare bits.  We'll steal the one for character
+ * devices, because we don't otherwise make use of those.
+ */
+#ifdef S_ISLNK
+#error "S_ISLNK is already defined"
+#endif
+#ifdef S_IFLNK
+#error "S_IFLNK is already defined"
+#endif
+#define S_IFLNK S_IFCHR
+#define S_ISLNK(m) (((m) & S_IFLNK) == S_IFLNK)
+
+/*
  * Supplement to <fcntl.h>.
  * This is the same value as _O_NOINHERIT in the MS header file. This is
  * to ensure that we don't collide with a future definition. It means
  * we cannot use _O_NOINHERIT ourselves.
  */
 #define O_DSYNC 0x0080
+
+/*
+ * Our open() replacement does not create inheritable handles, so it is safe to
+ * ignore O_CLOEXEC.  (If we were using Windows' own open(), it might be
+ * necessary to convert this to _O_NOINHERIT.)
+ */
+#define O_CLOEXEC 0
 
 /*
  * Supplement to <errno.h>.
@@ -381,6 +418,8 @@ extern int	_pgstat64(const char *name, struct stat *buf);
 #define ENETUNREACH WSAENETUNREACH
 #undef ENOTCONN
 #define ENOTCONN WSAENOTCONN
+#undef ETIMEDOUT
+#define ETIMEDOUT WSAETIMEDOUT
 
 /*
  * Locale stuff.
@@ -439,16 +478,16 @@ extern char *pgwin32_setlocale(int category, const char *locale);
 /* In backend/port/win32/signal.c */
 extern PGDLLIMPORT volatile int pg_signal_queue;
 extern PGDLLIMPORT int pg_signal_mask;
-extern HANDLE pgwin32_signal_event;
-extern HANDLE pgwin32_initial_signal_pipe;
+extern PGDLLIMPORT HANDLE pgwin32_signal_event;
+extern PGDLLIMPORT HANDLE pgwin32_initial_signal_pipe;
 
 #define UNBLOCKED_SIGNAL_QUEUE()	(pg_signal_queue & ~pg_signal_mask)
 #define PG_SIGNAL_COUNT 32
 
-void		pgwin32_signal_initialize(void);
-HANDLE		pgwin32_create_signal_listener(pid_t pid);
-void		pgwin32_dispatch_queued_signals(void);
-void		pg_queue_signal(int signum);
+extern void pgwin32_signal_initialize(void);
+extern HANDLE pgwin32_create_signal_listener(pid_t pid);
+extern void pgwin32_dispatch_queued_signals(void);
+extern void pg_queue_signal(int signum);
 
 /* In src/port/kill.c */
 #define kill(pid,sig)	pgkill(pid,sig)
@@ -465,17 +504,17 @@ extern int	pgkill(int pid, int sig);
 #define recv(s, buf, len, flags) pgwin32_recv(s, buf, len, flags)
 #define send(s, buf, len, flags) pgwin32_send(s, buf, len, flags)
 
-SOCKET		pgwin32_socket(int af, int type, int protocol);
-int			pgwin32_bind(SOCKET s, struct sockaddr *addr, int addrlen);
-int			pgwin32_listen(SOCKET s, int backlog);
-SOCKET		pgwin32_accept(SOCKET s, struct sockaddr *addr, int *addrlen);
-int			pgwin32_connect(SOCKET s, const struct sockaddr *name, int namelen);
-int			pgwin32_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timeval *timeout);
-int			pgwin32_recv(SOCKET s, char *buf, int len, int flags);
-int			pgwin32_send(SOCKET s, const void *buf, int len, int flags);
-int			pgwin32_waitforsinglesocket(SOCKET s, int what, int timeout);
+extern SOCKET pgwin32_socket(int af, int type, int protocol);
+extern int	pgwin32_bind(SOCKET s, struct sockaddr *addr, int addrlen);
+extern int	pgwin32_listen(SOCKET s, int backlog);
+extern SOCKET pgwin32_accept(SOCKET s, struct sockaddr *addr, int *addrlen);
+extern int	pgwin32_connect(SOCKET s, const struct sockaddr *name, int namelen);
+extern int	pgwin32_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timeval *timeout);
+extern int	pgwin32_recv(SOCKET s, char *buf, int len, int flags);
+extern int	pgwin32_send(SOCKET s, const void *buf, int len, int flags);
+extern int	pgwin32_waitforsinglesocket(SOCKET s, int what, int timeout);
 
-extern int	pgwin32_noblock;
+extern PGDLLIMPORT int pgwin32_noblock;
 
 #endif							/* FRONTEND */
 
@@ -484,6 +523,15 @@ extern int	pgwin32_ReserveSharedMemoryRegion(HANDLE);
 
 /* in backend/port/win32/crashdump.c */
 extern void pgwin32_install_crashdump_handler(void);
+
+/* in port/win32dlopen.c */
+extern void *dlopen(const char *file, int mode);
+extern void *dlsym(void *handle, const char *symbol);
+extern int	dlclose(void *handle);
+extern char *dlerror(void);
+
+#define RTLD_NOW 1
+#define RTLD_GLOBAL 0
 
 /* in port/win32error.c */
 extern void _dosmaperr(unsigned long);
@@ -519,18 +567,10 @@ typedef unsigned short mode_t;
 #define W_OK 2
 #define R_OK 4
 
-/* Pulled from Makefile.port in MinGW */
-#define DLSUFFIX ".dll"
-
 #endif							/* _MSC_VER */
 
-#if (defined(_MSC_VER) && (_MSC_VER < 1900)) || \
-	defined(__MINGW32__) || defined(__MINGW64__)
+#if defined(__MINGW32__) || defined(__MINGW64__)
 /*
- * VS2013 has a strtof() that seems to give correct answers for valid input,
- * even on the rounding edge cases, but which doesn't handle out-of-range
- * input correctly. Work around that.
- *
  * Mingw claims to have a strtof, and my reading of its source code suggests
  * that it ought to work (and not need this hack), but the regression test
  * results disagree with me; whether this is a version issue or not is not
@@ -542,5 +582,11 @@ typedef unsigned short mode_t;
  */
 #define HAVE_BUGGY_STRTOF 1
 #endif
+
+/* in port/win32pread.c */
+extern ssize_t pg_pread(int fd, void *buf, size_t nbyte, off_t offset);
+
+/* in port/win32pwrite.c */
+extern ssize_t pg_pwrite(int fd, const void *buf, size_t nbyte, off_t offset);
 
 #endif							/* PG_WIN32_PORT_H */

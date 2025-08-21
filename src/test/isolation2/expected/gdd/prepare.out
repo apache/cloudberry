@@ -75,7 +75,7 @@ ALTER
 -- Use utility session on seg 0 to restart master. This way avoids the
 -- situation where session issuing the restart doesn't disappear
 -- itself.
-1U:SELECT pg_ctl(dir, 'restart') from datadir;
+1U:SELECT pg_ctl(dir, 'restart', 'fast') from datadir;
  pg_ctl 
 --------
  OK     

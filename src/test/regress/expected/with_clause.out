@@ -1025,7 +1025,7 @@ SELECT pg_get_viewdef('my_view'::regclass);
           SELECT sum(with_test1.value) AS sum+
             FROM with_test1                  +
          )                                   +
-  SELECT my_sum.total                        +
+  SELECT total                               +
     FROM my_sum;
 (1 row)
 
@@ -1036,7 +1036,7 @@ SELECT pg_get_viewdef('my_view'::regclass, true);
           SELECT sum(with_test1.value) AS sum+
             FROM with_test1                  +
          )                                   +
-  SELECT my_sum.total                        +
+  SELECT total                               +
     FROM my_sum;
 (1 row)
 
@@ -1059,7 +1059,7 @@ SELECT pg_get_viewdef('my_view'::regclass);
           SELECT sum(my_group_sum.total) AS sum      +
             FROM my_group_sum                        +
          )                                           +
-  SELECT my_sum.total                                +
+  SELECT total                                       +
     FROM my_sum;
 (1 row)
 
@@ -1075,7 +1075,7 @@ SELECT pg_get_viewdef('my_view'::regclass, true);
           SELECT sum(my_group_sum.total) AS sum      +
             FROM my_group_sum                        +
          )                                           +
-  SELECT my_sum.total                                +
+  SELECT total                                       +
     FROM my_sum;
 (1 row)
 
@@ -2315,7 +2315,7 @@ UNION ALL
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  HashAggregate
-               Group Key: 'a'::text, cte.j
+               Group Key: cte.j
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: 'a'::text, cte.j
                      ->  Subquery Scan on cte

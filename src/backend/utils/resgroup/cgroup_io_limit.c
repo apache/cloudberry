@@ -407,7 +407,7 @@ get_iostat(Oid groupid, List *io_limit)
 		hash_create("hash table for bdi -> io stat", list_length(io_limit), &ctl,
 					HASH_ELEM | HASH_BLOBS| HASH_CONTEXT);
 
-	while (pg_get_line_append(f, line))
+	while (pg_get_line_append(f, line, NULL))
 	{
 		uint32 maj, min;
 		bdi_t bdi;

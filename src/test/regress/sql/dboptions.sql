@@ -19,6 +19,7 @@ order by gp_segment_id;
 -- Ensure that the db connection limit is not enforced on the segment. We check
 -- this by ensuring that a multi-slice plan, exceeding the connection limit on
 -- the segment can execute.
+\! psql -h /tmp limitdb -c 'grant all on schema public to connlimit_test_user;'
 \! psql -h /tmp limitdb -U connlimit_test_user -c 'create table tbl(i int);'
 \! psql -h /tmp limitdb -U connlimit_test_user -c 'select count(*) from tbl t1, tbl t2;'
 

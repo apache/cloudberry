@@ -115,7 +115,7 @@ BufferedAppendInit(BufferedAppend *bufferedAppend,
 void
 BufferedAppendSetFile(BufferedAppend *bufferedAppend,
 					  File file,
-					  RelFileNodeBackend relFileNode,
+					  RelFileLocatorBackend relFileNode,
 					  int32 segmentFileNum,
 					  char *filePathName,
 					  int64 eof,
@@ -198,7 +198,7 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend, bool needsWAL)
 	 * record after writing to file works fine.
 	 */
 	if (needsWAL)
-		xlog_ao_insert(bufferedAppend->relFileNode.node, bufferedAppend->segmentFileNum,
+		xlog_ao_insert(bufferedAppend->relFileNode.locator, bufferedAppend->segmentFileNum,
 					   bufferedAppend->largeWritePosition, largeWriteMemory, bytestotal);
 
 	bufferedAppend->largeWritePosition += bufferedAppend->largeWriteLen;

@@ -3,7 +3,7 @@
  * partdesc.c
  *		Support routines for manipulating partition descriptors
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -55,7 +55,7 @@ static PartitionDesc RelationBuildPartitionDesc(Relation rel,
  * RelationGetPartitionDesc -- get partition descriptor, if relation is partitioned
  *
  * We keep two partdescs in relcache: rd_partdesc includes all partitions
- * (even those being concurrently marked detached), while rd_partdesc_nodetach
+ * (even those being concurrently marked detached), while rd_partdesc_nodetached
  * omits (some of) those.  We store the pg_inherits.xmin value for the latter,
  * to determine whether it can be validly reused in each case, since that
  * depends on the active snapshot.
@@ -92,8 +92,8 @@ RelationGetPartitionDesc(Relation rel, bool omit_detached)
 	 * cached descriptor too.  We determine that based on the pg_inherits.xmin
 	 * that was saved alongside that descriptor: if the xmin that was not in
 	 * progress for that active snapshot is also not in progress for the
-	 * current active snapshot, then we can use use it.  Otherwise build one
-	 * from scratch.
+	 * current active snapshot, then we can use it.  Otherwise build one from
+	 * scratch.
 	 */
 	if (omit_detached &&
 		rel->rd_partdesc_nodetached &&
@@ -153,12 +153,15 @@ RelationBuildPartitionDesc(Relation rel, bool omit_detached)
 	ListCell   *cell;
 	int			i,
 				nparts;
+	bool		retried = false;
 	PartitionKey key = RelationGetPartitionKey(rel);
 	MemoryContext new_pdcxt;
 	MemoryContext oldcxt;
 	MemoryContext saved_cxt;
 	MemoryContext rbcontext;
 	int		   *mapping;
+
+retry:
 
 	/*
 	 * GPDB: Bring back the temporary memory context which gets removed in
@@ -184,8 +187,8 @@ RelationBuildPartitionDesc(Relation rel, bool omit_detached)
 	/*
 	 * Get partition oids from pg_inherits.  This uses a single snapshot to
 	 * fetch the list of children, so while more children may be getting added
-	 * concurrently, whatever this function returns will be accurate as of
-	 * some well-defined point in time.
+	 * or removed concurrently, whatever this function returns will be
+	 * accurate as of some well-defined point in time.
 	 */
 	detached_exist = false;
 	detached_xmin = InvalidTransactionId;
@@ -228,26 +231,33 @@ RelationBuildPartitionDesc(Relation rel, bool omit_detached)
 		}
 
 		/*
-		 * The system cache may be out of date; if so, we may find no pg_class
-		 * tuple or an old one where relpartbound is NULL.  In that case, try
-		 * the table directly.  We can't just AcceptInvalidationMessages() and
-		 * retry the system cache lookup because it's possible that a
-		 * concurrent ATTACH PARTITION operation has removed itself from the
-		 * ProcArray but not yet added invalidation messages to the shared
-		 * queue; InvalidateSystemCaches() would work, but seems excessive.
+		 * Two problems are possible here.  First, a concurrent ATTACH
+		 * PARTITION might be in the process of adding a new partition, but
+		 * the syscache doesn't have it, or its copy of it does not yet have
+		 * its relpartbound set.  We cannot just AcceptInvalidationMessages(),
+		 * because the other process might have already removed itself from
+		 * the ProcArray but not yet added its invalidation messages to the
+		 * shared queue.  We solve this problem by reading pg_class directly
+		 * for the desired tuple.
 		 *
-		 * Note that this algorithm assumes that PartitionBoundSpec we manage
-		 * to fetch is the right one -- so this is only good enough for
-		 * concurrent ATTACH PARTITION, not concurrent DETACH PARTITION or
-		 * some hypothetical operation that changes the partition bounds.
+		 * If the partition recently detached is also dropped, we get no tuple
+		 * from the scan.  In that case, we also retry, and next time through
+		 * here, we don't see that partition anymore.
+		 *
+		 * The other problem is that DETACH CONCURRENTLY is in the process of
+		 * removing a partition, which happens in two steps: first it marks it
+		 * as "detach pending", commits, then unsets relpartbound.  If
+		 * find_inheritance_children_extended included that partition but we
+		 * below we see that DETACH CONCURRENTLY has reset relpartbound for
+		 * it, we'd see an inconsistent view.  (The inconsistency is seen
+		 * because table_open below reads invalidation messages.)  We protect
+		 * against this by retrying find_inheritance_children_extended().
 		 */
 		if (boundspec == NULL)
 		{
 			Relation	pg_class;
 			SysScanDesc scan;
 			ScanKeyData key[1];
-			Datum		datum;
-			bool		isnull;
 
 			pg_class = table_open(RelationRelationId, AccessShareLock);
 			ScanKeyInit(&key[0],
@@ -256,15 +266,47 @@ RelationBuildPartitionDesc(Relation rel, bool omit_detached)
 						ObjectIdGetDatum(inhrelid));
 			scan = systable_beginscan(pg_class, ClassOidIndexId, true,
 									  NULL, 1, key);
+
+			/*
+			 * We could get one tuple from the scan (the normal case), or zero
+			 * tuples if the table has been dropped meanwhile.
+			 */
 			tuple = systable_getnext(scan);
-			if (!tuple)
-				elog(ERROR, "could not find pg_class entry for oid %u", inhrelid);
-			datum = heap_getattr(tuple, Anum_pg_class_relpartbound,
-								 RelationGetDescr(pg_class), &isnull);
-			if (!isnull)
-				boundspec = stringToNode(TextDatumGetCString(datum));
+
+			{
+				Datum		datum;
+				bool		isnull;
+
+				if (!tuple)
+					elog(ERROR, "could not find pg_class entry for oid %u", inhrelid);
+				datum = heap_getattr(tuple, Anum_pg_class_relpartbound,
+									 RelationGetDescr(pg_class), &isnull);
+				if (!isnull)
+					boundspec = stringToNode(TextDatumGetCString(datum));
+			}
+
 			systable_endscan(scan);
 			table_close(pg_class, AccessShareLock);
+
+			/*
+			 * If we still don't get a relpartbound value (either because
+			 * boundspec is null or because there was no tuple), then it must
+			 * be because of DETACH CONCURRENTLY.  Restart from the top, as
+			 * explained above.  We only do this once, for two reasons: first,
+			 * only one DETACH CONCURRENTLY session could affect us at a time,
+			 * since each of them would have to wait for the snapshot under
+			 * which this is running; and second, to avoid possible infinite
+			 * loops in case of catalog corruption.
+			 *
+			 * Note that the current memory context is short-lived enough, so
+			 * we needn't worry about memory leaks here.
+			 */
+			if (!boundspec && !retried)
+			{
+				AcceptInvalidationMessages();
+				retried = true;
+				goto retry;
+			}
 		}
 
 		/* Sanity checks. */

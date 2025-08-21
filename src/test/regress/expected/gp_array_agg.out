@@ -210,16 +210,18 @@ explain (costs off) select * from v_pagg_test order by y;
    ->  GroupAggregate
          Group Key: pagg_test.y
          ->  Sort
-               Sort Key: pagg_test.y
+               Sort Key: pagg_test.y, (((unnest(regexp_split_to_array((string_agg((pagg_test.x)::text, ','::text)), ','::text))))::integer)
                ->  Result
                      ->  ProjectSet
-                           ->  HashAggregate
+                           ->  Finalize HashAggregate
                                  Group Key: pagg_test.y
                                  ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                        Hash Key: pagg_test.y
-                                       ->  Seq Scan on pagg_test
+                                       ->  Partial HashAggregate
+                                             Group Key: pagg_test.y
+                                             ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 -- Test array_agg(anyarray)
 create table int_array_table (a int, arr int[]);

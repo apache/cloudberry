@@ -1,3 +1,4 @@
+set optimizer_trace_fallback = on;
 --
 -- UNION (also INTERSECT, EXCEPT)
 --
@@ -708,6 +709,8 @@ reset enable_hashagg;
 set enable_hashagg to on;
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
@@ -721,6 +724,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
 (8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
    x   
 -------
  (1,2)
@@ -730,6 +735,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                      QUERY PLAN                      
 -----------------------------------------------------
  SetOp Intersect
@@ -744,6 +751,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 (9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
    x   
 -------
  (1,2)
@@ -751,6 +760,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                      QUERY PLAN                      
 -----------------------------------------------------
  SetOp Except
@@ -765,6 +776,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
 (9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
    x   
 -------
  (1,3)
@@ -775,6 +788,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
 -- type is hashable.  (Otherwise, this would fail at execution time.)
 explain (costs off)
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
@@ -788,6 +803,8 @@ select x from (values (row(100::money)), (row(200::money))) _(x) union select x 
 (8 rows)
 
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
      x     
 -----------
  ($100.00)
@@ -824,6 +841,8 @@ drop type ct1;
 set enable_hashagg to off;
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
@@ -837,6 +856,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
 (8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
    x   
 -------
  (1,2)
@@ -846,6 +867,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                      QUERY PLAN                      
 -----------------------------------------------------
  SetOp Intersect
@@ -860,6 +883,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 (9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
    x   
 -------
  (1,2)
@@ -867,6 +892,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
                      QUERY PLAN                      
 -----------------------------------------------------
  SetOp Except
@@ -881,6 +908,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
 (9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
    x   
 -------
  (1,3)
@@ -982,7 +1011,7 @@ SELECT q1 FROM int8_tbl EXCEPT SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1;
 ERROR:  column "q2" does not exist
 LINE 1: ... int8_tbl EXCEPT SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1...
                                                              ^
-HINT:  There is a column named "q2" in table "*SELECT* 2", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "q2" in table "*SELECT* 2", but it cannot be referenced from this part of the query.
 -- But this should work:
 SELECT q1 FROM int8_tbl EXCEPT (((SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1))) ORDER BY 1;
         q1        
@@ -1225,6 +1254,8 @@ explain (costs off)
    UNION ALL
    SELECT ab FROM t2) t
   ORDER BY 1 LIMIT 8;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Inherited tables
                            QUERY PLAN                            
 -----------------------------------------------------------------
  Limit
@@ -1245,6 +1276,8 @@ explain (costs off)
    UNION ALL
    SELECT ab FROM t2) t
   ORDER BY 1 LIMIT 8;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Inherited tables
  ab 
 ----
  ab
@@ -1273,6 +1306,8 @@ select event_id
        union all
        select event_id from other_events) ss
  order by event_id;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Inherited tables
                            QUERY PLAN                           
 ----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1297,6 +1332,8 @@ explain (costs off)
    UNION ALL
    SELECT 2 AS t, * FROM tenk1 b) c
  WHERE t = 2;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1379,6 +1416,8 @@ SELECT * FROM
    SELECT 2 AS t, 4 AS x) ss
 WHERE x > 3
 ORDER BY x;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Sort
@@ -1403,6 +1442,8 @@ SELECT * FROM
    SELECT 2 AS t, 4 AS x) ss
 WHERE x > 3
 ORDER BY x;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
  t | x 
 ---+---
  2 | 4
@@ -1561,3 +1602,4 @@ where (x = 0) or (q1 >= q2 and q1 <= q2);
  4567890123456789 |  4567890123456789 | 1
 (6 rows)
 
+reset optimizer_trace_fallback;

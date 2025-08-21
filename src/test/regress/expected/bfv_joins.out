@@ -3511,6 +3511,7 @@ explain (costs off) select * from b, lateral (select * from a, c where b.i = a.i
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Join Filter: ((a.i + b.i) = c.j)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on b
          ->  Materialize

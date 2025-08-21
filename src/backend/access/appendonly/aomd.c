@@ -62,7 +62,7 @@ AOSegmentFilePathNameLen(Relation rel)
 	int 		len;
 		
 	/* Get base path for this relation file */
-	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	/*
 	 * The basepath will be the RelFileNode number.  Optional part is dot "." plus 
@@ -133,7 +133,7 @@ MakeAOSegmentFileName(Relation rel,
 	int32   fileSegNoLocal;
 
 	/* Get base path for this relation file */
-	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	FormatAOSegmentFileName(basepath, segno, filenum, &fileSegNoLocal, filepathname);
 	
@@ -158,9 +158,7 @@ OpenAOSegmentFile(Relation rel,
 
 	errno = 0;
 
-	RelationOpenSmgr(rel);
-
-	fd = rel->rd_smgr->smgr_ao->smgr_AORelOpenSegFile(RelationGetRelid(rel), filepathname, fileFlags);
+	fd = RelationGetSmgr(rel)->smgr_ao->smgr_AORelOpenSegFile(RelationGetRelid(rel), filepathname, fileFlags);
 	if (fd < 0)
 	{
 		if (logicalEof == 0 && errno == ENOENT)
@@ -183,9 +181,8 @@ void
 CloseAOSegmentFile(File fd, Relation rel)
 {
 	Assert(fd > 0);
-	RelationOpenSmgr(rel);
 
-	rel->rd_smgr->smgr_ao->smgr_FileClose(fd);
+	RelationGetSmgr(rel)->smgr_ao->smgr_FileClose(fd);
 }
 
 /*
@@ -200,9 +197,7 @@ TruncateAOSegmentFile(File fd, Relation rel, int32 segFileNum, int64 offset, AOV
 	Assert(fd > 0);
 	Assert(offset >= 0);
 
-	RelationOpenSmgr(rel);
-
-	filesize_before = rel->rd_smgr->smgr_ao->smgr_FileSize(fd);
+	filesize_before = RelationGetSmgr(rel)->smgr_ao->smgr_FileSize(fd);
 	if (filesize_before < offset)
 		ereport(ERROR,
 				(errmsg("\"%s\": file size smaller than logical eof: %m",
@@ -225,14 +220,14 @@ TruncateAOSegmentFile(File fd, Relation rel, int32 segFileNum, int64 offset, AOV
 	}
 
 	if (XLogIsNeeded() && RelationNeedsWAL(rel))
-		xlog_ao_truncate(rel->rd_node, segFileNum, offset);
+		xlog_ao_truncate(rel->rd_locator, segFileNum, offset);
 
 	SIMPLE_FAULT_INJECTOR("appendonly_after_truncate_segment_file");
 
 	if (file_truncate_hook)
 	{
-		RelFileNodeBackend rnode;
-		rnode.node = rel->rd_node;
+		RelFileLocatorBackend rnode;
+		rnode.locator = rel->rd_locator;
 		rnode.backend = rel->rd_backend;
 		(*file_truncate_hook)(rnode);
 	}
@@ -240,7 +235,7 @@ TruncateAOSegmentFile(File fd, Relation rel, int32 segFileNum, int64 offset, AOV
 
 struct mdunlink_ao_callback_ctx
 {
-	RelFileNode rnode; /* used to register forget request */
+	RelFileLocator rnode; /* used to register forget request */
 	char *segPath;
 	char *segpathSuffixPosition;
 	bool isRedo;
@@ -254,23 +249,27 @@ struct truncate_ao_callback_ctx
 };
 
 void
-mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
+mdunlink_ao(RelFileLocatorBackend rnode, ForkNumber forkNumber, bool isRedo)
 {
 	const char *path = relpath(rnode, forkNumber);
 
 	/*
 	 * Unlogged AO tables have INIT_FORK, in addition to MAIN_FORK.  It is
 	 * created once, regardless of the number of segment files (or the number
-	 * of columns for column-oriented tables).  Sync requests for INIT_FORKs
-	 * are not remembered, so they need not be forgotten.
+	 * of columns for column-oriented tables).
 	 */
 	if (forkNumber == INIT_FORKNUM)
 	{
+		FileTag tag;
+		
 		path = relpath(rnode, forkNumber);
 		if (unlink(path) < 0 && errno != ENOENT)
 			ereport(WARNING,
 					(errcode_for_file_access(),
 					 errmsg("could not remove file \"%s\": %m", path)));
+		INIT_FILETAG(tag, rnode.locator, INIT_FORKNUM, 0,
+					 SYNC_HANDLER_MD);
+		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
 	}
 	/* This storage manager is not concerned with forks other than MAIN_FORK */
 	else if (forkNumber == MAIN_FORKNUM)
@@ -280,7 +279,7 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 		char *segPathSuffixPosition = segPath + pathSize;
 		struct mdunlink_ao_callback_ctx unlinkFiles;
 		unlinkFiles.isRedo = isRedo;
-		unlinkFiles.rnode = rnode.node;
+		unlinkFiles.rnode = rnode.locator;
 
 		strncpy(segPath, path, pathSize);
 
@@ -397,7 +396,7 @@ mdunlink_ao_perFile(const int segno, void *ctx)
 
 static void
 copy_file(char *srcsegpath, char *dstsegpath,
-		  RelFileNode dst, SMgrRelation srcSMGR, SMgrRelation dstSMGR,
+		  RelFileLocator dst, SMgrRelation srcSMGR, SMgrRelation dstSMGR,
 		  int segfilenum, bool use_wal)
 {
 	File		srcFile;
@@ -475,8 +474,8 @@ struct copy_append_only_data_callback_ctx {
 	char *dstPath;
 	SMgrRelation srcSMGR;
 	SMgrRelation dstSMGR;
-	RelFileNode src;
-	RelFileNode dst;
+	RelFileLocator src;
+	RelFileLocator dst;
 	bool useWal;
 };
 
@@ -485,7 +484,7 @@ struct copy_append_only_data_callback_ctx {
  *
  */
 void
-copy_append_only_data(RelFileNode src, RelFileNode dst,
+copy_append_only_data(RelFileLocator src, RelFileLocator dst,
 		SMgrRelation srcSMGR, SMgrRelation dstSMGR,
         BackendId backendid, char relpersistence)
 {
@@ -516,8 +515,8 @@ copy_append_only_data(RelFileNode src, RelFileNode dst,
 
 	if (file_extend_hook)
 	{
-		RelFileNodeBackend rnode;
-		rnode.node = dst;
+		RelFileLocatorBackend rnode;
+		rnode.locator = dst;
 		rnode.backend = backendid;
 		(*file_extend_hook)(rnode);
 	}
@@ -562,7 +561,7 @@ ao_truncate_one_rel(Relation rel)
 	int pathSize;
 
 	/* Get base path for this relation file */
-	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
+	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	pathSize = strlen(basepath);
 	segPath = (char *) palloc(pathSize + SEGNO_SUFFIX_LENGTH);
@@ -710,7 +709,7 @@ ao_segfile_get_physical_size(Relation aorel, int segno, FileNumber filenum)
 		   "Opening append-optimized relation \"%s\", relation id %u, relfilenode %u filenum #%d, logical segment #%d (physical segment file #%d)",
 		   relname,
 		   aorel->rd_id,
-		   aorel->rd_node.relNode,
+		   aorel->rd_locator.relNumber,
 		   filenum,
 		   segno,
 		   fileSegNo);
@@ -722,7 +721,7 @@ ao_segfile_get_physical_size(Relation aorel, int segno, FileNumber filenum)
 			   "No gp_relation_node entry for append-optimized relation \"%s\", relation id %u, relfilenode %u filenum #%d, logical segment #%d (physical segment file #%d)",
 			   relname,
 			   aorel->rd_id,
-			   aorel->rd_node.relNode,
+			   aorel->rd_locator.relNumber,
 			   filenum,
 			   segno,
 			   fileSegNo);

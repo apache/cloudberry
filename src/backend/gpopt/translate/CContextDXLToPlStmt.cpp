@@ -51,6 +51,7 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_param_types_list(NIL),
 	  m_distribution_hashops(distribution_hashops),
 	  m_rtable_entries_list(nullptr),
+	  m_perminfo_list(nullptr),
 	  m_subplan_entries_list(nullptr),
 	  m_subplan_sliceids_list(nullptr),
 	  m_slices_list(nullptr),
@@ -588,6 +589,31 @@ CContextDXLToPlStmt::GetRTEIndexByAssignedQueryId(
 	//	`assigned_query_id_for_target_rel` of table descriptor which points to
 	//	result relation wasn't previously processed - create a new index.
 	return gpdb::ListLength(m_rtable_entries_list) + 1;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CContextDXLToPlStmt::AddPerfmInfo
+//
+//	@doc:
+//		Add a Perfission Info list entry
+//
+//---------------------------------------------------------------------------
+void
+CContextDXLToPlStmt::AddPerfmInfo(RTEPermissionInfo *pi)
+{
+	// add rte to rtable entries list
+	m_perminfo_list = gpdb::LAppend(m_perminfo_list, pi);
+}
+
+
+RTEPermissionInfo *
+CContextDXLToPlStmt::GetPermInfoByIndex(Index index)
+{
+
+	return (RTEPermissionInfo *) gpdb::ListNth(m_perminfo_list,
+										   int(index - 1));
 }
 
 // EOF

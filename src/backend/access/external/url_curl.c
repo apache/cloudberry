@@ -179,11 +179,11 @@ fill_buffer(URL_CURL_FILE *curl, int want);
  */
 #define CURL_EASY_SETOPT(h, opt, val) \
 	do { \
-		int			e; \
+		int			e2; \
 \
-		if ((e = curl_easy_setopt(h, opt, val)) != CURLE_OK) \
+		if ((e2 = curl_easy_setopt(h, opt, val)) != CURLE_OK) \
 			elog(ERROR, "internal error: curl_easy_setopt \"%s\" error (%d - %s)", \
-				 CppAsString(opt), e, curl_easy_strerror(e)); \
+				 CppAsString(opt), e2, curl_easy_strerror(e2)); \
 	} while(0)
 
 /*

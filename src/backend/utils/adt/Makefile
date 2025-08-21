@@ -43,6 +43,7 @@ OBJS = \
 	geo_ops.o \
 	geo_selfuncs.o \
 	geo_spgist.o \
+	hbafuncs.o \
 	inet_cidr_ntop.o \
 	inet_net_pton.o \
 	int.o \
@@ -57,6 +58,7 @@ OBJS = \
 	jsonpath.o \
 	jsonpath_exec.o \
 	jsonpath_gram.o \
+	jsonpath_scan.o \
 	like.o \
 	like_support.o \
 	lockfuncs.o \
@@ -119,11 +121,17 @@ OBJS = \
 	xid8funcs.o \
 	xml.o
 
+# See notes in src/backend/parser/Makefile about the following two rules
+jsonpath_gram.h: jsonpath_gram.c
+	touch $@
+
+jsonpath_gram.c: BISONFLAGS += -d
+
 jsonpath_scan.c: FLEXFLAGS = -CF -p -p
 jsonpath_scan.c: FLEX_NO_BACKUP=yes
 
-# jsonpath_scan is compiled as part of jsonpath_gram
-jsonpath_gram.o: jsonpath_scan.c
+# Force these dependencies to be known even without dependency info built:
+jsonpath_gram.o jsonpath_scan.o: jsonpath_gram.h
 
 # jsonpath_gram.c and jsonpath_scan.c are in the distribution tarball,
 # so they are not cleaned here.

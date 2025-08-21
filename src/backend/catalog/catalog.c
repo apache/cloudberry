@@ -5,7 +5,7 @@
  *		bits of hard-wired knowledge
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -36,7 +36,9 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_db_role_setting.h"
+#include "catalog/pg_largeobject.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_parameter_acl.h"
 #include "catalog/pg_replication_origin.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_shdescription.h"
@@ -95,7 +97,7 @@ bool system_relation_modified = false;
  * and the filename separately.
  */
 void
-reldir_and_filename(RelFileNode node, BackendId backend, ForkNumber forknum,
+reldir_and_filename(RelFileLocator node, BackendId backend, ForkNumber forknum,
 					char **dir, char **filename)
 {
 	char	   *path;
@@ -129,7 +131,7 @@ reldir_and_filename(RelFileNode node, BackendId backend, ForkNumber forknum,
  * XXX This is very similar to _mdfd_segpath(), let's use that one
  */
 char *
-aorelpathbackend(RelFileNode node, BackendId backend, int32 segno)
+aorelpathbackend(RelFileLocator node, BackendId backend, int32 segno)
 {
 	char	   *fullpath;
 	char	   *path;
@@ -230,9 +232,9 @@ bool
 IsCatalogRelationOid(Oid relid)
 {
 	/*
-	 * We consider a relation to be a system catalog if it has an OID that was
-	 * manually assigned or assigned by genbki.pl.  This includes all the
-	 * defined catalogs, their indexes, and their TOAST tables and indexes.
+	 * We consider a relation to be a system catalog if it has a pinned OID.
+	 * This includes all the defined catalogs, their indexes, and their TOAST
+	 * tables and indexes.
 	 *
 	 * This rule excludes the relations in information_schema, which are not
 	 * integral to the system and can be treated the same as user relations.
@@ -242,7 +244,37 @@ IsCatalogRelationOid(Oid relid)
 	 * This test is reliable since an OID wraparound will skip this range of
 	 * OIDs; see GetNewObjectId().
 	 */
-	return (relid < (Oid) FirstBootstrapObjectId);
+	return (relid < (Oid) FirstUnpinnedObjectId);
+}
+
+/*
+ * IsInplaceUpdateRelation
+ *		True iff core code performs inplace updates on the relation.
+ *
+ *		This is used for assertions and for making the executor follow the
+ *		locking protocol described at README.tuplock section "Locking to write
+ *		inplace-updated tables".  Extensions may inplace-update other heap
+ *		tables, but concurrent SQL UPDATE on the same table may overwrite
+ *		those modifications.
+ *
+ *		The executor can assume these are not partitions or partitioned and
+ *		have no triggers.
+ */
+bool
+IsInplaceUpdateRelation(Relation relation)
+{
+	return IsInplaceUpdateOid(RelationGetRelid(relation));
+}
+
+/*
+ * IsInplaceUpdateOid
+ *		Like the above, but takes an OID as argument.
+ */
+bool
+IsInplaceUpdateOid(Oid relid)
+{
+	return (relid == RelationRelationId ||
+			relid == DatabaseRelationId);
 }
 
 /*
@@ -436,13 +468,14 @@ IsSharedRelation(Oid relationId)
 	if (relationId == AuthIdRelationId ||
 		relationId == AuthMemRelationId ||
 		relationId == DatabaseRelationId ||
-		relationId == SharedDescriptionRelationId ||
-		relationId == SharedDependRelationId ||
-		relationId == SharedSecLabelRelationId ||
-		relationId == TableSpaceRelationId ||
 		relationId == DbRoleSettingRelationId ||
+		relationId == ParameterAclRelationId ||
 		relationId == ReplicationOriginRelationId ||
-		relationId == SubscriptionRelationId)
+		relationId == SharedDependRelationId ||
+		relationId == SharedDescriptionRelationId ||
+		relationId == SharedSecLabelRelationId ||
+		relationId == SubscriptionRelationId ||
+		relationId == TableSpaceRelationId)
 		return true;
 
 	/* GPDB additions */
@@ -474,23 +507,27 @@ IsSharedRelation(Oid relationId)
 		return true;
 
 	/* These are their indexes */
-	if (relationId == AuthIdRolnameIndexId ||
-		relationId == AuthIdOidIndexId ||
-		relationId == AuthMemRoleMemIndexId ||
+	if (relationId == AuthIdOidIndexId ||
+		relationId == AuthIdRolnameIndexId ||
 		relationId == AuthMemMemRoleIndexId ||
+		relationId == AuthMemRoleMemIndexId ||
+		relationId == AuthMemOidIndexId ||
+		relationId == AuthMemGrantorIndexId ||
 		relationId == DatabaseNameIndexId ||
 		relationId == DatabaseOidIndexId ||
-		relationId == SharedDescriptionObjIndexId ||
-		relationId == SharedDependDependerIndexId ||
-		relationId == SharedDependReferenceIndexId ||
-		relationId == SharedSecLabelObjectIndexId ||
-		relationId == TablespaceOidIndexId ||
-		relationId == TablespaceNameIndexId ||
 		relationId == DbRoleSettingDatidRolidIndexId ||
+		relationId == ParameterAclOidIndexId ||
+		relationId == ParameterAclParnameIndexId ||
 		relationId == ReplicationOriginIdentIndex ||
 		relationId == ReplicationOriginNameIndex ||
+		relationId == SharedDependDependerIndexId ||
+		relationId == SharedDependReferenceIndexId ||
+		relationId == SharedDescriptionObjIndexId ||
+		relationId == SharedSecLabelObjectIndexId ||
+		relationId == SubscriptionNameIndexId ||
 		relationId == SubscriptionObjectIndexId ||
-		relationId == SubscriptionNameIndexId)
+		relationId == TablespaceNameIndexId ||
+		relationId == TablespaceOidIndexId)
 		return true;
 
 	/* GPDB added indexes */
@@ -541,6 +578,8 @@ IsSharedRelation(Oid relationId)
 		relationId == PgDatabaseToastIndex ||
 		relationId == PgDbRoleSettingToastTable ||
 		relationId == PgDbRoleSettingToastIndex ||
+		relationId == PgParameterAclToastTable ||
+		relationId == PgParameterAclToastIndex ||
 		relationId == PgReplicationOriginToastTable ||
 		relationId == PgReplicationOriginToastIndex ||
 		relationId == PgShdescriptionToastTable ||
@@ -640,6 +679,68 @@ RelationNeedsSynchronizedOIDs(Relation relation)
 		return true;
 	}
 	return false;
+}
+
+/*
+ * IsPinnedObject
+ *		Given the class + OID identity of a database object, report whether
+ *		it is "pinned", that is not droppable because the system requires it.
+ *
+ * We used to represent this explicitly in pg_depend, but that proved to be
+ * an undesirable amount of overhead, so now we rely on an OID range test.
+ */
+bool
+IsPinnedObject(Oid classId, Oid objectId)
+{
+	/*
+	 * Objects with OIDs above FirstUnpinnedObjectId are never pinned.  Since
+	 * the OID generator skips this range when wrapping around, this check
+	 * guarantees that user-defined objects are never considered pinned.
+	 */
+	if (objectId >= FirstUnpinnedObjectId)
+		return false;
+
+	/*
+	 * Large objects are never pinned.  We need this special case because
+	 * their OIDs can be user-assigned.
+	 */
+	if (classId == LargeObjectRelationId)
+		return false;
+
+	/*
+	 * There are a few objects defined in the catalog .dat files that, as a
+	 * matter of policy, we prefer not to treat as pinned.  We used to handle
+	 * that by excluding them from pg_depend, but it's just as easy to
+	 * hard-wire their OIDs here.  (If the user does indeed drop and recreate
+	 * them, they'll have new but certainly-unpinned OIDs, so no problem.)
+	 *
+	 * Checking both classId and objectId is overkill, since OIDs below
+	 * FirstGenbkiObjectId should be globally unique, but do it anyway for
+	 * robustness.
+	 */
+
+	/* the public namespace is not pinned */
+	if (classId == NamespaceRelationId &&
+		objectId == PG_PUBLIC_NAMESPACE)
+		return false;
+
+	/*
+	 * Databases are never pinned.  It might seem that it'd be prudent to pin
+	 * at least template0; but we do this intentionally so that template0 and
+	 * template1 can be rebuilt from each other, thus letting them serve as
+	 * mutual backups (as long as you've not modified template1, anyway).
+	 */
+	if (classId == DatabaseRelationId)
+		return false;
+
+	/*
+	 * All other initdb-created objects are pinned.  This is overkill (the
+	 * system doesn't really depend on having every last weird datatype, for
+	 * instance) but generating only the minimum required set of dependencies
+	 * seems hard, and enforcing an accurate list would be much more expensive
+	 * than the simple range test used here.
+	 */
+	return true;
 }
 
 /*
@@ -775,7 +876,7 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 }
 
 static bool
-GpCheckRelFileCollision(RelFileNodeBackend rnode)
+GpCheckRelFileCollision(RelFileLocatorBackend rnode)
 {
 	char	   *rpath;
 	bool		collides;
@@ -802,14 +903,14 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
 }
 
 /*
- * GetNewRelFileNode
- *		Generate a new relfilenode number that is unique within the
+ * GetNewRelFileNumber
+ *		Generate a new relfilenumber that is unique within the
  *		database of the given tablespace.
  *
- * If the relfilenode will also be used as the relation's OID, pass the
+ * If the relfilenumber will also be used as the relation's OID, pass the
  * opened pg_class catalog, and this routine will guarantee that the result
  * is also an unused OID within pg_class.  If the result is to be used only
- * as a relfilenode for an existing relation, pass NULL for pg_class.
+ * as a relfilenumber for an existing relation, pass NULL for pg_class.
  * (in GPDB, 'pg_class' is unused, there is a different mechanism to avoid
  * clashes, across the whole cluster.)
  *
@@ -819,16 +920,16 @@ GpCheckRelFileCollision(RelFileNodeBackend rnode)
  * Note: we don't support using this in bootstrap mode.  All relations
  * created by bootstrap have preassigned OIDs, so there's no need.
  */
-Oid
-GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
+RelFileNumber
+GetNewRelFileNumber(Oid reltablespace, Relation pg_class, char relpersistence)
 {
-	RelFileNodeBackend rnode;
+	RelFileLocatorBackend rlocator;
 	bool		collides;
 	BackendId	backend;
 
 	/*
 	 * If we ever get here during pg_upgrade, there's something wrong; all
-	 * relfilenode assignments during a binary-upgrade run should be
+	 * relfilenumber assignments during a binary-upgrade run should be
 	 * determined by commands in the dump script.
 	 *
 	 * GPDB: Totally OK in Cloudberry. We don't use the table's OID as its
@@ -847,30 +948,32 @@ GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 			break;
 		default:
 			elog(ERROR, "invalid relpersistence: %c", relpersistence);
-			return InvalidOid;	/* placate compiler */
+			return InvalidRelFileNumber;	/* placate compiler */
 	}
 
 	/* This logic should match RelationInitPhysicalAddr */
-	rnode.node.spcNode = reltablespace ? reltablespace : MyDatabaseTableSpace;
-	rnode.node.dbNode = (rnode.node.spcNode == GLOBALTABLESPACE_OID) ? InvalidOid : MyDatabaseId;
+	rlocator.locator.spcOid = reltablespace ? reltablespace : MyDatabaseTableSpace;
+	rlocator.locator.dbOid =
+		(rlocator.locator.spcOid == GLOBALTABLESPACE_OID) ?
+		InvalidOid : MyDatabaseId;
 
 	/*
 	 * The relpath will vary based on the backend ID, so we must initialize
 	 * that properly here to make sure that any collisions based on filename
 	 * are properly detected.
 	 */
-	rnode.backend = backend;
+	rlocator.backend = backend;
 
 	do
 	{
         CHECK_FOR_INTERRUPTS();
 
         /* Generate the Relfilenode */
-        rnode.node.relNode = GetNewSegRelfilenode();
+		rlocator.locator.relNumber = GetNewSegRelfilenode();
 
-		collides = GpCheckRelFileCollision(rnode);
+		collides = GpCheckRelFileCollision(rlocator);
 
-		if (!collides && rnode.node.spcNode != GLOBALTABLESPACE_OID)
+		if (!collides && rlocator.locator.spcOid != GLOBALTABLESPACE_OID)
 		{
 			/*
 			 * GPDB_91_MERGE_FIXME: check again for a collision with a temp
@@ -883,15 +986,15 @@ GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 			 * buffers at all. We have to make this additional check to make
 			 * sure of that.
 			 */
-			rnode.backend = (backend == InvalidBackendId) ? TempRelBackendId
+			rlocator.backend = (backend == InvalidBackendId) ? TempRelBackendId
 														  : InvalidBackendId;
-			collides = GpCheckRelFileCollision(rnode);
+			collides = GpCheckRelFileCollision(rlocator);
 		}
 	} while (collides);
 
-	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %u", rnode.node.relNode);
+	elog(DEBUG1, "Calling GetNewRelFileNode returns new relfilenode = %u", rlocator.locator.relNumber);
 
-	return rnode.node.relNode;
+	return rlocator.locator.relNumber;
 }
 
 /*
@@ -923,7 +1026,8 @@ pg_nextoid(PG_FUNCTION_ARGS)
 	if (!superuser())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to call pg_nextoid()")));
+				 errmsg("must be superuser to call %s()",
+						"pg_nextoid")));
 
 	rel = table_open(reloid, RowExclusiveLock);
 	idx = index_open(idxoid, RowExclusiveLock);
@@ -970,5 +1074,29 @@ pg_nextoid(PG_FUNCTION_ARGS)
 	table_close(rel, RowExclusiveLock);
 	index_close(idx, RowExclusiveLock);
 
-	return newoid;
+	PG_RETURN_OID(newoid);
+}
+
+/*
+ * SQL callable interface for StopGeneratingPinnedObjectIds().
+ *
+ * This is only to be used by initdb, so it's intentionally not documented in
+ * the user facing docs.
+ */
+Datum
+pg_stop_making_pinned_objects(PG_FUNCTION_ARGS)
+{
+	/*
+	 * Belt-and-suspenders check, since StopGeneratingPinnedObjectIds will
+	 * fail anyway in non-single-user mode.
+	 */
+	if (!superuser())
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to call %s()",
+						"pg_stop_making_pinned_objects")));
+
+	StopGeneratingPinnedObjectIds();
+
+	PG_RETURN_VOID();
 }

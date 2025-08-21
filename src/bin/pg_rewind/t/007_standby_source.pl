@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 #
 # Test using a standby server as the source.
@@ -26,16 +26,16 @@
 
 use strict;
 use warnings;
-use TestLib;
-use Test::More tests => 3;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 use FindBin;
 use lib $FindBin::RealBin;
 use File::Copy;
-use PostgresNode;
+use PostgreSQL::Test::Cluster;
 use RewindTest;
 
-my $tmp_folder = TestLib::tempdir;
+my $tmp_folder = PostgreSQL::Test::Utils::tempdir;
 
 my $node_a;
 my $node_b;
@@ -58,13 +58,13 @@ primary_psql("CHECKPOINT");
 #
 # A (primary) <--- B (standby) <--- C (standby)
 $node_a->backup('my_backup');
-$node_b = get_new_node('node_b');
+$node_b = PostgreSQL::Test::Cluster->new('node_b');
 $node_b->init_from_backup($node_a, 'my_backup', has_streaming => 1);
 $node_b->set_standby_mode();
 $node_b->start;
 
 $node_b->backup('my_backup');
-$node_c = get_new_node('node_c');
+$node_c = PostgreSQL::Test::Cluster->new('node_c');
 $node_c->init_from_backup($node_b, 'my_backup', has_streaming => 1);
 $node_c->set_standby_mode();
 $node_c->start;
@@ -74,7 +74,7 @@ $node_a->safe_psql('postgres',
 	"INSERT INTO tbl1 values ('in A, before promotion')");
 $node_a->safe_psql('postgres', 'CHECKPOINT');
 
-my $lsn = $node_a->lsn('insert');
+my $lsn = $node_a->lsn('write');
 $node_a->wait_for_catchup('node_b', 'write', $lsn);
 $node_b->wait_for_catchup('node_c', 'write', $lsn);
 
@@ -83,7 +83,6 @@ $node_b->wait_for_catchup('node_c', 'write', $lsn);
 # A (primary) <--- B (standby)      C (primary)
 
 $node_c->promote;
-$node_c->safe_psql('postgres', "checkpoint");
 
 
 # Insert a row in A. This causes A/B and C to have "diverged", so that it's
@@ -93,8 +92,7 @@ $node_a->safe_psql('postgres',
 	"INSERT INTO tbl1 VALUES ('in A, after C was promoted')");
 
 # make sure it's replicated to B before we continue
-$lsn = $node_a->lsn('insert');
-$node_a->wait_for_catchup('node_b', 'replay', $lsn);
+$node_a->wait_for_catchup('node_b');
 
 # Also insert a new row in the standby, which won't be present in the
 # old primary.
@@ -126,8 +124,8 @@ copy(
 	# recovery configuration automatically.
 	command_ok(
 		[
-			'pg_rewind',                      "--debug",
-			"--source-server",                $node_b->connstr('postgres'),
+			'pg_rewind', "--debug",
+			"--source-server", $node_b->connstr('postgres'),
 			"--target-pgdata=$node_c_pgdata", "--no-sync",
 			"--write-recovery-conf"
 		],
@@ -142,7 +140,7 @@ move(
 # Restart the node.
 $node_c->start;
 
-# set RewindTest::node_primary to point to the rewinded node, so that we can
+# set RewindTest::node_primary to point to the rewound node, so that we can
 # use check_query()
 $node_primary = $node_c;
 
@@ -161,8 +159,7 @@ in A, after C was promoted
 $node_a->safe_psql('postgres',
 	"INSERT INTO tbl1 values ('in A, after rewind')");
 
-$lsn = $node_a->lsn('insert');
-$node_b->wait_for_catchup('node_c', 'replay', $lsn);
+$node_b->wait_for_replay_catchup('node_c', $node_a);
 
 check_query(
 	'SELECT * FROM tbl1',
@@ -178,4 +175,4 @@ $node_a->teardown_node;
 $node_b->teardown_node;
 $node_c->teardown_node;
 
-exit(0);
+done_testing();

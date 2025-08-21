@@ -1,3 +1,4 @@
+set optimizer_trace_fallback = on;
 --
 -- UNION (also INTERSECT, EXCEPT)
 --
@@ -947,7 +948,7 @@ SELECT q1 FROM int8_tbl EXCEPT SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1;
 ERROR:  column "q2" does not exist
 LINE 1: ... int8_tbl EXCEPT SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1...
                                                              ^
-HINT:  There is a column named "q2" in table "*SELECT* 2", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "q2" in table "*SELECT* 2", but it cannot be referenced from this part of the query.
 -- But this should work:
 SELECT q1 FROM int8_tbl EXCEPT (((SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1))) ORDER BY 1;
         q1        
@@ -1462,19 +1463,20 @@ explain (costs off)
 select * from
   (select * from t3 a union all select * from t3 b) ss
   join int4_tbl on f1 = expensivefunc(x);
-                          QUERY PLAN                           
----------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (expensivefunc(a.x) = int4_tbl.f1)
-         ->  Append
-               ->  Seq Scan on t3 a
-               ->  Seq Scan on t3 b
+         Hash Cond: (int4_tbl.f1 = expensivefunc(a.x))
+         ->  Seq Scan on int4_tbl
          ->  Hash
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on int4_tbl
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: expensivefunc(a.x)
+                     ->  Append
+                           ->  Seq Scan on t3 a
+                           ->  Seq Scan on t3 b
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 select * from
   (select * from t3 a union all select * from t3 b) ss
@@ -1519,3 +1521,4 @@ where (x = 0) or (q1 >= q2 and q1 <= q2);
  4567890123456789 |  4567890123456789 | 1
 (6 rows)
 
+reset optimizer_trace_fallback;

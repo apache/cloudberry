@@ -8,7 +8,7 @@
 #    Note: This does not reformat the .dat files, so you may want
 #    to run reformat_dat_file.pl afterwards.
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/include/catalog/renumber_oids.pl
@@ -32,16 +32,16 @@ my $FirstGenbkiObjectId =
   Catalog::FindDefinedSymbol('access/transam.h', '..', 'FirstGenbkiObjectId');
 
 # Process command line switches.
-my $output_path      = '';
+my $output_path = '';
 my $first_mapped_oid = 0;
-my $last_mapped_oid  = $FirstGenbkiObjectId - 1;
-my $target_oid       = 0;
+my $last_mapped_oid = $FirstGenbkiObjectId - 1;
+my $target_oid = 0;
 
 GetOptions(
-	'output=s'           => \$output_path,
+	'output=s' => \$output_path,
 	'first-mapped-oid=i' => \$first_mapped_oid,
-	'last-mapped-oid=i'  => \$last_mapped_oid,
-	'target-oid=i'       => \$target_oid) || usage();
+	'last-mapped-oid=i' => \$last_mapped_oid,
+	'target-oid=i' => \$target_oid) || usage();
 
 # Sanity check arguments.
 die "Unexpected non-switch arguments.\n" if @ARGV;
@@ -62,7 +62,7 @@ if ($output_path ne '' && substr($output_path, -1) ne '/')
 
 # Collect all the existing assigned OIDs (including those to be remapped).
 my @header_files = glob("pg_*.h");
-my $oids         = Catalog::FindAllOidsFromHeaders(@header_files);
+my $oids = Catalog::FindAllOidsFromHeaders(@header_files);
 
 # Hash-ify the existing OIDs for convenient lookup.
 my %oidhash;
@@ -108,7 +108,7 @@ foreach my $input_file (@header_files)
 
 	# Write output files to specified directory.
 	# Use a .tmp suffix, then rename into place, in case we're overwriting.
-	my $output_file     = "$output_path$catname.h";
+	my $output_file = "$output_path$catname.h";
 	my $tmp_output_file = "$output_file.tmp";
 	open my $ofd, '>', $tmp_output_file
 	  or die "can't open $tmp_output_file: $!";
@@ -140,14 +140,47 @@ foreach my $input_file (@header_files)
 				$changed = 1;
 			}
 		}
-		elsif (
-			$line =~ m/^(DECLARE_(UNIQUE_)?INDEX\(\s*\w+,\s*)(\d+)(,\s*.+)\)/)
+		elsif ($line =~
+			m/^(DECLARE_TOAST_WITH_MACRO\(\s*\w+,\s*)(\d+)(,\s*)(\d+)(,\s*\w+,\s*\w+)\)/
+		  )
 		{
-			if (exists $maphash{$3})
+			my $oid2 = $2;
+			my $oid4 = $4;
+			if (exists $maphash{$oid2})
 			{
-				my $repl = $1 . $maphash{$3} . $4 . ")";
+				$oid2 = $maphash{$oid2};
+				my $repl = $1 . $oid2 . $3 . $oid4 . $5 . ")";
 				$line =~
-				  s/^DECLARE_(UNIQUE_)?INDEX\(\s*\w+,\s*\d+,\s*.+\)/$repl/;
+				  s/^DECLARE_TOAST_WITH_MACRO\(\s*\w+,\s*\d+,\s*\d+,\s*\w+,\s*\w+\)/$repl/;
+				$changed = 1;
+			}
+			if (exists $maphash{$oid4})
+			{
+				$oid4 = $maphash{$oid4};
+				my $repl = $1 . $oid2 . $3 . $oid4 . $5 . ")";
+				$line =~
+				  s/^DECLARE_TOAST_WITH_MACRO\(\s*\w+,\s*\d+,\s*\d+,\s*\w+,\s*\w+\)/$repl/;
+				$changed = 1;
+			}
+		}
+		elsif ($line =~
+			m/^(DECLARE_(UNIQUE_)?INDEX(_PKEY)?\(\s*\w+,\s*)(\d+)(,\s*.+)\)/)
+		{
+			if (exists $maphash{$4})
+			{
+				my $repl = $1 . $maphash{$4} . $5 . ")";
+				$line =~
+				  s/^DECLARE_(UNIQUE_)?INDEX(_PKEY)?\(\s*\w+,\s*\d+,\s*.+\)/$repl/;
+				$changed = 1;
+			}
+		}
+		elsif (/^(DECLARE_OID_DEFINING_MACRO\(\s*\w+,\s*)(\d+)\)/)
+		{
+			if (exists $maphash{$2})
+			{
+				my $repl = $1 . $maphash{$2} . ")";
+				$line =~
+				  s/^DECLARE_OID_DEFINING_MACRO\(\s*\w+,\s*\d+\)/$repl/;
 				$changed = 1;
 			}
 		}
@@ -203,7 +236,7 @@ foreach my $input_file (glob("pg_*.dat"))
 
 	# Write output files to specified directory.
 	# Use a .tmp suffix, then rename into place, in case we're overwriting.
-	my $output_file     = "$output_path$catname.dat";
+	my $output_file = "$output_path$catname.dat";
 	my $tmp_output_file = "$output_file.tmp";
 	open my $ofd, '>', $tmp_output_file
 	  or die "can't open $tmp_output_file: $!";

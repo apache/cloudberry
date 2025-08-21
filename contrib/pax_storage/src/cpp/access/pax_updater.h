@@ -37,6 +37,6 @@ class CPaxUpdater final {
                                const Snapshot snapshot,
                                const Snapshot crosscheck, const bool wait,
                                TM_FailureData *tmfd, LockTupleMode *lockmode,
-                               bool *update_indexes);
+							   TU_UpdateIndexes *update_indexes);
 };
 }  // namespace pax

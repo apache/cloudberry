@@ -3,7 +3,7 @@
  * matview.c
  *	  materialized view support
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -371,7 +371,7 @@ SetMatViewIVMState(Relation relation, bool newstate)
  * ExecRefreshMatView -- execute a REFRESH MATERIALIZED VIEW command
  *
  * This refreshes the materialized view by creating a new table and swapping
- * the relfilenodes of the new table and the old materialized view, so the OID
+ * the relfilenumbers of the new table and the old materialized view, so the OID
  * of the original materialized view is preserved. Thus we do not lose GRANT
  * nor references to this materialized view.
  *
@@ -662,6 +662,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	 */
 	OIDNewHeap = make_new_heap_with_colname(matviewOid, tableSpace, matviewRel->rd_rel->relam, relpersistence,
 							   ExclusiveLock, ao_has_index, true, "_$");
+
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 	dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent, relpersistence,
 										  stmt->skipData);
@@ -847,7 +848,7 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	ExecutorStart(queryDesc, 0);
 
 	/* run the plan */
-	ExecutorRun(queryDesc, ForwardScanDirection, 0L, true);
+	ExecutorRun(queryDesc, ForwardScanDirection, 0, true);
 
 	/* and clean up */
 	ExecutorFinish(queryDesc);
@@ -1259,15 +1260,12 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 			int			indnkeyatts = indexStruct->indnkeyatts;
 			oidvector  *indclass;
 			Datum		indclassDatum;
-			bool		isnull;
 			int			i;
 
 			/* Must get indclass the hard way. */
-			indclassDatum = SysCacheGetAttr(INDEXRELID,
-											indexRel->rd_indextuple,
-											Anum_pg_index_indclass,
-											&isnull);
-			Assert(!isnull);
+			indclassDatum = SysCacheGetAttrNotNull(INDEXRELID,
+												   indexRel->rd_indextuple,
+												   Anum_pg_index_indclass);
 			indclass = (oidvector *) DatumGetPointer(indclassDatum);
 
 			/* Add quals for all columns from this index. */
@@ -1351,11 +1349,12 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	 *
 	 * ExecRefreshMatView() checks that after taking the exclusive lock on the
 	 * matview. So at least one unique index is guaranteed to exist here
-	 * because the lock is still being held; so an Assert seems sufficient.
+	 * because the lock is still being held.  (One known exception is if a
+	 * function called as part of refreshing the matview drops the index.
+	 * That's a pretty silly thing to do.)
 	 */
-	Assert(foundUniqueIndex);
-
-
+	if (!foundUniqueIndex)
+		elog(ERROR, "could not find suitable unique index on materialized view");
 
 	appendStringInfoString(&querybuf,
 						   " AND newdata.* OPERATOR(pg_catalog.*=) mv.*) "
@@ -1856,7 +1855,7 @@ ivm_immediate_maintenance(PG_FUNCTION_ARGS)
 
 		if (!(query->hasAggs && query->groupClause == NIL))
 			ExecuteTruncateGuts(list_make1(matviewRel), list_make1_oid(matviewOid),
-							NIL, DROP_RESTRICT, false, NULL);
+							NIL, DROP_RESTRICT, false, false, NULL);
 		else if (Gp_role == GP_ROLE_DISPATCH)
 			ExecuteTruncateGuts_IVM(matviewRel, matviewOid, query);
 

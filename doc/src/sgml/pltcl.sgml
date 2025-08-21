@@ -279,7 +279,7 @@ $$ LANGUAGE pltcl;
      functions will share the same global variables if and only if they are
      executed by the same SQL role.  In an application wherein a single
      session executes code under multiple SQL roles (via <literal>SECURITY
-     DEFINER</literal> functions, use of <command>SET ROLE</command>, etc) you may need to
+     DEFINER</literal> functions, use of <command>SET ROLE</command>, etc.) you may need to
      take explicit steps to ensure that PL/Tcl functions can share data.  To
      do that, make sure that functions that should communicate are owned by
      the same user, and mark them <literal>SECURITY DEFINER</literal>.  You must of
@@ -341,9 +341,11 @@ $$ LANGUAGE pltcl;
        </para>
        <para>
         The optional <literal>-count</literal> value tells
-        <function>spi_exec</function> the maximum number of rows
-        to process in the command.  The effect of this is comparable to
-        setting up a query as a cursor and then saying <literal>FETCH <replaceable>n</replaceable></literal>.
+        <function>spi_exec</function> to stop
+        once <replaceable>n</replaceable> rows have been retrieved,
+        much as if the query included a <literal>LIMIT</literal> clause.
+        If <replaceable>n</replaceable> is zero, the query is run to
+        completion, the same as when <literal>-count</literal> is omitted.
        </para>
        <para>
         If the command is a <command>SELECT</command> statement, the values of the

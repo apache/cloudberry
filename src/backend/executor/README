@@ -26,7 +26,7 @@ unnecessarily (for example, Sort does not rescan its input if no parameters
 of the input have changed, since it can just reread its stored sorted data).
 
 For a SELECT, it is only necessary to deliver the top-level result tuples
-to the client.  For INSERT/UPDATE/DELETE, the actual table modification
+to the client.  For INSERT/UPDATE/DELETE/MERGE, the actual table modification
 operations happen in a top-level ModifyTable plan node.  If the query
 includes a RETURNING clause, the ModifyTable node delivers the computed
 RETURNING rows as output, otherwise it returns nothing.  Handling INSERT
@@ -39,7 +39,7 @@ columns, combine the values into a new row, and apply the update.  (For a
 heap table, the row-identity junk column is a CTID, but other things may
 be used for other table types.)  For DELETE, the plan tree need only deliver
 junk row-identity column(s), and the ModifyTable node visits each of those
-rows and marks the row deleted.
+rows and marks the row deleted.  MERGE is described below.
 
 XXX a great deal more documentation needs to be written here...
 
@@ -223,6 +223,45 @@ fast-path step types (EEOP_ASSIGN_*_VAR) to handle targetlist entries that
 are simple Vars using only one step instead of two.
 
 
+MERGE
+-----
+
+MERGE is a multiple-table, multiple-action command: It specifies a target
+table and a source relation, and can contain multiple WHEN MATCHED and
+WHEN NOT MATCHED clauses, each of which specifies one UPDATE, INSERT,
+DELETE, or DO NOTHING actions.  The target table is modified by MERGE,
+and the source relation supplies additional data for the actions.  Each action
+optionally specifies a qualifying expression that is evaluated for each tuple.
+
+In the planner, transform_MERGE_to_join constructs a join between the target
+table and the source relation, with row-identifying junk columns from the target
+table.  This join is an outer join if the MERGE command contains any WHEN NOT
+MATCHED clauses; the ModifyTable node fetches tuples from the plan tree of that
+join.  If the row-identifying columns in the fetched tuple are NULL, then the
+source relation contains a tuple that is not matched by any tuples in the
+target table, so the qualifying expression for each WHEN NOT MATCHED clause is
+evaluated given that tuple as returned by the plan.  If the expression returns
+true, the action indicated by the clause is executed, and no further clauses
+are evaluated.  On the other hand, if the row-identifying columns are not
+NULL, then the matching tuple from the target table can be fetched; qualifying
+expression of each WHEN MATCHED clause is evaluated given both the fetched
+tuple and the tuple returned by the plan.
+
+If no WHEN NOT MATCHED clauses are present, then the join constructed by
+the planner is an inner join, and the row-identifying junk columns are
+always non NULL.
+
+If WHEN MATCHED ends up processing a row that is concurrently updated or deleted,
+EvalPlanQual (see below) is used to find the latest version of the row, and
+that is re-fetched; if it exists, the search for a matching WHEN MATCHED clause
+to use starts at the top.
+
+MERGE does not allow its own type of triggers, but instead fires UPDATE, DELETE,
+and INSERT triggers: row triggers are fired for each row when an action is
+executed for that row.  Statement triggers are fired always, regardless of
+whether any rows match the corresponding clauses.
+
+
 Memory Management
 -----------------
 
@@ -314,8 +353,8 @@ EvalPlanQual (READ COMMITTED Update Checking)
 For simple SELECTs, the executor need only pay attention to tuples that are
 valid according to the snapshot seen by the current transaction (ie, they
 were inserted by a previously committed transaction, and not deleted by any
-previously committed transaction).  However, for UPDATE and DELETE it is not
-cool to modify or delete a tuple that's been modified by an open or
+previously committed transaction).  However, for UPDATE, DELETE, and MERGE it
+is not cool to modify or delete a tuple that's been modified by an open or
 concurrently-committed transaction.  If we are running in SERIALIZABLE
 isolation level then we just raise an error when this condition is seen to
 occur.  In READ COMMITTED isolation level, we must work a lot harder.
@@ -339,14 +378,14 @@ we're doing UPDATE).  If no tuple is returned, then the modified tuple(s)
 fail the quals, so we ignore the current result tuple and continue the
 original query.
 
-In UPDATE/DELETE, only the target relation needs to be handled this way.
+In UPDATE/DELETE/MERGE, only the target relation needs to be handled this way.
 In SELECT FOR UPDATE, there may be multiple relations flagged FOR UPDATE,
 so we obtain lock on the current tuple version in each such relation before
 executing the recheck.
 
 It is also possible that there are relations in the query that are not
-to be locked (they are neither the UPDATE/DELETE target nor specified to
-be locked in SELECT FOR UPDATE/SHARE).  When re-running the test query
+to be locked (they are neither the UPDATE/DELETE/MERGE target nor specified
+to be locked in SELECT FOR UPDATE/SHARE).  When re-running the test query
 we want to use the same rows from these relations that were joined to
 the locked rows.  For ordinary relations this can be implemented relatively
 cheaply by including the row TID in the join outputs and re-fetching that

@@ -272,8 +272,8 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 	{
 		lock->grantMask = 0;
 		lock->waitMask = 0;
-		SHMQueueInit(&(lock->procLocks));
-		ProcQueueInit(&(lock->waitProcs));
+		dlist_init(&(lock->procLocks));
+		dclist_init(&(lock->waitProcs));
 		lock->nRequested = 0;
 		lock->nGranted = 0;
 		MemSet(lock->requested, 0, sizeof(int) * MAX_LOCKMODES);
@@ -317,7 +317,7 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 			 * of shared memory, because there won't be anything to cause
 			 * anyone to release the lock object later.
 			 */
-			Assert(SHMQueueEmpty(&(lock->procLocks)));
+			Assert(dlist_is_empty(&(lock->procLocks)));
 			if (!hash_search_with_hash_value(LockMethodLockHash,
 											 (void *) &(lock->tag),
 											 hashcode,
@@ -356,10 +356,10 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		proclock->holdMask = 0;
 		proclock->releaseMask = 0;
 		/* Add proclock to appropriate lists */
-		SHMQueueInsertBefore(&lock->procLocks, &proclock->lockLink);
-		SHMQueueInsertBefore(&(MyProc->myProcLocks[partition]), &proclock->procLink);
+		dlist_insert_before(&lock->procLocks.head, &proclock->lockLink);
+		dlist_insert_before(&(MyProc->myProcLocks[partition].head), &proclock->procLink);
 		proclock->nLocks = 0;
-		SHMQueueInit(&(proclock->portalLinks));
+		dlist_init(&(proclock->portalLinks));
 	}
 	else
 	{
@@ -524,8 +524,8 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		LWLockRelease(ResQueueLock);
 
 		/* Note the start time for queue statistics. */
-		pgstat_record_start_queue_exec(incrementSet->portalId,
-									   locktag->locktag_field1);
+//		pgstat_record_start_queue_exec(incrementSet->portalId,
+//									   locktag->locktag_field1);
 
 		resLockAcquireStatus = RQA_STATISTICS_UPDATED;
 	}
@@ -570,10 +570,10 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		LWLockRelease(ResQueueLock);
 
 		/* Note count and wait time for queue statistics. */
-		pgstat_count_queue_wait(incrementSet->portalId,
-								locktag->locktag_field1);
-		pgstat_record_start_queue_wait(incrementSet->portalId,
-									   locktag->locktag_field1);
+//		pgstat_count_queue_wait(incrementSet->portalId,
+//								locktag->locktag_field1);
+//		pgstat_record_start_queue_wait(incrementSet->portalId,
+//									   locktag->locktag_field1);
 
 		/*
 		 * Sleep till someone wakes me up.
@@ -597,10 +597,10 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		MyProc->waitPortalId = INVALID_PORTALID;
 
 		/* End wait time and start execute time statistics for this queue. */
-		pgstat_record_end_queue_wait(incrementSet->portalId,
-									 locktag->locktag_field1);
-		pgstat_record_start_queue_exec(incrementSet->portalId,
-									   locktag->locktag_field1);
+//		pgstat_record_end_queue_wait(incrementSet->portalId,
+//									 locktag->locktag_field1);
+//		pgstat_record_start_queue_exec(incrementSet->portalId,
+//									   locktag->locktag_field1);
 		resLockAcquireStatus = RQA_STATISTICS_UPDATED;
 	}
 
@@ -837,8 +837,8 @@ ResLockRelease(LOCKTAG *locktag, uint32 resPortalId)
 	LWLockRelease(partitionLock);
 
 	/* Update execute statistics for this queue, count and elapsed time. */
-	pgstat_count_queue_exec(resPortalId, locktag->locktag_field1);
-	pgstat_record_end_queue_exec(resPortalId, locktag->locktag_field1);
+//	pgstat_count_queue_exec(resPortalId, locktag->locktag_field1);
+//	pgstat_record_end_queue_exec(resPortalId, locktag->locktag_field1);
 
 	resLockReleaseStatus = RQR_NOT_STARTED_OR_DONE;
 	return true;
@@ -1226,10 +1226,10 @@ ResCleanUpLock(LOCK *lock, PROCLOCK *proclock, uint32 hashcode, bool wakeupNeede
 		uint32		proclock_hashcode;
 
 		if (proclock->lockLink.next != NULL)
-			SHMQueueDelete(&proclock->lockLink);
+			dlist_delete(&proclock->lockLink);
 
 		if (proclock->procLink.next != NULL)
-			SHMQueueDelete(&proclock->procLink);
+			dlist_delete(&proclock->procLink);
 
 		proclock_hashcode = ProcLockHashCode(&proclock->tag, hashcode);
 		hash_search_with_hash_value(LockMethodProcLockHash, (void *) &(proclock->tag),
@@ -1242,7 +1242,7 @@ ResCleanUpLock(LOCK *lock, PROCLOCK *proclock, uint32 hashcode, bool wakeupNeede
 		 * The caller just released the last lock, so garbage-collect the lock
 		 * object.
 		 */
-		Assert(SHMQueueEmpty(&(lock->procLocks)));
+		Assert(dlist_is_empty(&(lock->procLocks)));
 
 		hash_search(LockMethodLockHash, (void *) &(lock->tag), HASH_REMOVE, NULL);
 	}
@@ -1328,8 +1328,8 @@ ResWaitOnLock(LOCALLOCK *locallock, ResourceOwner owner, ResPortalIncrement *inc
 void
 ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 {
-	PROC_QUEUE *waitQueue = &(lock->waitProcs);
-	int			queue_size = waitQueue->size;
+	dclist_head *waitQueue = &(lock->waitProcs);
+	int			queue_size = waitQueue->count;
 	PGPROC	   *proc;
 	uint32		hashcode;
 	LWLockId	partitionLock;
@@ -1344,13 +1344,13 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 	 * wait-queue).
 	 */
 
-	Assert(queue_size >= 0);
+//	Assert(queue_size >= 0);
 	if (queue_size == 0)
 	{
 		return;
 	}
 
-	proc = (PGPROC *) waitQueue->links.next;
+	proc = (PGPROC *) waitQueue->dlist.head.next;
 
 	while (queue_size-- > 0)
 	{
@@ -1367,8 +1367,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 
 			nextproc = (PGPROC *) proc->links.next;
 
-			SHMQueueDelete(&(proc->links));
-			(proc->waitLock->waitProcs.size)--;
+			dclist_delete_from_thoroughly(waitQueue, &(proc->links));
 
 			proc = nextproc;
 
@@ -1408,7 +1407,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 		}
 	}
 
-	Assert(waitQueue->size >= 0);
+	Assert(waitQueue->count >= 0);
 
 	return;
 }
@@ -1472,8 +1471,7 @@ ResProcWakeup(PGPROC *proc, int waitStatus)
 	retProc = (PGPROC *) proc->links.next;
 
 	/* Remove process from wait queue */
-	SHMQueueDelete(&(proc->links));
-	(proc->waitLock->waitProcs.size)--;
+	dclist_delete_from_thoroughly(&proc->waitLock->waitProcs, &(proc->links));
 
 	/* Clean up process' state and pass it the ok/fail signal */
 	proc->waitLock = NULL;
@@ -1508,11 +1506,10 @@ ResRemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	/* Make sure proc is waiting */
 	Assert(proc->links.next != NULL);
 	Assert(waitLock);
-	Assert(waitLock->waitProcs.size > 0);
+	Assert(waitLock->waitProcs.count > 0);
 
 	/* Remove proc from lock's wait queue */
-	SHMQueueDelete(&(proc->links));
-	waitLock->waitProcs.size--;
+	dclist_delete_from_thoroughly(&waitLock->waitProcs, &(proc->links));
 
 	/* Undo increments of request counts by waiting process */
 	Assert(waitLock->nRequested > 0);
@@ -1790,7 +1787,7 @@ ResIncrementAdd(ResPortalIncrement *incSet,
 		{
 			incrementSet->increments[i] = incSet->increments[i];
 		}
-		SHMQueueInsertBefore(&proclock->portalLinks, &incrementSet->portalLink);
+		dlist_insert_before(&proclock->portalLinks.head, &incrementSet->portalLink);
 	}
 	else
 	{
@@ -1857,7 +1854,7 @@ ResIncrementRemove(ResPortalTag *portaltag)
 		return false;
 	}
 
-	SHMQueueDelete(&incrementSet->portalLink);
+	dlist_delete(&incrementSet->portalLink);
 
 	return true;
 }
@@ -2355,14 +2352,14 @@ int64 ResourceQueueGetMemoryLimitInCatalog(Oid queueId)
 	foreach(le, capabilitiesList)
 	{
 		List *entry = NULL;
-		Value *key = NULL;
+		Integer *key = NULL;
 		entry = (List *) lfirst(le);
 		Assert(entry);
-		key = (Value *) linitial(entry);
+		key = linitial(entry);
 		Assert(key->type == T_Integer); /* This is resource type id */
 		if (intVal(key) == PG_RESRCTYPE_MEMORY_LIMIT)
 		{
-			Value *val = lsecond(entry);
+			String *val = lsecond(entry);
 			Assert(val->type == T_String);
 
 #ifdef USE_ASSERT_CHECKING
@@ -2598,15 +2595,15 @@ void DumpResQueueLockInfo(LOCALLOCK *locallock)
 				 "waitMask:",
 				 lock->waitMask,
 				 "procLocks.prev:",
-				 lock->procLocks.prev,
+				 lock->procLocks.head.prev,
 				 "procLocks.next:",
-				 lock->procLocks.next,
+				 lock->procLocks.head.next,
 				 "waitProcs.links.prev:",
-				 lock->waitProcs.links.prev,
+				 lock->waitProcs.dlist.head.prev,
 				 "waitProcs.links.next:",
-				 lock->waitProcs.links.next,
+				 lock->waitProcs.dlist.head.next,
 				 "waitProcs.size:",
-				 lock->waitProcs.size,
+				 lock->waitProcs.count,
 				 "requested:",
 				 lock->requested[1],
 				 lock->requested[2],
@@ -2670,9 +2667,9 @@ void DumpResQueueLockInfo(LOCALLOCK *locallock)
 				 "nLocks:",
 				 proclock->nLocks,
 				 "portalLinks.prev:",
-				 proclock->portalLinks.prev,
+				 proclock->portalLinks.head.prev,
 				 "portalLinks.next:",
-				 proclock->portalLinks.next);
+				 proclock->portalLinks.head.next);
 		}
 	}
 

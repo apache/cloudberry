@@ -379,7 +379,17 @@ arow RECORD;
 <programlisting>
 quantity integer DEFAULT 32;
 url varchar := 'http://mysite.com';
-user_id CONSTANT integer := 10;
+transaction_time CONSTANT timestamp with time zone := now();
+</programlisting>
+     </para>
+
+     <para>
+      Once declared, a variable's value can be used in later initialization
+      expressions in the same block, for example:
+<programlisting>
+DECLARE
+  x integer := 1;
+  y integer := x + 1;
 </programlisting>
      </para>
 
@@ -1034,7 +1044,8 @@ INSERT INTO mytable VALUES (1,'one'), (2,'two');
      <application>PL/pgSQL</application> variable values can be
      automatically inserted into optimizable SQL commands, which
      are <command>SELECT</command>, <command>INSERT</command>,
-     <command>UPDATE</command>, <command>DELETE</command>, and certain
+     <command>UPDATE</command>, <command>DELETE</command>,
+     <command>MERGE</command>, and certain
      utility commands that incorporate one of these, such
      as <command>EXPLAIN</command> and <command>CREATE TABLE ... AS
      SELECT</command>.  In these commands,
@@ -1260,7 +1271,7 @@ $$ LANGUAGE plpgsql;
      On failure, this function might produce an error message such as
 <programlisting>
 ERROR:  query returned no rows
-DETAIL:  parameters: $1 = 'nosuchuser'
+DETAIL:  parameters: username = 'nosuchuser'
 CONTEXT:  PL/pgSQL function get_userid(text) line 6 at SQL statement
 </programlisting>
     </para>
@@ -1378,7 +1389,7 @@ EXECUTE format('SELECT count(*) FROM %I '
      Another restriction on parameter symbols is that they only work in
      optimizable SQL commands
      (<command>SELECT</command>, <command>INSERT</command>, <command>UPDATE</command>,
-     <command>DELETE</command>, and certain commands containing one of these).
+     <command>DELETE</command>, <command>MERGE</command>, and certain commands containing one of these).
      In other statement
      types (generically called utility statements), you must insert
      values textually even if they are just data values.
@@ -1628,6 +1639,11 @@ GET DIAGNOSTICS integer_var = ROW_COUNT;
          <entry>line(s) of text describing the current call stack
           (see <xref linkend="plpgsql-call-stack"/>)</entry>
         </row>
+        <row>
+         <entry><literal>PG_ROUTINE_OID</literal></entry>
+         <entry><type>oid</type></entry>
+         <entry>OID of the current function</entry>
+        </row>
        </tbody>
       </tgroup>
      </table>
@@ -1656,7 +1672,8 @@ GET DIAGNOSTICS integer_var = ROW_COUNT;
           </listitem>
           <listitem>
            <para>
-            <command>UPDATE</command>, <command>INSERT</command>, and <command>DELETE</command>
+            <command>UPDATE</command>, <command>INSERT</command>, <command>DELETE</command>,
+            and <command>MERGE</command>
             statements set <literal>FOUND</literal> true if at least one
             row is affected, false if no row is affected.
            </para>
@@ -1777,7 +1794,7 @@ END;
      NEXT</command>.
     </para>
 
-    <sect3>
+    <sect3 id="plpgsql-statements-returning-return">
      <title><command>RETURN</command></title>
 
 <synopsis>
@@ -1838,7 +1855,7 @@ RETURN (1, 2, 'three'::text);  -- must cast columns to correct types
      </para>
     </sect3>
 
-    <sect3>
+    <sect3 id="plpgsql-statements-returning-return-next">
      <title><command>RETURN NEXT</command> and <command>RETURN QUERY</command></title>
     <indexterm>
      <primary>RETURN NEXT</primary>
@@ -2070,7 +2087,7 @@ $$;
     </itemizedlist>
     </para>
 
-    <sect3>
+    <sect3 id="plpgsql-conditionals-if-then">
      <title><literal>IF-THEN</literal></title>
 
 <synopsis>
@@ -2097,7 +2114,7 @@ END IF;
        </para>
      </sect3>
 
-     <sect3>
+     <sect3 id="plpgsql-conditionals-if-then-else">
       <title><literal>IF-THEN-ELSE</literal></title>
 
 <synopsis>
@@ -2138,7 +2155,7 @@ END IF;
      </para>
     </sect3>
 
-     <sect3>
+     <sect3 id="plpgsql-conditionals-if-then-elsif">
       <title><literal>IF-THEN-ELSIF</literal></title>
 
 <synopsis>
@@ -2214,7 +2231,7 @@ END IF;
        </para>
      </sect3>
 
-     <sect3>
+     <sect3 id="plpgsql-conditionals-simple-case">
       <title>Simple <literal>CASE</literal></title>
 
 <synopsis>
@@ -2257,7 +2274,7 @@ END CASE;
       </para>
      </sect3>
 
-     <sect3>
+     <sect3 id="plpgsql-conditionals-searched-case">
       <title>Searched <literal>CASE</literal></title>
 
 <synopsis>
@@ -2324,7 +2341,7 @@ END CASE;
      <application>PL/pgSQL</application> function to repeat a series of commands.
     </para>
 
-    <sect3>
+    <sect3 id="plpgsql-control-structures-loops-loop">
      <title><literal>LOOP</literal></title>
 
 <synopsis>
@@ -2344,7 +2361,7 @@ END LOOP <optional> <replaceable>label</replaceable> </optional>;
      </para>
     </sect3>
 
-     <sect3>
+     <sect3 id="plpgsql-control-structures-loops-exit">
       <title><literal>EXIT</literal></title>
 
      <indexterm>
@@ -2416,7 +2433,7 @@ END;
        </para>
      </sect3>
 
-     <sect3>
+     <sect3 id="plpgsql-control-structures-loops-continue">
       <title><literal>CONTINUE</literal></title>
 
      <indexterm>
@@ -2465,7 +2482,7 @@ END LOOP;
      </sect3>
 
 
-     <sect3>
+     <sect3 id="plpgsql-control-structures-loops-while">
       <title><literal>WHILE</literal></title>
 
      <indexterm>
@@ -3166,7 +3183,9 @@ DECLARE
     <para>
      Before a cursor can be used to retrieve rows, it must be
      <firstterm>opened</firstterm>. (This is the equivalent action to the SQL
-     command <command>DECLARE CURSOR</command>.) <application>PL/pgSQL</application> has
+     command <link linkend="sql-declare"><command>DECLARE
+     CURSOR</command></link>.)
+     <application>PL/pgSQL</application> has
      three forms of the <command>OPEN</command> statement, two of which use unbound
      cursor variables while the third uses a bound cursor variable.
     </para>
@@ -3176,10 +3195,29 @@ DECLARE
       Bound cursor variables can also be used without explicitly opening the cursor,
       via the <command>FOR</command> statement described in
       <xref linkend="plpgsql-cursor-for-loop"/>.
+      A <command>FOR</command> loop will open the cursor and then
+      close it again when the loop completes.
      </para>
     </note>
 
-    <sect3>
+    <indexterm>
+     <primary>portal</primary>
+     <secondary>in PL/pgSQL</secondary>
+    </indexterm>
+
+    <para>
+     Opening a cursor involves creating a server-internal data structure
+     called a <firstterm>portal</firstterm>, which holds the execution
+     state for the cursor's query.  A portal has a name, which must be
+     unique within the session for the duration of the portal's existence.
+     By default, <application>PL/pgSQL</application> will assign a unique
+     name to each portal it creates.  However, if you assign a non-null
+     string value to a cursor variable, that string will be used as its
+     portal name.  This feature can be used as described in
+     <xref linkend="plpgsql-cursor-returning"/>.
+    </para>
+
+    <sect3 id="plpgsql-cursor-opening-open-for-query">
      <title><command>OPEN FOR</command> <replaceable>query</replaceable></title>
 
 <synopsis>
@@ -3213,7 +3251,7 @@ OPEN curs1 FOR SELECT * FROM foo WHERE key = mykey;
        </para>
      </sect3>
 
-    <sect3>
+    <sect3 id="plpgsql-cursor-opening-open-for-execute">
      <title><command>OPEN FOR EXECUTE</command></title>
 
 <synopsis>
@@ -3327,7 +3365,7 @@ BEGIN
      opened the cursor to begin with.  You can return a <type>refcursor</type>
      value out of a function and let the caller operate on the cursor.
      (Internally, a <type>refcursor</type> value is simply the string name
-     of a so-called portal containing the active query for the cursor.  This name
+     of the portal containing the active query for the cursor.  This name
      can be passed around, assigned to other <type>refcursor</type> variables,
      and so on, without disturbing the portal.)
     </para>
@@ -3338,7 +3376,7 @@ BEGIN
      only until the end of the transaction.
     </para>
 
-    <sect3>
+    <sect3 id="plpgsql-cursor-using-fetch">
      <title><literal>FETCH</literal></title>
 
 <synopsis>
@@ -3346,13 +3384,16 @@ FETCH <optional> <replaceable>direction</replaceable> { FROM | IN } </optional> 
 </synopsis>
 
     <para>
-     <command>FETCH</command> retrieves the next row from the
+     <command>FETCH</command> retrieves the next row (in the indicated
+     direction) from the
      cursor into a target, which might be a row variable, a record
      variable, or a comma-separated list of simple variables, just like
-     <command>SELECT INTO</command>.  If there is no next row, the
+     <command>SELECT INTO</command>.  If there is no suitable row, the
      target is set to NULL(s).  As with <command>SELECT
      INTO</command>, the special variable <literal>FOUND</literal> can
-     be checked to see whether a row was obtained or not.
+     be checked to see whether a row was obtained or not.  If no row is
+     obtained, the cursor is positioned after the last row or before the
+     first row, depending on the movement direction.
     </para>
 
     <para>
@@ -3395,7 +3436,7 @@ FETCH RELATIVE -2 FROM curs4 INTO x;
        </para>
      </sect3>
 
-    <sect3>
+    <sect3 id="plpgsql-cursor-using-move">
      <title><literal>MOVE</literal></title>
 
 <synopsis>
@@ -3404,11 +3445,25 @@ MOVE <optional> <replaceable>direction</replaceable> { FROM | IN } </optional> <
 
     <para>
      <command>MOVE</command> repositions a cursor without retrieving
-     any data. <command>MOVE</command> works exactly like the
+     any data. <command>MOVE</command> works like the
      <command>FETCH</command> command, except it only repositions the
-     cursor and does not return the row moved to. As with <command>SELECT
+     cursor and does not return the row moved to.
+     The <replaceable>direction</replaceable> clause can be any of the
+     variants allowed in the SQL <xref linkend="sql-fetch"/>
+     command, including those that can fetch more than one row;
+     the cursor is positioned to the last such row.
+     (However, the case in which the <replaceable>direction</replaceable>
+     clause is simply a <replaceable>count</replaceable> expression with
+     no key word is deprecated in <application>PL/pgSQL</application>.
+     That syntax is ambiguous with the case where
+     the <replaceable>direction</replaceable> clause is omitted
+     altogether, and hence it may fail if
+     the <replaceable>count</replaceable> is not a constant.)
+     As with <command>SELECT
      INTO</command>, the special variable <literal>FOUND</literal> can
-     be checked to see whether there was a next row to move to.
+     be checked to see whether there was a row to move to.  If there is no
+     such row, the cursor is positioned after the last row or before the
+     first row, depending on the movement direction.
     </para>
 
     <para>
@@ -3422,7 +3477,7 @@ MOVE FORWARD 2 FROM curs4;
        </para>
      </sect3>
 
-    <sect3>
+    <sect3 id="plpgsql-cursor-using-update-delete">
      <title><literal>UPDATE/DELETE WHERE CURRENT OF</literal></title>
 
 <synopsis>
@@ -3448,7 +3503,7 @@ UPDATE foo SET dataval = myval WHERE CURRENT OF curs1;
        </para>
      </sect3>
 
-    <sect3>
+    <sect3 id="plpgsql-cursor-using-close">
      <title><literal>CLOSE</literal></title>
 
 <synopsis>
@@ -3469,7 +3524,7 @@ CLOSE curs1;
        </para>
      </sect3>
 
-    <sect3>
+    <sect3 id="plpgsql-cursor-returning">
      <title>Returning Cursors</title>
 
        <para>
@@ -3489,7 +3544,8 @@ CLOSE curs1;
         simply assign a string to the <type>refcursor</type> variable before
         opening it.  The string value of the <type>refcursor</type> variable
         will be used by <command>OPEN</command> as the name of the underlying portal.
-        However, if the <type>refcursor</type> variable is null,
+        However, if the <type>refcursor</type> variable's value is null
+        (as it will be by default), then
         <command>OPEN</command> automatically generates a name that does not
         conflict with any existing portal, and assigns it to the
         <type>refcursor</type> variable.
@@ -3497,12 +3553,12 @@ CLOSE curs1;
 
        <note>
         <para>
-         A bound cursor variable is initialized to the string value
-         representing its name, so that the portal name is the same as
-         the cursor variable name, unless the programmer overrides it
-         by assignment before opening the cursor.  But an unbound cursor
-         variable defaults to the null value initially, so it will receive
-         an automatically-generated unique name, unless overridden.
+         Prior to <productname>PostgreSQL</productname> 16, bound cursor
+         variables were initialized to contain their own names, rather
+         than being left as null, so that the underlying portal name would
+         be the same as the cursor variable's name by default.  This was
+         changed because it created too much risk of conflicts between
+         similarly-named cursors in different functions.
         </para>
        </note>
 
@@ -3767,7 +3823,7 @@ RAISE ;
 
    <para>
     After <replaceable class="parameter">level</replaceable> if any,
-    you can write a <replaceable class="parameter">format</replaceable>
+    you can specify a <replaceable class="parameter">format</replaceable> string
     (which must be a simple string literal, not an expression).  The
     format string specifies the error message text to be reported.
     The format string can be followed
@@ -3798,7 +3854,7 @@ RAISE NOTICE 'Calling cs_create_job(%)', v_job_id;
     class="parameter">option</replaceable> key words are:
 
     <variablelist id="raise-using-options">
-     <varlistentry>
+     <varlistentry id="raise-using-option-message">
       <term><literal>MESSAGE</literal></term>
       <listitem>
        <para>Sets the error message text.  This option can't be used in the
@@ -3807,21 +3863,21 @@ RAISE NOTICE 'Calling cs_create_job(%)', v_job_id;
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="raise-using-option-detail">
       <term><literal>DETAIL</literal></term>
       <listitem>
        <para>Supplies an error detail message.</para>
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="raise-using-option-hint">
       <term><literal>HINT</literal></term>
       <listitem>
        <para>Supplies a hint message.</para>
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="raise-using-option-errcode">
       <term><literal>ERRCODE</literal></term>
       <listitem>
        <para>Specifies the error code (SQLSTATE) to report, either by condition
@@ -3830,7 +3886,7 @@ RAISE NOTICE 'Calling cs_create_job(%)', v_job_id;
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="raise-using-option-column">
       <term><literal>COLUMN</literal></term>
       <term><literal>CONSTRAINT</literal></term>
       <term><literal>DATATYPE</literal></term>
@@ -3903,7 +3959,7 @@ RAISE unique_violation USING MESSAGE = 'Duplicate user ID: ' || user_id;
    <para>
     If no condition name nor SQLSTATE is specified in a
     <command>RAISE EXCEPTION</command> command, the default is to use
-    <literal>ERRCODE_RAISE_EXCEPTION</literal> (<literal>P0001</literal>).
+    <literal>raise_exception</literal> (<literal>P0001</literal>).
     If no message text is specified, the default is to use the condition
     name or SQLSTATE as message text.
    </para>
@@ -4020,130 +4076,121 @@ ASSERT <replaceable class="parameter">condition</replaceable> <optional> , <repl
    top-level block. They are:
 
    <variablelist>
-    <varlistentry>
-     <term><varname>NEW</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-new">
+     <term><varname>NEW</varname> <type>record</type></term>
      <listitem>
       <para>
-       Data type <type>RECORD</type>; variable holding the new
-       database row for <command>INSERT</command>/<command>UPDATE</command> operations in row-level
+       new database row for <command>INSERT</command>/<command>UPDATE</command> operations in row-level
        triggers. This variable is null in statement-level triggers
        and for <command>DELETE</command> operations.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>OLD</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-old">
+     <term><varname>OLD</varname> <type>record</type></term>
      <listitem>
       <para>
-       Data type <type>RECORD</type>; variable holding the old
-       database row for <command>UPDATE</command>/<command>DELETE</command> operations in row-level
+       old database row for <command>UPDATE</command>/<command>DELETE</command> operations in row-level
        triggers. This variable is null in statement-level triggers
        and for <command>INSERT</command> operations.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_NAME</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-name">
+     <term><varname>TG_NAME</varname> <type>name</type></term>
      <listitem>
       <para>
-       Data type <type>name</type>; variable that contains the name of the trigger actually
-       fired.
+       name of the trigger which fired.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_WHEN</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-when">
+     <term><varname>TG_WHEN</varname> <type>text</type></term>
      <listitem>
       <para>
-       Data type <type>text</type>; a string of
        <literal>BEFORE</literal>, <literal>AFTER</literal>, or
        <literal>INSTEAD OF</literal>, depending on the trigger's definition.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_LEVEL</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-level">
+     <term><varname>TG_LEVEL</varname> <type>text</type></term>
      <listitem>
       <para>
-       Data type <type>text</type>; a string of either
-       <literal>ROW</literal> or <literal>STATEMENT</literal>
+       <literal>ROW</literal> or <literal>STATEMENT</literal>,
        depending on the trigger's definition.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_OP</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-op">
+     <term><varname>TG_OP</varname> <type>text</type></term>
      <listitem>
       <para>
-       Data type <type>text</type>; a string of
+       operation for which the trigger was fired:
        <literal>INSERT</literal>, <literal>UPDATE</literal>,
-       <literal>DELETE</literal>, or <literal>TRUNCATE</literal>
-       telling for which operation the trigger was fired.
+       <literal>DELETE</literal>, or <literal>TRUNCATE</literal>.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_RELID</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-relid">
+     <term><varname>TG_RELID</varname> <type>oid</type> (references <link linkend="catalog-pg-class"><structname>pg_class</structname></link>.<structfield>oid</structfield>)</term>
      <listitem>
       <para>
-       Data type <type>oid</type>; the object ID of the table that caused the
-       trigger invocation.
+       object ID of the table that caused the trigger invocation.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_RELNAME</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-relname">
+     <term><varname>TG_RELNAME</varname> <type>name</type></term>
      <listitem>
       <para>
-       Data type <type>name</type>; the name of the table that caused the trigger
+       table that caused the trigger
        invocation. This is now deprecated, and could disappear in a future
        release. Use <literal>TG_TABLE_NAME</literal> instead.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_TABLE_NAME</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-table-name">
+     <term><varname>TG_TABLE_NAME</varname> <type>name</type></term>
      <listitem>
       <para>
-       Data type <type>name</type>; the name of the table that
-       caused the trigger invocation.
-      </para>
-     </listitem>
-    </varlistentry>
-
-    <varlistentry>
-     <term><varname>TG_TABLE_SCHEMA</varname></term>
-     <listitem>
-      <para>
-       Data type <type>name</type>; the name of the schema of the
        table that caused the trigger invocation.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_NARGS</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-table-schema">
+     <term><varname>TG_TABLE_SCHEMA</varname> <type>name</type></term>
      <listitem>
       <para>
-       Data type <type>integer</type>; the number of arguments given to the trigger
+       schema of the table that caused the trigger invocation.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry id="plpgsql-dml-trigger-tg-nargs">
+     <term><varname>TG_NARGS</varname> <type>integer</type></term>
+     <listitem>
+      <para>
+       number of arguments given to the trigger
        function in the <command>CREATE TRIGGER</command> statement.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_ARGV[]</varname></term>
+    <varlistentry id="plpgsql-dml-trigger-tg-argv">
+     <term><varname>TG_ARGV</varname> <type>text[]</type></term>
      <listitem>
       <para>
-       Data type array of <type>text</type>; the arguments from
+       arguments from
        the <command>CREATE TRIGGER</command> statement.
        The index counts from 0. Invalid
        indexes (less than 0 or greater than or equal to <varname>tg_nargs</varname>)
@@ -4228,10 +4275,10 @@ ASSERT <replaceable class="parameter">condition</replaceable> <optional> , <repl
 
 <programlisting>
 CREATE TABLE emp (
-    empname text,
-    salary integer,
-    last_date timestamp,
-    last_user text
+    empname           text,
+    salary            integer,
+    last_date         timestamp,
+    last_user         text
 );
 
 CREATE FUNCTION emp_stamp() RETURNS trigger AS $emp_stamp$
@@ -4290,7 +4337,7 @@ CREATE TABLE emp_audit(
     stamp             timestamp NOT NULL,
     userid            text      NOT NULL,
     empname           text      NOT NULL,
-    salary integer
+    salary            integer
 );
 
 CREATE OR REPLACE FUNCTION process_emp_audit() RETURNS TRIGGER AS $emp_audit$
@@ -4300,11 +4347,11 @@ CREATE OR REPLACE FUNCTION process_emp_audit() RETURNS TRIGGER AS $emp_audit$
         -- making use of the special variable TG_OP to work out the operation.
         --
         IF (TG_OP = 'DELETE') THEN
-            INSERT INTO emp_audit SELECT 'D', now(), user, OLD.*;
+            INSERT INTO emp_audit SELECT 'D', now(), current_user, OLD.*;
         ELSIF (TG_OP = 'UPDATE') THEN
-            INSERT INTO emp_audit SELECT 'U', now(), user, NEW.*;
+            INSERT INTO emp_audit SELECT 'U', now(), current_user, NEW.*;
         ELSIF (TG_OP = 'INSERT') THEN
-            INSERT INTO emp_audit SELECT 'I', now(), user, NEW.*;
+            INSERT INTO emp_audit SELECT 'I', now(), current_user, NEW.*;
         END IF;
         RETURN NULL; -- result is ignored since this is an AFTER trigger
     END;
@@ -4370,20 +4417,20 @@ CREATE OR REPLACE FUNCTION update_emp_view() RETURNS TRIGGER AS $$
             IF NOT FOUND THEN RETURN NULL; END IF;
 
             OLD.last_updated = now();
-            INSERT INTO emp_audit VALUES('D', user, OLD.*);
+            INSERT INTO emp_audit VALUES('D', current_user, OLD.*);
             RETURN OLD;
         ELSIF (TG_OP = 'UPDATE') THEN
             UPDATE emp SET salary = NEW.salary WHERE empname = OLD.empname;
             IF NOT FOUND THEN RETURN NULL; END IF;
 
             NEW.last_updated = now();
-            INSERT INTO emp_audit VALUES('U', user, NEW.*);
+            INSERT INTO emp_audit VALUES('U', current_user, NEW.*);
             RETURN NEW;
         ELSIF (TG_OP = 'INSERT') THEN
             INSERT INTO emp VALUES(NEW.empname, NEW.salary);
 
             NEW.last_updated = now();
-            INSERT INTO emp_audit VALUES('I', user, NEW.*);
+            INSERT INTO emp_audit VALUES('I', current_user, NEW.*);
             RETURN NEW;
         END IF;
     END;
@@ -4587,7 +4634,7 @@ CREATE TABLE emp_audit(
     stamp             timestamp NOT NULL,
     userid            text      NOT NULL,
     empname           text      NOT NULL,
-    salary integer
+    salary            integer
 );
 
 CREATE OR REPLACE FUNCTION process_emp_audit() RETURNS TRIGGER AS $emp_audit$
@@ -4598,13 +4645,13 @@ CREATE OR REPLACE FUNCTION process_emp_audit() RETURNS TRIGGER AS $emp_audit$
         --
         IF (TG_OP = 'DELETE') THEN
             INSERT INTO emp_audit
-                SELECT 'D', now(), user, o.* FROM old_table o;
+                SELECT 'D', now(), current_user, o.* FROM old_table o;
         ELSIF (TG_OP = 'UPDATE') THEN
             INSERT INTO emp_audit
-                SELECT 'U', now(), user, n.* FROM new_table n;
+                SELECT 'U', now(), current_user, n.* FROM new_table n;
         ELSIF (TG_OP = 'INSERT') THEN
             INSERT INTO emp_audit
-                SELECT 'I', now(), user, n.* FROM new_table n;
+                SELECT 'I', now(), current_user, n.* FROM new_table n;
         END IF;
         RETURN NULL; -- result is ignored since this is an AFTER trigger
     END;
@@ -4644,22 +4691,20 @@ CREATE TRIGGER emp_audit_del
     in the top-level block. They are:
 
    <variablelist>
-    <varlistentry>
-     <term><varname>TG_EVENT</varname></term>
+    <varlistentry id="plpgsql-event-trigger-tg-event">
+     <term><varname>TG_EVENT</varname> <type>text</type></term>
      <listitem>
       <para>
-       Data type <type>text</type>; a string representing the event the
-       trigger is fired for.
+       event the trigger is fired for.
       </para>
      </listitem>
     </varlistentry>
 
-    <varlistentry>
-     <term><varname>TG_TAG</varname></term>
+    <varlistentry id="plpgsql-event-trigger-tg-tag">
+     <term><varname>TG_TAG</varname> <type>text</type></term>
      <listitem>
       <para>
-       Data type <type>text</type>; variable that contains the command tag
-       for which the trigger is fired.
+       command tag for which the trigger is fired.
       </para>
      </listitem>
     </varlistentry>
@@ -5109,7 +5154,7 @@ $PROC$ LANGUAGE plpgsql;
   </para>
 
   <variablelist>
-   <varlistentry>
+   <varlistentry id="plpgsql-quote-tips-1-quot">
     <term>1 quotation mark</term>
     <listitem>
      <para>
@@ -5125,7 +5170,7 @@ CREATE FUNCTION foo() RETURNS integer AS '
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="plpgsql-quote-tips-2-quot">
     <term>2 quotation marks</term>
     <listitem>
      <para>
@@ -5145,7 +5190,7 @@ SELECT * FROM users WHERE f_name='foobar';
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="plpgsql-quote-tips-4-quot">
     <term>4 quotation marks</term>
     <listitem>
      <para>
@@ -5168,7 +5213,7 @@ a_output := a_output || $$ AND name LIKE 'foobar' AND xyz$$
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="plpgsql-quote-tips-6-quot">
     <term>6 quotation marks</term>
     <listitem>
      <para>
@@ -5189,7 +5234,7 @@ a_output := a_output || $$ AND name LIKE 'foobar'$$
     </listitem>
    </varlistentry>
 
-   <varlistentry>
+   <varlistentry id="plpgsql-quote-tips-10-quot">
     <term>10 quotation marks</term>
     <listitem>
      <para>
@@ -5254,7 +5299,7 @@ a_output := a_output || $$ if v_$$ || referrer_keys.kind || $$ like '$$
     <literal>"all"</literal>. The default is <literal>"none"</literal>. Currently
     the list of available checks includes:
     <variablelist>
-     <varlistentry>
+     <varlistentry id="plpgsql-extra-checks-shadowed-variables">
       <term><varname>shadowed_variables</varname></term>
       <listitem>
        <para>
@@ -5263,17 +5308,17 @@ a_output := a_output || $$ if v_$$ || referrer_keys.kind || $$ like '$$
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="plpgsql-extra-checks-strict-multi-assignment">
       <term><varname>strict_multi_assignment</varname></term>
       <listitem>
        <para>
-        Some <application>PL/PgSQL</application> commands allow assigning
+        Some <application>PL/pgSQL</application> commands allow assigning
         values to more than one variable at a time, such as
         <command>SELECT INTO</command>.  Typically, the number of target
         variables and the number of source variables should match, though
-        <application>PL/PgSQL</application> will use <literal>NULL</literal>
+        <application>PL/pgSQL</application> will use <literal>NULL</literal>
         for missing values and extra variables are ignored.  Enabling this
-        check will cause <application>PL/PgSQL</application> to throw a
+        check will cause <application>PL/pgSQL</application> to throw a
         <literal>WARNING</literal> or <literal>ERROR</literal> whenever the
         number of target variables and the number of source variables are
         different.
@@ -5281,11 +5326,11 @@ a_output := a_output || $$ if v_$$ || referrer_keys.kind || $$ like '$$
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="plpgsql-extra-checks-too-many-rows">
       <term><varname>too_many_rows</varname></term>
       <listitem>
        <para>
-        Enabling this check will cause <application>PL/PgSQL</application> to
+        Enabling this check will cause <application>PL/pgSQL</application> to
         check if a given query returns more than one row when an
         <literal>INTO</literal> clause is used.  As an <literal>INTO</literal>
         statement will only ever use one row, having a query return multiple
@@ -5341,9 +5386,9 @@ WARNING:  number of source and target fields in assignment does not match
 DETAIL:  strict_multi_assignment check of extra_warnings is active.
 HINT:  Make sure the query returns the exact list of columns.
 
- foo 
+ foo
 -----
- 
+
 (1 row)
 </programlisting>
    </para>
@@ -5466,7 +5511,7 @@ HINT:  Make sure the query returns the exact list of columns.
     </itemizedlist>
    </para>
 
-  <sect2>
+  <sect2 id="plpgsql-porting-examples">
    <title>Porting Examples</title>
 
    <para>
@@ -5902,7 +5947,7 @@ END;
     </para>
    </sect3>
 
-   <sect3>
+   <sect3 id="plpgsql-porting-other-execute">
     <title><command>EXECUTE</command></title>
 
     <para>

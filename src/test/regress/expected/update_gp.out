@@ -418,7 +418,7 @@ EXPLAIN (COSTS OFF ) UPDATE tab3 SET C1 = C1 + 1, C5 = C5+1;
 ---------------------------------------------------------------
  Update on tab3
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on tab3
  Optimizer: Postgres query optimizer
 (5 rows)
@@ -674,12 +674,11 @@ create table nosplitupdate (a int) distributed by (a);
 explain update nosplitupdate set a=0 where a=1 and a<1;
                         QUERY PLAN                         
 -----------------------------------------------------------
- Update on nosplitupdate  (cost=0.00..0.01 rows=1 width=0)
-   ->  Result  (cost=0.00..0.01 rows=1 width=0)
+ Update on nosplitupdate  (cost=0.00..0.01 rows=0 width=0)
+   ->  Result  (cost=0.00..0.00 rows=0 width=14)
          One-Time Filter: false
- Planning time: 0.271 ms
  Optimizer: Postgres query optimizer
-(5 rows)
+(4 rows)
 
 -- test split-update when split-node's flow is entry
 create table tsplit_entry (c int);

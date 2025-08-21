@@ -34,7 +34,7 @@
  * This is also used with 0 length, to mark creation of a new segfile.
  */
 void
-xlog_ao_insert(RelFileNode relFileNode, int32 segmentFileNum,
+xlog_ao_insert(RelFileLocator relFileNode, int32 segmentFileNum,
 			   int64 offset, void *buffer, int32 bufferLen)
 {
 	xl_ao_insert	xlaoinsert;
@@ -75,13 +75,13 @@ ao_insert_replay(XLogReaderState *record)
 	 */
 	smgr = smgropen(xlrec->target.node, InvalidBackendId, SMGR_AO, NULL);
 
-	dbPath = GetDatabasePath(xlrec->target.node.dbNode,
-							 xlrec->target.node.spcNode);
+	dbPath = GetDatabasePath(xlrec->target.node.dbOid,
+							 xlrec->target.node.spcOid);
 
 	if (xlrec->target.segment_filenum == 0)
-		snprintf(path, MAXPGPATH, "%s/%u", dbPath, xlrec->target.node.relNode);
+		snprintf(path, MAXPGPATH, "%s/%u", dbPath, xlrec->target.node.relNumber);
 	else
-		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, xlrec->target.node.relNode, xlrec->target.segment_filenum);
+		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, xlrec->target.node.relNumber, xlrec->target.segment_filenum);
 	pfree(dbPath);
 
 	fileFlags = O_RDWR | PG_BINARY;
@@ -107,9 +107,10 @@ ao_insert_replay(XLogReaderState *record)
 						path)));
 	}
 
-	register_dirty_segment_ao(xlrec->target.node,
-							  xlrec->target.segment_filenum,
-							  file);
+	/* MERGE16_FIXME delete the register_dirty_segment, but this is not correct */
+//	register_dirty_segment_ao(xlrec->target.node,
+//							  xlrec->target.segment_filenum,
+//							  file);
 
 	smgr->smgr_ao->smgr_FileClose(file);
 }
@@ -117,7 +118,7 @@ ao_insert_replay(XLogReaderState *record)
 /*
  * AO/CO truncate xlog record insertion.
  */
-void xlog_ao_truncate(RelFileNode relFileNode, int32 segmentFileNum, int64 offset)
+void xlog_ao_truncate(RelFileLocator relFileNode, int32 segmentFileNum, int64 offset)
 {
 	xl_ao_truncate	xlaotruncate;
 
@@ -147,13 +148,13 @@ ao_truncate_replay(XLogReaderState *record)
 	 */
 	smgr = smgropen(xlrec->target.node, InvalidBackendId, SMGR_AO, NULL);
 
-	dbPath = GetDatabasePath(xlrec->target.node.dbNode,
-							 xlrec->target.node.spcNode);
+	dbPath = GetDatabasePath(xlrec->target.node.dbOid,
+							 xlrec->target.node.spcOid);
 
 	if (xlrec->target.segment_filenum == 0)
-		snprintf(path, MAXPGPATH, "%s/%u", dbPath, xlrec->target.node.relNode);
+		snprintf(path, MAXPGPATH, "%s/%u", dbPath, xlrec->target.node.relNumber);
 	else
-		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, xlrec->target.node.relNode, xlrec->target.segment_filenum);
+		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, xlrec->target.node.relNumber, xlrec->target.segment_filenum);
 	pfree(dbPath);
 	dbPath = NULL;
 

@@ -124,7 +124,8 @@ DROP TABLE attmp;
 -- fails with incorrect object type
 CREATE VIEW at_v1 AS SELECT 1 as a;
 ALTER TABLE at_v1 ALTER COLUMN a SET STATISTICS 0;
-ERROR:  "at_v1" is not a table, materialized view, index, partitioned index, or foreign table
+ERROR:  ALTER action ALTER COLUMN ... SET STATISTICS cannot be performed on relation "at_v1"
+DETAIL:  This operation is not supported for views.
 DROP VIEW at_v1;
 --
 -- rename - check on both non-temp and temp tables
@@ -1159,9 +1160,11 @@ ERROR:  column "bar" of relation "atacc1" does not exist
 -- try creating a view and altering that, should fail
 create view myview as select * from atacc1;
 alter table myview alter column test drop not null;
-ERROR:  "myview" is not a table or foreign table
+ERROR:  ALTER action ALTER COLUMN ... DROP NOT NULL cannot be performed on relation "myview"
+DETAIL:  This operation is not supported for views.
 alter table myview alter column test set not null;
-ERROR:  "myview" is not a table or foreign table
+ERROR:  ALTER action ALTER COLUMN ... SET NOT NULL cannot be performed on relation "myview"
+DETAIL:  This operation is not supported for views.
 drop view myview;
 drop table atacc1;
 -- set not null verified by constraints
@@ -1459,7 +1462,8 @@ select * from myview;
 (0 rows)
 
 alter table myview drop d;
-ERROR:  "myview" is not a table, composite type, or foreign table
+ERROR:  ALTER action DROP COLUMN cannot be performed on relation "myview"
+DETAIL:  This operation is not supported for views.
 drop view myview;
 -- test some commands to make sure they fail on the dropped column
 analyze atacc1(a);
@@ -2515,8 +2519,8 @@ create view at_view_2 as select *, to_json(v1) as j from at_view_1 v1;
  id     | integer |           |          |         | plain    | 
  stuff  | text    |           |          |         | extended | 
 View definition:
- SELECT bt.id,
-    bt.stuff
+ SELECT id,
+    stuff
    FROM at_base_table bt;
 
 \d+ at_view_2
@@ -2527,8 +2531,8 @@ View definition:
  stuff  | text    |           |          |         | extended | 
  j      | json    |           |          |         | extended | 
 View definition:
- SELECT v1.id,
-    v1.stuff,
+ SELECT id,
+    stuff,
     to_json(v1.*) AS j
    FROM at_view_1 v1;
 
@@ -2556,8 +2560,8 @@ create or replace view at_view_1 as select *, 2+2 as more from at_base_table bt;
  stuff  | text    |           |          |         | extended | 
  more   | integer |           |          |         | plain    | 
 View definition:
- SELECT bt.id,
-    bt.stuff,
+ SELECT id,
+    stuff,
     2 + 2 AS more
    FROM at_base_table bt;
 
@@ -2569,24 +2573,24 @@ View definition:
  stuff  | text    |           |          |         | extended | 
  j      | json    |           |          |         | extended | 
 View definition:
- SELECT v1.id,
-    v1.stuff,
+ SELECT id,
+    stuff,
     to_json(v1.*) AS j
    FROM at_view_1 v1;
 
 explain (verbose, costs off) select * from at_view_2;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Seq Scan on public.at_base_table bt
-   Output: bt.id, bt.stuff, to_json(ROW(bt.id, bt.stuff, NULL))
- Settings: constraint_exclusion = 'partition'
+   Output: bt.id, bt.stuff, to_json(ROW(bt.id, bt.stuff, 4))
+ Settings: optimizer = 'off', constraint_exclusion = 'partition'
  Optimizer: Postgres query optimizer
 (4 rows)
 
 select * from at_view_2;
- id | stuff  |                   j                    
-----+--------+----------------------------------------
- 23 | skidoo | {"id":23,"stuff":"skidoo","more":null}
+ id | stuff  |                  j                  
+----+--------+-------------------------------------
+ 23 | skidoo | {"id":23,"stuff":"skidoo","more":4}
 (1 row)
 
 drop view at_view_2;
@@ -3508,6 +3512,7 @@ ALTER TABLE old_system_table DROP COLUMN othercol;
 DROP TABLE old_system_table;
 -- set logged
 CREATE UNLOGGED TABLE unlogged1(f1 SERIAL PRIMARY KEY, f2 TEXT);
+ERROR:  unlogged sequences are not supported
 -- check relpersistence of an unlogged table
 SELECT relname, relkind, relpersistence FROM pg_class WHERE relname ~ '^unlogged1'
 UNION ALL
@@ -3515,23 +3520,20 @@ SELECT 'toast table', t.relkind, t.relpersistence FROM pg_class r JOIN pg_class 
 UNION ALL
 SELECT 'toast index', ri.relkind, ri.relpersistence FROM pg_class r join pg_class t ON t.oid = r.reltoastrelid JOIN pg_index i ON i.indrelid = t.oid JOIN pg_class ri ON ri.oid = i.indexrelid WHERE r.relname ~ '^unlogged1'
 ORDER BY relname;
-     relname      | relkind | relpersistence 
-------------------+---------+----------------
- toast index      | i       | u
- toast table      | t       | u
- unlogged1        | r       | u
- unlogged1_f1_seq | S       | p
- unlogged1_pkey   | i       | u
-(5 rows)
+ relname | relkind | relpersistence 
+---------+---------+----------------
+(0 rows)
 
 CREATE UNLOGGED TABLE unlogged2(f1 SERIAL PRIMARY KEY, f2 INTEGER REFERENCES unlogged1); -- foreign key
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
+ERROR:  unlogged sequences are not supported
 CREATE UNLOGGED TABLE unlogged3(f1 SERIAL PRIMARY KEY, f2 INTEGER REFERENCES unlogged3); -- self-referencing foreign key
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
+ERROR:  unlogged sequences are not supported
 ALTER TABLE unlogged3 SET LOGGED; -- skip self-referencing foreign key
+ERROR:  relation "unlogged3" does not exist
 ALTER TABLE unlogged2 SET LOGGED; -- fails because a foreign key to an unlogged table exists
-ERROR:  could not change table "unlogged2" to logged because it references unlogged table "unlogged1"
+ERROR:  relation "unlogged2" does not exist
 ALTER TABLE unlogged1 SET LOGGED;
+ERROR:  relation "unlogged1" does not exist
 -- check relpersistence of an unlogged table after changing to permanent
 SELECT relname, relkind, relpersistence FROM pg_class WHERE relname ~ '^unlogged1'
 UNION ALL
@@ -3539,19 +3541,18 @@ SELECT 'toast table', t.relkind, t.relpersistence FROM pg_class r JOIN pg_class 
 UNION ALL
 SELECT 'toast index', ri.relkind, ri.relpersistence FROM pg_class r join pg_class t ON t.oid = r.reltoastrelid JOIN pg_index i ON i.indrelid = t.oid JOIN pg_class ri ON ri.oid = i.indexrelid WHERE r.relname ~ '^unlogged1'
 ORDER BY relname;
-     relname      | relkind | relpersistence 
-------------------+---------+----------------
- toast index      | i       | p
- toast table      | t       | p
- unlogged1        | r       | p
- unlogged1_f1_seq | S       | p
- unlogged1_pkey   | i       | p
-(5 rows)
+ relname | relkind | relpersistence 
+---------+---------+----------------
+(0 rows)
 
 ALTER TABLE unlogged1 SET LOGGED; -- silently do nothing
+ERROR:  relation "unlogged1" does not exist
 DROP TABLE unlogged3;
+ERROR:  table "unlogged3" does not exist
 DROP TABLE unlogged2;
+ERROR:  table "unlogged2" does not exist
 DROP TABLE unlogged1;
+ERROR:  table "unlogged1" does not exist
 -- set unlogged
 CREATE TABLE logged1(f1 SERIAL PRIMARY KEY, f2 TEXT);
 -- check relpersistence of a permanent table
@@ -3589,7 +3590,7 @@ ORDER BY relname;
     relname     | relkind | relpersistence 
 ----------------+---------+----------------
  logged1        | r       | u
- logged1_f1_seq | S       | p
+ logged1_f1_seq | S       | u
  logged1_pkey   | i       | u
  toast index    | i       | u
  toast table    | t       | u
@@ -4244,7 +4245,8 @@ DROP TABLE fail_part;
 -- fails with incorrect object type
 CREATE VIEW at_v1 AS SELECT 1 as a;
 ALTER TABLE at_v1 ATTACH PARTITION dummy default;
-ERROR:  "at_v1" is not a table or partitioned index
+ERROR:  ALTER action ATTACH PARTITION cannot be performed on relation "at_v1"
+DETAIL:  This operation is not supported for views.
 DROP VIEW at_v1;
 --
 -- DETACH PARTITION

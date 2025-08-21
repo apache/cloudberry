@@ -59,7 +59,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
 </synopsis>
  </refsynopsisdiv>
 
- <refsect1>
+ <refsect1 id="sql-alterrole-desc">
   <title>Description</title>
 
   <para>
@@ -77,10 +77,14 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
    <link linkend="sql-revoke"><command>REVOKE</command></link> for that.)
    Attributes not mentioned in the command retain their previous settings.
    Database superusers can change any of these settings for any role.
-   Roles having <literal>CREATEROLE</literal> privilege can change any of these
-   settings except <literal>SUPERUSER</literal>, <literal>REPLICATION</literal>,
-   and <literal>BYPASSRLS</literal>; but only for non-superuser and
-   non-replication roles.
+   Non-superuser roles having <literal>CREATEROLE</literal> privilege can
+   change most of these properties, but only for non-superuser and
+   non-replication roles for which they have been granted
+   <literal>ADMIN OPTION</literal>. Non-superusers cannot change the
+   <literal>SUPERUSER</literal> property and can change the
+   <literal>CREATEDB</literal>, <literal>REPLICATION</literal>, and
+   <literal>BYPASSRLS</literal> properties only if they possess the
+   corresponding property themselves.
    Ordinary roles can only change their own password.
   </para>
 
@@ -88,7 +92,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
    The second variant changes the name of the role.
    Database superusers can rename any role.
    Roles having <literal>CREATEROLE</literal> privilege can rename non-superuser
-   roles.
+   roles for which they have been granted <literal>ADMIN OPTION</literal>.
    The current session user cannot be renamed.
    (Connect as a different user if you need to do that.)
    Because <literal>MD5</literal>-encrypted passwords use the role name as
@@ -123,18 +127,19 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
   <para>
    Superusers can change anyone's session defaults. Roles having
    <literal>CREATEROLE</literal> privilege can change defaults for non-superuser
-   roles. Ordinary roles can only set defaults for themselves.
+   roles for which they have been granted <literal>ADMIN OPTION</literal>.
+   Ordinary roles can only set defaults for themselves.
    Certain configuration variables cannot be set this way, or can only be
    set if a superuser issues the command.  Only superusers can change a setting
    for all roles in all databases.
   </para>
  </refsect1>
 
- <refsect1>
+ <refsect1 id="sql-alterrole-params">
   <title>Parameters</title>
 
     <variablelist>
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-name">
       <term><replaceable class="parameter">name</replaceable></term>
       <listitem>
        <para>
@@ -143,7 +148,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-current-role">
       <term><literal>CURRENT_ROLE</literal></term>
       <term><literal>CURRENT_USER</literal></term>
       <listitem>
@@ -153,7 +158,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-session-user">
       <term><literal>SESSION_USER</literal></term>
       <listitem>
        <para>
@@ -163,7 +168,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-superuser">
       <term><literal>SUPERUSER</literal></term>
       <term><literal>NOSUPERUSER</literal></term>
       <term><literal>CREATEDB</literal></term>
@@ -191,34 +196,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
       </listitem>
      </varlistentry>
 
-     <varlistentry>
-      <term><literal>RESOURCE GROUP</> <replaceable class="parameter">group_name</replaceable></term>
-      <listitem>
-       <para>
-        The name of the resource group to assign to this role. Specifying
-        <replaceable>group_name</replaceable> <literal>NONE</literal> removes the role's
-        current resource group assignment and assigns a default resource
-        group based on the role's capability. <literal>SUPERUSER</literal> roles are assigned
-        the <literal>admin_group</literal> resource group, while the <literal>default_group</literal> resource
-        group is assigned to non-admin roles. See <xref linkend="sql-createresourcegroup"
-        endterm="sql-createresourcegroup-title"> for more information.
-       </para>
-      </listitem>
-     </varlistentry>
-
-     <varlistentry>
-      <term><literal>RESOURCE QUEUE</> <replaceable class="parameter">queue_name</replaceable></term>
-      <listitem>
-       <para>
-        The <literal>RESOURCE QUEUE</literal> that this role is in, or 
-        <literal>NONE</literal> to remove the role from any resource queuing 
-        restrictions. See <xref linkend="sql-createresourcequeue" 
-        endterm="sql-createresourcequeue-title"> for more information.
-       </para>
-      </listitem>
-     </varlistentry>
-
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-new-name">
       <term><replaceable>new_name</replaceable></term>
       <listitem>
        <para>
@@ -227,7 +205,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
       </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-database-name">
        <term><replaceable>database_name</replaceable></term>
        <listitem>
          <para>
@@ -236,7 +214,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
        </listitem>
      </varlistentry>
 
-     <varlistentry>
+     <varlistentry id="sql-alterrole-params-configuration-parameter">
       <term><replaceable>configuration_parameter</replaceable></term>
       <term><replaceable>value</replaceable></term>
       <listitem>
@@ -271,7 +249,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
     </variablelist>
  </refsect1>
 
- <refsect1>
+ <refsect1 id="sql-alterrole-notes">
   <title>Notes</title>
 
   <para>
@@ -305,7 +283,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
   </para>
  </refsect1>
 
- <refsect1>
+ <refsect1 id="sql-alterrole-examples">
   <title>Examples</title>
 
   <para>
@@ -341,7 +319,7 @@ ALTER ROLE fred VALID UNTIL 'infinity';
   </para>
 
   <para>
-   Give a role the ability to create other roles and new databases:
+   Give a role the ability to manage other roles and create new databases:
 
 <programlisting>
 ALTER ROLE miriam CREATEROLE CREATEDB;
@@ -366,7 +344,7 @@ ALTER ROLE fred IN DATABASE devel SET client_min_messages = DEBUG;
 </programlisting></para>
  </refsect1>
 
- <refsect1>
+ <refsect1 id="sql-alterrole-compat">
   <title>Compatibility</title>
 
   <para>
@@ -375,7 +353,7 @@ ALTER ROLE fred IN DATABASE devel SET client_min_messages = DEBUG;
   </para>
  </refsect1>
 
- <refsect1>
+ <refsect1 id="sql-alterrole-see">
   <title>See Also</title>
 
   <simplelist type="inline">

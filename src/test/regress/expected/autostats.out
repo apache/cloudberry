@@ -76,7 +76,7 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 analyze autostats_test;
 LOG:  statement: analyze autostats_test;
-WARNING:  skipping "autostats_test" --- only table or database owner can analyze it
+WARNING:  permission denied to analyze "autostats_test", skipping it
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
     relname     | reltuples 

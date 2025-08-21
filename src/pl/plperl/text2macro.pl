@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # src/pl/plperl/text2macro.pl
 
@@ -15,14 +15,13 @@ Options:
 
   --prefix=S   - add prefix S to the names of the macros
   --name=S     - use S as the macro name (assumes only one file)
-  --strip=S    - don't include lines that match perl regex S
 
 =head1 DESCRIPTION
 
 Reads one or more text files and outputs a corresponding series of C
 pre-processor macro definitions. Each macro defines a string literal that
 contains the contents of the corresponding text file. The basename of the text
-file as capitalized and used as the name of the macro, along with an optional prefix.
+file is capitalized and used as the name of the macro, along with an optional prefix.
 
 =cut
 
@@ -32,10 +31,13 @@ use warnings;
 use Getopt::Long;
 
 GetOptions(
-	'prefix=s'  => \my $opt_prefix,
-	'name=s'    => \my $opt_name,
-	'strip=s'   => \my $opt_strip,
+	'prefix=s' => \my $opt_prefix,
+	'name=s' => \my $opt_name,
 	'selftest!' => sub { exit selftest() },) or exit 1;
+
+# This was once a command-line option, but meson is obstreperous
+# about passing backslashes through custom targets.
+my $opt_strip = '^(#.*|\s*)$';
 
 die "No text files specified"
   unless @ARGV;
@@ -80,7 +82,7 @@ exit 0;
 
 sub selftest
 {
-	my $tmp    = "text2macro_tmp";
+	my $tmp = "text2macro_tmp";
 	my $string = q{a '' '\\'' "" "\\"" "\\\\" "\\\\n" b};
 
 	open my $fh, '>', "$tmp.pl" or die;

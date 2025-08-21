@@ -227,6 +227,7 @@ ANALYZE pagg_tab_ml;
 
 -- For Parallel Append
 SET max_parallel_workers_per_gather TO 2;
+SET parallel_setup_cost = 0;
 
 -- Full aggregation at level 1 as GROUP BY clause matches with PARTITION KEY
 -- for level 1 only. For subpartitions, GROUP BY clause does not match with
@@ -239,6 +240,8 @@ SELECT a, sum(b), array_agg(distinct c), count(*) FROM pagg_tab_ml GROUP BY a HA
 -- Without ORDER BY clause, to test Gather at top-most path
 EXPLAIN (COSTS OFF)
 SELECT a, sum(b), array_agg(distinct c), count(*) FROM pagg_tab_ml GROUP BY a HAVING avg(b) < 3;
+
+RESET parallel_setup_cost;
 
 -- Full aggregation at level 1 as GROUP BY clause matches with PARTITION KEY
 -- for level 1 only. For subpartitions, GROUP BY clause does not match with
@@ -314,15 +317,15 @@ SELECT y, sum(x), avg(x), count(*) FROM pagg_tab_para GROUP BY y HAVING avg(x) <
 
 -- Test when parent can produce parallel paths but not any (or some) of its children
 -- (Use one more aggregate to tilt the cost estimates for the plan we want)
--- ALTER TABLE pagg_tab_para_p1 SET (parallel_workers = 0);
--- ALTER TABLE pagg_tab_para_p3 SET (parallel_workers = 0);
+ALTER TABLE pagg_tab_para_p1 SET (parallel_workers = 0);
+ALTER TABLE pagg_tab_para_p3 SET (parallel_workers = 0);
 ANALYZE pagg_tab_para;
 
 EXPLAIN (COSTS OFF)
 SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
 SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
 
--- ALTER TABLE pagg_tab_para_p2 SET (parallel_workers = 0);
+ALTER TABLE pagg_tab_para_p2 SET (parallel_workers = 0);
 ANALYZE pagg_tab_para;
 
 EXPLAIN (COSTS OFF)

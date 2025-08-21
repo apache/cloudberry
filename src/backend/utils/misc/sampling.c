@@ -3,7 +3,7 @@
  * sampling.c
  *	  Relation block sampling routines.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -37,7 +37,7 @@
  */
 BlockNumber
 BlockSampler_Init(BlockSampler bs, BlockNumber nblocks, int samplesize,
-				  long randseed)
+				  uint32 randseed)
 {
 	bs->N = nblocks;			/* measured table size */
 
@@ -49,7 +49,7 @@ BlockSampler_Init(BlockSampler bs, BlockNumber nblocks, int samplesize,
 	bs->t = 0;					/* blocks scanned so far */
 	bs->m = 0;					/* blocks selected so far */
 
-	sampler_random_init_state(randseed, bs->randstate);
+	sampler_random_init_state(randseed, &bs->randstate);
 
 	return Min(bs->n, bs->N);
 }
@@ -98,7 +98,7 @@ BlockSampler_Next(BlockSampler bs)
 	 * less than k, which means that we cannot fail to select enough blocks.
 	 *----------
 	 */
-	V = sampler_random_fract(bs->randstate);
+	V = sampler_random_fract(&bs->randstate);
 	p = 1.0 - (double) k / (double) K;
 	while (V < p)
 	{
@@ -113,81 +113,6 @@ BlockSampler_Next(BlockSampler bs)
 	/* select */
 	bs->m++;
 	return bs->t++;
-}
-
-/*
- * This is a 64 bit version of BlockSampler.
- *
- * The code is same as BlockSampler except replacing
- * int type of variables with int64, which is intended
- * to support larger size of the data set (N).
- * 
- * Duplicate code for not willing to break the original
- * design to conflict with upstream for some special case.
- */
-void
-RowSampler_Init(RowSampler rs, int64 nobjects, int64 samplesize,
-				   long randseed)
-{
-	rs->N = nobjects;			/* measured table size */
-
-	/*
-	 * If we decide to reduce samplesize for tables that have less or not much
-	 * more than samplesize objects, here is the place to do it.
-	 */
-	rs->n = samplesize;
-	rs->t = 0;					/* objects scanned so far */
-	rs->m = 0;					/* objects selected so far */
-
-	sampler_random_init_state(randseed, rs->randstate);
-}
-
-bool
-RowSampler_HasMore(RowSampler rs)
-{
-	return (rs->t < rs->N) && (rs->m < rs->n);
-}
-
-int64
-RowSampler_Next(RowSampler rs)
-{
-	int64       K = rs->N - rs->t;	/* remaining objects */
-	int64		k = rs->n - rs->m;	/* objects still to sample */
-	double		p;				    /* probability to skip object */
-	double		V;				    /* random */
-
-	Assert(RowSampler_HasMore(rs));	/* hence K > 0 and k > 0 */
-
-	if (k >= K)
-	{
-		/* need all the rest */
-		rs->m++;
-		return rs->t++;
-	}
-
-    /* 
-     * It is not obvious that this code matches Knuth's Algorithm S.
-     * Refer to BlockSampler_Next() for detail.
-     */
-	V = sampler_random_fract(rs->randstate);
-    /*
-	 * Don't bother overflow of conversion from int64 K (N) as it was
-	 * already converted to "double" range value when initialized.
-	 */
-	p = 1.0 - (double) k / (double) K;
-	while (V < p)
-	{
-		/* skip */
-		rs->t++;
-		K--; /* keep K == N - t */
-
-		/* adjust p to be new cutoff point in reduced range */
-		p *= 1.0 - (double) k / (double) K;
-	}
-
-	/* select */
-	rs->m++;
-	return rs->t++;
 }
 
 /*
@@ -211,10 +136,11 @@ reservoir_init_selection_state(ReservoirState rs, int n)
 	 * Reservoir sampling is not used anywhere where it would need to return
 	 * repeatable results so we can initialize it randomly.
 	 */
-	sampler_random_init_state(random(), rs->randstate);
+	sampler_random_init_state(pg_prng_uint32(&pg_global_prng_state),
+							  &rs->randstate);
 
 	/* Initial value of W (for use when Algorithm Z is first applied) */
-	rs->W = exp(-log(sampler_random_fract(rs->randstate)) / n);
+	rs->W = exp(-log(sampler_random_fract(&rs->randstate)) / n);
 }
 
 double
@@ -229,7 +155,7 @@ reservoir_get_next_S(ReservoirState rs, double t, int n)
 		double		V,
 					quot;
 
-		V = sampler_random_fract(rs->randstate);	/* Generate V */
+		V = sampler_random_fract(&rs->randstate);	/* Generate V */
 		S = 0;
 		t += 1;
 		/* Note: "num" in Vitter's code is always equal to t - n */
@@ -261,7 +187,7 @@ reservoir_get_next_S(ReservoirState rs, double t, int n)
 						tmp;
 
 			/* Generate U and X */
-			U = sampler_random_fract(rs->randstate);
+			U = sampler_random_fract(&rs->randstate);
 			X = t * (W - 1.0);
 			S = floor(X);		/* S is tentatively set to floor(X) */
 			/* Test if U <= h(S)/cg(X) in the manner of (6.3) */
@@ -290,7 +216,7 @@ reservoir_get_next_S(ReservoirState rs, double t, int n)
 				y *= numer / denom;
 				denom -= 1;
 			}
-			W = exp(-log(sampler_random_fract(rs->randstate)) / n); /* Generate W in advance */
+			W = exp(-log(sampler_random_fract(&rs->randstate)) / n);	/* Generate W in advance */
 			if (exp(log(y) / n) <= (t + X) / t)
 				break;
 		}
@@ -305,24 +231,22 @@ reservoir_get_next_S(ReservoirState rs, double t, int n)
  *----------
  */
 void
-sampler_random_init_state(long seed, SamplerRandomState randstate)
+sampler_random_init_state(uint32 seed, pg_prng_state *randstate)
 {
-	randstate[0] = 0x330e;		/* same as pg_erand48, but could be anything */
-	randstate[1] = (unsigned short) seed;
-	randstate[2] = (unsigned short) (seed >> 16);
+	pg_prng_seed(randstate, (uint64) seed);
 }
 
 /* Select a random value R uniformly distributed in (0 - 1) */
 double
-sampler_random_fract(SamplerRandomState randstate)
+sampler_random_fract(pg_prng_state *randstate)
 {
 	double		res;
 
-	/* pg_erand48 returns a value in [0.0 - 1.0), so we must reject 0 */
+	/* pg_prng_double returns a value in [0.0 - 1.0), so we must reject 0.0 */
 	do
 	{
-		res = pg_erand48(randstate);
-	} while (res == 0.0);
+		res = pg_prng_double(randstate);
+	} while (unlikely(res == 0.0));
 	return res;
 }
 
@@ -336,27 +260,36 @@ sampler_random_fract(SamplerRandomState randstate)
  * except that a common random state is used across all callers.
  */
 static ReservoirStateData oldrs;
+static bool oldrs_initialized = false;
 
 double
 anl_random_fract(void)
 {
 	/* initialize if first time through */
-	if (oldrs.randstate[0] == 0)
-		sampler_random_init_state(random(), oldrs.randstate);
+	if (unlikely(!oldrs_initialized))
+	{
+		sampler_random_init_state(pg_prng_uint32(&pg_global_prng_state),
+								  &oldrs.randstate);
+		oldrs_initialized = true;
+	}
 
 	/* and compute a random fraction */
-	return sampler_random_fract(oldrs.randstate);
+	return sampler_random_fract(&oldrs.randstate);
 }
 
 double
 anl_init_selection_state(int n)
 {
 	/* initialize if first time through */
-	if (oldrs.randstate[0] == 0)
-		sampler_random_init_state(random(), oldrs.randstate);
+	if (unlikely(!oldrs_initialized))
+	{
+		sampler_random_init_state(pg_prng_uint32(&pg_global_prng_state),
+								  &oldrs.randstate);
+		oldrs_initialized = true;
+	}
 
 	/* Initial value of W (for use when Algorithm Z is first applied) */
-	return exp(-log(sampler_random_fract(oldrs.randstate)) / n);
+	return exp(-log(sampler_random_fract(&oldrs.randstate)) / n);
 }
 
 double

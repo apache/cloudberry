@@ -70,6 +70,14 @@ SET jit_above_cost TO DEFAULT;
 CREATE TABLE distinct_group_2 AS
 SELECT DISTINCT (g%1000)::text FROM generate_series(0,9999) g;
 
+SET enable_seqscan = 0;
+
+-- Check to see we get an incremental sort plan
+EXPLAIN (costs off)
+SELECT DISTINCT hundred, two FROM tenk1;
+
+RESET enable_seqscan;
+
 SET enable_hashagg=TRUE;
 SET optimizer_enable_hashagg=TRUE;
 
@@ -108,6 +116,71 @@ DROP TABLE distinct_hash_1;
 DROP TABLE distinct_hash_2;
 DROP TABLE distinct_group_1;
 DROP TABLE distinct_group_2;
+
+-- Test parallel DISTINCT
+SET parallel_tuple_cost=0;
+SET parallel_setup_cost=0;
+SET min_parallel_table_scan_size=0;
+SET max_parallel_workers_per_gather=2;
+
+-- Ensure we get a parallel plan
+EXPLAIN (costs off)
+SELECT DISTINCT four FROM tenk1;
+
+-- Ensure the parallel plan produces the correct results
+SELECT DISTINCT four FROM tenk1;
+
+CREATE OR REPLACE FUNCTION distinct_func(a INT) RETURNS INT AS $$
+  BEGIN
+    RETURN a;
+  END;
+$$ LANGUAGE plpgsql PARALLEL UNSAFE;
+
+-- Ensure we don't do parallel distinct with a parallel unsafe function
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT distinct_func(1) FROM tenk1;
+
+-- make the function parallel safe
+CREATE OR REPLACE FUNCTION distinct_func(a INT) RETURNS INT AS $$
+  BEGIN
+    RETURN a;
+  END;
+$$ LANGUAGE plpgsql PARALLEL SAFE;
+
+-- Ensure we do parallel distinct now that the function is parallel safe
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT distinct_func(1) FROM tenk1;
+
+RESET max_parallel_workers_per_gather;
+RESET min_parallel_table_scan_size;
+RESET parallel_setup_cost;
+RESET parallel_tuple_cost;
+
+--
+-- Test the planner's ability to use a LIMIT 1 instead of a Unique node when
+-- all of the distinct_pathkeys have been marked as redundant
+--
+
+-- Ensure we get a plan with a Limit 1
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 0;
+
+-- Ensure the above gives us the correct result
+SELECT DISTINCT four FROM tenk1 WHERE four = 0;
+
+-- Ensure we get a plan with a Limit 1
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
+
+-- Ensure no rows are returned
+SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
+
+-- Ensure we get a plan with a Limit 1 when the SELECT list contains constants
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
+
+-- Ensure we only get 1 row
+SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
 
 --
 -- Also, some tests of IS DISTINCT FROM, which doesn't quite deserve its
@@ -200,3 +273,48 @@ DROP TABLE capitals;
 DROP TABLE cities;
 set gp_statistics_pullup_from_child_partition to off;
 -- gpdb end: test inherit/partition table distinct when gp_statistics_pullup_from_child_partition is on
+
+create table t_distinct_sort(a int, b int, c int);
+insert into t_distinct_sort select i, i+1, i+2 from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+analyze t_distinct_sort;
+
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+explain(verbose, costs off)
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+explain(verbose, costs off)
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort ;
+select distinct count(a), sum(b) from t_distinct_sort ;
+
+-- should keep distinct clause
+explain(verbose, costs off) 
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+
+explain(verbose, costs off)
+select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
+0, 2) from t_distinct_sort)as xx;
+select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
+0, 2) from t_distinct_sort)as xx;
+drop table t_distinct_sort;
+
+explain(verbose, costs off)
+select distinct(count(a)) from generate_series(0, 1) as a;
+select distinct(count(a)) from generate_series(0, 1) as a;
+explain(verbose, costs off)
+select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2) b on true;
+select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2) b on true;
+-- please refer to https://github.com/greenplum-db/gpdb/issues/15033
+CREATE TABLE t1_issue_15033(c DECIMAL CHECK (0.4 IS DISTINCT FROM 0.3));
+CREATE TABLE t2_issue_15033(c DECIMAL CHECK (0.4 IS NOT DISTINCT FROM 0.3));
+INSERT INTO t1_issue_15033 VALUES(10);
+SELECT * FROM t1_issue_15033;
+INSERT INTO t2_issue_15033 VALUES(10);
+SELECT * FROM t2_issue_15033;

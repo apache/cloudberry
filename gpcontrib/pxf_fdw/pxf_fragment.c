@@ -23,10 +23,10 @@ static void LogFragmentList(const char *debugHeader, List *fragments);
 static void InitClientContext(ClientContext * client_context);
 static void CallRest(PxfOptions *options, ClientContext * client_context, char *rest_msg);
 static void ProcessRequest(ClientContext * client_context, char *uri);
-static void PxfFragmentScalar(void *state, char *token, JsonTokenType type);
-static void PxfFragmentObjectStart(void *state, char *name, bool isnull);
-static void PxfArrayElementStart(void *state, bool isnull);
-static void PxfArrayElementEnd(void *state, bool isnull);
+static JsonParseErrorType PxfFragmentScalar(void *state, char *token, JsonTokenType type);
+static JsonParseErrorType PxfFragmentObjectStart(void *state, char *name, bool isnull);
+static JsonParseErrorType PxfArrayElementStart(void *state, bool isnull);
+static JsonParseErrorType PxfArrayElementEnd(void *state, bool isnull);
 
 /* Get List of fragments using PXF
  * Returns selected fragments that have been allocated to the current segment
@@ -150,7 +150,7 @@ typedef struct FragmentState
 	int			arraydepth;
 } FragmentState;
 
-static void
+static JsonParseErrorType
 PxfFragmentObjectStart(void *state, char *name, bool isnull)
 {
 	FragmentState *s = (FragmentState *) state;
@@ -196,6 +196,7 @@ PxfFragmentObjectStart(void *state, char *name, bool isnull)
 					 errmsg("unrecognized array in PXF fragment: \"%s\"",
 							name)));
 	}
+	return JSON_SUCCESS;
 }
 
 static void
@@ -213,7 +214,7 @@ CheckAndAssign(char **field, JsonTokenType type, char *token,
 				 errmsg("unexpected value \"%s\" for attribute", token)));
 }
 
-static void
+static JsonParseErrorType
 PxfFragmentScalar(void *state, char *token, JsonTokenType type)
 {
 	FragmentState *s = (FragmentState *) state;
@@ -250,9 +251,11 @@ PxfFragmentScalar(void *state, char *token, JsonTokenType type)
 			elog(ERROR, "Unexpected PXF object state: %d", s->object);
 			break;
 	}
+
+	return JSON_SUCCESS;
 }
 
-static void
+static JsonParseErrorType
 PxfArrayElementStart(void *state, bool isnull)
 {
 	FragmentState *s = (FragmentState *) state;
@@ -264,7 +267,7 @@ PxfArrayElementStart(void *state, bool isnull)
 	 * and there is nothing but book keeping to do
 	 */
 	if (++s->arraydepth > 1)
-		return;
+		return JSON_SUCCESS;
 
 	/*
 	 * Reaching here means we are entering a new fragment in the PXFFragments
@@ -274,9 +277,11 @@ PxfArrayElementStart(void *state, bool isnull)
 	s->fragments = lappend(s->fragments, data);
 	s->has_replicas = false;
 	s->object = PXF_PARSE_START;
+
+	return JSON_SUCCESS;
 }
 
-static void
+static JsonParseErrorType
 PxfArrayElementEnd(void *state, bool isnull)
 {
 	FragmentState *s = (FragmentState *) state;
@@ -287,6 +292,8 @@ PxfArrayElementEnd(void *state, bool isnull)
 			s->fragments = list_truncate(s->fragments,
 										 list_length(s->fragments) - 1);
 	}
+
+	return JSON_SUCCESS;
 }
 
 static List *

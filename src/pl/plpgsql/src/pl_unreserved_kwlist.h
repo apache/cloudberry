@@ -7,7 +7,7 @@
  * by the PG_KEYWORD macro, which is not defined in this file; it can
  * be defined by the caller for special purposes.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/pl/plpgsql/src/pl_unreserved_kwlist.h
@@ -70,6 +70,7 @@ PG_KEYWORD("insert", K_INSERT)
 PG_KEYWORD("is", K_IS)
 PG_KEYWORD("last", K_LAST)
 PG_KEYWORD("log", K_LOG)
+PG_KEYWORD("merge", K_MERGE)
 PG_KEYWORD("message", K_MESSAGE)
 PG_KEYWORD("message_text", K_MESSAGE_TEXT)
 PG_KEYWORD("move", K_MOVE)
@@ -84,6 +85,7 @@ PG_KEYWORD("pg_datatype_name", K_PG_DATATYPE_NAME)
 PG_KEYWORD("pg_exception_context", K_PG_EXCEPTION_CONTEXT)
 PG_KEYWORD("pg_exception_detail", K_PG_EXCEPTION_DETAIL)
 PG_KEYWORD("pg_exception_hint", K_PG_EXCEPTION_HINT)
+PG_KEYWORD("pg_routine_oid", K_PG_ROUTINE_OID)
 PG_KEYWORD("print_strict_params", K_PRINT_STRICT_PARAMS)
 PG_KEYWORD("prior", K_PRIOR)
 PG_KEYWORD("query", K_QUERY)

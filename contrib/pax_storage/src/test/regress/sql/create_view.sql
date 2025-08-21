@@ -11,16 +11,43 @@ set Debug_print_plan=on;
 --	(this also tests the query rewrite system)
 --
 
+-- directory paths and dlsuffix are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv libdir PG_LIBDIR
+\getenv dlsuffix PG_DLSUFFIX
+
+\set regresslib :libdir '/regress' :dlsuffix
+
+CREATE FUNCTION interpt_pp(path, path)
+    RETURNS point
+    AS :'regresslib'
+    LANGUAGE C STRICT;
+
+CREATE TABLE real_city (
+	pop			int4,
+	cname		text,
+	outline 	path
+);
+
+\set filename :abs_srcdir '/data/real_city.data'
+COPY real_city FROM :'filename';
+ANALYZE real_city;
+
+SELECT *
+   INTO TABLE ramp
+   FROM ONLY road
+   WHERE name ~ '.*Ramp';
+
 CREATE VIEW street AS
    SELECT r.name, r.thepath, c.cname AS cname
    FROM ONLY road r, real_city c
-   WHERE c.outline ## r.thepath;
+   WHERE c.outline ?# r.thepath;
 
 CREATE VIEW iexit AS
    SELECT ih.name, ih.thepath,
 	interpt_pp(ih.thepath, r.thepath) AS exit
    FROM ihighway ih, ramp r
-   WHERE ih.thepath ## r.thepath;
+   WHERE ih.thepath ?# r.thepath;
 
 CREATE VIEW toyemp AS
    SELECT name, age, location, 12*salary AS annualsal
@@ -47,12 +74,13 @@ CREATE VIEW key_dependent_view_no_cols AS
 -- CREATE OR REPLACE VIEW
 --
 
-CREATE TABLE viewtest_tbl (a int, b int);
+CREATE TABLE viewtest_tbl (a int, b int, c numeric(10,1), d text COLLATE "C");
+
 COPY viewtest_tbl FROM stdin;
-5	10
-10	15
-15	20
-20	25
+5	10	1.1	xy
+10	15	2.2	xyz
+15	20	3.3	xyzz
+20	25	4.4	xyzzy
 \.
 
 CREATE OR REPLACE VIEW viewtest AS
@@ -64,7 +92,7 @@ CREATE OR REPLACE VIEW viewtest AS
 SELECT * FROM viewtest;
 
 CREATE OR REPLACE VIEW viewtest AS
-	SELECT a, b FROM viewtest_tbl WHERE a > 5 ORDER BY b DESC;
+	SELECT a, b, c, d FROM viewtest_tbl WHERE a > 5 ORDER BY b DESC;
 
 SELECT * FROM viewtest;
 
@@ -78,11 +106,19 @@ CREATE OR REPLACE VIEW viewtest AS
 
 -- should fail
 CREATE OR REPLACE VIEW viewtest AS
-	SELECT a, b::numeric FROM viewtest_tbl;
+	SELECT a, b::numeric, c, d FROM viewtest_tbl;
+
+-- should fail
+CREATE OR REPLACE VIEW viewtest AS
+	SELECT a, b, c::numeric(10,2), d FROM viewtest_tbl;
+
+-- should fail
+CREATE OR REPLACE VIEW viewtest AS
+	SELECT a, b, c, d COLLATE "POSIX" FROM viewtest_tbl;
 
 -- should work
 CREATE OR REPLACE VIEW viewtest AS
-	SELECT a, b, 0 AS c FROM viewtest_tbl;
+	SELECT a, b, c, d, 0 AS e FROM viewtest_tbl;
 
 DROP VIEW viewtest;
 DROP TABLE viewtest_tbl;
@@ -225,9 +261,19 @@ CREATE VIEW mysecview5 WITH (security_barrier=100)	-- Error
        AS SELECT * FROM tbl1 WHERE a > 100;
 CREATE VIEW mysecview6 WITH (invalid_option)		-- Error
        AS SELECT * FROM tbl1 WHERE a < 100;
+CREATE VIEW mysecview7 WITH (security_invoker=true)
+       AS SELECT * FROM tbl1 WHERE a = 100;
+CREATE VIEW mysecview8 WITH (security_invoker=false, security_barrier=true)
+       AS SELECT * FROM tbl1 WHERE a > 100;
+CREATE VIEW mysecview9 WITH (security_invoker)
+       AS SELECT * FROM tbl1 WHERE a < 100;
+CREATE VIEW mysecview10 WITH (security_invoker=100)	-- Error
+       AS SELECT * FROM tbl1 WHERE a <> 100;
 SELECT relname, relkind, reloptions FROM pg_class
        WHERE oid in ('mysecview1'::regclass, 'mysecview2'::regclass,
-                     'mysecview3'::regclass, 'mysecview4'::regclass)
+                     'mysecview3'::regclass, 'mysecview4'::regclass,
+                     'mysecview7'::regclass, 'mysecview8'::regclass,
+                     'mysecview9'::regclass)
        ORDER BY relname;
 
 CREATE OR REPLACE VIEW mysecview1
@@ -238,9 +284,17 @@ CREATE OR REPLACE VIEW mysecview3 WITH (security_barrier=true)
        AS SELECT * FROM tbl1 WHERE a < 256;
 CREATE OR REPLACE VIEW mysecview4 WITH (security_barrier=false)
        AS SELECT * FROM tbl1 WHERE a <> 256;
+CREATE OR REPLACE VIEW mysecview7
+       AS SELECT * FROM tbl1 WHERE a > 256;
+CREATE OR REPLACE VIEW mysecview8 WITH (security_invoker=true)
+       AS SELECT * FROM tbl1 WHERE a < 256;
+CREATE OR REPLACE VIEW mysecview9 WITH (security_invoker=false, security_barrier=true)
+       AS SELECT * FROM tbl1 WHERE a <> 256;
 SELECT relname, relkind, reloptions FROM pg_class
        WHERE oid in ('mysecview1'::regclass, 'mysecview2'::regclass,
-                     'mysecview3'::regclass, 'mysecview4'::regclass)
+                     'mysecview3'::regclass, 'mysecview4'::regclass,
+                     'mysecview7'::regclass, 'mysecview8'::regclass,
+                     'mysecview9'::regclass)
        ORDER BY relname;
 
 -- Check that unknown literals are converted to "text" in CREATE VIEW,
@@ -325,6 +379,22 @@ ALTER TABLE tmp1 RENAME TO tx1;
 \d+ aliased_view_2
 \d+ aliased_view_3
 \d+ aliased_view_4
+
+-- Test correct deparsing of ORDER BY when there is an output name conflict
+
+create view aliased_order_by as
+select x1 as x2, x2 as x1, x3 from tt1
+  order by x2;  -- this is interpreted per SQL92, so really ordering by x1
+
+\d+ aliased_order_by
+
+alter view aliased_order_by rename column x1 to x0;
+
+\d+ aliased_order_by
+
+alter view aliased_order_by rename column x3 to x1;
+
+\d+ aliased_order_by
 
 -- Test aliasing of joins
 
@@ -528,31 +598,77 @@ create view tt14v as select t.* from tt14f() t;
 select pg_get_viewdef('tt14v', true);
 select * from tt14v;
 
-begin;
+alter table tt14t drop column f3;  -- fail, view has explicit reference to f3
 
--- this perhaps should be rejected, but it isn't:
-alter table tt14t drop column f3;
+-- MERGE16_FIXME: delete command can only delete tuples from master, But we
+-- need to delete them from both master and segments
+    
+-- We used to have a bug that would allow the above to succeed, posing
+-- hazards for later execution of the view.  Check that the internal
+-- defenses for those hazards haven't bit-rotted, in case some other
+-- bug with similar symptoms emerges.
+-- begin;
+-- 
+-- -- destroy the dependency entry that prevents the DROP:
+-- delete from pg_depend where
+--   objid = (select oid from pg_rewrite
+--            where ev_class = 'tt14v'::regclass and rulename = '_RETURN')
+--   and refobjsubid = 3
+-- returning pg_describe_object(classid, objid, objsubid) as obj,
+--           pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+--           deptype;
+-- 
+-- -- this will now succeed:
+-- alter table tt14t drop column f3;
+-- 
+-- -- column f3 is still in the view, sort of ...
+-- select pg_get_viewdef('tt14v', true);
+-- -- ... and you can even EXPLAIN it ...
+-- explain (verbose, costs off) select * from tt14v;
+-- -- but it will fail at execution
+-- select f1, f4 from tt14v;
+-- select * from tt14v;
+-- 
+-- rollback;
 
--- f3 is still in the view ...
+-- likewise, altering a referenced column's type is prohibited ...
+alter table tt14t alter column f4 type integer using f4::integer;  -- fail
+
+-- ... but some bug might let it happen, so check defenses
+-- begin;
+-- 
+-- -- destroy the dependency entry that prevents the ALTER:
+-- delete from pg_depend where
+--   objid = (select oid from pg_rewrite
+--            where ev_class = 'tt14v'::regclass and rulename = '_RETURN')
+--   and refobjsubid = 4
+-- returning pg_describe_object(classid, objid, objsubid) as obj,
+--           pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+--           deptype;
+-- 
+-- -- this will now succeed:
+-- alter table tt14t alter column f4 type integer using f4::integer;
+-- 
+-- -- f4 is still in the view ...
+-- select pg_get_viewdef('tt14v', true);
+-- -- but will fail at execution
+-- select f1, f3 from tt14v;
+-- select * from tt14v;
+-- 
+-- rollback;
+
+drop view tt14v;
+
+create view tt14v as select t.f1, t.f4 from tt14f() t;
+
 select pg_get_viewdef('tt14v', true);
--- but will fail at execution
-select f1, f4 from tt14v;
 select * from tt14v;
 
-rollback;
+alter table tt14t drop column f3;  -- ok
 
-begin;
-
--- this perhaps should be rejected, but it isn't:
-alter table tt14t alter column f4 type integer using f4::integer;
-
--- f4 is still in the view ...
 select pg_get_viewdef('tt14v', true);
--- but will fail at execution
-select f1, f3 from tt14v;
+explain (verbose, costs off) select * from tt14v;
 select * from tt14v;
-
-rollback;
 
 -- check display of whole-row variables in some corner cases
 
@@ -613,6 +729,7 @@ select pg_get_viewdef('tt20v', true);
 
 create view tt201v as
 select
+  ('2022-12-01'::date + '1 day'::interval) at time zone 'UTC' as atz,
   extract(day from now()) as extr,
   (now(), '1 day'::interval) overlaps
     (current_timestamp(2), '1 day'::interval) as o,
@@ -631,7 +748,39 @@ select
   trim(trailing ' foo ') as rt,
   trim(E'\\000'::bytea from E'\\000Tom\\000'::bytea) as btb,
   trim(leading E'\\000'::bytea from E'\\000Tom\\000'::bytea) as ltb,
-  trim(trailing E'\\000'::bytea from E'\\000Tom\\000'::bytea) as rtb;
+  trim(trailing E'\\000'::bytea from E'\\000Tom\\000'::bytea) as rtb,
+  CURRENT_DATE as cd,
+  (select * from CURRENT_DATE) as cd2,
+  CURRENT_TIME as ct,
+  (select * from CURRENT_TIME) as ct2,
+  CURRENT_TIME (1) as ct3,
+  (select * from CURRENT_TIME (1)) as ct4,
+  CURRENT_TIMESTAMP as ct5,
+  (select * from CURRENT_TIMESTAMP) as ct6,
+  CURRENT_TIMESTAMP (1) as ct7,
+  (select * from CURRENT_TIMESTAMP (1)) as ct8,
+  LOCALTIME as lt1,
+  (select * from LOCALTIME) as lt2,
+  LOCALTIME (1) as lt3,
+  (select * from LOCALTIME (1)) as lt4,
+  LOCALTIMESTAMP as lt5,
+  (select * from LOCALTIMESTAMP) as lt6,
+  LOCALTIMESTAMP (1) as lt7,
+  (select * from LOCALTIMESTAMP (1)) as lt8,
+  CURRENT_CATALOG as ca,
+  (select * from CURRENT_CATALOG) as ca2,
+  CURRENT_ROLE as cr,
+  (select * from CURRENT_ROLE) as cr2,
+  CURRENT_SCHEMA as cs,
+  (select * from CURRENT_SCHEMA) as cs2,
+  CURRENT_USER as cu,
+  (select * from CURRENT_USER) as cu2,
+  USER as us,
+  (select * from USER) as us2,
+  SESSION_USER seu,
+  (select * from SESSION_USER) as seu2,
+  SYSTEM_USER as su,
+  (select * from SYSTEM_USER) as su2;
 select pg_get_viewdef('tt201v', true);
 
 -- corner cases with empty join conditions
@@ -689,6 +838,15 @@ select x + y + z as c1,
        (x,y) <= ANY (values(1,2),(3,4)) as c11
 from (values(1,2,3)) v(x,y,z);
 select pg_get_viewdef('tt26v', true);
+
+-- test restriction on non-system view expansion.
+create table tt27v_tbl (a int);
+create view tt27v as select a from tt27v_tbl;
+set restrict_nonsystem_relation_kind to 'view';
+select a from tt27v where a > 0; -- Error
+insert into tt27v values (1); -- Error
+select viewname from pg_views where viewname = 'tt27v'; -- Ok to access a system view.
+reset restrict_nonsystem_relation_kind;
 
 -- clean up all the random objects we made above
 DROP SCHEMA temp_view_test CASCADE;

@@ -32,6 +32,7 @@ CATALOG(gp_fastsequence,7023,FastSequenceRelationId)
 
 /* GPDB added foreign key definitions for gpcheckcat. */
 FOREIGN_KEY(objid REFERENCES pg_class(oid));
+DECLARE_UNIQUE_INDEX(gp_fastsequence_objid_objmod_index, 6067, FastSequenceObjidObjmodIndexId, on gp_fastsequence using btree(objid oid_ops, objmod  int8_ops));
 
 /* ----------------
 *		Form_gp_fastsequence corresponds to a pointer to a tuple with

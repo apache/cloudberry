@@ -16,7 +16,7 @@ if TD["new"]["fname"] == "william":
 	TD["new"]["fname"] = TD["args"][0]
 	rv = "MODIFY"
 return rv'
-	LANGUAGE plpythonu;
+	LANGUAGE plpython3u;
 
 
 CREATE FUNCTION users_update() returns trigger
@@ -25,7 +25,7 @@ CREATE FUNCTION users_update() returns trigger
 	if TD["old"]["fname"] != TD["new"]["fname"] and TD["old"]["fname"] == TD["args"][0]:
 		return "SKIP"
 return None'
-	LANGUAGE plpythonu;
+	LANGUAGE plpython3u;
 
 
 CREATE FUNCTION users_delete() RETURNS trigger
@@ -33,7 +33,7 @@ CREATE FUNCTION users_delete() RETURNS trigger
 'if TD["old"]["fname"] == TD["args"][0]:
 	return "SKIP"
 return None'
-	LANGUAGE plpythonu;
+	LANGUAGE plpython3u;
 
 
 CREATE TRIGGER users_insert_trig BEFORE INSERT ON users FOR EACH ROW
@@ -72,7 +72,7 @@ CREATE TABLE trigger_test_generated (
         j int GENERATED ALWAYS AS (i * 2) STORED
 );
 
-CREATE FUNCTION trigger_data() RETURNS trigger LANGUAGE plpythonu AS $$
+CREATE FUNCTION trigger_data() RETURNS trigger LANGUAGE plpython3u AS $$
 
 if 'relid' in TD:
 	TD['relid'] = "bogus:12345"
@@ -163,7 +163,7 @@ INSERT INTO trigger_test VALUES (0, 'zero');
 CREATE FUNCTION stupid1() RETURNS trigger
 AS $$
     return 37
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger1
 BEFORE INSERT ON trigger_test
@@ -179,7 +179,7 @@ DROP TRIGGER stupid_trigger1 ON trigger_test;
 CREATE FUNCTION stupid2() RETURNS trigger
 AS $$
     return "MODIFY"
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger2
 BEFORE DELETE ON trigger_test
@@ -197,7 +197,7 @@ INSERT INTO trigger_test VALUES (0, 'zero');
 CREATE FUNCTION stupid3() RETURNS trigger
 AS $$
     return "foo"
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger3
 BEFORE UPDATE ON trigger_test
@@ -212,8 +212,8 @@ DROP TRIGGER stupid_trigger3 ON trigger_test;
 
 CREATE FUNCTION stupid3u() RETURNS trigger
 AS $$
-    return u"foo"
-$$ LANGUAGE plpythonu;
+    return "foo"
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger3
 BEFORE UPDATE ON trigger_test
@@ -230,7 +230,7 @@ CREATE FUNCTION stupid4() RETURNS trigger
 AS $$
     del TD["new"]
     return "MODIFY";
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger4
 BEFORE UPDATE ON trigger_test
@@ -247,7 +247,7 @@ CREATE FUNCTION stupid5() RETURNS trigger
 AS $$
     TD["new"] = ['foo', 'bar']
     return "MODIFY";
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger5
 BEFORE UPDATE ON trigger_test
@@ -264,7 +264,7 @@ CREATE FUNCTION stupid6() RETURNS trigger
 AS $$
     TD["new"] = {1: 'foo', 2: 'bar'}
     return "MODIFY";
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger6
 BEFORE UPDATE ON trigger_test
@@ -281,7 +281,7 @@ CREATE FUNCTION stupid7() RETURNS trigger
 AS $$
     TD["new"] = {'v': 'foo', 'a': 'bar'}
     return "MODIFY";
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger7
 BEFORE UPDATE ON trigger_test
@@ -296,9 +296,9 @@ DROP TRIGGER stupid_trigger7 ON trigger_test;
 
 CREATE FUNCTION stupid7u() RETURNS trigger
 AS $$
-    TD["new"] = {u'v': 'foo', u'a': 'bar'}
+    TD["new"] = {'v': 'foo', 'a': 'bar'}
     return "MODIFY"
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER stupid_trigger7
 BEFORE UPDATE ON trigger_test
@@ -324,7 +324,7 @@ CREATE FUNCTION test_null() RETURNS trigger
 AS $$
     TD["new"]['v'] = None
     return "MODIFY"
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER test_null_trigger
 BEFORE UPDATE ON trigger_test
@@ -347,7 +347,7 @@ SET DateStyle = 'ISO';
 CREATE FUNCTION set_modif_time() RETURNS trigger AS $$
     TD['new']['modif_time'] = '2010-10-13 21:57:28.930486'
     return 'MODIFY'
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 -- Add 'DISTRIBUTED RANDOMLY' to avoid "ERROR:  Cannot parallelize an UPDATE statement that updates the distribution columns"
 CREATE TABLE pb (a TEXT, modif_time TIMESTAMP(0) WITHOUT TIME ZONE) DISTRIBUTED RANDOMLY;
@@ -372,7 +372,7 @@ CREATE FUNCTION composite_trigger_f() RETURNS trigger AS $$
     TD['new']['f1'] = (3, False)
     TD['new']['f2'] = {'k': 7, 'l': 'yes', 'ignored': 10}
     return 'MODIFY'
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER composite_trigger BEFORE INSERT ON composite_trigger_test
   FOR EACH ROW EXECUTE PROCEDURE composite_trigger_f();
@@ -387,7 +387,7 @@ CREATE TABLE composite_trigger_noop_test (f1 comp1, f2 comp2);
 
 CREATE FUNCTION composite_trigger_noop_f() RETURNS trigger AS $$
     return 'MODIFY'
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER composite_trigger_noop BEFORE INSERT ON composite_trigger_noop_test
   FOR EACH ROW EXECUTE PROCEDURE composite_trigger_noop_f();
@@ -406,7 +406,7 @@ CREATE TABLE composite_trigger_nested_test(c comp3);
 
 CREATE FUNCTION composite_trigger_nested_f() RETURNS trigger AS $$
     return 'MODIFY'
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 
 CREATE TRIGGER composite_trigger_nested BEFORE INSERT ON composite_trigger_nested_test
   FOR EACH ROW EXECUTE PROCEDURE composite_trigger_nested_f();
@@ -417,7 +417,7 @@ INSERT INTO composite_trigger_nested_test VALUES (ROW(ROW(NULL, 't'), ROW(1, 'f'
 SELECT * FROM composite_trigger_nested_test;
 
 -- check that using a function as a trigger over two tables works correctly
-CREATE FUNCTION trig1234() RETURNS trigger LANGUAGE plpythonu AS $$
+CREATE FUNCTION trig1234() RETURNS trigger LANGUAGE plpython3u AS $$
     TD["new"]["data"] = '1234'
     return 'MODIFY'
 $$;
@@ -439,7 +439,7 @@ SELECT * FROM b;
 CREATE TABLE transition_table_test (id int, name text);
 INSERT INTO transition_table_test VALUES (1, 'a');
 
-CREATE FUNCTION transition_table_test_f() RETURNS trigger LANGUAGE plpythonu AS
+CREATE FUNCTION transition_table_test_f() RETURNS trigger LANGUAGE plpython3u AS
 $$
     rv = plpy.execute("SELECT * FROM old_table")
     assert(rv.nrows() == 1)
@@ -464,7 +464,7 @@ DROP FUNCTION transition_table_test_f();
 -- dealing with generated columns
 
 CREATE FUNCTION generated_test_func1() RETURNS trigger
-LANGUAGE plpythonu
+LANGUAGE plpython3u
 AS $$
 TD['new']['j'] = 5  # not allowed
 return 'MODIFY'
@@ -483,7 +483,7 @@ SELECT * FROM trigger_test_generated;
 CREATE TABLE recursive_trigger_test (a int, b int);
 
 CREATE FUNCTION recursive_trigger_func() RETURNS trigger
-LANGUAGE plpythonu
+LANGUAGE plpython3u
 AS $$
 if TD["event"] == "UPDATE":
     plpy.execute("INSERT INTO recursive_trigger_test VALUES (1, 2)")

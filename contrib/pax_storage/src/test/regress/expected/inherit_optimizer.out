@@ -539,6 +539,34 @@ CREATE TEMP TABLE z (b TEXT, PRIMARY KEY(aa, b)) inherits (a);
 INSERT INTO z VALUES (NULL, 'text'); -- should fail
 ERROR:  null value in column "aa" of relation "z" violates not-null constraint
 DETAIL:  Failing row contains (null, text).
+-- Check inherited UPDATE with first child excluded
+create table some_tab (f1 int, f2 int, f3 int, check (f1 < 10) no inherit);
+create table some_tab_child () inherits(some_tab);
+insert into some_tab_child select i, i+1, 0 from generate_series(1,1000) i;
+create index on some_tab_child(f1, f2);
+-- while at it, also check that statement-level triggers fire
+create function some_tab_stmt_trig_func() returns trigger as
+$$begin raise notice 'updating some_tab'; return NULL; end;$$
+language plpgsql;
+create trigger some_tab_stmt_trig
+  before update on some_tab execute function some_tab_stmt_trig_func();
+ERROR:  Triggers for statements are not yet supported
+explain (costs off)
+update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
+                                           QUERY PLAN
+-------------------------------------------------------------------------------------------------
+ Update on some_tab
+   Update on some_tab_child some_tab_1
+   ->  Result
+         ->  Index Scan using some_tab_child_f1_f2_idx on some_tab_child some_tab_1
+               Index Cond: ((f1 = 12) AND (f2 = 13))
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
+drop table some_tab cascade;
+NOTICE:  drop cascades to table some_tab_child
+drop function some_tab_stmt_trig_func();
 -- Check inherited UPDATE with all children excluded
 create table some_tab (a int, b int) distributed randomly;
 create table some_tab_child () inherits (some_tab);
@@ -1080,6 +1108,34 @@ Inherits: inht1,
 Distributed by: (aa)
 
 DROP TABLE inhts;
+-- Test for adding a column to a parent table with complex inheritance
+CREATE TABLE inhta ();
+CREATE TABLE inhtb () INHERITS (inhta);
+CREATE TABLE inhtc () INHERITS (inhtb);
+CREATE TABLE inhtd () INHERITS (inhta, inhtb, inhtc);
+ALTER TABLE inhta ADD COLUMN i int, ADD COLUMN j bigint DEFAULT 1;
+NOTICE:  merging definition of column "i" for child "inhtd"
+NOTICE:  merging definition of column "j" for child "inhtd"
+\d+ inhta
+                                   Table "public.inhta"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
+ j      | bigint  |           |          | 1       | plain   |              | 
+Child tables: inhtb,
+              inhtd
+
+\d+ inhtd
+                                   Table "public.inhtd"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
+ j      | bigint  |           |          | 1       | plain   |              | 
+Inherits: inhta,
+          inhtb,
+          inhtc
+
+DROP TABLE inhta, inhtb, inhtc, inhtd;
 -- Test for renaming in diamond inheritance
 CREATE TABLE inht2 (x int) INHERITS (inht1);
 CREATE TABLE inht3 (y int) INHERITS (inht1);
@@ -1188,19 +1244,23 @@ Distributed by: (val1, val2)
 
 DROP TABLE test_constraints_inh;
 DROP TABLE test_constraints;
--- PAX not support gist/spgist/brin indexes
--- CREATE TABLE test_ex_constraints (
---     c circle,
---     dkey inet,
---     EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
--- );
--- CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
--- \d+ test_ex_constraints
--- ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
--- \d+ test_ex_constraints
--- \d+ test_ex_constraints_inh
--- DROP TABLE test_ex_constraints_inh;
--- DROP TABLE test_ex_constraints;
+CREATE TABLE test_ex_constraints (
+    c circle,
+    dkey inet,
+    EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
+);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:###)
+CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
+ERROR:  relation "test_ex_constraints" does not exist
+\d+ test_ex_constraints
+ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
+ERROR:  relation "test_ex_constraints" does not exist
+\d+ test_ex_constraints
+\d+ test_ex_constraints_inh
+DROP TABLE test_ex_constraints_inh;
+ERROR:  table "test_ex_constraints_inh" does not exist
+DROP TABLE test_ex_constraints;
+ERROR:  table "test_ex_constraints" does not exist
 -- Test non-inheritable foreign key constraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);
 CREATE TABLE test_foreign_constraints(id1 int REFERENCES test_primary_constraints(id));
@@ -1579,6 +1639,39 @@ select min(1-id) from matest0;
 reset enable_seqscan;
 reset enable_parallel_append;
 reset enable_bitmapscan;
+explain (verbose, costs off)  -- bug #18652
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((1 - t1.id))
+   Merge Key: ((1 - t1.id))
+   ->  Sort
+         Output: ((1 - t1.id))
+         Sort Key: ((1 - t1.id))
+         ->  Result
+               Output: (1 - t1.id)
+               ->  Append
+                     ->  Seq Scan on public.matest3 t1
+                           Output: t1.id
+                     ->  Seq Scan on public.matest3 t2
+                           Output: (t2.id * 2)
+ Optimizer: GPORCA
+(14 rows)
+
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+  c  
+-----
+  -4
+  -5
+  -9
+ -11
+(4 rows)
+
 drop table matest0 cascade;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table matest1
@@ -1787,6 +1880,117 @@ reset enable_seqscan;
 reset enable_indexscan;
 reset enable_bitmapscan;
 rollback;
+--
+-- Check handling of MULTIEXPR SubPlans in inherited updates
+--
+create table inhpar(f1 int, f2 name);
+create table inhcld(f2 name, f1 int);
+alter table inhcld inherit inhpar;
+insert into inhpar select x, x::text from generate_series(1,5) x;
+insert into inhcld select x::text, x from generate_series(6,10) x;
+explain (verbose, costs off)
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+ERROR:  can't split update for inherit table:
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+ERROR:  can't split update for inherit table:
+select * from inhpar order by f1;
+ f1 | f2 
+----+----
+  1 | 1
+  2 | 2
+  3 | 3
+  4 | 4
+  5 | 5
+  6 | 6
+  7 | 7
+  8 | 8
+  9 | 9
+ 10 | 10
+(10 rows)
+
+drop table inhpar cascade;
+NOTICE:  drop cascades to table inhcld
+--
+-- And the same for partitioned cases
+--
+create table inhpar(f1 int primary key, f2 name) partition by range (f1);
+create table inhcld1(f2 name, f1 int primary key);
+create table inhcld2(f1 int primary key, f2 name);
+alter table inhpar attach partition inhcld1 for values from (1) to (5);
+alter table inhpar attach partition inhcld2 for values from (5) to (100);
+insert into inhpar select x, x::text from generate_series(1,10) x;
+explain (verbose, costs off)
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Update on public.inhpar i
+   Update on public.inhcld1 i_1
+   Update on public.inhcld2 i_2
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: ($2), (($3)::name), ((SubPlan 1 (returns $2,$3) (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, i.*, (DMLAction)
+         ->  Split Update
+               Output: ($2), (($3)::name), ((SubPlan 1 (returns $2,$3) (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, i.*, DMLAction
+               ->  Append
+                     ->  Seq Scan on public.inhcld1 i_1
+                           Output: $2, $3, (SubPlan 1 (returns $2,$3) (copy 2)), i_1.tableoid, i_1.ctid, i_1.gp_segment_id, i_1.*
+                           SubPlan 1 (returns $2,$3) (copy 2)
+                             ->  Limit
+                                   Output: (i_1.f1), (((i_1.f2)::text || '-'::text))
+                                   ->  Result
+                                         Output: i_1.f1, ((i_1.f2)::text || '-'::text)
+                                         ->  Materialize
+                                               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                                     ->  Seq Scan on public.int4_tbl
+                     ->  Seq Scan on public.inhcld2 i_2
+                           Output: $2, $3, (SubPlan 1 (returns $2,$3) (copy 3)), i_2.tableoid, i_2.ctid, i_2.gp_segment_id, i_2.*
+                           SubPlan 1 (returns $2,$3) (copy 3)
+                             ->  Limit
+                                   Output: (i_2.f1), (((i_2.f2)::text || '-'::text))
+                                   ->  Result
+                                         Output: i_2.f1, ((i_2.f2)::text || '-'::text)
+                                         ->  Materialize
+                                               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                                     ->  Seq Scan on public.int4_tbl int4_tbl_1
+ Settings: enable_mergejoin = 'on', enable_bitmapscan = 'off', enable_indexscan = 'on', enable_seqscan = 'off'
+ Optimizer: Postgres query optimizer
+(30 rows)
+
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+select * from inhpar;
+ f1 | f2  
+----+-----
+  1 | 1-
+  2 | 2-
+  3 | 3-
+  4 | 4-
+  5 | 5-
+  6 | 6-
+  7 | 7-
+  8 | 8-
+  9 | 9-
+ 10 | 10-
+(10 rows)
+
+-- Also check ON CONFLICT
+insert into inhpar as i values (3), (7) on conflict (f1)
+  do update set (f1, f2) = (select i.f1, i.f2 || '+');
+ERROR:  modification of distribution columns in OnConflictUpdate is not supported
+select * from inhpar order by f1;  -- tuple order might be unstable here
+ f1 | f2  
+----+-----
+  1 | 1-
+  2 | 2-
+  3 | 3-
+  4 | 4-
+  5 | 5-
+  6 | 6-
+  7 | 7-
+  8 | 8-
+  9 | 9-
+ 10 | 10-
+(10 rows)
+
+drop table inhpar cascade;
 --
 -- Check handling of a constant-null CHECK constraint
 --
@@ -2306,6 +2510,8 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c;
  Optimizer: Postgres query optimizer
 (12 rows)
 
+set enable_bitmapscan to off;
+set enable_sort to off;
 create table mclparted (a int) partition by list(a);
 create table mclparted1 partition of mclparted for values in(1);
 create table mclparted2 partition of mclparted for values in(2);
@@ -2339,7 +2545,110 @@ explain (costs off) select * from mclparted order by a;
  Optimizer: GPORCA
 (7 rows)
 
+explain (costs off) select * from mclparted where a in(3,4,5) order by a;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Index Only Scan on mclparted_a_idx on mclparted
+               Index Cond: (a = ANY ('{3,4,5}'::integer[]))
+               Number of partitions to scan: 2 (out of 4)
+ Optimizer: GPORCA
+(8 rows)
+
+-- Introduce a NULL and DEFAULT partition so we can test more complex cases
+create table mclparted_null partition of mclparted for values in(null);
+create table mclparted_def partition of mclparted default;
+-- Append can be used providing we don't scan the interleaved partition
+explain (costs off) select * from mclparted where a in(1,2,4) order by a;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Index Only Scan on mclparted_a_idx on mclparted
+               Index Cond: (a = ANY ('{1,2,4}'::integer[]))
+               Number of partitions to scan: 3 (out of 6)
+ Optimizer: GPORCA
+(8 rows)
+
+explain (costs off) select * from mclparted where a in(1,2,4) or a is null order by a;
+                               QUERY PLAN
+-------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Seq Scan on mclparted
+               Number of partitions to scan: 4 (out of 6)
+               Filter: ((a = ANY ('{1,2,4}'::integer[])) OR (a IS NULL))
+ Optimizer: GPORCA
+(8 rows)
+
+-- Test a more complex case where the NULL partition allows some other value
+drop table mclparted_null;
+create table mclparted_0_null partition of mclparted for values in(0,null);
+-- Ensure MergeAppend is used since 0 and NULLs are in the same partition.
+explain (costs off) select * from mclparted where a in(1,2,4) or a is null order by a;
+                               QUERY PLAN
+-------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Seq Scan on mclparted
+               Number of partitions to scan: 4 (out of 6)
+               Filter: ((a = ANY ('{1,2,4}'::integer[])) OR (a IS NULL))
+ Optimizer: GPORCA
+(8 rows)
+
+explain (costs off) select * from mclparted where a in(0,1,2,4) order by a;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Index Only Scan on mclparted_a_idx on mclparted
+               Index Cond: (a = ANY ('{0,1,2,4}'::integer[]))
+               Number of partitions to scan: 4 (out of 6)
+ Optimizer: GPORCA
+(8 rows)
+
+-- Ensure Append is used when the null partition is pruned
+explain (costs off) select * from mclparted where a in(1,2,4) order by a;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Index Only Scan on mclparted_a_idx on mclparted
+               Index Cond: (a = ANY ('{1,2,4}'::integer[]))
+               Number of partitions to scan: 3 (out of 6)
+ Optimizer: GPORCA
+(8 rows)
+
+-- Ensure MergeAppend is used when the default partition is not pruned
+explain (costs off) select * from mclparted where a in(1,2,4,100) order by a;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a
+   ->  Sort
+         Sort Key: a
+         ->  Dynamic Index Only Scan on mclparted_a_idx on mclparted
+               Index Cond: (a = ANY ('{1,2,4,100}'::integer[]))
+               Number of partitions to scan: 4 (out of 6)
+ Optimizer: GPORCA
+(8 rows)
+
 drop table mclparted;
+reset enable_sort;
+reset enable_bitmapscan;
 -- Ensure subplans which don't have a path with the correct pathkeys get
 -- sorted correctly.
 drop index mcrparted_a_abs_c_idx;
@@ -2511,7 +2820,7 @@ alter table permtest_child attach partition permtest_grandchild for values in ('
 alter table permtest_parent attach partition permtest_child for values in (1);
 create index on permtest_parent (left(c, 3));
 insert into permtest_parent
-  select 1, 'a', left(md5(i::text), 5) from generate_series(0, 100) i;
+  select 1, 'a', left(fipshash(i::text), 5) from generate_series(0, 100) i;
 analyze permtest_parent;
 create role regress_no_child_access;
 revoke all on permtest_grandchild from regress_no_child_access;

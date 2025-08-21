@@ -22,7 +22,7 @@
   <para>
    Several tools are available for monitoring database activity and
    analyzing performance.  Most of this chapter is devoted to describing
-   <productname>PostgreSQL</productname>'s statistics collector,
+   <productname>PostgreSQL</productname>'s cumulative statistics system,
    but one should not neglect regular Unix monitoring programs such as
    <command>ps</command>, <command>top</command>, <command>iostat</command>, and <command>vmstat</command>.
    Also, once one has identified a
@@ -53,7 +53,6 @@ postgres  15554  0.0  0.0  57536  1184 ?        Ss   18:02   0:00 postgres: back
 postgres  15555  0.0  0.0  57536   916 ?        Ss   18:02   0:00 postgres: checkpointer
 postgres  15556  0.0  0.0  57536   916 ?        Ss   18:02   0:00 postgres: walwriter
 postgres  15557  0.0  0.0  58504  2244 ?        Ss   18:02   0:00 postgres: autovacuum launcher
-postgres  15558  0.0  0.0  17512  1068 ?        Ss   18:02   0:00 postgres: stats collector
 postgres  15582  0.0  0.0  58772  3080 ?        Ss   18:04   0:00 postgres: joe runbug 127.0.0.1 idle
 postgres  15606  0.0  0.0  58772  3052 ?        Ss   18:07   0:00 postgres: tgl regression [local] SELECT waiting
 postgres  15610  0.0  0.0  58772  3056 ?        Ss   18:07   0:00 postgres: tgl regression [local] idle in transaction
@@ -63,11 +62,10 @@ postgres  15610  0.0  0.0  58772  3056 ?        Ss   18:07   0:00 postgres: tgl 
    platforms, as do the details of what is shown.  This example is from a
    recent Linux system.)  The first process listed here is the
    primary server process.  The command arguments
-   shown for it are the same ones used when it was launched.  The next five
+   shown for it are the same ones used when it was launched.  The next four
    processes are background worker processes automatically launched by the
-   primary process.  (The <quote>stats collector</quote> process will not be present
-   if you have set the system not to start the statistics collector; likewise
-   the <quote>autovacuum launcher</quote> process can be disabled.)
+   primary process.  (The <quote>autovacuum launcher</quote> process will not
+   be present if you have set the system not to run autovacuum.)
    Each of the remaining
    processes is a server process handling one client connection.  Each such
    process sets its command line display in the form
@@ -130,20 +128,20 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
  </sect1>
 
  <sect1 id="monitoring-stats">
-  <title>The Statistics Collector</title>
+  <title>The Cumulative Statistics System</title>
 
   <indexterm zone="monitoring-stats">
    <primary>statistics</primary>
   </indexterm>
 
   <para>
-   <productname>PostgreSQL</productname>'s <firstterm>statistics collector</firstterm>
-   is a subsystem that supports collection and reporting of information about
-   server activity.  Presently, the collector can count accesses to tables
-   and indexes in both disk-block and individual-row terms.  It also tracks
-   the total number of rows in each table, and information about vacuum and
-   analyze actions for each table.  It can also count calls to user-defined
-   functions and the total time spent in each one.
+   <productname>PostgreSQL</productname>'s <firstterm>cumulative statistics
+   system</firstterm> supports collection and reporting of information about
+   server activity.  Presently, accesses to tables and indexes in both
+   disk-block and individual-row terms are counted.  The total number of rows
+   in each table, and information about vacuum and analyze actions for each
+   table are also counted.  If enabled, calls to user-defined functions and
+   the total time spent in each one are counted as well.
   </para>
 
   <para>
@@ -151,7 +149,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
    information about exactly what is going on in the system right now, such as
    the exact command currently being executed by other server processes, and
    which other connections exist in the system.  This facility is independent
-   of the collector process.
+   of the cumulative statistics system.
   </para>
 
  <sect2 id="monitoring-stats-setup">
@@ -172,7 +170,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
 
   <para>
    The parameter <xref linkend="guc-track-counts"/> controls whether
-   statistics are collected about table and index accesses.
+   cumulative statistics are collected about table and index accesses.
   </para>
 
   <para>
@@ -182,12 +180,12 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
 
   <para>
    The parameter <xref linkend="guc-track-io-timing"/> enables monitoring
-   of block read and write times.
+   of block read, write, extend, and fsync times.
   </para>
 
   <para>
    The parameter <xref linkend="guc-track-wal-io-timing"/> enables monitoring
-   of WAL write times.
+   of WAL write and fsync times.
   </para>
 
   <para>
@@ -201,18 +199,15 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
   </para>
 
   <para>
-   The statistics collector transmits the collected information to other
-   <productname>PostgreSQL</productname> processes through temporary files.
-   These files are stored in the directory named by the
-   <xref linkend="guc-stats-temp-directory"/> parameter,
-   <filename>pg_stat_tmp</filename> by default.
-   For better performance, <varname>stats_temp_directory</varname> can be
-   pointed at a RAM-based file system, decreasing physical I/O requirements.
-   When the server shuts down cleanly, a permanent copy of the statistics
-   data is stored in the <filename>pg_stat</filename> subdirectory, so that
-   statistics can be retained across server restarts.  When recovery is
-   performed at server start (e.g., after immediate shutdown, server crash,
-   and point-in-time recovery), all statistics counters are reset.
+   Cumulative statistics are collected in shared memory. Every
+   <productname>PostgreSQL</productname> process collects statistics locally,
+   then updates the shared data at appropriate intervals.  When a server,
+   including a physical replica, shuts down cleanly, a permanent copy of the
+   statistics data is stored in the <filename>pg_stat</filename> subdirectory,
+   so that statistics can be retained across server restarts.  In contrast,
+   when starting from an unclean shutdown (e.g., after an immediate shutdown,
+   a server crash, starting from a base backup, and point-in-time recovery),
+   all statistics counters are reset.
   </para>
 
  </sect2>
@@ -225,48 +220,58 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
    linkend="monitoring-stats-dynamic-views-table"/>, are available to show
    the current state of the system. There are also several other
    views, listed in <xref
-   linkend="monitoring-stats-views-table"/>, available to show the results
-   of statistics collection.  Alternatively, one can
-   build custom views using the underlying statistics functions, as discussed
-   in <xref linkend="monitoring-stats-functions"/>.
+   linkend="monitoring-stats-views-table"/>, available to show the accumulated
+   statistics.  Alternatively, one can
+   build custom views using the underlying cumulative statistics functions, as
+   discussed in <xref linkend="monitoring-stats-functions"/>.
   </para>
 
   <para>
-   When using the statistics to monitor collected data, it is important
-   to realize that the information does not update instantaneously.
-   Each individual server process transmits new statistical counts to
-   the collector just before going idle; so a query or transaction still in
-   progress does not affect the displayed totals.  Also, the collector itself
-   emits a new report at most once per <varname>PGSTAT_STAT_INTERVAL</varname>
-   milliseconds (500 ms unless altered while building the server).  So the
-   displayed information lags behind actual activity.  However, current-query
-   information collected by <varname>track_activities</varname> is
-   always up-to-date.
+   When using the cumulative statistics views and functions to monitor
+   collected data, it is important to realize that the information does not
+   update instantaneously.  Each individual server process flushes out
+   accumulated statistics to shared memory just before going idle, but not
+   more frequently than once per <varname>PGSTAT_MIN_INTERVAL</varname>
+   milliseconds (1 second unless altered while building the server); so a
+   query or transaction still in progress does not affect the displayed totals
+   and the displayed information lags behind actual activity.  However,
+   current-query information collected by <varname>track_activities</varname>
+   is always up-to-date.
   </para>
 
   <para>
    Another important point is that when a server process is asked to display
-   any of these statistics, it first fetches the most recent report emitted by
-   the collector process and then continues to use this snapshot for all
-   statistical views and functions until the end of its current transaction.
-   So the statistics will show static information as long as you continue the
-   current transaction.  Similarly, information about the current queries of
-   all sessions is collected when any such information is first requested
-   within a transaction, and the same information will be displayed throughout
-   the transaction.
-   This is a feature, not a bug, because it allows you to perform several
-   queries on the statistics and correlate the results without worrying that
-   the numbers are changing underneath you.  But if you want to see new
-   results with each query, be sure to do the queries outside any transaction
-   block.  Alternatively, you can invoke
-   <function>pg_stat_clear_snapshot</function>(), which will discard the
-   current transaction's statistics snapshot (if any).  The next use of
-   statistical information will cause a new snapshot to be fetched.
+   any of the accumulated statistics, accessed values are cached until the end
+   of its current transaction in the default configuration. So the statistics
+   will show static information as long as you continue the current
+   transaction. Similarly, information about the current queries of all
+   sessions is collected when any such information is first requested within a
+   transaction, and the same information will be displayed throughout the
+   transaction. This is a feature, not a bug, because it allows you to perform
+   several queries on the statistics and correlate the results without
+   worrying that the numbers are changing underneath you.
+
+   When analyzing statistics interactively, or with expensive queries, the
+   time delta between accesses to individual statistics can lead to
+   significant skew in the cached statistics. To minimize skew,
+   <varname>stats_fetch_consistency</varname> can be set to
+   <literal>snapshot</literal>, at the price of increased memory usage for
+   caching not-needed statistics data.  Conversely, if it's known that
+   statistics are only accessed once, caching accessed statistics is
+   unnecessary and can be avoided by setting
+   <varname>stats_fetch_consistency</varname> to <literal>none</literal>.
+
+   You can invoke <function>pg_stat_clear_snapshot</function>() to discard the
+   current transaction's statistics snapshot or cached values (if any).  The
+   next use of statistical information will (when in snapshot mode) cause a
+   new snapshot to be built or (when in cache mode) accessed statistics to be
+   cached.
   </para>
 
   <para>
-   A transaction can also see its own statistics (as yet untransmitted to the
-   collector) in the views <structname>pg_stat_xact_all_tables</structname>,
+   A transaction can also see its own statistics (not yet flushed out to the
+   shared memory statistics) in the views
+   <structname>pg_stat_xact_all_tables</structname>,
    <structname>pg_stat_xact_sys_tables</structname>,
    <structname>pg_stat_xact_user_tables</structname>, and
    <structname>pg_stat_xact_user_functions</structname>.  These numbers do not act as
@@ -280,7 +285,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
    (sessions belonging to a role that they are a member of).  In rows about
    other sessions, many columns will be null.  Note, however, that the
    existence of a session and its general properties such as its sessions user
-   and database are visible to all users.  Superusers and members of the
+   and database are visible to all users.  Superusers and roles with privileges of
    built-in role <literal>pg_read_all_stats</literal> (see also <xref
    linkend="predefined-roles"/>) can see all the information about all sessions.
   </para>
@@ -329,6 +334,14 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
 
      <row>
+      <entry><structname>pg_stat_recovery_prefetch</structname><indexterm><primary>pg_stat_recovery_prefetch</primary></indexterm></entry>
+      <entry>Only one row, showing statistics about blocks prefetched during recovery.
+       See <link linkend="monitoring-pg-stat-recovery-prefetch">
+       <structname>pg_stat_recovery_prefetch</structname></link> for details.
+      </entry>
+     </row>
+
+     <row>
       <entry><structname>pg_stat_subscription</structname><indexterm><primary>pg_stat_subscription</primary></indexterm></entry>
       <entry>At least one row per subscription, showing information about
        the subscription workers.
@@ -359,7 +372,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><structname>pg_stat_progress_analyze</structname><indexterm><primary>pg_stat_progress_analyze</primary></indexterm></entry>
       <entry>One row for each backend (including autovacuum worker processes) running
        <command>ANALYZE</command>, showing current progress.
-       See <xref linkend='analyze-progress-reporting'/>.
+       See <xref linkend="analyze-progress-reporting"/>.
       </entry>
      </row>
 
@@ -367,7 +380,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><structname>pg_stat_progress_create_index</structname><indexterm><primary>pg_stat_progress_create_index</primary></indexterm></entry>
       <entry>One row for each backend running <command>CREATE INDEX</command> or <command>REINDEX</command>, showing
       current progress.
-      See <xref linkend='create-index-progress-reporting'/>.
+      See <xref linkend="create-index-progress-reporting"/>.
      </entry>
      </row>
 
@@ -375,7 +388,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><structname>pg_stat_progress_vacuum</structname><indexterm><primary>pg_stat_progress_vacuum</primary></indexterm></entry>
       <entry>One row for each backend (including autovacuum worker processes) running
        <command>VACUUM</command>, showing current progress.
-       See <xref linkend='vacuum-progress-reporting'/>.
+       See <xref linkend="vacuum-progress-reporting"/>.
       </entry>
      </row>
 
@@ -383,7 +396,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><structname>pg_stat_progress_cluster</structname><indexterm><primary>pg_stat_progress_cluster</primary></indexterm></entry>
       <entry>One row for each backend running
        <command>CLUSTER</command> or <command>VACUUM FULL</command>, showing current progress.
-       See <xref linkend='cluster-progress-reporting'/>.
+       See <xref linkend="cluster-progress-reporting"/>.
       </entry>
      </row>
 
@@ -391,14 +404,14 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><structname>pg_stat_progress_basebackup</structname><indexterm><primary>pg_stat_progress_basebackup</primary></indexterm></entry>
       <entry>One row for each WAL sender process streaming a base backup,
        showing current progress.
-       See <xref linkend='basebackup-progress-reporting'/>.
+       See <xref linkend="basebackup-progress-reporting"/>.
       </entry>
      </row>
 
      <row>
       <entry><structname>pg_stat_progress_copy</structname><indexterm><primary>pg_stat_progress_copy</primary></indexterm></entry>
       <entry>One row for each backend running <command>COPY</command>, showing current progress.
-       See <xref linkend='copy-progress-reporting'/>.
+       See <xref linkend="copy-progress-reporting"/>.
       </entry>
      </row>
     </tbody>
@@ -417,6 +430,9 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
     </thead>
 
     <tbody>
+
+     <!-- everything related to global objects, alphabetically -->
+
      <row>
       <entry><structname>pg_stat_archiver</structname><indexterm><primary>pg_stat_archiver</primary></indexterm></entry>
       <entry>One row only, showing statistics about the
@@ -436,14 +452,6 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
 
      <row>
-      <entry><structname>pg_stat_wal</structname><indexterm><primary>pg_stat_wal</primary></indexterm></entry>
-      <entry>One row only, showing statistics about WAL activity. See
-       <link linkend="monitoring-pg-stat-wal-view">
-       <structname>pg_stat_wal</structname></link> for details.
-      </entry>
-     </row>
-
-     <row>
       <entry><structname>pg_stat_database</structname><indexterm><primary>pg_stat_database</primary></indexterm></entry>
       <entry>One row per database, showing database-wide statistics. See
        <link linkend="monitoring-pg-stat-database-view">
@@ -460,6 +468,51 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        <structname>pg_stat_database_conflicts</structname></link> for details.
       </entry>
      </row>
+
+     <row>
+      <entry><structname>pg_stat_io</structname><indexterm><primary>pg_stat_io</primary></indexterm></entry>
+      <entry>
+       One row for each combination of backend type, context, and target object
+       containing cluster-wide I/O statistics.
+       See <link linkend="monitoring-pg-stat-io-view">
+       <structname>pg_stat_io</structname></link> for details.
+     </entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_replication_slots</structname><indexterm><primary>pg_stat_replication_slots</primary></indexterm></entry>
+      <entry>One row per replication slot, showing statistics about the
+       replication slot's usage. See
+       <link linkend="monitoring-pg-stat-replication-slots-view">
+       <structname>pg_stat_replication_slots</structname></link> for details.
+      </entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_slru</structname><indexterm><primary>pg_stat_slru</primary></indexterm></entry>
+      <entry>One row per SLRU, showing statistics of operations. See
+       <link linkend="monitoring-pg-stat-slru-view">
+       <structname>pg_stat_slru</structname></link> for details.
+      </entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_subscription_stats</structname><indexterm><primary>pg_stat_subscription_stats</primary></indexterm></entry>
+      <entry>One row per subscription, showing statistics about errors.
+      See <link linkend="monitoring-pg-stat-subscription-stats">
+      <structname>pg_stat_subscription_stats</structname></link> for details.
+      </entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_wal</structname><indexterm><primary>pg_stat_wal</primary></indexterm></entry>
+      <entry>One row only, showing statistics about WAL activity. See
+       <link linkend="monitoring-pg-stat-wal-view">
+       <structname>pg_stat_wal</structname></link> for details.
+      </entry>
+     </row>
+
+     <!-- all "stat" for schema objects, by "importance" -->
 
      <row>
       <entry><structname>pg_stat_all_tables</structname><indexterm><primary>pg_stat_all_tables</primary></indexterm></entry>
@@ -525,6 +578,25 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry>Same as <structname>pg_stat_all_indexes</structname>, except that only
       indexes on user tables are shown.</entry>
      </row>
+
+     <row>
+      <entry><structname>pg_stat_user_functions</structname><indexterm><primary>pg_stat_user_functions</primary></indexterm></entry>
+      <entry>
+       One row for each tracked function, showing statistics
+       about executions of that function. See
+       <link linkend="monitoring-pg-stat-user-functions-view">
+       <structname>pg_stat_user_functions</structname></link> for details.
+      </entry>
+     </row>
+
+     <row>
+      <entry><structname>pg_stat_xact_user_functions</structname><indexterm><primary>pg_stat_xact_user_functions</primary></indexterm></entry>
+      <entry>Similar to <structname>pg_stat_user_functions</structname>, but counts only
+      calls during the current transaction (which are <emphasis>not</emphasis>
+      yet included in <structname>pg_stat_user_functions</structname>).</entry>
+     </row>
+
+     <!-- all "statio" for schema objects, by "importance" -->
 
      <row>
       <entry><structname>pg_statio_all_tables</structname><indexterm><primary>pg_statio_all_tables</primary></indexterm></entry>
@@ -593,40 +665,6 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       user sequences are shown.</entry>
      </row>
 
-     <row>
-      <entry><structname>pg_stat_user_functions</structname><indexterm><primary>pg_stat_user_functions</primary></indexterm></entry>
-      <entry>
-       One row for each tracked function, showing statistics
-       about executions of that function. See
-       <link linkend="monitoring-pg-stat-user-functions-view">
-       <structname>pg_stat_user_functions</structname></link> for details.
-      </entry>
-     </row>
-
-     <row>
-      <entry><structname>pg_stat_xact_user_functions</structname><indexterm><primary>pg_stat_xact_user_functions</primary></indexterm></entry>
-      <entry>Similar to <structname>pg_stat_user_functions</structname>, but counts only
-      calls during the current transaction (which are <emphasis>not</emphasis>
-      yet included in <structname>pg_stat_user_functions</structname>).</entry>
-     </row>
-
-     <row>
-      <entry><structname>pg_stat_slru</structname><indexterm><primary>pg_stat_slru</primary></indexterm></entry>
-      <entry>One row per SLRU, showing statistics of operations. See
-       <link linkend="monitoring-pg-stat-slru-view">
-       <structname>pg_stat_slru</structname></link> for details.
-      </entry>
-     </row>
-
-     <row>
-      <entry><structname>pg_stat_replication_slots</structname><indexterm><primary>pg_stat_replication_slots</primary></indexterm></entry>
-      <entry>One row per replication slot, showing statistics about the
-       replication slot's usage. See
-       <link linkend="monitoring-pg-stat-replication-slots-view">
-       <structname>pg_stat_replication_slots</structname></link> for details.
-      </entry>
-     </row>
-
     </tbody>
    </tgroup>
   </table>
@@ -637,20 +675,16 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
   </para>
 
   <para>
-   The <structname>pg_statio_</structname> views are primarily useful to
-   determine the effectiveness of the buffer cache.  When the number
-   of actual disk reads is much smaller than the number of buffer
-   hits, then the cache is satisfying most read requests without
-   invoking a kernel call. However, these statistics do not give the
-   entire story: due to the way in which <productname>PostgreSQL</productname>
-   handles disk I/O, data that is not in the
-   <productname>PostgreSQL</productname> buffer cache might still reside in the
-   kernel's I/O cache, and might therefore still be fetched without
-   requiring a physical read. Users interested in obtaining more
-   detailed information on <productname>PostgreSQL</productname> I/O behavior are
-   advised to use the <productname>PostgreSQL</productname> statistics collector
-   in combination with operating system utilities that allow insight
-   into the kernel's handling of I/O.
+   The <structname>pg_stat_io</structname> and
+   <structname>pg_statio_</structname> set of views are useful for determining
+   the effectiveness of the buffer cache. They can be used to calculate a cache
+   hit ratio. Note that while <productname>PostgreSQL</productname>'s I/O
+   statistics capture most instances in which the kernel was invoked in order
+   to perform I/O, they do not differentiate between data which had to be
+   fetched from disk and that which already resided in the kernel page cache.
+   Users are advised to use the <productname>PostgreSQL</productname>
+   statistics views in combination with operating system utilities for a more
+   complete picture of their database's I/O performance.
   </para>
 
  </sect2>
@@ -715,9 +749,11 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        <structfield>leader_pid</structfield> <type>integer</type>
       </para>
       <para>
-       Process ID of the parallel group leader, if this process is a
-       parallel query worker.  <literal>NULL</literal> if this process is a
-       parallel group leader or does not participate in parallel query.
+       Process ID of the parallel group leader if this process is a parallel
+       query worker, or process ID of the leader apply worker if this process
+       is a parallel apply worker.  <literal>NULL</literal> indicates that this
+       process is a parallel group leader or leader apply worker, or does not
+       participate in any parallel operation.
       </para></entry>
      </row>
 
@@ -897,7 +933,8 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        <structfield>backend_xid</structfield> <type>xid</type>
       </para>
       <para>
-       Top-level transaction identifier of this backend, if any.
+       Top-level transaction identifier of this backend, if any;  see
+       <xref linkend="transaction-id"/>.
       </para></entry>
      </row>
 
@@ -951,7 +988,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        <literal>logical replication worker</literal>,
        <literal>parallel worker</literal>, <literal>background writer</literal>,
        <literal>client backend</literal>, <literal>checkpointer</literal>,
-       <literal>archiver</literal>,
+       <literal>archiver</literal>, <literal>standalone backend</literal>,
        <literal>startup</literal>, <literal>walreceiver</literal>,
        <literal>walsender</literal> and <literal>walwriter</literal>.
        In addition, background workers registered by extensions may have
@@ -1103,8 +1140,9 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry>Waiting in main loop of logical replication launcher process.</entry>
      </row>
      <row>
-      <entry><literal>PgStatMain</literal></entry>
-      <entry>Waiting in main loop of statistics collector process.</entry>
+      <entry><literal>LogicalParallelApplyMain</literal></entry>
+      <entry>Waiting in main loop of logical replication parallel apply
+       process.</entry>
      </row>
      <row>
       <entry><literal>RecoveryWalStream</literal></entry>
@@ -1235,16 +1273,24 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry>Waiting for base backup to read from a file.</entry>
      </row>
      <row>
+      <entry><literal>BaseBackupSync</literal></entry>
+      <entry>Waiting for data written by a base backup to reach durable storage.</entry>
+     </row>
+     <row>
+      <entry><literal>BaseBackupWrite</literal></entry>
+      <entry>Waiting for base backup to write to a file.</entry>
+     </row>
+     <row>
       <entry><literal>BufFileRead</literal></entry>
       <entry>Waiting for a read from a buffered file.</entry>
      </row>
      <row>
-      <entry><literal>BufFileWrite</literal></entry>
-      <entry>Waiting for a write to a buffered file.</entry>
-     </row>
-     <row>
       <entry><literal>BufFileTruncate</literal></entry>
       <entry>Waiting for a buffered file to be truncated.</entry>
+     </row>
+     <row>
+      <entry><literal>BufFileWrite</literal></entry>
+      <entry>Waiting for a write to a buffered file.</entry>
      </row>
      <row>
       <entry><literal>ControlFileRead</literal></entry>
@@ -1278,6 +1324,11 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      <row>
       <entry><literal>CopyFileWrite</literal></entry>
       <entry>Waiting for a write during a file copy operation.</entry>
+     </row>
+     <row>
+      <entry><literal>DSMAllocate</literal></entry>
+      <entry>Waiting for a dynamic shared memory segment to be
+       allocated.</entry>
      </row>
      <row>
       <entry><literal>DSMFillZeroWrite</literal></entry>
@@ -1400,8 +1451,8 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry>Waiting for a read of the relation map file.</entry>
      </row>
      <row>
-      <entry><literal>RelationMapSync</literal></entry>
-      <entry>Waiting for the relation map file to reach durable storage.</entry>
+      <entry><literal>RelationMapReplace</literal></entry>
+      <entry>Waiting for durable replacement of a relation map file.</entry>
      </row>
      <row>
       <entry><literal>RelationMapWrite</literal></entry>
@@ -1508,6 +1559,15 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry>Waiting for a write of a two phase state file.</entry>
      </row>
      <row>
+      <entry><literal>VersionFileSync</literal></entry>
+      <entry>Waiting for the version file to reach durable storage while
+       creating a database.</entry>
+     </row>
+     <row>
+      <entry><literal>VersionFileWrite</literal></entry>
+      <entry>Waiting for the version file to be written while creating a database.</entry>
+     </row>
+     <row>
       <entry><literal>WALBootstrapSync</literal></entry>
       <entry>Waiting for WAL to reach durable storage during
        bootstrapping.</entry>
@@ -1562,22 +1622,6 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><literal>WALWrite</literal></entry>
       <entry>Waiting for a write to a WAL file.</entry>
      </row>
-     <row>
-      <entry><literal>LogicalChangesRead</literal></entry>
-      <entry>Waiting for a read from a logical changes file.</entry>
-     </row>
-     <row>
-      <entry><literal>LogicalChangesWrite</literal></entry>
-      <entry>Waiting for a write to a logical changes file.</entry>
-     </row>
-     <row>
-      <entry><literal>LogicalSubxactRead</literal></entry>
-      <entry>Waiting for a read from a logical subxact file.</entry>
-     </row>
-     <row>
-      <entry><literal>LogicalSubxactWrite</literal></entry>
-      <entry>Waiting for a write to a logical subxact file.</entry>
-     </row>
     </tbody>
    </tgroup>
   </table>
@@ -1598,7 +1642,17 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry>Waiting for subplan nodes of an <literal>Append</literal> plan
        node to be ready.</entry>
      </row>
-    <row>
+     <row>
+      <entry><literal>ArchiveCleanupCommand</literal></entry>
+      <entry>Waiting for <xref linkend="guc-archive-cleanup-command"/> to
+       complete.</entry>
+     </row>
+     <row>
+      <entry><literal>ArchiveCommand</literal></entry>
+      <entry>Waiting for <xref linkend="guc-archive-command"/> to
+       complete.</entry>
+     </row>
+     <row>
       <entry><literal>BackendTermination</literal></entry>
       <entry>Waiting for the termination of another backend.</entry>
      </row>
@@ -1673,11 +1727,6 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        the outer relation.</entry>
      </row>
      <row>
-      <entry><literal>HashGrowBatchesAllocate</literal></entry>
-      <entry>Waiting for an elected Parallel Hash participant to allocate more
-       batches.</entry>
-     </row>
-     <row>
       <entry><literal>HashGrowBatchesDecide</literal></entry>
       <entry>Waiting to elect a Parallel Hash participant to decide on future
        batch growth.</entry>
@@ -1693,14 +1742,14 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        future batch growth.</entry>
      </row>
      <row>
+      <entry><literal>HashGrowBatchesReallocate</literal></entry>
+      <entry>Waiting for an elected Parallel Hash participant to allocate more
+       batches.</entry>
+     </row>
+     <row>
       <entry><literal>HashGrowBatchesRepartition</literal></entry>
       <entry>Waiting for other Parallel Hash participants to finish
        repartitioning.</entry>
-     </row>
-     <row>
-      <entry><literal>HashGrowBucketsAllocate</literal></entry>
-      <entry>Waiting for an elected Parallel Hash participant to finish
-       allocating more buckets.</entry>
      </row>
      <row>
       <entry><literal>HashGrowBucketsElect</literal></entry>
@@ -1708,9 +1757,24 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        buckets.</entry>
      </row>
      <row>
+      <entry><literal>HashGrowBucketsReallocate</literal></entry>
+      <entry>Waiting for an elected Parallel Hash participant to finish
+       allocating more buckets.</entry>
+     </row>
+     <row>
       <entry><literal>HashGrowBucketsReinsert</literal></entry>
       <entry>Waiting for other Parallel Hash participants to finish inserting
        tuples into new buckets.</entry>
+     </row>
+     <row>
+      <entry><literal>LogicalApplySendData</literal></entry>
+      <entry>Waiting for a logical replication leader apply process to send
+       data to a parallel apply process.</entry>
+     </row>
+     <row>
+      <entry><literal>LogicalParallelApplyStateChange</literal></entry>
+      <entry>Waiting for a logical replication parallel apply process to change
+       state.</entry>
      </row>
      <row>
       <entry><literal>LogicalSyncData</literal></entry>
@@ -1755,7 +1819,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      <row>
       <entry><literal>ProcArrayGroupUpdate</literal></entry>
       <entry>Waiting for the group leader to clear the transaction ID at
-       end of a parallel operation.</entry>
+       transaction end.</entry>
      </row>
      <row>
       <entry><literal>ProcSignalBarrier</literal></entry>
@@ -1777,6 +1841,11 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        tablespace.</entry>
      </row>
      <row>
+      <entry><literal>RecoveryEndCommand</literal></entry>
+      <entry>Waiting for <xref linkend="guc-recovery-end-command"/> to
+       complete.</entry>
+     </row>
+     <row>
       <entry><literal>RecoveryPause</literal></entry>
       <entry>Waiting for recovery to be resumed.</entry>
      </row>
@@ -1789,6 +1858,11 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><literal>ReplicationSlotDrop</literal></entry>
       <entry>Waiting for a replication slot to become inactive so it can be
        dropped.</entry>
+     </row>
+     <row>
+      <entry><literal>RestoreCommand</literal></entry>
+      <entry>Waiting for <xref linkend="guc-restore-command"/> to
+       complete.</entry>
      </row>
      <row>
       <entry><literal>SafeSnapshot</literal></entry>
@@ -1812,7 +1886,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      <row>
       <entry><literal>XactGroupUpdate</literal></entry>
       <entry>Waiting for the group leader to update transaction status at
-       end of a parallel operation.</entry>
+       transaction end.</entry>
      </row>
     </tbody>
    </tgroup>
@@ -1832,6 +1906,11 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      <row>
       <entry><literal>advisory</literal></entry>
       <entry>Waiting to acquire an advisory user lock.</entry>
+     </row>
+     <row>
+      <entry><literal>applytransaction</literal></entry>
+      <entry>Waiting to acquire a lock on a remote transaction being applied
+      by a logical replication subscriber.</entry>
      </row>
      <row>
       <entry><literal>extend</literal></entry>
@@ -1873,7 +1952,8 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
      </row>
      <row>
       <entry><literal>virtualxid</literal></entry>
-      <entry>Waiting to acquire a virtual transaction ID lock.</entry>
+      <entry>Waiting to acquire a virtual transaction ID lock;  see
+      <xref linkend="transaction-id"/>.</entry>
      </row>
     </tbody>
    </tgroup>
@@ -1966,6 +2046,16 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        about <quote>heavyweight</quote> locks.</entry>
      </row>
      <row>
+      <entry><literal>LogicalRepLauncherDSA</literal></entry>
+      <entry>Waiting to access logical replication launcher's dynamic shared
+       memory allocator.</entry>
+     </row>
+     <row>
+      <entry><literal>LogicalRepLauncherHash</literal></entry>
+      <entry>Waiting to access logical replication launcher's shared
+       hash table.</entry>
+     </row>
+     <row>
       <entry><literal>LogicalRepWorker</literal></entry>
       <entry>Waiting to read or update the state of logical replication
        workers.</entry>
@@ -2053,6 +2143,18 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
       <entry><literal>PerXactPredicateList</literal></entry>
       <entry>Waiting to access the list of predicate locks held by the current
        serializable transaction during a parallel query.</entry>
+     </row>
+     <row>
+      <entry><literal>PgStatsData</literal></entry>
+      <entry>Waiting for shared memory stats data access</entry>
+     </row>
+     <row>
+      <entry><literal>PgStatsDSA</literal></entry>
+      <entry>Waiting for stats dynamic shared memory allocator access</entry>
+     </row>
+     <row>
+      <entry><literal>PgStatsHash</literal></entry>
+      <entry>Waiting for stats shared memory hash table access</entry>
      </row>
      <row>
       <entry><literal>PredicateLockManager</literal></entry>
@@ -2261,8 +2363,17 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
        checkpointer, because the request queue is full.</entry>
      </row>
      <row>
+      <entry><literal>SpinDelay</literal></entry>
+      <entry>Waiting while acquiring a contended spinlock.</entry>
+     </row>
+     <row>
       <entry><literal>VacuumDelay</literal></entry>
       <entry>Waiting in a cost-based vacuum delay point.</entry>
+     </row>
+     <row>
+      <entry><literal>VacuumTruncate</literal></entry>
+      <entry>Waiting to acquire an exclusive lock to truncate off any
+       empty pages at the end of a table vacuumed.</entry>
      </row>
     </tbody>
    </tgroup>
@@ -2273,7 +2384,7 @@ postgres   27093  0.0  0.0  30096  2752 ?        Ss   11:34   0:00 postgres: ser
 
 <programlisting>
 SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event is NOT NULL;
- pid  | wait_event_type | wait_event 
+ pid  | wait_event_type | wait_event
 ------+-----------------+------------
  2540 | Lock            | relation
  6644 | LWLock          | ProcArray
@@ -2949,19 +3060,158 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
  </sect2>
 
+ <sect2 id="monitoring-pg-stat-recovery-prefetch">
+  <title><structname>pg_stat_recovery_prefetch</structname></title>
+
+  <indexterm>
+   <primary>pg_stat_recovery_prefetch</primary>
+  </indexterm>
+
+  <para>
+   The <structname>pg_stat_recovery_prefetch</structname> view will contain
+   only one row.  The columns <structfield>wal_distance</structfield>,
+   <structfield>block_distance</structfield> and
+   <structfield>io_depth</structfield> show current values, and the
+   other columns show cumulative counters that can be reset
+   with the <function>pg_stat_reset_shared</function> function.
+  </para>
+
+  <table id="pg-stat-recovery-prefetch-view" xreflabel="pg_stat_recovery_prefetch">
+   <title><structname>pg_stat_recovery_prefetch</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>stats_reset</structfield> <type>timestamp with time zone</type>
+       </para>
+       <para>
+        Time at which these statistics were last reset
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>prefetch</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of blocks prefetched because they were not in the buffer pool
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>hit</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of blocks not prefetched because they were already in the buffer pool
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>skip_init</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of blocks not prefetched because they would be zero-initialized
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>skip_new</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of blocks not prefetched because they didn't exist yet
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>skip_fpw</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of blocks not prefetched because a full page image was included in the WAL
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>skip_rep</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of blocks not prefetched because they were already recently prefetched
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>wal_distance</structfield> <type>int</type>
+       </para>
+       <para>
+        How many bytes ahead the prefetcher is looking
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>block_distance</structfield> <type>int</type>
+       </para>
+       <para>
+        How many blocks ahead the prefetcher is looking
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>io_depth</structfield> <type>int</type>
+       </para>
+       <para>
+        How many prefetches have been initiated but are not yet known to have completed
+       </para>
+      </entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+ </sect2>
+
  <sect2 id="monitoring-pg-stat-subscription">
   <title><structname>pg_stat_subscription</structname></title>
 
   <indexterm>
    <primary>pg_stat_subscription</primary>
   </indexterm>
-
-  <para>
-   The <structname>pg_stat_subscription</structname> view will contain one
-   row per subscription for main worker (with null PID if the worker is
-   not running), and additional rows for workers handling the initial data
-   copy of the subscribed tables.
-  </para>
 
   <table id="pg-stat-subscription" xreflabel="pg_stat_subscription">
    <title><structname>pg_stat_subscription</structname> View</title>
@@ -3007,11 +3257,22 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>leader_pid</structfield> <type>integer</type>
+      </para>
+      <para>
+       Process ID of the leader apply worker if this process is a parallel
+       apply worker; NULL if this process is a leader apply worker or a
+       synchronization worker
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>relid</structfield> <type>oid</type>
       </para>
       <para>
-       OID of the relation that the worker is synchronizing; null for the
-       main apply worker
+       OID of the relation that the worker is synchronizing; NULL for the
+       leader apply worker and parallel apply workers
       </para></entry>
      </row>
 
@@ -3021,7 +3282,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       </para>
       <para>
        Last write-ahead log location received, the initial value of
-       this field being 0
+       this field being 0; NULL for parallel apply workers
       </para></entry>
      </row>
 
@@ -3030,7 +3291,8 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>last_msg_send_time</structfield> <type>timestamp with time zone</type>
       </para>
       <para>
-       Send time of last message received from origin WAL sender
+       Send time of last message received from origin WAL sender; NULL for
+       parallel apply workers
       </para></entry>
      </row>
 
@@ -3039,7 +3301,8 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>last_msg_receipt_time</structfield> <type>timestamp with time zone</type>
       </para>
       <para>
-       Receipt time of last message received from origin WAL sender
+       Receipt time of last message received from origin WAL sender; NULL for
+       parallel apply workers
       </para></entry>
      </row>
 
@@ -3048,7 +3311,8 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>latest_end_lsn</structfield> <type>pg_lsn</type>
       </para>
       <para>
-       Last write-ahead log location reported to origin WAL sender
+       Last write-ahead log location reported to origin WAL sender; NULL for
+       parallel apply workers
       </para></entry>
      </row>
 
@@ -3058,7 +3322,85 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       </para>
       <para>
        Time of last write-ahead log location reported to origin WAL
-       sender
+       sender; NULL for parallel apply workers
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+ </sect2>
+
+ <sect2 id="monitoring-pg-stat-subscription-stats">
+  <title><structname>pg_stat_subscription_stats</structname></title>
+
+  <indexterm>
+   <primary>pg_stat_subscription_stats</primary>
+  </indexterm>
+
+  <para>
+   The <structname>pg_stat_subscription_stats</structname> view will contain
+   one row per subscription.
+  </para>
+
+  <table id="pg-stat-subscription-stats" xreflabel="pg_stat_subscription_stats">
+   <title><structname>pg_stat_subscription_stats</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>subid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the subscription
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>subname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the subscription
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>apply_error_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times an error occurred while applying changes
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>sync_error_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of times an error occurred during the initial table
+       synchronization
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>stats_reset</structfield> <type>timestamp with time zone</type>
+      </para>
+      <para>
+       Time at which these statistics were last reset
       </para></entry>
      </row>
     </tbody>
@@ -3257,6 +3599,15 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        True if GSSAPI encryption is in use on this connection
       </para></entry>
      </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>credentials_delegated</structfield> <type>boolean</type>
+      </para>
+      <para>
+       True if GSSAPI credentials were delegated on this connection.
+      </para></entry>
+     </row>
     </tbody>
    </tgroup>
   </table>
@@ -3304,7 +3655,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>last_archived_wal</structfield> <type>text</type>
       </para>
       <para>
-       Name of the last WAL file successfully archived
+       Name of the WAL file most recently successfully archived
       </para></entry>
      </row>
 
@@ -3313,7 +3664,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>last_archived_time</structfield> <type>timestamp with time zone</type>
       </para>
       <para>
-       Time of the last successful archive operation
+       Time of the most recent successful archive operation
       </para></entry>
      </row>
 
@@ -3331,7 +3682,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>last_failed_wal</structfield> <type>text</type>
       </para>
       <para>
-       Name of the WAL file of the last failed archival operation
+       Name of the WAL file of the most recent failed archival operation
       </para></entry>
      </row>
 
@@ -3340,7 +3691,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>last_failed_time</structfield> <type>timestamp with time zone</type>
       </para>
       <para>
-       Time of the last failed archival operation
+       Time of the most recent failed archival operation
       </para></entry>
      </row>
 
@@ -3355,6 +3706,398 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
     </tbody>
    </tgroup>
   </table>
+
+  <para>
+    Normally, WAL files are archived in order, oldest to newest, but that is
+    not guaranteed, and does not hold under special circumstances like when
+    promoting a standby or after crash recovery. Therefore it is not safe to
+    assume that all files older than
+    <structfield>last_archived_wal</structfield> have also been successfully
+    archived.
+  </para>
+ </sect2>
+
+ <sect2 id="monitoring-pg-stat-io-view">
+  <title><structname>pg_stat_io</structname></title>
+
+  <indexterm>
+   <primary>pg_stat_io</primary>
+  </indexterm>
+
+  <para>
+   The <structname>pg_stat_io</structname> view will contain one row for each
+   combination of backend type, target I/O object, and I/O context, showing
+   cluster-wide I/O statistics. Combinations which do not make sense are
+   omitted.
+  </para>
+
+  <para>
+   Currently, I/O on relations (e.g. tables, indexes) is tracked. However,
+   relation I/O which bypasses shared buffers (e.g. when moving a table from one
+   tablespace to another) is currently not tracked.
+  </para>
+
+  <table id="pg-stat-io-view" xreflabel="pg_stat_io">
+   <title><structname>pg_stat_io</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        Column Type
+       </para>
+       <para>
+        Description
+       </para>
+      </entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>backend_type</structfield> <type>text</type>
+       </para>
+       <para>
+        Type of backend (e.g. background worker, autovacuum worker). See <link
+        linkend="monitoring-pg-stat-activity-view">
+        <structname>pg_stat_activity</structname></link> for more information
+        on <varname>backend_type</varname>s. Some
+        <varname>backend_type</varname>s do not accumulate I/O operation
+        statistics and will not be included in the view.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>object</structfield> <type>text</type>
+       </para>
+       <para>
+        Target object of an I/O operation. Possible values are:
+       <itemizedlist>
+        <listitem>
+         <para>
+          <literal>relation</literal>: Permanent relations.
+         </para>
+        </listitem>
+        <listitem>
+         <para>
+          <literal>temp relation</literal>: Temporary relations.
+         </para>
+        </listitem>
+       </itemizedlist>
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>context</structfield> <type>text</type>
+       </para>
+       <para>
+        The context of an I/O operation. Possible values are:
+       </para>
+       <itemizedlist>
+        <listitem>
+         <para>
+          <literal>normal</literal>: The default or standard
+          <varname>context</varname> for a type of I/O operation. For
+          example, by default, relation data is read into and written out from
+          shared buffers. Thus, reads and writes of relation data to and from
+          shared buffers are tracked in <varname>context</varname>
+          <literal>normal</literal>.
+         </para>
+        </listitem>
+        <listitem>
+         <para>
+          <literal>vacuum</literal>: I/O operations performed outside of shared
+          buffers while vacuuming and analyzing permanent relations. Temporary
+          table vacuums use the same local buffer pool as other temporary table
+          IO operations and are tracked in <varname>context</varname>
+          <literal>normal</literal>.
+         </para>
+        </listitem>
+        <listitem>
+         <para>
+          <literal>bulkread</literal>: Certain large read I/O operations
+          done outside of shared buffers, for example, a sequential scan of a
+          large table.
+         </para>
+        </listitem>
+        <listitem>
+         <para>
+          <literal>bulkwrite</literal>: Certain large write I/O operations
+          done outside of shared buffers, such as <command>COPY</command>.
+         </para>
+        </listitem>
+       </itemizedlist>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>reads</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of read operations, each of the size specified in
+        <varname>op_bytes</varname>.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>read_time</structfield> <type>double precision</type>
+       </para>
+       <para>
+        Time spent in read operations in milliseconds (if
+        <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero)
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>writes</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of write operations, each of the size specified in
+        <varname>op_bytes</varname>.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>write_time</structfield> <type>double precision</type>
+       </para>
+       <para>
+        Time spent in write operations in milliseconds (if
+        <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero)
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>writebacks</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of units of size <varname>op_bytes</varname> which the process
+        requested the kernel write out to permanent storage.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>writeback_time</structfield> <type>double precision</type>
+       </para>
+       <para>
+        Time spent in writeback operations in milliseconds (if
+        <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero). This
+        includes the time spent queueing write-out requests and, potentially,
+        the time spent to write out the dirty data.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>extends</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of relation extend operations, each of the size specified in
+        <varname>op_bytes</varname>.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>extend_time</structfield> <type>double precision</type>
+       </para>
+       <para>
+        Time spent in extend operations in milliseconds (if
+        <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero)
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>op_bytes</structfield> <type>bigint</type>
+       </para>
+       <para>
+        The number of bytes per unit of I/O read, written, or extended.
+       </para>
+       <para>
+        Relation data reads, writes, and extends are done in
+        <varname>block_size</varname> units, derived from the build-time
+        parameter <symbol>BLCKSZ</symbol>, which is <literal>8192</literal> by
+        default.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>hits</structfield> <type>bigint</type>
+       </para>
+       <para>
+        The number of times a desired block was found in a shared buffer.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>evictions</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of times a block has been written out from a shared or local
+        buffer in order to make it available for another use.
+       </para>
+       <para>
+        In <varname>context</varname> <literal>normal</literal>, this counts
+        the number of times a block was evicted from a buffer and replaced with
+        another block. In <varname>context</varname>s
+        <literal>bulkwrite</literal>, <literal>bulkread</literal>, and
+        <literal>vacuum</literal>, this counts the number of times a block was
+        evicted from shared buffers in order to add the shared buffer to a
+        separate, size-limited ring buffer for use in a bulk I/O operation.
+        </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>reuses</structfield> <type>bigint</type>
+       </para>
+       <para>
+        The number of times an existing buffer in a size-limited ring buffer
+        outside of shared buffers was reused as part of an I/O operation in the
+        <literal>bulkread</literal>, <literal>bulkwrite</literal>, or
+        <literal>vacuum</literal> <varname>context</varname>s.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>fsyncs</structfield> <type>bigint</type>
+       </para>
+       <para>
+        Number of <literal>fsync</literal> calls. These are only tracked in
+        <varname>context</varname> <literal>normal</literal>.
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>fsync_time</structfield> <type>double precision</type>
+       </para>
+       <para>
+        Time spent in fsync operations in milliseconds (if
+        <xref linkend="guc-track-io-timing"/> is enabled, otherwise zero)
+       </para>
+      </entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry">
+       <para role="column_definition">
+        <structfield>stats_reset</structfield> <type>timestamp with time zone</type>
+       </para>
+       <para>
+        Time at which these statistics were last reset.
+       </para>
+      </entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <para>
+   Some backend types never perform I/O operations on some I/O objects and/or
+   in some I/O contexts. These rows are omitted from the view. For example, the
+   checkpointer does not checkpoint temporary tables, so there will be no rows
+   for <varname>backend_type</varname> <literal>checkpointer</literal> and
+   <varname>object</varname> <literal>temp relation</literal>.
+  </para>
+
+  <para>
+   In addition, some I/O operations will never be performed either by certain
+   backend types or on certain I/O objects and/or in certain I/O contexts.
+   These cells will be NULL. For example, temporary tables are not
+   <literal>fsync</literal>ed, so <varname>fsyncs</varname> will be NULL for
+   <varname>object</varname> <literal>temp relation</literal>. Also, the
+   background writer does not perform reads, so <varname>reads</varname> will
+   be NULL in rows for <varname>backend_type</varname> <literal>background
+   writer</literal>.
+  </para>
+
+  <para>
+   <structname>pg_stat_io</structname> can be used to inform database tuning.
+   For example:
+   <itemizedlist>
+    <listitem>
+     <para>
+      A high <varname>evictions</varname> count can indicate that shared
+      buffers should be increased.
+     </para>
+    </listitem>
+    <listitem>
+     <para>
+      Client backends rely on the checkpointer to ensure data is persisted to
+      permanent storage. Large numbers of <varname>fsyncs</varname> by
+      <literal>client backend</literal>s could indicate a misconfiguration of
+      shared buffers or of the checkpointer. More information on configuring
+      the checkpointer can be found in <xref linkend="wal-configuration"/>.
+     </para>
+    </listitem>
+    <listitem>
+     <para>
+      Normally, client backends should be able to rely on auxiliary processes
+      like the checkpointer and the background writer to write out dirty data
+      as much as possible. Large numbers of writes by client backends could
+      indicate a misconfiguration of shared buffers or of the checkpointer.
+      More information on configuring the checkpointer can be found in <xref
+      linkend="wal-configuration"/>.
+     </para>
+    </listitem>
+   </itemizedlist>
+  </para>
+
+  <note>
+   <para>
+    Columns tracking I/O time will only be non-zero when
+    <xref linkend="guc-track-io-timing"/> is enabled. The user should be
+    careful when referencing these columns in combination with their
+    corresponding IO operations in case <varname>track_io_timing</varname>
+    was not enabled for the entire time since the last stats reset.
+   </para>
+  </note>
+
+
 
  </sect2>
 
@@ -3734,7 +4477,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>tup_returned</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of rows returned by queries in this database
+       Number of live rows fetched by sequential scans and index entries returned by index scans in this database
       </para></entry>
      </row>
 
@@ -3743,7 +4486,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>tup_fetched</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of rows fetched by queries in this database
+       Number of live rows fetched by index scans in this database
       </para></entry>
      </row>
 
@@ -4051,6 +4794,17 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        deadlocks
       </para></entry>
      </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>confl_active_logicalslot</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of uses of logical slots in this database that have been
+       canceled due to old snapshots or too low a <xref linkend="guc-wal-level"/>
+       on the primary
+      </para></entry>
+     </row>
     </tbody>
    </tgroup>
   </table>
@@ -4127,6 +4881,16 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>last_seq_scan</structfield> <type>timestamp with time zone</type>
+      </para>
+      <para>
+       The time of the last sequential scan on this table, based on the
+       most recent transaction stop time
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>seq_tup_read</structfield> <type>bigint</type>
       </para>
       <para>
@@ -4145,6 +4909,16 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
 
      <row>
       <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>last_idx_scan</structfield> <type>timestamp with time zone</type>
+      </para>
+      <para>
+       The time of the last index scan on this table, based on the
+       most recent transaction stop time
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
        <structfield>idx_tup_fetch</structfield> <type>bigint</type>
       </para>
       <para>
@@ -4157,7 +4931,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>n_tup_ins</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of rows inserted
+       Total number of rows inserted
       </para></entry>
      </row>
 
@@ -4166,7 +4940,10 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>n_tup_upd</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of rows updated (includes HOT updated rows)
+       Total number of rows updated.  (This includes row updates
+       counted in <structfield>n_tup_hot_upd</structfield> and
+       <structfield>n_tup_newpage_upd</structfield>, and remaining
+       non-<acronym>HOT</acronym> updates.)
       </para></entry>
      </row>
 
@@ -4175,7 +4952,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>n_tup_del</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of rows deleted
+       Total number of rows deleted
       </para></entry>
      </row>
 
@@ -4184,8 +4961,23 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        <structfield>n_tup_hot_upd</structfield> <type>bigint</type>
       </para>
       <para>
-       Number of rows HOT updated (i.e., with no separate index
-       update required)
+       Number of rows <link linkend="storage-hot">HOT updated</link>.
+       These are updates where no successor versions are required in
+       indexes.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>n_tup_newpage_upd</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of rows updated where the successor version goes onto a
+       <emphasis>new</emphasis> heap page, leaving behind an original
+       version with a
+       <link linkend="storage-tuple-layout"><structfield>t_ctid</structfield>
+        field</link> that points to a different heap page.  These are
+       always non-<acronym>HOT</acronym> updates.
       </para></entry>
      </row>
 
@@ -4391,6 +5183,16 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
       </para>
       <para>
        Number of index scans initiated on this index
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>last_idx_scan</structfield> <type>timestamp with time zone</type>
+      </para>
+      <para>
+       The time of the last scan on this index, based on the
+       most recent transaction stop time
       </para></entry>
      </row>
 
@@ -4991,8 +5793,8 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
   </para>
 
   <para>
-   Additional functions related to statistics collection are listed in <xref
-   linkend="monitoring-stats-funcs-table"/>.
+   Additional functions related to the cumulative statistics system are listed
+   in <xref linkend="monitoring-stats-funcs-table"/>.
   </para>
 
    <table id="monitoring-stats-funcs-table">
@@ -5047,7 +5849,43 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
         <returnvalue>timestamp with time zone</returnvalue>
        </para>
        <para>
-        Returns the timestamp of the current statistics snapshot.
+        Returns the timestamp of the current statistics snapshot, or NULL if
+        no statistics snapshot has been taken. A snapshot is taken the first
+        time cumulative statistics are accessed in a transaction if
+        <varname>stats_fetch_consistency</varname> is set to
+        <literal>snapshot</literal>
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
+         <primary>pg_stat_get_xact_blocks_fetched</primary>
+        </indexterm>
+        <function>pg_stat_get_xact_blocks_fetched</function> ( <type>oid</type> )
+        <returnvalue>bigint</returnvalue>
+       </para>
+       <para>
+        Returns the number of block read requests for table or index, in the
+        current transaction. This number minus
+        <function>pg_stat_get_xact_blocks_hit</function> gives the number of
+        kernel <function>read()</function> calls; the number of actual
+        physical reads is usually lower due to kernel-level buffering.
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
+         <primary>pg_stat_get_xact_blocks_hit</primary>
+        </indexterm>
+        <function>pg_stat_get_xact_blocks_hit</function> ( <type>oid</type> )
+        <returnvalue>bigint</returnvalue>
+       </para>
+       <para>
+        Returns the number of block read requests for table or index, in the
+        current transaction, found in cache (not triggering kernel
+        <function>read()</function> calls).
        </para></entry>
       </row>
 
@@ -5060,7 +5898,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
         <returnvalue>void</returnvalue>
        </para>
        <para>
-        Discards the current statistics snapshot.
+        Discards the current statistics snapshot or cached information.
        </para></entry>
       </row>
 
@@ -5095,8 +5933,13 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
         all the counters shown in
         the <structname>pg_stat_bgwriter</structname>
         view, <literal>archiver</literal> to reset all the counters shown in
-        the <structname>pg_stat_archiver</structname> view or <literal>wal</literal>
-        to reset all the counters shown in the <structname>pg_stat_wal</structname> view.
+        the <structname>pg_stat_archiver</structname> view,
+        <literal>io</literal> to reset all the counters shown in the
+        <structname>pg_stat_io</structname> view,
+        <literal>wal</literal> to reset all the counters shown in the
+        <structname>pg_stat_wal</structname> view or
+        <literal>recovery_prefetch</literal> to reset all the counters shown
+        in the <structname>pg_stat_recovery_prefetch</structname> view.
        </para>
        <para>
         This function is restricted to superusers by default, but other users
@@ -5114,7 +5957,7 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
        </para>
        <para>
         Resets statistics for a single table or index in the current database
-        to zero.
+        or shared across all databases in the cluster to zero.
        </para>
        <para>
         This function is restricted to superusers by default, but other users
@@ -5189,29 +6032,63 @@ SELECT pid, wait_event_type, wait_event FROM pg_stat_activity WHERE wait_event i
          can be granted EXECUTE to run the function.
        </para></entry>
       </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
+          <primary>pg_stat_reset_subscription_stats</primary>
+        </indexterm>
+        <function>pg_stat_reset_subscription_stats</function> ( <type>oid</type> )
+        <returnvalue>void</returnvalue>
+       </para>
+       <para>
+        Resets statistics for a single subscription shown in the
+        <structname>pg_stat_subscription_stats</structname> view to zero. If
+        the argument is <literal>NULL</literal>, reset statistics for all
+        subscriptions.
+       </para>
+       <para>
+        This function is restricted to superusers by default, but other users
+        can be granted EXECUTE to run the function.
+       </para></entry>
+      </row>
      </tbody>
     </tgroup>
    </table>
+
+  <warning>
+   <para>
+    Using <function>pg_stat_reset()</function> also resets counters that
+    autovacuum uses to determine when to trigger a vacuum or an analyze.
+    Resetting these counters can cause autovacuum to not perform necessary
+    work, which can cause problems such as table bloat or out-dated
+    table statistics.  A database-wide <command>ANALYZE</command> is
+    recommended after the statistics have been reset.
+   </para>
+  </warning>
 
   <para>
    <function>pg_stat_get_activity</function>, the underlying function of
    the <structname>pg_stat_activity</structname> view, returns a set of records
    containing all the available information about each backend process.
    Sometimes it may be more convenient to obtain just a subset of this
-   information.  In such cases, an older set of per-backend statistics
+   information.  In such cases, another set of per-backend statistics
    access functions can be used; these are shown in <xref
    linkend="monitoring-stats-backend-funcs-table"/>.
-   These access functions use a backend ID number, which ranges from one
-   to the number of currently active backends.
+   These access functions use the session's backend ID number, which is a
+   small positive integer that is distinct from the backend ID of any
+   concurrent session, although a session's ID can be recycled as soon as
+   it exits.  The backend ID is used, among other things, to identify the
+   session's temporary schema if it has one.
    The function <function>pg_stat_get_backend_idset</function> provides a
-   convenient way to generate one row for each active backend for
+   convenient way to list all the active backends' ID numbers for
    invoking these functions.  For example, to show the <acronym>PID</acronym>s and
    current queries of all backends:
 
 <programlisting>
-SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
-       pg_stat_get_backend_activity(s.backendid) AS query
-    FROM (SELECT pg_stat_get_backend_idset() AS backendid) AS s;
+SELECT pg_stat_get_backend_pid(backendid) AS pid,
+       pg_stat_get_backend_activity(backendid) AS query
+FROM pg_stat_get_backend_idset() AS backendid;
 </programlisting>
   </para>
 
@@ -5230,20 +6107,6 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
      </thead>
 
      <tbody>
-      <row>
-       <entry role="func_table_entry"><para role="func_signature">
-        <indexterm>
-         <primary>pg_stat_get_backend_idset</primary>
-        </indexterm>
-        <function>pg_stat_get_backend_idset</function> ()
-        <returnvalue>setof integer</returnvalue>
-       </para>
-       <para>
-        Returns the set of currently active backend ID numbers (from 1 to the
-        number of active backends).
-       </para></entry>
-      </row>
-
       <row>
        <entry role="func_table_entry"><para role="func_signature">
         <indexterm>
@@ -5312,6 +6175,19 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
       <row>
        <entry role="func_table_entry"><para role="func_signature">
         <indexterm>
+         <primary>pg_stat_get_backend_idset</primary>
+        </indexterm>
+        <function>pg_stat_get_backend_idset</function> ()
+        <returnvalue>setof integer</returnvalue>
+       </para>
+       <para>
+        Returns the set of currently active backend ID numbers.
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
          <primary>pg_stat_get_backend_pid</primary>
         </indexterm>
         <function>pg_stat_get_backend_pid</function> ( <type>integer</type> )
@@ -5338,6 +6214,24 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
       <row>
        <entry role="func_table_entry"><para role="func_signature">
         <indexterm>
+         <primary>pg_stat_get_backend_subxact</primary>
+        </indexterm>
+        <function>pg_stat_get_backend_subxact</function> ( <type>integer</type> )
+        <returnvalue>record</returnvalue>
+       </para>
+       <para>
+        Returns a record of information about the subtransactions of the
+        backend with the specified ID.
+        The fields returned are <parameter>subxact_count</parameter>, which
+        is the number of subtransactions in the backend's subtransaction cache,
+        and <parameter>subxact_overflow</parameter>, which indicates whether
+        the backend's subtransaction cache is overflowed or not.
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
          <primary>pg_stat_get_backend_userid</primary>
         </indexterm>
         <function>pg_stat_get_backend_userid</function> ( <type>integer</type> )
@@ -5345,20 +6239,6 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
        </para>
        <para>
         Returns the OID of the user logged into this backend.
-       </para></entry>
-      </row>
-
-      <row>
-       <entry role="func_table_entry"><para role="func_signature">
-        <indexterm>
-         <primary>pg_stat_get_backend_wait_event_type</primary>
-        </indexterm>
-        <function>pg_stat_get_backend_wait_event_type</function> ( <type>integer</type> )
-        <returnvalue>text</returnvalue>
-       </para>
-       <para>
-        Returns the wait event type name if this backend is currently waiting,
-        otherwise NULL.  See <xref linkend="wait-event-table"/> for details.
        </para></entry>
       </row>
 
@@ -5374,6 +6254,20 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
         Returns the wait event name if this backend is currently waiting,
         otherwise NULL. See <xref linkend="wait-event-activity-table"/> through
         <xref linkend="wait-event-timeout-table"/>.
+       </para></entry>
+      </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
+         <primary>pg_stat_get_backend_wait_event_type</primary>
+        </indexterm>
+        <function>pg_stat_get_backend_wait_event_type</function> ( <type>integer</type> )
+        <returnvalue>text</returnvalue>
+       </para>
+       <para>
+        Returns the wait event type name if this backend is currently waiting,
+        otherwise NULL.  See <xref linkend="wait-event-table"/> for details.
        </para></entry>
       </row>
 
@@ -5607,7 +6501,7 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
   </table>
 
   <table id="analyze-phases">
-   <title>ANALYZE phases</title>
+   <title>ANALYZE Phases</title>
    <tgroup cols="2">
     <colspec colname="col1" colwidth="1*"/>
     <colspec colname="col2" colwidth="2*"/>
@@ -5676,539 +6570,6 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
     statistics are collected, followed by that for each partition.
    </para>
   </note>
- </sect2>
-
- <sect2 id="create-index-progress-reporting">
-  <title>CREATE INDEX Progress Reporting</title>
-
-  <indexterm>
-   <primary>pg_stat_progress_create_index</primary>
-  </indexterm>
-
-  <para>
-   Whenever <command>CREATE INDEX</command> or <command>REINDEX</command> is running, the
-   <structname>pg_stat_progress_create_index</structname> view will contain
-   one row for each backend that is currently creating indexes.  The tables
-   below describe the information that will be reported and provide information
-   about how to interpret it.
-  </para>
-
-  <table id="pg-stat-progress-create-index-view" xreflabel="pg_stat_progress_create_index">
-   <title><structname>pg_stat_progress_create_index</structname> View</title>
-   <tgroup cols="1">
-    <thead>
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       Column Type
-      </para>
-      <para>
-       Description
-      </para></entry>
-     </row>
-    </thead>
-
-    <tbody>
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>pid</structfield> <type>integer</type>
-      </para>
-      <para>
-       Process ID of backend.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>datid</structfield> <type>oid</type>
-      </para>
-      <para>
-       OID of the database to which this backend is connected.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>datname</structfield> <type>name</type>
-      </para>
-      <para>
-       Name of the database to which this backend is connected.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>relid</structfield> <type>oid</type>
-      </para>
-      <para>
-       OID of the table on which the index is being created.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>index_relid</structfield> <type>oid</type>
-      </para>
-      <para>
-       OID of the index being created or reindexed.  During a
-       non-concurrent <command>CREATE INDEX</command>, this is 0.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>command</structfield> <type>text</type>
-      </para>
-      <para>
-       The command that is running: <literal>CREATE INDEX</literal>,
-       <literal>CREATE INDEX CONCURRENTLY</literal>,
-       <literal>REINDEX</literal>, or <literal>REINDEX CONCURRENTLY</literal>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>phase</structfield> <type>text</type>
-      </para>
-      <para>
-       Current processing phase of index creation.  See <xref linkend="create-index-phases"/>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>lockers_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Total number of lockers to wait for, when applicable.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>lockers_done</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of lockers already waited for.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>current_locker_pid</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Process ID of the locker currently being waited for.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>blocks_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Total number of blocks to be processed in the current phase.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>blocks_done</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of blocks already processed in the current phase.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>tuples_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Total number of tuples to be processed in the current phase.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>tuples_done</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of tuples already processed in the current phase.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>partitions_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       When creating an index on a partitioned table, this column is set to
-       the total number of partitions on which the index is to be created.
-       This field is <literal>0</literal> during a <literal>REINDEX</literal>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>partitions_done</structfield> <type>bigint</type>
-      </para>
-      <para>
-       When creating an index on a partitioned table, this column is set to
-       the number of partitions on which the index has been created.
-       This field is <literal>0</literal> during a <literal>REINDEX</literal>.
-      </para></entry>
-     </row>
-    </tbody>
-   </tgroup>
-  </table>
-
-  <table id="create-index-phases">
-   <title>CREATE INDEX Phases</title>
-   <tgroup cols="2">
-    <colspec colname="col1" colwidth="1*"/>
-    <colspec colname="col2" colwidth="2*"/>
-    <thead>
-     <row>
-      <entry>Phase</entry>
-      <entry>Description</entry>
-     </row>
-    </thead>
-    <tbody>
-     <row>
-      <entry><literal>initializing</literal></entry>
-      <entry>
-       <command>CREATE INDEX</command> or <command>REINDEX</command> is preparing to create the index.  This
-       phase is expected to be very brief.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for writers before build</literal></entry>
-      <entry>
-       <command>CREATE INDEX CONCURRENTLY</command> or <command>REINDEX CONCURRENTLY</command> is waiting for transactions
-       with write locks that can potentially see the table to finish.
-       This phase is skipped when not in concurrent mode.
-       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
-       and <structname>current_locker_pid</structname> contain the progress
-       information for this phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>building index</literal></entry>
-      <entry>
-       The index is being built by the access method-specific code.  In this phase,
-       access methods that support progress reporting fill in their own progress data,
-       and the subphase is indicated in this column.  Typically,
-       <structname>blocks_total</structname> and <structname>blocks_done</structname>
-       will contain progress data, as well as potentially
-       <structname>tuples_total</structname> and <structname>tuples_done</structname>.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for writers before validation</literal></entry>
-      <entry>
-       <command>CREATE INDEX CONCURRENTLY</command> or <command>REINDEX CONCURRENTLY</command> is waiting for transactions
-       with write locks that can potentially write into the table to finish.
-       This phase is skipped when not in concurrent mode.
-       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
-       and <structname>current_locker_pid</structname> contain the progress
-       information for this phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>index validation: scanning index</literal></entry>
-      <entry>
-       <command>CREATE INDEX CONCURRENTLY</command> is scanning the index searching
-       for tuples that need to be validated.
-       This phase is skipped when not in concurrent mode.
-       Columns <structname>blocks_total</structname> (set to the total size of the index)
-       and <structname>blocks_done</structname> contain the progress information for this phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>index validation: sorting tuples</literal></entry>
-      <entry>
-       <command>CREATE INDEX CONCURRENTLY</command> is sorting the output of the
-       index scanning phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>index validation: scanning table</literal></entry>
-      <entry>
-       <command>CREATE INDEX CONCURRENTLY</command> is scanning the table
-       to validate the index tuples collected in the previous two phases.
-       This phase is skipped when not in concurrent mode.
-       Columns <structname>blocks_total</structname> (set to the total size of the table)
-       and <structname>blocks_done</structname> contain the progress information for this phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for old snapshots</literal></entry>
-      <entry>
-       <command>CREATE INDEX CONCURRENTLY</command> or <command>REINDEX CONCURRENTLY</command> is waiting for transactions
-       that can potentially see the table to release their snapshots.  This
-       phase is skipped when not in concurrent mode.
-       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
-       and <structname>current_locker_pid</structname> contain the progress
-       information for this phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for readers before marking dead</literal></entry>
-      <entry>
-       <command>REINDEX CONCURRENTLY</command> is waiting for transactions
-       with read locks on the table to finish, before marking the old index dead.
-       This phase is skipped when not in concurrent mode.
-       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
-       and <structname>current_locker_pid</structname> contain the progress
-       information for this phase.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for readers before dropping</literal></entry>
-      <entry>
-       <command>REINDEX CONCURRENTLY</command> is waiting for transactions
-       with read locks on the table to finish, before dropping the old index.
-       This phase is skipped when not in concurrent mode.
-       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
-       and <structname>current_locker_pid</structname> contain the progress
-       information for this phase.
-      </entry>
-     </row>
-    </tbody>
-   </tgroup>
-  </table>
-
- </sect2>
-
- <sect2 id="vacuum-progress-reporting">
-  <title>VACUUM Progress Reporting</title>
-
-  <indexterm>
-   <primary>pg_stat_progress_vacuum</primary>
-  </indexterm>
-
-  <para>
-   Whenever <command>VACUUM</command> is running, the
-   <structname>pg_stat_progress_vacuum</structname> view will contain
-   one row for each backend (including autovacuum worker processes) that is
-   currently vacuuming.  The tables below describe the information
-   that will be reported and provide information about how to interpret it.
-   Progress for <command>VACUUM FULL</command> commands is reported via
-   <structname>pg_stat_progress_cluster</structname>
-   because both <command>VACUUM FULL</command> and <command>CLUSTER</command>
-   rewrite the table, while regular <command>VACUUM</command> only modifies it
-   in place. See <xref linkend='cluster-progress-reporting'/>.
-  </para>
-
-  <table id="pg-stat-progress-vacuum-view" xreflabel="pg_stat_progress_vacuum">
-   <title><structname>pg_stat_progress_vacuum</structname> View</title>
-   <tgroup cols="1">
-    <thead>
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       Column Type
-      </para>
-      <para>
-       Description
-      </para></entry>
-     </row>
-    </thead>
-
-    <tbody>
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>pid</structfield> <type>integer</type>
-      </para>
-      <para>
-       Process ID of backend.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>datid</structfield> <type>oid</type>
-      </para>
-      <para>
-       OID of the database to which this backend is connected.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>datname</structfield> <type>name</type>
-      </para>
-      <para>
-       Name of the database to which this backend is connected.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>relid</structfield> <type>oid</type>
-      </para>
-      <para>
-       OID of the table being vacuumed.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>phase</structfield> <type>text</type>
-      </para>
-      <para>
-       Current processing phase of vacuum.  See <xref linkend="vacuum-phases"/>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>heap_blks_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Total number of heap blocks in the table.  This number is reported
-       as of the beginning of the scan; blocks added later will not be (and
-       need not be) visited by this <command>VACUUM</command>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>heap_blks_scanned</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of heap blocks scanned.  Because the
-       <link linkend="storage-vm">visibility map</link> is used to optimize scans,
-       some blocks will be skipped without inspection; skipped blocks are
-       included in this total, so that this number will eventually become
-       equal to <structfield>heap_blks_total</structfield> when the vacuum is complete.
-       This counter only advances when the phase is <literal>scanning heap</literal>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>heap_blks_vacuumed</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of heap blocks vacuumed.  Unless the table has no indexes, this
-       counter only advances when the phase is <literal>vacuuming heap</literal>.
-       Blocks that contain no dead tuples are skipped, so the counter may
-       sometimes skip forward in large increments.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>index_vacuum_count</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of completed index vacuum cycles.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>max_dead_tuples</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of dead tuples that we can store before needing to perform
-       an index vacuum cycle, based on
-       <xref linkend="guc-maintenance-work-mem"/>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>num_dead_tuples</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of dead tuples collected since the last index vacuum cycle.
-      </para></entry>
-     </row>
-    </tbody>
-   </tgroup>
-  </table>
-
-  <table id="vacuum-phases">
-   <title>VACUUM Phases</title>
-   <tgroup cols="2">
-    <colspec colname="col1" colwidth="1*"/>
-    <colspec colname="col2" colwidth="2*"/>
-    <thead>
-    <row>
-      <entry>Phase</entry>
-      <entry>Description</entry>
-     </row>
-    </thead>
-
-   <tbody>
-    <row>
-     <entry><literal>initializing</literal></entry>
-     <entry>
-       <command>VACUUM</command> is preparing to begin scanning the heap.  This
-       phase is expected to be very brief.
-     </entry>
-    </row>
-    <row>
-     <entry><literal>scanning heap</literal></entry>
-     <entry>
-       <command>VACUUM</command> is currently scanning the heap.  It will prune and
-       defragment each page if required, and possibly perform freezing
-       activity.  The <structfield>heap_blks_scanned</structfield> column can be used
-       to monitor the progress of the scan.
-     </entry>
-    </row>
-    <row>
-     <entry><literal>vacuuming indexes</literal></entry>
-     <entry>
-       <command>VACUUM</command> is currently vacuuming the indexes.  If a table has
-       any indexes, this will happen at least once per vacuum, after the heap
-       has been completely scanned.  It may happen multiple times per vacuum
-       if <xref linkend="guc-maintenance-work-mem"/> (or, in the case of autovacuum,
-       <xref linkend="guc-autovacuum-work-mem"/> if set) is insufficient to store
-       the number of dead tuples found.
-     </entry>
-    </row>
-    <row>
-     <entry><literal>vacuuming heap</literal></entry>
-     <entry>
-       <command>VACUUM</command> is currently vacuuming the heap.  Vacuuming the heap
-       is distinct from scanning the heap, and occurs after each instance of
-       vacuuming indexes.  If <structfield>heap_blks_scanned</structfield> is less than
-       <structfield>heap_blks_total</structfield>, the system will return to scanning
-       the heap after this phase is completed; otherwise, it will begin
-       cleaning up indexes after this phase is completed.
-     </entry>
-    </row>
-    <row>
-     <entry><literal>cleaning up indexes</literal></entry>
-     <entry>
-       <command>VACUUM</command> is currently cleaning up indexes.  This occurs after
-       the heap has been completely scanned and all vacuuming of the indexes
-       and the heap has been completed.
-     </entry>
-    </row>
-    <row>
-     <entry><literal>truncating heap</literal></entry>
-     <entry>
-       <command>VACUUM</command> is currently truncating the heap so as to return
-       empty pages at the end of the relation to the operating system.  This
-       occurs after cleaning up indexes.
-     </entry>
-    </row>
-    <row>
-     <entry><literal>performing final cleanup</literal></entry>
-     <entry>
-       <command>VACUUM</command> is performing final cleanup.  During this phase,
-       <command>VACUUM</command> will vacuum the free space map, update statistics
-       in <literal>pg_class</literal>, and report statistics to the statistics
-       collector.  When this phase is completed, <command>VACUUM</command> will end.
-     </entry>
-    </row>
-   </tbody>
-   </tgroup>
-  </table>
-
  </sect2>
 
  <sect2 id="cluster-progress-reporting">
@@ -6433,181 +6794,6 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
   </table>
  </sect2>
 
- <sect2 id="basebackup-progress-reporting">
-  <title>Base Backup Progress Reporting</title>
-
-  <indexterm>
-   <primary>pg_stat_progress_basebackup</primary>
-  </indexterm>
-
-  <para>
-   Whenever an application like <application>pg_basebackup</application>
-   is taking a base backup, the
-   <structname>pg_stat_progress_basebackup</structname>
-   view will contain a row for each WAL sender process that is currently
-   running the <command>BASE_BACKUP</command> replication command
-   and streaming the backup. The tables below describe the information
-   that will be reported and provide information about how to interpret it.
-  </para>
-
-  <table id="pg-stat-progress-basebackup-view" xreflabel="pg_stat_progress_basebackup">
-   <title><structname>pg_stat_progress_basebackup</structname> View</title>
-   <tgroup cols="1">
-    <thead>
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       Column Type
-      </para>
-      <para>
-       Description
-      </para></entry>
-     </row>
-    </thead>
-
-    <tbody>
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>pid</structfield> <type>integer</type>
-      </para>
-      <para>
-       Process ID of a WAL sender process.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>phase</structfield> <type>text</type>
-      </para>
-      <para>
-       Current processing phase. See <xref linkend="basebackup-phases"/>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>backup_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Total amount of data that will be streamed. This is estimated and
-       reported as of the beginning of
-       <literal>streaming database files</literal> phase. Note that
-       this is only an approximation since the database
-       may change during <literal>streaming database files</literal> phase
-       and WAL log may be included in the backup later. This is always
-       the same value as <structfield>backup_streamed</structfield>
-       once the amount of data streamed exceeds the estimated
-       total size. If the estimation is disabled in
-       <application>pg_basebackup</application>
-       (i.e., <literal>--no-estimate-size</literal> option is specified),
-       this is <literal>NULL</literal>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>backup_streamed</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Amount of data streamed. This counter only advances
-       when the phase is <literal>streaming database files</literal> or
-       <literal>transferring wal files</literal>.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>tablespaces_total</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Total number of tablespaces that will be streamed.
-      </para></entry>
-     </row>
-
-     <row>
-      <entry role="catalog_table_entry"><para role="column_definition">
-       <structfield>tablespaces_streamed</structfield> <type>bigint</type>
-      </para>
-      <para>
-       Number of tablespaces streamed. This counter only
-       advances when the phase is <literal>streaming database files</literal>.
-      </para></entry>
-     </row>
-    </tbody>
-   </tgroup>
-  </table>
-
-  <table id="basebackup-phases">
-   <title>Base backup phases</title>
-   <tgroup cols="2">
-    <colspec colname="col1" colwidth="1*"/>
-    <colspec colname="col2" colwidth="2*"/>
-    <thead>
-     <row>
-      <entry>Phase</entry>
-      <entry>Description</entry>
-     </row>
-    </thead>
-    <tbody>
-     <row>
-      <entry><literal>initializing</literal></entry>
-      <entry>
-       The WAL sender process is preparing to begin the backup.
-       This phase is expected to be very brief.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for checkpoint to finish</literal></entry>
-      <entry>
-       The WAL sender process is currently performing
-       <function>pg_start_backup</function> to prepare to
-       take a base backup, and waiting for the start-of-backup
-       checkpoint to finish.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>estimating backup size</literal></entry>
-      <entry>
-       The WAL sender process is currently estimating the total amount
-       of database files that will be streamed as a base backup.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>streaming database files</literal></entry>
-      <entry>
-       The WAL sender process is currently streaming database files
-       as a base backup.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>waiting for wal archiving to finish</literal></entry>
-      <entry>
-       The WAL sender process is currently performing
-       <function>pg_stop_backup</function> to finish the backup,
-       and waiting for all the WAL files required for the base backup
-       to be successfully archived.
-       If either <literal>--wal-method=none</literal> or
-       <literal>--wal-method=stream</literal> is specified in
-       <application>pg_basebackup</application>, the backup will end
-       when this phase is completed.
-      </entry>
-     </row>
-     <row>
-      <entry><literal>transferring wal files</literal></entry>
-      <entry>
-       The WAL sender process is currently transferring all WAL logs
-       generated during the backup. This phase occurs after
-       <literal>waiting for wal archiving to finish</literal> phase if
-       <literal>--wal-method=fetch</literal> is specified in
-       <application>pg_basebackup</application>. The backup will end
-       when this phase is completed.
-      </entry>
-     </row>
-    </tbody>
-   </tgroup>
-  </table>
-
- </sect2>
-
  <sect2 id="copy-progress-reporting">
   <title>COPY Progress Reporting</title>
 
@@ -6742,6 +6928,715 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
   </table>
  </sect2>
 
+ <sect2 id="create-index-progress-reporting">
+  <title>CREATE INDEX Progress Reporting</title>
+
+  <indexterm>
+   <primary>pg_stat_progress_create_index</primary>
+  </indexterm>
+
+  <para>
+   Whenever <command>CREATE INDEX</command> or <command>REINDEX</command> is running, the
+   <structname>pg_stat_progress_create_index</structname> view will contain
+   one row for each backend that is currently creating indexes.  The tables
+   below describe the information that will be reported and provide information
+   about how to interpret it.
+  </para>
+
+  <table id="pg-stat-progress-create-index-view" xreflabel="pg_stat_progress_create_index">
+   <title><structname>pg_stat_progress_create_index</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pid</structfield> <type>integer</type>
+      </para>
+      <para>
+       Process ID of the backend creating indexes.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the database to which this backend is connected.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the database to which this backend is connected.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>relid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the table on which the index is being created.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>index_relid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the index being created or reindexed.  During a
+       non-concurrent <command>CREATE INDEX</command>, this is 0.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>command</structfield> <type>text</type>
+      </para>
+      <para>
+       Specific command type: <literal>CREATE INDEX</literal>,
+       <literal>CREATE INDEX CONCURRENTLY</literal>,
+       <literal>REINDEX</literal>, or <literal>REINDEX CONCURRENTLY</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>phase</structfield> <type>text</type>
+      </para>
+      <para>
+       Current processing phase of index creation.  See <xref linkend="create-index-phases"/>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>lockers_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of lockers to wait for, when applicable.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>lockers_done</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of lockers already waited for.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>current_locker_pid</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Process ID of the locker currently being waited for.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>blocks_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of blocks to be processed in the current phase.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>blocks_done</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of blocks already processed in the current phase.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tuples_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of tuples to be processed in the current phase.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tuples_done</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of tuples already processed in the current phase.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>partitions_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of partitions on which the index is to be created
+       or attached, including both direct and indirect partitions.
+       <literal>0</literal> during a <literal>REINDEX</literal>, or when
+       the index is not partitioned.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>partitions_done</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of partitions on which the index has already been created
+       or attached, including both direct and indirect partitions.
+       <literal>0</literal> during a <literal>REINDEX</literal>, or when
+       the index is not partitioned.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <table id="create-index-phases">
+   <title>CREATE INDEX Phases</title>
+   <tgroup cols="2">
+    <colspec colname="col1" colwidth="1*"/>
+    <colspec colname="col2" colwidth="2*"/>
+    <thead>
+     <row>
+      <entry>Phase</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry><literal>initializing</literal></entry>
+      <entry>
+       <command>CREATE INDEX</command> or <command>REINDEX</command> is preparing to create the index.  This
+       phase is expected to be very brief.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for writers before build</literal></entry>
+      <entry>
+       <command>CREATE INDEX CONCURRENTLY</command> or <command>REINDEX CONCURRENTLY</command> is waiting for transactions
+       with write locks that can potentially see the table to finish.
+       This phase is skipped when not in concurrent mode.
+       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
+       and <structname>current_locker_pid</structname> contain the progress
+       information for this phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>building index</literal></entry>
+      <entry>
+       The index is being built by the access method-specific code.  In this phase,
+       access methods that support progress reporting fill in their own progress data,
+       and the subphase is indicated in this column.  Typically,
+       <structname>blocks_total</structname> and <structname>blocks_done</structname>
+       will contain progress data, as well as potentially
+       <structname>tuples_total</structname> and <structname>tuples_done</structname>.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for writers before validation</literal></entry>
+      <entry>
+       <command>CREATE INDEX CONCURRENTLY</command> or <command>REINDEX CONCURRENTLY</command> is waiting for transactions
+       with write locks that can potentially write into the table to finish.
+       This phase is skipped when not in concurrent mode.
+       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
+       and <structname>current_locker_pid</structname> contain the progress
+       information for this phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>index validation: scanning index</literal></entry>
+      <entry>
+       <command>CREATE INDEX CONCURRENTLY</command> is scanning the index searching
+       for tuples that need to be validated.
+       This phase is skipped when not in concurrent mode.
+       Columns <structname>blocks_total</structname> (set to the total size of the index)
+       and <structname>blocks_done</structname> contain the progress information for this phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>index validation: sorting tuples</literal></entry>
+      <entry>
+       <command>CREATE INDEX CONCURRENTLY</command> is sorting the output of the
+       index scanning phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>index validation: scanning table</literal></entry>
+      <entry>
+       <command>CREATE INDEX CONCURRENTLY</command> is scanning the table
+       to validate the index tuples collected in the previous two phases.
+       This phase is skipped when not in concurrent mode.
+       Columns <structname>blocks_total</structname> (set to the total size of the table)
+       and <structname>blocks_done</structname> contain the progress information for this phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for old snapshots</literal></entry>
+      <entry>
+       <command>CREATE INDEX CONCURRENTLY</command> or <command>REINDEX CONCURRENTLY</command> is waiting for transactions
+       that can potentially see the table to release their snapshots.  This
+       phase is skipped when not in concurrent mode.
+       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
+       and <structname>current_locker_pid</structname> contain the progress
+       information for this phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for readers before marking dead</literal></entry>
+      <entry>
+       <command>REINDEX CONCURRENTLY</command> is waiting for transactions
+       with read locks on the table to finish, before marking the old index dead.
+       This phase is skipped when not in concurrent mode.
+       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
+       and <structname>current_locker_pid</structname> contain the progress
+       information for this phase.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for readers before dropping</literal></entry>
+      <entry>
+       <command>REINDEX CONCURRENTLY</command> is waiting for transactions
+       with read locks on the table to finish, before dropping the old index.
+       This phase is skipped when not in concurrent mode.
+       Columns <structname>lockers_total</structname>, <structname>lockers_done</structname>
+       and <structname>current_locker_pid</structname> contain the progress
+       information for this phase.
+      </entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+ </sect2>
+
+ <sect2 id="vacuum-progress-reporting">
+  <title>VACUUM Progress Reporting</title>
+
+  <indexterm>
+   <primary>pg_stat_progress_vacuum</primary>
+  </indexterm>
+
+  <para>
+   Whenever <command>VACUUM</command> is running, the
+   <structname>pg_stat_progress_vacuum</structname> view will contain
+   one row for each backend (including autovacuum worker processes) that is
+   currently vacuuming.  The tables below describe the information
+   that will be reported and provide information about how to interpret it.
+   Progress for <command>VACUUM FULL</command> commands is reported via
+   <structname>pg_stat_progress_cluster</structname>
+   because both <command>VACUUM FULL</command> and <command>CLUSTER</command>
+   rewrite the table, while regular <command>VACUUM</command> only modifies it
+   in place. See <xref linkend="cluster-progress-reporting"/>.
+  </para>
+
+  <table id="pg-stat-progress-vacuum-view" xreflabel="pg_stat_progress_vacuum">
+   <title><structname>pg_stat_progress_vacuum</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pid</structfield> <type>integer</type>
+      </para>
+      <para>
+       Process ID of backend.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the database to which this backend is connected.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>datname</structfield> <type>name</type>
+      </para>
+      <para>
+       Name of the database to which this backend is connected.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>relid</structfield> <type>oid</type>
+      </para>
+      <para>
+       OID of the table being vacuumed.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>phase</structfield> <type>text</type>
+      </para>
+      <para>
+       Current processing phase of vacuum.  See <xref linkend="vacuum-phases"/>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>heap_blks_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of heap blocks in the table.  This number is reported
+       as of the beginning of the scan; blocks added later will not be (and
+       need not be) visited by this <command>VACUUM</command>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>heap_blks_scanned</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of heap blocks scanned.  Because the
+       <link linkend="storage-vm">visibility map</link> is used to optimize scans,
+       some blocks will be skipped without inspection; skipped blocks are
+       included in this total, so that this number will eventually become
+       equal to <structfield>heap_blks_total</structfield> when the vacuum is complete.
+       This counter only advances when the phase is <literal>scanning heap</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>heap_blks_vacuumed</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of heap blocks vacuumed.  Unless the table has no indexes, this
+       counter only advances when the phase is <literal>vacuuming heap</literal>.
+       Blocks that contain no dead tuples are skipped, so the counter may
+       sometimes skip forward in large increments.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>index_vacuum_count</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of completed index vacuum cycles.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>max_dead_tuples</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of dead tuples that we can store before needing to perform
+       an index vacuum cycle, based on
+       <xref linkend="guc-maintenance-work-mem"/>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>num_dead_tuples</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of dead tuples collected since the last index vacuum cycle.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <table id="vacuum-phases">
+   <title>VACUUM Phases</title>
+   <tgroup cols="2">
+    <colspec colname="col1" colwidth="1*"/>
+    <colspec colname="col2" colwidth="2*"/>
+    <thead>
+    <row>
+      <entry>Phase</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+
+   <tbody>
+    <row>
+     <entry><literal>initializing</literal></entry>
+     <entry>
+       <command>VACUUM</command> is preparing to begin scanning the heap.  This
+       phase is expected to be very brief.
+     </entry>
+    </row>
+    <row>
+     <entry><literal>scanning heap</literal></entry>
+     <entry>
+       <command>VACUUM</command> is currently scanning the heap.  It will prune and
+       defragment each page if required, and possibly perform freezing
+       activity.  The <structfield>heap_blks_scanned</structfield> column can be used
+       to monitor the progress of the scan.
+     </entry>
+    </row>
+    <row>
+     <entry><literal>vacuuming indexes</literal></entry>
+     <entry>
+       <command>VACUUM</command> is currently vacuuming the indexes.  If a table has
+       any indexes, this will happen at least once per vacuum, after the heap
+       has been completely scanned.  It may happen multiple times per vacuum
+       if <xref linkend="guc-maintenance-work-mem"/> (or, in the case of autovacuum,
+       <xref linkend="guc-autovacuum-work-mem"/> if set) is insufficient to store
+       the number of dead tuples found.
+     </entry>
+    </row>
+    <row>
+     <entry><literal>vacuuming heap</literal></entry>
+     <entry>
+       <command>VACUUM</command> is currently vacuuming the heap.  Vacuuming the heap
+       is distinct from scanning the heap, and occurs after each instance of
+       vacuuming indexes.  If <structfield>heap_blks_scanned</structfield> is less than
+       <structfield>heap_blks_total</structfield>, the system will return to scanning
+       the heap after this phase is completed; otherwise, it will begin
+       cleaning up indexes after this phase is completed.
+     </entry>
+    </row>
+    <row>
+     <entry><literal>cleaning up indexes</literal></entry>
+     <entry>
+       <command>VACUUM</command> is currently cleaning up indexes.  This occurs after
+       the heap has been completely scanned and all vacuuming of the indexes
+       and the heap has been completed.
+     </entry>
+    </row>
+    <row>
+     <entry><literal>truncating heap</literal></entry>
+     <entry>
+       <command>VACUUM</command> is currently truncating the heap so as to return
+       empty pages at the end of the relation to the operating system.  This
+       occurs after cleaning up indexes.
+     </entry>
+    </row>
+    <row>
+     <entry><literal>performing final cleanup</literal></entry>
+     <entry>
+       <command>VACUUM</command> is performing final cleanup.  During this phase,
+       <command>VACUUM</command> will vacuum the free space map, update statistics
+       in <literal>pg_class</literal>, and report statistics to the cumulative
+       statistics system. When this phase is completed, <command>VACUUM</command> will end.
+     </entry>
+    </row>
+   </tbody>
+   </tgroup>
+  </table>
+ </sect2>
+
+ <sect2 id="basebackup-progress-reporting">
+  <title>Base Backup Progress Reporting</title>
+
+  <indexterm>
+   <primary>pg_stat_progress_basebackup</primary>
+  </indexterm>
+
+  <para>
+   Whenever an application like <application>pg_basebackup</application>
+   is taking a base backup, the
+   <structname>pg_stat_progress_basebackup</structname>
+   view will contain a row for each WAL sender process that is currently
+   running the <command>BASE_BACKUP</command> replication command
+   and streaming the backup. The tables below describe the information
+   that will be reported and provide information about how to interpret it.
+  </para>
+
+  <table id="pg-stat-progress-basebackup-view" xreflabel="pg_stat_progress_basebackup">
+   <title><structname>pg_stat_progress_basebackup</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pid</structfield> <type>integer</type>
+      </para>
+      <para>
+       Process ID of a WAL sender process.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>phase</structfield> <type>text</type>
+      </para>
+      <para>
+       Current processing phase. See <xref linkend="basebackup-phases"/>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>backup_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total amount of data that will be streamed. This is estimated and
+       reported as of the beginning of
+       <literal>streaming database files</literal> phase. Note that
+       this is only an approximation since the database
+       may change during <literal>streaming database files</literal> phase
+       and WAL log may be included in the backup later. This is always
+       the same value as <structfield>backup_streamed</structfield>
+       once the amount of data streamed exceeds the estimated
+       total size. If the estimation is disabled in
+       <application>pg_basebackup</application>
+       (i.e., <literal>--no-estimate-size</literal> option is specified),
+       this is <literal>NULL</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>backup_streamed</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Amount of data streamed. This counter only advances
+       when the phase is <literal>streaming database files</literal> or
+       <literal>transferring wal files</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tablespaces_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of tablespaces that will be streamed.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tablespaces_streamed</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of tablespaces streamed. This counter only
+       advances when the phase is <literal>streaming database files</literal>.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <table id="basebackup-phases">
+   <title>Base Backup Phases</title>
+   <tgroup cols="2">
+    <colspec colname="col1" colwidth="1*"/>
+    <colspec colname="col2" colwidth="2*"/>
+    <thead>
+     <row>
+      <entry>Phase</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry><literal>initializing</literal></entry>
+      <entry>
+       The WAL sender process is preparing to begin the backup.
+       This phase is expected to be very brief.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for checkpoint to finish</literal></entry>
+      <entry>
+       The WAL sender process is currently performing
+       <function>pg_backup_start</function> to prepare to
+       take a base backup, and waiting for the start-of-backup
+       checkpoint to finish.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>estimating backup size</literal></entry>
+      <entry>
+       The WAL sender process is currently estimating the total amount
+       of database files that will be streamed as a base backup.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>streaming database files</literal></entry>
+      <entry>
+       The WAL sender process is currently streaming database files
+       as a base backup.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for wal archiving to finish</literal></entry>
+      <entry>
+       The WAL sender process is currently performing
+       <function>pg_backup_stop</function> to finish the backup,
+       and waiting for all the WAL files required for the base backup
+       to be successfully archived.
+       If either <literal>--wal-method=none</literal> or
+       <literal>--wal-method=stream</literal> is specified in
+       <application>pg_basebackup</application>, the backup will end
+       when this phase is completed.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>transferring wal files</literal></entry>
+      <entry>
+       The WAL sender process is currently transferring all WAL logs
+       generated during the backup. This phase occurs after
+       <literal>waiting for wal archiving to finish</literal> phase if
+       <literal>--wal-method=fetch</literal> is specified in
+       <application>pg_basebackup</application>. The backup will end
+       when this phase is completed.
+      </entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+ </sect2>
+
  </sect1>
 
  <sect1 id="dynamic-trace">
@@ -6785,7 +7680,7 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
    explicitly tell the configure script to make the probes available
    in <productname>PostgreSQL</productname>. To include DTrace support
    specify <option>--enable-dtrace</option> to configure.  See <xref
-   linkend="install-procedure"/> for further information.
+   linkend="configure-options-devel"/> for further information.
   </para>
   </sect2>
 
@@ -7013,32 +7908,51 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
       complete.</entry>
     </row>
     <row>
+     <entry><literal>buffer-extend-start</literal></entry>
+     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid, int, unsigned int)</literal></entry>
+     <entry>Probe that fires when a relation extension starts.
+       arg0 contains the fork to be extended. arg1, arg2, and arg3 contain the
+       tablespace, database, and relation OIDs identifying the relation.  arg4
+       is the ID of the backend which created the temporary relation for a
+       local buffer, or <symbol>InvalidBackendId</symbol> (-1) for a shared
+       buffer. arg5 is the number of blocks the caller would like to extend
+       by.</entry>
+    </row>
+    <row>
+     <entry><literal>buffer-extend-done</literal></entry>
+     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid, int, unsigned int, BlockNumber)</literal></entry>
+     <entry>Probe that fires when a relation extension is complete.
+       arg0 contains the fork to be extended. arg1, arg2, and arg3 contain the
+       tablespace, database, and relation OIDs identifying the relation.  arg4
+       is the ID of the backend which created the temporary relation for a
+       local buffer, or <symbol>InvalidBackendId</symbol> (-1) for a shared
+       buffer. arg5 is the number of blocks the relation was extended by, this
+       can be less than the number in the
+       <literal>buffer-extend-start</literal> due to resource
+       constraints. arg6 contains the BlockNumber of the first new
+       block.</entry>
+    </row>
+    <row>
      <entry><literal>buffer-read-start</literal></entry>
-     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid, int, bool)</literal></entry>
+     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid, int)</literal></entry>
      <entry>Probe that fires when a buffer read is started.
-      arg0 and arg1 contain the fork and block numbers of the page (but
-      arg1 will be -1 if this is a relation extension request).
+      arg0 and arg1 contain the fork and block numbers of the page.
       arg2, arg3, and arg4 contain the tablespace, database, and relation OIDs
       identifying the relation.
       arg5 is the ID of the backend which created the temporary relation for a
       local buffer, or <symbol>InvalidBackendId</symbol> (-1) for a shared buffer.
-      arg6 is true for a relation extension request, false for normal
-      read.</entry>
+      </entry>
     </row>
     <row>
      <entry><literal>buffer-read-done</literal></entry>
-     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid, int, bool, bool)</literal></entry>
+     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid, int, bool)</literal></entry>
      <entry>Probe that fires when a buffer read is complete.
-      arg0 and arg1 contain the fork and block numbers of the page (if this
-      is a relation extension request, arg1 now contains the block number
-      of the newly added block).
+      arg0 and arg1 contain the fork and block numbers of the page.
       arg2, arg3, and arg4 contain the tablespace, database, and relation OIDs
       identifying the relation.
       arg5 is the ID of the backend which created the temporary relation for a
       local buffer, or <symbol>InvalidBackendId</symbol> (-1) for a shared buffer.
-      arg6 is true for a relation extension request, false for normal
-      read.
-      arg7 is true if the buffer was found in the pool, false if not.</entry>
+      arg6 is true if the buffer was found in the pool, false if not.</entry>
     </row>
     <row>
      <entry><literal>buffer-flush-start</literal></entry>
@@ -7056,23 +7970,6 @@ SELECT pg_stat_get_backend_pid(s.backendid) AS pid,
       that this just reflects the time to pass the data to the kernel;
       it's typically not actually been written to disk yet.)
       The arguments are the same as for <literal>buffer-flush-start</literal>.</entry>
-    </row>
-    <row>
-     <entry><literal>buffer-write-dirty-start</literal></entry>
-     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid)</literal></entry>
-     <entry>Probe that fires when a server process begins to write a dirty
-      buffer.  (If this happens often, it implies that
-      <xref linkend="guc-shared-buffers"/> is too
-      small or the background writer control parameters need adjustment.)
-      arg0 and arg1 contain the fork and block numbers of the page.
-      arg2, arg3, and arg4 contain the tablespace, database, and relation OIDs
-      identifying the relation.</entry>
-    </row>
-    <row>
-     <entry><literal>buffer-write-dirty-done</literal></entry>
-     <entry><literal>(ForkNumber, BlockNumber, Oid, Oid, Oid)</literal></entry>
-     <entry>Probe that fires when a dirty-buffer write is complete.
-      The arguments are the same as for <literal>buffer-write-dirty-start</literal>.</entry>
     </row>
     <row>
      <entry><literal>wal-buffer-write-dirty-start</literal></entry>

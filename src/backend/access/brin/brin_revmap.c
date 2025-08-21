@@ -12,7 +12,7 @@
  * the metapage.  When the revmap needs to be expanded, all tuples on the
  * regular BRIN page at that block (if any) are moved out of the way.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -724,7 +724,6 @@ revmap_physical_extend(BrinRevmap *revmap, LogicalPageNum targetLogicalPageNum)
 	BlockNumber mapBlk = InvalidBlockNumber;
 	BlockNumber nblocks;
 	Relation	irel = revmap->rm_irel;
-	bool		needLock = !RELATION_IS_LOCAL(irel);
 
 	/* GPDB: AO/CO specific state */
 	bool		isAO = revmap->rm_isAO;
@@ -798,10 +797,8 @@ revmap_physical_extend(BrinRevmap *revmap, LogicalPageNum targetLogicalPageNum)
 	}
 	else
 	{
-		if (needLock)
-			LockRelationForExtension(irel, ExclusiveLock);
-
-		buf = ReadBuffer(irel, P_NEW);
+		buf = ExtendBufferedRel(BMR_REL(irel), MAIN_FORKNUM, NULL,
+								EB_LOCK_FIRST);
 		if (!isAO && BufferGetBlockNumber(buf) != mapBlk)
 		{
 			/*
@@ -810,17 +807,11 @@ revmap_physical_extend(BrinRevmap *revmap, LogicalPageNum targetLogicalPageNum)
 			 * up and have caller start over.  We will have to evacuate that
 			 * page from under whoever is using it.
 			 */
-			if (needLock)
-				UnlockRelationForExtension(irel, ExclusiveLock);
 			LockBuffer(revmap->rm_metaBuf, BUFFER_LOCK_UNLOCK);
-			ReleaseBuffer(buf);
+			UnlockReleaseBuffer(buf);
 			return;
 		}
-		LockBuffer(buf, BUFFER_LOCK_EXCLUSIVE);
 		page = BufferGetPage(buf);
-
-		if (needLock)
-			UnlockRelationForExtension(irel, ExclusiveLock);
 
 		if (isAO)
 		{

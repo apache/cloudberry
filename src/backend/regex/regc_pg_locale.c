@@ -6,7 +6,7 @@
  *
  * This file is #included by regcomp.c; it's not meant to compile standalone.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -231,6 +231,18 @@ static const unsigned char pg_char_properties[128] = {
 void
 pg_set_regex_collation(Oid collation)
 {
+	if (!OidIsValid(collation))
+	{
+		/*
+		 * This typically means that the parser could not resolve a conflict
+		 * of implicit collations, so report it that way.
+		 */
+		ereport(ERROR,
+				(errcode(ERRCODE_INDETERMINATE_COLLATION),
+				 errmsg("could not determine which collation to use for regular expression"),
+				 errhint("Use the COLLATE clause to set the collation explicitly.")));
+	}
+
 	if (lc_ctype_is_c(collation))
 	{
 		/* C/POSIX collations use this path regardless of database encoding */
@@ -240,30 +252,14 @@ pg_set_regex_collation(Oid collation)
 	}
 	else
 	{
-		if (collation == DEFAULT_COLLATION_OID)
-			pg_regex_locale = 0;
-		else if (OidIsValid(collation))
-		{
-			/*
-			 * NB: pg_newlocale_from_collation will fail if not HAVE_LOCALE_T;
-			 * the case of pg_regex_locale != 0 but not HAVE_LOCALE_T does not
-			 * have to be considered below.
-			 */
-			pg_regex_locale = pg_newlocale_from_collation(collation);
-		}
-		else
-		{
-			/*
-			 * This typically means that the parser could not resolve a
-			 * conflict of implicit collations, so report it that way.
-			 */
-			ereport(ERROR,
-					(errcode(ERRCODE_INDETERMINATE_COLLATION),
-					 errmsg("could not determine which collation to use for regular expression"),
-					 errhint("Use the COLLATE clause to set the collation explicitly.")));
-		}
+		/*
+		 * NB: pg_newlocale_from_collation will fail if not HAVE_LOCALE_T; the
+		 * case of pg_regex_locale != 0 but not HAVE_LOCALE_T does not have to
+		 * be considered below.
+		 */
+		pg_regex_locale = pg_newlocale_from_collation(collation);
 
-		if (pg_regex_locale && !pg_regex_locale->deterministic)
+		if (!pg_locale_deterministic(pg_regex_locale))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("nondeterministic collations are not supported for regular expressions")));
@@ -934,10 +930,8 @@ pg_ctype_get_cache(pg_wc_probefunc probefunc, int cclasscode)
 	 * Failure, clean up
 	 */
 out_of_memory:
-	if (pcc->cv.chrs)
-		free(pcc->cv.chrs);
-	if (pcc->cv.ranges)
-		free(pcc->cv.ranges);
+	free(pcc->cv.chrs);
+	free(pcc->cv.ranges);
 	free(pcc);
 
 	return NULL;

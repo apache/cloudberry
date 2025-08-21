@@ -710,12 +710,45 @@ SELECT * FROM ROWS FROM(get_users(), generate_series(10,11)) WITH ORDINALITY;
 select * from usersview;
 alter table users add column junk text;
 select * from usersview;
+
+alter table users drop column moredrop;  -- fail, view has reference
+
+-- We used to have a bug that would allow the above to succeed, posing
+-- hazards for later execution of the view.  Check that the internal
+-- defenses for those hazards haven't bit-rotted, in case some other
+-- bug with similar symptoms emerges.
 begin;
-alter table users drop column moredrop;
+
+-- destroy the dependency entry that prevents the DROP:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 5
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+
+alter table users drop column moredrop cascade;
 select * from usersview;  -- expect clean failure
 rollback;
-alter table users alter column seq type numeric;
+
+alter table users alter column seq type numeric;  -- fail, view has reference
+
+-- likewise, check we don't crash if the dependency goes wrong
+begin;
+
+-- destroy the dependency entry that prevents the ALTER:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 2
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+
+-- alter table users alter column seq type numeric;
 select * from usersview;  -- expect clean failure
+rollback;
 
 drop view usersview;
 drop function get_first_user();
@@ -829,3 +862,13 @@ select * from
    from unnest(array['{"lectures": [{"id": "1"}]}'::jsonb])
         as unnested_modules(module)) as ss,
   jsonb_to_recordset(ss.lecture) as j (id text);
+
+-- check detection of mismatching record types with a const-folded expression
+
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int);  -- fail
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int, f int, g int);  -- fail
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int, f float);  -- fail
+select * from int8_tbl, coalesce(row(1)) as (a int, b int);  -- fail

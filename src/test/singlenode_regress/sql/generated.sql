@@ -110,17 +110,12 @@ INSERT INTO gtest1_1 VALUES (4);
 SELECT * FROM gtest1_1;
 SELECT * FROM gtest1;
 
+-- can't have generated column that is a child of normal column
 CREATE TABLE gtest_normal (a int, b int);
-CREATE TABLE gtest_normal_child (a int, b int GENERATED ALWAYS AS (a * 2) STORED) INHERITS (gtest_normal);
-\d gtest_normal_child
-INSERT INTO gtest_normal (a) VALUES (1);
-INSERT INTO gtest_normal_child (a) VALUES (2);
-SELECT * FROM gtest_normal;
-
-CREATE TABLE gtest_normal_child2 (a int, b int GENERATED ALWAYS AS (a * 3) STORED);
-ALTER TABLE gtest_normal_child2 INHERIT gtest_normal;
-INSERT INTO gtest_normal_child2 (a) VALUES (3);
-SELECT * FROM gtest_normal;
+CREATE TABLE gtest_normal_child (a int, b int GENERATED ALWAYS AS (a * 2) STORED) INHERITS (gtest_normal);  -- error
+CREATE TABLE gtest_normal_child (a int, b int GENERATED ALWAYS AS (a * 2) STORED);
+ALTER TABLE gtest_normal_child INHERIT gtest_normal;  -- error
+DROP TABLE gtest_normal, gtest_normal_child;
 
 -- test inheritance mismatches between parent and child
 CREATE TABLE gtestx (x int, b int GENERATED ALWAYS AS (a * 22) STORED) INHERITS (gtest1);  -- error

@@ -1483,7 +1483,7 @@ gpdb::LookupTypeCache(Oid type_id, int flags)
 	return nullptr;
 }
 
-Value *
+String *
 gpdb::MakeStringValue(char *str)
 {
 	GP_WRAP_START;
@@ -1494,7 +1494,7 @@ gpdb::MakeStringValue(char *str)
 	return nullptr;
 }
 
-Value *
+Integer *
 gpdb::MakeIntegerValue(long i)
 {
 	GP_WRAP_START;
@@ -1960,7 +1960,8 @@ gpdb::GetMVNDistinct(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		return statext_ndistinct_load(stat_oid);
+		/* CBDB_16_MERGE: xxx: do we need ihn = true in any case? */
+		return statext_ndistinct_load(stat_oid, false);
 	}
 	GP_WRAP_END;
 }
@@ -1970,7 +1971,7 @@ gpdb::GetMVDependencies(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		return statext_dependencies_load(stat_oid, true);
+		return statext_dependencies_load(stat_oid, false, true);
 	}
 	GP_WRAP_END;
 }
@@ -2157,11 +2158,11 @@ gpdb::CdbHashRandomSeg(int num_segments)
 
 // check permissions on range table
 void
-gpdb::CheckRTPermissions(List *rtable)
+gpdb::CheckRTPermissions(List *rtable, List *rteperminfos)
 {
 	GP_WRAP_START;
 	{
-		ExecCheckRTPerms(rtable, true);
+		ExecCheckPermissions(rtable, rteperminfos, true);
 		return;
 	}
 	GP_WRAP_END;
@@ -2814,6 +2815,17 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 	}
 	GP_WRAP_END;
 	return false;
+}
+
+RTEPermissionInfo *
+gpdb::GetRTEPermissionInfo(List *rteperminfos,
+											   const RangeTblEntry *rte)
+{
+	GP_WRAP_START;
+	{
+		return getRTEPermissionInfo(rteperminfos, (RangeTblEntry *) rte);
+	}
+	GP_WRAP_END;
 }
 
 // EOF

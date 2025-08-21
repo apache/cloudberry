@@ -783,15 +783,16 @@ SELECT * FROM t1 FOR SHARE;
 EXPLAIN (COSTS OFF) SELECT * FROM t1 FOR SHARE;
              QUERY PLAN              
 -------------------------------------
- Append
-   ->  Seq Scan on t1 t1_1
-         Filter: ((a % 2) = 0)
-   ->  Seq Scan on t2 t1_2
-         Filter: ((a % 2) = 0)
-   ->  Seq Scan on t3 t1_3
-         Filter: ((a % 2) = 0)
+ LockRows
+   ->  Append
+         ->  Seq Scan on t1 t1_1
+               Filter: ((a % 2) = 0)
+         ->  Seq Scan on t2 t1_2
+               Filter: ((a % 2) = 0)
+         ->  Seq Scan on t3 t1_3
+               Filter: ((a % 2) = 0)
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 SELECT * FROM t1 WHERE f_leak(b) FOR SHARE;
 NOTICE:  f_leak => bbb
@@ -809,17 +810,18 @@ NOTICE:  f_leak => yyy
 (5 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b) FOR SHARE;
-                  QUERY PLAN                   
------------------------------------------------
- Append
-   ->  Seq Scan on t1 t1_1
-         Filter: (((a % 2) = 0) AND f_leak(b))
-   ->  Seq Scan on t2 t1_2
-         Filter: (((a % 2) = 0) AND f_leak(b))
-   ->  Seq Scan on t3 t1_3
-         Filter: (((a % 2) = 0) AND f_leak(b))
+                     QUERY PLAN                      
+-----------------------------------------------------
+ LockRows
+   ->  Append
+         ->  Seq Scan on t1 t1_1
+               Filter: (((a % 2) = 0) AND f_leak(b))
+         ->  Seq Scan on t2 t1_2
+               Filter: (((a % 2) = 0) AND f_leak(b))
+         ->  Seq Scan on t3 t1_3
+               Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 -- union all query
 SELECT a, b, tableoid::regclass FROM t2 UNION ALL SELECT a, b, tableoid::regclass FROM t3;
@@ -1822,11 +1824,11 @@ AND f_leak(t2_1.b) AND f_leak(t2_2.b) RETURNING *, t2_1, t2_2;
 -----------------------------------------------------------------------
  Update on t2 t2_1
    ->  Hash Join
-         Hash Cond: (t2_2.b = t2_1.b)
-         ->  Seq Scan on t2 t2_2
+         Hash Cond: (t2_1.b = t2_2.b)
+         ->  Seq Scan on t2 t2_1
                Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
          ->  Hash
-               ->  Seq Scan on t2 t2_1
+               ->  Seq Scan on t2 t2_2
                      Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -3609,17 +3611,21 @@ ALTER TABLE t ENABLE ROW LEVEL SECURITY;
 SAVEPOINT q;
 CREATE RULE "_RETURN" AS ON SELECT TO t DO INSTEAD
   SELECT * FROM generate_series(1,5) t0(c); -- fails due to row-level security enabled
-ERROR:  could not convert table "t" to a view because it has row security enabled
+ERROR:  relation "t" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ROLLBACK TO q;
 ALTER TABLE t DISABLE ROW LEVEL SECURITY;
 SAVEPOINT q;
 CREATE RULE "_RETURN" AS ON SELECT TO t DO INSTEAD
   SELECT * FROM generate_series(1,5) t0(c); -- fails due to policy p on t
-ERROR:  could not convert table "t" to a view because it has row security policies
+ERROR:  relation "t" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ROLLBACK TO q;
 DROP POLICY p ON t;
 CREATE RULE "_RETURN" AS ON SELECT TO t DO INSTEAD
   SELECT * FROM generate_series(1,5) t0(c); -- succeeds
+ERROR:  relation "t" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ROLLBACK;
 --
 -- Policy expression handling

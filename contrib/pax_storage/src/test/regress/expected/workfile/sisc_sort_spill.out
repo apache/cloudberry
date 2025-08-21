@@ -58,8 +58,7 @@ select * from sisc_sort_spill.is_workfile_created('explain (analyze, verbose)
  is_workfile_created 
 ---------------------
                    1
-                   1
-(2 rows)
+(1 row)
 
 select * from sisc_sort_spill.is_workfile_created('explain (analyze, verbose)
   with ctesisc as (select * from testsisc order by i2)
@@ -70,8 +69,7 @@ limit 50000;');
  is_workfile_created 
 ---------------------
                    1
-                   1
-(2 rows)
+(1 row)
 
 select avg(i3) from (
   with ctesisc as (select * from testsisc order by i2)
@@ -93,8 +91,7 @@ select * from sisc_sort_spill.is_workfile_created('explain (analyze, verbose)
  is_workfile_created 
 ---------------------
                    1
-                   1
-(2 rows)
+(1 row)
 
 select * from sisc_sort_spill.is_workfile_created('explain (analyze, verbose)
   with ctesisc as (select * from testsisc order by i2)
@@ -105,8 +102,7 @@ limit 50000;');
  is_workfile_created 
 ---------------------
                    1
-                   1
-(2 rows)
+(1 row)
 
 reset max_parallel_workers_per_gather;
 drop schema sisc_sort_spill cascade;

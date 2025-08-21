@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Test password normalization in SCRAM.
 #
@@ -7,24 +7,20 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 if (!$use_unix_sockets)
 {
 	plan skip_all =>
 	  "authentication tests cannot run without Unix-domain sockets";
 }
-else
-{
-	plan tests => 12;
-}
 
 # Delete pg_hba.conf from the given node, add a new entry to it
 # and then execute a reload to refresh it.
 sub reset_pg_hba
 {
-	my $node       = shift;
+	my $node = shift;
 	my $hba_method = shift;
 
 	unlink($node->data_dir . '/pg_hba.conf');
@@ -38,10 +34,10 @@ sub test_login
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
-	my $node          = shift;
-	my $role          = shift;
-	my $password      = shift;
-	my $expected_res  = shift;
+	my $node = shift;
+	my $role = shift;
+	my $password = shift;
+	my $expected_res = shift;
 	my $status_string = 'failed';
 
 	$status_string = 'success' if ($expected_res eq 0);
@@ -64,7 +60,7 @@ sub test_login
 
 # Initialize primary node. Force UTF-8 encoding, so that we can use non-ASCII
 # characters in the passwords below.
-my $node = get_new_node('primary');
+my $node = PostgreSQL::Test::Cluster->new('primary');
 $node->init(extra => [ '--locale=C', '--encoding=UTF8' ]);
 $node->start;
 
@@ -97,23 +93,25 @@ CREATE ROLE saslpreptest7_role LOGIN PASSWORD E'foo\\u0627\\u0031bar';
 reset_pg_hba($node, 'scram-sha-256');
 
 # Check that #1 and #5 are treated the same as just 'IX'
-test_login($node, 'saslpreptest1_role', "I\xc2\xadX",   0);
+test_login($node, 'saslpreptest1_role', "I\xc2\xadX", 0);
 test_login($node, 'saslpreptest1_role', "\xe2\x85\xa8", 0);
 
 # but different from lower case 'ix'
 test_login($node, 'saslpreptest1_role', "ix", 2);
 
 # Check #4
-test_login($node, 'saslpreptest4a_role', "a",        0);
+test_login($node, 'saslpreptest4a_role', "a", 0);
 test_login($node, 'saslpreptest4a_role', "\xc2\xaa", 0);
-test_login($node, 'saslpreptest4b_role', "a",        0);
+test_login($node, 'saslpreptest4b_role', "a", 0);
 test_login($node, 'saslpreptest4b_role', "\xc2\xaa", 0);
 
 # Check #6 and #7 - In PostgreSQL, contrary to the spec, if the password
 # contains prohibited characters, we use it as is, without normalization.
 test_login($node, 'saslpreptest6_role', "foo\x07bar", 0);
-test_login($node, 'saslpreptest6_role', "foobar",     2);
+test_login($node, 'saslpreptest6_role', "foobar", 2);
 
 test_login($node, 'saslpreptest7_role', "foo\xd8\xa71bar", 0);
 test_login($node, 'saslpreptest7_role', "foo1\xd8\xa7bar", 2);
-test_login($node, 'saslpreptest7_role', "foobar",          2);
+test_login($node, 'saslpreptest7_role', "foobar", 2);
+
+done_testing();

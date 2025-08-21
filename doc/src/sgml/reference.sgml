@@ -188,6 +188,7 @@
    &listen;
    &load;
    &lock;
+   &merge;
    &move;
    &notify;
    &prepare;
@@ -292,7 +293,6 @@
    &pgupgrade;
    &pgwaldump;
    &postgres;
-   &postmaster;
 
  </reference>
 

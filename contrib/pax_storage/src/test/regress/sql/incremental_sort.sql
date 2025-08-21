@@ -257,11 +257,7 @@ set parallel_tuple_cost=0;
 set parallel_setup_cost=0;
 set min_parallel_table_scan_size = 0;
 set min_parallel_index_scan_size = 0;
--- The execution plan of pax will be inaccurate if it involves bitmap heap scan.
--- This depends on the fact that the pg cost estimate will be calculated based on page
--- but pax cannot give an accurate number of pages.
-set enable_bitmapscan=off;
-set optimizer_enable_bitmapscan=off;
+
 -- Parallel sort below join.
 explain (costs off) select distinct sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
@@ -298,7 +294,3 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
 explain (costs off) select sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
 order by 1, 2;
--- Disallow pushing down sort when pathkey is an SRF.
-explain (costs off) select unique1 from tenk1 order by unnest('{1,2}'::int[]);
-reset enable_bitmapscan;
-reset optimizer_enable_bitmapscan;

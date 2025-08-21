@@ -2375,6 +2375,9 @@ ERROR:  value 8169 out of bounds for option "siglen"
 DETAIL:  Valid values are between "1" and "8168".
 create index trgm_idx on test_trgm using gist (t gist_trgm_ops(siglen=8168));
 set enable_seqscan=off;
+-- check index compatibility handling when opclass option is specified
+alter table test_trgm alter column t type varchar(768);
+alter table test_trgm alter column t type text;
 select t,similarity(t,'qwertyu0988') as sml from test_trgm where t % 'qwertyu0988' order by sml desc, t;
       t      |   sml    
 -------------+----------
@@ -5413,16 +5416,15 @@ SELECT similarity('Szczecin', 'Warsaw');
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT city, similarity(city, 'Warsaw'), show_limit()
   FROM restaurants WHERE city % 'Warsaw';
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
-         Group Key: city, similarity(city, 'Warsaw'::text), '0.3'::real
+         Group Key: city, similarity(city, 'Warsaw'::text)
          ->  Bitmap Heap Scan on restaurants
                Recheck Cond: (city % 'Warsaw'::text)
                ->  Bitmap Index Scan on restaurants_city_idx
                      Index Cond: (city % 'Warsaw'::text)
- Optimizer: Postgres query optimizer
 (8 rows)
 
 SELECT set_limit(0.3);

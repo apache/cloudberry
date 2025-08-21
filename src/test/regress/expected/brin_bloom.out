@@ -411,19 +411,16 @@ CREATE INDEX brin_test_bloom_a_idx ON brin_test_bloom USING brin (a) WITH (pages
 CREATE INDEX brin_test_bloom_b_idx ON brin_test_bloom USING brin (b) WITH (pages_per_range = 2);
 VACUUM ANALYZE brin_test_bloom;
 -- Ensure brin index is used when columns are perfectly correlated
---start_ignore
---GPDB_14_MERGE_FIXME
---It should choose bitmap index scan, but seq scan here, which is caused by
---inaccurate index correlation calculation in compute_scalar_stats.
---end_ignore
 EXPLAIN (COSTS OFF) SELECT * FROM brin_test_bloom WHERE a = 1;
-                QUERY PLAN                
-------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on brin_test_bloom
-         Filter: (a = 1)
+   ->  Bitmap Heap Scan on brin_test_bloom
+         Recheck Cond: (a = 1)
+         ->  Bitmap Index Scan on brin_test_bloom_a_idx
+               Index Cond: (a = 1)
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 -- Ensure brin index is not used when values are not correlated
 EXPLAIN (COSTS OFF) SELECT * FROM brin_test_bloom WHERE b = 1;

@@ -8,7 +8,7 @@
  * pager open/close functions, all that stuff came with it.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/fe_utils/print.c
@@ -140,56 +140,126 @@ typedef struct unicodeStyleFormat
 static const unicodeStyleFormat unicode_style = {
 	{
 		{
-			/* ─ */
+			/* U+2500 Box Drawings Light Horizontal */
 			"\342\224\200",
-			/* ├╟ */
+
+			/*--
+			 * U+251C Box Drawings Light Vertical and Right,
+			 * U+255F Box Drawings Vertical Double and Right Single
+			 *--
+			 */
 			{"\342\224\234", "\342\225\237"},
-			/* ┤╢ */
+
+			/*--
+			 * U+2524 Box Drawings Light Vertical and Left,
+			 * U+2562 Box Drawings Vertical Double and Left Single
+			 *--
+			 */
 			{"\342\224\244", "\342\225\242"},
 		},
 		{
-			/* ═ */
+			/* U+2550 Box Drawings Double Horizontal */
 			"\342\225\220",
-			/* ╞╠ */
+
+			/*--
+			 * U+255E Box Drawings Vertical Single and Right Double,
+			 * U+2560 Box Drawings Double Vertical and Right
+			 *--
+			 */
 			{"\342\225\236", "\342\225\240"},
-			/* ╡╣ */
+
+			/*--
+			 * U+2561 Box Drawings Vertical Single and Left Double,
+			 * U+2563 Box Drawings Double Vertical and Left
+			 *--
+			 */
 			{"\342\225\241", "\342\225\243"},
 		},
 	},
 	{
 		{
-			/* │ */
+			/* U+2502 Box Drawings Light Vertical */
 			"\342\224\202",
-			/* ┼╪ */
+
+			/*--
+			 * U+253C Box Drawings Light Vertical and Horizontal,
+			 * U+256A Box Drawings Vertical Single and Horizontal Double
+			 *--
+			 */
 			{"\342\224\274", "\342\225\252"},
-			/* ┴╧ */
+
+			/*--
+			 * U+2534 Box Drawings Light Up and Horizontal,
+			 * U+2567 Box Drawings Up Single and Horizontal Double
+			 *--
+			 */
 			{"\342\224\264", "\342\225\247"},
-			/* ┬╤ */
+
+			/*--
+			 * U+252C Box Drawings Light Down and Horizontal,
+			 * U+2564 Box Drawings Down Single and Horizontal Double
+			 *--
+			 */
 			{"\342\224\254", "\342\225\244"},
 		},
 		{
-			/* ║ */
+			/* U+2551 Box Drawings Double Vertical */
 			"\342\225\221",
-			/* ╫╬ */
+
+			/*--
+			 * U+256B Box Drawings Vertical Double and Horizontal Single,
+			 * U+256C Box Drawings Double Vertical and Horizontal
+			 *--
+			 */
 			{"\342\225\253", "\342\225\254"},
-			/* ╨╩ */
+
+			/*--
+			 * U+2568 Box Drawings Up Double and Horizontal Single,
+			 * U+2569 Box Drawings Double Up and Horizontal
+			 *--
+			 */
 			{"\342\225\250", "\342\225\251"},
-			/* ╥╦ */
+
+			/*--
+			 * U+2565 Box Drawings Down Double and Horizontal Single,
+			 * U+2566 Box Drawings Double Down and Horizontal
+			 *--
+			 */
 			{"\342\225\245", "\342\225\246"},
 		},
 	},
 	{
-		/* └│┌─┐┘ */
+		/*--
+		 * U+2514 Box Drawings Light Up and Right,
+		 * U+2502 Box Drawings Light Vertical,
+		 * U+250C Box Drawings Light Down and Right,
+		 * U+2500 Box Drawings Light Horizontal,
+		 * U+2510 Box Drawings Light Down and Left,
+		 * U+2518 Box Drawings Light Up and Left
+		 *--
+		 */
 		{"\342\224\224", "\342\224\202", "\342\224\214", "\342\224\200", "\342\224\220", "\342\224\230"},
-		/* ╚║╔═╗╝ */
+
+		/*--
+		 * U+255A Box Drawings Double Up and Right,
+		 * U+2551 Box Drawings Double Vertical,
+		 * U+2554 Box Drawings Double Down and Right,
+		 * U+2550 Box Drawings Double Horizontal,
+		 * U+2557 Box Drawings Double Down and Left,
+		 * U+255D Box Drawings Double Up and Left
+		 *--
+		 */
 		{"\342\225\232", "\342\225\221", "\342\225\224", "\342\225\220", "\342\225\227", "\342\225\235"},
 	},
 	" ",
-	"\342\206\265",				/* ↵ */
+	/* U+21B5 Downwards Arrow with Corner Leftwards */
+	"\342\206\265",
 	" ",
-	"\342\206\265",				/* ↵ */
-	"\342\200\246",				/* … */
-	"\342\200\246",				/* … */
+	/* U+21B5 Downwards Arrow with Corner Leftwards */
+	"\342\206\265",
+	/* U+2026 Horizontal Ellipsis */
+	"\342\200\246",
+	"\342\200\246",
 	true
 };
 
@@ -1103,7 +1173,6 @@ print_aligned_text(const printTableContent *cont, FILE *fout, bool is_pager)
 			if (opt_border == 2)
 				fputs(dformat->rightvrule, fout);
 			fputc('\n', fout);
-
 		} while (more_lines);
 	}
 
@@ -1153,15 +1222,16 @@ cleanup:
 
 
 static void
-print_aligned_vertical_line(const printTextFormat *format,
-							const unsigned short opt_border,
+print_aligned_vertical_line(const printTableOpt *topt,
 							unsigned long record,
 							unsigned int hwidth,
 							unsigned int dwidth,
+							int output_columns,
 							printTextRule pos,
 							FILE *fout)
 {
-	const printTextLineFormat *lformat = &format->lrule[pos];
+	const printTextLineFormat *lformat = &get_line_style(topt)->lrule[pos];
+	const unsigned short opt_border = topt->border;
 	unsigned int i;
 	int			reclen = 0;
 
@@ -1190,8 +1260,18 @@ print_aligned_vertical_line(const printTextFormat *format,
 		if (reclen-- <= 0)
 			fputs(lformat->hrule, fout);
 		if (reclen-- <= 0)
-			fputs(lformat->midvrule, fout);
-		if (reclen-- <= 0)
+		{
+			if (topt->expanded_header_width_type == PRINT_XHEADER_COLUMN)
+			{
+				fputs(lformat->rightvrule, fout);
+			}
+			else
+			{
+				fputs(lformat->midvrule, fout);
+			}
+		}
+		if (reclen-- <= 0
+			&& topt->expanded_header_width_type != PRINT_XHEADER_COLUMN)
 			fputs(lformat->hrule, fout);
 	}
 	else
@@ -1199,12 +1279,44 @@ print_aligned_vertical_line(const printTextFormat *format,
 		if (reclen-- <= 0)
 			fputc(' ', fout);
 	}
-	if (reclen < 0)
-		reclen = 0;
-	for (i = reclen; i < dwidth; i++)
-		fputs(opt_border > 0 ? lformat->hrule : " ", fout);
-	if (opt_border == 2)
-		fprintf(fout, "%s%s", lformat->hrule, lformat->rightvrule);
+
+	if (topt->expanded_header_width_type != PRINT_XHEADER_COLUMN)
+	{
+		if (topt->expanded_header_width_type == PRINT_XHEADER_PAGE
+			|| topt->expanded_header_width_type == PRINT_XHEADER_EXACT_WIDTH)
+		{
+			if (topt->expanded_header_width_type == PRINT_XHEADER_EXACT_WIDTH)
+			{
+				output_columns = topt->expanded_header_exact_width;
+			}
+			if (output_columns > 0)
+			{
+				if (opt_border == 0)
+					dwidth = Min(dwidth, Max(0, (int) (output_columns - hwidth)));
+				if (opt_border == 1)
+					dwidth = Min(dwidth, Max(0, (int) (output_columns - hwidth - 3)));
+
+				/*
+				 * Handling the xheader width for border=2 doesn't make much
+				 * sense because this format has an additional right border,
+				 * but keep this for consistency.
+				 */
+				if (opt_border == 2)
+					dwidth = Min(dwidth, Max(0, (int) (output_columns - hwidth - 7)));
+			}
+		}
+
+		if (reclen < 0)
+			reclen = 0;
+		if (dwidth < reclen)
+			dwidth = reclen;
+
+		for (i = reclen; i < dwidth; i++)
+			fputs(opt_border > 0 ? lformat->hrule : " ", fout);
+		if (opt_border == 2)
+			fprintf(fout, "%s%s", lformat->hrule, lformat->rightvrule);
+	}
+
 	fputc('\n', fout);
 }
 
@@ -1501,11 +1613,12 @@ print_aligned_vertical(const printTableContent *cont,
 				lhwidth++;		/* for newline indicators */
 
 			if (!opt_tuples_only)
-				print_aligned_vertical_line(format, opt_border, record++,
-											lhwidth, dwidth, pos, fout);
+				print_aligned_vertical_line(cont->opt, record++,
+											lhwidth, dwidth, output_columns,
+											pos, fout);
 			else if (i != 0 || !cont->opt->start_table || opt_border == 2)
-				print_aligned_vertical_line(format, opt_border, 0, lhwidth,
-											dwidth, pos, fout);
+				print_aligned_vertical_line(cont->opt, 0, lhwidth,
+											dwidth, output_columns, pos, fout);
 		}
 
 		/* Format the header */
@@ -1691,8 +1804,8 @@ print_aligned_vertical(const printTableContent *cont,
 	if (cont->opt->stop_table)
 	{
 		if (opt_border == 2 && !cancel_pressed)
-			print_aligned_vertical_line(format, opt_border, 0, hwidth, dwidth,
-										PRINT_RULE_BOTTOM, fout);
+			print_aligned_vertical_line(cont->opt, 0, hwidth, dwidth,
+										output_columns, PRINT_RULE_BOTTOM, fout);
 
 		/* print footers */
 		if (!opt_tuples_only && cont->footers != NULL && !cancel_pressed)
@@ -3006,6 +3119,7 @@ PageOutput(int lines, const printTableOpt *topt)
 				if (strspn(pagerprog, " \t\r\n") == strlen(pagerprog))
 					return stdout;
 			}
+			fflush(NULL);
 			disable_sigpipe_trap();
 			pagerpipe = popen(pagerprog, "w");
 			if (pagerpipe)

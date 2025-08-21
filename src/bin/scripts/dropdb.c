@@ -2,7 +2,7 @@
  *
  * dropdb
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/scripts/dropdb.c
@@ -65,12 +65,21 @@ main(int argc, char *argv[])
 
 	handle_help_version_opts(argc, argv, "dropdb", help);
 
-	while ((c = getopt_long(argc, argv, "h:p:U:wWeif", long_options, &optindex)) != -1)
+	while ((c = getopt_long(argc, argv, "efh:ip:U:wW", long_options, &optindex)) != -1)
 	{
 		switch (c)
 		{
+			case 'e':
+				echo = true;
+				break;
+			case 'f':
+				force = true;
+				break;
 			case 'h':
 				host = pg_strdup(optarg);
+				break;
+			case 'i':
+				interactive = true;
 				break;
 			case 'p':
 				port = pg_strdup(optarg);
@@ -84,15 +93,6 @@ main(int argc, char *argv[])
 			case 'W':
 				prompt_password = TRI_YES;
 				break;
-			case 'e':
-				echo = true;
-				break;
-			case 'i':
-				interactive = true;
-				break;
-			case 'f':
-				force = true;
-				break;
 			case 0:
 				/* this covers the long options */
 				break;
@@ -100,7 +100,8 @@ main(int argc, char *argv[])
 				maintenance_db = pg_strdup(optarg);
 				break;
 			default:
-				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+				/* getopt_long already emitted a complaint */
+				pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 				exit(1);
 		}
 	}
@@ -109,7 +110,7 @@ main(int argc, char *argv[])
 	{
 		case 0:
 			pg_log_error("missing required argument database name");
-			fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+			pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 			exit(1);
 		case 1:
 			dbname = argv[optind];
@@ -117,7 +118,7 @@ main(int argc, char *argv[])
 		default:
 			pg_log_error("too many command-line arguments (first is \"%s\")",
 						 argv[optind + 1]);
-			fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+			pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 			exit(1);
 	}
 
