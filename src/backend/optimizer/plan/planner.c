@@ -4263,6 +4263,8 @@ make_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 	grouped_rel->useridiscurrent = input_rel->useridiscurrent;
 	grouped_rel->fdwroutine = input_rel->fdwroutine;
 	grouped_rel->exec_location = input_rel->exec_location;
+	grouped_rel->cdbpolicy = input_rel->cdbpolicy;
+	grouped_rel->relid = input_rel->relid;
 
 	return grouped_rel;
 }
