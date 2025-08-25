@@ -147,9 +147,10 @@ std::unique_ptr<MicroPartitionReader::Group> OrcReader::ReadGroup(
   if (COLUMN_STORAGE_FORMAT_IS_VEC(pax_columns))
     group = std::make_unique<OrcVecGroup>(std::move(pax_columns), group_offset,
                                           proj_column_index);
-  else
+  else {
     group = std::make_unique<OrcGroup>(std::move(pax_columns), group_offset,
                                        proj_column_index);
+  }
 
   group->SetVisibilityMap(visibility_bitmap_);
   return group;
@@ -210,8 +211,8 @@ retry_read_group:
     if (filter_ && filter_->SparseFilterEnabled()) {
       auto info = GetGroupStatsInfo(group_index);
       TupleDesc tupleDesc = slot->tts_tupleDescriptor;
-      if (!filter_->ExecSparseFilter(*info, tupleDesc,
-                     pax::PaxSparseFilter::StatisticsKind::kGroup)) {
+      if (!filter_->ExecSparseFilter(
+              *info, tupleDesc, pax::PaxSparseFilter::StatisticsKind::kGroup)) {
         goto retry_read_group;
       }
     }
