@@ -90,12 +90,27 @@ PYYAML_VERSION=5.4.1
 download-python-deps:
 	@echo "--- Downloading Python dependencies for gpMgmt modules"
 	@mkdir -p $(PYLIB_SRC_EXT)
-	# Download psutil using curl
-	curl -sSL https://files.pythonhosted.org/packages/source/p/psutil/psutil-$(PSUTIL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz
-	# Download PyYAML using curl
-	curl -sSL https://files.pythonhosted.org/packages/source/P/PyYAML/PyYAML-$(PYYAML_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz
-	# Download PyGreSQL using curl
-	curl -sSL https://files.pythonhosted.org/packages/source/P/PyGreSQL/PyGreSQL-$(PYGRESQL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz
+	# Download psutil using curl (only if not exists)
+	@if [ ! -f $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz ]; then \
+		echo "Downloading psutil-$(PSUTIL_VERSION).tar.gz..."; \
+		curl -sSL https://files.pythonhosted.org/packages/source/p/psutil/psutil-$(PSUTIL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz; \
+	else \
+		echo "psutil-$(PSUTIL_VERSION).tar.gz already exists, skipping download"; \
+	fi
+	# Download PyYAML using curl (only if not exists)
+	@if [ ! -f $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz ]; then \
+		echo "Downloading PyYAML-$(PYYAML_VERSION).tar.gz..."; \
+		curl -sSL https://files.pythonhosted.org/packages/source/P/PyYAML/PyYAML-$(PYYAML_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz; \
+	else \
+		echo "PyYAML-$(PYYAML_VERSION).tar.gz already exists, skipping download"; \
+	fi
+	# Download PyGreSQL using curl (only if not exists)
+	@if [ ! -f $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz ]; then \
+		echo "Downloading PyGreSQL-$(PYGRESQL_VERSION).tar.gz..."; \
+		curl -sSL https://files.pythonhosted.org/packages/source/P/PyGreSQL/PyGreSQL-$(PYGRESQL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz; \
+	else \
+		echo "PyGreSQL-$(PYGRESQL_VERSION).tar.gz already exists, skipping download"; \
+	fi
 	# Install wheel and cython for PyYAML building
 	pip3 install --user wheel "cython<3.0.0"
 
@@ -150,7 +165,12 @@ $(MOCK_BIN):
        pip3 install mock;\
     else\
        mkdir -p $(PYLIB_SRC_EXT) && \
-       curl -sSL https://files.pythonhosted.org/packages/source/m/mock/mock-$(MOCK_VERSION).zip -o $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip && \
+       if [ ! -f $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip ]; then \
+           echo "Downloading mock-$(MOCK_VERSION).zip..."; \
+           curl -sSL https://files.pythonhosted.org/packages/source/m/mock/mock-$(MOCK_VERSION).zip -o $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip; \
+       else \
+           echo "mock-$(MOCK_VERSION).zip already exists, skipping download"; \
+       fi && \
        mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
        cd $(PYLIB_SRC_EXT)/ && unzip -q $(MOCK_DIR).zip && \
        cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
