@@ -1643,9 +1643,13 @@ gp_acquire_sample_rows_func(Relation onerel, int elevel,
 											  totalrows, totaldeadrows);
 	}
 
-	if (RelationIsAppendOptimized(onerel))
+	/* 
+	 * if relation_acquire_sample_rows exist, we use it directly.
+	 * Otherwise, use the acquire_sample_rows by default.
+	 */
+	if (onerel->rd_tableam->relation_acquire_sample_rows)
 		return table_relation_acquire_sample_rows(onerel, elevel, rows,
-											  targrows, totalrows, totaldeadrows);
+												  targrows, totalrows, totaldeadrows);
     
 	return acquire_sample_rows(onerel, elevel, rows,
 							   targrows, totalrows, totaldeadrows);
