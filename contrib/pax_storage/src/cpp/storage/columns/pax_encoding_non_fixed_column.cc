@@ -61,19 +61,40 @@ void PaxNonFixedEncodingColumn::InitEncoder() {
 void PaxNonFixedEncodingColumn::InitOffsetStreamCompressor() {
   Assert(encoder_options_.offsets_encode_type !=
          ColumnEncoding_Kind::ColumnEncoding_Kind_DEF_ENCODED);
-  offsets_compressor_ = PaxCompressor::CreateBlockCompressor(
-      encoder_options_.offsets_encode_type);
   SetOffsetsEncodeType(encoder_options_.offsets_encode_type);
   SetOffsetsCompressLevel(encoder_options_.offsets_compress_level);
+
+  // Prefer encoder for offsets if encoding type supports it; otherwise use
+  // compressor
+  if (encoder_options_.offsets_encode_type ==
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA) {
+    PaxEncoder::EncodingOption opt = encoder_options_;
+    opt.column_encode_type = encoder_options_.offsets_encode_type;
+    // offsets are fixed-width, do not enable non_fixed streaming restriction
+    offsets_encoder_ = PaxEncoder::CreateStreamingEncoder(opt, false);
+  } else {
+    offsets_compressor_ = PaxCompressor::CreateBlockCompressor(
+        encoder_options_.offsets_encode_type);
+  }
 }
 
 void PaxNonFixedEncodingColumn::InitOffsetStreamDecompressor() {
   Assert(decoder_options_.offsets_encode_type !=
          ColumnEncoding_Kind::ColumnEncoding_Kind_DEF_ENCODED);
-  offsets_compressor_ = PaxCompressor::CreateBlockCompressor(
-      decoder_options_.offsets_encode_type);
   SetOffsetsEncodeType(decoder_options_.offsets_encode_type);
   SetOffsetsCompressLevel(decoder_options_.offsets_compress_level);
+
+  if (decoder_options_.offsets_encode_type ==
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA) {
+    PaxDecoder::DecodingOption temp_opt = decoder_options_;
+    temp_opt.column_encode_type =
+        ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+    temp_opt.is_sign = false;
+    offsets_decoder_ = PaxDecoder::CreateDecoder<int32>(temp_opt);
+  } else {
+    offsets_compressor_ = PaxCompressor::CreateBlockCompressor(
+        decoder_options_.offsets_encode_type);
+  }
 }
 
 void PaxNonFixedEncodingColumn::InitDecoder() {
@@ -169,9 +190,13 @@ void PaxNonFixedEncodingColumn::Set(std::shared_ptr<DataBuffer<char>> data,
 
   auto offsets_decompress = [&]() {
     Assert(!compress_route_);
-    Assert(offsets_compressor_);
+    Assert(offsets_compressor_ || offsets_decoder_);
 
-    if (offsets->Used() != 0) {
+    if (offsets->Used() == 0) {
+      return;
+    }
+
+    if (offsets_compressor_) {
       auto d_size = offsets_compressor_->Decompress(
           PaxNonFixedColumn::offsets_->Start(),
           PaxNonFixedColumn::offsets_->Capacity(), offsets->Start(),
@@ -182,22 +207,36 @@ void PaxNonFixedEncodingColumn::Set(std::shared_ptr<DataBuffer<char>> data,
             fmt("Decompress failed, %s", compressor_->ErrorName(d_size)));
       }
       PaxNonFixedColumn::offsets_->Brush(d_size);
+      return;
+    }
+
+    if (offsets_decoder_) {
+      // Decode offsets using encoder for int32 stream
+      shared_offsets_data_ = std::make_shared<DataBuffer<char>>(
+          PaxNonFixedColumn::offsets_->Start(),
+          PaxNonFixedColumn::offsets_->Capacity(), false, false);
+      offsets_decoder_->SetDataBuffer(shared_offsets_data_);
+      offsets_decoder_->SetSrcBuffer(offsets->Start(), offsets->Used());
+      offsets_decoder_->Decoding();
+      PaxNonFixedColumn::offsets_->Brush(shared_offsets_data_->Used());
+      return;
     }
   };
 
   exist_decoder = compressor_ || decoder_;
+  bool has_offsets_processor = offsets_compressor_ || offsets_decoder_;
 
-  if (exist_decoder && offsets_compressor_) {
+  if (exist_decoder && has_offsets_processor) {
     data_decompress();
     offsets_decompress();
     PaxNonFixedColumn::estimated_size_ = total_size;
     PaxNonFixedColumn::next_offsets_ = -1;
-  } else if (exist_decoder && !offsets_compressor_) {
+  } else if (exist_decoder && !has_offsets_processor) {
     data_decompress();
     PaxNonFixedColumn::offsets_ = offsets;
     PaxNonFixedColumn::estimated_size_ = total_size;
     PaxNonFixedColumn::next_offsets_ = -1;
-  } else if (!exist_decoder && offsets_compressor_) {
+  } else if (!exist_decoder && has_offsets_processor) {
     PaxNonFixedColumn::data_ = data;
     offsets_decompress();
     PaxNonFixedColumn::estimated_size_ = total_size;
@@ -278,17 +317,17 @@ std::pair<char *, size_t> PaxNonFixedEncodingColumn::GetOffsetBuffer(
     AppendLastOffset();
   }
 
+  if (shared_offsets_data_) {
+    return std::make_pair(shared_offsets_data_->Start(),
+                          shared_offsets_data_->Used());
+  }
+
+  if (PaxNonFixedColumn::offsets_->Used() == 0) {
+    // should never append last offset again
+    return PaxNonFixedColumn::GetOffsetBuffer(false);
+  }
+
   if (offsets_compressor_ && compress_route_) {
-    if (shared_offsets_data_) {
-      return std::make_pair(shared_offsets_data_->Start(),
-                            shared_offsets_data_->Used());
-    }
-
-    if (PaxNonFixedColumn::offsets_->Used() == 0) {
-      // should never append last offset again
-      return PaxNonFixedColumn::GetOffsetBuffer(false);
-    }
-
     size_t bound_size = offsets_compressor_->GetCompressBound(
         PaxNonFixedColumn::offsets_->Used());
     shared_offsets_data_ = std::make_shared<DataBuffer<char>>(bound_size);
@@ -308,6 +347,19 @@ std::pair<char *, size_t> PaxNonFixedEncodingColumn::GetOffsetBuffer(
                           shared_offsets_data_->Used());
   }
 
+  if (offsets_encoder_ && compress_route_) {
+    // For delta encoder, allocate a buffer sized by raw bytes for safety
+    shared_offsets_data_ = std::make_shared<DataBuffer<char>>(offsets_->Used());
+    offsets_encoder_->SetDataBuffer(shared_offsets_data_);
+
+    // Encode entire offsets buffer as a single stream
+    offsets_encoder_->Append(offsets_->Start(), offsets_->Used());
+    offsets_encoder_->Flush();
+
+    return std::make_pair(shared_offsets_data_->Start(),
+                          shared_offsets_data_->Used());
+  }
+
   // no compress or uncompressed
   // should never append last offset again
   return PaxNonFixedColumn::GetOffsetBuffer(false);
@@ -315,6 +367,14 @@ std::pair<char *, size_t> PaxNonFixedEncodingColumn::GetOffsetBuffer(
 
 int64 PaxNonFixedEncodingColumn::GetOriginLength() const {
   return PaxNonFixedColumn::data_->Used();
+}
+
+void PaxNonFixedEncodingColumn::SetAlignSize(size_t align_size) {
+  if (encoder_options_.column_encode_type ==
+      ColumnEncoding_Kind::ColumnEncoding_Kind_NO_ENCODED) {
+    PaxColumn::SetAlignSize(align_size);
+    return;
+  }
 }
 
 size_t PaxNonFixedEncodingColumn::GetAlignSize() const {
