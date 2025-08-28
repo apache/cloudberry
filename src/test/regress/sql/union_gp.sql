@@ -709,6 +709,18 @@ set optimizer_parallel_union to off;
 drop table if exists my_table;
 
 --
+-- test Github issue https://github.com/apache/cloudberry/issues/1240
+--
+create table r_1240(a int) distributed replicated;
+insert into r_1240 select generate_series(1,10);
+create table p1_1240(a int) distributed by (a);
+insert into p1_1240 select generate_series(1,3);
+explain(costs off) with result as (update r_1240 set a = a +1 where a < 5 returning *) select * from result except select * from p1_1240;
+with result as (update r_1240 set a = a +1 where a < 5 returning *) select * from result except select * from p1_1240;
+drop table r_1240;
+drop table p1_1240;
+
+--
 -- Clean up
 --
 
