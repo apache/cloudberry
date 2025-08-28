@@ -1361,4 +1361,96 @@ TEST_F(PaxEncodingTest, TestEncodingWithAllNULL) {
   ASSERT_EQ(n_read, shared_dst_data->Used());
 }
 
+TEST_F(PaxEncodingTest, TestPaxDeltaEncodingBasic) {
+  std::vector<uint32_t> data_vec{100, 101, 102, 105, 106, 110, 120, 121};
+  auto shared_data = std::make_shared<DataBuffer<char>>(1024);
+  auto shared_dst_data = std::make_shared<DataBuffer<char>>(1024);
+
+  PaxEncoder::EncodingOption encoder_options;
+  encoder_options.column_encode_type =
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+  encoder_options.is_sign = false;
+  auto encoder = PaxEncoder::CreateStreamingEncoder(encoder_options);
+
+  ASSERT_TRUE(encoder);
+  encoder->SetDataBuffer(shared_data);
+  encoder->Append(reinterpret_cast<char *>(data_vec.data()), data_vec.size() * sizeof(uint32_t));
+  encoder->Flush();
+
+  ASSERT_NE(encoder->GetBuffer(), nullptr);
+  ASSERT_GT(encoder->GetBufferSize(), 0UL);
+
+  PaxDecoder::DecodingOption decoder_options;
+  decoder_options.column_encode_type =
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+  decoder_options.is_sign = false;
+
+  auto decoder = PaxDecoder::CreateDecoder<int32>(decoder_options);
+  ASSERT_TRUE(decoder);
+  decoder->SetSrcBuffer(shared_data->GetBuffer(), shared_data->Used());
+
+  decoder->SetDataBuffer(shared_dst_data);
+  decoder->Decoding();
+
+  ASSERT_EQ(shared_dst_data->Used(), data_vec.size() * sizeof(int32));
+
+  auto result_dst_data = std::make_shared<DataBuffer<int32>>(
+      reinterpret_cast<int32 *>(shared_dst_data->Start()),
+      shared_dst_data->Used(), false, false);
+
+  for (size_t i = 0; i < data_vec.size(); ++i) {
+    ASSERT_EQ((*result_dst_data)[i], static_cast<int32>(data_vec[i]));
+  }
+}
+
+TEST_F(PaxEncodingTest, TestPaxDeltaEncodingRoundTripRandom) {
+  const size_t n = 1000;
+  std::vector<uint32_t> data_vec(n);
+  std::mt19937 rng(12345);
+  std::uniform_int_distribution<uint32_t> base_dist(0, 100);
+  std::uniform_int_distribution<uint32_t> step_dist(0, 5);
+
+  data_vec[0] = base_dist(rng);
+  for (size_t i = 1; i < n; ++i) {
+    data_vec[i] = data_vec[i - 1] + step_dist(rng);
+  }
+
+  auto shared_data = std::make_shared<DataBuffer<char>>(n * sizeof(uint32_t));
+  auto shared_dst_data = std::make_shared<DataBuffer<char>>(n * sizeof(uint32_t));
+
+  PaxEncoder::EncodingOption encoder_options;
+  encoder_options.column_encode_type =
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+  encoder_options.is_sign = false;
+  auto encoder = PaxEncoder::CreateStreamingEncoder(encoder_options);
+
+  ASSERT_TRUE(encoder);
+  encoder->SetDataBuffer(shared_data);
+
+  encoder->Append(reinterpret_cast<char *>(data_vec.data()), data_vec.size() * sizeof(uint32_t));
+  encoder->Flush();
+
+  PaxDecoder::DecodingOption decoder_options;
+  decoder_options.column_encode_type =
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+  decoder_options.is_sign = false;
+
+  auto decoder = PaxDecoder::CreateDecoder<int32>(decoder_options);
+  ASSERT_TRUE(decoder);
+  decoder->SetSrcBuffer(shared_data->GetBuffer(), shared_data->Used());
+
+  decoder->SetDataBuffer(shared_dst_data);
+  decoder->Decoding();
+
+  ASSERT_EQ(shared_dst_data->Used(), data_vec.size() * sizeof(int32));
+
+  auto result_dst_data = std::make_shared<DataBuffer<int32>>(
+      reinterpret_cast<int32 *>(shared_dst_data->Start()),
+      shared_dst_data->Used(), false, false);
+
+  for (size_t i = 0; i < data_vec.size(); ++i) {
+    ASSERT_EQ((*result_dst_data)[i], static_cast<int32>(data_vec[i]));
+  }
+}
+
 }  // namespace pax::tests
