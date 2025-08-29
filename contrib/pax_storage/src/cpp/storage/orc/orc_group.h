@@ -81,11 +81,11 @@ class OrcGroup : public MicroPartitionReader::Group {
   std::vector<std::shared_ptr<MemoryObject>> buffer_holders_;
   // only a reference, owner by pax_filter
   const std::vector<int> *proj_col_index_;
+  std::vector<uint32> current_nulls_;
+  std::vector<uint32 *> nulls_shuffle_;
 
  private:
   friend class tools::OrcDumpReader;
-  std::vector<uint32> current_nulls_;
-  std::vector<uint32 *> nulls_shuffle_;
 };
 
 class OrcVecGroup final : public OrcGroup {

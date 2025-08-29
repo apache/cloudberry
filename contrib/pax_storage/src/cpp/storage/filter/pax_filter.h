@@ -50,7 +50,7 @@ class PaxFilter final {
   ~PaxFilter() = default;
 
   // The sparse filter
-  void InitSparseFilter(Relation relation, List *quals,
+  void InitSparseFilter(Relation relation, List *quals, ScanKey key, int nkeys,
                         bool allow_fallback_to_pg = false);
 #ifdef VEC_BUILD
   void InitSparseFilter(
@@ -73,7 +73,8 @@ class PaxFilter final {
 
   // The row filter
   void InitRowFilter(Relation relation, PlanState *ps,
-                     const std::vector<bool> &projection);
+                     const std::vector<bool> &projection, ScanKey key,
+                     int nkeys);
   std::shared_ptr<PaxRowFilter> GetRowFilter();
 
   void LogStatistics() const;

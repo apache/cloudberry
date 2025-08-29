@@ -77,16 +77,21 @@ SeqNext(SeqScanState *node)
 
 		/*
 		 * Just when gp_enable_runtime_filter_pushdown enabled and
-		 * node->filter_in_seqscan is false means scankey need to be pushed to
+		 * table am support runtime filter, scankey need to be pushed to
 		 * AM.
 		 */
-		if (gp_enable_runtime_filter_pushdown && !node->filter_in_seqscan)
+		if (gp_enable_runtime_filter_pushdown && node->filters &&
+			(table_scan_flags(node->ss.ss_currentRelation) &
+			 (SCAN_SUPPORT_RUNTIME_FILTER)))
+		{
+			// pushdown runtime filter to AM
 			keys = ScanKeyListToArray(node->filters, &nkeys);
+		}
 
 		/*
-		* We reach here if the scan is not parallel, or if we're serially
-		* executing a scan that was planned to be parallel.
-		*/
+		 * We reach here if the scan is not parallel, or if we're serially
+		 * executing a scan that was planned to be parallel.
+		 */
 		scandesc = table_beginscan_es(node->ss.ss_currentRelation,
 									  estate->es_snapshot,
 									  nkeys, keys,
@@ -102,6 +107,7 @@ SeqNext(SeqScanState *node)
 	{
 		while (table_scan_getnextslot(scandesc, direction, slot))
 		{
+			// TODO: later pushdown bloom filter to AM
 			if (!PassByBloomFilter(&node->ss.ps, node->filters, slot))
 				continue;
 
@@ -224,6 +230,10 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 		&& !estate->useMppParallelMode)
 	{
 		scanstate->filter_in_seqscan = true;
+	}
+	else 
+	{
+		scanstate->filter_in_seqscan = false;
 	}
 
 	return scanstate;
