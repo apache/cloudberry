@@ -1,0 +1,3 @@
+testinfra
+pytest-testinfra
+paramiko
