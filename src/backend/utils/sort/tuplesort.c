@@ -3233,6 +3233,14 @@ dumptuples(Tuplesortstate *state, bool alltuples)
 		return;
 
 	/*
+	 * do nothing if we are told to finish execution.
+	 */
+	if (QueryFinishPending)
+	{
+		return;
+	}
+
+	/*
 	 * Final call might require no sorting, in rare cases where we just so
 	 * happen to have previously LACKMEM()'d at the point where exactly all
 	 * remaining tuples are loaded into memory, just before input was
