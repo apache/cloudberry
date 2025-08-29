@@ -507,10 +507,12 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	}
 	else if (limitType == RESGROUP_LIMIT_TYPE_IO_LIMIT)
 	{
-		if (caps.io_limit != NIL)
-			updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
-										  groupid, RESGROUP_LIMIT_TYPE_IO_LIMIT,
-										  0, cgroupOpsRoutine->dumpio(caps.io_limit));
+		updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
+									  groupid, RESGROUP_LIMIT_TYPE_IO_LIMIT,
+									  0,
+									  (caps.io_limit != NIL) ?
+										cgroupOpsRoutine->dumpio(caps.io_limit) :
+										DefaultIOLimit);
 	}
 	else
 	{
