@@ -542,7 +542,7 @@ CTranslatorScalarToDXL::CreateScalarCmpFromOpExpr(
 	const CWStringConst *str = GetDXLArrayCmpType(mdid);
 
 	CDXLScalarComp *dxlop = GPOS_NEW(m_mp) CDXLScalarComp(
-		m_mp, mdid, GPOS_NEW(m_mp) CWStringConst(str->GetBuffer()));
+		m_mp, mdid, GPOS_NEW(m_mp) CWStringConst(m_mp, str->GetBuffer()));
 
 	// create the DXL node holding the scalar comparison operator
 	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, dxlop);
@@ -592,7 +592,7 @@ CTranslatorScalarToDXL::TranslateOpExprToDXL(
 
 	CDXLScalarOpExpr *dxlop = GPOS_NEW(m_mp)
 		CDXLScalarOpExpr(m_mp, mdid, return_type_mdid,
-						 GPOS_NEW(m_mp) CWStringConst(str->GetBuffer()));
+						 GPOS_NEW(m_mp) CWStringConst(m_mp, str->GetBuffer()));
 
 	// create the DXL node holding the scalar opexpr
 	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, dxlop);
@@ -702,7 +702,7 @@ CTranslatorScalarToDXL::CreateScalarArrayCompFromExpr(
 		m_mp,
 		GPOS_NEW(m_mp)
 			CMDIdGPDB(IMDId::EmdidGeneral, scalar_array_op_expr->opno),
-		GPOS_NEW(m_mp) CWStringConst(op_name->GetBuffer()), type);
+		GPOS_NEW(m_mp) CWStringConst(m_mp, op_name->GetBuffer()), type);
 
 	// create the DXL node holding the scalar opexpr
 	CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(m_mp, dxlop);
