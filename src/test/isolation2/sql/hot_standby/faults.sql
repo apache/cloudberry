@@ -59,10 +59,11 @@ select gp_inject_fault('out_of_recovery_in_startupxlog', 'reset', dbid) from gp_
 -- in an existing gang. That mirror is now a primary, so it will complain and the query fails.
 -1S: select * from hs_failover;
 -1Sq:
-
+-- start_ignore
 -- will fail due to downed mirror (previous primary)
 -1S: select * from hs_failover;
 -1Sq:
+-- end_ignore
 
 -- bring the downed mirror up
 !\retcode gprecoverseg -aF;

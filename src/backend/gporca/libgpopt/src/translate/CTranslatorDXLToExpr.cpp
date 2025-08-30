@@ -367,7 +367,7 @@ void CTranslatorDXLToExpr::PruneCTEs()
 			poper->RecalOutputColumns(umask, pprgpcrsz);
 
 			// Align consumer and producer output columns.
-			// In fact, we can support the column projection in consumer(SharedInputScan).
+			// In fact, we can support the column projection in consumer(ShareInputScan).
 			// However, non-requested columns in consumer(which from producer) may be added to the consumer, 
 			// which will make the plan for consumer(support projection) very complicated. 
 			//

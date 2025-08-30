@@ -20,6 +20,7 @@ extern "C" {
 #include "catalog/heap.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic.h"
 #include "catalog/pg_statistic_ext.h"
@@ -1436,6 +1437,22 @@ CTranslatorRelcacheToDXL::LookupFuncProps(
 	GPOS_ASSERT(nullptr != returns_set);
 
 	*stability = GetFuncStability(gpdb::FuncStability(func_oid));
+
+	RegProcedure prosupport = gpdb::FuncSupport(func_oid);
+	if (OidIsValid(prosupport))
+	{
+		/*
+		  CBDB_FIXME:
+		  Check if function is NOT in pg_catalog namespace
+		  Functions outside pg_catalog are likely extension functions that unsupported yet.
+		*/
+		Oid func_namespace = gpdb::FuncNamespace(func_oid);
+		if (func_namespace != PG_CATALOG_NAMESPACE)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("extension functions with prosupport unsupported"));
+		}
+	}
 
 	if (gpdb::FuncExecLocation(func_oid) != PROEXECLOCATION_ANY)
 	{

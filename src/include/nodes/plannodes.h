@@ -1245,6 +1245,9 @@ typedef struct ShareInputScan
 
 	/* Discard the scan output? True for ORCA CTE producer, false otherwise. */
 	bool        discard_output;
+
+	/* Could be set reference? */
+	bool		ref_set;
 } ShareInputScan;
 
 /* ----------------

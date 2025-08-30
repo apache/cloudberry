@@ -294,6 +294,7 @@
 		"gp_workfile_limit_per_segment",
 		"gp_workfile_max_entries",
 		"hba_file",
+		"hot_dr",
 		"hot_standby",
 		"hot_standby_feedback",
 		"huge_pages",

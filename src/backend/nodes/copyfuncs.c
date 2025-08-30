@@ -1262,6 +1262,7 @@ _copyShareInputScan(const ShareInputScan *from)
 	COPY_SCALAR_FIELD(this_slice_id);
 	COPY_SCALAR_FIELD(nconsumers);
 	COPY_SCALAR_FIELD(discard_output);
+	COPY_SCALAR_FIELD(ref_set);
 
 	return newnode;
 }
@@ -2202,8 +2203,8 @@ _copyFuncExpr(const FuncExpr *from)
 	COPY_SCALAR_FIELD(funccollid);
 	COPY_SCALAR_FIELD(inputcollid);
 	COPY_NODE_FIELD(args);
-	COPY_SCALAR_FIELD(is_tablefunc);
 	COPY_LOCATION_FIELD(location);
+	COPY_SCALAR_FIELD(is_tablefunc);
 
 	return newnode;
 }
