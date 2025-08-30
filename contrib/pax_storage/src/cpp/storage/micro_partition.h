@@ -58,7 +58,6 @@ class MicroPartitionWriter {
     RelFileNode node;
     bool need_wal = false;
     std::vector<std::tuple<ColumnEncoding_Kind, int>> encoding_opts;
-    std::pair<ColumnEncoding_Kind, int> offsets_encoding_opts;
     std::vector<int> enable_min_max_col_idxs;
     std::vector<int> enable_bf_col_idxs;
 

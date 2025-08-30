@@ -104,7 +104,6 @@ static std::unique_ptr<PaxColumns> BuildColumns(
     const std::vector<pax::porc::proto::Type_Kind> &types, const TupleDesc desc,
     const std::vector<std::tuple<ColumnEncoding_Kind, int>>
         &column_encoding_types,
-    const std::pair<ColumnEncoding_Kind, int> &offsets_encoding_types,
     const PaxStorageFormat &storage_format) {
   std::unique_ptr<PaxColumns> columns;
   bool is_vec;
@@ -125,14 +124,7 @@ static std::unique_ptr<PaxColumns> BuildColumns(
     encoding_option.is_sign = true;
     encoding_option.compress_level = std::get<1>(column_encoding_types[i]);
 
-    if (offsets_encoding_types.first == ColumnEncoding_Kind_DEF_ENCODED) {
-      // default value of offsets_stream is zstd
-      encoding_option.offsets_encode_type = ColumnEncoding_Kind_COMPRESS_ZSTD;
-      encoding_option.offsets_compress_level = 5;
-    } else {
-      encoding_option.offsets_encode_type = offsets_encoding_types.first;
-      encoding_option.offsets_compress_level = offsets_encoding_types.second;
-    }
+    encoding_option.offsets_encode_type = ColumnEncoding_Kind_DIRECT_DELTA;
 
     switch (type) {
       case (pax::porc::proto::Type_Kind::Type_Kind_STRING): {
@@ -241,10 +233,9 @@ OrcWriter::OrcWriter(
   Assert(writer_options.rel_tuple_desc->natts ==
          static_cast<int>(column_types.size()));
 
-  pax_columns_ = BuildColumns(column_types_, writer_options.rel_tuple_desc,
-                              writer_options.encoding_opts,
-                              writer_options.offsets_encoding_opts,
-                              writer_options.storage_format);
+  pax_columns_ =
+      BuildColumns(column_types_, writer_options.rel_tuple_desc,
+                   writer_options.encoding_opts, writer_options.storage_format);
 
   summary_.rel_oid = writer_options.rel_oid;
   summary_.block_id = writer_options.block_id;
@@ -300,7 +291,6 @@ void OrcWriter::Flush() {
 
     new_columns = BuildColumns(column_types_, writer_options_.rel_tuple_desc,
                                writer_options_.encoding_opts,
-                               writer_options_.offsets_encoding_opts,
                                writer_options_.storage_format);
 
     for (size_t i = 0; i < column_types_.size(); ++i) {
