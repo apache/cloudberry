@@ -18,8 +18,17 @@
 #include "postgres.h"
 #include "nodes/pg_list.h"
 
+extern char *gp_resource_group_cgroup_parent;
+
 #define MAX_CGROUP_PATHLEN 256
 #define MAX_CGROUP_CONTENTLEN 1024  
+
+#define CGROUP_CONFIG_WARNING(msg, ...) \
+	ereport(WARNING, \
+			(errmsg("cgroup is not properly configured: " msg, ##__VA_ARGS__), \
+			 errhint("Please check whether the directory '/sys/fs/cgroup/%s' exists when gp_resource_manager = 'group-v2' and gp_resource_group_cgroup_parent = '%s'.", \
+			 gp_resource_group_cgroup_parent ? gp_resource_group_cgroup_parent : "", \
+			 gp_resource_group_cgroup_parent ? gp_resource_group_cgroup_parent : "")))
 
 #define CGROUP_ERROR(...) elog(ERROR, __VA_ARGS__)
 #define CGROUP_CONFIG_ERROR(...) \

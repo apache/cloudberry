@@ -2,7 +2,16 @@
 # Copyright (c) 2017, VMware, Inc. or its affiliates.
 
 import os
+import sys
 from functools import reduce
+
+# Add the gppylib path to sys.path to import database connection modules
+try:
+    from gppylib.db import dbconn
+    from pg import DatabaseError
+except ImportError as err:
+    sys.exit('Cannot import modules. Please check that you have sourced '
+             'cloudberry-env.sh. Detail: ' + str(err))
 
 
 class ValidationException(Exception):
@@ -29,6 +38,7 @@ class CgroupValidationVersionTwo(CgroupValidation):
     def __init__(self):
         self.mount_point = self.detect_cgroup_mount_point()
         self.tab = {"r": os.R_OK, "w": os.W_OK, "x": os.X_OK, "f": os.F_OK}
+        self.cgroup_parent = self.get_cgroup_parent()
 
     def validate_all(self):
         """
@@ -43,23 +53,46 @@ class CgroupValidationVersionTwo(CgroupValidation):
 
         self.validate_permission("cgroup.procs", "rw")
 
-        self.validate_permission("gpdb/", "rwx")
-        self.validate_permission("gpdb/cgroup.procs", "rw")
+        self.validate_permission(self.cgroup_parent + "/", "rwx")
+        self.validate_permission(self.cgroup_parent + "/cgroup.procs", "rw")
 
-        self.validate_permission("gpdb/cpu.max", "rw")
-        self.validate_permission("gpdb/cpu.weight", "rw")
-        self.validate_permission("gpdb/cpu.weight.nice", "rw")
-        self.validate_permission("gpdb/cpu.stat", "r")
+        self.validate_permission(self.cgroup_parent + "/cpu.max", "rw")
+        self.validate_permission(self.cgroup_parent + "/cpu.weight", "rw")
+        self.validate_permission(self.cgroup_parent + "/cpu.weight.nice", "rw")
+        self.validate_permission(self.cgroup_parent + "/cpu.stat", "r")
 
-        self.validate_permission("gpdb/cpuset.cpus", "rw")
-        self.validate_permission("gpdb/cpuset.cpus.partition", "rw")
-        self.validate_permission("gpdb/cpuset.mems", "rw")
-        self.validate_permission("gpdb/cpuset.cpus.effective", "r")
-        self.validate_permission("gpdb/cpuset.mems.effective", "r")
+        self.validate_permission(self.cgroup_parent + "/cpuset.cpus", "rw")
+        self.validate_permission(self.cgroup_parent + "/cpuset.cpus.partition", "rw")
+        self.validate_permission(self.cgroup_parent + "/cpuset.mems", "rw")
+        self.validate_permission(self.cgroup_parent + "/cpuset.cpus.effective", "r")
+        self.validate_permission(self.cgroup_parent + "/cpuset.mems.effective", "r")
 
-        self.validate_permission("gpdb/memory.current", "r")
+        self.validate_permission(self.cgroup_parent + "/memory.current", "r")
 
-        self.validate_permission("gpdb/io.max", "rw")
+        self.validate_permission(self.cgroup_parent + "/io.max", "rw")
+
+    def get_cgroup_parent(self):
+        """
+        Get the cgroup parent directory from the database GUC parameter
+        gp_resource_group_cgroup_parent. If unable to connect to database
+        or retrieve the parameter, report error using die function.
+        """
+        try:
+            dburl = dbconn.DbURL()
+
+            with dbconn.connect(dburl, utility=True) as conn:
+                # Query the GUC parameter value
+                sql = "SHOW gp_resource_group_cgroup_parent"
+                cursor = dbconn.query(conn, sql)
+                result = cursor.fetchone()
+
+                if result and result[0]:
+                    return result[0]
+                else:
+                    self.die("failed to retrieve gp_resource_group_cgroup_parent parameter from database")
+ 
+        except Exception as e:
+            self.die("failed to retrieve gp_resource_group_cgroup_parent parameter: {}".format(str(e)))
 
     def die(self, msg):
         raise ValidationException("cgroup is not properly configured: {}".format(msg))
