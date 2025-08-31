@@ -20,10 +20,20 @@ ERROR:  language "plpython3u" already exists
 -- end_ignore
 
 -- enable resource group and restart cluster.
+-- prerequisites:
+--     1. '/sys/fs/cgroup/gpdb' must exist,
+--        otherwise create it before run installcheck-resgroup-v2;
+--     2. 'gpconfig -c gp_resource_group_cgroup_parent -v "gpdb" && gpstop -rai'
+--        must run before 'gpconfig -c gp_resource_manager -v group-v2', because
+--        during the process of setting gp_resource_manager to group-v2, the
+--        system will check whether the directory
+--        '/sys/fs/cgroup/$gp_resource_group_cgroup_parent' exists.
 -- start_ignore
-! gpconfig -c gp_resource_manager -v group-v2;
+! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb";
 
-! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb"
+! gpstop -rai;
+
+! gpconfig -c gp_resource_manager -v group-v2;
 
 ! gpconfig -c max_connections -v 250 -m 25;
 
@@ -38,6 +48,11 @@ ERROR:  language "plpython3u" already exists
  gp_resource_manager 
 ---------------------
  group-v2            
+(1 row)
+0: SHOW gp_resource_group_cgroup_parent;
+ gp_resource_group_cgroup_parent 
+---------------------------------
+ gpdb                            
 (1 row)
 
 -- resource queue statistics should not crash

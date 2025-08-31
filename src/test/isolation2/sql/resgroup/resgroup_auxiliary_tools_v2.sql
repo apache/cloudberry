@@ -19,9 +19,18 @@ CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 -- enable resource group and restart cluster.
+-- prerequisites:
+--     1. '/sys/fs/cgroup/gpdb' must exist,
+--        otherwise create it before run installcheck-resgroup-v2;
+--     2. 'gpconfig -c gp_resource_group_cgroup_parent -v "gpdb" && gpstop -rai'
+--        must run before 'gpconfig -c gp_resource_manager -v group-v2', because
+--        during the process of setting gp_resource_manager to group-v2, the
+--        system will check whether the directory
+--        '/sys/fs/cgroup/$gp_resource_group_cgroup_parent' exists.
 -- start_ignore
+! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb";
+! gpstop -rai;
 ! gpconfig -c gp_resource_manager -v group-v2;
-! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb"
 ! gpconfig -c max_connections -v 250 -m 25;
 ! gpconfig -c runaway_detector_activation_percent -v 100;
 ! gpstop -rai;
@@ -30,6 +39,7 @@ CREATE LANGUAGE plpython3u;
 -- after the restart we need a new connection to run the queries
 
 0: SHOW gp_resource_manager;
+0: SHOW gp_resource_group_cgroup_parent;
 
 -- resource queue statistics should not crash
 0: SELECT * FROM pg_resqueue_status;

@@ -665,6 +665,12 @@ permListCheck(const PermList *permlist, Oid group, bool report)
 									prop[0] ? "file" : "directory",
 									path);
 			}
+			else
+			{
+				CGROUP_CONFIG_WARNING("invalid %s name '%s': %m",
+									  prop[0] ? "file" : "directory",
+									  path);
+			}
 			return false;
 		}
 
@@ -677,6 +683,12 @@ permListCheck(const PermList *permlist, Oid group, bool report)
 				CGROUP_CONFIG_ERROR("can't access %s '%s': %m",
 									prop[0] ? "file" : "directory",
 									path);
+			}
+			else
+			{
+				CGROUP_CONFIG_WARNING("can't access %s '%s': %m",
+									  prop[0] ? "file" : "directory",
+									  path);
 			}
 			return false;
 		}
