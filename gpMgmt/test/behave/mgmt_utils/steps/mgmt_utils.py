@@ -1618,7 +1618,7 @@ def impl(context, seg):
     elif seg == "master":
         hostname = get_master_hostname()[0][0]
 
-    filename = os.path.join(os.getcwd(), './test/behave/mgmt_utils/steps/data/pid_background_script.py')
+    filename = os.path.join(os.getcwd(), './test/behave/mgmt_utils/pid_background_script.py')
 
     cmd = Command(name="Remove background script on remote host", cmdStr='rm -f /tmp/pid_background_script.py',
                   remoteHost=hostname, ctxt=REMOTE)
@@ -2313,18 +2313,18 @@ ssh %s "source %s; export PGUSER=%s; export PGPORT=%s; export PGOPTIONS=\\\"-c g
     run_command(context, remote_cmd.strip())
 
 
-@then('The user runs sql "{query}" in "{dbname}" on first primary segment')
-@when('The user runs sql "{query}" in "{dbname}" on first primary segment')
-@given('The user runs sql "{query}" in "{dbname}" on first primary segment')
+@then('the user runs sql "{query}" in "{dbname}" on first primary segment')
+@when('the user runs sql "{query}" in "{dbname}" on first primary segment')
+@given('the user runs sql "{query}" in "{dbname}" on first primary segment')
 def impl(context, query, dbname):
     host, port = get_primary_segment_host_port()
     psql_cmd = "PGDATABASE=\'%s\' PGOPTIONS=\'-c gp_session_role=utility\' psql -h %s -p %s -c \"%s\"; " % (
     dbname, host, port, query)
     Command(name='Running Remote command: %s' % psql_cmd, cmdStr=psql_cmd).run(validateAfter=True)
 
-@then('The user runs sql "{query}" in "{dbname}" on all the segments')
-@when('The user runs sql "{query}" in "{dbname}" on all the segments')
-@given('The user runs sql "{query}" in "{dbname}" on all the segments')
+@then('the user runs sql "{query}" in "{dbname}" on all the segments')
+@when('the user runs sql "{query}" in "{dbname}" on all the segments')
+@given('the user runs sql "{query}" in "{dbname}" on all the segments')
 def impl(context, query, dbname):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
     segments = gparray.getDbList()
@@ -2337,9 +2337,9 @@ def impl(context, query, dbname):
             Command(name='Running Remote command: %s' % psql_cmd, cmdStr=psql_cmd).run(validateAfter=True)
 
 
-@then('The user runs sql file "{file}" in "{dbname}" on all the segments')
-@when('The user runs sql file "{file}" in "{dbname}" on all the segments')
-@given('The user runs sql file "{file}" in "{dbname}" on all the segments')
+@then('the user runs sql file "{file}" in "{dbname}" on all the segments')
+@when('the user runs sql file "{file}" in "{dbname}" on all the segments')
+@given('the user runs sql file "{file}" in "{dbname}" on all the segments')
 def impl(context, file, dbname):
     with open(file) as fd:
         query = fd.read().strip()
@@ -2388,9 +2388,9 @@ def impl(context, table_name, dbname, host, port):
         raise Exception(context.stdout_message)
 
 
-@then('The path "{path}" is removed from current working directory')
-@when('The path "{path}" is removed from current working directory')
-@given('The path "{path}" is removed from current working directory')
+@then('the path "{path}" is removed from current working directory')
+@when('the path "{path}" is removed from current working directory')
+@given('the path "{path}" is removed from current working directory')
 def impl(context, path):
     remove_local_path(path)
 

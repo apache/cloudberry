@@ -274,7 +274,7 @@ Feature: gpcheckcat tests
         Given database "extra_db" is dropped and recreated
         And the path "gpcheckcat.repair.*" is removed from current working directory
         And the user runs "psql extra_db -c "CREATE TABLE foo(i int)""
-        Then The user runs sql "set allow_system_table_mods=true;delete from pg_class where relname='foo'" in "extra_db" on first primary segment
+        Then the user runs sql "set allow_system_table_mods=true;delete from pg_class where relname='foo'" in "extra_db" on first primary segment
         And the user runs "psql extra_db -c "drop table if exists foo""
         Then the user runs "gpcheckcat -R missing_extraneous extra_db"
         Then gpcheckcat should return a return code of 3
@@ -307,7 +307,7 @@ Feature: gpcheckcat tests
         Given database "extra_gr_db" is dropped and recreated
         And the path "repair_dir" is removed from current working directory
         And the user runs "psql extra_gr_db -c "CREATE TABLE foo(i int)""
-        Then The user runs sql "set allow_system_table_mods=true;delete from pg_class where relname='foo'" in "extra_gr_db" on first primary segment
+        Then the user runs sql "set allow_system_table_mods=true;delete from pg_class where relname='foo'" in "extra_gr_db" on first primary segment
         And the user runs "psql extra_gr_db -c "drop table if exists foo""
         Then the user runs "gpcheckcat -R missing_extraneous -E -g repair_dir extra_gr_db"
         Then gpcheckcat should return a return code of 1
@@ -344,7 +344,7 @@ Feature: gpcheckcat tests
         And the user runs "psql timestamp_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_aoco_table.sql"
         And the user runs sql file "test/behave/mgmt_utils/steps/data/gpcheckcat/create_inconsistent_gpfastsequence.sql" in "timestamp_db" on all the segments
         And the user runs "psql timestamp_db -c "CREATE TABLE foo(i int)""
-        Then The user runs sql "set allow_system_table_mods=true;delete from pg_class where relname='foo'" in "timestamp_db" on first primary segment
+        Then the user runs sql "set allow_system_table_mods=true;delete from pg_class where relname='foo'" in "timestamp_db" on first primary segment
         And the user runs "psql timestamp_db -c "drop table if exists foo""
         Then the user runs "gpcheckcat timestamp_db"
         Then gpcheckcat should return a return code of 3

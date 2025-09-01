@@ -31,7 +31,7 @@ RUN yum makecache && \
     # repository can no longer update itself.
     curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python && \
     pip install psi pytest==3.10.1 && \
-    pip install behave==1.2.6 allure-behave==2.4.0 && \
+    pip install allure-behave==2.4.0 && \
     yum clean all
 
 # setup ssh configuration
