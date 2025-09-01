@@ -59,7 +59,7 @@ inline uint8_t NumBitsAllowZero(uint32_t value) {
 }
 
 // Fast bit width calculation (0 -> 0)
-inline uint8_t FastNumBits(uint32_t v) {
+inline static uint8_t FastNumBits(uint32_t v) {
 #if defined(__GNUC__) || defined(__clang__)
   return v == 0 ? 0 : static_cast<uint8_t>(32 - __builtin_clz(v));
 #else
@@ -152,21 +152,19 @@ Overall layout:
   [Repeated Block until total_count is exhausted]
     - uint32 min_delta
     - uint8  bit_widths[ mini_blocks_per_block ]
-    - uint32 payload_size
-    - uint8  payload[payload_size]
+    - uint8  payload[computed from bit_widths]
             // bit-packed adjusted deltas, mini-block by mini-block
-            // within a block: bits are written LSB-first, end aligned to byte
+            // within a block: bits are written MSB-first, end aligned to byte
 */
 
 template <typename T>
 size_t PaxDeltaEncoder<T>::GetBoundSize(size_t src_len) const {
   size_t value_count = src_len / sizeof(T);
   size_t block_count = (value_count + value_per_block_ - 1) / value_per_block_;
-  /* header + first_value + block_count * (min_delta + bit_widths + payload_size
-   * + payload) */
+  /* header + first_value + block_count * (min_delta + bit_widths )
+   * + payload was eliminated to value_count*/
   return sizeof(DeltaBlockHeader) + sizeof(T) +
-         block_count * (sizeof(uint32) + mini_blocks_per_block_ +
-                        sizeof(uint32) + sizeof(uint32));
+         block_count * (sizeof(uint32) + mini_blocks_per_block_) + value_count;
 }
 
 template <typename T>
@@ -231,8 +229,8 @@ void PaxDeltaEncoder<T>::Encode(T *data, size_t count) {
     }
     uint32_t payload_bytes = static_cast<uint32_t>((total_bits + 7) / 8);
 
-    size_t need_size = payload_bytes + mini_blocks_per_block_ +
-                       sizeof(payload_bytes) + sizeof(min_delta);
+    size_t need_size =
+        payload_bytes + mini_blocks_per_block_ + sizeof(min_delta);
 
     // Grows the buffer to be at least need_size bytes. To avoid frequent
     // resizing, the new capacity is calculated as the maximum of (current
@@ -249,14 +247,10 @@ void PaxDeltaEncoder<T>::Encode(T *data, size_t count) {
                           sizeof(min_delta));
     result_buffer_->Brush(sizeof(min_delta));
 
-    // write bit_widths and payload_size
+    // write bit_widths
     result_buffer_->Write(reinterpret_cast<char *>(bit_widths),
                           mini_blocks_per_block_);
     result_buffer_->Brush(mini_blocks_per_block_);
-
-    result_buffer_->Write(reinterpret_cast<char *>(&payload_bytes),
-                          sizeof(payload_bytes));
-    result_buffer_->Brush(sizeof(payload_bytes));
 
     uint8_t *payload_ptr =
         reinterpret_cast<uint8_t *>(result_buffer_->GetAvailableBuffer());
@@ -466,16 +460,12 @@ size_t PaxDeltaDecoder<T>::Decoding() {
       --remaining;
     }
 
-    uint32_t payload_size;
-    std::memcpy(&payload_size, p, sizeof(payload_size));
-    p += sizeof(payload_size);
-    remaining -= sizeof(payload_size);
-
     uint32_t values_in_block =
         std::min(values_per_block, total_count - decoded);
 
-    // read payload within bounded size
-    BitReader64Ptr br(p, payload_size);
+    // read payload: initialize reader with remaining bytes; we'll compute
+    // consumed
+    BitReader64Ptr br(p, remaining);
 
     for (uint32_t i = 0; i < mini_blocks_per_block_ && decoded < total_count;
          ++i) {
@@ -494,8 +484,9 @@ size_t PaxDeltaDecoder<T>::Decoding() {
 
     br.AlignToByte();
 
-    p += payload_size;
-    remaining -= payload_size;
+    size_t consumed = br.index;
+    p += consumed;
+    remaining -= consumed;
   }
 
   Assert(result_buffer_->Used() == total_count * sizeof(T));

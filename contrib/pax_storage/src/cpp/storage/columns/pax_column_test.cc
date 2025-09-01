@@ -697,7 +697,6 @@ TEST_P(PaxNonFixedColumnCompressTest,
   auto number = ::testing::get<0>(GetParam());
   auto kind = ::testing::get<1>(GetParam());
   auto verify_range = ::testing::get<2>(GetParam());
-  auto enable_offsets_encoding = ::testing::get<2>(GetParam());
   const size_t number_of_rows = 1024;
 
   PaxEncoder::EncodingOption encoding_option;
@@ -705,10 +704,9 @@ TEST_P(PaxNonFixedColumnCompressTest,
   encoding_option.compress_level = 5;
   encoding_option.is_sign = true;
 
-  if (enable_offsets_encoding) {
-    encoding_option.offsets_encode_type = kind;
-    encoding_option.offsets_compress_level = 5;
-  }
+  encoding_option.offsets_encode_type =
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+  encoding_option.offsets_compress_level = 5;
 
   non_fixed_column = new PaxNonFixedEncodingColumn(
       number_of_rows, number_of_rows, std::move(encoding_option));
@@ -744,10 +742,9 @@ TEST_P(PaxNonFixedColumnCompressTest,
   decoding_option.is_sign = true;
   decoding_option.compress_level = 5;
 
-  if (enable_offsets_encoding) {
-    decoding_option.offsets_encode_type = kind;
-    decoding_option.offsets_compress_level = 5;
-  }
+  decoding_option.offsets_encode_type =
+      ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA;
+  decoding_option.offsets_compress_level = 5;
 
   auto non_fixed_column_for_read = new PaxNonFixedEncodingColumn(
       number_of_rows * number, sizeof(int32) * number_of_rows,
