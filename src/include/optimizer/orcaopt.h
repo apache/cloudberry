@@ -29,13 +29,11 @@
 
 #include "pg_config.h"
 
-#ifdef USE_ORCA
 
 typedef struct OptimizerOptions 
 {
     bool create_vectorization_plan;
 } OptimizerOptions;
 
-#endif
 
 #endif /* ORCA_H */
