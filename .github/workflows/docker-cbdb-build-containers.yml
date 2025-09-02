@@ -60,6 +60,7 @@ on:
     paths:
       - 'devops/deploy/docker/build/rocky8/**'
       - 'devops/deploy/docker/build/rocky9/**'
+      - 'devops/deploy/docker/build/ubuntu22.04/**'
   workflow_dispatch:  # Manual trigger
 
 # Prevent multiple workflow runs from interfering with each other
@@ -73,10 +74,10 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
 
-    # Matrix strategy to build for both Rocky Linux 8 and 9
+    # Matrix strategy to build for both Rocky Linux 8 and 9, Ubuntu 22.04
     strategy:
       matrix:
-        platform: ['rocky8', 'rocky9']
+        platform: ['rocky8', 'rocky9', 'ubuntu22.04']
 
     steps:
       # Checkout repository code with full history
@@ -103,6 +104,8 @@ jobs:
               - 'devops/deploy/docker/build/rocky8/**'
             rocky9:
               - 'devops/deploy/docker/build/rocky9/**'
+            ubuntu22.04:
+              - 'devops/deploy/docker/build/ubuntu22.04/**'
 
       # Set up QEMU for multi-architecture support
       # This allows building ARM64 images on AMD64 infrastructure and vice versa

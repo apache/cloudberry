@@ -1240,7 +1240,7 @@ code or new licensing patterns.
             <exclude>Makefile</exclude>
             <exclude>aclocal.m4</exclude>
             <exclude>python-dependencies.txt</exclude>
-            
+
             <!-- Finally we exclude a few file types (based on
                  extension) for which comments are tough to
                  maintain. Note that this is a combination of files
@@ -1742,6 +1742,11 @@ code or new licensing patterns.
 
             <exclude>devops/deploy/docker/build/rocky8/tests/requirements.txt</exclude>
             <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
+	    <exclude>devops/deploy/docker/build/ubuntu22.04/tests/requirements.txt</exclude>
+
+	    <!-- Exclude ubuntu debian packaging files since they do not support comments
+            -->
+            <exclude>devops/build/packaging/deb/ubuntu22.04/**</exclude>
 
           </excludes>
 
