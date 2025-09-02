@@ -56,7 +56,7 @@ init_environment "Cloudberry Unittest Script" "${UNITTEST_LOG}"
 
 # Set environment
 log_section "Environment Setup"
-export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:LD_LIBRARY_PATH
 log_section_end "Environment Setup"
 
 # Unittest process
