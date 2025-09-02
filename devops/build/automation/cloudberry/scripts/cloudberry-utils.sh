@@ -79,10 +79,14 @@
 #
 # --------------------------------------------------------------------
 
+DEFAULT_BUILD_DESTINATION=/usr/local/cloudberry-db
+
 # Initialize logging and environment
 init_environment() {
     local script_name=$1
     local log_file=$2
+
+    init_build_destination_var
 
     echo "=== Initializing environment for ${script_name} ==="
     echo "${script_name} executed at $(date)" | tee -a "${log_file}"
@@ -91,6 +95,7 @@ init_environment() {
     echo "Working directory: $(pwd)" | tee -a "${log_file}"
     echo "Source directory: ${SRC_DIR}" | tee -a "${log_file}"
     echo "Log directory: ${LOG_DIR}" | tee -a "${log_file}"
+    echo "Build destination: ${BUILD_DESTINATION}" | tee -a "${log_file}"
 
     if [ -z "${SRC_DIR:-}" ]; then
         echo "Error: SRC_DIR environment variable is not set" | tee -a "${log_file}"
@@ -121,7 +126,7 @@ run_psql_cmd() {
 # Function to source Cloudberry environment
 source_cloudberry_env() {
     echo "=== Sourcing Cloudberry environment ===" | tee -a "${LOG_DIR}/environment.log"
-    source /usr/local/cloudberry-db/cloudberry-env.sh
+    source ${BUILD_DESTINATION}/cloudberry-env.sh
     source ${SRC_DIR}/../cloudberry/gpAux/gpdemo/gpdemo-env.sh
 }
 
@@ -145,4 +150,26 @@ log_completion() {
     local log_file=$2
     local timestamp=$(date "+%Y.%m.%d-%H.%M.%S")
     echo "${script_name} execution completed successfully at ${timestamp}" | tee -a "${log_file}"
+}
+
+# Function to get OS identifier
+detect_os() {
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_ID=$ID
+    OS_VERSION=$VERSION_ID
+  else
+    echo "Unsupported system: cannot detect OS" >&2
+    exit 99
+  fi
+}
+
+# Init BUILD_DESTINATION default value if not set
+init_build_destination_var() {
+
+    if [ -z ${BUILD_DESTINATION+x} ]; then 
+      export BUILD_DESTINATION=${DEFAULT_BUILD_DESTINATION}
+      exec "$@"
+    fi
+
 }
