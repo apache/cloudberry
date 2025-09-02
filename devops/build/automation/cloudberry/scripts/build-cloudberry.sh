@@ -45,7 +45,7 @@
 # Prerequisites:
 #   - configure-cloudberry.sh must be run first
 #   - Required build dependencies must be installed
-#   - /usr/local/cloudberry-db/lib must exist and be writable
+#   - ${BUILD_DESTINATION}/lib (by default /usr/local/cloudberry-db/lib) must exist and be writable
 #
 # Exit Codes:
 #   0 - Build and installation completed successfully
@@ -71,7 +71,7 @@ init_environment "Cloudberry Build Script" "${BUILD_LOG}"
 
 # Set environment
 log_section "Environment Setup"
-export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:LD_LIBRARY_PATH
 log_section_end "Environment Setup"
 
 # Build process
