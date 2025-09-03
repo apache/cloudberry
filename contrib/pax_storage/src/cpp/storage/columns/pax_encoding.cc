@@ -33,6 +33,7 @@
 #include "comm/pax_memory.h"
 #include "storage/columns/pax_dict_encoding.h"
 #include "storage/columns/pax_rlev2_encoding.h"
+#include "storage/columns/pax_delta_encoding.h"
 
 namespace pax {
 
@@ -56,8 +57,7 @@ std::shared_ptr<PaxEncoder> PaxEncoder::CreateStreamingEncoder(
       break;
     }
     case ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA: {
-      // TODO(jiaqizho): support direct delta encoding
-      // not support yet, then direct return a nullptr(means no encoding)
+      encoder = std::make_shared<PaxDeltaEncoder<uint32_t>>(encoder_options);
       break;
     }
     case ColumnEncoding_Kind::ColumnEncoding_Kind_DEF_ENCODED: {

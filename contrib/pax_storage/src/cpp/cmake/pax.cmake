@@ -51,6 +51,7 @@ set(pax_storage_src
     storage/columns/pax_dict_encoding.cc
     storage/columns/pax_decoding.cc
     storage/columns/pax_encoding.cc
+    storage/columns/pax_delta_encoding.cc
     storage/columns/pax_rlev2_decoding.cc
     storage/columns/pax_rlev2_encoding.cc
     storage/columns/pax_vec_bitpacked_column.cc

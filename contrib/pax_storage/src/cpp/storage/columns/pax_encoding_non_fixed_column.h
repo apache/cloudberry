@@ -83,6 +83,9 @@ class PaxNonFixedEncodingColumn : public PaxNonFixedColumn {
   std::shared_ptr<DataBuffer<char>> shared_data_;
 
   std::shared_ptr<PaxCompressor> offsets_compressor_;
+  // Optional encoder/decoder for offsets stream (alternative to compression)
+  std::shared_ptr<PaxEncoder> offsets_encoder_;
+  std::shared_ptr<PaxDecoder> offsets_decoder_;
   std::shared_ptr<DataBuffer<char>> shared_offsets_data_;
 };
 

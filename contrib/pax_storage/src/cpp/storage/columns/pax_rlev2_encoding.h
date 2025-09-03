@@ -49,6 +49,10 @@ class PaxOrcEncoder final : public PaxEncoder {
 
   void Flush() override;
 
+  size_t GetBoundSize(size_t src_len) const override {
+    CBDB_RAISE(cbdb::CException::kExTypeUnImplements);
+  }
+
  private:
   struct EncoderContext {
     bool is_sign;
