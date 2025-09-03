@@ -233,7 +233,7 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 insert into base_table select i,i,i from generate_series(1, 100) i;
 refresh materialized view mt;
 select pg_sleep(0.77) from gp_dist_random('gp_id'); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables_internal where relid = 'mt'::regclass;
+select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
 -- pg_stat_all_tables collects gpstats across segments
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
 
@@ -249,7 +249,7 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 insert into base_table select i,i,i from generate_series(1, 100) i;
 refresh materialized view mt;
 select pg_sleep(0.77) from gp_dist_random('gp_id'); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables_internal where relid = 'mt'::regclass;
+select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
 -- pg_stat_all_tables collects gpstats across segments
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
 
