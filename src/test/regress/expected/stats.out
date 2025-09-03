@@ -28,7 +28,7 @@ SELECT t.seq_scan, t.seq_tup_read, t.idx_scan, t.idx_tup_fetch,
        (b.heap_blks_read + b.heap_blks_hit) AS heap_blks,
        (b.idx_blks_read + b.idx_blks_hit) AS idx_blks,
        pg_stat_get_snapshot_timestamp() as snap_ts
-  FROM pg_catalog.pg_stat_user_tables AS t,
+  FROM pg_catalog.gp_stat_user_tables_summary AS t,
        pg_catalog.pg_statio_user_tables AS b
  WHERE t.relname='tenk2' AND b.relname='tenk2';
 COMMIT;
@@ -121,7 +121,7 @@ SELECT pg_stat_force_next_flush();
 BEGIN;
 SET LOCAL stats_fetch_consistency = snapshot;
 SELECT relname, n_tup_ins, n_tup_upd, n_tup_del, n_live_tup, n_dead_tup
-  FROM pg_stat_user_tables
+  FROM gp_stat_user_tables_summary
  WHERE relname like 'trunc_stats_test%' order by relname;
       relname      | n_tup_ins | n_tup_upd | n_tup_del | n_live_tup | n_dead_tup 
 -------------------+-----------+-----------+-----------+------------+------------
@@ -136,7 +136,7 @@ SELECT st.seq_scan >= pr.seq_scan + 1,
        st.seq_tup_read >= pr.seq_tup_read + cl.reltuples,
        st.idx_scan >= pr.idx_scan + 1,
        st.idx_tup_fetch >= pr.idx_tup_fetch + 1
-  FROM pg_stat_user_tables AS st, pg_class AS cl, prevstats AS pr
+  FROM gp_stat_user_tables_summary AS st, pg_class AS cl, prevstats AS pr
  WHERE st.relname='tenk2' AND cl.relname='tenk2';
  ?column? | ?column? | ?column? | ?column? 
 ----------+----------+----------+----------

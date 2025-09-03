@@ -45,18 +45,6 @@ ABORT
 DELETE FROM vacuum_progress_ao_column where j % 2 = 0;
 DELETE 50000
 
--- Lookup pg_class and collected stats view before VACUUM
-SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_column';
- relpages | reltuples | relallvisible 
-----------+-----------+---------------
- 0        | -1        | 0             
-(1 row)
-SELECT n_live_tup, n_dead_tup, last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
- n_live_tup | n_dead_tup | last_vacuum | vacuum_count 
-------------+------------+-------------+--------------
- 100000     | 200000     |             | 0            
-(1 row)
-
 -- Perform VACUUM and observe the progress
 
 -- Suspend execution at pre-cleanup phase after truncating both segfiles to their logical EOF.
@@ -168,7 +156,7 @@ SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_
 ----------+-----------+---------------
  37       | 50000     | 0             
 (1 row)
-SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
+SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' and gp_segment_id = 1;
  n_live_tup | n_dead_tup | has_last_vacuum | vacuum_count 
 ------------+------------+-----------------+--------------
  50000      | 0          | t               | 1            
@@ -248,7 +236,7 @@ SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_
 ----------+-----------+---------------
  13       | 50000     | 0             
 (1 row)
-SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM pg_stat_all_tables WHERE relname = 'vacuum_progress_ao_column';
+SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' and gp_segment_id = 1;
  n_live_tup | n_dead_tup | has_last_vacuum | vacuum_count 
 ------------+------------+-----------------+--------------
  50000      | 0          | t               | 2            
@@ -259,19 +247,6 @@ SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuu
 -- Current behavior is it will clear previous compact phase num_dead_tuples in post-cleanup
 -- phase (at injecting point vacuum_ao_post_cleanup_end), which is different from above case
 -- in which vacuum worker isn't changed.
-ALTER SYSTEM SET gp_fts_mark_mirror_down_grace_period to 10;
-ALTER
-ALTER SYSTEM SET gp_fts_probe_interval to 10;
-ALTER
-SELECT gp_segment_id, pg_reload_conf() FROM gp_id UNION SELECT gp_segment_id, pg_reload_conf() FROM gp_dist_random('gp_id');
- gp_segment_id | pg_reload_conf 
----------------+----------------
- 2             | t              
- 1             | t              
- 0             | t              
- -1            | t              
-(4 rows)
-
 DROP TABLE IF EXISTS vacuum_progress_ao_column;
 DROP
 CREATE TABLE vacuum_progress_ao_column(i int, j int);
@@ -315,7 +290,7 @@ DELETE 50000
 SET
 1&: vacuum vacuum_progress_ao_column;  <waiting ...>
 
-2: SELECT gp_wait_until_triggered_fault('vacuum_ao_after_compact', 3, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
+2: SELECT gp_wait_until_triggered_fault('vacuum_ao_after_compact', 1, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
  gp_wait_until_triggered_fault 
 -------------------------------
  Success:                      
@@ -325,13 +300,17 @@ SET
 
 -- Non-zero progressing data num_dead_tuples is showed up.
 select gp_segment_id, relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum where gp_segment_id > -1;
-ERROR:  relation "gp_stat_progress_vacuum" does not exist
-LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
-                                                             ^
+ gp_segment_id | relname                   | phase                    | heap_blks_total | heap_blks_scanned | heap_blks_vacuumed | index_vacuum_count | max_dead_tuples | num_dead_tuples 
+---------------+---------------------------+--------------------------+-----------------+-------------------+--------------------+--------------------+-----------------+-----------------
+ 1             | vacuum_progress_ao_column | append-optimized compact | 25              | 9                 | 17                 | 0                  | 33327           | 16621           
+ 0             | vacuum_progress_ao_column | append-optimized compact | 25              | 9                 | 17                 | 0                  | 33462           | 16726           
+ 2             | vacuum_progress_ao_column | append-optimized compact | 25              | 9                 | 17                 | 0                  | 33211           | 16653           
+(3 rows)
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
-ERROR:  relation "gp_stat_progress_vacuum_summary" does not exist
-LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
-                                                             ^
+ relname                   | phase                    | heap_blks_total | heap_blks_scanned | heap_blks_vacuumed | index_vacuum_count | max_dead_tuples | num_dead_tuples 
+---------------------------+--------------------------+-----------------+-------------------+--------------------+--------------------+-----------------+-----------------
+ vacuum_progress_ao_column | append-optimized compact | 75              | 27                | 51                 | 0                  | 100000          | 50000           
+(1 row)
 
 -- Resume execution of compact phase and block at syncrep on one segment.
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
@@ -372,7 +351,7 @@ LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
 -- initializes a new vacrelstats at the beginning of post-cleanup phase.
 -- Also all segments should reach to the same "vacuum_worker_changed" point
 -- due to FTS version being changed.
-2: SELECT gp_wait_until_triggered_fault('vacuum_worker_changed', 3, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
+2: SELECT gp_wait_until_triggered_fault('vacuum_worker_changed', 1, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
  gp_wait_until_triggered_fault 
 -------------------------------
  Success:                      
@@ -383,10 +362,10 @@ LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
 2: SELECT content, role, preferred_role, mode, status FROM gp_segment_configuration WHERE content > -1;
  content | role | preferred_role | mode | status 
 ---------+------+----------------+------+--------
- 0       | p    | p              | s    | u      
- 0       | m    | m              | s    | u      
  2       | p    | p              | s    | u      
  2       | m    | m              | s    | u      
+ 0       | p    | p              | s    | u      
+ 0       | m    | m              | s    | u      
  1       | p    | p              | n    | u      
  1       | m    | m              | n    | d      
 (6 rows)
@@ -406,7 +385,7 @@ LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
  Success:        
  Success:        
 (3 rows)
-2: SELECT gp_wait_until_triggered_fault('vacuum_ao_post_cleanup_end', 3, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
+2: SELECT gp_wait_until_triggered_fault('vacuum_ao_post_cleanup_end', 1, dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
  gp_wait_until_triggered_fault 
 -------------------------------
  Success:                      
@@ -416,13 +395,17 @@ LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
 
 -- The previous collected num_dead_tuples in compact phase is zero.
 select gp_segment_id, relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum where gp_segment_id > -1;
-ERROR:  relation "gp_stat_progress_vacuum" does not exist
-LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
-                                                             ^
+ gp_segment_id | relname                   | phase                         | heap_blks_total | heap_blks_scanned | heap_blks_vacuumed | index_vacuum_count | max_dead_tuples | num_dead_tuples 
+---------------+---------------------------+-------------------------------+-----------------+-------------------+--------------------+--------------------+-----------------+-----------------
+ 2             | vacuum_progress_ao_column | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
+ 0             | vacuum_progress_ao_column | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
+ 1             | vacuum_progress_ao_column | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
+(3 rows)
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
-ERROR:  relation "gp_stat_progress_vacuum_summary" does not exist
-LINE 1: ...cuum_count, max_dead_tuples, num_dead_tuples from gp_stat_pr...
-                                                             ^
+ relname                   | phase                         | heap_blks_total | heap_blks_scanned | heap_blks_vacuumed | index_vacuum_count | max_dead_tuples | num_dead_tuples 
+---------------------------+-------------------------------+-----------------+-------------------+--------------------+--------------------+-----------------+-----------------
+ vacuum_progress_ao_column | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
+(1 row)
 
 2: SELECT gp_inject_fault('vacuum_ao_post_cleanup_end', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
  gp_inject_fault 
@@ -469,15 +452,3 @@ reset Debug_appendonly_print_compaction;
 RESET
 reset default_table_access_method;
 RESET
-ALTER SYSTEM RESET gp_fts_mark_mirror_down_grace_period;
-ALTER
-ALTER SYSTEM RESET gp_fts_probe_interval;
-ALTER
-SELECT gp_segment_id, pg_reload_conf() FROM gp_id UNION SELECT gp_segment_id, pg_reload_conf() FROM gp_dist_random('gp_id');
- gp_segment_id | pg_reload_conf 
----------------+----------------
- 2             | t              
- 1             | t              
- 0             | t              
- -1            | t              
-(4 rows)

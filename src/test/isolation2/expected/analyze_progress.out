@@ -92,4 +92,3 @@ ANALYZE
 -- teardown
 DROP TABLE t_analyze_repl;
 DROP
-
