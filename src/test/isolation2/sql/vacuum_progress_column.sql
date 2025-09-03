@@ -95,7 +95,11 @@ SELECT gp_inject_fault('appendonly_after_truncate_segment_file', 'reset', dbid) 
 -- pg_class and collected stats view should be updated after the 2nd VACUUM
 1U: SELECT wait_until_dead_tup_change_to('vacuum_progress_ao_column'::regclass::oid, 0);
 SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_progress_ao_column';
+<<<<<<< HEAD
 -- SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' and gp_segment_id = 1;
+=======
+SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' and gp_segment_id = 1;
+>>>>>>> 05869c862a5 (Fix: Adapt system view after cherry-pick)
 
 1q:
 -- Test vacuum worker process is changed at post-cleanup phase due to mirror down.

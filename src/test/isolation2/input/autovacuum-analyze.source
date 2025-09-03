@@ -176,8 +176,8 @@ SELECT gp_inject_fault('auto_vac_worker_after_report_activity', 'suspend', '', '
 -- auto_stats executed but auto-ANALYZE not execute yet since we suspend before finish ANALYZE.
 SELECT count(*) FROM pg_statistic where starelid = 'autostatstbl'::regclass;
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
--- expect analyze_count = 1, autoanalyze_count = 0, and n_mod_since_analyze = 1000 since ANALYZE
--- executed in same transaction for the insert statement.
+-- expect analyze_count = 1, autoanalyze_count = 0, and n_mod_since_analyze = 1000 since ANALYZE executed
+-- in same transaction for the insert statement.
 select analyze_count, autoanalyze_count, n_mod_since_analyze from pg_stat_all_tables where relname = 'autostatstbl';
 
 -- Wait until autovacuum is triggered
@@ -242,8 +242,8 @@ SELECT gp_inject_fault('auto_vac_worker_after_report_activity', 'suspend', '', '
 
 -- auto_stats should not executed and auto-ANALYZE not execute yet since we suspend before finish ANALYZE.
 select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
--- expect analyze_count = 2, autoanalyze_count = 2, and n_mod_since_analyze = 1000 since ANALYZE
--- executed in same transaction for the insert statement.
+-- expect analyze_count = 2, autoanalyze_count = 2, and n_mod_since_analyze = 1000 since ANALYZE executed
+-- in same transaction for the insert statement.
 select analyze_count, autoanalyze_count, n_mod_since_analyze from pg_stat_all_tables where relname = 'autostatstbl';
 
 -- Wait until autovacuum is triggered

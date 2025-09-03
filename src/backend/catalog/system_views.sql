@@ -1205,6 +1205,18 @@ CREATE VIEW pg_stat_database AS
         SELECT oid, datname FROM pg_database
     ) D;
 
+CREATE VIEW pg_stat_resqueues AS
+    SELECT
+        Q.oid AS queueid,
+        Q.rsqname AS queuename,
+        pg_stat_get_queue_num_exec(Q.oid) AS n_queries_exec,
+        pg_stat_get_queue_num_wait(Q.oid) AS n_queries_wait,
+        pg_stat_get_queue_elapsed_exec(Q.oid) AS elapsed_exec,
+        pg_stat_get_queue_elapsed_wait(Q.oid) AS elapsed_wait
+    FROM pg_resqueue AS Q;
+
+-- Resource queue views
+
 CREATE VIEW pg_resqueue_status AS
     SELECT
             q.rsqname,
