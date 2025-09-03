@@ -235,8 +235,11 @@ size_t PaxLZ4Compressor::GetCompressBound(size_t src_len) {
 
 size_t PaxLZ4Compressor::Compress(void *dst_buff, size_t dst_cap,
                                   void *src_buff, size_t src_len, int lvl) {
+#define LZ4_MAX_ACC 65536
   // acceleration is oppsite meaning of compress level
+  // map [19, 0] to [0, LZ4_MAX_ACC]
   int acceleration = 19 - lvl;
+  acceleration = (int)(acceleration * LZ4_MAX_ACC / 20.0);
   return LZ4_compress_fast((char *)src_buff, (char *)dst_buff, src_len,
                               dst_cap, acceleration);
 }
