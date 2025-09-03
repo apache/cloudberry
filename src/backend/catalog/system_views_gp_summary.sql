@@ -135,6 +135,7 @@ FROM
          case when d.policytype = 'r' then (sum(n_live_tup)/d.numsegments)::bigint else sum(n_live_tup) end n_live_tup,
          case when d.policytype = 'r' then (sum(n_dead_tup)/d.numsegments)::bigint else sum(n_dead_tup) end n_dead_tup,
          case when d.policytype = 'r' then (sum(n_mod_since_analyze)/d.numsegments)::bigint else sum(n_mod_since_analyze) end n_mod_since_analyze,
+         case when d.policytype = 'r' then (sum(n_ins_since_vacuum)/d.numsegments)::bigint else sum(n_ins_since_vacuum) end n_ins_since_vacuum,
          max(last_vacuum) as last_vacuum,
          max(last_autovacuum) as last_autovacuum,
          max(last_analyze) as last_analyze,

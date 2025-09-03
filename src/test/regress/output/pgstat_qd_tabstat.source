@@ -520,8 +520,8 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
        153 |         0 |         0 |             0 |        102 |          0 |                 153
 (1 row)
 
--- pg_stat_all_tables collects gpstats across segments
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
+-- gp_stat_all_tables_summary collects gpstats across segments
+select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        153 |         0 |         0 |             0 |        102 |          0 |                 153
@@ -561,8 +561,8 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
        153 |         0 |         0 |             0 |        102 |          0 |                 153
 (1 row)
 
--- pg_stat_all_tables collects gpstats across segments
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
+-- gp_stat_all_tables_summary collects gpstats across segments
+select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        153 |         0 |         0 |             0 |        102 |          0 |                 153
