@@ -4,6 +4,6 @@
 
 class UDSConnector {
 public:
-  UDSConnector();
-  bool report_query(const yagpcc::SetQueryReq &req, const std::string &event);
+  bool static report_query(const yagpcc::SetQueryReq &req,
+                           const std::string &event);
 };

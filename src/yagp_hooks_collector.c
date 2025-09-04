@@ -10,6 +10,8 @@ void _PG_init(void);
 void _PG_fini(void);
 PG_FUNCTION_INFO_V1(yagp_stat_messages_reset);
 PG_FUNCTION_INFO_V1(yagp_stat_messages);
+PG_FUNCTION_INFO_V1(yagp_init_log);
+PG_FUNCTION_INFO_V1(yagp_truncate_log);
 
 void _PG_init(void) {
   if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
@@ -30,4 +32,14 @@ Datum yagp_stat_messages_reset(PG_FUNCTION_ARGS) {
 
 Datum yagp_stat_messages(PG_FUNCTION_ARGS) {
   return yagp_functions_get(fcinfo);
+}
+
+Datum yagp_init_log(PG_FUNCTION_ARGS) {
+  init_log();
+  PG_RETURN_VOID();
+}
+
+Datum yagp_truncate_log(PG_FUNCTION_ARGS) {
+  truncate_log();
+  PG_RETURN_VOID();
 }
