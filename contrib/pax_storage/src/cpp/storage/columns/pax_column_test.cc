@@ -798,6 +798,9 @@ INSTANTIATE_TEST_SUITE_P(
     PaxColumnEncodingTestCombine, PaxColumnCompressTest,
     testing::Combine(testing::Values(16, 32, 64),
                      testing::Values(ColumnEncoding_Kind_NO_ENCODED,
+#ifdef USE_LZ4
+                                     ColumnEncoding_Kind_COMPRESS_LZ4,
+#endif
                                      ColumnEncoding_Kind_COMPRESS_ZSTD,
                                      ColumnEncoding_Kind_COMPRESS_ZLIB)));
 
@@ -805,6 +808,9 @@ INSTANTIATE_TEST_SUITE_P(
     PaxColumnEncodingTestCombine, PaxNonFixedColumnCompressTest,
     testing::Combine(testing::Values(16, 32, 64),
                      testing::Values(ColumnEncoding_Kind_NO_ENCODED,
+#ifdef USE_LZ4
+                                     ColumnEncoding_Kind_COMPRESS_LZ4,
+#endif
                                      ColumnEncoding_Kind_COMPRESS_ZSTD,
                                      ColumnEncoding_Kind_COMPRESS_ZLIB),
                      testing::Values(true, false),

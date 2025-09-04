@@ -37,6 +37,7 @@ message ColumnEncoding {
     COMPRESS_ZLIB = 4;        // use ZLIB to compress 
 
     DICTIONARY = 5;           // use dict-endoing 
+    COMPRESS_LZ4 = 6;         // use lz4 to compress
   }
 
   optional Kind kind = 1;
