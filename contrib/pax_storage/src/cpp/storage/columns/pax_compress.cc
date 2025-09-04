@@ -50,10 +50,12 @@ std::shared_ptr<PaxCompressor> PaxCompressor::CreateBlockCompressor(
       compressor = std::make_shared<PaxZlibCompressor>();
       break;
     }
+#ifdef USE_LZ4
     case ColumnEncoding_Kind::ColumnEncoding_Kind_COMPRESS_LZ4: {
       compressor = std::make_shared<PaxLZ4Compressor>();
       break;
     }
+#endif
     case ColumnEncoding_Kind::ColumnEncoding_Kind_DEF_ENCODED: {
       CBDB_RAISE(cbdb::CException::ExType::kExTypeLogicError,
                  fmt("Invalid compress type %d",
