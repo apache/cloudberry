@@ -79,8 +79,3 @@ bool filter_query(QueryDesc *query_desc) {
   return gp_command_count == 0 || query_desc->sourceText == nullptr ||
          !Config::enable_collector() || Config::filter_user(get_user_name());
 }
-
-bool need_collect(QueryDesc *query_desc, int nesting_level) {
-  return !filter_query(query_desc) &&
-         nesting_is_valid(query_desc, nesting_level);
-}
