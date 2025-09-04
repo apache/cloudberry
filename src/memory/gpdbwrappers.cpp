@@ -1,4 +1,5 @@
 #include "gpdbwrappers.h"
+#include "log/LogOps.h"
 
 extern "C" {
 #include "postgres.h"
@@ -126,8 +127,8 @@ ExplainState ya_gpdb::get_explain_state(QueryDesc *query_desc,
   });
 }
 
-ExplainState ya_gpdb::get_analyze_state_json(QueryDesc *query_desc,
-                                             bool analyze) noexcept {
+ExplainState ya_gpdb::get_analyze_state(QueryDesc *query_desc,
+                                        bool analyze) noexcept {
   return wrap_noexcept([&]() {
     ExplainState es;
     ExplainInitState(&es);
@@ -136,7 +137,7 @@ ExplainState ya_gpdb::get_analyze_state_json(QueryDesc *query_desc,
     es.buffers = es.analyze;
     es.timing = es.analyze;
     es.summary = es.analyze;
-    es.format = EXPLAIN_FORMAT_JSON;
+    es.format = EXPLAIN_FORMAT_TEXT;
     ExplainBeginOutput(&es);
     if (analyze) {
       ExplainPrintPlan(&es, query_desc);
@@ -220,4 +221,8 @@ char *ya_gpdb::get_rg_name_for_id(Oid group_id) {
 
 Oid ya_gpdb::get_rg_id_by_session_id(int session_id) {
   return wrap_throw(ResGroupGetGroupIdBySessionId, session_id);
+}
+
+void ya_gpdb::insert_log(const yagpcc::SetQueryReq &req, bool utility) {
+  return wrap_throw(::insert_log, req, utility);
 }

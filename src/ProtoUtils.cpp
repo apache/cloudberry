@@ -24,6 +24,18 @@ extern "C" {
 #include <ctime>
 #include <string>
 
+namespace {
+constexpr uint8_t UTF8_CONTINUATION_BYTE_MASK = (1 << 7) | (1 << 6);
+constexpr uint8_t UTF8_CONTINUATION_BYTE = (1 << 7);
+constexpr uint8_t UTF8_MAX_SYMBOL_BYTES = 4;
+
+// Returns true if byte is the starting byte of utf8
+// character, false if byte is the continuation (10xxxxxx).
+inline bool utf8_start_byte(uint8_t byte) {
+  return (byte & UTF8_CONTINUATION_BYTE_MASK) != UTF8_CONTINUATION_BYTE;
+}
+} // namespace
+
 google::protobuf::Timestamp current_ts() {
   google::protobuf::Timestamp current_ts;
   struct timeval tv;
@@ -46,9 +58,26 @@ void set_segment_key(yagpcc::SegmentKey *key) {
   key->set_segindex(GpIdentity.segindex);
 }
 
-inline std::string char_to_trimmed_str(const char *str, size_t len,
-                                       size_t lim) {
-  return std::string(str, std::min(len, lim));
+std::string trim_str_shrink_utf8(const char *str, size_t len, size_t lim) {
+  if (unlikely(str == nullptr)) {
+    return std::string();
+  }
+  if (likely(len <= lim || GetDatabaseEncoding() != PG_UTF8)) {
+    return std::string(str, std::min(len, lim));
+  }
+
+  // Handle trimming of utf8 correctly, do not cut multi-byte characters.
+  size_t cut_pos = lim;
+  size_t visited_bytes = 1;
+  while (visited_bytes < UTF8_MAX_SYMBOL_BYTES && cut_pos > 0) {
+    if (utf8_start_byte(static_cast<uint8_t>(str[cut_pos]))) {
+      break;
+    }
+    ++visited_bytes;
+    --cut_pos;
+  }
+
+  return std::string(str, cut_pos);
 }
 
 void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
@@ -61,10 +90,10 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
         ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
     ExplainState es = ya_gpdb::get_explain_state(query_desc, true);
     if (es.str) {
-      *qi->mutable_plan_text() = char_to_trimmed_str(es.str->data, es.str->len,
-                                                     Config::max_plan_size());
+      *qi->mutable_plan_text() = trim_str_shrink_utf8(es.str->data, es.str->len,
+                                                      Config::max_plan_size());
       StringInfo norm_plan = ya_gpdb::gen_normplan(es.str->data);
-      *qi->mutable_template_plan_text() = char_to_trimmed_str(
+      *qi->mutable_template_plan_text() = trim_str_shrink_utf8(
           norm_plan->data, norm_plan->len, Config::max_plan_size());
       qi->set_plan_id(
           hash_any((unsigned char *)norm_plan->data, norm_plan->len));
@@ -79,11 +108,11 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
 void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
   if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
     auto qi = req->mutable_query_info();
-    *qi->mutable_query_text() = char_to_trimmed_str(
+    *qi->mutable_query_text() = trim_str_shrink_utf8(
         query_desc->sourceText, strlen(query_desc->sourceText),
         Config::max_text_size());
     char *norm_query = ya_gpdb::gen_normquery(query_desc->sourceText);
-    *qi->mutable_template_query_text() = char_to_trimmed_str(
+    *qi->mutable_template_query_text() = trim_str_shrink_utf8(
         norm_query, strlen(norm_query), Config::max_text_size());
   }
 }
@@ -103,7 +132,8 @@ void set_query_info(yagpcc::SetQueryReq *req) {
   if (Gp_session_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
     qi->set_username(get_user_name());
-    qi->set_databasename(get_db_name());
+    if (IsTransactionState())
+      qi->set_databasename(get_db_name());
     qi->set_rsgname(get_rg_name());
   }
 }
@@ -118,11 +148,10 @@ void set_qi_slice_id(yagpcc::SetQueryReq *req) {
   aqi->set_slice_id(currentSliceId);
 }
 
-void set_qi_error_message(yagpcc::SetQueryReq *req) {
+void set_qi_error_message(yagpcc::SetQueryReq *req, const char *err_msg) {
   auto aqi = req->mutable_add_info();
-  auto error = elog_message();
   *aqi->mutable_error_message() =
-      char_to_trimmed_str(error, strlen(error), Config::max_text_size());
+      trim_str_shrink_utf8(err_msg, strlen(err_msg), Config::max_text_size());
 }
 
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
@@ -226,8 +255,7 @@ double protots_to_double(const google::protobuf::Timestamp &ts) {
   return double(ts.seconds()) + double(ts.nanos()) / 1000000000.0;
 }
 
-void set_analyze_plan_text_json(QueryDesc *query_desc,
-                                yagpcc::SetQueryReq *req) {
+void set_analyze_plan_text(QueryDesc *query_desc, yagpcc::SetQueryReq *req) {
   // Make sure it is a valid txn and it is not an utility
   // statement for ExplainPrintPlan() later.
   if (!IsTransactionState() || !query_desc->plannedstmt) {
@@ -235,7 +263,7 @@ void set_analyze_plan_text_json(QueryDesc *query_desc,
   }
   MemoryContext oldcxt =
       ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
-  ExplainState es = ya_gpdb::get_analyze_state_json(
+  ExplainState es = ya_gpdb::get_analyze_state(
       query_desc, query_desc->instrument_options && Config::enable_analyze());
   ya_gpdb::mem_ctx_switch_to(oldcxt);
   if (es.str) {
@@ -243,13 +271,8 @@ void set_analyze_plan_text_json(QueryDesc *query_desc,
     if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
       es.str->data[--es.str->len] = '\0';
     }
-    // Convert JSON array to JSON object.
-    if (es.str->len > 0) {
-      es.str->data[0] = '{';
-      es.str->data[es.str->len - 1] = '}';
-    }
-    auto trimmed_analyze =
-        char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());
+    auto trimmed_analyze = trim_str_shrink_utf8(es.str->data, es.str->len,
+                                                Config::max_plan_size());
     req->mutable_query_info()->set_analyze_text(trimmed_analyze);
     ya_gpdb::pfree(es.str->data);
   }
