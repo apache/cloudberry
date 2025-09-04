@@ -1,32 +1,33 @@
 ## YAGP Hooks Collector Metrics
 
-### States  
-A Postgres process goes through 4 executor functions to execute a query:  
-1) `ExecutorStart()` - resource allocation for the query.  
-2) `ExecutorRun()` - query execution.  
-3) `ExecutorFinish()` - cleanup.  
-4) `ExecutorEnd()` - cleanup.  
+### States
+A Postgres process goes through 4 executor functions to execute a query:
+1) `ExecutorStart()` - resource allocation for the query.
+2) `ExecutorRun()` - query execution.
+3) `ExecutorFinish()` - cleanup.
+4) `ExecutorEnd()` - cleanup.
 
-yagp-hooks-collector sends messages with 4 states, from _Dispatcher_ and/or _Execute_ processes: `submit`, `start`, `end`, `done`, in this order:  
+yagp-hooks-collector sends messages with 4 states, from _Dispatcher_ and/or _Execute_ processes: `submit`, `start`, `end`, `done`, in this order:
 ```
 submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -> ExecutorEnd() -> done
 ```
 
-### Key Points  
-- Some queries may skip the _end_ state, then the _end_ statistics is sent during _done_.  
-- If a query finishes with an error (`METRICS_QUERY_ERROR`), or is cancelled (`METRICS_QUERY_CANCELLED`), statistics is sent at _done_.  
-- Some statistics is calculated as the difference between the current global metric and the previous. The initial snapshot is taken at submit, and at _end_/_done_ the diff is calculated.  
-- Nested queries on _Dispatcher_ become top-level on _Execute_.  
-- Each process (_Dispatcher_/_Execute_) sends its own statistics.  
+### Key Points
+- Some queries may skip the _end_ state, then the _end_ statistics is sent during _done_.
+- If a query finishes with an error (`METRICS_QUERY_ERROR`), or is cancelled (`METRICS_QUERY_CANCELLED`), statistics is sent at _done_.
+- Some statistics is calculated as the difference between the current global metric and the previous. The initial snapshot is taken at submit, and at _end_/_done_ the diff is calculated.
+- Nested queries on _Dispatcher_ become top-level on _Execute_.
+- Each process (_Dispatcher_/_Execute_) sends its own statistics
 
-### Notations  
-- **S** = Submit event.  
-- **T** = Start event.  
-- **E** = End event.  
-- **D** = Done event.  
-- **DIFF** = current_value - submit_value (submit event).  
-- **ABS** = Absolute value, or where diff is not applicable, the value taken.  
-- **Local*** - Statistics that starts counting from zero for each new query. A nested query is also considered new.  
+### Notations
+- **S** = Submit event.
+- **T** = Start event.
+- **E** = End event.
+- **D** = Done event.
+- **DIFF** = current_value - submit_value (submit event).
+- **ABS** = Absolute value, or where diff is not applicable, the value taken.
+- **Local*** - Statistics that starts counting from zero for each new query. A nested query is also considered new.
+- **Node** - PG process, either a `Query Dispatcher` (on master) or an `Execute` (on segment).
 
 ### Statistics Table
 
@@ -36,7 +37,7 @@ submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -
 | `runningTimeSeconds`         | double | E, D    | DIFF     | -      | Node    |     +      |    +    | seconds | Wall clock time                                     |
 | `userTimeSeconds`            | double | E, D    | DIFF     | -      | Node    |     +      |    +    | seconds | /proc/pid/stat utime                                |
 | `kernelTimeSeconds`          | double | E, D    | DIFF     | -      | Node    |     +      |    +    | seconds | /proc/pid/stat stime                                |
-| `vsize`                      | uint64 | E, D    | ABS      | -      | Node    |     +      |    +    | pages   | /proc/pid/stat vsize                                |
+| `vsize`                      | uint64 | E, D    | ABS      | -      | Node    |     +      |    +    | bytes   | /proc/pid/stat vsize                                |
 | `rss`                        | uint64 | E, D    | ABS      | -      | Node    |     +      |    +    | pages   | /proc/pid/stat rss                                  |
 | `VmSizeKb`                   | uint64 | E, D    | ABS      | -      | Node    |     +      |    +    | KB      | /proc/pid/status VmSize                             |
 | `VmPeakKb`                   | uint64 | E, D    | ABS      | -      | Node    |     +      |    +    | KB      | /proc/pid/status VmPeak                             |
@@ -114,7 +115,7 @@ submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -
 | `error_message`              | string | D       | ABS      | -      | Node    |     +      |    +    | text    | Error message                                       |
 | `slice_id`                   | int64  | All     | ABS      | -      | Node    |     +      |    +    | id      | Slice ID                                            |
 | **QueryKey**                 |        |         |          |        |         |            |         |         |                                                     |
-| `tmid`                       | int32  | All     | ABS      | -      | Node    |     +      |    +    | id      | Time ID                                             |
+| `tmid`                       | int32  | All     | ABS      | -      | Node    |     +      |    +    | id      | Transaction start time                                             |
 | `ssid`                       | int32  | All     | ABS      | -      | Node    |     +      |    +    | id      | Session ID                                          |
 | `ccnt`                       | int32  | All     | ABS      | -      | Node    |     +      |    +    | count   | Command counter                                     |
 | **SegmentKey**               |        |         |          |        |         |            |         |         |                                                     |
