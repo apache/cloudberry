@@ -16,6 +16,10 @@ extern "C" {
 #include <utility>
 #include <string>
 
+namespace yagpcc {
+class SetQueryReq;
+} // namespace yagpcc
+
 namespace ya_gpdb {
 
 // Functions that call palloc().
@@ -27,8 +31,7 @@ char *get_database_name(Oid dbid) noexcept;
 bool split_identifier_string(char *rawstring, char separator,
                              List **namelist) noexcept;
 ExplainState get_explain_state(QueryDesc *query_desc, bool costs) noexcept;
-ExplainState get_analyze_state_json(QueryDesc *query_desc,
-                                    bool analyze) noexcept;
+ExplainState get_analyze_state(QueryDesc *query_desc, bool analyze) noexcept;
 Instrumentation *instr_alloc(size_t n, int instrument_options);
 HeapTuple heap_form_tuple(TupleDesc tupleDescriptor, Datum *values,
                           bool *isnull);
@@ -38,6 +41,7 @@ void instr_end_loop(Instrumentation *instr);
 char *gen_normquery(const char *query);
 StringInfo gen_normplan(const char *executionPlan);
 char *get_rg_name_for_id(Oid group_id);
+void insert_log(const yagpcc::SetQueryReq &req, bool utility);
 
 // Palloc-free functions.
 void pfree(void *pointer) noexcept;

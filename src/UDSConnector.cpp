@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "YagpStat.h"
 #include "memory/gpdbwrappers.h"
+#include "log/LogOps.h"
 
 #include <string>
 #include <unistd.h>
@@ -15,8 +16,6 @@
 extern "C" {
 #include "postgres.h"
 }
-
-UDSConnector::UDSConnector() { GOOGLE_PROTOBUF_VERIFY_VERSION; }
 
 static void inline log_tracing_failure(const yagpcc::SetQueryReq &req,
                                        const std::string &event) {

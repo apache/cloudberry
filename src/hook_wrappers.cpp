@@ -32,6 +32,7 @@ static analyze_stats_collect_hook_type previous_analyze_stats_collect_hook =
 #ifdef IC_TEARDOWN_HOOK
 static ic_teardown_hook_type previous_ic_teardown_hook = nullptr;
 #endif
+static ProcessUtility_hook_type previous_ProcessUtility_hook = nullptr;
 
 static void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags);
 static void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
@@ -44,6 +45,10 @@ static void ya_ic_teardown_hook(ChunkTransportState *transportStates,
 #ifdef ANALYZE_STATS_COLLECT_HOOK
 static void ya_analyze_stats_collect_hook(QueryDesc *query_desc);
 #endif
+static void ya_process_utility_hook(Node *parsetree, const char *queryString,
+                                    ProcessUtilityContext context,
+                                    ParamListInfo params, DestReceiver *dest,
+                                    char *completionTag);
 
 static EventSender *sender = nullptr;
 
@@ -85,6 +90,8 @@ void hooks_init() {
   analyze_stats_collect_hook = ya_analyze_stats_collect_hook;
 #endif
   stat_statements_parser_init();
+  previous_ProcessUtility_hook = ProcessUtility_hook;
+  ProcessUtility_hook = ya_process_utility_hook;
 }
 
 void hooks_deinit() {
@@ -104,6 +111,7 @@ void hooks_deinit() {
     delete sender;
   }
   YagpStat::deinit();
+  ProcessUtility_hook = previous_ProcessUtility_hook;
 }
 
 void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags) {
@@ -165,7 +173,8 @@ void ya_ExecutorEnd_hook(QueryDesc *query_desc) {
 }
 
 void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {
-  cpp_call(get_sender(), &EventSender::query_metrics_collect, status, arg);
+  cpp_call(get_sender(), &EventSender::query_metrics_collect, status,
+           arg /* queryDesc */, false /* utility */, (ErrorData *)NULL);
   if (previous_query_info_collect_hook) {
     (*previous_query_info_collect_hook)(status, arg);
   }
@@ -188,6 +197,55 @@ void ya_analyze_stats_collect_hook(QueryDesc *query_desc) {
   }
 }
 #endif
+
+static void ya_process_utility_hook(Node *parsetree, const char *queryString,
+                                    ProcessUtilityContext context,
+                                    ParamListInfo params, DestReceiver *dest,
+                                    char *completionTag) {
+  /* Project utility data on QueryDesc to use existing logic */
+  QueryDesc *query_desc = (QueryDesc *)palloc0(sizeof(QueryDesc));
+  query_desc->sourceText = queryString;
+
+  cpp_call(get_sender(), &EventSender::query_metrics_collect,
+           METRICS_QUERY_SUBMIT, (void *)query_desc, true /* utility */,
+           (ErrorData *)NULL);
+
+  get_sender()->incr_depth();
+  PG_TRY();
+  {
+    if (previous_ProcessUtility_hook) {
+      (*previous_ProcessUtility_hook)(parsetree, queryString, context, params,
+                                      dest, completionTag);
+    } else {
+      standard_ProcessUtility(parsetree, queryString, context, params, dest,
+                              completionTag);
+    }
+
+    get_sender()->decr_depth();
+    cpp_call(get_sender(), &EventSender::query_metrics_collect, METRICS_QUERY_DONE,
+         (void *)query_desc, true /* utility */, (ErrorData *)NULL);
+
+    pfree(query_desc);
+  }
+  PG_CATCH();
+  {
+    ErrorData *edata;
+    MemoryContext oldctx;
+
+    oldctx = MemoryContextSwitchTo(TopMemoryContext);
+    edata = CopyErrorData();
+    FlushErrorState();
+    MemoryContextSwitchTo(oldctx);
+
+    get_sender()->decr_depth();
+    cpp_call(get_sender(), &EventSender::query_metrics_collect, METRICS_QUERY_ERROR,
+         (void *)query_desc, true /* utility */, edata);
+
+    pfree(query_desc);
+    ReThrowError(edata);
+  }
+  PG_END_TRY();
+}
 
 static void check_stats_loaded() {
   if (!YagpStat::loaded()) {
