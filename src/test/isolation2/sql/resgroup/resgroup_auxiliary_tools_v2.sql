@@ -19,7 +19,17 @@ CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 -- enable resource group and restart cluster.
+-- prerequisites:
+--     1. '/sys/fs/cgroup/gpdb' must exist,
+--        otherwise create it before run installcheck-resgroup-v2;
+--     2. 'gpconfig -c gp_resource_group_cgroup_parent -v "gpdb" && gpstop -rai'
+--        must run before 'gpconfig -c gp_resource_manager -v group-v2', because
+--        during the process of setting gp_resource_manager to group-v2, the
+--        system will check whether the directory
+--        '/sys/fs/cgroup/$gp_resource_group_cgroup_parent' exists.
 -- start_ignore
+! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb";
+! gpstop -rai;
 ! gpconfig -c gp_resource_manager -v group-v2;
 ! gpconfig -c max_connections -v 250 -m 25;
 ! gpconfig -c runaway_detector_activation_percent -v 100;
@@ -29,6 +39,7 @@ CREATE LANGUAGE plpython3u;
 -- after the restart we need a new connection to run the queries
 
 0: SHOW gp_resource_manager;
+0: SHOW gp_resource_group_cgroup_parent;
 
 -- resource queue statistics should not crash
 0: SELECT * FROM pg_resqueue_status;
@@ -259,7 +270,7 @@ $$ LANGUAGE plpython3u;
                                 stdout=subprocess.PIPE, check=True).stdout
         session_pids = stdout.splitlines()
 
-        path = "/sys/fs/cgroup/gpdb/{}/cgroup.procs".format(groupid)
+        path = "/sys/fs/cgroup/gpdb/{}/queries/cgroup.procs".format(groupid)
         stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout
         cgroups_pids = stdout.splitlines()
 
@@ -320,6 +331,8 @@ $$ LANGUAGE plpython3u;
 
     try:
         os.makedirs(dirname)
+    except FileExistsError:
+        return True
     except Exception as e:
         plpy.error("cannot create dir {}".format(e))
     else:
@@ -328,9 +341,18 @@ $$ LANGUAGE plpython3u;
 
 0: CREATE OR REPLACE FUNCTION rmdir(dirname text) RETURNS BOOL AS $$
     import shutil
+    import fcntl
     import os
 
+    try:
+        f = os.open(dirname, os.O_RDONLY)
+    except FileNotFoundError:
+        return True
+
+    fcntl.flock(f, fcntl.LOCK_EX)
+
     if not os.path.exists(dirname):
+        os.close(f)
         return True
 
     try:
@@ -339,4 +361,38 @@ $$ LANGUAGE plpython3u;
         plpy.error("cannot remove dir {}".format(e))
     else:
         return True
+    finally:
+        os.close(f)
+$$ LANGUAGE plpython3u;
+
+0: CREATE OR REPLACE FUNCTION check_clear_io_max(groupname text) RETURNS BOOL AS $$
+    import ctypes
+    import os
+
+    postgres = ctypes.CDLL(None)
+    clear_io_max = postgres['clear_io_max']
+
+    # get group oid
+    sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname = '%s'" % groupname
+    result = plpy.execute(sql)
+    groupid = result[0]['groupid']
+
+    clear_io_max(groupid)
+
+    cgroup_path = "/sys/fs/cgroup/gpdb/%d/io.max" % groupid
+
+    return os.stat(cgroup_path).st_size == 0
+$$ LANGUAGE plpython3u;
+
+0: CREATE OR REPLACE FUNCTION check_io_max_empty(groupname text) RETURNS BOOL AS $$
+    import os
+
+    # get group oid
+    sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname = '%s'" % groupname
+    result = plpy.execute(sql)
+    groupid = result[0]['groupid']
+
+    cgroup_path = "/sys/fs/cgroup/gpdb/%d/io.max" % groupid
+
+    return os.stat(cgroup_path).st_size == 0
 $$ LANGUAGE plpython3u;

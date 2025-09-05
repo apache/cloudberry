@@ -7,14 +7,18 @@
 /* type for linux device id, use libc dev_t now.
  * bdi means backing device info.
  */
+#ifdef __linux__
 typedef dev_t bdi_t;
-
 #define make_bdi(major, minor) makedev(major, minor)
 #define bdi_major(bdi) major(bdi)
 #define bdi_minor(bdi) minor(bdi)
+#else
+typedef uint64 bdi_t;
+#endif
 
 
-#define IO_LIMIT_MAX  (0)
+#define IO_LIMIT_MAX  (PG_UINT64_MAX)
+#define IO_LIMIT_EMPTY (0)
 
 /*
  * IOconfig represents the io.max of cgroup v2 io controller.
@@ -69,7 +73,7 @@ typedef struct IOLimitParserContext
 
 typedef struct IOLimitScannerState
 {
-	void *state;
+	void *buffer;
 	void *scanner;
 } IOLimitScannerState;
 
@@ -104,9 +108,11 @@ extern int fill_bdi_list(TblSpcIOLimit *io_limit);
 extern List *io_limit_parse(const char *limit_str);
 extern void io_limit_free(List *limit_list);
 extern void io_limit_validate(List *limit_list);
+bool io_limit_value_validate(const char *field, const uint64 value, uint64 *max);
 
 extern List  *get_iostat(Oid groupid, List *io_limit);
 extern int  compare_iostat(const ListCell *ca, const ListCell *cb);
 extern char *io_limit_dump(List *limit_list);
+extern void clear_io_max(Oid groupid);
 
 #endif
