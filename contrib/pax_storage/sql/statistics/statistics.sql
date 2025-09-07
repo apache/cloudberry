@@ -1,5 +1,5 @@
 set default_table_access_method = pax;
-
+set pax.enable_sync_collect_stats = on;
 
 -- 
 -- Test with small group
@@ -305,3 +305,4 @@ select * from get_pax_aux_table('t_update_twice_stats');
 drop table t_update_twice_stats;
 
 reset pax.max_tuples_per_group;
+reset pax.enable_sync_collect_stats;

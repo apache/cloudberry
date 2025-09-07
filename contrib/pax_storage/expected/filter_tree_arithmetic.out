@@ -7,6 +7,7 @@
 set default_table_access_method to pax;
 set pax.enable_debug to on;
 set pax.enable_sparse_filter to on;
+set pax.enable_sync_collect_stats = on;
 create table t_arithmetic(same int, v1 int, v2 int, v3 int) using pax with (minmax_columns='v1,v2,v3');
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'same' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -1063,5 +1064,6 @@ LOG:  kind file, filter rate: 0 / 1
 
 reset client_min_messages;
 LOG:  statement: reset client_min_messages;
+reset pax.enable_sync_collect_stats;
 drop table t_arithmetic;
 drop table ta_mul;
