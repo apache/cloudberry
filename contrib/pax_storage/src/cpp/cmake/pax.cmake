@@ -85,8 +85,10 @@ set(pax_storage_src
     storage/orc/orc_writer.cc
     storage/pax_buffer.cc
     storage/pax_itemptr.cc
+    storage/pax_index_update.cc
     storage/proto/protobuf_stream.cc
     storage/pax.cc 
+    storage/pax_vacuum_compactor.cc
     storage/paxc_smgr.cc
     storage/toast/pax_toast.cc
     storage/strategy.cc

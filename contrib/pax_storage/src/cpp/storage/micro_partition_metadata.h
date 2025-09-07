@@ -45,6 +45,7 @@ struct WriteSummary {
   bool is_clustered = false;
   pax::stats::MicroPartitionStatisticsInfo *mp_stats = nullptr;
   bool exist_ext_toast;
+  bool is_stats_valid = false;
   WriteSummary();
   WriteSummary(const WriteSummary &summary) = default;
 };
@@ -96,6 +97,9 @@ struct MicroPartitionMetadata {
   inline void SetExistToast(bool exist) { exist_ext_toast_ = exist; }
   inline void SetClustered(bool clustered) { is_clustered_ = clustered; }
 
+  inline bool GetStatsValid() const { return is_stats_valid_; }
+  inline void SetStatsValid(bool valid) { is_stats_valid_ = valid; }
+
   inline bool IsClustered() const { return is_clustered_; }
 
  private:
@@ -110,6 +114,8 @@ struct MicroPartitionMetadata {
 
   bool exist_ext_toast_ = false;
   bool is_clustered_ = false;
+
+  bool is_stats_valid_ = false;
 
   ::pax::stats::MicroPartitionStatisticsInfo stats_;
 };  // class MicroPartitionMetadata
