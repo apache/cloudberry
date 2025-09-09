@@ -116,7 +116,11 @@ BlockSampler_Next(BlockSampler bs)
 }
 
 /*
- * This is a 64 bit version of BlockSampler.
+ * This is used for sampling AO/CO row numbers, in the flattened
+ * row number space, across all segfile tuple counts. 64 bits is
+ * used for simplicity and is sufficient to hold a maximum tuple
+ * count of (AOTupleId_MaxSegmentFileNum * MAX_AOREL_CONCURRENCY),
+ * which can be represented with 48 bits.
  *
  * The code is same as BlockSampler except replacing
  * int type of variables with int64, which is intended
@@ -127,7 +131,7 @@ BlockSampler_Next(BlockSampler bs)
  */
 void
 RowSampler_Init(RowSampler rs, int64 nobjects, int64 samplesize,
-				   long randseed)
+				long randseed)
 {
 	rs->N = nobjects;			/* measured table size */
 

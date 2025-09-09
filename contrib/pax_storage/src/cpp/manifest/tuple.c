@@ -284,7 +284,6 @@ void manifest_insert(ManifestRelation mrel, const MetaValue data[],
   MemoryContext oldctx;
   ManifestHeap *mheap;
   ManifestTuple mtuple;
-  Relation rel;
   
   oldctx = MemoryContextSwitchTo(mrel->mctx);
 

@@ -86,6 +86,7 @@ static bool check_optimizer(bool *newval, void **extra, GucSource source);
 static bool check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source);
 static bool check_dispatch_log_stats(bool *newval, void **extra, GucSource source);
 static bool check_gp_workfile_compression(bool *newval, void **extra, GucSource source);
+static bool check_hot_dr(bool *newval, void **extra, GucSource source);
 
 /* Helper function for guc setter */
 bool gpvars_check_gp_resqueue_priority_default_value(char **newval,
@@ -322,7 +323,6 @@ char	   *optimizer_search_strategy_path = NULL;
 /* GUCs to tell Optimizer to enable a physical operator */
 bool		optimizer_enable_nljoin;
 bool		optimizer_enable_indexjoin;
-bool		optimizer_enable_motions_masteronly_queries;
 bool		optimizer_enable_motions;
 bool		optimizer_enable_motion_broadcast;
 bool		optimizer_enable_motion_gather;
@@ -365,6 +365,8 @@ bool		optimizer_enable_replicated_table;
 bool		optimizer_enable_foreign_table;
 bool		optimizer_enable_right_outer_join;
 bool		optimizer_enable_query_parameter;
+bool		optimizer_force_window_hash_agg;
+int			optimizer_agg_pds_strategy;
 
 /* Optimizer plan enumeration related GUCs */
 bool		optimizer_enumerate_plans;
@@ -2176,16 +2178,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"optimizer_enable_motions_masteronly_queries", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Enable plans with Motion operators in the optimizer for queries with no distributed tables."),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&optimizer_enable_motions_masteronly_queries,
-		false,
-		NULL, NULL, NULL
-	},
-	{
 		{"optimizer_enable_motions", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable plans with Motion operators in the optimizer."),
 			NULL,
@@ -3096,16 +3088,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_pause_on_restore_point_replay", PGC_SIGHUP, DEVELOPER_OPTIONS,
-		 gettext_noop("Pause recovery when a restore point is replayed."),
-		 NULL,
-		 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&gp_pause_on_restore_point_replay,
-		false,
-		NULL, NULL, NULL
-	},
-	{
 		{"gp_autostats_allow_nonowner", PGC_SUSET, DEVELOPER_OPTIONS,
 			gettext_noop("Allow automatic stats collection on tables even for users who are not the owner of the relation."),
 			gettext_noop("If disabled, table statistics will be updated only when tables are modified by the owners of the relations.")
@@ -3299,6 +3281,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_force_window_hash_agg", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Enable create window hash agg."),
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_force_window_hash_agg, // TODO: remove it before merge
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"aqumv_allow_foreign_table", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("allow answer query using materialized views which have foreign or external tables."),
 			NULL,
@@ -3337,6 +3330,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		&gp_detect_data_correctness,
 		false,
 		NULL, NULL, NULL
+	},
+
+	{
+		{"hot_dr", PGC_POSTMASTER, REPLICATION_STANDBY,
+			gettext_noop("DR Cluster as well as allows connteions and queries"),
+			NULL
+		},
+		&EnableHotDR,
+		false,
+		check_hot_dr, NULL, NULL
 	},
 
 	{
@@ -3534,7 +3537,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			NULL
 		},
 		&gp_appendonly_insert_files,
-		4, 0, 127,
+		0, 0, 127,
 		NULL, NULL, NULL
 	},
 
@@ -4500,6 +4503,17 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"optimizer_agg_pds_strategy", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Set the strategy of agg required distribution."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_agg_pds_strategy,
+		OPTIMIZER_AGG_PDS_ALL_KEY, OPTIMIZER_AGG_PDS_ALL_KEY, OPTIMIZER_AGG_PDS_EXCLUDE_NON_FIXED,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"memory_profiler_dataset_size", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Set the size in GB"),
 			NULL,
@@ -5052,6 +5066,17 @@ struct config_string ConfigureNamesString_gp[] =
 		"udpifc",
 		check_gp_interconnect_type, assign_gp_interconnect_type, show_gp_interconnect_type
 	},
+	{
+		{"gp_pause_on_restore_point_replay", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Specifies the restore point to pause replay on."),
+			gettext_noop("Unlike recovery_target_name, this can be used to continuously set/reset "
+						"how much a standby should replay up to."),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_pause_on_restore_point_replay,
+		"",
+		NULL, NULL, NULL
+	},
 
 	/* End-of-list marker */
 	{
@@ -5438,6 +5463,22 @@ check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source)
 	if (!*newval && Gp_role == GP_ROLE_DISPATCH)
 		elog(WARNING, "verify_gpfdists_cert=off. Apache Cloudberry will stop validating "
 				"the gpfdists SSL certificate for connections between segments and gpfdists");
+	return true;
+}
+
+static bool
+check_hot_dr(bool *newval, void **extra, GucSource source)
+{
+	if (*newval && !EnableHotStandby)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("cannot enable \"hot_dr\" when \"hot_standby\" is false")));
+
+	if (*newval && IS_QUERY_DISPATCHER() && !checkGpSegConfigFtsFiles())
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("cannot enable \"hot_dr\" since DR cluster segment configuration file does not exits")));
+
 	return true;
 }
 

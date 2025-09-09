@@ -371,6 +371,9 @@ standby_decode(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 			 * XLOG_XACT_INVALIDATIONS.  So we don't need to do anything here.
 			 */
 			break;
+		case XLOG_LATESTCOMPLETED_GXID:
+			/* FIXME: need to decode this part? */
+			break;
 		default:
 			elog(ERROR, "unexpected RM_STANDBY_ID record type: %u", info);
 	}

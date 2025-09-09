@@ -23,7 +23,7 @@
 # using the command: `mvn clean verify -Drat.consoleOutput=true`
 # --------------------------------------------------------------------
 
-name: Apache Rat Audit
+name: Apache Rat License Check
 
 on:
   push:
@@ -42,7 +42,6 @@ concurrency:
 
 jobs:
   rat-check:
-    name: Apache Rat License Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -60,7 +59,6 @@ jobs:
           cache: maven
 
       - name: Run Apache Rat check
-        id: rat-check
         run: |
           echo "Running Apache Rat license check..."
           mvn clean verify -Drat.consoleOutput=true | tee rat-output.log
@@ -147,3 +145,18 @@ jobs:
               echo "The rat-output.log file was not generated."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report Status
+        if: always()
+        shell: bash {0}
+        run: |
+          if [[ -f rat-output.log ]] && grep -q "\[INFO\] BUILD SUCCESS" rat-output.log; then
+            echo "✅ Apache Rat check completed successfully"
+            exit 0
+          elif [[ -f rat-output.log ]] && grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+            echo "❌ Apache Rat check failed"
+            exit 1
+          else
+            echo "⚠️ Apache Rat check status unclear"
+            exit 1
+          fi

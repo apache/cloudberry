@@ -518,7 +518,8 @@ cdbpathlocus_from_subquery(struct PlannerInfo *root,
 											  rel->relids,
 											  usable_subtlist,
 											  new_vars,
-											  -1 /* not used */);
+											  -1 /* not used */,
+											  false/* not used */);
 				if (outer_ec)
 				{
 					outer_dk = makeNode(DistributionKey);
@@ -589,7 +590,7 @@ cdbpathlocus_get_distkey_exprs(CdbPathLocus locus,
 				EquivalenceClass *dk_eclass = (EquivalenceClass *) lfirst(ec_cell);
 
 				item = cdbpullup_findEclassInTargetList(dk_eclass, targetlist,
-														distkey->dk_opfamily);
+														distkey->dk_opfamily, NULL);
 
 				if (item)
 					break;
@@ -668,7 +669,8 @@ cdbpathlocus_pull_above_projection(struct PlannerInfo *root,
 											relids,
 											targetlist,
 											newvarlist,
-											newrelid);
+											newrelid,
+											true /* ignore RelabelType */);
 				if (new_ec)
 					break;
 			}

@@ -3,6 +3,7 @@
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
+#include "optimizer/orcaopt.h"
 
 char *
 SerializeDXLPlan(Query *pquery)
@@ -12,7 +13,7 @@ SerializeDXLPlan(Query *pquery)
 }
 
 PlannedStmt *
-GPOPTOptimizedPlan(Query *pquery, bool pfUnexpectedFailure)
+GPOPTOptimizedPlan(Query *pquery, bool pfUnexpectedFailure, OptimizerOptions *opts)
 {
 	elog(ERROR, "mock implementation of GPOPTOptimizedPlan called");
 	return NULL;

@@ -466,6 +466,12 @@ extern bool create_restartpoint_on_ckpt_record_replay;
 #define OPTIMIZER_GPDB_CALIBRATED       1       /* GPDB's calibrated cost model */
 #define OPTIMIZER_GPDB_EXPERIMENTAL     2       /* GPDB's experimental cost model */
 
+/* optimizer cost model */
+#define OPTIMIZER_AGG_PDS_ALL_KEY             0
+#define OPTIMIZER_AGG_PDS_FIRST_KEY           1
+#define OPTIMIZER_AGG_PDS_MINIMAL_LEN_KEY     2
+#define OPTIMIZER_AGG_PDS_EXCLUDE_NON_FIXED   3
+
 
 /* Optimizer related gucs */
 extern bool	optimizer;
@@ -501,7 +507,6 @@ extern char *optimizer_search_strategy_path;
 /* GUCs to tell Optimizer to enable a physical operator */
 extern bool optimizer_enable_nljoin;
 extern bool optimizer_enable_indexjoin;
-extern bool optimizer_enable_motions_masteronly_queries;
 extern bool optimizer_enable_motions;
 extern bool optimizer_enable_motion_broadcast;
 extern bool optimizer_enable_motion_gather;
@@ -546,6 +551,8 @@ extern bool optimizer_enable_replicated_table;
 extern bool optimizer_enable_foreign_table;
 extern bool optimizer_enable_right_outer_join;
 extern bool optimizer_enable_query_parameter;
+extern bool optimizer_force_window_hash_agg;
+extern int optimizer_agg_pds_strategy;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;

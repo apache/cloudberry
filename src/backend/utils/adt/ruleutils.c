@@ -53,6 +53,7 @@
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
 #include "parser/parse_agg.h"
+#include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_node.h"
 #include "parser/parse_oper.h"
@@ -9693,6 +9694,159 @@ get_rule_expr(Node *node, deparse_context *context,
 		case T_RowIdExpr:
 			{
 				appendStringInfo(buf, "RowIdExpr");
+			}
+			break;
+
+		case T_GpPartitionDefinition:
+			{
+				GpPartitionDefinition *def = (GpPartitionDefinition*)node;
+				ListCell *lc;
+				char *sep = "";
+				ParseState *pstate = make_parsestate(NULL);
+
+				if (def->isTemplate)
+					appendStringInfo(buf, "SUBPARTITION TEMPLATE(");
+
+				foreach(lc, def->partDefElems)
+				{
+					if (IsA(lfirst(lc), GpPartDefElem))
+					{
+						GpPartDefElem *elem = lfirst_node(GpPartDefElem, lc);
+
+						if (elem->colencs)
+							elog(ERROR, "Partition specific ENCODING clause not supported yet");
+
+						appendStringInfoString(buf, sep);
+						sep = ", ";
+						if (elem->partName)
+						{
+							if (elem->isDefault)
+								appendStringInfo(buf, "DEFAULT SUBPARTITION %s", elem->partName);
+							else
+								appendStringInfo(buf, "SUBPARTITION %s", elem->partName);
+						}
+
+						if (elem->boundSpec)
+						{
+							switch (nodeTag(elem->boundSpec))
+							{
+								case T_GpPartitionRangeSpec:
+								{
+									GpPartitionRangeSpec *rspec =
+															(GpPartitionRangeSpec *) elem->boundSpec;
+									if (rspec->partStart)
+									{
+										Node *val = transformExpr(pstate,
+												(Node *)linitial(rspec->partStart->val), EXPR_KIND_VALUES);
+										Assert(rspec->partStart->edge ==
+												PART_EDGE_INCLUSIVE);
+										appendStringInfo(buf, " START (");
+										get_rule_expr(val, context, true);
+										appendStringInfo(buf, ")");
+									}
+									if (rspec->partEnd)
+									{
+										Node *val = transformExpr(pstate,
+												(Node *)linitial(rspec->partEnd->val), EXPR_KIND_VALUES);
+										Assert(rspec->partEnd->edge ==
+												PART_EDGE_EXCLUSIVE);
+										appendStringInfo(buf, " END (");
+										get_rule_expr(val, context, true);
+										appendStringInfo(buf, ")");
+									}
+									if (rspec->partEvery)
+									{
+										Node *val = transformExpr(pstate,
+												(Node *)linitial(rspec->partEvery), EXPR_KIND_VALUES);
+
+										appendStringInfo(buf, " Every (");
+										get_rule_expr(val, context, true);
+										appendStringInfo(buf, ")");
+									}
+								}
+									break;
+								case T_GpPartitionListSpec:
+								{
+									GpPartitionListSpec *lspec = (GpPartitionListSpec *) elem->boundSpec;
+									ListCell *cell;
+
+									appendStringInfoString(buf, " VALUES (");
+									sep = "";
+									foreach(cell, lspec->partValues)
+									{
+										Node *val = transformExpr(pstate, (Node *)linitial(lfirst(cell)), EXPR_KIND_VALUES);
+
+										Assert(list_length(lfirst(cell)) == 1);
+										appendStringInfoString(buf, sep);
+										get_rule_expr(val, context, -1);
+										sep = ", ";
+									}
+									appendStringInfoChar(buf, ')');
+								}
+									break;
+								default:
+									elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
+							}
+						}
+						if (elem->options)
+						{
+							ListCell *cell;
+
+							appendStringInfoString(buf, sep);
+							appendStringInfoString(buf, " WITH (");
+							if (elem->accessMethod)
+							{
+								if (pg_strcasecmp(elem->accessMethod, "ao_row") != 0)
+								{
+									appendStringInfoString(buf, "appendonly=true, orientation=row");
+									sep = ", ";
+								}
+								else if (pg_strcasecmp(elem->accessMethod, "ao_column") != 0)
+								{
+									appendStringInfoString(buf, "appendonly=true, orientation=column");
+									sep = ", ";
+								}
+							}
+							foreach (cell, elem->options)
+							{
+								DefElem *el = lfirst_node(DefElem, cell);
+								char *arg;
+
+								appendStringInfoString(buf, sep);
+								appendStringInfo(buf, "%s=", el->defname);
+								appendStringInfo(buf, "%s", arg = defGetString(el));
+								sep = ", ";
+							}
+							appendStringInfoChar(buf, ')');
+						}
+					}
+					else if (IsA(lfirst(lc), ColumnReferenceStorageDirective))
+					{
+						ListCell *cell;
+						ColumnReferenceStorageDirective *crsd = lfirst_node(ColumnReferenceStorageDirective, lc);
+
+						appendStringInfoString(buf, sep);
+						if (crsd->deflt)
+							appendStringInfo(buf, "DEFAULT COLUMN ENCODING (");
+						else
+							appendStringInfo(buf, "COLUMN %s ENCODING (", crsd->column);
+
+						sep = "";
+						foreach(cell, crsd->encoding)
+						{
+							DefElem *el = lfirst_node(DefElem, cell);
+							char *arg;
+
+							appendStringInfoString(buf, sep);
+							appendStringInfo(buf, "%s=", el->defname);
+							appendStringInfo(buf, "%s", arg = defGetString(el));
+							sep = ", ";
+						}
+						appendStringInfo(buf, ")");
+					}
+				}
+				if (def->isTemplate)
+					appendStringInfo(buf, ")");
 			}
 			break;
 

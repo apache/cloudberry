@@ -21,6 +21,7 @@ set statement_mem to '1024kB';
 
 set extra_float_digits=0; -- the last decimal digits are somewhat random
 
+set enable_parallel = off;
 -- Inject fault at 'winagg_after_spool_tuples' to show that the tuplestore spills
 -- to disk.
 SELECT gp_inject_fault('winagg_after_spool_tuples', 'skip', dbid)
@@ -42,6 +43,7 @@ SELECT gp_inject_fault('winagg_after_spool_tuples', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;
 
 reset statement_mem;
+reset enable_parallel;
 
 -- non-ASCII multibyte character should show up correctly in error messages.
 select '溋' || (B'1');

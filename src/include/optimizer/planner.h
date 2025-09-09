@@ -21,13 +21,14 @@
 #include "nodes/pathnodes.h"
 #include "nodes/plannerconfig.h"
 #include "nodes/plannodes.h"
-
+#include "optimizer/orcaopt.h"
 
 /* Hook for plugins to get control in planner() */
 typedef PlannedStmt *(*planner_hook_type) (Query *parse,
 										   const char *query_string,
 										   int cursorOptions,
-										   ParamListInfo boundParams);
+										   ParamListInfo boundParams,
+										   OptimizerOptions *optimizer_options);
 extern PGDLLIMPORT planner_hook_type planner_hook;
 
 /* Hook for plugins to get control when grouping_planner() plans upper rels */
@@ -41,7 +42,8 @@ extern PGDLLIMPORT create_upper_paths_hook_type create_upper_paths_hook;
 
 extern PlannedStmt *standard_planner(Query *parse, const char *query_string,
 									 int cursorOptions,
-									 ParamListInfo boundParams);
+									 ParamListInfo boundParams,
+									 OptimizerOptions *optimizer_options);
 
 extern PlannerInfo *subquery_planner(PlannerGlobal *glob, Query *parse,
 									 PlannerInfo *parent_root,

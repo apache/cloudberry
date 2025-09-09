@@ -19,6 +19,7 @@
 #ifndef CDBVARS_H
 #define CDBVARS_H
 
+#include "access/xlog.h"  /*RecoveryInProgress*/
 #include "access/xlogdefs.h"  /*XLogRecPtr*/
 #include "cdb/cdbutil.h" /* MASTER_CONTENT_ID */
 #ifdef USE_INTERNAL_FTS
@@ -756,9 +757,12 @@ extern GpId GpIdentity;
 #define MAX_DBID_STRING_LENGTH  11
 
 #define UNINITIALIZED_GP_IDENTITY_VALUE (-10000)
+#define IS_HOT_DR_CLUSTER() (EnableHotDR)
 #define IS_QUERY_DISPATCHER() (GpIdentity.segindex == MASTER_CONTENT_ID)
+#define IS_HOT_STANDBY_QD() (EnableHotStandby && IS_QUERY_DISPATCHER() && RecoveryInProgress())
 
 #define IS_QUERY_EXECUTOR_BACKEND() (Gp_role == GP_ROLE_EXECUTE && gp_session_id > 0)
+#define IS_HOT_STANDBY_QE() (EnableHotStandby && IS_QUERY_EXECUTOR_BACKEND() && RecoveryInProgress())
 
 /* Stores the listener port that this process uses to listen for incoming
  * Interconnect connections from other Motion nodes.

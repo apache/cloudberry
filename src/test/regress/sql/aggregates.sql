@@ -1446,7 +1446,11 @@ drop table agg_hash_4;
 
 -- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
+set enable_indexscan = off;
+set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class, (select count(*) > 0 from (select count(*) from pg_class where relnatts > 8) x) y;
+reset enable_indexscan;
+reset enable_indexonlyscan;
 
 -- test aggno
 create table tgb1(v1 int, v2 int, v3 int);
@@ -1524,3 +1528,26 @@ having sum(tgb1.v3 * tgb2.v3) > 100 and
 
 reset debug_print_aggref_in_explain;
 reset optimizer_force_multistage_agg;
+
+-- test the optimizer_agg_pds_strategy
+DROP TABLE IF EXISTS pds_t1;
+create table pds_t1(v1 int, v2 text, v3 int, v4 text, v5 int, v6 text) DISTRIBUTED BY (v1);
+
+set optimizer_agg_pds_strategy to 0;
+explain (costs off) select v2,v3 from pds_t1 group by v2,v3;
+set optimizer_agg_pds_strategy to 1;
+explain (costs off) select v2,v3 from pds_t1 group by v2,v3;
+set optimizer_agg_pds_strategy to 2;
+explain (costs off) select v2,v3 from pds_t1 group by v2,v3;
+set optimizer_agg_pds_strategy to 3;
+explain (costs off) select v2,v3,v4,v5,v6 from pds_t1 group by v2,v3,v4,v5,v6;
+
+-- We can't dedup the "Redistribute Motion", cause in this step we can't know the 
+-- distribution of output column which from the underlying operators.
+-- So you need to be cautious when opening this guc.
+set optimizer_agg_pds_strategy to 1;
+explain (costs off) select v1,v2,v3 from pds_t1 group by v3,v2,v1;
+set optimizer_agg_pds_strategy to 0;
+explain (costs off) select v1,v2,v3 from pds_t1 group by v3,v2,v1;
+
+reset optimizer_agg_pds_strategy;

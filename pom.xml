@@ -996,6 +996,7 @@ code or new licensing patterns.
             <exclude>src/template/win32</exclude>
             <exclude>src/template/cygwin</exclude>
             <exclude>src/template/aix</exclude>
+            <exclude>src/backend/cdb/dispatcher/test/cdbdisp_query_test.c</exclude>
             <exclude>src/backend/cdb/cdbdistributedxid.c</exclude>
             <exclude>src/backend/cdb/test/cdbdistributedsnapshot_test.c</exclude>
             <exclude>src/backend/cdb/test/cdbbufferedread_test.c</exclude>
@@ -1046,6 +1047,7 @@ code or new licensing patterns.
             <exclude>src/backend/postmaster/test/checkpointer_test.c</exclude>
             <exclude>src/backend/postmaster/README.auto-ANALYZE</exclude>
             <exclude>src/backend/mock.mk</exclude>
+            <exclude>src/backend/catalog/system_views_gp.in</exclude>
             <exclude>src/backend/catalog/storage_tablespace.c</exclude>
             <exclude>src/backend/catalog/test/storage_tablespace_test.c</exclude>
             <exclude>src/backend/catalog/sql_features.txt</exclude>

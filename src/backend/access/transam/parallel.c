@@ -379,7 +379,10 @@ InitializeParallelDSM(ParallelContext *pcxt)
 	/* CDB: should sync some global states to workes */
 	fps->cdb_aux_state.session_id = gp_session_id;
 	fps->cdb_aux_state.num_segments = numsegmentsFromQD;
-	strcpy(fps->cdb_aux_state.interconnect_address, interconnect_address);
+	if (interconnect_address)
+		strcpy(fps->cdb_aux_state.interconnect_address, interconnect_address);
+	else
+		fps->cdb_aux_state.interconnect_address[0] = '\0';
 	fps->cdb_aux_state.ic_htab_size = ic_htab_size;
 
 	/* We can skip the rest of this if we're not budgeting for any workers. */

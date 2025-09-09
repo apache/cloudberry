@@ -202,6 +202,9 @@ test: rpt rpt_joins rpt_tpch rpt_returning
 test: bfv_cte
 test: bfv_joins bfv_subquery bfv_planner bfv_legacy bfv_temp bfv_dml
 
+# test tpcds query 04
+test: tpcds_q04
+
 test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_skew qp_select partition_prune_opfamily gp_tsrf qp_join_union_all qp_join_universal qp_rowsecurity qp_query_params qp_full_join
 
 test: qp_misc_jiras qp_with_clause qp_executor qp_olap_windowerr qp_olap_window qp_derived_table qp_bitmapscan qp_dropped_cols
@@ -280,6 +283,9 @@ test: freeze_aux_tables
 
 # cbdb parallel test
 test: cbdb_parallel
+
+# window function parallel test
+test: window_parallel
 
 # These cannot run in parallel, because they check that VACUUM FULL shrinks table size.
 # A concurrent session could hold back the xid horizon and prevent old tuples from being
@@ -374,8 +380,6 @@ test: dynamic_table
 # DML tests for AO/CO unique indexes.
 test: uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
 
-# test that distributing or hash partitioning by an enum field or expression is blocked
-test: enum_dist_part_ban
 
 # run pg_hba raleted testing
 test: hba_conf

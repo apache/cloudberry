@@ -60,24 +60,15 @@
 /* Define to 1 to build with ic-proxy support (--enable-ic-proxy) */
 #undef ENABLE_IC_PROXY
 
-/* Define to 1 to disable preload interconnect module */
+/* Define to 1 to preload with ic module */
 #undef ENABLE_PRELOAD_IC_MODULE
 
 /* Define to 1 to build client libraries as thread-safe code.
    (--enable-thread-safety) */
 #undef ENABLE_THREAD_SAFETY
 
-/* Define to 1 to build with fault injector. (--enable-faultinjector) */
+/* Define to 1 to build with fault injector. */
 #undef FAULT_INJECTOR
-
-/* Define to nothing if C supports flexible array members, and to 1 if it does
-   not. That way, with a declaration like `struct s { int n; double
-   d[FLEXIBLE_ARRAY_MEMBER]; };', the struct hack can be used with pre-C99
-   compilers. When computing the size of such an object, don't use 'sizeof
-   (struct s)' as it overestimates the size. Use 'offsetof (struct s, d)'
-   instead. Don't use 'offsetof (struct s, d[0])', as this doesn't work with
-   MSVC and with C++ compilers. */
-#undef FLEXIBLE_ARRAY_MEMBER
 
 /* float4 values are passed by value if 'true', by reference if 'false'
    (always true in GPDB) */
@@ -130,6 +121,9 @@
 /* Define to 1 if you have the `BIO_meth_new' function. */
 #undef HAVE_BIO_METH_NEW
 
+/* Define to 1 if you have the `cbrt' function. */
+#undef HAVE_CBRT
+
 /* Define to 1 if you have the `clock_gettime' function. */
 #undef HAVE_CLOCK_GETTIME
 
@@ -147,9 +141,6 @@
 
 /* Define to 1 if you have the `CRYPTO_lock' function. */
 #undef HAVE_CRYPTO_LOCK
-
-/* Define to 1 if you have the <crypt.h> header file. */
-#undef HAVE_CRYPT_H
 
 /* define if the compiler supports basic C++14 syntax */
 #undef HAVE_CXX14
@@ -386,6 +377,9 @@
 /* Define to 1 if you have the `execinfo' library (-lexecinfo). */
 #undef HAVE_LIBEXECINFO
 
+/* Define to 1 if you have the `jansson' library (-ljansson). */
+#undef HAVE_LIBJANSSON
+
 /* Define to 1 if you have the `ldap' library (-lldap). */
 #undef HAVE_LIBLDAP
 
@@ -406,6 +400,9 @@
 
 /* Define to 1 if you have the `rt' library (-lrt). */
 #undef HAVE_LIBRT
+
+/* Define to 1 if you have the `seccomp' library (-lseccomp). */
+#undef HAVE_LIBSECCOMP
 
 /* Define to 1 if you have the `selinux' library (-lselinux). */
 #undef HAVE_LIBSELINUX
@@ -502,6 +499,9 @@
 
 /* Define to 1 if you have the `pread' function. */
 #undef HAVE_PREAD
+
+/* Define if protobuf is available */
+#undef HAVE_PROTOBUF
 
 /* Define to 1 if you have the `pstat' function. */
 #undef HAVE_PSTAT
@@ -744,10 +744,6 @@
 /* Define to 1 if you have the <time.h> header file. */
 #undef HAVE_TIME_H
 
-/* Define to 1 if your `struct tm' has `tm_zone'. Deprecated, use
-   `HAVE_STRUCT_TM_TM_ZONE' instead. */
-#undef HAVE_TM_ZONE
-
 /* Define to 1 if your compiler understands `typeof' or something similar. */
 #undef HAVE_TYPEOF
 
@@ -796,13 +792,11 @@
 /* Define to 1 if you have the <winldap.h> header file. */
 #undef HAVE_WINLDAP_H
 
-
 /* Define to 1 if you have the <winsock2.h> header file. */
 #undef HAVE_WINSOCK2_H
 
 /* Define to 1 if you have the `writev' function. */
 #undef HAVE_WRITEV
-
 
 /* Define to 1 if you have the `X509_get_signature_nid' function. */
 #undef HAVE_X509_GET_SIGNATURE_NID
@@ -812,6 +806,9 @@
 
 /* Define to 1 if you have the <yaml.h> header file. */
 #undef HAVE_YAML_H
+
+/* Define if zstd is available */
+#undef HAVE_ZSTD
 
 /* Define to 1 if the system has the type `_Bool'. */
 #undef HAVE__BOOL
@@ -867,9 +864,6 @@
 /* Define to 1 if you have the `__strtoull' function. */
 #undef HAVE___STRTOULL
 
-/* Define to 1 if you have the `etcdlib' library (-letcdlib). */
-#undef HAVE_LIBETCDLIB
-
 /* Define to the appropriate printf length modifier for 64-bit ints. */
 #undef INT64_MODIFIER
 
@@ -881,6 +875,9 @@
 
 /* Define bytes to use libc memset(). */
 #undef MEMSET_LOOP_LIMIT
+
+/* Define to 1 if you want to allow OpenSSL redirects. */
+#undef OPENSSL_ALLOW_REDIRECT
 
 /* Define to the OpenSSL API version in use. This avoids deprecation warnings
    from newer OpenSSL versions. */
@@ -930,7 +927,6 @@
 #undef PG_USE_STDBOOL
 
 /* Postgres version Apache Cloudberry is based on */
-/* PostgreSQL version as a string */
 #undef PG_VERSION
 
 /* PostgreSQL version as a number */
@@ -960,7 +956,7 @@
    RELSEG_SIZE requires an initdb. */
 #undef RELSEG_SIZE
 
-/*  Define to 1 to use serverless mode of Cloudberry. (--enable-serverless) */
+/* Define to 1 to use serverless mode of Cloudberry. (--enable-serverless) */
 #undef SERVERLESS
 
 /* The size of `bool', as computed by sizeof. */
@@ -1005,9 +1001,6 @@
 /* Define to 1 to build with libcurl support. (--with-libcurl) */
 #undef USE_CURL
 
-/* Define to use /dev/urandom for random number generation */
-#undef USE_DEV_URANDOM
-
 /* Define to 1 if you want float4 values to be passed by value. (Always
    defined in GPDB) */
 #undef USE_FLOAT4_BYVAL
@@ -1019,9 +1012,11 @@
 /* Define to 1 to build with gpcloud (--enable-gpcloud) */
 #undef USE_GPCLOUD
 
-
 /* Define to build with ICU support. (--with-icu) */
 #undef USE_ICU
+
+/* Define to 1 to use the internal FTS implementation. */
+#undef USE_INTERNAL_FTS
 
 /* Define to 1 to build with LDAP support. (--with-ldap) */
 #undef USE_LDAP
@@ -1033,18 +1028,18 @@
    (--with-libxslt) */
 #undef USE_LIBXSLT
 
+/* Define to 1 to build Cloudberry using the shared library libpostgres.so
+   (--enable-link-postgres-with-shared) */
+#undef USE_LINK_POSTGRES_WITH_SHARED
+
 /* Define to 1 to build with LLVM based JIT support. (--with-llvm) */
 #undef USE_LLVM
-
-/* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
-#undef USE_MAPREDUCE
-
-/* Define to 1 to build with shared postgres backend capabilities (--enable-shared-postgres-backend) */
-#undef USE_SHARED_POSTGRES_BACKEND
 
 /* Define to 1 to build with LZ4 support. (--with-lz4) */
 #undef USE_LZ4
 
+/* Define to 1 to build with Mapreduce capabilities (--enable-mapreduce) */
+#undef USE_MAPREDUCE
 
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES
@@ -1052,20 +1047,18 @@
 /* Define to 1 to build with OpenSSL support. (--with-ssl=openssl) */
 #undef USE_OPENSSL
 
-/* Define to use OpenSSL for random number generation */
-#undef USE_OPENSSL_RANDOM
-
-/* Define to use OpenSSL redirect access internal implements if not implements */
-#undef OPENSSL_ALLOW_REDIRECT
-
 /* Define to 1 to build with Cloudberry ORCA optimizer. (--enable-orca) */
 #undef USE_ORCA
 
-/* Define to 1 to build with pax support. (--enable-pax) */
-#undef USE_PAX_STORAGE
-
 /* Define to 1 to build with PAM support. (--with-pam) */
 #undef USE_PAM
+
+/* Define to 1 to support PAX */
+#undef USE_PAX_STORAGE
+
+/* Define to 1 to build with shared Cloudberry backend capabilities
+   (--enable-shared-postgres-backend) */
+#undef USE_SHARED_POSTGRES_BACKEND
 
 /* Define to 1 to use software CRC-32C implementation (slicing-by-8). */
 #undef USE_SLICING_BY_8_CRC32C
@@ -1100,9 +1093,6 @@
 /* Define to 1 if `wcstombs_l' requires <xlocale.h>. */
 #undef WCSTOMBS_L_IN_XLOCALE
 
-/* Define to build with external FTS support. (--enable-external-fts) */
-#undef USE_INTERNAL_FTS
-
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
 #if defined AC_APPLE_UNIVERSAL_BUILD
@@ -1122,10 +1112,7 @@
    */
 #undef XLOG_BLCKSZ
 
-/* Enable large inode numbers on Mac OS X 10.5.  */
-#ifndef _DARWIN_USE_64_BIT_INODE
-# define _DARWIN_USE_64_BIT_INODE 1
-#endif
+
 
 /* Number of bits in a file offset, on hosts where this is settable. */
 #undef _FILE_OFFSET_BITS

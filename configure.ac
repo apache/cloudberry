@@ -20,7 +20,7 @@ m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
-AC_INIT([Apache Cloudberry], [2.1.0-devel], [dev@cloudberry.apache.org], [], [https://cloudberry.apache.org/])
+AC_INIT([Apache Cloudberry], [3.0.0-devel], [dev@cloudberry.apache.org], [], [https://cloudberry.apache.org/])
 [PG_PACKAGE_VERSION=14.4]
 AC_SUBST(PG_PACKAGE_VERSION)
 
@@ -919,7 +919,7 @@ AC_MSG_RESULT([checking whether to build with external-fts... $enable_external_f
 AC_SUBST(enable_external_fts)
 
 if test "$enable_external_fts" = no; then
-  AC_DEFINE([USE_INTERNAL_FTS], [1])
+  AC_DEFINE([USE_INTERNAL_FTS], [1], [Define to 1 to use the internal FTS implementation.])
   CFLAGS="$CFLAGS -DUSE_INTERNAL_FTS=1"
 fi
 
@@ -1077,6 +1077,25 @@ AC_SUBST(with_python)
 AC_MSG_CHECKING([whether to build Python modules for gpMgmt])
 PGAC_ARG_BOOL(with, pythonsrc-ext, no, [build Python modules for gpMgmt])
 AC_MSG_RESULT([$with_pythonsrc_ext])
+
+# Check for required dependencies when pythonsrc-ext is enabled
+if test "$with_pythonsrc_ext" = yes; then
+  AC_PATH_PROG([PYTHON3], [python3])
+  if test -z "$PYTHON3"; then
+    AC_MSG_ERROR([python3 is required for --with-pythonsrc-ext but was not found])
+  fi
+
+  AC_PATH_PROG([CURL], [curl])
+  if test -z "$CURL"; then
+    AC_MSG_ERROR([curl is required for --with-pythonsrc-ext but was not found])
+  fi
+
+  AC_PATH_PROG([PIP3], [pip3])
+  if test -z "$PIP3"; then
+    AC_MSG_ERROR([pip3 is required for --with-pythonsrc-ext but was not found])
+  fi
+fi
+
 AC_SUBST(with_pythonsrc_ext)
 
 
@@ -1636,8 +1655,8 @@ AC_DEFUN([CHECK_APR], [
 if test "$enable_gpfdist" = yes ; then
   CHECK_APR()
   _LIBS="$LIBS"
-  AC_SEARCH_LIBS(event_add, [event], [], [AC_MSG_ERROR([libevent is required for gpfdist])])
-  EVENT_LIBS=" -levent"
+  PKG_CHECK_MODULES([EVENT], [libevent >= 2.0.0], [], [AC_MSG_ERROR([libevent >= 2.0.0 is required for gpfdist])])
+  EVENT_LIBS="$EVENT_LIBS"
   AC_SUBST(EVENT_LIBS)
 
   AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_WARN([libyaml is not found. disabling transformations for gpfdist.])])
@@ -1723,7 +1742,7 @@ if test "$enable_openssl_redirect" = yes; then
     AC_MSG_ERROR([--enable-openssl-redirect must specify --with-ssl])
   fi
 
-  AC_DEFINE([OPENSSL_ALLOW_REDIRECT], [1])
+  AC_DEFINE([OPENSSL_ALLOW_REDIRECT], [1], [Define to 1 if you want to allow OpenSSL redirects.])
 fi
 
 # Check for curl.

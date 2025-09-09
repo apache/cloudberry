@@ -437,3 +437,31 @@ SELECT reltuples, relname FROM pg_class WHERE oid='vac_reltuple_distortion'::reg
      1e+06 | vac_reltuple_distortion
 (1 row)
 
+-- test wrong log relcache leak in pg_catalog.gp_acquire_sample_rows
+-- start_ignore
+drop table if exists relcache_leak_in_motion;
+NOTICE:  table "relcache_leak_in_motion" does not exist, skipping
+-- end_ignore
+create table relcache_leak_in_motion(v1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into relcache_leak_in_motion values(generate_series(0, 10000));
+SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'interrupt', dbid)
+  FROM gp_segment_configuration WHERE content = -1 and role='p';
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+analyze relcache_leak_in_motion;
+ERROR:  canceling statement due to user request
+SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = -1 and role='p';
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- start_ignore
+drop table if exists relcache_leak_in_motion;
+-- end_ignore

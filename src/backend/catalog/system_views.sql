@@ -427,8 +427,7 @@ CREATE VIEW pg_prepared_xacts AS
          LEFT JOIN pg_database D ON P.dbid = D.oid;
 
 CREATE VIEW pg_prepared_statements AS
-    SELECT pg_catalog.gp_execution_segment() AS gp_segment_id, *
-      FROM pg_prepared_statement() AS P;
+    SELECT * FROM pg_prepared_statement() AS P;
 
 CREATE VIEW pg_seclabels AS
 SELECT
@@ -652,15 +651,14 @@ REVOKE ALL ON pg_shmem_allocations FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_get_shmem_allocations() FROM PUBLIC;
 
 CREATE VIEW pg_backend_memory_contexts AS
-    SELECT pg_catalog.gp_execution_segment() AS gp_segment_id, *
-      FROM pg_get_backend_memory_contexts();
+    SELECT * FROM pg_get_backend_memory_contexts();
 
 REVOKE ALL ON pg_backend_memory_contexts FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_get_backend_memory_contexts() FROM PUBLIC;
 
 -- Statistics views
 
-CREATE VIEW pg_stat_all_tables_internal AS
+CREATE VIEW pg_stat_all_tables AS
     SELECT
             C.oid AS relid,
             N.nspname AS schemaname,
@@ -692,81 +690,6 @@ CREATE VIEW pg_stat_all_tables_internal AS
     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M', 'p')
     GROUP BY C.oid, N.nspname, C.relname;
 
--- Gather data from segments on user tables, and use data on coordinator on system tables.
-
-CREATE VIEW pg_stat_all_tables AS
-SELECT
-    s.relid,
-    s.schemaname,
-    s.relname,
-    m.seq_scan,
-    m.seq_tup_read,
-    m.idx_scan,
-    m.idx_tup_fetch,
-    m.n_tup_ins,
-    m.n_tup_upd,
-    m.n_tup_del,
-    m.n_tup_hot_upd,
-    m.n_live_tup,
-    m.n_dead_tup,
-    m.n_mod_since_analyze,
-    m.n_ins_since_vacuum,
-    s.last_vacuum,
-    s.last_autovacuum,
-    s.last_analyze,
-    s.last_autoanalyze,
-    s.vacuum_count,
-    s.autovacuum_count,
-    s.analyze_count,
-    s.autoanalyze_count
-FROM
-    (SELECT
-         allt.relid,
-         allt.schemaname,
-         allt.relname,
-         case when d.policytype = 'r' then (sum(seq_scan)/d.numsegments)::bigint else sum(seq_scan) end seq_scan,
-         case when d.policytype = 'r' then (sum(seq_tup_read)/d.numsegments)::bigint else sum(seq_tup_read) end seq_tup_read,
-         case when d.policytype = 'r' then (sum(idx_scan)/d.numsegments)::bigint else sum(idx_scan) end idx_scan,
-         case when d.policytype = 'r' then (sum(idx_tup_fetch)/d.numsegments)::bigint else sum(idx_tup_fetch) end idx_tup_fetch,
-         case when d.policytype = 'r' then (sum(n_tup_ins)/d.numsegments)::bigint else sum(n_tup_ins) end n_tup_ins,
-         case when d.policytype = 'r' then (sum(n_tup_upd)/d.numsegments)::bigint else sum(n_tup_upd) end n_tup_upd,
-         case when d.policytype = 'r' then (sum(n_tup_del)/d.numsegments)::bigint else sum(n_tup_del) end n_tup_del,
-         case when d.policytype = 'r' then (sum(n_tup_hot_upd)/d.numsegments)::bigint else sum(n_tup_hot_upd) end n_tup_hot_upd,
-         case when d.policytype = 'r' then (sum(n_live_tup)/d.numsegments)::bigint else sum(n_live_tup) end n_live_tup,
-         case when d.policytype = 'r' then (sum(n_dead_tup)/d.numsegments)::bigint else sum(n_dead_tup) end n_dead_tup,
-         case when d.policytype = 'r' then (sum(n_mod_since_analyze)/d.numsegments)::bigint else sum(n_mod_since_analyze) end n_mod_since_analyze,
-         case when d.policytype = 'r' then (sum(n_ins_since_vacuum)/d.numsegments)::bigint else sum(n_ins_since_vacuum) end n_ins_since_vacuum,
-         max(last_vacuum) as last_vacuum,
-         max(last_autovacuum) as last_autovacuum,
-         max(last_analyze) as last_analyze,
-         max(last_autoanalyze) as last_autoanalyze,
-         max(vacuum_count) as vacuum_count,
-         max(autovacuum_count) as autovacuum_count,
-         max(analyze_count) as analyze_count,
-         max(autoanalyze_count) as autoanalyze_count
-     FROM
-         gp_dist_random('pg_stat_all_tables_internal') allt
-         inner join pg_class c
-               on allt.relid = c.oid
-         left outer join gp_distribution_policy d
-              on allt.relid = d.localoid
-     WHERE
-        relid >= 16384
-        and (
-            d.localoid is not null
-            or c.relkind in ('o', 'b', 'M')
-            )
-     GROUP BY allt.relid, allt.schemaname, allt.relname, d.policytype, d.numsegments
-
-     UNION ALL
-
-     SELECT
-         *
-     FROM
-         pg_stat_all_tables_internal
-     WHERE
-             relid < 16384) m, pg_stat_all_tables_internal s
-WHERE m.relid = s.relid;
 
 CREATE VIEW pg_stat_xact_all_tables AS
     SELECT
@@ -797,7 +720,7 @@ CREATE VIEW pg_stat_sys_tables AS
 -- since we don't have segments.
 -- We create a new view for single node mode.
 CREATE VIEW pg_stat_sys_tables_single_node AS
-    SELECT * FROM pg_stat_all_tables_internal
+    SELECT * FROM pg_stat_all_tables
     WHERE schemaname IN ('pg_catalog', 'information_schema') OR
           schemaname ~ '^pg_toast';
 
@@ -815,9 +738,10 @@ CREATE VIEW pg_stat_user_tables AS
 -- since we don't have segments.
 -- We create a new view for single node mode.
 CREATE VIEW pg_stat_user_tables_single_node AS
-    SELECT * FROM pg_stat_all_tables_internal
+    SELECT * FROM pg_stat_all_tables
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
+
 
 CREATE VIEW pg_stat_xact_user_tables AS
     SELECT * FROM pg_stat_xact_all_tables
@@ -859,7 +783,7 @@ CREATE VIEW pg_statio_user_tables AS
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
-CREATE VIEW pg_stat_all_indexes_internal AS
+CREATE VIEW pg_stat_all_indexes AS
     SELECT
             C.oid AS relid,
             I.oid AS indexrelid,
@@ -874,44 +798,6 @@ CREATE VIEW pg_stat_all_indexes_internal AS
             pg_class I ON I.oid = X.indexrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
-
--- Gather data from segments on user tables, and use data on coordinator on system tables.
-
-CREATE VIEW pg_stat_all_indexes AS
-SELECT
-    s.relid,
-    s.indexrelid,
-    s.schemaname,
-    s.relname,
-    s.indexrelname,
-    m.idx_scan,
-    m.idx_tup_read,
-    m.idx_tup_fetch
-FROM
-    (SELECT
-         relid,
-         indexrelid,
-         schemaname,
-         relname,
-         indexrelname,
-         sum(idx_scan) as idx_scan,
-         sum(idx_tup_read) as idx_tup_read,
-         sum(idx_tup_fetch) as idx_tup_fetch
-     FROM
-         gp_dist_random('pg_stat_all_indexes_internal')
-     WHERE
-             relid >= 16384
-     GROUP BY relid, indexrelid, schemaname, relname, indexrelname
-
-     UNION ALL
-
-     SELECT
-         *
-     FROM
-         pg_stat_all_indexes_internal
-     WHERE
-             relid < 16384) m, pg_stat_all_indexes_internal s
-WHERE m.indexrelid = s.indexrelid;
 
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
@@ -1069,15 +955,6 @@ CREATE VIEW pg_stat_replication AS
         JOIN pg_stat_get_wal_senders() AS W ON (S.pid = W.pid)
         LEFT JOIN pg_authid AS U ON (S.usesysid = U.oid);
 
--- FIXME: remove it after 0d0fdc75ae5b72d42be549e234a29546efe07ca2
-CREATE VIEW gp_stat_activity AS 
-    SELECT gp_execution_segment() as gp_segment_id, * FROM gp_dist_random('pg_stat_activity') 
-    UNION ALL SELECT -1 as gp_segment_id, * from pg_stat_activity;
-
-CREATE VIEW gp_settings AS 
-    SELECT gp_execution_segment() as gp_segment_id, * FROM gp_dist_random('pg_settings') 
-    UNION ALL SELECT -1 as gp_segment_id, * from pg_settings;
-
 CREATE FUNCTION gp_stat_get_master_replication() RETURNS SETOF RECORD AS
 $$
     SELECT pg_catalog.gp_execution_segment() AS gp_segment_id, *
@@ -1098,6 +975,7 @@ $$
 $$
 LANGUAGE SQL EXECUTE ON ALL SEGMENTS;
 
+-- This view has an additional column than pg_stat_replication so cannot be generated using system_views_gp.in
 CREATE VIEW gp_stat_replication AS
     SELECT *, pg_catalog.gp_replication_error() AS sync_error
     FROM pg_catalog.gp_stat_get_master_replication() AS R
@@ -1228,7 +1106,6 @@ CREATE VIEW pg_replication_slots AS
 
 CREATE VIEW pg_stat_replication_slots AS
     SELECT
-            pg_catalog.gp_execution_segment() AS gp_segment_id,
             s.slot_name,
             s.spill_txns,
             s.spill_count,
@@ -1245,7 +1122,6 @@ CREATE VIEW pg_stat_replication_slots AS
 
 CREATE VIEW pg_stat_database AS
     SELECT
-            pg_catalog.gp_execution_segment() AS gp_segment_id,
             D.oid AS datid,
             D.datname AS datname,
                 CASE
@@ -1286,7 +1162,6 @@ CREATE VIEW pg_stat_database AS
 
 CREATE VIEW pg_stat_resqueues AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         Q.oid AS queueid,
         Q.rsqname AS queuename,
         pg_stat_get_queue_num_exec(Q.oid) AS n_queries_exec,
@@ -1498,6 +1373,10 @@ rq.oid=rc.resqueueid AND rc.restypid = rt.restypid
 ORDER BY rsqname, restypid
 ;
 
+-- FIXME: we have a cluster-wide view gp_stat_database_conflicts, but that is 
+-- only showing conflicts of every segment. Some conflict might be encountered
+-- on just part of the segments. Ideally we should have a view like
+-- gp_stat_database_conflicts_summary that prints the overall conflicts and types.
 CREATE VIEW pg_stat_database_conflicts AS
     SELECT
             D.oid AS datid,
@@ -1582,9 +1461,8 @@ CREATE VIEW pg_stat_bgwriter AS
 
 CREATE VIEW pg_stat_wal AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         w.wal_records,
-        w.wal_fpi,
+        w.wal_fpi as wal_fpw,
         w.wal_bytes,
         w.wal_buffers_full,
         w.wal_write,
@@ -1596,7 +1474,6 @@ CREATE VIEW pg_stat_wal AS
 
 CREATE VIEW pg_stat_progress_analyze AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         S.pid AS pid, S.datid AS datid, D.datname AS datname,
         CAST(S.relid AS oid) AS relid,
         CASE S.param1 WHEN 0 THEN 'initializing'
@@ -1618,7 +1495,6 @@ CREATE VIEW pg_stat_progress_analyze AS
 
 CREATE VIEW pg_stat_progress_vacuum AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         S.pid AS pid, S.datid AS datid, D.datname AS datname,
         S.relid AS relid,
         CASE S.param1 WHEN 0 THEN 'initializing'
@@ -1640,7 +1516,6 @@ CREATE VIEW pg_stat_progress_vacuum AS
 
 CREATE VIEW pg_stat_progress_cluster AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         S.pid AS pid,
         S.datid AS datid,
         D.datname AS datname,
@@ -1668,7 +1543,6 @@ CREATE VIEW pg_stat_progress_cluster AS
 
 CREATE VIEW pg_stat_progress_create_index AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         S.pid AS pid, S.datid AS datid, D.datname AS datname,
         S.relid AS relid,
         CAST(S.param7 AS oid) AS index_relid,
@@ -1704,7 +1578,6 @@ CREATE VIEW pg_stat_progress_create_index AS
 
 CREATE VIEW pg_stat_progress_basebackup AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         S.pid AS pid,
         CASE S.param1 WHEN 0 THEN 'initializing'
                       WHEN 1 THEN 'waiting for checkpoint to finish'
@@ -1722,7 +1595,6 @@ CREATE VIEW pg_stat_progress_basebackup AS
 
 CREATE VIEW pg_stat_progress_copy AS
     SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
         S.pid AS pid, S.datid AS datid, D.datname AS datname,
         S.relid AS relid,
         CASE S.param5 WHEN 1 THEN 'COPY FROM'
@@ -1800,11 +1672,6 @@ CREATE VIEW gp_suboverflowed_backend(segid, pids) AS
 UNION ALL
   SELECT gp_segment_id, gp_get_suboverflowed_backends() FROM gp_dist_random('gp_id') order by 1;
 
-
-CREATE OR REPLACE VIEW gp_stat_archiver AS
-    SELECT -1 AS gp_segment_id, * FROM pg_stat_archiver
-    UNION
-    SELECT gp_execution_segment() AS gp_segment_id, * FROM gp_dist_random('pg_stat_archiver');
 
 CREATE FUNCTION gp_get_session_endpoints (OUT gp_segment_id int, OUT auth_token text,
 									  OUT cursorname text, OUT sessionid int, OUT hostname varchar(64),

@@ -56,6 +56,9 @@ OBJS += pg_extprotocol.o \
 	   gp_matview_aux.o \
        pg_directory_table.o storage_directory_table.o
 
+GP_SYSVIEW_IN = system_views_gp.in
+GP_SYSVIEW_SQL = system_views_gp.sql
+
 CATALOG_JSON:= $(addprefix $(top_srcdir)/gpMgmt/bin/gppylib/data/, $(addsuffix .json,$(GP_MAJORVERSION)))
 
 include $(top_srcdir)/src/backend/common.mk
@@ -133,7 +136,7 @@ POSTGRES_BKI_DATA += $(addprefix $(top_srcdir)/src/include/catalog/,\
 	$(top_builddir)/src/include/catalog/gp_version_at_initdb.dat
 
 
-all: distprep generated-header-symlinks
+all: distprep generated-header-symlinks $(GP_SYSVIEW_SQL)
 
 distprep: bki-stamp
 
@@ -197,6 +200,8 @@ ifeq ($(USE_INTERNAL_FTS_FOUND), false)
 endif
 	$(INSTALL_DATA) $(srcdir)/system_functions.sql '$(DESTDIR)$(datadir)/system_functions.sql'
 	$(INSTALL_DATA) $(srcdir)/system_views.sql '$(DESTDIR)$(datadir)/system_views.sql'
+	$(INSTALL_DATA) $(srcdir)/$(GP_SYSVIEW_SQL) '$(DESTDIR)$(datadir)/$(GP_SYSVIEW_SQL)'
+	$(INSTALL_DATA) $(srcdir)/system_views_gp_summary.sql '$(DESTDIR)$(datadir)/system_views_gp_summary.sql'
 	$(INSTALL_DATA) $(srcdir)/information_schema.sql '$(DESTDIR)$(datadir)/information_schema.sql'
 	$(INSTALL_DATA) $(call vpathsearch,cdb_schema.sql) '$(DESTDIR)$(datadir)/cdb_init.d/cdb_schema.sql'
 	$(INSTALL_DATA) $(srcdir)/sql_features.txt '$(DESTDIR)$(datadir)/sql_features.txt'
@@ -207,7 +212,7 @@ installdirs:
 
 .PHONY: uninstall-data
 uninstall-data:
-	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_constraints.sql system_functions.sql system_views.sql information_schema.sql cdb_init.d/cdb_schema.sql cdb_init.d/gp_toolkit.sql sql_features.txt)
+	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_constraints.sql system_functions.sql system_views.sql system_views_gp_summary.sql information_schema.sql cdb_init.d/cdb_schema.sql cdb_init.d/gp_toolkit.sql sql_features.txt)
 ifeq ($(USE_INTERNAL_FTS_FOUND), false)
 	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, external_fts.sql)
 endif
@@ -216,4 +221,4 @@ endif
 clean:
 
 maintainer-clean: clean
-	rm -f bki-stamp postgres.bki system_constraints.sql $(GENERATED_HEADERS)
+	rm -f bki-stamp postgres.bki system_constraints.sql $(GENERATED_HEADERS) $(GP_SYSVIEW_SQL)

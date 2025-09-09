@@ -31,7 +31,7 @@
 #include "utils/wait_event.h"
 #include "miscadmin.h"
 #include "utils/memutils.h"
-
+#include "tcop/pquery.h" /* ActivePortal */
 
 /* #define MEASURE_MOTION_TIME */
 
@@ -269,6 +269,7 @@ execMotionSender(MotionState *node)
 
 			if (node->stopRequested)
 			{
+				ActivePortal->stop_requested_in_motion = true;
 				elog(gp_workfile_caching_loglevel, "Motion calling Squelch on child node");
 				/* propagate stop notification to our children */
 				ExecSquelchNode(outerNode, true);

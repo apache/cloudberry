@@ -83,6 +83,7 @@ CXformGbAggDedup2HashAggDedup::Transform(CXformContext *pxfctxt,
 			popAggDedup->FGeneratesDuplicates(),
 			CXformUtils::FMultiStageAgg(pexpr),
 			CXformUtils::FAggGenBySplitDQAXform(pexpr), popAggDedup->AggStage(),
+			popAggDedup->FAggPushdown(),
 			!CXformUtils::FLocalAggCreatedByEagerAggXform(pexpr)),
 		pexprRel, pexprScalar);
 

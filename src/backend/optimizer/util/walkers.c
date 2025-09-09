@@ -403,6 +403,14 @@ plan_tree_walker(Node *node,
 			if (walker(((WindowAgg *) node)->endOffset, context))
 				return true;
 			break;
+		case T_WindowHashAgg:
+			if (walk_plan_node_fields((Plan *) node, walker, context))
+				return true;
+			if (walker(((WindowHashAgg *) node)->startOffset, context))
+				return true;
+			if (walker(((WindowHashAgg *) node)->endOffset, context))
+				return true;
+			break;
 
 		case T_Unique:
 			if (walk_plan_node_fields((Plan *) node, walker, context))

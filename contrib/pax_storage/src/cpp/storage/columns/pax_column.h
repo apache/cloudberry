@@ -46,7 +46,7 @@
 
 namespace pax {
 
-#define DEFAULT_CAPACITY 2048
+#define DEFAULT_CAPACITY MIN(2048, MAX(16, MAXALIGN(pax::pax_max_tuples_per_group)))
 
 // Used to mapping pg_type
 enum PaxColumnTypeInMem {

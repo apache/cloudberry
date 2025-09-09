@@ -378,11 +378,6 @@ class GpRecoverSegmentProgram:
             if not mirrorBuilder.recover_mirrors(gpEnv, gpArray):
                 if self.termination_requested:
                     self.logger.error("gprecoverseg process was interrupted by the user.")
-                if self.__options.differentialResynchronization:
-                    self.logger.error("gprecoverseg differential recovery failed. Please check the gpsegrecovery.py log"
-                                      " file and rsync log file for more details.")
-                else:
-                    self.logger.error("gprecoverseg failed. Please check the output for more details.")
                 sys.exit(1)
 
             if self.termination_requested:

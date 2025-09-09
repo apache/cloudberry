@@ -41,6 +41,7 @@ namespace paxc {
 #define ColumnEncoding_Kind_DICTIONARY_STR "dict"
 #define ColumnEncoding_Kind_COMPRESS_ZSTD_STR "zstd"
 #define ColumnEncoding_Kind_COMPRESS_ZLIB_STR "zlib"
+#define ColumnEncoding_Kind_COMPRESS_LZ4_STR "lz4"
 
 #define STORAGE_FORMAT_TYPE_PORC "porc"
 #define STORAGE_FORMAT_TYPE_PORC_VEC "porc_vec"

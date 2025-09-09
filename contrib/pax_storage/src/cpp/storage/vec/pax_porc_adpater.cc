@@ -576,8 +576,7 @@ std::pair<size_t, size_t> VecAdapter::AppendPorcFormat(PaxColumns *columns,
         vec_buffer->Set(boolean_buffer, align_size);
 
         Bitmap8 vec_bool_bitmap(
-            BitmapRaw<uint8>((uint8 *)(boolean_buffer), align_size),
-            BitmapTpl<uint8>::ReadOnlyRefBitmap);
+            BitmapRaw<uint8>((uint8 *)(boolean_buffer), align_size));
 
         CopyBitPackedBuffer(column, micro_partition_visibility_bitmap_,
                             group_base_offset_, range_begin, range_lens,
