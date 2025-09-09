@@ -18,7 +18,7 @@ if sys.version_info < (3, 5, 0):
                      % os.path.split(__file__)[-1])
     sys.exit(1)
 
-MAIN_VERSION = [2,99]    # version number for main
+MAIN_VERSION = [3,99]    # version number for main
 
 
 #============================================================
