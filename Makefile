@@ -31,9 +31,11 @@ OBJS			:=	$(PG_STAT_OBJS)						\
 					$(SRC_DIR)/EventSender.o 			\
 					$(SRC_DIR)/hook_wrappers.o		 	\
 					$(SRC_DIR)/memory/gpdbwrappers.o		\
-					$(SRC_DIR)/yagp_hooks_collector.o
+					$(SRC_DIR)/yagp_hooks_collector.o	\
+					$(SRC_DIR)/log/LogOps.o				\
+					$(SRC_DIR)/log/LogSchema.o
 EXTRA_CLEAN     := $(GEN_DIR)
-DATA			:= $(wildcard sql/*--*.sql)
+DATA			:= $(wildcard *--*.sql)
 EXTENSION		:= yagp_hooks_collector
 EXTVERSION		:= $(shell grep default_version $(EXTENSION).control | \
 			   	sed -e "s/default_version[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
@@ -45,10 +47,11 @@ include $(PGXS)
 $(GEN_DIR)/yagpcc_set_service.pb.o: $(GEN_DIR)/yagpcc_metrics.pb.h
 
 PROTO_INCLUDES = $(GEN_DIR)/yagpcc_set_service.pb.h $(GEN_DIR)/yagpcc_metrics.pb.h $(GEN_DIR)/yagpcc_plan.pb.h
-$(SRC_DIR)/UDSConnector.o: $(PROTO_INCLUDES)
+$(SRC_DIR)/UDSConnector.o: $(PROTO_INCLUDES) src/log/LogOps.h
 $(SRC_DIR)/ProtoUtils.o: $(PROTO_INCLUDES)
 $(SRC_DIR)/EventSender.o: $(PROTO_INCLUDES)
 $(SRC_DIR)/ProcStats.o: $(GEN_DIR)/yagpcc_metrics.pb.h
+$(SRC_DIR)/log/LogOps.o: $(PROTO_INCLUDES)
 
 gen: $(PROTO_GEN_OBJECTS)
 

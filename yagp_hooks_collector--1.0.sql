@@ -15,7 +15,7 @@ LANGUAGE C EXECUTE ON ALL SEGMENTS;
 
 CREATE FUNCTION yagp_stat_messages_reset()
 RETURNS void
-AS 
+AS
 $$
   SELECT __yagp_stat_messages_reset_f_on_master();
   SELECT __yagp_stat_messages_reset_f_on_segments();

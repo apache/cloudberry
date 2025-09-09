@@ -2,6 +2,9 @@
 
 #include <string>
 
+#define LOG_MODE_UDS 0
+#define LOG_MODE_TBL 1
+
 class Config {
 public:
   static void init();
@@ -14,5 +17,6 @@ public:
   static size_t max_text_size();
   static size_t max_plan_size();
   static int min_analyze_time();
+  static int logging_mode();
   static void sync();
 };

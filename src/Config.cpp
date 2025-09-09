@@ -19,6 +19,12 @@ static char *guc_ignored_users = nullptr;
 static int guc_max_text_size = 1024;  // in KB
 static int guc_max_plan_size = 1024;  // in KB
 static int guc_min_analyze_time = -1; // uninitialized state
+static int guc_logging_mode = LOG_MODE_UDS;
+
+static const struct config_enum_entry logging_mode_options[] = {
+    {"uds", LOG_MODE_UDS, false /* hidden */},
+    {"tbl", LOG_MODE_TBL, false},
+    {NULL, 0, false}};
 
 static std::unique_ptr<std::unordered_set<std::string>> ignored_users_set =
     nullptr;
@@ -108,6 +114,12 @@ void Config::init() {
       "Zero prints all plans. -1 turns this feature off.",
       &guc_min_analyze_time, -1, -1, INT_MAX, PGC_USERSET,
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC | GUC_UNIT_MS, NULL, NULL, NULL);
+
+  DefineCustomEnumVariable(
+      "yagpcc.logging_mode", "Logging mode: UDS or PG Table", NULL,
+      &guc_logging_mode, LOG_MODE_UDS, logging_mode_options, PGC_SUSET,
+      GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC | GUC_SUPERUSER_ONLY, NULL, NULL,
+      NULL);
 }
 
 std::string Config::uds_path() { return guc_uds_path; }
@@ -118,6 +130,7 @@ bool Config::report_nested_queries() { return guc_report_nested_queries; }
 size_t Config::max_text_size() { return guc_max_text_size * 1024; }
 size_t Config::max_plan_size() { return guc_max_plan_size * 1024; }
 int Config::min_analyze_time() { return guc_min_analyze_time; };
+int Config::logging_mode() { return guc_logging_mode; }
 
 bool Config::filter_user(std::string username) {
   if (!ignored_users_set) {

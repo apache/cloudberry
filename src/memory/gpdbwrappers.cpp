@@ -1,4 +1,5 @@
 #include "gpdbwrappers.h"
+#include "log/LogOps.h"
 
 extern "C" {
 #include "postgres.h"
@@ -220,4 +221,8 @@ char *ya_gpdb::get_rg_name_for_id(Oid group_id) {
 
 Oid ya_gpdb::get_rg_id_by_session_id(int session_id) {
   return wrap_throw(ResGroupGetGroupIdBySessionId, session_id);
+}
+
+void ya_gpdb::insert_log(const yagpcc::SetQueryReq &req) {
+  return wrap_throw(::insert_log, req);
 }

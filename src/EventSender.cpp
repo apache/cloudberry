@@ -1,6 +1,7 @@
 #include "Config.h"
 #include "UDSConnector.h"
 #include "memory/gpdbwrappers.h"
+#include "log/LogOps.h"
 
 #define typeid __typeid
 extern "C" {
@@ -23,6 +24,23 @@ extern "C" {
 #define need_collect_analyze()                                                 \
   (Gp_role == GP_ROLE_DISPATCH && Config::min_analyze_time() >= 0 &&           \
    Config::enable_analyze())
+
+bool EventSender::log_query_req(const yagpcc::SetQueryReq &req,
+                                const std::string &event) {
+  bool clear_big_fields = false;
+  switch (Config::logging_mode()) {
+  case LOG_MODE_UDS:
+    clear_big_fields = UDSConnector::report_query(req, event);
+    break;
+  case LOG_MODE_TBL:
+    ya_gpdb::insert_log(req);
+    clear_big_fields = false;
+    break;
+  default:
+    Assert(false);
+  }
+  return clear_big_fields;
+}
 
 void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
   if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
@@ -58,7 +76,7 @@ void EventSender::query_metrics_collect(QueryMetricsStatus status, void *arg) {
 }
 
 void EventSender::executor_before_start(QueryDesc *query_desc, int eflags) {
-  if (!connector) {
+  if (!proto_verified) {
     return;
   }
   if (filter_query(query_desc)) {
@@ -88,7 +106,7 @@ void EventSender::executor_before_start(QueryDesc *query_desc, int eflags) {
 }
 
 void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
-  if (!connector || !need_collect(query_desc, nesting_level)) {
+  if (!proto_verified || !need_collect(query_desc, nesting_level)) {
     return;
   }
   if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
@@ -112,14 +130,14 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   }
   yagpcc::GPMetrics stats;
   std::swap(stats, *query_msg->mutable_query_metrics());
-  if (connector->report_query(*query_msg, "started")) {
+  if (log_query_req(*query_msg, "started")) {
     clear_big_fields(query_msg);
   }
   std::swap(stats, *query_msg->mutable_query_metrics());
 }
 
 void EventSender::executor_end(QueryDesc *query_desc) {
-  if (!connector || !need_collect(query_desc, nesting_level)) {
+  if (!proto_verified || !need_collect(query_desc, nesting_level)) {
     return;
   }
   if (Gp_role != GP_ROLE_DISPATCH && Gp_role != GP_ROLE_EXECUTE) {
@@ -135,13 +153,13 @@ void EventSender::executor_end(QueryDesc *query_desc) {
   } else {
     set_gp_metrics(query_msg->mutable_query_metrics(), query_desc, 0, 0);
   }
-  if (connector->report_query(*query_msg, "ended")) {
+  if (log_query_req(*query_msg, "ended")) {
     clear_big_fields(query_msg);
   }
 }
 
 void EventSender::collect_query_submit(QueryDesc *query_desc) {
-  if (!connector) {
+  if (!proto_verified) {
     return;
   }
   Config::sync();
@@ -167,7 +185,7 @@ void EventSender::collect_query_submit(QueryDesc *query_desc) {
   set_qi_nesting_level(query_msg, nesting_level);
   set_qi_slice_id(query_msg);
   set_query_text(query_msg, query_desc);
-  if (connector->report_query(*query_msg, "submit")) {
+  if (log_query_req(*query_msg, "submit")) {
     clear_big_fields(query_msg);
   }
   // take initial metrics snapshot so that we can safely take diff afterwards
@@ -230,12 +248,12 @@ void EventSender::report_query_done(QueryDesc *query_desc, QueryItem &query,
   set_ic_stats(query_msg->mutable_query_metrics()->mutable_instrumentation(),
                &ic_statistics);
 #endif
-  connector->report_query(*query_msg, msg);
+  (void)log_query_req(*query_msg, msg);
 }
 
 void EventSender::collect_query_done(QueryDesc *query_desc,
                                      QueryMetricsStatus status) {
-  if (!connector || !need_collect(query_desc, nesting_level)) {
+  if (!proto_verified || !need_collect(query_desc, nesting_level)) {
     return;
   }
 
@@ -276,7 +294,7 @@ void EventSender::ic_metrics_collect() {
   if (Gp_interconnect_type != INTERCONNECT_TYPE_UDPIFC) {
     return;
   }
-  if (!connector || gp_command_count == 0 || !Config::enable_collector() ||
+  if (!proto_verified || gp_command_count == 0 || !Config::enable_collector() ||
       Config::filter_user(get_user_name())) {
     return;
   }
@@ -305,7 +323,7 @@ void EventSender::ic_metrics_collect() {
 }
 
 void EventSender::analyze_stats_collect(QueryDesc *query_desc) {
-  if (!connector || Gp_role != GP_ROLE_DISPATCH) {
+  if (!proto_verified || Gp_role != GP_ROLE_DISPATCH) {
     return;
   }
   if (!need_collect(query_desc, nesting_level)) {
@@ -330,7 +348,8 @@ void EventSender::analyze_stats_collect(QueryDesc *query_desc) {
 EventSender::EventSender() {
   if (Config::enable_collector()) {
     try {
-      connector = new UDSConnector();
+      GOOGLE_PROTOBUF_VERIFY_VERSION;
+      proto_verified = true;
     } catch (const std::exception &e) {
       ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
     }
@@ -342,12 +361,10 @@ EventSender::EventSender() {
 
 EventSender::~EventSender() {
   for (const auto &[qkey, _] : queries) {
-    ereport(LOG,
-            (errmsg("YAGPCC query with missing done event: "
-                    "tmid=%d ssid=%d ccnt=%d nlvl=%d",
-                    qkey.tmid, qkey.ssid, qkey.ccnt, qkey.nesting_level)));
+    ereport(LOG, (errmsg("YAGPCC query with missing done event: "
+                         "tmid=%d ssid=%d ccnt=%d nlvl=%d",
+                         qkey.tmid, qkey.ssid, qkey.ccnt, qkey.nesting_level)));
   }
-  delete connector;
 }
 
 // That's basically a very simplistic state machine to fix or highlight any bugs

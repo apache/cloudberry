@@ -105,6 +105,8 @@ private:
     explicit QueryItem(QueryState st);
   };
 
+  static bool log_query_req(const yagpcc::SetQueryReq &req,
+                            const std::string &event);
   void update_query_state(QueryItem &query, QueryState new_state,
                           bool success = true);
   QueryItem &get_query(QueryDesc *query_desc);
@@ -116,7 +118,7 @@ private:
   void update_nested_counters(QueryDesc *query_desc);
   bool qdesc_submitted(QueryDesc *query_desc);
 
-  UDSConnector *connector = nullptr;
+  bool proto_verified = false;
   int nesting_level = 0;
   int64_t nested_calls = 0;
   double nested_timing = 0;
