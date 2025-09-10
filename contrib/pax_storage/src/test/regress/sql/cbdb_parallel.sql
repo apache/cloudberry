@@ -695,7 +695,7 @@ declare
  results1 RECORD;
 begin
   create table t_p(c1 int, c2 int) using pax  with(parallel_workers=8) distributed by(c1);
-  set pax_max_tuples_per_file to 131072;
+  set pax.max_tuples_per_file to 131072;
   insert into t_p select i, i+1 from generate_series(1, 10000000)i;
   analyze t_p;
   if ao_row then
