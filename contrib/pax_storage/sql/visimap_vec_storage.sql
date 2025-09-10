@@ -2,7 +2,7 @@
 -- so we can test multiple group with visimap,
 -- at the beginning, in the middle, or at the end
 -- of a group.
-set pax_max_tuples_per_group = 5;
+set pax.max_tuples_per_group = 5;
 
 -- column types contain:
 -- 1. normal fix-length column, like int
@@ -78,4 +78,4 @@ reset optimizer;
 
 drop table pt1;
 
-reset pax_max_tuples_per_group;
+reset pax.max_tuples_per_group;

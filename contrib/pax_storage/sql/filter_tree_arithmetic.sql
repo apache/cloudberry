@@ -7,8 +7,8 @@
 -- end_matchignore
 
 set default_table_access_method to pax;
-set pax_enable_debug to on;
-set pax_enable_sparse_filter to on;
+set pax.enable_debug to on;
+set pax.enable_sparse_filter to on;
 
 create table t_arithmetic(same int, v1 int, v2 int, v3 int) using pax with (minmax_columns='v1,v2,v3');
 create table ta_mul(same int, v1 int, v2 int, v3 int) using pax with (minmax_columns='v1,v2,v3');

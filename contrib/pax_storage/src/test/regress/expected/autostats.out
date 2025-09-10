@@ -11,7 +11,7 @@
 -- end_matchignore
 set gp_autostats_mode=on_change;
 set gp_autostats_on_change_threshold=9;
-set pax_enable_debug = false;
+set pax.enable_debug = false;
 set log_autostats=on;
 set client_min_messages=log;
 reset optimizer_trace_fallback;

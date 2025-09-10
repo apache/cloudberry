@@ -1978,9 +1978,11 @@ create table foo(a int, b int) distributed by (a);
 -- and log_min_duration_statement, they are the most obvious ones.
 set log_statement='none';
 set log_min_duration_statement=-1;
+set pax.enable_debug to off;
 set client_min_messages='log';
 explain select count(*) from foo group by cube(a,b);
 reset client_min_messages;
+reset pax.enable_debug;
 reset log_statement;
 reset log_min_duration_statement;
 
@@ -2053,9 +2055,17 @@ explain select * from foo where b in ('1', '2');
 set optimizer_enable_ctas = off;
 set log_statement='none';
 set log_min_duration_statement=-1;
+<<<<<<< HEAD
 set client_min_messages='log';
 create table foo_ctas(a) as (select generate_series(1,10)) distributed by (a);
 reset client_min_messages;
+=======
+set pax.enable_debug to off;
+set client_min_messages='log';
+create table foo_ctas(a) as (select generate_series(1,10)) distributed by (a);
+reset client_min_messages;
+reset pax.enable_debug;
+>>>>>>> ee310deac52 (PAX: Rename all PAX guc names from pax_xxx to pax.xxx)
 reset log_min_duration_statement;
 reset log_statement;
 reset optimizer_enable_ctas;

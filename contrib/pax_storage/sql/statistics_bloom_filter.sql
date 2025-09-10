@@ -6,12 +6,12 @@
 -- m/^LOG:  Missing statistics for column: .*/
 -- end_matchignore
 set default_table_access_method = pax;
-set pax_enable_debug to on;
+set pax.enable_debug to on;
 -- 
 -- Test with small group
 -- 
-set pax_max_tuples_per_group = 10;
-set pax_bloom_filter_work_memory_bytes = 102400; -- 100kb
+set pax.max_tuples_per_group = 10;
+set pax.bloom_filter_work_memory_bytes = 102400; -- 100kb
 
 -- create pax table with bloom filter reloptions 
 create table t1(v1 int, v2 text, v3 varchar, v4 varchar(100), v5 bit, v6 float, v7 numeric, v8 numeric(20,10)) 
@@ -23,7 +23,7 @@ drop table t1;
 drop table t2;
 
 -- test bloom filter(only work on IN case)
-set pax_enable_sparse_filter to on;
+set pax.enable_sparse_filter to on;
 -- the fixed length and type by value type
 create table t1(single_seg int, v1 int, v2 int) with (bloomfilter_columns='v1,v2');
 
@@ -124,8 +124,8 @@ reset client_min_messages;
 drop table t3;
 
 -- test the big bloom filter
-set pax_max_tuples_per_group to 16384;
-set pax_max_tuples_per_file to 131072;
+set pax.max_tuples_per_group to 16384;
+set pax.max_tuples_per_file to 131072;
 
 create table t4(single_seg int, v1 varchar, v2 varchar) with (bloomfilter_columns='v1,v2');
 insert into t4 values(1, generate_series(1, 1000000), generate_series(1000001, 2000000));
@@ -140,7 +140,7 @@ select * from t4 where v1 > '1' and v2 in ('8', '1000009');
 select * from t4 where v1 in ('8', '1000009') and v2 in ('8', '1000009');
 reset client_min_messages;
 
-reset pax_bloom_filter_work_memory_bytes;
-reset pax_max_tuples_per_group;
-reset pax_max_tuples_per_file;
-reset pax_enable_sparse_filter;
+reset pax.bloom_filter_work_memory_bytes;
+reset pax.max_tuples_per_group;
+reset pax.max_tuples_per_file;
+reset pax.enable_sparse_filter;

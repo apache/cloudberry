@@ -1,5 +1,5 @@
-set pax_enable_debug to on;
-set pax_enable_sparse_filter = on;
+set pax.enable_debug to on;
+set pax.enable_sparse_filter = on;
 create table pax_test.null_test_t(a int, b int, c text) using pax;
 insert into pax_test.null_test_t(a) select null from generate_series(1,2)i;
 insert into pax_test.null_test_t select 1, i, 'cc_' || i from generate_series(1,2)i;
@@ -222,4 +222,4 @@ kind group, filter rate: 0 / 1
 
 reset client_min_messages;
 drop table pax_test.in_test_t;
-reset pax_enable_sparse_filter;
+reset pax.enable_sparse_filter;

@@ -1,5 +1,5 @@
 set default_table_access_method = pax;
-set pax_enable_toast to true;
+set pax.enable_toast to true;
 CREATE TABLE pax_toasttest_t1(v1 text);
 alter TABLE pax_toasttest_t1 alter column v1 set storage plain;
 insert into pax_toasttest_t1 values(repeat('0', 100000000));
@@ -131,9 +131,9 @@ select length(v2), length(v4) from pax_toasttest_t2;
 
 drop table pax_toasttest_t2;
 -----------------------------------------------------------------------
--- a copy test cases that should be sucess when pax_enable_toast is off
+-- a copy test cases that should be sucess when pax.enable_toast is off
 -----------------------------------------------------------------------
-set pax_enable_toast to false;
+set pax.enable_toast to false;
 CREATE TABLE pax_toasttest_t1(v1 text);
 alter TABLE pax_toasttest_t1 alter column v1 set storage plain;
 insert into pax_toasttest_t1 values(repeat('0', 100000000));

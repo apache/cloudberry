@@ -2,7 +2,7 @@
 -- SELECT_VIEWS
 -- test the views defined in CREATE_VIEWS
 --
-set pax_enable_sparse_filter to off;
+set pax.enable_sparse_filter to off;
 SELECT * FROM street;
                 name                |                                                                                                                                                                                                                   thepath                                                                                                                                                                                                                    |   cname   
 ------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------
@@ -1589,4 +1589,4 @@ NOTICE:  f_leak => hamburger  (seg1 slice1 127.0.0.1:7003 pid=16817)
 -- Cleanup.
 RESET SESSION AUTHORIZATION;
 DROP ROLE regress_alice;
-reset pax_enable_sparse_filter;
+reset pax.enable_sparse_filter;

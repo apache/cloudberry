@@ -4,7 +4,7 @@ set default_table_access_method = pax;
 -- 
 -- Test with small group
 -- 
-set pax_max_tuples_per_group = 10;
+set pax.max_tuples_per_group = 10;
 
 -- test min/max type support
 create table t1(v1 int, v2 text, v3 float8, v4 bool) with (minmax_columns='v1,v2,v3,v4');
@@ -87,7 +87,7 @@ insert into t_interval values
 select * from get_pax_aux_table('t_interval');
 drop table t_interval;
 
-reset pax_max_tuples_per_group;
+reset pax.max_tuples_per_group;
 
 -- 
 -- Test with small group
@@ -162,7 +162,7 @@ drop table t_interval;
 -- 
 -- Test the update/delete DML, stats should be updated
 -- 
-set pax_max_tuples_per_group = 250;
+set pax.max_tuples_per_group = 250;
 
 -- delete part of data in the first group
 create table t1_update_stats(v1 int, v2 int, v3 int) with (minmax_columns='v1,v2');
@@ -276,7 +276,7 @@ drop table t10_update_stats;
 
 
 -- delete twice
-set pax_max_tuples_per_group = 25;
+set pax.max_tuples_per_group = 25;
 create table t_delete_twice_stats(v1 int, v2 int, v3 int) with (minmax_columns='v2,v3');
 insert into t_delete_twice_stats values(1, generate_series(1, 100), generate_series(101, 200));
 select * from get_pax_aux_table('t_delete_twice_stats');
@@ -304,4 +304,4 @@ select sum(v2), sum(v3) from t_update_twice_stats;
 select * from get_pax_aux_table('t_update_twice_stats');
 drop table t_update_twice_stats;
 
-reset pax_max_tuples_per_group;
+reset pax.max_tuples_per_group;
