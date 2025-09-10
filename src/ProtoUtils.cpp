@@ -226,8 +226,8 @@ double protots_to_double(const google::protobuf::Timestamp &ts) {
   return double(ts.seconds()) + double(ts.nanos()) / 1000000000.0;
 }
 
-void set_analyze_plan_text_json(QueryDesc *query_desc,
-                                yagpcc::SetQueryReq *req) {
+void set_analyze_plan_text(QueryDesc *query_desc,
+                           yagpcc::SetQueryReq *req) {
   // Make sure it is a valid txn and it is not an utility
   // statement for ExplainPrintPlan() later.
   if (!IsTransactionState() || !query_desc->plannedstmt) {
@@ -235,18 +235,13 @@ void set_analyze_plan_text_json(QueryDesc *query_desc,
   }
   MemoryContext oldcxt =
       ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
-  ExplainState es = ya_gpdb::get_analyze_state_json(
+  ExplainState es = ya_gpdb::get_analyze_state(
       query_desc, query_desc->instrument_options && Config::enable_analyze());
   ya_gpdb::mem_ctx_switch_to(oldcxt);
   if (es.str) {
     // Remove last line break.
     if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
       es.str->data[--es.str->len] = '\0';
-    }
-    // Convert JSON array to JSON object.
-    if (es.str->len > 0) {
-      es.str->data[0] = '{';
-      es.str->data[es.str->len - 1] = '}';
     }
     auto trimmed_analyze =
         char_to_trimmed_str(es.str->data, es.str->len, Config::max_plan_size());

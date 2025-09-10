@@ -18,7 +18,7 @@ static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
 static int guc_max_text_size = 1024;  // in KB
 static int guc_max_plan_size = 1024;  // in KB
-static int guc_min_analyze_time = -1; // uninitialized state
+static int guc_min_analyze_time = 10000; // in seconds
 static int guc_logging_mode = LOG_MODE_UDS;
 
 static const struct config_enum_entry logging_mode_options[] = {
@@ -112,7 +112,7 @@ void Config::init() {
       "yagpcc.min_analyze_time",
       "Sets the minimum execution time above which plans will be logged.",
       "Zero prints all plans. -1 turns this feature off.",
-      &guc_min_analyze_time, -1, -1, INT_MAX, PGC_USERSET,
+      &guc_min_analyze_time, 10000, -1, INT_MAX, PGC_USERSET,
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC | GUC_UNIT_MS, NULL, NULL, NULL);
 
   DefineCustomEnumVariable(

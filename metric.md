@@ -109,7 +109,7 @@ submit -> ExecutorStart() -> start -> ExecutorRun() -> ExecutorFinish() -> end -
 | `userName`                   | string | All     | ABS      | -      | Cluster |     +      |    -    | text    | Session user                                        |
 | `databaseName`               | string | All     | ABS      | -      | Cluster |     +      |    -    | text    | Database name                                       |
 | `rsgname`                    | string | All     | ABS      | -      | Cluster |     +      |    -    | text    | Resource group name                                 |
-| `analyze_text`               | string | D       | ABS      | -      | Cluster |     +      |    -    | text    | EXPLAIN ANALYZE JSON                                |
+| `analyze_text`               | string | D       | ABS      | -      | Cluster |     +      |    -    | text    | EXPLAIN ANALYZE                                |
 | **AdditionalQueryInfo**      |        |         |          |        |         |            |         |         |                                                     |
 | `nested_level`               | int64  | All     | ABS      | -      | Node    |     +      |    +    | count   | Current nesting level                               |
 | `error_message`              | string | D       | ABS      | -      | Node    |     +      |    +    | text    | Error message                                       |

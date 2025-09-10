@@ -13,7 +13,7 @@ An extension for collecting greenplum query execution metrics and reporting them
 -   **GUC:** `yagpcc.enable`.
 
 #### 3. `EXPLAIN ANALYZE` data
--   **What:** Triggers generation of the `EXPLAIN (JSON, ANALYZE, BUFFERS, TIMING, VERBOSE)` and captures it.
+-   **What:** Triggers generation of the `EXPLAIN (TEXT, ANALYZE, BUFFERS, TIMING, VERBOSE)` and captures it.
 -   **GUCs:** `yagpcc.enable`, `yagpcc.min_analyze_time`, `yagpcc.enable_cdbstats`(ANALYZE), `yagpcc.enable_analyze`(BUFFERS, TIMING, VERBOSE).
 
 #### 4. Other Metrics
@@ -25,3 +25,4 @@ An extension for collecting greenplum query execution metrics and reporting them
 -   **Data Destination:** All collected data is sent to a Unix Domain Socket. Configure the path with `yagpcc.uds_path`.
 -   **User Filtering:** To exclude activity from certain roles, add them to the comma-separated list in `yagpcc.ignored_users_list`.
 -   **Trimming plans:** Query texts and execution plans are trimmed based on `yagpcc.max_text_size` and `yagpcc.max_plan_size` (default: 1024KB). For now, it is not recommended to set these GUCs higher than 1024KB.
+-   **Analyze collection:** Analyze is sent if execution time exceeds `yagpcc.min_analyze_time`, which is 10 seconds by default. Analyze is collected if `yagpcc.enable_analyze` is true.

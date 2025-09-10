@@ -341,7 +341,7 @@ void EventSender::analyze_stats_collect(QueryDesc *query_desc) {
 
   double ms = query_desc->totaltime->total * 1000.0;
   if (ms >= Config::min_analyze_time()) {
-    set_analyze_plan_text_json(query_desc, query_msg);
+    set_analyze_plan_text(query_desc, query_msg);
   }
 }
 
