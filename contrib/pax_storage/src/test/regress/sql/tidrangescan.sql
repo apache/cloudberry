@@ -97,7 +97,7 @@ DECLARE c SCROLL CURSOR FOR SELECT ctid FROM tidrangescan WHERE ctid < '(1,0)';
 FETCH NEXT c;
 FETCH NEXT c;
 --start_ignore
-/* backward scan is not supported in this version of Cloudberry Database */
+/* backward scan is not supported in this version of Apache Cloudberry */
 /*
 FETCH PRIOR c;
 FETCH FIRST c;
