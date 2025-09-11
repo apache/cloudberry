@@ -372,7 +372,7 @@ TableScanDesc PaxScanDesc::BeginScanExtractColumns(
         && !(flags & SO_TYPE_VECTOR)
 #endif
     ) {
-      filter->InitRowFilter(rel, ps, filter->GetColumnProjection());
+      filter->InitRowFilter(rel, ps, filter->GetColumnProjection(), key, nkeys);
     }
   }
   return BeginScan(rel, snapshot, nkeys, key, parallel_scan, flags,
