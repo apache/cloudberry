@@ -2758,7 +2758,7 @@ process_sample_rows(Portal portal,
 
 		if (!attr->attisdropped)
 		{
-			TupleDescInitEntry(funcTupleDesc, (AttrNumber) 4 + index, "",
+			TupleDescInitEntry(funcTupleDesc, (AttrNumber) NUM_SAMPLE_FIXED_COLS + 1 + index, "",
 							   typid, attr->atttypmod, attr->attndims);
 
 			index++;
