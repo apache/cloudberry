@@ -21,7 +21,7 @@ Release:        1%{?dist}
 Summary:        Apache Cloudberry Repository Configuration
 License:        ASL 2.0
 Group:          Applications/Databases
-URL:            https://cloudberrydb.org
+URL:            https://cloudberry.apache.org
 Vendor:         Cloudberry Open Source
 BuildArch:      noarch
 
