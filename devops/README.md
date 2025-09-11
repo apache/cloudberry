@@ -17,72 +17,92 @@
   under the License.
 -->
 
-# Auto-Build Cloudberry Database from Source Code
+# Auto-Build Apache Cloudberry from Source Code
 
-You can build Cloudberry Database from source code in two ways: manually or automatically.
+You can build Apache Cloudberry from source code in two ways: manually or automatically.
 
 For the manual build, you need to manually set up many system configurations and download third-party dependencies, which is quite cumbersome and error-prone.
 
 To make the job easier, it is recommended that you use the automated deployment method and scripts provided here. The automation method simplifies the deployment process, reduces time costs, and allows developers to focus more on business code development.
 
-## 1. Setup docker environment
+## 1. Setup Docker environment
 
-Nothing special, just follow the [official documentation](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository)
+Nothing special, just follow the [official documentation](https://docs.docker.com/engine/install/) to install Docker on your machine based on your OS.
 
-## 2. Create docker build image
+## 2. Create Docker build image
 
-Go to the supported OS directory, for example Rocky Linux 9
+Go to the supported OS directory, for example Rocky Linux 8:
 
-`cd devops/deploy/docker/build/rocky8/`
+```bash
+cd devops/deploy/docker/build/rocky8/
+```
 
-And build image
+And build image:
 
-`docker build -t cloudberry-db-env . `
+```bash
+docker build -t apache-cloudberry-env .
+```
 
 The whole process usually takes about 5 minutes. You can use the created base image as many times as you want, just launch a new container for your specific task.
 
 ## 3. Launch container
 
-Just run
+Launch the container in detached mode with a long-running process:
 
-`docker run -h cdw -it cloudberry-db-env`
+```bash
+docker run -h cdw -d --name cloudberry-build apache-cloudberry-env bash -c "/tmp/init_system.sh && tail -f /dev/null"
+```
+
+> [!NOTE]
+> The container will be named `cloudberry-build` and run in the background for easy reference in subsequent commands.
+> If you need to:
+>  - access the container interactively, use `docker exec -it cloudberry-build bash`
+>  - check if the container is running, use `docker ps`
 
 ## 4. Checkout git repo inside container
 
 The same way you did it on your laptop
 
-`docker exec <container ID> bash -c "cd /home/gpadmin && git clone --recurse-submodules https://github.com/apache/cloudberry.git"`
+```bash
+docker exec cloudberry-build bash -c "cd /home/gpadmin && git clone --recurse-submodules --branch main --depth 1 https://github.com/apache/cloudberry.git"
+```
 
-## 5. Set envoronment and configure build container
+## 5. Set environment and configure build container
 
-Create direcory for store logs
+Create direcory for store logs:
 
-`SRC_DIR=/home/gpadmin/cloudberry && docker exec <container ID>  bash -c "mkdir ${SRC_DIR}/build-logs"`
+```bash
+SRC_DIR=/home/gpadmin/cloudberry && docker exec cloudberry-build  bash -c "mkdir ${SRC_DIR}/build-logs"
+```
 
-Execute configure and check if system is ready for build
+Execute configure and check if system is ready for build:
 
-`SRC_DIR=/home/gpadmin/cloudberry && docker exec <container ID> bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"`
+```bash
+SRC_DIR=/home/gpadmin/cloudberry && docker exec cloudberry-build bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"
+```
 
-## 6. Build binary
+## 6. Build and install binary
 
-The building consumes all available CPU resources and can take minutes to complete
+The building consumes all available CPU resources and can take minutes to complete:
 
-`SRC_DIR=/home/gpadmin/cloudberry && docker exec <container ID> bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ./devops/build/automation/cloudberry/scripts/build-cloudberry.sh"`
+```bash
+SRC_DIR=/home/gpadmin/cloudberry && docker exec cloudberry-build bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ./devops/build/automation/cloudberry/scripts/build-cloudberry.sh"
+```
 
 ## 7. Install binary and create demo cluster
 
-By default `make install` copy compiled binary to  `/usr/local/cloudberry-db`
+The build script above has already installed the binaries to `/usr/local/cloudberry-db` inside the container. Now create the demo cluster just launch `create-cloudberry-demo-cluster.sh`
 
-`SRC_DIR=/home/gpadmin/cloudberry && docker exec <container ID> bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} make install"`
-
-To create demo cluster just launch `create-cloudberry-demo-cluster.sh`
-
-`SRC_DIR=/home/gpadmin/cloudberry && docker exec <container ID> bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ./devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"`
+```bash
+SRC_DIR=/home/gpadmin/cloudberry && docker exec cloudberry-build bash -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ./devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"
+```
 
 ## 8. Execute test query
 
-Now you could set environment and execute queries
+Now you could set environment and execute queries:
 
-`docker exec 7197206b0645 bash -c "source /usr/local/cloudberry-db/cloudberry-env.sh && source /home/gpadmin/cloudberry/gpAux/gpdemo/gpdemo-env.sh && psql -U gpadmin -d postgres -c 'SELECT 42'"`
+```bash
+docker exec cloudberry-build bash -c "source /usr/local/cloudberry-db/cloudberry-env.sh && source /home/gpadmin/cloudberry/gpAux/gpdemo/gpdemo-env.sh && psql -U gpadmin -d postgres -c 'SELECT 42'"
+```
 
 All done!
