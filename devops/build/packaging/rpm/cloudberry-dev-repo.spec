@@ -18,26 +18,26 @@
 Name:           cloudberry-dev-repo
 Version:        1.0
 Release:        1%{?dist}
-Summary:        Cloudberry Database Repository Configuration
+Summary:        Apache Cloudberry Repository Configuration
 License:        ASL 2.0
 Group:          Applications/Databases
-URL:            https://cloudberrydb.org
+URL:            https://cloudberry.apache.org
 Vendor:         Cloudberry Open Source
 BuildArch:      noarch
 
 %description
-This package configures the Cloudberry Database repository on your
-system. Cloudberry Database is an open-source project aimed at
+This package configures the Apache Cloudberry repository on your
+system. Apache Cloudberry is an open-source project aimed at
 providing a scalable, high-performance SQL database for
 analytics. This repository provides access to the latest RPM packages
-for Cloudberry Database, allowing you to easily install and stay
+for Apache Cloudberry, allowing you to easily install and stay
 up-to-date with the latest developments.
 
 %install
 mkdir -p %{buildroot}%{_sysconfdir}/yum.repos.d/
 cat > %{buildroot}%{_sysconfdir}/yum.repos.d/cloudberry-dev.repo <<EOF
 [cloudberry-dev]
-name=Cloudberry Database Repository
+name=Apache Cloudberry Repository
 baseurl=https://cloudberry-rpm-dev-bucket.s3.amazonaws.com/repo/el%{rhel}/x86_64/
 enabled=1
 gpgcheck=1

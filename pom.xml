@@ -1240,12 +1240,6 @@ code or new licensing patterns.
             <exclude>Makefile</exclude>
             <exclude>aclocal.m4</exclude>
             <exclude>python-dependencies.txt</exclude>
-
-           <!-- Exclude python requirements files, since they are just a list of packages and do not support any comments
-            -->
-
-            <exclude>devops/deploy/docker/build/rocky8/tests/requirements.txt</exclude>
-            <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
             
             <!-- Finally we exclude a few file types (based on
                  extension) for which comments are tough to
@@ -1742,6 +1736,12 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/unicode.cpp</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.clang-format</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.travis.yml</exclude>
+
+            <!-- Exclude python requirements files, since they are just a list of packages and do not support any comments
+            -->
+
+            <exclude>devops/deploy/docker/build/rocky8/tests/requirements.txt</exclude>
+            <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
 
           </excludes>
 
