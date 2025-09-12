@@ -4,8 +4,7 @@ test: parallel_retrieve_cursor/corner
 test: parallel_retrieve_cursor/explain
 test: parallel_retrieve_cursor/replicated_table
 test: parallel_retrieve_cursor/special_query
-# FIXME: Temporary disable as unstable
-# test: parallel_retrieve_cursor/status_check
+test: parallel_retrieve_cursor/status_check
 test: parallel_retrieve_cursor/status_wait
 test: parallel_retrieve_cursor/syntax
 test: parallel_retrieve_cursor/retrieve_quit_check

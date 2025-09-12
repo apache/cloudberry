@@ -256,6 +256,9 @@ insert into t1 select generate_series(1,100);
 2: CLOSE c8;
 2: END;
 
+1q:
+2q:
+
 ---------- Test9: Test parallel retrieve cursor auto-check
 1: drop table if exists t1;
 1: create table t1(a int, b int);
