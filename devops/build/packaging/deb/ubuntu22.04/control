@@ -1,0 +1,101 @@
+Source: apache-cloudberry-db-incubating
+Maintainer: Apache Cloudberry (Incubating) <dev@cloudberry.apache.org> 
+Section: database
+Build-Depends: debhelper (>= 9),
+    bison,
+    ca-certificates-java,
+    ca-certificates,
+    cmake,
+    curl,
+    cgroup-tools,
+    flex,
+    gcc-11,
+    g++-11,
+    git,
+    krb5-multidev,
+    libapr1-dev,
+    libbz2-dev,
+    libcurl4-gnutls-dev,
+    libevent-dev,
+    libkrb5-dev,
+    libldap2-dev,
+    libperl-dev,
+    libreadline6-dev,
+    libssl-dev,
+    libxml2-dev,
+    libyaml-dev,
+    libzstd-dev,
+    libaprutil1-dev,
+    libpam0g-dev,
+    libpam0g,
+    libcgroup1,
+    libyaml-0-2,
+    libldap-2.5-0,
+    libssl3,
+    libxerces-c-dev,
+    libxerces-c3.2,
+    ninja-build,
+    quilt,
+    unzip,
+    wget,
+    zlib1g-dev,
+    libuv1-dev
+
+Package: apache-cloudberry-db-incubating
+Provides: apache-cloudberry-db
+Architecture: amd64
+Depends: curl,
+    cgroup-tools,
+    iputils-ping,
+    krb5-multidev,
+    less,
+    libapr1,
+    libbz2-1.0,
+    libcurl4,
+    libcurl3-gnutls,
+    libevent-2.1-7,
+    libreadline8,
+    libxml2,
+    libyaml-0-2,
+    libldap-2.5-0,
+    libzstd1,
+    libcgroup1,
+    libssl3,
+    libpam0g,
+    libxerces-c3.2,
+    locales,
+    net-tools,
+    openssh-client,
+    openssh-server,
+    openssl,
+    python-six,
+    python2.7,
+    python2.7-dev,
+    rsync,
+    wget,
+    zlib1g,
+    libuv1
+Description: Apache Cloudberry (incubating) is an advanced, open-source, massively
+  parallel processing (MPP) data warehouse developed from PostgreSQL and
+  Greenplum. It is designed for high-performance analytics on
+  large-scale data sets, offering powerful analytical capabilities and
+  enhanced security features.
+  Key Features:
+    - Massively parallel processing for optimized performance
+    - Advanced analytics for complex data processing
+    - Integration with ETL and BI tools
+    - Compatibility with multiple data sources and formats
+    - Enhanced security features
+  Apache Cloudberry supports both batch processing and real-time data
+  warehousing, making it a versatile solution for modern data
+  environments.
+  Apache Cloudberry (incubating) is an effort undergoing incubation at
+  the Apache Software Foundation (ASF), sponsored by the Apache
+  Incubator PMC.
+  Incubation is required of all newly accepted projects until a further
+  review indicates that the infrastructure, communications, and decision
+  making process have stabilized in a manner consistent with other
+  successful ASF projects.
+  While incubation status is not necessarily a reflection of the
+  completeness or stability of the code, it does indicate that the
+  project has yet to be fully endorsed by the ASF.
