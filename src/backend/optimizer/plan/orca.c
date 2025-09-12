@@ -25,6 +25,7 @@
 #include "cdb/cdbplan.h"
 #include "cdb/cdbvars.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/orca.h"
@@ -37,8 +38,13 @@
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "portability/instr_time.h"
+#include "utils/elog.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/syscache.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_namespace.h"
 
 /* GPORCA entry point */
 extern PlannedStmt * GPOPTOptimizedPlan(Query *parse, bool *had_unexpected_failure, OptimizerOptions *opts);
@@ -81,6 +87,110 @@ log_optimizer(PlannedStmt *plan, bool fUnexpectedFailure)
 	}
 }
 
+/*
+ * support_functions_check_context
+ *		Context structure for checking support functions, similar to eval_const_expressions_context
+ */
+typedef struct
+{
+	PlannerInfo *root;
+	bool		recurse_queries;		/* recurse into query structures */
+	bool		recurse_sublink_testexpr; /* recurse into sublink test expressions */
+} support_functions_check_context;
+
+/*
+ * check_support_functions_walker
+ *		Walker function to check if a query tree contains functions with support functions
+ *		Uses the same traversal pattern as eval_const_expressions_mutator but as a walker
+ */
+static bool
+check_support_functions_walker(Node *node, support_functions_check_context *context)
+{
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		if (context->recurse_queries)
+		{
+			/* Recurse into Query structures like fold_constants does */
+			return query_tree_walker(query, check_support_functions_walker, context, 0);
+		}
+		return false;
+	}
+
+	/* Handle SubLink like eval_const_expressions_mutator does */
+	if (IsA(node, SubLink) && !context->recurse_sublink_testexpr)
+	{
+		SubLink *sublink = (SubLink *) node;
+
+		/*
+		 * Also invoke the walker on the sublink's Query node, so it
+		 * can recurse into the sub-query if it wants to.
+		 */
+		return query_tree_walker((Query *) sublink->subselect, check_support_functions_walker, context, 0);
+	}
+
+	/* Check both FuncExpr and OpExpr nodes for prosupport functions */
+	if (IsA(node, FuncExpr) || IsA(node, OpExpr))
+	{
+		HeapTuple	proctup;
+		Form_pg_proc procform;
+		bool		has_support = false;
+		Oid			funcid;
+		const char	*exprtype;
+
+		/* Extract function OID from either FuncExpr or OpExpr */
+		if (IsA(node, FuncExpr))
+		{
+			FuncExpr *funcexpr = (FuncExpr *) node;
+			funcid = funcexpr->funcid;
+			exprtype = "FuncExpr";
+		}
+		else /* OpExpr */
+		{
+			OpExpr *opexpr = (OpExpr *) node;
+			funcid = opexpr->opfuncid;
+			exprtype = "OpExpr";
+		}
+
+		proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+		if (HeapTupleIsValid(proctup))
+		{
+			procform = (Form_pg_proc) GETSTRUCT(proctup);
+			has_support = OidIsValid(procform->prosupport);
+			/* Skip pg_catalog namespace support functions - they are safe */
+			if (has_support && procform->pronamespace != PG_CATALOG_NAMESPACE)
+			{
+				elog(DEBUG1, "Found %s with non-pg_catalog prosupport function, falling back to standard planner", exprtype);
+				ReleaseSysCache(proctup);
+				return true;
+			}
+			ReleaseSysCache(proctup);
+		}
+	}
+
+	return expression_tree_walker(node, check_support_functions_walker, context);
+}
+
+/*
+ * query_contains_support_functions
+ *		Check if a query contains function calls that have support functions
+ */
+static bool
+query_contains_support_functions(Query *query)
+{
+	support_functions_check_context context;
+
+	context.root = NULL;  /* We don't need PlannerInfo for this check */
+	context.recurse_queries = true; /* recurse into query structures */
+	context.recurse_sublink_testexpr = false; /* do not recurse into sublink test expressions */
+
+	/* Use the same traversal pattern as fold_constants but with a walker */
+	return query_or_expression_tree_walker((Node *) query, check_support_functions_walker, &context, 0);
+}
 
 /*
  * optimize_query
@@ -140,6 +250,23 @@ optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams, Optim
 	/*
 	 * Pre-process the Query tree before calling optimizer.
 	 *
+	 * Check if rtable is NULL and query contains support functions.
+	 * If both conditions are true, fall back to standard planner to avoid
+	 * crashes in extension support functions that expect valid rtable.
+	 * 
+	 * Performance note: This check does not significantly impact performance
+	 * since pqueryCopy->rtable is non-NULL for most queries. The rtable is
+	 * typically only NULL when the query contains sublinks, which is uncommon.
+	 * The query_contains_support_functions() traversal only occurs in these
+	 * rare cases.
+	 */
+	if (pqueryCopy->rtable == NULL && query_contains_support_functions(pqueryCopy))
+	{
+		elog(DEBUG1, "Query rtable is NULL and contains support functions, falling back to standard planner");
+		return NULL;
+	}
+
+	/*
 	 * Constant folding will add dependencies to functions or relations in
 	 * glob->invalItems, for any functions that are inlined or eliminated
 	 * away. (We will find dependencies to other objects later, after planning).
