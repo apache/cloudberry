@@ -57,6 +57,9 @@
 /* Define to build with GSSAPI support. (--with-gssapi) */
 #undef ENABLE_GSS
 
+/* Define to 1 to build with ic-udp2 support (--enable-ic-udp2) */
+#undef ENABLE_IC_UDP2
+
 /* Define to 1 to build with ic-proxy support (--enable-ic-proxy) */
 #undef ENABLE_IC_PROXY
 
