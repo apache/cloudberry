@@ -18,7 +18,7 @@ static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
 static int guc_max_text_size = 1024;  // in KB
 static int guc_max_plan_size = 1024;  // in KB
-static int guc_min_analyze_time = 10000; // in seconds
+static int guc_min_analyze_time = 10000; // in ms
 static int guc_logging_mode = LOG_MODE_UDS;
 
 static const struct config_enum_entry logging_mode_options[] = {
