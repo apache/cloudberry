@@ -30,6 +30,8 @@
 #include <gpfxdist.h>
 #endif
 
+#include <arpa/inet.h>
+
 char* format_error(char* c1, char* c2);
 
 
@@ -144,6 +146,36 @@ static void glob_and_copyfree(glob_and_copy_t *pglob)
 		gfile_free(pglob->gl_pathv);
 		pglob->gl_pathc = 0;
 		pglob->gl_pathv = 0;
+	}
+}
+
+static void glob_and_copyfree_sftp(glob_and_copy_t *pglob)
+{
+	if (pglob->gl_pathc)
+	{
+		int i;
+
+		for (i = 0; i < pglob->gl_pathc; i++)
+		{
+			gfile_free(pglob->gl_pathv[i]);
+			gfile_free(pglob->gl_username[i]);
+			gfile_free(pglob->gl_passwd[i]);
+			gfile_free(pglob->gl_hostaddr[i]);
+			gfile_free(pglob->gl_port[i]);
+		}
+
+		gfile_free(pglob->gl_pathv);
+		gfile_free(pglob->gl_username);
+		gfile_free(pglob->gl_passwd);
+		gfile_free(pglob->gl_hostaddr);
+		gfile_free(pglob->gl_port);
+
+		pglob->gl_pathc = 0;
+		pglob->gl_pathv = 0;
+		pglob->gl_username = 0;
+		pglob->gl_passwd = 0;
+		pglob->gl_hostaddr = 0;
+		pglob->gl_port = 0;
 	}
 }
 
@@ -315,7 +347,12 @@ int fstream_close_with_error(fstream_t* fs, char* error)
 	if(fs->buffer)
 		gfile_free(fs->buffer);
 
-	glob_and_copyfree(&fs->glob);
+	if (fs->fd.is_sftp)
+	{
+		glob_and_copyfree_sftp(&fs->glob);
+	}
+	else 
+		glob_and_copyfree(&fs->glob);
 	gfile_close(&fs->fd);
 #ifdef GPFXDIST
 		/* 
@@ -453,6 +490,310 @@ static int glob_path(fstream_t *fs, const char *path)
 	return 0;
 }
 
+int get_sftp_counts(const char *sftp_request)
+{
+	const char *start;
+	const char *end;
+	int count1 = 0;
+	int count2 = 0;
+
+	start = (char *)sftp_request;
+	end = (char *)sftp_request;
+
+	while (*start || *end)
+	{
+		if (*start == '<')
+			count1++;
+		start++;
+		if (*end == '>')
+			count2++;
+		end++;
+	}
+
+	if (count1 != count2)
+		return -1;
+
+	return count1;
+}
+
+int ParseFilePathUri(char *uri_str, sftp_info_t *info)
+{
+
+	int protocol_len = 0;
+	int len = 0;
+	char *start, *end;
+
+	if (strncmp(uri_str, "sftp://", 7) == 0)
+	{
+		protocol_len = 7;
+	}
+	else
+	{
+		return -2;
+	}
+
+	start = (char *)uri_str + protocol_len;
+	end = strchr(start, ':');
+	if (end == NULL)
+	{
+
+		return -2;
+	}
+	else
+	{
+		len = end - start;
+
+		char *username = NULL;
+		username = (char *)gfile_malloc(len + 1);
+		if (username == NULL)
+		{
+			gfile_printf_then_putc_newline("out of memory");
+			return -1;
+		}
+		strncpy(username, start, len);
+		username[len] = '\0';
+		strcpy(info->username, username);
+		gfile_free(username);
+	}
+	start = end + 1;
+	end = strchr(start, '@');
+
+	if (end == NULL)
+	{
+		return -2;
+	}
+	else
+	{
+		len = end - start;
+
+		char *passwd = NULL;
+		passwd = (char *)gfile_malloc(len + 1);
+		if (passwd == NULL)
+		{
+			gfile_printf_then_putc_newline("out of memory");
+			return -1;
+		}
+		strncpy(passwd, start, len);
+		passwd[len] = '\0';
+		strcpy(info->password, passwd);
+		gfile_free(passwd);
+	}
+
+	start = end + 1;
+	if (strncmp(start, "[", 1) == 0)
+	{
+		end = strchr(start, ']');
+		if (end == NULL)
+			return -2;
+
+		len = end - start;
+		char *hostaddr6 = NULL;
+		hostaddr6 = (char *)gfile_malloc(len);
+		if (hostaddr6 == NULL)
+		{
+			gfile_printf_then_putc_newline("out of memory");
+			return -1;
+		}
+		strncpy(hostaddr6, start + 1, len - 1);
+		hostaddr6[len - 1] = '\0';
+		strcpy(info->hostaddr, hostaddr6);
+		gfile_free(hostaddr6);
+
+		end++;
+	}
+
+	else
+	{
+		end = strchr(start, ':');
+		if (end == NULL)
+		{
+			return -2;
+		}
+		else
+		{
+			len = end - start;
+
+			char *hostaddr4 = NULL;
+			hostaddr4 = (char *)gfile_malloc(len + 1);
+			if (hostaddr4 == NULL)
+			{
+				gfile_printf_then_putc_newline("out of memory");
+				return -1;
+			}
+			strncpy(hostaddr4, start, len);
+			hostaddr4[len] = '\0';
+			strcpy(info->hostaddr, hostaddr4);
+			gfile_free(hostaddr4);
+		}
+	}
+
+	start = end + 1;
+	end = strchr(start, '/');
+	if (end == NULL)
+	{
+		return -2;
+	}
+	else
+	{
+		len = end - start;
+
+		char *port = NULL;
+		port = (char *)gfile_malloc(len + 1);
+		if (port == NULL)
+		{
+			gfile_printf_then_putc_newline("out of memory");
+			return -1;
+		}
+		strncpy(port, start, len);
+		port[len] = '\0';
+		strcpy(info->port, port);
+		gfile_free(port);
+	}
+
+	start = end;
+	strcpy(info->fpath, start);
+
+	return 0;
+}
+
+static int order_by_hostaddr(const void *e1, const void *e2)
+{
+	struct in_addr ip1;
+	struct in_addr ip2;
+	int result = 0;
+
+	inet_pton(AF_INET, ((struct sftp_info_t *)e1)->hostaddr, &ip1);
+	inet_pton(AF_INET, ((struct sftp_info_t *)e2)->hostaddr, &ip2);
+
+	result = memcmp(&ip1, &ip2, sizeof(struct in_addr));
+
+	if (result > 0)
+		return 1;
+	else if (result < 0)
+		return -1;
+	else
+		return 0;
+}
+
+static int fetch_sftp_paths(fstream_t *fs, const char *path)
+{
+	int counts = get_sftp_counts(path);
+	if(counts == -1)
+	{
+		gfile_printf_then_putc_newline("sftp path is Non-conforming, please check ");
+		return 1;
+	}
+
+	if(counts == 0)
+	{
+		gfile_printf_then_putc_newline("sftp path is empty");
+		return 1;
+	}
+	char **res = (char **)malloc(sizeof(char *) * counts);
+
+	char **unames = (char **)gfile_malloc(sizeof(char *) * counts);
+	char **passwds = (char **)gfile_malloc(sizeof(char *) * counts);
+	char **hostaddrs = (char **)gfile_malloc(sizeof(char *) * counts);
+	char **ports = (char **)gfile_malloc(sizeof(char *) * counts);
+	char **fpaths = (char **)gfile_malloc(sizeof(char *) * counts);
+
+	if (!unames || !passwds || !hostaddrs || !ports || !fpaths)
+	{
+		gfile_printf_then_putc_newline("out of memory");
+		return 1;
+	}
+
+	sftp_info_t sftp_info_lists[64];
+
+	fs->glob.gl_pathc = 0;
+	fs->glob.gl_username = unames;
+	fs->glob.gl_passwd = passwds;
+	fs->glob.gl_hostaddr = hostaddrs;
+	fs->glob.gl_port = ports;
+	fs->glob.gl_pathv = fpaths;
+
+	{
+		const char *start;
+		const char *end;
+		start = (char *)path;
+		end = (char *)path;
+
+		for (int i = 0; i < counts; i++)
+		{
+			while (*start != '<')
+				start++;
+			while (*end != '>')
+				end++;
+			int len = end - start - 1;
+			char *req = (char *)gfile_malloc(len + 1);
+			if (!req)
+			{
+				gfile_printf_then_putc_newline("out of memory");
+				return 1;
+			}
+			strncpy(req, start + 1, len);
+			req[len] = '\0';
+			res[i] = strdup(req);
+			gfile_free(req);
+			start++;
+			end++;
+		}
+	}
+
+	for (int i = 0; i < counts; i++)
+	{
+		int parse_result = ParseFilePathUri(res[i], &sftp_info_lists[i]);
+		if(parse_result == 0)
+			continue;
+		else
+		{
+			for (int j = 0; j < counts; j++)
+			{
+				if(res[i])
+					free(res[i]);
+			}
+			free(res);
+		}
+	}
+
+	qsort(sftp_info_lists, counts, sizeof(sftp_info_t), order_by_hostaddr);
+
+	for (int j = 0; j < counts; j++)
+	{
+		char *tmp_uname = sftp_info_lists[j].username;
+		char *tmp_passwd = sftp_info_lists[j].password;
+		char *tmp_hostaddr = sftp_info_lists[j].hostaddr;
+		char *tmp_port = sftp_info_lists[j].port;
+		char *tmp_fpath = sftp_info_lists[j].fpath;
+
+		*unames = (char *)gfile_malloc(strlen(tmp_uname) + 1);
+		*passwds = (char *)gfile_malloc(strlen(tmp_passwd) + 1);
+		*hostaddrs = (char *)gfile_malloc(strlen(tmp_hostaddr) + 1);
+		*ports = (char *)gfile_malloc(strlen(tmp_port) + 1);
+		*fpaths = (char *)gfile_malloc(strlen(tmp_fpath) + 1);
+
+		if (!(*unames) || !(*passwds) || !(*hostaddrs) || !(*ports) || !(*fpaths))
+		{
+			gfile_printf_then_putc_newline("out of memory!!!");
+			return 1;
+		}
+
+		strcpy(*unames++, tmp_uname);
+		strcpy(*passwds++, tmp_passwd);
+		strcpy(*hostaddrs++, tmp_hostaddr);
+		strcpy(*ports++, tmp_port);
+		strcpy(*fpaths++, tmp_fpath);
+
+		fs->glob.gl_pathc++;
+	}
+
+	for (int i = 0; i < counts; i++)
+	{
+		free(res[i]);
+	}
+	free(res);
+	return 0;
+}
 
 #ifdef GPFXDIST
 /*
@@ -501,6 +842,7 @@ fstream_open(const char *path, const struct fstream_options *options,
 {
 	int i;
 	fstream_t* fs;
+	bool_t is_sftp = FALSE;
 
 	*response_code = 500;
 	*response_string = "Internal Server Error";
@@ -515,26 +857,43 @@ fstream_open(const char *path, const struct fstream_options *options,
 	fs->options = *options;
 	fs->buffer = gfile_malloc(options->bufsize);
 	
+	if (strncmp(path, "/<sftp://", 9) == 0)
+	{
+		is_sftp = TRUE;
+	}
+
 	/*
 	 * get a list of all files that were requested to be read and include them
 	 * in our fstream. This includes any wildcard pattern matching.
 	 */
-	if (glob_path(fs, path))
+	if (is_sftp)
 	{
-		fstream_close(fs);
-		return 0;
-	}
-
-	/*
-	 * If the list of files in our filestrem includes a directory name, expand
-	 * the directory and add all the files inside of it.
-	 */
-	if (fpath_all_directories(&fs->glob))
-	{
-		if (expand_directories(fs))
+		if (fetch_sftp_paths(fs, path))
 		{
 			fstream_close(fs);
 			return 0;
+		}
+	}
+
+	else
+	{
+		if (glob_path(fs, path))
+		{
+			fstream_close(fs);
+			return 0;
+		}
+
+		/*
+	 * If the list of files in our filestrem includes a directory name, expand
+	 * the directory and add all the files inside of it.
+	 */
+		if (fpath_all_directories(&fs->glob))
+		{
+			if (expand_directories(fs))
+			{
+				fstream_close(fs);
+				return 0;
+			}
 		}
 	}
 
@@ -543,11 +902,14 @@ fstream_open(const char *path, const struct fstream_options *options,
 	 */
 	if (fs->glob.gl_pathc == 0)
 	{
-		gfile_printf_then_putc_newline("fstream bad path: %s", path);
-		fstream_close(fs);
-		*response_code = 404;
-		*response_string = "No matching file(s) found";
-		return 0;
+		if(!is_sftp)
+		{
+			gfile_printf_then_putc_newline("fstream bad path: %s", path);
+			fstream_close(fs);
+			*response_code = 404;
+			*response_string = "No matching file(s) found";
+			return 0;
+		}
 	}
 
 	if (fs->glob.gl_pathc != 1 && options->forwrite)
@@ -650,13 +1012,28 @@ fstream_open(const char *path, const struct fstream_options *options,
 
 		gfile_close(&fs->fd);
 
-		if (gfile_open(&fs->fd, fs->glob.gl_pathv[i], gfile_open_flags(options->forwrite, options->usesync),
-					   response_code, response_string, transform))
+		if (is_sftp)
 		{
-			gfile_printf_then_putc_newline("fstream unable to open file %s",
-					fs->glob.gl_pathv[i]);
-			fstream_close(fs);
-			return 0;
+#ifdef LIBSSH2
+			if (gfile_open_sftp(&fs->fd, fs->glob.gl_pathv[i], fs->glob.gl_username[i], fs->glob.gl_passwd[i],
+								fs->glob.gl_hostaddr[i], fs->glob.gl_port[i], gfile_open_flags(options->forwrite, options->usesync), response_code, response_string, transform))
+			{
+				gfile_printf_then_putc_newline("fstream unable to open file %s", fs->glob.gl_pathv[i]);
+				fstream_close(fs);
+				return 0;
+			}
+#endif
+		}
+		else
+		{
+			if (gfile_open(&fs->fd, fs->glob.gl_pathv[i], gfile_open_flags(options->forwrite, options->usesync),
+						   response_code, response_string, transform))
+			{
+				gfile_printf_then_putc_newline("fstream unable to open file %s",
+											   fs->glob.gl_pathv[i]);
+				fstream_close(fs);
+				return 0;
+			}
 		}
 
 		fs->compressed_size += gfile_get_compressed_size(&fs->fd);
@@ -707,14 +1084,29 @@ static int nextFile(fstream_t*fs)
 	if (fs->fidx < fs->glob.gl_pathc)
 	{
 		fs->skip_header_line = fs->options.header;
-
-		if (gfile_open(&fs->fd, fs->glob.gl_pathv[fs->fidx], GFILE_OPEN_FOR_READ, 
-					   &response_code, &response_string, transform))
+		if (fs->fd.is_sftp)
 		{
-			gfile_printf_then_putc_newline("fstream unable to open file %s",
-											fs->glob.gl_pathv[fs->fidx]);
-			fs->ferror = "unable to open file";
-			return 1;
+#ifdef LIBSSH2
+			if (gfile_open_sftp(&fs->fd, fs->glob.gl_pathv[fs->fidx], fs->glob.gl_username[fs->fidx], fs->glob.gl_passwd[fs->fidx],
+								fs->glob.gl_hostaddr[fs->fidx], fs->glob.gl_port[fs->fidx], GFILE_OPEN_FOR_READ, &response_code, &response_string, transform))
+			{
+				gfile_printf_then_putc_newline("fstream unable to open file %s",
+											   fs->glob.gl_pathv[fs->fidx]);
+				fs->ferror = "unable to open file";
+				return 1;
+			}
+#endif
+		}
+		else
+		{
+			if (gfile_open(&fs->fd, fs->glob.gl_pathv[fs->fidx], GFILE_OPEN_FOR_READ,
+						   &response_code, &response_string, transform))
+			{
+				gfile_printf_then_putc_newline("fstream unable to open file %s",
+											   fs->glob.gl_pathv[fs->fidx]);
+				fs->ferror = "unable to open file";
+				return 1;
+			}
 		}
 	}
 
