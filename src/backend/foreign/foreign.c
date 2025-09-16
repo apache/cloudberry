@@ -108,6 +108,66 @@ SeparateOutNumSegments(List **options)
 	return num_segments;
 }
 
+/* Get and separate out the insert_dist_by_key option */
+bool
+SeparateOutDistByKey(List **options)
+{
+	ListCell   *lc = NULL;
+	ListCell   *prev = NULL;
+	bool		is_distr_key = false;
+
+	foreach(lc, *options)
+	{
+		DefElem    *def = (DefElem *) lfirst(lc);
+
+		if (strcmp(def->defname, "insert_dist_by_key") == 0)
+		{
+			is_distr_key = defGetBoolean(def);
+
+			*options = list_delete_cell(*options, lc, prev);
+			break;
+		}
+
+		prev = lc;
+	}
+	return is_distr_key;
+}
+
+/* Get and separate out the insert_dist_by_key_weight option */
+int32
+SeparateOutDistByKeyWeight(List **options)
+{
+	ListCell   *lc = NULL;
+	ListCell   *prev = NULL;
+	char	   *weight_str = NULL;
+	int32		weight = -1;
+
+	foreach(lc, *options)
+	{
+		DefElem    *def = (DefElem *) lfirst(lc);
+
+		if (strcmp(def->defname, "insert_dist_by_key_weight") == 0)
+		{
+			weight_str = defGetString(def);
+			weight = pg_atoi(weight_str, sizeof(int32), 0);
+
+			if (weight < 0)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
+						 errmsg("Negative values are not allowed for "
+							  "'insert_dist_by_key_weight' column option")));
+			}
+
+			*options = list_delete_cell(*options, lc, prev);
+			break;
+		}
+
+		prev = lc;
+	}
+	return weight;
+}
+
 /*
  * GetForeignDataWrapper -	look up the foreign-data wrapper by OID.
  */

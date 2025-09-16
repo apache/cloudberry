@@ -141,6 +141,160 @@ createHashPartitionedPolicy(List *keys, List *opclasses, int numsegments)
 }
 
 /*
+ * createForeignTablePartitionedPolicy-- Create a policy for a foreign table
+ * with data partitioned by keys if it is possible, otherwise randomly
+ * partitioned
+ */
+static GpPolicy *
+createForeignTablePartitionedPolicy(ForeignTable *ft)
+{
+	Assert(ft->exec_location == FTEXECLOCATION_ALL_SEGMENTS);
+
+	/*
+	 * Go over all table attributes and find out if there are any attributes
+	 * marked as distribution keys. The order of the distribution keys is
+	 * important, as it affects the final hash that is used to locate the
+	 * proper segment. User can affect the order by setting
+	 * 'insert_dist_by_key_weight' option to a column (the value set by the
+	 * user is always not negative). If weight is not set by the user, we use
+	 * the order of appearance in pg_attribute.
+	 *
+	 * So, the final order of the distribution keys is: 1. all attributes that
+	 * have explicit weight, sorted by their weight ascendingly; 2. then all
+	 * other attributes in the order they were set during the table creation.
+	 *
+	 * In order to facilitate the required order, we firstly store
+	 * distribution keys in an ordered list 'ft_distr_keys', where sorting is
+	 * done in the descending order by internal weight, which is set to
+	 * 'PG_INT32_MAX - weight' for the user-defined weight, and to '-1 *
+	 * attnum' for other columns. And the final list of distribution policy
+	 * key is restored basing on this list.
+	 */
+
+	typedef struct
+	{
+		int32		weight;
+		Form_pg_attribute attr;
+	}			FTDistributionKey;
+
+	Relation	rel = heap_open(ft->relid, AccessShareLock);
+	List	   *ft_distr_keys = NIL;
+	int			i;
+
+	for (i = 1; i <= rel->rd_att->natts; i++)
+	{
+		Form_pg_attribute attr = rel->rd_att->attrs[i - 1];
+
+		/* Skip dropped attributes. */
+		if (attr->attisdropped)
+			continue;
+
+		/* Find out if the column should be used for distribution. */
+		int32		distr_weight = -i;
+		List	   *options = GetForeignColumnOptions(ft->relid, attr->attnum);
+		bool		is_distr_column = SeparateOutDistByKey(&options);
+		int32		weight = SeparateOutDistByKeyWeight(&options);
+
+		if (weight >= 0)
+			distr_weight = PG_INT32_MAX - weight;
+
+		/* Insert according to the weight into the ordered list. */
+		if (is_distr_column)
+		{
+			FTDistributionKey *ftkey = (FTDistributionKey *)
+			palloc(sizeof(*ftkey));
+
+			ftkey->weight = distr_weight;
+			ftkey->attr = attr;
+
+			/* Does the element belong at the front? */
+			if ((ft_distr_keys == NIL) ||
+				(ftkey->weight >
+				 ((FTDistributionKey *) linitial(ft_distr_keys))->weight))
+				ft_distr_keys = lcons(ftkey, ft_distr_keys);
+			else
+			{
+				/* No, so find the entry it belongs after. */
+				ListCell   *prev = list_head(ft_distr_keys);
+
+				for (;;)
+				{
+					ListCell   *curr = lnext(prev);
+
+					if (ftkey->weight ==
+						((FTDistributionKey *) lfirst(prev))->weight)
+						ereport(ERROR,
+								(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
+							   errmsg("Duplicate values are not allowed for "
+									  "column distribution key weight")));
+
+					if (curr == NULL ||
+						ftkey->weight >
+						((FTDistributionKey *) lfirst(curr))->weight)
+						break;
+
+					prev = curr;
+				}
+				/* Insert datum into list after 'prev' */
+				lappend_cell(ft_distr_keys, prev, ftkey);
+			}
+		}
+	}
+
+	/*
+	 * After we have iterated over all attributes, create the final
+	 * distribution keys list.
+	 */
+	List	   *policykeys = NIL;
+	List	   *policyopclasses = NIL;
+	bool	   all_types_hashable = true;
+	ListCell   *lc;
+
+	foreach(lc, ft_distr_keys)
+	{
+		FTDistributionKey *ftkey = (FTDistributionKey *) lfirst(lc);
+		Form_pg_attribute attr = ftkey->attr;
+		int16		attnum = attr->attnum;
+		Oid			type_oid = attr->atttypid;
+		Oid			keyopclass = InvalidOid;
+
+		if (gp_use_legacy_hashops)
+			keyopclass = get_legacy_cdbhash_opclass_for_base_type(type_oid);
+
+		if (!keyopclass)
+			keyopclass = cdb_default_distribution_opclass_for_type(type_oid);
+
+		/*
+		 * Provide a warning to the user that the column can't be used for the
+		 * table distribution. We do not break the loop here in order to show
+		 * all warnings to the user at once.
+		 */
+		if (!OidIsValid(keyopclass))
+		{
+			elog(WARNING,
+				 "Columns with geometric or user-defined data types are not "
+				 "eligible as Greengage distribution key columns (type '%s')",
+				 format_type_be(type_oid));
+
+			all_types_hashable = false;
+		}
+
+		policykeys = lappend_int(policykeys, attnum);
+		policyopclasses = lappend_oid(policyopclasses, keyopclass);
+	}
+	list_free_deep(ft_distr_keys);
+
+	heap_close(rel, NoLock);
+
+	if (policykeys != NIL && all_types_hashable)
+		return createHashPartitionedPolicy(policykeys,
+										   policyopclasses,
+										   getgpsegmentCount());
+
+	return createRandomPartitionedPolicy(getgpsegmentCount());
+}
+
+/*
  * GpPolicyCopy -- Return a copy of a GpPolicy object.
  *
  * The copy is palloc'ed.
@@ -376,15 +530,7 @@ GpPolicyFetch(Oid tbloid)
 
 			if (f->exec_location == FTEXECLOCATION_ALL_SEGMENTS)
 			{
-				/*
-				 * Currently, foreign tables do not support a distribution
-				 * policy, as opposed to writable external tables. For now,
-				 * we will create a random partitioned policy for foreign
-				 * tables that run on all segments. This will allow writing
-				 * to foreign tables from all segments when the mpp_execute
-				 * option is set to 'all segments'
-				 */
-				return createRandomPartitionedPolicy(getgpsegmentCount());
+				return createForeignTablePartitionedPolicy(f);
 			}
 		}
 	}

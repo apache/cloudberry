@@ -144,6 +144,8 @@ InitPgFdwOptions(void)
 		{"schema_name", ForeignTableRelationId, false},
 		{"table_name", ForeignTableRelationId, false},
 		{"column_name", AttributeRelationId, false},
+		{"insert_dist_by_key", AttributeRelationId, false},
+		{"insert_dist_by_key_weight", AttributeRelationId, false},
 		/* use_remote_estimate is available on both server and table */
 		{"use_remote_estimate", ForeignServerRelationId, false},
 		{"use_remote_estimate", ForeignTableRelationId, false},
