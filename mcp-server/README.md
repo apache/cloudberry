@@ -159,6 +159,75 @@ python -m cbmcp.client
 - **Connection Pooling**: Secure connection management
 - **Sensitive Table Protection**: Blocks access to system tables
 
+
+## Quick Start with Cloudberry Demo Cluster
+
+This section shows how to quickly set up and test the Cloudberry MCP Server using a local Cloudberry demo cluster. This is ideal for development and testing purposes. 
+
+Assume you already have a running [Cloudberry demo cluster](https://cloudberry.apache.org/docs/deployment/set-demo-cluster) and install & build MCP server as described above.
+
+1. Configure local connections in `pg_hba.conf`
+
+**Note**: This configuration is for demo purposes only. Do not use `trust` authentication in production environments.
+
+```bash
+[gpadmin@cdw]$ vi ~/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf
+```
+
+Add the following lines to the end of the pg_hba.conf:
+
+```
+# IPv4 local connections
+host    all     all     127.0.0.1/32    trust
+# IPv6 local connections
+host    all     all     ::1/128         trust
+```
+
+After modifying `pg_hba.conf`, reload the configuration parameters:
+```bash
+[gpadmin@cdw]$ gpstop -u
+```
+
+2. Create environment configuration
+
+Create a `.env` in the project root directory:
+
+```
+# Database Configuration (Demo cluster defaults)
+DB_HOST=localhost
+DB_PORT=7000
+DB_NAME=postgres
+DB_USER=gpadmin
+# No password required for demo cluster
+
+# Server Configuration
+MCP_HOST=localhost
+MCP_PORT=8000
+MCP_DEBUG=false
+```
+
+3. Start the MCP server
+
+```bash
+MCP_HOST=0.0.0.0 MCP_PORT=8000 python -m cbmcp.server
+```
+
+You should see output indicating the server is running:
+```
+[09/17/25 14:07:50] INFO     Starting MCP server 'Apache Cloudberry MCP Server' with transport        server.py:1572
+                             'streamable-http' on http://0.0.0.0:8000/mcp/
+```
+
+4. Configure your MCP client.
+
+Add the following server configuration to your MCP client:
+
+- Server Type: Streamable-HTTP
+- URL: http://[YOUR_HOST_IP]:8000/mcp
+
+Replace `[YOUR_HOST_IP]` with your actual host IP address.
+
+
 ## LLM Client Integration
 
 ### Claude Desktop Configuration
