@@ -18,7 +18,7 @@
 #
 # --------------------------------------------------------------------
 #
-# Apache Cloudberry (incubating) is an effort undergoing incubation at
+# Apache Cloudberry (Incubating) is an effort undergoing incubation at
 # the Apache Software Foundation (ASF), sponsored by the Apache
 # Incubator PMC.
 #
