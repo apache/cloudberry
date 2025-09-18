@@ -51,6 +51,13 @@ typedef enum SegmentType
 	SEGMENTTYPE_ANY
 }SegmentType;
 
+struct ExtInterconnectFuncs {
+	void (*init)();
+	int (*port)();
+	void (*exit)();
+};
+extern const struct ExtInterconnectFuncs *ext_interconnect;
+
 /*
  * performs all necessary setup required for initializing Apache Cloudberry components.
  *

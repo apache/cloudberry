@@ -126,6 +126,7 @@ typedef struct CdbProcess
 	char *listenerAddr; /* Interconnect listener IPv4 address, a C-string */
 
 	int listenerPort; /* Interconnect listener port */
+	int listenerExtPort; /* extensible interconnect listener port */
 	int pid; /* Backend PID of the process. */
 
 	int contentid;

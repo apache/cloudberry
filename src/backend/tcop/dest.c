@@ -329,9 +329,13 @@ void
 sendQEDetails(void)
 {
 	StringInfoData msgbuf;
-	char		port_str[11];
+	char		port_str[32];
+	int ext_port = 0;
 
-	snprintf(port_str, sizeof(port_str), "%u", CurrentMotionIPCLayer->GetListenPort());
+	if (ext_interconnect && ext_interconnect->port)
+		ext_port = ext_interconnect->port();
+
+	snprintf(port_str, sizeof(port_str), "%u:%d", CurrentMotionIPCLayer->GetListenPort(), ext_port);
 
 	pq_beginmessage(&msgbuf, 'S');
 	pq_sendstring(&msgbuf, "qe_listener_port");
