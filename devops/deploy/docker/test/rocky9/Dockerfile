@@ -18,7 +18,7 @@
 #
 # --------------------------------------------------------------------
 #
-# Apache Cloudberry (incubating) is an effort undergoing incubation at
+# Apache Cloudberry (Incubating) is an effort undergoing incubation at
 # the Apache Software Foundation (ASF), sponsored by the Apache
 # Incubator PMC.
 #
@@ -32,10 +32,10 @@
 # project has yet to be fully endorsed by the ASF.
 #
 # --------------------------------------------------------------------
-# Dockerfile for Cloudberry Database Base Environment
+# Dockerfile for Apache Cloudberry Base Environment
 # --------------------------------------------------------------------
 # This Dockerfile sets up a Rocky Linux 9-based container to serve as
-# a base environment for evaluating the Cloudberry Database. It installs
+# a base environment for evaluating the Apache Cloudberry. It installs
 # necessary system utilities, configures the environment for SSH access,
 # and sets up a 'gpadmin' user with sudo privileges. The Cloudberry
 # Database RPM can be installed into this container for testing and
@@ -73,7 +73,7 @@ ENV LANG=en_US.UTF-8
 # System Update and Installation
 # --------------------------------------------------------------------
 # Update the system and install essential system utilities required for
-# running and testing Cloudberry Database. Cleanup the DNF cache afterward
+# running and testing Apache Cloudberry. Cleanup the DNF cache afterward
 # to reduce the image size.
 # --------------------------------------------------------------------
 RUN dnf install -y \
@@ -127,7 +127,7 @@ RUN cp /tmp/90-cbdb-limits /etc/security/limits.d/90-cbdb-limits && \
 # --------------------------------------------------------------------
 # The default user is set to 'gpadmin', and the container starts by
 # running the init_system.sh script. This container serves as a base
-# environment, and the Cloudberry Database RPM can be installed for
+# environment, and the Apache Cloudberry RPM can be installed for
 # testing and functional verification.
 # --------------------------------------------------------------------
 USER gpadmin

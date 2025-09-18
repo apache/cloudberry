@@ -22,7 +22,7 @@
 Name:           cloudberry-pgvector
 Version:        %{pgvector_version}
 Release:        %{?release}%{!?release:1}
-Summary:        pgvector extension for Cloudberry Database %{cloudberry_version}
+Summary:        pgvector extension for Apache Cloudberry %{cloudberry_version}
 License:        PostgreSQL
 URL:            https://github.com/pgvector/pgvector
 Vendor:         Cloudberry Open Source
@@ -33,7 +33,7 @@ Prefix:         %{cloudberry_install_dir}
 
 %description
 pgvector is an open-source vector similarity search extension for
-PostgreSQL and Cloudberry Database %{cloudberry_version}.  It provides
+PostgreSQL and Apache Cloudberry %{cloudberry_version}.  It provides
 vector data types and vector similarity search functions, allowing for
 efficient similarity search operations on high-dimensional data.
 
@@ -61,10 +61,10 @@ cp -R %{cloudberry_install_dir}/share/postgresql/extension/vector* \
 %{prefix}/share/postgresql/extension/vector.control
 
 %post
-echo "pgvector extension version %{version} for Cloudberry Database %{cloudberry_version} has been installed in %{prefix}."
+echo "pgvector extension version %{version} for Apache Cloudberry %{cloudberry_version} has been installed in %{prefix}."
 echo "To enable it in a database, run:"
 echo "  CREATE EXTENSION vector;"
 
 %postun
-echo "pgvector extension version %{version} for Cloudberry Database %{cloudberry_version} has been removed from %{prefix}."
+echo "pgvector extension version %{version} for Apache Cloudberry %{cloudberry_version} has been removed from %{prefix}."
 echo "You may need to manually clean up any database objects that were using the extension."

@@ -39,7 +39,7 @@ Summary:        High-performance, open-source data warehouse based on PostgreSQL
 
 License:        ASL 2.0
 URL:            https://cloudberry.apache.org
-Vendor:         Apache Cloudberry (incubating)
+Vendor:         Apache Cloudberry (Incubating)
 Group:          Applications/Databases
 Prefix:         %{cloudberry_install_dir}
 
@@ -107,7 +107,7 @@ Requires:       xz
 
 %description
 
-Apache Cloudberry (incubating) is an advanced, open-source, massively
+Apache Cloudberry (Incubating) is an advanced, open-source, massively
 parallel processing (MPP) data warehouse developed from PostgreSQL and
 Greenplum. It is designed for high-performance analytics on
 large-scale data sets, offering powerful analytical capabilities and
@@ -125,7 +125,7 @@ Apache Cloudberry supports both batch processing and real-time data
 warehousing, making it a versatile solution for modern data
 environments.
 
-Apache Cloudberry (incubating) is an effort undergoing incubation at
+Apache Cloudberry (Incubating) is an effort undergoing incubation at
 the Apache Software Foundation (ASF), sponsored by the Apache
 Incubator PMC.
 
