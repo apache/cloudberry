@@ -23,7 +23,7 @@
 # Description: Configures Apache Cloudberry build environment and runs
 #             ./configure with optimized settings. Performs the
 #             following:
-#             1. Prepares /usr/local/cloudberry-db directory
+#             1. Prepares ${BUILD_DESTINATION} (by default /usr/local/cloudberry-db) directory
 #             2. Sets up library dependencies
 #             3. Configures build with required features enabled
 #
@@ -49,6 +49,7 @@
 #
 # Required Environment Variables:
 #   SRC_DIR - Root source directory
+#   BUILD_DESTINATION - Directory to build binaries
 #
 # Optional Environment Variables:
 #   LOG_DIR - Directory for logs (defaults to ${SRC_DIR}/build-logs)
@@ -92,6 +93,10 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/cloudberry-utils.sh"
 
+# Call it before conditional logic
+detect_os
+echo "Detected OS: $OS_ID $OS_VERSION"
+
 # Define log directory and files
 export LOG_DIR="${SRC_DIR}/build-logs"
 CONFIGURE_LOG="${LOG_DIR}/configure.log"
@@ -101,18 +106,20 @@ init_environment "Cloudberry Configure Script" "${CONFIGURE_LOG}"
 
 # Initial setup
 log_section "Initial Setup"
-execute_cmd sudo rm -rf /usr/local/cloudberry-db || exit 2
+execute_cmd sudo rm -rf ${BUILD_DESTINATION} || exit 2
 execute_cmd sudo chmod a+w /usr/local || exit 2
-execute_cmd mkdir -p /usr/local/cloudberry-db/lib || exit 2
-execute_cmd sudo cp /usr/local/xerces-c/lib/libxerces-c.so \
-        /usr/local/xerces-c/lib/libxerces-c-3.3.so \
-        /usr/local/cloudberry-db/lib || exit 3
-execute_cmd sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db || exit 2
+execute_cmd sudo mkdir -p ${BUILD_DESTINATION}/lib || exit 2
+if [[ "$OS_ID" == "rocky" && "$OS_VERSION" =~ ^(8|9) ]]; then
+    execute_cmd sudo cp /usr/local/xerces-c/lib/libxerces-c.so \
+                /usr/local/xerces-c/lib/libxerces-c-3.3.so \
+                ${BUILD_DESTINATION}/lib || exit 3
+fi
+execute_cmd sudo chown -R gpadmin:gpadmin ${BUILD_DESTINATION} || exit 2
 log_section_end "Initial Setup"
 
 # Set environment
 log_section "Environment Setup"
-export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:LD_LIBRARY_PATH
 log_section_end "Environment Setup"
 
 # Add debug options if ENABLE_DEBUG is set to "true"
@@ -127,7 +134,7 @@ fi
 
 # Configure build
 log_section "Configure"
-execute_cmd ./configure --prefix=/usr/local/cloudberry-db \
+execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --disable-external-fts \
             --enable-gpcloud \
             --enable-ic-proxy \
@@ -152,7 +159,7 @@ execute_cmd ./configure --prefix=/usr/local/cloudberry-db \
             --with-openssl \
             --with-uuid=e2fs \
             --with-includes=/usr/local/xerces-c/include \
-            --with-libraries=/usr/local/cloudberry-db/lib || exit 4
+            --with-libraries=${BUILD_DESTINATION}/lib || exit 4
 log_section_end "Configure"
 
 # Capture version information

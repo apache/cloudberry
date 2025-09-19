@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+
+GPADMIN=gpadmin
+
+case $1 in
+    install|upgrade)
+        id "${GPADMIN}" >> /dev/null 2>&1 || \
+            useradd -r -m -d /home/${GPADMIN} -s /bin/bash ${GPADMIN}
+     ;;
+esac
+
