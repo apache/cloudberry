@@ -598,12 +598,12 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 		AclResult	aclresult;
 
 		/* Otherwise, must be owner of the existing object */
-		if (!pg_namespace_ownercheck(nspForm->oid, GetUserId()))
+		if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), nspForm->nspowner)
+		 && !pg_namespace_ownercheck(nspForm->oid, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 						   NameStr(nspForm->nspname));
 
-		/* Must be able to become new owner */
-		check_is_member_of_role(GetUserId(), newOwnerId);
+		check_mdb_admin_is_member_of_role(GetUserId(), newOwnerId);
 
 		/*
 		 * must have create-schema rights
@@ -614,8 +614,13 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 		 * schemas.  Because superusers will always have this right, we need
 		 * no special case for them.
 		 */
-		aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(),
+		if (mdb_admin_allow_bypass_owner_checks(GetUserId(), nspForm->nspowner)) {
+			aclresult = ACLCHECK_OK;
+		} else {
+			aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(),
 										 ACL_CREATE);
+		}
+
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_DATABASE,
 						   get_database_name(MyDatabaseId));
