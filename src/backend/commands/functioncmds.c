@@ -1525,9 +1525,13 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 	 * by security barrier views or row-level security policies.
 	 */
 	if (isLeakProof && !superuser())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("only superuser can define a leakproof function")));
+	{
+		Oid role = get_role_oid("mdb_admin", true);
+		if (!is_member_of_role(GetUserId(), role))
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("only superuser or mdb_admin can define a leakproof function")));
+	}
 
 	if (transformDefElem)
 	{
@@ -1852,9 +1856,13 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 	{
 		procForm->proleakproof = intVal(leakproof_item->arg);
 		if (procForm->proleakproof && !superuser())
-			ereport(ERROR,
-					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("only superuser can define a leakproof function")));
+		{
+			Oid role = get_role_oid("mdb_admin", true);
+			if (!is_member_of_role(GetUserId(), role))
+				ereport(ERROR,
+						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("only superuser or mdb_admin can define a leakproof function")));
+		}
 	}
 	if (cost_item)
 	{
