@@ -88,6 +88,16 @@ execute 'create table t_orphaned_r'||n||'(i int) with (appendonly=true, orientat
 return cmd; /**/ end $$ language plpgsql;
 CREATE
 
+1: create or replace function resetInjectFaults(p_contentid int) returns void as $$ begin perform gp_inject_fault('qe_exec_finished', 'reset', dbid), gp_inject_fault('checkpoint',       'reset', dbid) from gp_segment_configuration where role = 'p' and content = p_contentid; /**/ end $$ language plpgsql;
+CREATE
+
+-- Skip FTS probes
+1: select gp_inject_fault_infinite('fts_probe', 'skip', 1);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
 -- Test case 2.1
 -- Segfault on all segments
 
@@ -138,11 +148,17 @@ ROLLBACK
 2: rollback;
 ROLLBACK
 
+
 1: select force_mirrors_to_catch_up();
  force_mirrors_to_catch_up 
 ---------------------------
                            
 (1 row)
+
+-- Make a checkpoint to remove orphaned files from segments where segfault did
+-- not happen
+1: checkpoint;
+CHECKPOINT
 
 -- Check that the tables files don't exist on the segments
 ! sh /tmp/gp_orphaned_files.sh;
@@ -247,6 +263,8 @@ CHECKPOINT
 -- Cleanup
 ! rm /tmp/gp_orphaned_files.sh;
 
+1: drop function resetInjectFaults(p_contentid int);
+DROP
 1: drop function createTables(n text);
 DROP
 1: drop function getTableSegFiles (t regclass, out gp_contentid smallint, out filepath text);
@@ -348,5 +366,10 @@ CREATE
 (0 rows)
 
 -- Cleanup
+1: select gp_inject_fault_infinite('fts_probe', 'reset', 1);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
 1: drop table t;
 DROP

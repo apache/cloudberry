@@ -171,6 +171,19 @@ begin
 end
 $$ language plpgsql;
 
+1: create or replace function resetInjectFaults(p_contentid int) returns void as
+$$
+begin
+  perform gp_inject_fault('qe_exec_finished', 'reset', dbid),
+          gp_inject_fault('checkpoint',       'reset', dbid)
+  from gp_segment_configuration
+  where role = 'p' and content = p_contentid; /**/
+end
+$$ language plpgsql;
+
+-- Skip FTS probes
+1: select gp_inject_fault_infinite('fts_probe', 'skip', 1);
+
 -- Test case 2.1
 -- Segfault on all segments
 
@@ -200,7 +213,20 @@ $$ language plpgsql;
 1: rollback;
 2: rollback;
 
+-- start_ignore
+-- The MPP operation can be cancelled on some segments, because the cancel
+-- request can come faster than the segfault happens on these segments. So we
+-- should reset the qe_exec_finished inject fault explicitly to avoid segfaults.
+1: select resetInjectFaults(0);
+1: select resetInjectFaults(1);
+1: select resetInjectFaults(2);
+-- end_ignore
+
 1: select force_mirrors_to_catch_up();
+
+-- Make a checkpoint to remove orphaned files from segments where segfault did
+-- not happen
+1: checkpoint;
 
 -- Check that the tables files don't exist on the segments
 ! sh /tmp/gp_orphaned_files.sh;
@@ -250,6 +276,7 @@ $$ language plpgsql;
 
 -- Cleanup
 ! rm /tmp/gp_orphaned_files.sh;
+1: drop function resetInjectFaults(p_contentid int);
 1: drop function createTables(n text);
 1: drop function getTableSegFiles
    (t regclass, out gp_contentid smallint, out filepath text);
@@ -322,4 +349,5 @@ $$ language plpgsql;
 1: select * from t;
 
 -- Cleanup
+1: select gp_inject_fault_infinite('fts_probe', 'reset', 1);
 1: drop table t;
