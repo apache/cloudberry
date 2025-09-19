@@ -5012,6 +5012,60 @@ has_privs_of_role(Oid member, Oid role)
 }
 
 
+// -- non-upstream patch begin
+/*
+ * Is userId allowed to bypass ownership check
+ * and tranfer onwership to ownerId role?
+ */
+bool
+mdb_admin_allow_bypass_owner_checks(Oid userId,  Oid ownerId)
+{
+	Oid mdb_admin_roleoid;
+	/* 
+	* Never allow nobody to grant objects to 
+	* superusers.
+	* This can result in various CVE.
+	* For paranoic reasons, check this even before
+	* membership of mdb_admin role.
+	*/
+	if (superuser_arg(ownerId)) {
+		return false;
+	}
+
+	mdb_admin_roleoid = get_role_oid("mdb_admin", true /* superuser suggested to be mdb_admin*/);
+	/* Is userId actually member of mdb admin? */
+	if (!is_member_of_role(userId, mdb_admin_roleoid)) {
+		/* if no, disallow. */
+		return false;
+	}
+	
+	/* 
+	* Now, we need to check if ownerId 
+	* is some dangerous role to trasfer membership to.
+	*
+	* For now, we check that ownerId does not have
+	* priviledge to execute server program or/and
+	* read/write server files.
+	*/
+
+	if (has_privs_of_role(ownerId, ROLE_PG_READ_SERVER_FILES)) {
+		return false;
+	}
+
+	if (has_privs_of_role(ownerId, ROLE_PG_WRITE_SERVER_FILES)) {
+		return false;
+	}
+
+	if (has_privs_of_role(ownerId, ROLE_PG_EXECUTE_SERVER_PROGRAM)) {
+		return false;
+	}
+
+	/* All checks passed, hope will not be hacked here (again) */
+	return true;
+}
+
+// -- non-upstream patch end
+
 /*
  * Is member a member of role (directly or indirectly)?
  *
@@ -5050,6 +5104,64 @@ check_is_member_of_role(Oid member, Oid role)
 				 errmsg("must be member of role \"%s\"",
 						GetUserNameFromId(role, false))));
 }
+
+// -- mdb admin patch 
+/*
+ * check_mdb_admin_is_member_of_role
+ *		is_member_of_role with a standard permission-violation error if not in usual case
+ * Is case `member` in mdb_admin we check that role is neither of superuser, pg_read/write 
+ * server files nor pg_execute_server_program
+ */
+void
+check_mdb_admin_is_member_of_role(Oid member, Oid role)
+{
+	Oid mdb_admin_roleoid;
+	/* fast path - if we are superuser, its ok */
+	if (superuser_arg(member)) {
+		return;
+	}
+
+	mdb_admin_roleoid = get_role_oid("mdb_admin", true /* superuser suggested to be mdb_admin*/);
+	/* Is userId actually member of mdb admin? */
+	if (is_member_of_role(member, mdb_admin_roleoid)) {
+		/* role is mdb admin */
+		if (superuser_arg(role)) {
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("cannot transfer ownership to superuser \"%s\"",
+							GetUserNameFromId(role, false))));
+		}
+
+		if (has_privs_of_role(role, ROLE_PG_READ_SERVER_FILES)) {
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("cannot transfer ownership to pg_read_server_files role in Cloud")));
+		}
+
+		if (has_privs_of_role(role, ROLE_PG_WRITE_SERVER_FILES)) {
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("cannot transfer ownership to pg_write_server_files role in Cloud")));
+		}
+
+		if (has_privs_of_role(role, ROLE_PG_EXECUTE_SERVER_PROGRAM)) {
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("cannot transfer ownership to pg_execute_server_program role in Cloud")));
+		}
+	} else {
+		/* if no, check membership transfer in usual way. */
+		
+		if (!is_member_of_role(member, role)) {
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("must be member of role \"%s\"",
+							GetUserNameFromId(role, false))));
+		}
+	}
+}
+
+// -- mdb admin patch 
 
 /*
  * Is member a member of role, not considering superuserness?
