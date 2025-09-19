@@ -35,6 +35,9 @@ endif
 ifeq ($(enable_pax), yes)
 	$(MAKE) -C contrib/pax_storage all
 endif
+ifeq ($(enable_ic_udp2),yes)
+	$(MAKE) -C contrib/udp2 all
+endif
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
 	+@echo "All of Apache Cloudberry successfully made. Ready to install."
@@ -81,6 +84,9 @@ ifeq ($(enable_pax), yes)
 endif
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo $@
+endif
+ifeq ($(enable_ic_udp2),yes)
+	$(MAKE) -C contrib/udp2 $@
 endif
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C gpcontrib $@
