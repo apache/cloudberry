@@ -9,6 +9,7 @@
 #include "ecpglib_extern.h"
 #include "ecpgtype.h"
 #include "sqlca.h"
+#include "common/mdb_locale.h"
 
 #ifdef HAVE_USELOCALE
 locale_t	ecpg_clocale = (locale_t) 0;
@@ -517,7 +518,7 @@ ECPGconnect(int lineno, int c, const char *name, const char *user, const char *p
 #ifdef HAVE_USELOCALE
 	if (!ecpg_clocale)
 	{
-		ecpg_clocale = newlocale(LC_NUMERIC_MASK, "C", (locale_t) 0);
+		ecpg_clocale = NEWLOCALE(LC_NUMERIC_MASK, "C", (locale_t) 0);
 		if (!ecpg_clocale)
 		{
 #ifdef ENABLE_THREAD_SAFETY
