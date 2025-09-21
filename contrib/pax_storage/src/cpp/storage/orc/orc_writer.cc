@@ -367,7 +367,11 @@ std::vector<std::pair<int, Datum>> OrcWriter::PrepareWriteTuple(
     // Numeric always need ensure that with the 4B header, otherwise it will
     // be converted twice in the vectorization path.
     if (required_stats_cols[i] || VARATT_IS_COMPRESSED(tts_value_vl) ||
-        VARATT_IS_EXTERNAL(tts_value_vl) || attrs->atttypid == NUMERICOID) {
+        VARATT_IS_EXTERNAL(tts_value_vl)
+#ifdef VEC_BUILD
+        || attrs->atttypid == NUMERICOID
+#endif
+    ) {
       // still detoast the origin toast
       detoast_vl = cbdb::PgDeToastDatum(tts_value_vl);
       Assert(detoast_vl != nullptr);

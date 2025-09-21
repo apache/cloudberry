@@ -131,6 +131,7 @@ class TableWriter {
   std::vector<std::tuple<ColumnEncoding_Kind, int>> encoding_opts_;
 
   bool is_dfs_table_space_;
+  size_t cur_physical_size_ = 0;
 };
 
 class TableReader final {
