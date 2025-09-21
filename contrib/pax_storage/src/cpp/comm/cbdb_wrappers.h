@@ -114,8 +114,6 @@ void MemoryCtxDelete(MemoryContext memory_context);
 void MemoryCtxRegisterResetCallback(MemoryContext context,
                                     MemoryContextCallback *cb);
 
-Oid RelationGetRelationId(Relation rel);
-
 static inline void *DatumToPointer(Datum d) noexcept {
   return DatumGetPointer(d);
 }
@@ -162,6 +160,10 @@ static inline Datum Float8ToDutum(float8 d) noexcept {
 
 static inline float8 DatumToFloat8(Datum d) noexcept {
   return DatumGetFloat8(d);
+}
+
+static pg_attribute_always_inline Oid RelationGetRelationId(Relation rel) noexcept {
+  return RelationGetRelid(rel);
 }
 
 BpChar *BpcharInput(const char *s, size_t len, int32 atttypmod);
