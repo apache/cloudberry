@@ -49,6 +49,8 @@
 #include "storage/vec/pax_vec_reader.h"
 #endif
 
+#define PAX_SPLIT_STRATEGY_CHECK_INTERVAL (16)
+
 namespace paxc {
 class IndexUpdaterInternal {
  public:
@@ -280,14 +282,25 @@ void TableWriter::Open() {
   // insert tuple into the aux table before inserting any tuples.
   cbdb::InsertMicroPartitionPlaceHolder(RelationGetRelid(relation_),
                                         current_blockno_);
+  cur_physical_size_ = 0;
 }
 
 void TableWriter::WriteTuple(TupleTableSlot *slot) {
   Assert(writer_);
   Assert(strategy_);
-  // should check split strategy before write tuple
-  // otherwise, may got a empty file in the disk
-  if (strategy_->ShouldSplit(writer_->PhysicalSize(), num_tuples_)) {
+  // Because of the CTID constraint, we have to strictly enforce the accuracy of
+  // the tuple count and make sure it doesn't exceed
+  // PAX_MAX_NUM_TUPLES_PER_FILE. That's why we kept this precise check here.
+
+  // On the other hand,the biggest performance hit here is the PhysicalSize()
+  // function.So to reduce the overhead of calling it so often,
+  // we only update the file size every PAX_SPLIT_STRATEGY_CHECK_INTERVAL
+  // tuples.
+  if ((num_tuples_ % PAX_SPLIT_STRATEGY_CHECK_INTERVAL) == 0) {
+    cur_physical_size_ = writer_->PhysicalSize();
+  }
+
+  if (strategy_->ShouldSplit(cur_physical_size_, num_tuples_)) {
     writer_->Close();
     writer_ = nullptr;
     Open();
