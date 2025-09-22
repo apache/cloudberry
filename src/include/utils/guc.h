@@ -507,6 +507,7 @@ extern char *optimizer_search_strategy_path;
 /* GUCs to tell Optimizer to enable a physical operator */
 extern bool optimizer_enable_nljoin;
 extern bool optimizer_enable_indexjoin;
+extern bool optimizer_enable_motions_masteronly_queries;
 extern bool optimizer_enable_motions;
 extern bool optimizer_enable_motion_broadcast;
 extern bool optimizer_enable_motion_gather;
