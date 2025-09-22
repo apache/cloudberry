@@ -2156,12 +2156,17 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 	 * Partially fixed append issue.
 	 * But there are still several locus can't be parallel so that we can't handle it currently.
 	 */
-	AssertImply(parallel_workers > 1 &&
+	/*
+	 * After we try parallel-bolivious append, there could be possible that partial paths with
+	 * parallel_workers = 0, ex: a partial path and Motion to a path with parallel_workers = 0.
+	 */
+	pathnode->parallel_workers = targetlocus.parallel_workers;
+
+	AssertImply(pathnode->parallel_workers > 1 &&
 				!CdbPathLocus_IsEntry(targetlocus) &&
 				!CdbPathLocus_IsOuterQuery(targetlocus) &&
 				!CdbPathLocus_IsGeneral(targetlocus) &&
 				!CdbPathLocus_IsSingleQE(targetlocus), targetlocus.parallel_workers > 1);
-	pathnode->parallel_workers = targetlocus.parallel_workers;
 
 	*subpaths_out = new_subpaths;
 
