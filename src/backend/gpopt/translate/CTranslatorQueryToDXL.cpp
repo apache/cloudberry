@@ -210,9 +210,6 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL(
 		}
 	}
 
-	// check if query has insert/update/delete when is_master_only is true.
-	CheckUnsupportedDDLInSingleMode(m_mp, query);
-
 	// check if the query has any unsupported node types
 	CheckUnsupportedNodeTypes(query);
 
@@ -280,50 +277,6 @@ CTranslatorQueryToDXL::~CTranslatorQueryToDXL()
 	if (m_query_level == 0)
 	{
 		GPOS_DELETE(m_context);
-	}
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorQueryToDXL::CheckUnsupportedNodeTypes
-//
-//	@doc:
-//		Check for unsupported node types, and throws an exception when found
-//
-//---------------------------------------------------------------------------
-void
-CTranslatorQueryToDXL::CheckUnsupportedDDLInSingleMode(CMemoryPool *mp, Query *query)
-{
-	static const SUnsupportedFeature unsupported_features[] = {
-		{T_SubLink, GPOS_WSZ_LIT("Sublink")},
-		{T_SubqueryScan, GPOS_WSZ_LIT("Subscan")},
-	};
-
-	List *unsupported_list = NIL;
-	for (ULONG ul = 0; ul < GPOS_ARRAY_SIZE(unsupported_features); ul++)
-	{
-		unsupported_list = gpdb::LAppendInt(unsupported_list,
-											unsupported_features[ul].node_tag);
-	}
-
-	INT unsupported_node = gpdb::FindNodes((Node *) query, unsupported_list);
-	gpdb::GPDBFree(unsupported_list);
-
-	if (GPOS_FTRACE(EopttraceSingleNodeMode) || GPOS_FTRACE(EopttraceDisableMotions)) {
-		if (query->commandType == CMD_INSERT ||  query->commandType == CMD_UPDATE ||
-			query->commandType == CMD_DELETE) {
-			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-				   GPOS_WSZ_LIT("Single-mode not support insert/update/delete"));
-		}
-
-		if (0 <= unsupported_node) {
-			CWStringDynamic error_message(mp);
-			error_message.AppendFormat(GPOS_WSZ_LIT("Single-mode not support %s"),
-				unsupported_features[unsupported_node].m_feature_name);
-
-			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-				   error_message.GetBuffer());
-		}
 	}
 }
 

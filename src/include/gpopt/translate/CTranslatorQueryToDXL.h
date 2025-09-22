@@ -147,8 +147,6 @@ private:
 	// node is found
 	static void CheckUnsupportedNodeTypes(Query *query);
 
-	static void CheckUnsupportedDDLInSingleMode(CMemoryPool *mp, Query *query);
-
 	// walker to check if SUBLINK node is present in the security quals
 	static BOOL CheckSublinkInSecurityQuals(Node *node, void *context);
 
