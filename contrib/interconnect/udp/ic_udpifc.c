@@ -136,8 +136,6 @@ WSAPoll(
 #define UDP_INITIAL_RTO                 (MSEC_TO_USEC(200))
 #define UDP_DEFAULT_MSS 1460
 
-#define UDP_SEQ_GT(a,b) 		((int32_t)((a)-(b)) > 0)
-
 #define RTO_HASH (3000)
 
 #define UDP_SEQ_LT(a,b) ((int32_t)((a)-(b)) < 0)
@@ -998,8 +996,6 @@ initRTOHashstore()
 {
 	int i;
 	struct rto_hashstore* hs = palloc(sizeof(struct rto_hashstore));
-	if (!hs)
-		return 0;
 
 	for (i = 0; i < RTO_HASH; i++)
 		TAILQ_INIT(&hs->rto_list[i]);
@@ -1081,7 +1077,6 @@ updateRetransmissionTimer(mudp_manager_t mudp,
 		/* update rto timestamp */
 		cur_stream->sndvar.ts_rto = cur_ts + cur_stream->sndvar.rto;
 		addtoRTOList(mudp, cur_stream);
-
 	}
 
 	if (cur_stream->on_rto_idx == -1)
@@ -1196,8 +1191,7 @@ checkRtmTimeout(mudp_manager_t mudp,
 		if ((int32_t)(cur_ts - mudp->rto_store->rto_now_ts) < 0)
 			break;
 
-		for (walk = TAILQ_FIRST(rto_list);
-				walk != NULL; walk = next)
+		for (walk = TAILQ_FIRST(rto_list); walk != NULL; walk = next)
 		{
 			if (++cnt > thresh)
 				break;

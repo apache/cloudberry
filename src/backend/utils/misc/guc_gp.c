@@ -3763,7 +3763,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_interconnect_mem_size", PGC_USERSET, GP_ARRAY_TUNING,
-			gettext_noop("Sets the maximum size of the send/recv queue memory for all connections in the UDP interconnect"),
+			gettext_noop("Sets the maximum size(in MB) of the send/recv queue memory for all connections in the UDP interconnect"),
 			NULL
 		},
 		&Gp_interconnect_mem_size,
