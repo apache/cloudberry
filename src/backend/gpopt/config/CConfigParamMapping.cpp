@@ -15,7 +15,7 @@
 
 extern "C" {
 #include "postgres.h"
-#include "cdb/cdbvars.h"
+
 #include "utils/guc.h"
 }
 
@@ -384,12 +384,6 @@ CConfigParamMapping::PackConfigParamInBitset(
 				traceflag_bitset->ExchangeSet(EopttraceDisableXformBase + ul);
 			GPOS_ASSERT(!is_traceflag_set);
 		}
-	}
-
-	if (IS_SINGLENODE()) {
-		traceflag_bitset->ExchangeSet(EopttraceSingleNodeMode);
-	} else {
-		traceflag_bitset->ExchangeClear(EopttraceSingleNodeMode);
 	}
 
 	if (!optimizer_enable_nljoin)

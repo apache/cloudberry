@@ -953,9 +953,10 @@ COptTasks::OptimizeTask(void *ptr)
 				query_to_dxl_translator->GetCTEs();
 			GPOS_ASSERT(nullptr != query_output_dxlnode_array);
 
-			BOOL is_master_only = GPOS_FTRACE(EopttraceDisableMotions) || 
-				GPOS_FTRACE(EopttraceSingleNodeMode) ||
-				!query_to_dxl_translator->HasDistributedTables();
+			BOOL is_master_only =
+				!optimizer_enable_motions ||
+				(!optimizer_enable_motions_masteronly_queries &&
+				 !query_to_dxl_translator->HasDistributedTables());
 			// See NoteDistributionPolicyOpclasses() in src/backend/gpopt/translate/CTranslatorQueryToDXL.cpp
 			BOOL use_legacy_opfamilies =
 				(query_to_dxl_translator->GetDistributionHashOpsKind() ==
