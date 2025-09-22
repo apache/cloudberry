@@ -753,3 +753,21 @@ select count(*) from (select * from (select pg_catalog.gp_acquire_sample_rows('t
 (1 row)
 
 drop table test_ao3;
+-- Test initplan function referring the outer query.
+-- The query below previously led to a SIGSEGV.
+-- start_matchsubs
+-- m/ \(subselect\.c:.*\)/
+-- s/ \(subselect\.c:.*\)//
+-- end_matchsubs
+create table test_table(a text);
+create function test_function(param_in text) returns
+table (param_out text) as
+$function$
+select param_in;
+$function$
+language sql execute on initplan;
+create table tnew as
+select * from test_table l join test_function(l.a) r on l.a = r.param_out;
+ERROR:  plan should not reference subplan's variable
+drop function test_function(param_in text);
+drop table test_table;
