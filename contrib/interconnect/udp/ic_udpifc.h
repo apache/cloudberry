@@ -90,6 +90,9 @@ typedef struct icpkthdr
      */
 	uint32		seq;
 	uint32		extraSeq;
+	uint64_t send_time;
+	uint64_t recv_time;
+	uint8_t retry_times;
 }			icpkthdr;
 
 typedef struct ICBuffer ICBuffer;

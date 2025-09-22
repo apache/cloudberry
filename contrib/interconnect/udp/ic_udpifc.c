@@ -26,13 +26,17 @@
 #include "ic_udpifc.h"
 #include "ic_internal.h"
 #include "ic_common.h"
-
 #include <pthread.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <sys/queue.h>
+#include <assert.h>
 
 #include "access/transam.h"
 #include "access/xact.h"
@@ -115,6 +119,57 @@ WSAPoll(
  */
 #undef select
 #endif
+
+#define TIMEOUT_Z
+#define RTT_SHIFT_ALPHA (3)       /* srtt (0.125) */
+#define LOSS_THRESH (3) /* Packet loss triggers Karn */
+#define RTO_MIN (5000)   /* MIN RTO(ms) */
+#define RTO_MAX (100000) /* MAX RTO(ms) */
+#define UDP_INFINITE_SSTHRESH   0x7fffffff
+
+#define SEC_TO_USEC(t)                  ((t) * 1000000)
+#define SEC_TO_MSEC(t)                  ((t) * 1000)
+#define MSEC_TO_USEC(t)                 ((t) * 1000)
+#define USEC_TO_SEC(t)                  ((t) / 1000000)
+#define TIME_TICK (1000000/HZ)/* in us */
+
+#define UDP_INITIAL_RTO                 (MSEC_TO_USEC(200))
+#define UDP_DEFAULT_MSS 1460
+
+#define RTO_HASH (3000)
+
+#define UDP_SEQ_LT(a,b) ((int32_t)((a)-(b)) < 0)
+#define UDP_SEQ_LEQ(a,b) ((int32_t)((a)-(b)) <= 0)
+#define UDP_SEQ_GT(a,b) ((int32_t)((a)-(b)) > 0)
+#define UDP_SEQ_GEQ(a,b) ((int32_t)((a)-(b)) >= 0)
+
+#ifndef MAX
+#define MAX(a, b) ((a)>(b)?(a):(b))
+#endif
+#ifndef MIN
+#define MIN(a, b) ((a)<(b)?(a):(b))
+#endif
+
+#define UDP_RTO_MIN ((unsigned)(HZ/5))
+
+struct rto_hashstore
+{
+	uint32_t    rto_now_idx;    /* pointing the hs_table_s index */
+	uint32_t    rto_now_ts;
+
+	TAILQ_HEAD(rto_head, MotionConnUDP) rto_list[RTO_HASH + 1];
+};
+
+struct mudp_manager
+{
+	struct rto_hashstore *rto_store;     /* lists related to timeout */
+
+	int         rto_list_cnt;
+	uint32_t    cur_ts;
+};
+
+typedef struct mudp_manager* mudp_manager_t;
+static struct mudp_manager mudp;
 
 #define MAX_TRY (11)
 int
@@ -516,8 +571,10 @@ static ICGlobalControlInfo ic_control_info;
  */
 #define UNACK_QUEUE_RING_SLOTS_NUM (2000)
 #define TIMER_SPAN (Gp_interconnect_timer_period * 1000ULL)	/* default: 5ms */
-#define TIMER_CHECKING_PERIOD (Gp_interconnect_timer_checking_period)	/* default: 20ms */
+#define TIMER_SPAN_LOSS (Gp_interconnect_timer_period * 500ULL)     /* default: 5ms */
+#define TIMER_CHECKING_PERIOD Gp_interconnect_timer_checking_period	/* default: 20ms */
 #define UNACK_QUEUE_RING_LENGTH (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN)
+#define UNACK_QUEUE_RING_LENGTH_LOSS (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN_LOSS)
 
 #define DEFAULT_RTT (Gp_interconnect_default_rtt * 1000)	/* default: 20ms */
 #define MIN_RTT (100)			/* 0.1ms */
@@ -537,6 +594,7 @@ static ICGlobalControlInfo ic_control_info;
 
 #define MAX_SEQS_IN_DISORDER_ACK (4)
 
+#define MAX_QUEUE_SIZE (64)
 /*
  * UnackQueueRing
  *
@@ -573,12 +631,19 @@ struct UnackQueueRing
 
 	/* time slots */
 	ICBufferList slots[UNACK_QUEUE_RING_SLOTS_NUM];
+#ifdef TIMEOUT_Z
+	uint32_t retrans_count;
+	uint32_t no_retrans_count;
+	uint32_t time_difference;
+	uint32_t min;
+	uint32_t max;
+#endif
 };
 
 /*
  * All connections in a process share this unack queue ring instance.
  */
-static UnackQueueRing unack_queue_ring = {0, 0, 0};
+static UnackQueueRing unack_queue_ring = {0};
 
 static int	ICSenderSocket = -1;
 static int32 ICSenderPort = 0;
@@ -746,8 +811,8 @@ static void checkQDConnectionAlive(void);
 static void *rxThreadFunc(void *arg);
 
 static bool handleMismatch(icpkthdr *pkt, struct sockaddr_storage *peer, int peer_len);
-static void handleAckedPacket(MotionConn *ackConn, ICBuffer *buf, uint64 now);
-static bool handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkEntry);
+static void handleAckedPacket(MotionConn *ackConn, ICBuffer *buf, uint64 now, struct icpkthdr *pkt);
+static bool handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkEntry, bool need_flush);
 static void handleStopMsgs(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkEntry, int16 motionId);
 static void handleDisorderPacket(MotionConn *conn, int pos, uint32 tailSeq, icpkthdr *pkt);
 static bool handleDataPacket(MotionConn *conn, icpkthdr *pkt, struct sockaddr_storage *peer, socklen_t *peerlen, AckSendParam *param, bool *wakeup_mainthread);
@@ -766,6 +831,8 @@ static void initSndBufferPool();
 
 static void putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64 now);
 static void initUnackQueueRing(UnackQueueRing *uqr);
+static void initUdpManager(mudp_manager_t mptr);
+static inline void checkNetworkTimeout(ICBuffer *buf, uint64 now, bool *networkTimeoutIsLogged);
 
 static void checkExpiration(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEntry, MotionConn *triggerConn, uint64 now);
 static void checkDeadlock(ChunkTransportStateEntry *pChunkEntry, MotionConn *conn);
@@ -923,6 +990,349 @@ dumpTransProtoStats()
 }
 
 #endif							/* TRANSFER_PROTOCOL_STATS */
+
+static struct rto_hashstore*
+initRTOHashstore()
+{
+	int i;
+	struct rto_hashstore* hs = palloc(sizeof(struct rto_hashstore));
+
+	for (i = 0; i < RTO_HASH; i++)
+		TAILQ_INIT(&hs->rto_list[i]);
+
+	TAILQ_INIT(&hs->rto_list[RTO_HASH]);
+
+	return hs;
+}
+
+static void
+initUdpManager(mudp_manager_t mudp)
+{
+	mudp->rto_store = initRTOHashstore();
+	mudp->rto_list_cnt = 0;
+	mudp->cur_ts = 0;
+}
+
+static inline void
+addtoRTOList(mudp_manager_t mudp, MotionConnUDP *cur_stream)
+{
+	if (!mudp->rto_list_cnt)
+	{
+		mudp->rto_store->rto_now_idx = 0;
+		mudp->rto_store->rto_now_ts = cur_stream->sndvar.ts_rto;
+	}
+
+	if (cur_stream->on_rto_idx < 0 )
+	{
+		if (cur_stream->on_timewait_list)
+			return;
+
+		int diff = (int32_t)(cur_stream->sndvar.ts_rto - mudp->rto_store->rto_now_ts);
+		if (diff < RTO_HASH)
+		{
+			int offset= (diff + mudp->rto_store->rto_now_idx) % RTO_HASH;
+			cur_stream->on_rto_idx = offset;
+			TAILQ_INSERT_TAIL(&(mudp->rto_store->rto_list[offset]),
+					cur_stream, sndvar.timer_link);
+		}
+		else
+		{
+			cur_stream->on_rto_idx = RTO_HASH;
+			TAILQ_INSERT_TAIL(&(mudp->rto_store->rto_list[RTO_HASH]),
+					cur_stream, sndvar.timer_link);
+		}
+		mudp->rto_list_cnt++;
+	}
+}
+
+static inline void
+removeFromRTOList(mudp_manager_t mudp,
+				MotionConnUDP *cur_stream)
+{
+	if (cur_stream->on_rto_idx < 0)
+		return;
+
+	TAILQ_REMOVE(&mudp->rto_store->rto_list[cur_stream->on_rto_idx],
+			cur_stream, sndvar.timer_link);
+	cur_stream->on_rto_idx = -1;
+
+	mudp->rto_list_cnt--;
+}
+
+static inline void
+updateRetransmissionTimer(mudp_manager_t mudp,
+				MotionConnUDP *cur_stream,
+				uint32_t cur_ts)
+{
+	cur_stream->sndvar.nrtx = 0;
+
+	/* if in rto list, remove it */
+	if (cur_stream->on_rto_idx >= 0)
+		removeFromRTOList(mudp, cur_stream);
+
+	/* Reset retransmission timeout */
+	if (UDP_SEQ_GT(cur_stream->snd_nxt, cur_stream->sndvar.snd_una))
+	{
+		/* there are packets sent but not acked */
+		/* update rto timestamp */
+		cur_stream->sndvar.ts_rto = cur_ts + cur_stream->sndvar.rto;
+		addtoRTOList(mudp, cur_stream);
+	}
+
+	if (cur_stream->on_rto_idx == -1)
+	{
+		cur_stream->sndvar.ts_rto = cur_ts + cur_stream->sndvar.rto;
+		addtoRTOList(mudp, cur_stream);
+	}
+}
+
+static int 
+handleRTO(mudp_manager_t mudp,
+				uint32_t cur_ts,
+				MotionConnUDP *cur_stream,
+				ChunkTransportState *transportStates,
+				ChunkTransportStateEntry *pEntry,
+				MotionConn *triggerConn)
+{
+	/* check for expiration */
+	int                     count = 0;
+	int                     retransmits = 0;
+	MotionConnUDP *currBuffConn = NULL;
+	uint32_t now = cur_ts;
+
+	Assert(unack_queue_ring.currentTime != 0);
+	removeFromRTOList(mudp, cur_stream);
+
+	while (now >= (unack_queue_ring.currentTime + TIMER_SPAN) && count++ < UNACK_QUEUE_RING_SLOTS_NUM)
+	{
+		/* expired, need to resend them */
+		ICBuffer   *curBuf = NULL;
+
+		while ((curBuf = icBufferListPop(&unack_queue_ring.slots[unack_queue_ring.idx])) != NULL)
+		{
+			curBuf->nRetry++;
+			putIntoUnackQueueRing(
+								&unack_queue_ring,
+								curBuf,
+								computeExpirationPeriod(curBuf->conn, curBuf->nRetry), now);
+
+#ifdef TRANSFER_PROTOCOL_STATS
+			updateStats(TPE_DATA_PKT_SEND, curBuf->conn, curBuf->pkt);
+#endif
+
+			sendOnce(transportStates, pEntry, curBuf, curBuf->conn);
+
+			currBuffConn = CONTAINER_OF(curBuf->conn, MotionConnUDP, mConn);
+
+			retransmits++;
+			ic_statistics.retransmits++;
+			currBuffConn->stat_count_resent++;
+			currBuffConn->stat_max_resent = Max(currBuffConn->stat_max_resent, currBuffConn->stat_count_resent);
+			checkNetworkTimeout(curBuf, now, &transportStates->networkTimeoutIsLogged);
+
+#ifdef AMS_VERBOSE_LOGGING
+			write_log("RESEND pkt with seq %d (retry %d, rtt " UINT64_FORMAT ") to route %d",
+				  curBuf->pkt->seq, curBuf->nRetry, curBuf->conn->rtt, curBuf->conn->route);
+			logPkt("RESEND PKT in checkExpiration", curBuf->pkt);
+#endif
+		}
+
+		unack_queue_ring.currentTime += TIMER_SPAN;
+		unack_queue_ring.idx = (unack_queue_ring.idx + 1) % (UNACK_QUEUE_RING_SLOTS_NUM);
+	}
+	return 0;
+}
+
+static inline void
+rearrangeRTOStore(mudp_manager_t mudp)
+{
+	MotionConnUDP *walk, *next;
+	struct rto_head* rto_list = &mudp->rto_store->rto_list[RTO_HASH];
+	int cnt = 0;
+
+	for (walk = TAILQ_FIRST(rto_list); walk != NULL; walk = next)
+	{
+		next = TAILQ_NEXT(walk, sndvar.timer_link);
+
+		int diff = (int32_t)(mudp->rto_store->rto_now_ts - walk->sndvar.ts_rto);
+		if (diff < RTO_HASH)
+		{
+			int offset = (diff + mudp->rto_store->rto_now_idx) % RTO_HASH;
+			TAILQ_REMOVE(&mudp->rto_store->rto_list[RTO_HASH],
+					walk, sndvar.timer_link);
+			walk->on_rto_idx = offset;
+			TAILQ_INSERT_TAIL(&(mudp->rto_store->rto_list[offset]),
+					walk, sndvar.timer_link);
+		}
+		cnt++;
+	}
+}
+
+static inline void
+checkRtmTimeout(mudp_manager_t mudp,
+				uint32_t cur_ts,
+				int thresh,
+				ChunkTransportState *transportStates,
+				ChunkTransportStateEntry *pEntry,
+				MotionConn *triggerConn)
+{
+	MotionConnUDP *walk, *next;
+	struct rto_head* rto_list;
+	int cnt;
+
+	if (!mudp->rto_list_cnt)
+		return;
+
+	cnt = 0;
+
+	while (1)
+	{
+		rto_list = &mudp->rto_store->rto_list[mudp->rto_store->rto_now_idx];
+		if ((int32_t)(cur_ts - mudp->rto_store->rto_now_ts) < 0)
+			break;
+
+		for (walk = TAILQ_FIRST(rto_list); walk != NULL; walk = next)
+		{
+			if (++cnt > thresh)
+				break;
+			next = TAILQ_NEXT(walk, sndvar.timer_link);
+
+			if (walk->on_rto_idx >= 0)
+			{
+				TAILQ_REMOVE(rto_list, walk, sndvar.timer_link);
+				mudp->rto_list_cnt--;
+				walk->on_rto_idx = -1;
+				handleRTO(mudp, cur_ts, walk, transportStates, pEntry, triggerConn);
+			}
+		}
+
+		if (cnt > thresh)
+		{
+			break;
+		}
+		else
+		{
+			mudp->rto_store->rto_now_idx = (mudp->rto_store->rto_now_idx + 1) % RTO_HASH;
+			mudp->rto_store->rto_now_ts++;
+			if (!(mudp->rto_store->rto_now_idx % 1000))
+				rearrangeRTOStore(mudp);
+		}
+
+	}
+}
+
+/*
+ * estimateRTT - Dynamically estimates the Round-Trip Time (RTT) and adjusts Retransmission Timeout (RTO)
+ * 
+ * This function implements a variant of the Jacobson/Karels algorithm for RTT estimation, adapted for UDP-based
+ * motion control connections. It updates smoothed RTT (srtt), mean deviation (mdev), and RTO values based on 
+ * newly measured RTT samples (mrtt). The RTO calculation ensures reliable data transmission over unreliable networks.
+ *
+ * Key Components:
+ *   - srtt:   Smoothed Round-Trip Time (weighted average of historical RTT samples)
+ *   - mdev:   Mean Deviation (measure of RTT variability)
+ *   - rttvar: Adaptive RTT variation bound (used to clamp RTO updates)
+ *   - rto:    Retransmission Timeout (dynamically adjusted based on srtt + rttvar)
+ *
+ * Algorithm Details:
+ *   1. For the first RTT sample:
+ *        srtt    = mrtt << 3   (scaled by 8 for fixed-point arithmetic)
+ *        mdev    = mrtt << 1   (scaled by 2)
+ *        rttvar  = max(mdev, rto_min)
+ *   2. For subsequent samples:
+ *        Delta   = mrtt - (srtt >> 3)  (difference between new sample and smoothed RTT)
+ *        srtt   += Delta               (update srtt with 1/8 weight of new sample)
+ *        Delta   = abs(Delta) - (mdev >> 2)
+ *        mdev   += Delta               (update mdev with 1/4 weight)
+ *   3. rttvar bounds the maximum RTT variation:
+ *        If mdev > mdev_max, update mdev_max and rttvar
+ *        On new ACKs (snd_una > rtt_seq), decay rttvar toward mdev_max
+ *   4. Final RTO calculation:
+ *        rto = (srtt >> 3) + rttvar   (clamped to RTO_MAX)
+ *
+ * Parameters:
+ *   @mConn:  Parent motion connection context (container of MotionConnUDP)
+ *   @mrtt:   Measured Round-Trip Time (in microseconds) for the latest packet
+ *
+ * Notes:
+ *   - Designed for non-retransmitted packets to avoid sampling bias.
+ *   - Uses fixed-point arithmetic to avoid floating-point operations.
+ *   - Minimum RTO (rto_min) is set to 20ms (HZ/5/10, assuming HZ=100).
+ *   - Critical for adaptive timeout control in UDP protocols where reliability is implemented at the application layer.
+ *   - Thread-unsafe: Must be called in a synchronized context (e.g., packet processing loop).
+ */
+
+static inline void
+estimateRTT(MotionConn *mConn , uint32_t mrtt)
+{
+	/* This function should be called for not retransmitted packets */
+	/* TODO: determine rto_min */
+	MotionConnUDP *conn = NULL;
+
+	conn = CONTAINER_OF(mConn, MotionConnUDP, mConn);
+	long m = mrtt;
+	uint32_t rto_min = UDP_RTO_MIN / 10;
+
+	if (m == 0)
+		m = 1;
+
+	/*
+	 * Special RTO optimization for high-speed networks:
+	 * When measured RTT (m) is below 100 microseconds and current RTO is under 10ms,
+	 * forcibly set RTO to half of RTO_MIN. This targets two scenarios:
+	 *   - Loopback interfaces (localhost communication)
+	 *   - Ultra-low-latency networks (e.g., InfiniBand, RDMA)
+	 */
+	if(m < 100 && conn->rttvar.rto < 10000)
+	{
+		conn->rttvar.rto = RTO_MIN / 2;
+	}
+
+	if (conn->rttvar.srtt != 0)
+	{
+		/* rtt = 7/8 rtt + 1/8 new */
+		m -= (conn->rttvar.srtt >> LOSS_THRESH);
+		conn->rttvar.srtt += m;
+		if (m < 0)
+		{
+			m = -m;
+			m -= (conn->rttvar.mdev >> RTT_SHIFT_ALPHA);
+			if (m > 0)
+				m >>= LOSS_THRESH;
+		}
+		else
+		{
+			m -= (conn->rttvar.mdev >> RTT_SHIFT_ALPHA);
+		}
+		conn->rttvar.mdev += m;
+		if (conn->rttvar.mdev > conn->rttvar.mdev_max)
+		{
+			conn->rttvar.mdev_max = conn->rttvar.mdev;
+			if (conn->rttvar.mdev_max > conn->rttvar.rttvar)
+			{
+				conn->rttvar.rttvar = conn->rttvar.mdev_max;
+			}
+		}
+		if (UDP_SEQ_GT(conn->rttvar.snd_una, conn->rttvar.rtt_seq))
+		{
+			if (conn->rttvar.mdev_max < conn->rttvar.rttvar)
+			{
+				conn->rttvar.rttvar -= (conn->rttvar.rttvar - conn->rttvar.mdev_max) >> RTT_SHIFT_ALPHA;
+			}
+			conn->rttvar.mdev_max = rto_min;
+		}
+	}
+	else
+	{
+		/* fresh measurement */
+		conn->rttvar.srtt = m << LOSS_THRESH;
+		conn->rttvar.mdev = m << 1;
+		conn->rttvar.mdev_max = conn->rttvar.rttvar = MAX(conn->rttvar.mdev, rto_min);
+	}
+
+	conn->rttvar.rto = ((conn->rttvar.srtt >> LOSS_THRESH) + conn->rttvar.rttvar) > RTO_MAX ? RTO_MAX : ((conn->rttvar.srtt >> LOSS_THRESH) + conn->rttvar.rttvar);
+}
+
 
 /*
  * initCursorICHistoryTable
@@ -2522,6 +2932,14 @@ initUnackQueueRing(UnackQueueRing *uqr)
 	{
 		icBufferListInit(&uqr->slots[i], ICBufferListType_Secondary);
 	}
+
+#ifdef TIMEOUT_Z
+	uqr->retrans_count = 0;
+	uqr->no_retrans_count = 0;
+	uqr->time_difference = 0;
+	uqr->min = 0;
+	uqr->max = 0;
+#endif
 }
 
 /*
@@ -2556,6 +2974,9 @@ computeExpirationPeriod(MotionConn *mConn, uint32 retry)
 	else
 #endif
 	{
+		if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
+			return Min(retry > 3 ? conn->rttvar.rto * retry : conn->rttvar.rto, UNACK_QUEUE_RING_LENGTH_LOSS);
+
 		uint32		factor = (retry <= 12 ? retry : 12);
 
 		return Max(MIN_EXPIRATION_PERIOD, Min(MAX_EXPIRATION_PERIOD, (conn->rtt + (conn->dev << 2)) << (factor)));
@@ -2968,6 +3389,19 @@ setupOutgoingUDPConnection(ChunkTransportState *transportStates, ChunkTransportS
 	conn->mConn.msgSize = sizeof(conn->conn_info);
 	conn->mConn.stillActive = true;
 	conn->conn_info.seq = 1;
+	conn->rttvar.ts_rto = 0;
+	conn->rttvar.rto = UDP_INITIAL_RTO;
+	conn->rttvar.srtt = 0;
+	conn->rttvar.rttvar = 0;
+	conn->rttvar.snd_una = 0;
+	conn->rttvar.nrtx = 0;
+	conn->rttvar.max_nrtx = 0;
+	conn->rttvar.mss = UDP_DEFAULT_MSS;
+	conn->rttvar.cwnd = 2;
+	conn->rttvar.ssthresh = UDP_INFINITE_SSTHRESH;
+	conn->rttvar.loss_count = 0;
+	conn->rttvar.karn_mode = false;
+	conn->on_rto_idx = -1;
 	Assert(conn->peer.ss_family == AF_INET || conn->peer.ss_family == AF_INET6);
 
 }								/* setupOutgoingUDPConnection */
@@ -3207,6 +3641,19 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 				conn->conn_info.icId = sliceTable->ic_instance_id;
 				conn->conn_info.flags = UDPIC_FLAGS_RECEIVER_TO_SENDER;
 
+				conn->rttvar.ts_rto = 0;
+				conn->rttvar.rto = UDP_INITIAL_RTO;
+				conn->rttvar.srtt = 0;
+				conn->rttvar.rttvar = 0;
+				conn->rttvar.snd_una = 0;
+				conn->rttvar.nrtx = 0;
+				conn->rttvar.max_nrtx = 0;
+				conn->rttvar.mss = UDP_DEFAULT_MSS;
+				conn->rttvar.cwnd = 2;
+				conn->rttvar.ssthresh = UDP_INFINITE_SSTHRESH;
+				conn->rttvar.loss_count = 0;
+				conn->rttvar.karn_mode = false;
+				conn->on_rto_idx = -1;
 				connAddHash(&ic_control_info.connHtab, &conn->mConn);
 			}
 		}
@@ -3221,6 +3668,8 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 	{
 		initSndBufferPool(&snd_buffer_pool);
 		initUnackQueueRing(&unack_queue_ring);
+		if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_TIMER)
+			initUdpManager(&mudp);
 		ic_control_info.isSender = true;
 		ic_control_info.lastExpirationCheckTime = getCurrentTime();
 		ic_control_info.lastPacketSendTime = ic_control_info.lastExpirationCheckTime;
@@ -3284,6 +3733,9 @@ static inline void
 SetupUDPIFCInterconnect(EState *estate)
 {
 	ChunkTransportState *icContext = NULL;
+	int32 sliceNum = 0;
+	int32 calcQueueDepth = 0;
+	int32 calcSndDepth = 0;
 	PG_TRY();
 	{
 		/*
@@ -3291,6 +3743,39 @@ SetupUDPIFCInterconnect(EState *estate)
 		 * technically it is not part of current query, discard it directly.
 		 */
 		resetRxThreadError();
+		if (estate != NULL && estate->es_sliceTable != NULL)
+			sliceNum = estate->es_sliceTable->numSlices;
+		else
+			sliceNum = 1;
+
+		if (Gp_interconnect_mem_size > 0 &&
+			Gp_interconnect_queue_depth == 4 &&
+			Gp_interconnect_snd_queue_depth == 2)
+		{
+			int32 perQueue = Gp_interconnect_mem_size /
+				(Gp_max_packet_size * sliceNum);
+
+			calcSndDepth = Max(Gp_interconnect_snd_queue_depth, perQueue / 2);
+			calcQueueDepth = Max(Gp_interconnect_queue_depth, perQueue - calcSndDepth);
+
+			if (calcSndDepth > MAX_QUEUE_SIZE)
+				calcSndDepth = MAX_QUEUE_SIZE;
+
+			if (calcQueueDepth > MAX_QUEUE_SIZE)
+				calcQueueDepth = MAX_QUEUE_SIZE;
+
+			Gp_interconnect_snd_queue_depth = calcSndDepth;
+			Gp_interconnect_queue_depth = calcQueueDepth;
+
+			elog(DEBUG1, "SetupUDPIFCInterconnect: queue depth, "
+				     "queue_depth=%d, snd_queue_depth=%d, "
+				     "mem_size=%d, slices=%d, packet_size=%d",
+				     Gp_interconnect_queue_depth,
+				     Gp_interconnect_snd_queue_depth,
+				     Gp_interconnect_mem_size,
+				     sliceNum,
+				     Gp_max_packet_size);
+		}
 
 		icContext = SetupUDPIFCInterconnect_Internal(estate->es_sliceTable);
 
@@ -3815,7 +4300,6 @@ static TupleChunkListItem
 receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEntry *pEntry,
 					int16 motNodeID, int16 *srcRoute, MotionConn *mConn)
 {
-	bool		directed = false;
 	int 		nFds = 0;
 	int 		*waitFds = NULL;
 	int 		nevent = 0;
@@ -3832,7 +4316,6 @@ receiveChunksUDPIFC(ChunkTransportState *pTransportStates, ChunkTransportStateEn
 	if (mConn != NULL)
 	{
 		conn = CONTAINER_OF(mConn, MotionConnUDP, mConn);
-		directed = true;
 		*srcRoute = conn->route;
 		setMainThreadWaiting(&rx_control_info.mainWaitingState, motNodeID, conn->route,
 							 pTransportStates->sliceTable->ic_instance_id);
@@ -4475,7 +4958,7 @@ logPkt(char *prefix, icpkthdr *pkt)
  *	packet is retransmitted.
  */
 static void
-handleAckedPacket(MotionConn *ackMotionConn, ICBuffer *buf, uint64 now)
+handleAckedPacket(MotionConn *ackMotionConn, ICBuffer *buf, uint64 now, struct icpkthdr *pkt)
 {
 	uint64		ackTime = 0;
 	bool		bufIsHead = false; 
@@ -4487,6 +4970,39 @@ handleAckedPacket(MotionConn *ackMotionConn, ICBuffer *buf, uint64 now)
 	bufIsHead = (&buf->primary == icBufferListFirst(&ackConn->unackQueue));
 
 	buf = icBufferListDelete(&ackConn->unackQueue, buf);
+
+	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE || Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_TIMER)
+	{
+		bufConn = CONTAINER_OF(buf->conn, MotionConnUDP, mConn);
+		buf = icBufferListDelete(&unack_queue_ring.slots[buf->unackQueueRingSlot], buf);
+		unack_queue_ring.numOutStanding--;
+		if (icBufferListLength(&ackConn->unackQueue) >= 1)
+		unack_queue_ring.numSharedOutStanding--;
+
+		ackTime = now - buf->sentTime;
+
+		if (buf->nRetry == 0)
+		{
+			/* adjust the congestion control window. */
+			if (snd_control_info.cwnd < snd_control_info.ssthresh)
+				snd_control_info.cwnd += 2;
+			else
+				snd_control_info.cwnd += 1 / snd_control_info.cwnd;
+			snd_control_info.cwnd = Min(snd_control_info.cwnd, snd_buffer_pool.maxCount);
+		}
+
+		if ((bufConn->rttvar.rto << 1) > ackTime && pkt->retry_times != Gp_interconnect_min_retries_before_timeout)
+			estimateRTT(buf->conn, (now - pkt->send_time));
+
+		if (buf->nRetry && pkt->retry_times > 0 && pkt->retry_times < Gp_interconnect_min_retries_before_timeout)
+			bufConn->rttvar.rto += (bufConn->rttvar.rto >> 4 * buf->nRetry);
+
+		if (unlikely(Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_TIMER))
+		{
+			bufConn->sndvar.ts_rto = bufConn->rttvar.rto;
+			addtoRTOList(&mudp, bufConn);
+		}
+	}
 
 	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
 	{
@@ -4567,7 +5083,7 @@ handleAckedPacket(MotionConn *ackMotionConn, ICBuffer *buf, uint64 now)
  * if we receive a stop message, return true (caller will clean up).
  */
 static bool
-handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkEntry)
+handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChunkEntry, bool need_flush)
 {
 	ChunkTransportStateEntryUDP * pEntry = NULL;
 	bool		ret = false;
@@ -4579,7 +5095,6 @@ handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChun
 	socklen_t	peerlen;
 
 	struct icpkthdr *pkt = snd_control_info.ackBuffer;
-
 
 	bool		shouldSendBuffers = false;
 	SliceTable	*sliceTbl = transportStates->sliceTable;
@@ -4754,7 +5269,7 @@ handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChun
 					while (!icBufferListIsHead(&ackConn->unackQueue, link) && buf->pkt->seq <= pkt->seq)
 					{
 						next = link->next;
-						handleAckedPacket(&ackConn->mConn, buf, now);
+						handleAckedPacket(&ackConn->mConn, buf, now, pkt);
 						shouldSendBuffers = true;
 						link = next;
 						buf = GET_ICBUFFER_FROM_PRIMARY(link);
@@ -4770,7 +5285,7 @@ handleAcks(ChunkTransportState *transportStates, ChunkTransportStateEntry *pChun
 			 * still send here, since in STOP/EOS race case, we may have been
 			 * in EOS sending logic and will not check stop message.
 			 */
-			if (shouldSendBuffers)
+			if (shouldSendBuffers && need_flush)
 				sendBuffers(transportStates, &pEntry->entry, &ackConn->mConn);
 		}
 		else if (DEBUG1 >= log_min_messages)
@@ -5014,7 +5529,7 @@ handleStopMsgs(ChunkTransportState *transportStates, ChunkTransportStateEntry *p
 		{
 			if (pollAcks(transportStates, pEntry->txfd, 0))
 			{
-				if (handleAcks(transportStates, &pEntry->entry))
+				if (handleAcks(transportStates, &pEntry->entry, true))
 				{
 					/* more stops found, loop again. */
 					i = 0;
@@ -5056,7 +5571,7 @@ sendBuffers(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEnt
 	{
 		ICBuffer   *buf = NULL;
 
-		if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS &&
+		if ((Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS || Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE) &&
 			(icBufferListLength(&conn->unackQueue) > 0 &&
 			 unack_queue_ring.numSharedOutStanding >= (snd_control_info.cwnd - snd_control_info.minCwnd)))
 			break;
@@ -5077,7 +5592,7 @@ sendBuffers(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEnt
 
 		icBufferListAppend(&conn->unackQueue, buf);
 
-		if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
+		if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS || Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
 		{
 			unack_queue_ring.numOutStanding++;
 			if (icBufferListLength(&conn->unackQueue) > 1)
@@ -5101,6 +5616,10 @@ sendBuffers(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEnt
 		updateStats(TPE_DATA_PKT_SEND, conn, buf->pkt);
 #endif
 
+		struct icpkthdr *pkt_ = buf->pkt;
+		pkt_->send_time = now;
+		pkt_->recv_time = 0;
+		pkt_->retry_times = buf->nRetry;
 		sendOnce(transportStates, pEntry, buf, &conn->mConn);
 		ic_statistics.sndPktNum++;
 
@@ -5248,7 +5767,7 @@ handleAckForDisorderPkt(ChunkTransportState *transportStates,
 
 		if (buf->pkt->seq == pkt->seq)
 		{
-			handleAckedPacket(&conn->mConn, buf, now);
+			handleAckedPacket(&conn->mConn, buf, now, pkt);
 			shouldSendBuffers = true;
 			break;
 		}
@@ -5258,7 +5777,7 @@ handleAckForDisorderPkt(ChunkTransportState *transportStates,
 			/* this is a lost packet, retransmit */
 
 			buf->nRetry++;
-			if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
+			if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS || Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
 			{
 				buf = icBufferListDelete(&unack_queue_ring.slots[buf->unackQueueRingSlot], buf);
 				putIntoUnackQueueRing(&unack_queue_ring, buf,
@@ -5287,7 +5806,7 @@ handleAckForDisorderPkt(ChunkTransportState *transportStates,
 			/* remove packet already received. */
 
 			next = link->next;
-			handleAckedPacket(&conn->mConn, buf, now);
+			handleAckedPacket(&conn->mConn, buf, now, pkt);
 			shouldSendBuffers = true;
 			link = next;
 			buf = GET_ICBUFFER_FROM_PRIMARY(link);
@@ -5304,7 +5823,7 @@ handleAckForDisorderPkt(ChunkTransportState *transportStates,
 			lostPktCnt--;
 		}
 	}
-	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
+	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS || Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
 	{
 		snd_control_info.ssthresh = Max(snd_control_info.cwnd / 2, snd_control_info.minCwnd);
 		snd_control_info.cwnd = snd_control_info.ssthresh;
@@ -5357,7 +5876,7 @@ handleAckForDuplicatePkt(MotionConn *mConn, icpkthdr *pkt)
 	while (!icBufferListIsHead(&conn->unackQueue, link) && (buf->pkt->seq <= pkt->extraSeq))
 	{
 		next = link->next;
-		handleAckedPacket(&conn->mConn, buf, now);
+		handleAckedPacket(&conn->mConn, buf, now, pkt);
 		shouldSendBuffers = true;
 		link = next;
 		buf = GET_ICBUFFER_FROM_PRIMARY(link);
@@ -5369,7 +5888,7 @@ handleAckForDuplicatePkt(MotionConn *mConn, icpkthdr *pkt)
 		next = link->next;
 		if (buf->pkt->seq == pkt->seq)
 		{
-			handleAckedPacket(&conn->mConn, buf, now);
+			handleAckedPacket(&conn->mConn, buf, now, pkt);
 			shouldSendBuffers = true;
 			break;
 		}
@@ -5451,55 +5970,223 @@ checkExpiration(ChunkTransportState *transportStates,
 				uint64 now)
 {
 	/* check for expiration */
-	int			count = 0;
-	int			retransmits = 0;
+	int	count = 0;
+	int	retransmits = 0;
 	MotionConnUDP *currBuffConn = NULL;
 
 	Assert(unack_queue_ring.currentTime != 0);
-	while (now >= (unack_queue_ring.currentTime + TIMER_SPAN) && count++ < UNACK_QUEUE_RING_SLOTS_NUM)
+
+	if (unlikely(Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_TIMER))
 	{
-		/* expired, need to resend them */
-		ICBuffer   *curBuf = NULL;
-
-		while ((curBuf = icBufferListPop(&unack_queue_ring.slots[unack_queue_ring.idx])) != NULL)
-		{
-			curBuf->nRetry++;
-			putIntoUnackQueueRing(
-								  &unack_queue_ring,
-								  curBuf,
-								  computeExpirationPeriod(curBuf->conn, curBuf->nRetry), now);
-
-#ifdef TRANSFER_PROTOCOL_STATS
-			updateStats(TPE_DATA_PKT_SEND, curBuf->conn, curBuf->pkt);
-#endif
-
-			sendOnce(transportStates, pEntry, curBuf, curBuf->conn);
-
-			currBuffConn = CONTAINER_OF(curBuf->conn, MotionConnUDP, mConn);
-
-			retransmits++;
-			ic_statistics.retransmits++;
-			currBuffConn->stat_count_resent++;
-			currBuffConn->stat_max_resent = Max(currBuffConn->stat_max_resent,
-												currBuffConn->stat_count_resent);
-
-			checkNetworkTimeout(curBuf, now, &transportStates->networkTimeoutIsLogged);
-
-#ifdef AMS_VERBOSE_LOGGING
-			write_log("RESEND pkt with seq %d (retry %d, rtt " UINT64_FORMAT ") to route %d",
-					  curBuf->pkt->seq, curBuf->nRetry, currBuffConn->rtt, currBuffConn->route);
-			logPkt("RESEND PKT in checkExpiration", curBuf->pkt);
-#endif
-		}
-
-		unack_queue_ring.currentTime += TIMER_SPAN;
-		unack_queue_ring.idx = (unack_queue_ring.idx + 1) % (UNACK_QUEUE_RING_SLOTS_NUM);
+		checkRtmTimeout(&mudp, now, 500, transportStates, pEntry, triggerConn);
+		return;
 	}
 
-	/*
-	 * deal with case when there is a long time this function is not called.
-	 */
-	unack_queue_ring.currentTime = now - (now % TIMER_SPAN);
+	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
+	{
+		uint64 timer_span_time = unack_queue_ring.currentTime + TIMER_SPAN_LOSS;
+
+		while (now >= (timer_span_time + unack_queue_ring.time_difference)  && count++ < UNACK_QUEUE_RING_SLOTS_NUM)
+		{
+			/* expired, need to resend them */
+			ICBuffer   *curBuf = NULL;
+
+			while ((curBuf = icBufferListPop(&unack_queue_ring.slots[unack_queue_ring.idx])) != NULL)
+			{
+				MotionConnUDP *conn = NULL;
+				conn = CONTAINER_OF(curBuf->conn, MotionConnUDP, mConn);
+				curBuf->nRetry++;
+
+				/*
+				 * Fixed Timeout Thresholds: Traditional TCP-style Retransmission Timeout
+				 * (RTTVAR.RTO) calculations may be too rigid for networks with volatile
+				 * latency. This leads to:
+				 *   Premature Retransmissions: Unnecessary data resends during temporary
+				 *     latency spikes, wasting bandwidth.
+				 *   Delayed Recovery: Slow reaction to actual packet loss when RTO is
+				 *     overly conservative.
+				 * 
+				 * Lack of Context Awareness: Static RTO ignores real-time network behavior
+				 * patterns, reducing throughput and responsiveness.
+				 * 
+				 * Solution: Dynamic Timeout Threshold Adjustment
+				 * Implements an adaptive timeout mechanism to optimize retransmission:
+				 *   if (now < (curBuf->sentTime + conn->rttvar.rto)) {
+				 *       uint32_t diff = (curBuf->sentTime + conn->rttvar.rto) - now;
+				 *       // ... (statistical tracking and threshold adjustment)
+				 *   }
+				 *   Temporary Latency Spike: Uses max (conservative) to avoid false
+				 *     retransmits, reducing bandwidth waste (vs. traditional mistaken
+				 *     retransmissions).
+				 *   Persistent Packet Loss: Prioritizes min (aggressive) via
+				 *     weight_retrans, accelerating recovery (vs. slow fixed-RTO reaction).
+				 *   Stable Network: Balances weights for equilibrium throughput (vs.
+				 *     static RTO limitations).
+				 */
+				if (now < (curBuf->sentTime +  conn->rttvar.rto))
+				{
+#ifdef TIMEOUT_Z
+					uint32_t diff = (curBuf->sentTime +  conn->rttvar.rto) - now;
+					if(unack_queue_ring.retrans_count == 0 && unack_queue_ring.no_retrans_count == 0)
+					{
+						unack_queue_ring.min = diff;
+						unack_queue_ring.max = diff;
+					}
+
+					if (diff < unack_queue_ring.min) unack_queue_ring.min = diff;
+					if (diff > unack_queue_ring.max) unack_queue_ring.max = diff;
+
+					if (unack_queue_ring.retrans_count == 0)
+						unack_queue_ring.time_difference = unack_queue_ring.max;
+					else if (unack_queue_ring.no_retrans_count == 0 && ic_statistics.retransmits < (Gp_interconnect_min_retries_before_timeout / 4)) 
+						unack_queue_ring.time_difference = 0;
+					else
+					{
+						uint32_t total_count = unack_queue_ring.retrans_count + unack_queue_ring.no_retrans_count;
+						double weight_retrans = (double)unack_queue_ring.retrans_count / total_count;
+						double weight_no_retrans = (double)unack_queue_ring.no_retrans_count / total_count;
+						unack_queue_ring.time_difference = (uint32_t)(unack_queue_ring.max * weight_no_retrans + unack_queue_ring.min * weight_retrans);
+					}
+					
+					++unack_queue_ring.no_retrans_count;
+				}
+				else
+					++unack_queue_ring.retrans_count;
+#endif
+
+#ifdef TRANSFER_PROTOCOL_STATS
+				updateStats(TPE_DATA_PKT_SEND, curBuf->conn, curBuf->pkt);
+#endif
+				ChunkTransportStateEntryUDP *pEntryUdp;
+				pEntryUdp = CONTAINER_OF(pEntry, ChunkTransportStateEntryUDP, entry);
+				putIntoUnackQueueRing(&unack_queue_ring,
+									  curBuf,
+									  computeExpirationPeriod(curBuf->conn, curBuf->nRetry), getCurrentTime());
+				struct icpkthdr *pkt_ = curBuf->pkt;
+
+				pkt_->send_time = getCurrentTime();
+				pkt_->recv_time = 0;
+				pkt_->retry_times = curBuf->nRetry;
+
+				sendOnce(transportStates, pEntry, curBuf, curBuf->conn);
+
+				/*
+				 * Adaptive Retry Backoff with Polling for Network Asymmetry Mitigation
+				 *
+				 * This logic addresses two critical network pathologies:
+				 *  1. RTO Distortion Amplification: 
+				 *     - Packet loss in volatile networks causes RTO-based retransmission errors
+				 *     - Multiple spurious retries increase network load and congestion collapse risk
+				 *  2. Data Skew-Induced Starvation:
+				 *     - Under unbalanced workloads, low-traffic nodes experience MON (Message Order Number) delays
+				 *     - Delayed ACKs trigger false retransmissions even when packets arrive eventually
+				 *     - Unacked queue inflation worsens congestion in high-traffic nodes
+				 */
+				int32_t loop_ack = curBuf->nRetry;
+				uint32_t rto_min = UDP_RTO_MIN / 10;
+				uint32_t rtoMs = conn->rttvar.rto / 1000;
+				int32_t wait_time = rto_min > rtoMs ? rto_min : rtoMs;
+				int32_t loop = 0;
+
+				/*
+				 * To optimize performance, we need to process all the time-out file descriptors (fds)
+				 * in each batch together.
+				 */
+				if (loop_ack > 0)
+				{
+					while (loop++ < loop_ack)
+					{
+						if (pollAcks(transportStates, pEntryUdp->txfd, wait_time))
+						{
+							handleAcks(transportStates, pEntry, false);
+							break;
+						}
+
+						struct icpkthdr *pkt_ = curBuf->pkt;
+						pkt_->send_time = getCurrentTime();
+						pkt_->recv_time = 0;
+						pkt_->retry_times = curBuf->nRetry;
+
+						sendOnce(transportStates, pEntry, curBuf, curBuf->conn);
+
+						if (loop_ack < (Gp_interconnect_min_retries_before_timeout / 10))
+							wait_time += wait_time / 10;
+						else if (loop_ack > (Gp_interconnect_min_retries_before_timeout / 10) && loop_ack < (Gp_interconnect_min_retries_before_timeout / 5))
+							wait_time += RTO_MAX / 10;
+						else if (loop_ack > (Gp_interconnect_min_retries_before_timeout / 5) && loop_ack < (Gp_interconnect_min_retries_before_timeout / 2))
+							wait_time += RTO_MAX / 5;
+						else if (loop_ack < (Gp_interconnect_min_retries_before_timeout))
+							wait_time += RTO_MAX;
+					};
+				}
+
+				currBuffConn = CONTAINER_OF(curBuf->conn, MotionConnUDP, mConn);
+
+				retransmits++;
+				ic_statistics.retransmits++;
+				currBuffConn->stat_count_resent++;
+				currBuffConn->stat_max_resent = Max(currBuffConn->stat_max_resent,
+													currBuffConn->stat_count_resent);
+
+				checkNetworkTimeout(curBuf, now, &transportStates->networkTimeoutIsLogged);
+
+#ifdef AMS_VERBOSE_LOGGING
+				write_log("RESEND pkt with seq %d (retry %d, rtt " UINT64_FORMAT ") to route %d",
+						curBuf->pkt->seq, curBuf->nRetry, currBuffConn->rtt, currBuffConn->route);
+				logPkt("RESEND PKT in checkExpiration", curBuf->pkt);
+#endif
+			}
+
+			timer_span_time += TIMER_SPAN_LOSS;
+			unack_queue_ring.idx = (unack_queue_ring.idx + 1) % (UNACK_QUEUE_RING_SLOTS_NUM);
+		}
+	}
+	else
+	{
+		while (now >= (unack_queue_ring.currentTime + TIMER_SPAN) && count++ < UNACK_QUEUE_RING_SLOTS_NUM)
+		{
+			/* expired, need to resend them */
+			ICBuffer   *curBuf = NULL;
+
+			while ((curBuf = icBufferListPop(&unack_queue_ring.slots[unack_queue_ring.idx])) != NULL)
+			{
+				curBuf->nRetry++;
+				putIntoUnackQueueRing(
+									&unack_queue_ring,
+									curBuf,
+									computeExpirationPeriod(curBuf->conn, curBuf->nRetry), now);
+
+#ifdef TRANSFER_PROTOCOL_STATS
+				updateStats(TPE_DATA_PKT_SEND, curBuf->conn, curBuf->pkt);
+#endif
+
+				sendOnce(transportStates, pEntry, curBuf, curBuf->conn);
+
+				currBuffConn = CONTAINER_OF(curBuf->conn, MotionConnUDP, mConn);
+
+				retransmits++;
+				ic_statistics.retransmits++;
+				currBuffConn->stat_count_resent++;
+				currBuffConn->stat_max_resent = Max(currBuffConn->stat_max_resent, currBuffConn->stat_count_resent);
+				checkNetworkTimeout(curBuf, now, &transportStates->networkTimeoutIsLogged);
+
+#ifdef AMS_VERBOSE_LOGGING
+				write_log("RESEND pkt with seq %d (retry %d, rtt " UINT64_FORMAT ") to route %d",
+					  curBuf->pkt->seq, curBuf->nRetry, curBuf->conn->rtt, curBuf->conn->route);
+				logPkt("RESEND PKT in checkExpiration", curBuf->pkt);
+#endif
+			}
+
+			unack_queue_ring.currentTime += TIMER_SPAN;
+			unack_queue_ring.idx = (unack_queue_ring.idx + 1) % (UNACK_QUEUE_RING_SLOTS_NUM);
+		}
+
+		/*
+		 * deal with case when there is a long time this function is not called.
+		 */
+		unack_queue_ring.currentTime = now - (now % (TIMER_SPAN));
+	}
+
 	if (retransmits > 0)
 	{
 		snd_control_info.ssthresh = Max(snd_control_info.cwnd / 2, snd_control_info.minCwnd);
@@ -5693,7 +6380,7 @@ checkExceptions(ChunkTransportState *transportStates,
 		checkExpirationCapacityFC(transportStates, pEntry, conn, timeout);
 	}
 
-	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
+	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS || Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
 	{
 		uint64		now = getCurrentTime();
 
@@ -5738,13 +6425,23 @@ static inline int
 computeTimeout(MotionConn *mConn, int retry)
 {
 	MotionConnUDP *conn = NULL;
+	uint32_t rtoMs = 0;
 
 	conn = CONTAINER_OF(mConn, MotionConnUDP, mConn);
+	rtoMs = conn->rttvar.rto / 1000;
 	if (icBufferListLength(&conn->unackQueue) == 0)
 		return TIMER_CHECKING_PERIOD;
 
 	ICBufferLink *bufLink = icBufferListFirst(&conn->unackQueue);
 	ICBuffer   *buf = GET_ICBUFFER_FROM_PRIMARY(bufLink);
+
+	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
+	{
+		if (buf->nRetry == 0 && retry == 0 && unack_queue_ring.numSharedOutStanding < (snd_control_info.cwnd - snd_control_info.minCwnd))
+			return 0;
+
+		return rtoMs > TIMER_CHECKING_PERIOD ? rtoMs: TIMER_CHECKING_PERIOD;
+	}
 
 	if (buf->nRetry == 0 && retry == 0)
 		return 0;
@@ -5833,7 +6530,7 @@ SendChunkUDPIFC(ChunkTransportState *transportStates,
 
 		if (pollAcks(transportStates, pEntry->txfd, timeout))
 		{
-			if (handleAcks(transportStates, &pEntry->entry))
+			if (handleAcks(transportStates, &pEntry->entry, true))
 			{
 				/*
 				 * We make sure that we deal with the stop messages only after
@@ -5990,12 +6687,15 @@ SendEOSUDPIFC(ChunkTransportState *transportStates,
 					timeout = computeTimeout(&conn->mConn, retry);
 
 					if (pollAcks(transportStates, pEntry->txfd, timeout))
-						handleAcks(transportStates, &pEntry->entry);
-
+						handleAcks(transportStates, &pEntry->entry, true);
 					checkExceptions(transportStates, &pEntry->entry, &conn->mConn, retry++, timeout);
 
 					if (retry >= MAX_TRY)
+					{
+						if (icBufferListLength(&conn->unackQueue) == 0)
+							sendBuffers(transportStates, &pEntry->entry, &conn->mConn);
 						break;
+					}
 				}
 
 				if ((!conn->mConn.cdbProc) || (icBufferListLength(&conn->unackQueue) == 0 &&
@@ -6220,24 +6920,60 @@ getCurrentTime(void)
 static void
 putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64 now)
 {
+	MotionConnUDP *buffConn = NULL;
+	buffConn = CONTAINER_OF(buf->conn, MotionConnUDP, mConn);
 	uint64		diff = 0;
 	int			idx = 0;
-
-	/* The first packet, currentTime is not initialized */
-	if (uqr->currentTime == 0)
-		uqr->currentTime = now - (now % TIMER_SPAN);
-
-	diff = now + expTime - uqr->currentTime;
-	if (diff >= UNACK_QUEUE_RING_LENGTH)
+	
+	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS_ADVANCE)
 	{
-#ifdef AMS_VERBOSE_LOGGING
-		write_log("putIntoUnackQueueRing:" "now " UINT64_FORMAT "expTime " UINT64_FORMAT "diff " UINT64_FORMAT "uqr-currentTime " UINT64_FORMAT, now, expTime, diff, uqr->currentTime);
+		/* The first packet, currentTime is not initialized */
+#ifndef TIMEOUT_Z
+		if (uqr->currentTime == 0)
+			uqr->currentTime = now - (now % TIMER_SPAN_LOSS);
+#else
+		if (uqr->currentTime == 0 && buffConn->rttvar.rto == 0)
+			uqr->currentTime = now - (now % TIMER_SPAN_LOSS);
+		else
+			uqr->currentTime = now + buffConn->rttvar.rto;
+
 #endif
-		diff = UNACK_QUEUE_RING_LENGTH - 1;
+		diff = expTime;
+		if (diff >= UNACK_QUEUE_RING_LENGTH_LOSS)
+		{
+#ifdef AMS_VERBOSE_LOGGING
+			write_log("putIntoUnackQueueRing:" "now " UINT64_FORMAT "expTime " UINT64_FORMAT "diff " UINT64_FORMAT "uqr-currentTime " UINT64_FORMAT, now, expTime, diff, uqr->currentTime);
+#endif
+			diff = UNACK_QUEUE_RING_LENGTH_LOSS - 1;
+		}
+		else if (diff < TIMER_SPAN_LOSS)
+		{
+			diff = diff < TIMER_SPAN_LOSS ? TIMER_SPAN_LOSS : diff;
+		}
 	}
-	else if (diff < TIMER_SPAN)
+	else
 	{
-		diff = TIMER_SPAN;
+		if (uqr->currentTime == 0)
+		uqr->currentTime = now - (now % TIMER_SPAN_LOSS);
+
+		diff = now + expTime - uqr->currentTime;
+		if (diff >= UNACK_QUEUE_RING_LENGTH)
+		{
+#ifdef AMS_VERBOSE_LOGGING
+			write_log("putIntoUnackQueueRing:" "now " UINT64_FORMAT "expTime " UINT64_FORMAT "diff " UINT64_FORMAT "uqr-currentTime " UINT64_FORMAT, now, expTime, diff, uqr->currentTime);
+#endif
+			diff = UNACK_QUEUE_RING_LENGTH - 1;
+		}
+		else if (diff < TIMER_SPAN)
+		{
+			diff = TIMER_SPAN;
+		}
+
+		idx = (uqr->idx + diff / TIMER_SPAN) % UNACK_QUEUE_RING_SLOTS_NUM;
+
+#ifdef AMS_VERBOSE_LOGGING
+		write_log("PUTTW: curtime " UINT64_FORMAT " now " UINT64_FORMAT " (diff " UINT64_FORMAT ") expTime " UINT64_FORMAT " previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
+#endif
 	}
 
 	idx = (uqr->idx + diff / TIMER_SPAN) % UNACK_QUEUE_RING_SLOTS_NUM;
@@ -6684,9 +7420,25 @@ rxThreadFunc(void *arg)
 
 			if (conn != NULL)
 			{
+				uint64          now = getCurrentTime();
+				uint64 send_time = pkt->send_time;
+				uint64 recv_time = now;
+				uint64 retry_times = pkt->retry_times;
+				MotionConnUDP *connUdp = NULL;
+
+				connUdp = CONTAINER_OF(conn, MotionConnUDP, mConn);
+				bool drop_ack = pkt->seq < connUdp->conn_info.seq ? true : false;
 				/* Handling a regular packet */
 				if (handleDataPacket(conn, pkt, &peer, &peerlen, &param, &wakeup_mainthread))
 					pkt = NULL;
+				if (!pkt)
+				{
+					param.msg.send_time = send_time;
+					param.msg.recv_time = recv_time;
+					param.msg.retry_times = retry_times;
+				}
+				if (drop_ack)
+					param.msg.retry_times = Gp_interconnect_min_retries_before_timeout;
 				ic_statistics.recvPktNum++;
 			}
 			else
