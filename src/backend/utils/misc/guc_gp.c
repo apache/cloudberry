@@ -324,6 +324,7 @@ char	   *optimizer_search_strategy_path = NULL;
 /* GUCs to tell Optimizer to enable a physical operator */
 bool		optimizer_enable_nljoin;
 bool		optimizer_enable_indexjoin;
+bool		optimizer_enable_motions_masteronly_queries;
 bool		optimizer_enable_motions;
 bool		optimizer_enable_motion_broadcast;
 bool		optimizer_enable_motion_gather;
@@ -2178,6 +2179,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&optimizer_enable_indexjoin,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"optimizer_enable_motions_masteronly_queries", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable plans with Motion operators in the optimizer for queries with no distributed tables."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_motions_masteronly_queries,
+		false,
 		NULL, NULL, NULL
 	},
 	{
