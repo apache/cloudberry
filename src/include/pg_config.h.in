@@ -60,6 +60,9 @@
 /* Define to 1 to build with ic-proxy support (--enable-ic-proxy) */
 #undef ENABLE_IC_PROXY
 
+/* Define to 1 to build with interconnect udp2 support (--enable-ic-udp2) */
+#undef ENABLE_IC_UDP2
+
 /* Define to 1 to preload with ic module */
 #undef ENABLE_PRELOAD_IC_MODULE
 
