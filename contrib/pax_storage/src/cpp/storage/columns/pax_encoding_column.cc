@@ -124,7 +124,7 @@ void PaxEncodingColumn<T>::InitDecoder() {
 }
 
 template <typename T>
-void PaxEncodingColumn<T>::Set(std::shared_ptr<DataBuffer<T>> data) {
+void PaxEncodingColumn<T>::Set(std::unique_ptr<DataBuffer<T>> data) {
   if (decoder_) {
     // should not decoding null
     if (data->Used() != 0) {
@@ -155,7 +155,7 @@ void PaxEncodingColumn<T>::Set(std::shared_ptr<DataBuffer<T>> data) {
 
     Assert(!data->IsMemTakeOver());
   } else {
-    PaxCommColumn<T>::Set(data);
+    PaxCommColumn<T>::Set(std::move(data));
   }
 }
 
@@ -175,7 +175,7 @@ std::pair<char *, size_t> PaxEncodingColumn<T>::GetBuffer() {
     if (encoder_) {
       // changed streaming encode to blocking encode
       // because we still need store a origin data in `PaxCommColumn<T>`
-      auto origin_data_buffer = PaxCommColumn<T>::data_;
+      auto origin_data_buffer = PaxCommColumn<T>::data_.get();
 
       shared_data_ = std::make_shared<DataBuffer<char>>(origin_data_buffer->Used());
       encoder_->SetDataBuffer(shared_data_);

@@ -208,7 +208,7 @@ std::string PaxColumn::DebugString() {
 
 template <typename T>
 PaxCommColumn<T>::PaxCommColumn(uint32 capacity) {
-  data_ = std::make_shared<DataBuffer<T>>(capacity * sizeof(T));
+  data_ = std::make_unique<DataBuffer<T>>(capacity * sizeof(T));
 }
 
 template <typename T>
@@ -218,7 +218,7 @@ template <typename T>  // NOLINT: redirect constructor
 PaxCommColumn<T>::PaxCommColumn() : PaxCommColumn(DEFAULT_CAPACITY) {}
 
 template <typename T>
-void PaxCommColumn<T>::Set(std::shared_ptr<DataBuffer<T>> data) {
+void PaxCommColumn<T>::Set(std::unique_ptr<DataBuffer<T>> data) {
   data_ = std::move(data);
 }
 
@@ -318,8 +318,8 @@ template class PaxCommColumn<double>;
 PaxNonFixedColumn::PaxNonFixedColumn(uint32 data_capacity,
                                      uint32 offsets_capacity)
     : estimated_size_(0),
-      data_(std::make_shared<DataBuffer<char>>(data_capacity)),
-      offsets_(std::make_shared<DataBuffer<int32>>(offsets_capacity)),
+      data_(std::make_unique<DataBuffer<char>>(data_capacity)),
+      offsets_(std::make_unique<DataBuffer<int32>>(offsets_capacity)),
       next_offsets_(0) {}
 
 PaxNonFixedColumn::PaxNonFixedColumn()
@@ -327,8 +327,8 @@ PaxNonFixedColumn::PaxNonFixedColumn()
 
 PaxNonFixedColumn::~PaxNonFixedColumn() {}
 
-void PaxNonFixedColumn::Set(std::shared_ptr<DataBuffer<char>> data,
-                            std::shared_ptr<DataBuffer<int32>> offsets,
+void PaxNonFixedColumn::Set(std::unique_ptr<DataBuffer<char>> data,
+                            std::unique_ptr<DataBuffer<int32>> offsets,
                             size_t total_size) {
   estimated_size_ = total_size;
   data_ = std::move(data);
