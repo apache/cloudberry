@@ -23,6 +23,8 @@ the author shall be liable for any damage, etc.
 #include <stdio.h>
 #include <locale.h>
 #include <ctype.h>
+#include "common/mdb_locale.h"
+
 
 char	   *flag(int b);
 void		describe_char(int c);
@@ -62,7 +64,7 @@ main()
 	short		c;
 	char	   *cur_locale;
 
-	cur_locale = setlocale(LC_ALL, "");
+	cur_locale = SETLOCALE(LC_ALL, "");
 	if (cur_locale)
 		fprintf(stderr, "Successfully set locale to \"%s\"\n", cur_locale);
 	else

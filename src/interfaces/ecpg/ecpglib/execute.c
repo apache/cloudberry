@@ -31,6 +31,7 @@
 #include "sqlca.h"
 #include "sqlda-compat.h"
 #include "sqlda-native.h"
+#include "common/mdb_locale.h"
 
 /*
  *	This function returns a newly malloced string that has ' and \
@@ -2002,13 +2003,13 @@ ecpg_do_prologue(int lineno, const int compat, const int force_indicator,
 #ifdef HAVE__CONFIGTHREADLOCALE
 	stmt->oldthreadlocale = _configthreadlocale(_ENABLE_PER_THREAD_LOCALE);
 #endif
-	stmt->oldlocale = ecpg_strdup(setlocale(LC_NUMERIC, NULL), lineno);
+	stmt->oldlocale = ecpg_strdup(SETLOCALE(LC_NUMERIC, NULL), lineno);
 	if (stmt->oldlocale == NULL)
 	{
 		ecpg_do_epilogue(stmt);
 		return false;
 	}
-	setlocale(LC_NUMERIC, "C");
+	SETLOCALE(LC_NUMERIC, "C");
 #endif
 
 	/*
@@ -2222,7 +2223,7 @@ ecpg_do_epilogue(struct statement *stmt)
 		uselocale(stmt->oldlocale);
 #else
 	if (stmt->oldlocale)
-		setlocale(LC_NUMERIC, stmt->oldlocale);
+		SETLOCALE(LC_NUMERIC, stmt->oldlocale);
 #ifdef HAVE__CONFIGTHREADLOCALE
 
 	/*
