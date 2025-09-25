@@ -938,7 +938,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 				/* Find the guy who should manage our locks */
 				volatile PGPROC * proc = FindProcByGpSessionId(gp_session_id);
 				int count = 0;
-				while(proc==NULL && count < 5)
+				while(proc==NULL && count < 200)
 				{
 					pg_usleep( /* microseconds */ 2000);
 					count++;
