@@ -25,7 +25,7 @@ ifeq ($(PORTNAME),win32)
   OBJS += $(top_builddir)/src/port/glob.o
 endif
 
-LDLIBS += $(LIBS) $(GPFDIST_LIBS) $(apr_link_ld_libs)
+LDLIBS += $(LIBS) $(GPFDIST_LIBS) $(apr_link_ld_libs) -lssh2
 
 all: gpfdist$(X)
 
