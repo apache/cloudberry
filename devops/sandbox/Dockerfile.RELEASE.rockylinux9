@@ -1,0 +1,86 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# Multi-stage Dockerfile for Apache Cloudberry Sandbox Environment
+# --------------------------------------------------------------------
+# This Dockerfile uses pre-built Apache Cloudberry build images to
+# compile and install a specific release version of Cloudberry, then
+# creates a runtime environment for testing and development.
+# --------------------------------------------------------------------
+
+# Build stage: Use pre-built image to compile Cloudberry
+FROM apache/incubator-cloudberry:cbdb-build-rocky9-latest as builder
+
+ARG CODEBASE_VERSION_VAR=${CODEBASE_VERSION_VAR}
+
+# Download and extract the specified release version
+RUN wget -O /tmp/cloudberry-${CODEBASE_VERSION_VAR}.zip https://github.com/apache/cloudberry/archive/refs/tags/${CODEBASE_VERSION_VAR}.zip && \
+    cd /tmp/ && \
+    unzip /tmp/cloudberry-${CODEBASE_VERSION_VAR}.zip && \
+    mv /tmp/cloudberry-${CODEBASE_VERSION_VAR} /tmp/cloudberry && \
+    rm -f /tmp/cloudberry-${CODEBASE_VERSION_VAR}.zip
+
+# Copy build scripts into the container
+COPY devops/build/automation/cloudberry/scripts /tmp/build-scripts
+
+# Build Cloudberry using the official build scripts
+RUN cd /tmp/cloudberry && \
+    export SRC_DIR=/tmp/cloudberry && \
+    export BUILD_DESTINATION=/usr/local/cloudberry-db && \
+    /tmp/build-scripts/configure-cloudberry.sh && \
+    /tmp/build-scripts/build-cloudberry.sh
+
+# Runtime stage: Use the same base image for runtime environment
+FROM apache/incubator-cloudberry:cbdb-build-rocky9-latest
+
+ARG CODEBASE_VERSION_VAR=${CODEBASE_VERSION_VAR}
+
+# Environment variables (only those not already set in base image)
+ENV MULTINODE=false
+
+# Copy built Cloudberry from builder stage
+COPY --from=builder /usr/local/cloudberry-db /usr/local/cloudberry-db
+
+# Runtime configuration (only what's needed beyond base image)
+RUN echo root:cbdb@123 | chpasswd && \
+    cp ./configs/90-cbdb-sysctl.conf /etc/sysctl.conf && \
+    echo "cdw" > /tmp/gpdb-hosts && \
+    chmod 777 ./configs/gpinitsystem_singlenode && \
+    chmod 777 ./configs/init_system.sh && \
+    hostname > ~/orig_hostname && \
+    echo "export COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1" >> /home/gpadmin/.bashrc && \
+    echo "source /usr/local/cloudberry-db/greenplum_path.sh" >> /home/gpadmin/.bashrc && \
+    mkdir -p /data0/database/coordinator /data0/database/primary /data0/database/mirror && \
+    chown -R gpadmin:gpadmin /data0
+
+# ----------------------------------------------------------------------
+# Set the Default User and Command
+# ----------------------------------------------------------------------
+# The default user is set to 'gpadmin', and the container starts by
+# running the init_system.sh script. This container serves as a base
+# environment, and the Apache Cloudberry RPM can be installed for
+# testing and functional verification.
+# ----------------------------------------------------------------------
+USER gpadmin
+WORKDIR /home/gpadmin
+
+EXPOSE 5432 22
+
+VOLUME [ "/sys/fs/cgroup" ]
+CMD ["bash","-c","./configs/init_system.sh"]
