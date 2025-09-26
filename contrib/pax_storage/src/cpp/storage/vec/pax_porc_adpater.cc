@@ -240,11 +240,15 @@ static void CopyDecimalBuffer(PaxColumn *column,
           column->GetBuffer(data_index_begin + non_null_offset);
 
       auto vl = (struct varlena *)DatumGetPointer(buffer);
-      Assert(!(VARATT_IS_EXTERNAL(vl) || VARATT_IS_COMPRESSED(vl) ||
-               VARATT_IS_SHORT(vl)));
+      Assert(!(VARATT_IS_EXTERNAL(vl) || VARATT_IS_COMPRESSED(vl)));
       num_len = VARSIZE_ANY_EXHDR(vl);
-      // direct cast
-      numeric = (Numeric)(buffer);
+      // it has been detoasted in OrcWriter::PrepareWriteTuple, except numeric
+      // type with short header should be detoasted to 4B header
+      if (unlikely(VARATT_IS_SHORT(vl))) {
+        numeric = cbdb::VarlenaShortTo4B(vl);
+      } else {  // direct cast
+        numeric = (Numeric)(buffer);
+      }
 
       char *dest_buff = out_data_buffer->GetAvailableBuffer();
       Assert(out_data_buffer->Available() >= (size_t)type_len);

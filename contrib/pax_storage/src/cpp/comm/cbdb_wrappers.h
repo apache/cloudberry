@@ -114,8 +114,6 @@ void MemoryCtxDelete(MemoryContext memory_context);
 void MemoryCtxRegisterResetCallback(MemoryContext context,
                                     MemoryContextCallback *cb);
 
-Oid RelationGetRelationId(Relation rel);
-
 static inline void *DatumToPointer(Datum d) noexcept {
   return DatumGetPointer(d);
 }
@@ -164,6 +162,10 @@ static inline float8 DatumToFloat8(Datum d) noexcept {
   return DatumGetFloat8(d);
 }
 
+static pg_attribute_always_inline Oid RelationGetRelationId(Relation rel) noexcept {
+  return RelationGetRelid(rel);
+}
+
 BpChar *BpcharInput(const char *s, size_t len, int32 atttypmod);
 VarChar *VarcharInput(const char *s, size_t len, int32 atttypmod);
 text *CstringToText(const char *s, size_t len);
@@ -193,6 +195,22 @@ Datum DatumFromPointer(const void *p, int16 typlen);
 struct varlena *PgDeToastDatum(struct varlena *datum);
 
 struct varlena *PgDeToastDatumPacked(struct varlena *datum);
+
+static pg_attribute_always_inline struct varlena *VarlenaShortTo4B(struct varlena *attr) {
+  Assert(attr != nullptr);
+  Assert(VARATT_IS_SHORT(attr));
+  Size data_size = VARSIZE_SHORT(attr) - VARHDRSZ_SHORT;
+  Size new_size = data_size + VARHDRSZ;
+
+  struct varlena *new_attr =
+      reinterpret_cast<struct varlena *>(std::malloc(new_size));
+
+  Assert(new_attr != nullptr);
+
+  SET_VARSIZE(new_attr, new_size);
+  std::memcpy(VARDATA(new_attr), VARDATA_SHORT(attr), data_size);
+  return new_attr;
+}
 
 bool TupleIsValid(HeapTuple tupcache);
 
