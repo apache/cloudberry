@@ -25,21 +25,21 @@
 # --------------------------------------------------------------------
 
 # Build stage: Use pre-built image to compile Cloudberry
-FROM apache/incubator-cloudberry:cbdb-build-rocky9-latest as builder
+FROM apache/incubator-cloudberry:cbdb-build-rocky9-latest AS builder
+
+# Switch to gpadmin user
+USER gpadmin
+WORKDIR /home/gpadmin
 
 # Clone the latest Cloudberry source code
-RUN cd /tmp/ && \
-    git clone --recurse-submodules --branch main --single-branch --depth=1 https://github.com/apache/cloudberry.git
-
-# Copy build scripts into the container
-COPY devops/build/automation/cloudberry/scripts /tmp/build-scripts
+RUN git clone --recurse-submodules --branch main --single-branch --depth=1 https://github.com/apache/cloudberry.git
 
 # Build Cloudberry using the official build scripts
-RUN cd /tmp/cloudberry && \
-    export SRC_DIR=/tmp/cloudberry && \
-    export BUILD_DESTINATION=/usr/local/cloudberry-db && \
-    /tmp/build-scripts/configure-cloudberry.sh && \
-    /tmp/build-scripts/build-cloudberry.sh
+RUN cd /home/gpadmin/cloudberry && \
+    export SRC_DIR=/home/gpadmin/cloudberry && \
+    mkdir -p ${SRC_DIR}/build-logs && \
+    ./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh && \
+    ./devops/build/automation/cloudberry/scripts/build-cloudberry.sh
 
 # Runtime stage: Use the same base image for runtime environment
 FROM apache/incubator-cloudberry:cbdb-build-rocky9-latest
