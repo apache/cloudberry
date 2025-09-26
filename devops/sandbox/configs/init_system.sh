@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/bin/bash
 # --------------------------------------------------------------------
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
@@ -19,20 +19,27 @@
 #
 # --------------------------------------------------------------------
 ## ======================================================================
-## Container initialization script
+## Container initialization script for Apache Cloudberry Sandbox
 ## ======================================================================
 
 # ----------------------------------------------------------------------
 # Start SSH daemon and setup for SSH access
 # ----------------------------------------------------------------------
 # The SSH daemon is started to allow remote access to the container via
-# SSH. This is useful for development and debugging purposes. If the SSH
-# daemon fails to start, the script exits with an error.
+# SSH. This is useful for development and debugging purposes.
 # ----------------------------------------------------------------------
+
+# Ensure SSH directory exists
+sudo mkdir -p /run/sshd
+
+# Start SSH daemon (base image already handles most SSH setup)
 if ! sudo /usr/sbin/sshd; then
     echo "Failed to start SSH daemon" >&2
     exit 1
 fi
+
+# Give SSH daemon time to start
+sleep 2
 
 # ----------------------------------------------------------------------
 # Remove /run/nologin to allow logins
@@ -83,9 +90,10 @@ if [[ $MULTINODE == "false" && $HOSTNAME == "cdw" ]]; then
                  --max_connections=100
 # Initialize multi node Cloudberry cluster
 elif [[ $MULTINODE == "true" && $HOSTNAME == "cdw" ]]; then
-    sshpass -p "cbdb@123" ssh-copy-id -o StrictHostKeyChecking=no sdw1
-    sshpass -p "cbdb@123" ssh-copy-id -o StrictHostKeyChecking=no sdw2
-    sshpass -p "cbdb@123" ssh-copy-id -o StrictHostKeyChecking=no scdw
+    # Use key-based authentication instead of password
+    ssh-copy-id -o StrictHostKeyChecking=no -o PasswordAuthentication=no sdw1
+    ssh-copy-id -o StrictHostKeyChecking=no -o PasswordAuthentication=no sdw2
+    ssh-copy-id -o StrictHostKeyChecking=no -o PasswordAuthentication=no scdw
     gpinitsystem -a \
                  -c /tmp/gpinitsystem_multinode \
                  -h /tmp/multinode-gpinit-hosts \
@@ -99,8 +107,9 @@ if [ $HOSTNAME == "cdw" ]; then
      echo 'host all all 0.0.0.0/0 trust' >> /data0/database/coordinator/gpseg-1/pg_hba.conf
      gpstop -u
 
+     # Remove password requirement for gpadmin user
      psql -d template1 \
-          -c "ALTER USER gpadmin PASSWORD 'cbdb@123'"
+          -c "ALTER USER gpadmin PASSWORD NULL"
 
      cat <<-'EOF'
 

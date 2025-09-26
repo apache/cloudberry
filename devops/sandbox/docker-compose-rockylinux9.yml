@@ -17,6 +17,11 @@
 # permissions and limitations under the License.
 #
 # --------------------------------------------------------------------
+# Common variables for multi-container deployment
+x-common-variables: &common-variables
+  TIMEZONE_VAR: "America/Los_Angeles"
+  MULTINODE: "true"
+
 services:
   cbdb-coordinator:
     container_name: cbdb-cdw
@@ -29,7 +34,14 @@ services:
       interconnect:
         ipv4_address: 10.5.0.10
     environment:
+      <<: *common-variables
       MULTINODE: "true"
+    healthcheck:
+      test: ["CMD", "/devops/sandbox/scripts/health-check.sh", "cbdb-cdw"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   cbdb-standby-coordinator:
     container_name: cbdb-scdw
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -38,6 +50,8 @@ services:
     networks:
       interconnect:
         ipv4_address: 10.5.0.11
+    environment:
+      <<: *common-variables
   cbdb-segment-host-1:
     container_name: cbdb-sdw1
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -46,6 +60,8 @@ services:
     networks:
       interconnect:
         ipv4_address: 10.5.0.12
+    environment:
+      <<: *common-variables
   cbdb-segment-host-2:
     container_name: cbdb-sdw2
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -54,6 +70,8 @@ services:
     networks:
       interconnect:
         ipv4_address: 10.5.0.13
+    environment:
+      <<: *common-variables
 networks:
   interconnect:
     name: cbdb-interconnect

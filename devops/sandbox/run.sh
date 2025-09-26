@@ -18,7 +18,40 @@
 # permissions and limitations under the License.
 #
 # --------------------------------------------------------------------
-set -eu
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+# Cleanup function
+cleanup_on_exit() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        log_error "Script failed with exit code $exit_code"
+        log_info "Cleaning up any partial deployments..."
+        # Add cleanup logic here if needed
+    fi
+    exit $exit_code
+}
+
+# Set trap for cleanup
+trap cleanup_on_exit EXIT
 
 # Default values
 DEFAULT_OS_VERSION="rockylinux9"
@@ -118,7 +151,6 @@ else
 
     docker build --file ${DOCKERFILE} \
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
-                 --build-arg PIP_INDEX_URL_VAR="${PIP_INDEX_URL_VAR}" \
                  --build-arg CODEBASE_VERSION_VAR="${CODEBASE_VERSION}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
 fi

@@ -22,7 +22,7 @@ title: Sandbox of Apache Cloudberry
 
 # Install Apache Cloudberry With Docker
 
-This document guides you on how to quickly set up and connect to a Apache Cloudberry in a Docker environment. You can try out Apache Cloudberry by performing some basic operations and running SQL commands. 
+This document guides you on how to quickly set up and connect to Apache Cloudberry in a Docker environment. You can try out Apache Cloudberry by performing some basic operations and running SQL commands. 
 
 > [!WARNING]
 > This guide is intended for testing or development. DO NOT use it for production.
@@ -54,37 +54,37 @@ Build and deploy steps:
 
 1. Start Docker Desktop and make sure it is running properly on your host platform.
 
-2. Download this repository (which is [apache/cloudberry-bootcamp](https://github.com/apache/cloudberry-bootcamp)) to the target machine.
+2. Clone the Apache Cloudberry repository to the target machine.
 
     ```shell
-    git clone https://github.com/apache/cloudberry-bootcamp.git
+    git clone https://github.com/apache/cloudberry.git
     ```
 
 3. Enter the repository and run the `run.sh` script to start the Docker container. This will start the automatic installation process. Depending on your environment, you may need to run this with 'sudo' command.
 
-    - For latest Cloudberry DB release running on a single container
+    - For latest Cloudberry release running on a single container
 
     ```shell
-    cd bootcamp/000-cbdb-sandbox
-    ./run.sh
+    cd cloudberry/devops/sandbox
+    ./run.sh -c 2.0.0
     ```
-    - For latest Cloudberry DB release running across multiple containers
+    - For latest Cloudberry release running across multiple containers
 
     ```shell
-    cd bootcamp/000-cbdb-sandbox
-    ./run.sh -m
+    cd cloudberry/devops/sandbox
+    ./run.sh -c 2.0.0 -m
     ```
     - For latest main branch running on a single container
 
     ```shell
-    cd bootcamp/000-cbdb-sandbox
+    cd cloudberry/devops/sandbox
     ./run.sh -c main
     ```
 
     - For latest main branch running across multiple containers
 
     ```shell
-    cd bootcamp/000-cbdb-sandbox
+    cd cloudberry/devops/sandbox
     ./run.sh -c main -m
     ```
 
@@ -118,6 +118,7 @@ You can now connect to the database and try some basic operations.
     
     # psql (14.4, server 14.4)
     # Type "help" for help.
+    # Note: No password is required for the gpadmin user in this sandbox environment.
     ```
 
     ```sql
@@ -127,7 +128,7 @@ You can now connect to the database and try some basic operations.
     (1 row)
     ```
 
-Now you have a Apache Cloudberry and can continue with [Apache Cloudberry Tutorials Based on Docker Installation](https://github.com/apache/cloudberry-bootcamp/blob/main/101-cbdb-tutorials/README.md)! Enjoy!
+Now you have a Apache Cloudberry and can continue with [Apache Cloudberry Tutorials](https://cloudberry.apache.org/docs/)! Enjoy!
 
 ## Working with your Cloudberry Docker environment
 
