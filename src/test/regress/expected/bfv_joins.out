@@ -4127,6 +4127,58 @@ select * from r_table2 where ra2 in ( select a from l_table join r_table1 on b =
    1 |   1
 (1 row)
 
+-- Testcase for hash join rescan clearing batch files for outer subplan
+truncate l_table;
+truncate r_table1;
+insert into l_table select i, i%100 from generate_series(1, 20000) i;
+insert into r_table1 select i%100, i from generate_series(1, 10000) i;
+insert into r_table1 select i%100, i from generate_series(1, 10000) i;
+analyze l_table;
+analyze r_table1;
+set statement_mem="1MB";
+explain analyze select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=30000000473.00..30000001205.61 rows=16 width=8) (actual time=73.649..73.651 rows=2 loops=1)
+   ->  Nested Loop Semi Join  (cost=30000000473.00..30000001205.61 rows=16 width=8) (actual time=29.419..73.334 rows=2 loops=1)
+         Join Filter: (r_table2.ra2 = r_table1.ra1)
+         ->  Seq Scan on r_table2  (cost=10000000000.00..10000000001.02 rows=2 width=8) (actual time=0.003..0.004 rows=2 loops=1)
+         ->  Hash Join  (cost=20000000473.00..20000001196.00 rows=40000 width=4) (actual time=5.144..34.441 rows=20807 loops=2)
+               Hash Cond: (l_table.b = r_table1.rb1)
+               Extra Text: Initial batch 0:
+   Wrote 198K bytes to inner workfile.
+   Wrote 111K bytes to outer workfile.
+ Work file set: 2 files (0 compressed), avg file size 147456, compression buffer size 0 bytes
+ Hash chain length 3.4 avg, 14 max, using 2907 of 4096 buckets.  Skipped 1 empty batches.
+               ->  Seq Scan on l_table  (cost=10000000000.00..10000000223.00 rows=20000 width=4) (actual time=0.007..15.150 rows=20000 loops=2)
+               ->  Hash  (cost=10000000223.00..10000000223.00 rows=6667 width=8) (actual time=10.240..10.240 rows=20000 loops=1)
+                     ->  Seq Scan on r_table1  (cost=10000000000.00..10000000223.00 rows=20000 width=8) (actual time=0.013..3.960 rows=20000 loops=1)
+ Planning time: 1.497 ms
+   (slice0)    Executor memory: 123K bytes.
+ * (slice1)    Executor memory: 1228K bytes (seg2).  Work_mem: 525K bytes max, 575K bytes wanted.
+ Memory used:  1024kB
+ Memory wanted:  1174kB
+ Optimizer: Postgres query optimizer
+ Execution time: 74.293 ms
+(21 rows)
+
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+ ra2 | rb2 
+-----+-----
+  11 |  11
+   1 |   1
+(2 rows)
+
+set gp_workfile_compression=on;
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+ ra2 | rb2 
+-----+-----
+  11 |  11
+   1 |   1
+(2 rows)
+
+reset gp_workfile_compression;
+reset statement_mem;
 reset optimizer;
 reset enable_nestloop;
 reset enable_bitmapscan;

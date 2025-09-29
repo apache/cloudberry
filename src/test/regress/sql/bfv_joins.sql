@@ -575,6 +575,24 @@ set enable_seqscan=off;
 explain select * from r_table2 where ra2 in ( select a from l_table join r_table1 on b = rb1);
 select * from r_table2 where ra2 in ( select a from l_table join r_table1 on b = rb1);
 
+-- Testcase for hash join rescan clearing batch files for outer subplan
+truncate l_table;
+truncate r_table1;
+insert into l_table select i, i%100 from generate_series(1, 20000) i;
+insert into r_table1 select i%100, i from generate_series(1, 10000) i;
+insert into r_table1 select i%100, i from generate_series(1, 10000) i;
+analyze l_table;
+analyze r_table1;
+
+set statement_mem="1MB";
+explain analyze select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+
+set gp_workfile_compression=on;
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+reset gp_workfile_compression;
+reset statement_mem;
+
 reset optimizer;
 reset enable_nestloop;
 reset enable_bitmapscan;
