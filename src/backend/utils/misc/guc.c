@@ -2652,6 +2652,16 @@ static struct config_int ConfigureNamesInt[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"find_writer_proc_retry_time", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Sets the retry time of find writer proc entry."),
+			NULL
+		},
+		&find_writer_proc_retry_time,
+		5, 1, 5000,
+		NULL, NULL, NULL
+	},
+
 #ifdef LOCK_DEBUG
 	{
 		{"trace_lock_oidmin", PGC_SUSET, DEVELOPER_OPTIONS,
