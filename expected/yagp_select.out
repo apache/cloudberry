@@ -14,6 +14,7 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 SET yagpcc.enable TO TRUE;
 SET yagpcc.report_nested_queries TO TRUE;
+SET yagpcc.enable_utility TO FALSE;
 -- Basic SELECT tests
 SET yagpcc.logging_mode to 'TBL';
 SELECT 1;
@@ -29,17 +30,17 @@ SELECT COUNT(*) FROM generate_series(1,10);
 (1 row)
 
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
- segid | ccnt |                 query_text                  |    query_status     
--------+------+---------------------------------------------+---------------------
-    -1 |    9 | SELECT 1;                                   | QUERY_STATUS_SUBMIT
-    -1 |    9 | SELECT 1;                                   | QUERY_STATUS_START
-    -1 |    9 | SELECT 1;                                   | QUERY_STATUS_END
-    -1 |    9 | SELECT 1;                                   | QUERY_STATUS_DONE
-    -1 |   11 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_SUBMIT
-    -1 |   11 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_START
-    -1 |   11 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_END
-    -1 |   11 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_DONE
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+ segid |                 query_text                  |    query_status     
+-------+---------------------------------------------+---------------------
+    -1 | SELECT 1;                                   | QUERY_STATUS_SUBMIT
+    -1 | SELECT 1;                                   | QUERY_STATUS_START
+    -1 | SELECT 1;                                   | QUERY_STATUS_END
+    -1 | SELECT 1;                                   | QUERY_STATUS_DONE
+    -1 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_SUBMIT
+    -1 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_START
+    -1 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_END
+    -1 | SELECT COUNT(*) FROM generate_series(1,10); | QUERY_STATUS_DONE
 (8 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -59,13 +60,13 @@ SELECT 1;
 
 COMMIT;
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
- segid | ccnt | query_text |    query_status     
--------+------+------------+---------------------
-    -1 |   22 | SELECT 1;  | QUERY_STATUS_SUBMIT
-    -1 |   22 | SELECT 1;  | QUERY_STATUS_START
-    -1 |   22 | SELECT 1;  | QUERY_STATUS_END
-    -1 |   22 | SELECT 1;  | QUERY_STATUS_DONE
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+ segid | query_text |    query_status     
+-------+------------+---------------------
+    -1 | SELECT 1;  | QUERY_STATUS_SUBMIT
+    -1 | SELECT 1;  | QUERY_STATUS_START
+    -1 | SELECT 1;  | QUERY_STATUS_END
+    -1 | SELECT 1;  | QUERY_STATUS_DONE
 (4 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -85,17 +86,17 @@ SELECT * FROM t;
 (2 rows)
 
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
- segid | ccnt |         query_text          |    query_status     
--------+------+-----------------------------+---------------------
-    -1 |   33 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_SUBMIT
-       |      | SELECT * FROM t;            | 
-    -1 |   33 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_START
-       |      | SELECT * FROM t;            | 
-    -1 |   33 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_END
-       |      | SELECT * FROM t;            | 
-    -1 |   33 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_DONE
-       |      | SELECT * FROM t;            | 
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+ segid |         query_text          |    query_status     
+-------+-----------------------------+---------------------
+    -1 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_SUBMIT
+       | SELECT * FROM t;            | 
+    -1 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_START
+       | SELECT * FROM t;            | 
+    -1 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_END
+       | SELECT * FROM t;            | 
+    -1 | WITH t AS (VALUES (1), (2))+| QUERY_STATUS_DONE
+       | SELECT * FROM t;            | 
 (4 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -115,13 +116,13 @@ EXECUTE test_stmt;
 
 DEALLOCATE test_stmt;
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
- segid | ccnt |           query_text           |    query_status     
--------+------+--------------------------------+---------------------
-    -1 |   44 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_SUBMIT
-    -1 |   44 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_START
-    -1 |   44 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_END
-    -1 |   44 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_DONE
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+ segid |           query_text           |    query_status     
+-------+--------------------------------+---------------------
+    -1 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_SUBMIT
+    -1 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_START
+    -1 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_END
+    -1 | PREPARE test_stmt AS SELECT 1; | QUERY_STATUS_DONE
 (4 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -134,3 +135,4 @@ DROP FUNCTION yagp_status_order(text);
 DROP EXTENSION yagp_hooks_collector;
 RESET yagpcc.enable;
 RESET yagpcc.report_nested_queries;
+RESET yagpcc.enable_utility;

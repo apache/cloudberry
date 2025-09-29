@@ -16,6 +16,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 SET yagpcc.enable TO TRUE;
 SET yagpcc.report_nested_queries TO TRUE;
+SET yagpcc.enable_utility TO FALSE;
 
 -- Hash distributed table
 
@@ -30,7 +31,7 @@ RESET optimizer_enable_direct_dispatch;
 
 RESET yagpcc.logging_mode;
 -- Should see 8 rows.
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 SET yagpcc.logging_mode to 'TBL';
@@ -40,7 +41,7 @@ select * from test_hash_dist;
 
 DROP TABLE test_hash_dist;
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 -- Replicated table
@@ -59,7 +60,7 @@ DROP TABLE test_replicated;
 DROP FUNCTION force_segments();
 
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 -- Partially distributed table (2 numsegments)
@@ -75,10 +76,11 @@ RESET yagpcc.logging_mode;
 DROP TABLE test_partial_dist;
 RESET allow_system_table_mods;
 -- Should see 12 rows.
-SELECT ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 DROP FUNCTION yagp_status_order(text);
 DROP EXTENSION yagp_hooks_collector;
 RESET yagpcc.enable;
 RESET yagpcc.report_nested_queries;
+RESET yagpcc.enable_utility;

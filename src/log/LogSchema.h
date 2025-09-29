@@ -133,13 +133,15 @@ inline constexpr std::array log_tbl_desc = {
  LogDesc{"analyze_text",        "query_info.analyze_text",        TEXTOID},  
  LogDesc{"error_message",       "add_info.error_message",         TEXTOID},  
  LogDesc{"query_status",        "query_status",                   TEXTOID},  
+ /* Extra field */
+ LogDesc{"utility",             "",                               BOOLOID},  
 };
 /* clang-format on */
 
 inline constexpr size_t natts_yagp_log = log_tbl_desc.size();
+inline constexpr size_t attnum_yagp_log_utility = natts_yagp_log - 1;
 
-const std::unordered_map<std::string_view, size_t> &
-proto_name_to_col_idx();
+const std::unordered_map<std::string_view, size_t> &proto_name_to_col_idx();
 
 TupleDesc DescribeTuple();
 

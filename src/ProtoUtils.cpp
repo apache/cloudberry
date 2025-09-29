@@ -103,7 +103,8 @@ void set_query_info(yagpcc::SetQueryReq *req) {
   if (Gp_session_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
     qi->set_username(get_user_name());
-    qi->set_databasename(get_db_name());
+    if (IsTransactionState())
+      qi->set_databasename(get_db_name());
     qi->set_rsgname(get_rg_name());
   }
 }
@@ -118,11 +119,10 @@ void set_qi_slice_id(yagpcc::SetQueryReq *req) {
   aqi->set_slice_id(currentSliceId);
 }
 
-void set_qi_error_message(yagpcc::SetQueryReq *req) {
+void set_qi_error_message(yagpcc::SetQueryReq *req, const char *err_msg) {
   auto aqi = req->mutable_add_info();
-  auto error = elog_message();
   *aqi->mutable_error_message() =
-      char_to_trimmed_str(error, strlen(error), Config::max_text_size());
+      char_to_trimmed_str(err_msg, strlen(err_msg), Config::max_text_size());
 }
 
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
@@ -226,8 +226,7 @@ double protots_to_double(const google::protobuf::Timestamp &ts) {
   return double(ts.seconds()) + double(ts.nanos()) / 1000000000.0;
 }
 
-void set_analyze_plan_text(QueryDesc *query_desc,
-                           yagpcc::SetQueryReq *req) {
+void set_analyze_plan_text(QueryDesc *query_desc, yagpcc::SetQueryReq *req) {
   // Make sure it is a valid txn and it is not an utility
   // statement for ExplainPrintPlan() later.
   if (!IsTransactionState() || !query_desc->plannedstmt) {

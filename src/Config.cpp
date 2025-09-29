@@ -16,10 +16,11 @@ static bool guc_enable_cdbstats = true;
 static bool guc_enable_collector = true;
 static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
-static int guc_max_text_size = 1024;  // in KB
-static int guc_max_plan_size = 1024;  // in KB
+static int guc_max_text_size = 1024;     // in KB
+static int guc_max_plan_size = 1024;     // in KB
 static int guc_min_analyze_time = 10000; // in ms
 static int guc_logging_mode = LOG_MODE_UDS;
+static bool guc_enable_utility = false;
 
 static const struct config_enum_entry logging_mode_options[] = {
     {"uds", LOG_MODE_UDS, false /* hidden */},
@@ -120,12 +121,18 @@ void Config::init() {
       &guc_logging_mode, LOG_MODE_UDS, logging_mode_options, PGC_SUSET,
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC | GUC_SUPERUSER_ONLY, NULL, NULL,
       NULL);
+
+  DefineCustomBoolVariable(
+      "yagpcc.enable_utility", "Collect utility statement stats", NULL,
+      &guc_enable_utility, false, PGC_USERSET,
+      GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
 }
 
 std::string Config::uds_path() { return guc_uds_path; }
 bool Config::enable_analyze() { return guc_enable_analyze; }
 bool Config::enable_cdbstats() { return guc_enable_cdbstats; }
 bool Config::enable_collector() { return guc_enable_collector; }
+bool Config::enable_utility() { return guc_enable_utility; }
 bool Config::report_nested_queries() { return guc_report_nested_queries; }
 size_t Config::max_text_size() { return guc_max_text_size * 1024; }
 size_t Config::max_plan_size() { return guc_max_plan_size * 1024; }

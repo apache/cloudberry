@@ -1,8 +1,3 @@
--- FETCH is not tested here because truly utility statements (those
--- without sub-queries that go through the executor) are not logged.
--- Currently, only executor states are reported. Utility hooks are
--- not implemented.
-
 CREATE EXTENSION yagp_hooks_collector;
 
 CREATE FUNCTION yagp_status_order(status text)
@@ -20,6 +15,7 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 SET yagpcc.enable TO TRUE;
+SET yagpcc.enable_utility TO TRUE;
 SET yagpcc.report_nested_queries TO TRUE;
 
 -- DECLARE
@@ -31,7 +27,7 @@ CLOSE cursor_stats_0;
 COMMIT;
 
 RESET yagpcc.logging_mode;
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 -- DECLARE WITH HOLD
@@ -46,7 +42,7 @@ COMMIT;
 
 RESET yagpcc.logging_mode;
 
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 -- ROLLBACK
@@ -60,10 +56,28 @@ ROLLBACK;
 
 RESET yagpcc.logging_mode;
 
-SELECT segid, ccnt, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
+SELECT yagpcc.truncate_log() IS NOT NULL AS t;
+
+-- FETCH
+SET yagpcc.logging_mode to 'TBL';
+
+BEGIN;
+DECLARE cursor_stats_5 CURSOR WITH HOLD FOR SELECT 2;
+DECLARE cursor_stats_6 CURSOR WITH HOLD FOR SELECT 3;
+FETCH 1 IN cursor_stats_5;
+FETCH 1 IN cursor_stats_6;
+CLOSE cursor_stats_5;
+CLOSE cursor_stats_6;
+COMMIT;
+
+RESET yagpcc.logging_mode;
+
+SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
 
 DROP FUNCTION yagp_status_order(text);
 DROP EXTENSION yagp_hooks_collector;
 RESET yagpcc.enable;
 RESET yagpcc.report_nested_queries;
+RESET yagpcc.enable_utility;

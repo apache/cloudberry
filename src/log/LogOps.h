@@ -16,4 +16,4 @@ void truncate_log();
 }
 
 /* INSERT INTO yagpcc.__log VALUES (...) */
-void insert_log(const yagpcc::SetQueryReq &req);
+void insert_log(const yagpcc::SetQueryReq &req, bool utility);

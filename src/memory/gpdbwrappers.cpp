@@ -128,7 +128,7 @@ ExplainState ya_gpdb::get_explain_state(QueryDesc *query_desc,
 }
 
 ExplainState ya_gpdb::get_analyze_state(QueryDesc *query_desc,
-                                             bool analyze) noexcept {
+                                        bool analyze) noexcept {
   return wrap_noexcept([&]() {
     ExplainState es;
     ExplainInitState(&es);
@@ -223,6 +223,6 @@ Oid ya_gpdb::get_rg_id_by_session_id(int session_id) {
   return wrap_throw(ResGroupGetGroupIdBySessionId, session_id);
 }
 
-void ya_gpdb::insert_log(const yagpcc::SetQueryReq &req) {
-  return wrap_throw(::insert_log, req);
+void ya_gpdb::insert_log(const yagpcc::SetQueryReq &req, bool utility) {
+  return wrap_throw(::insert_log, req, utility);
 }

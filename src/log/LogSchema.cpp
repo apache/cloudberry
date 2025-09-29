@@ -4,8 +4,7 @@
 
 #include "LogSchema.h"
 
-const std::unordered_map<std::string_view, size_t> &
-proto_name_to_col_idx() {
+const std::unordered_map<std::string_view, size_t> &proto_name_to_col_idx() {
   static const auto name_col_idx = [] {
     std::unordered_map<std::string_view, size_t> map;
     map.reserve(log_tbl_desc.size());

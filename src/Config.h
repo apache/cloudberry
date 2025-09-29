@@ -12,6 +12,7 @@ public:
   static bool enable_analyze();
   static bool enable_cdbstats();
   static bool enable_collector();
+  static bool enable_utility();
   static bool filter_user(std::string username);
   static bool report_nested_queries();
   static size_t max_text_size();

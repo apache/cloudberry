@@ -87,7 +87,8 @@ public:
   void executor_before_start(QueryDesc *query_desc, int eflags);
   void executor_after_start(QueryDesc *query_desc, int eflags);
   void executor_end(QueryDesc *query_desc);
-  void query_metrics_collect(QueryMetricsStatus status, void *arg);
+  void query_metrics_collect(QueryMetricsStatus status, void *arg, bool utility,
+                             ErrorData *edata = NULL);
   void ic_metrics_collect();
   void analyze_stats_collect(QueryDesc *query_desc);
   void incr_depth() { nesting_level++; }
@@ -106,15 +107,18 @@ private:
   };
 
   static bool log_query_req(const yagpcc::SetQueryReq &req,
-                            const std::string &event);
-  void update_query_state(QueryItem &query, QueryState new_state,
+                            const std::string &event, bool utility);
+  bool verify_query(QueryDesc *query_desc, QueryState state, bool utility);
+  void update_query_state(QueryItem &query, QueryState new_state, bool utility,
                           bool success = true);
   QueryItem &get_query(QueryDesc *query_desc);
   void submit_query(QueryDesc *query_desc);
-  void collect_query_submit(QueryDesc *query_desc);
+  void collect_query_submit(QueryDesc *query_desc, bool utility);
   void report_query_done(QueryDesc *query_desc, QueryItem &query,
-                         QueryMetricsStatus status);
-  void collect_query_done(QueryDesc *query_desc, QueryMetricsStatus status);
+                         QueryMetricsStatus status, bool utility,
+                         ErrorData *edata = NULL);
+  void collect_query_done(QueryDesc *query_desc, bool utility,
+                          QueryMetricsStatus status, ErrorData *edata = NULL);
   void update_nested_counters(QueryDesc *query_desc);
   bool qdesc_submitted(QueryDesc *query_desc);
 

@@ -62,7 +62,7 @@ void init_log() {
   CommandCounterIncrement();
 }
 
-void insert_log(const yagpcc::SetQueryReq &req) {
+void insert_log(const yagpcc::SetQueryReq &req, bool utility) {
   Oid namespaceId;
   Oid relationId;
   Relation rel;
@@ -92,6 +92,8 @@ void insert_log(const yagpcc::SetQueryReq &req) {
   memset(values, 0, sizeof(values));
 
   extract_query_req(req, "", values, nulls);
+  nulls[attnum_yagp_log_utility] = false;
+  values[attnum_yagp_log_utility] = BoolGetDatum(utility);
 
   rel = heap_open(relationId, RowExclusiveLock);
 
