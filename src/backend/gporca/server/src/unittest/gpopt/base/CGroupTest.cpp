@@ -104,6 +104,24 @@ CGroupTest::EresUnittest_FResetStatsOnCGroupWithDuplicateGroup()
 		return GPOS_FAILED;
 	}
 
+	CStatistics *stat =
+		GPOS_NEW(mp) CStatistics(mp, GPOS_NEW(mp) UlongToHistogramMap(mp),
+								 GPOS_NEW(mp) UlongToDoubleMap(mp), 0, false);
+
+	IStatistics *oldStats = pmemo->Pgroup(0)->Pstats();
+	pmemo->Pgroup(0)->AppendStats(mp, stat);
+
+	// By appending stats on group (0), we really are appending the stats on
+	// group (1). group (0) stats is never set in the first place.
+	if (oldStats == pmemo->Pgroup(1)->Pstats())
+	{
+		stat->Release();
+		GPOS_DELETE(pmemo);
+		pexprGet1->Release();
+		pexprGet2->Release();
+		return GPOS_FAILED;
+	}
+
 	pmemo->Pgroup(0)->FResetStats();
 
 	// By resetting stats on group (0), we really are resetting the stats on
@@ -111,12 +129,14 @@ CGroupTest::EresUnittest_FResetStatsOnCGroupWithDuplicateGroup()
 	if (pmemo->Pgroup(0)->Pstats() != NULL ||
 		pmemo->Pgroup(1)->Pstats() != NULL)
 	{
+		stat->Release();
 		GPOS_DELETE(pmemo);
 		pexprGet1->Release();
 		pexprGet2->Release();
 		return GPOS_FAILED;
 	}
 
+	stat->Release();
 	GPOS_DELETE(pmemo);
 	pexprGet1->Release();
 	pexprGet2->Release();
