@@ -330,6 +330,8 @@ static LOCALLOCK *StrongLockInProgress;
 LOCALLOCK *awaitedLock;
 ResourceOwner awaitedOwner;
 
+/* find writer proc entry retry time */
+int	find_writer_proc_retry_time = 5;
 
 #ifdef LOCK_DEBUG
 
@@ -938,7 +940,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 				/* Find the guy who should manage our locks */
 				volatile PGPROC * proc = FindProcByGpSessionId(gp_session_id);
 				int count = 0;
-				while(proc==NULL && count < 5)
+				while(proc==NULL && count < find_writer_proc_retry_time)
 				{
 					pg_usleep( /* microseconds */ 2000);
 					count++;
