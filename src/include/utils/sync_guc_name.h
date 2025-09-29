@@ -199,3 +199,4 @@
 		"wal_sender_timeout",
 		"work_mem",
 		"zero_damaged_pages",
+		"find_writer_proc_retry_time",
