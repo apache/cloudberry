@@ -35,6 +35,7 @@ typedef struct PROC_QUEUE
 
 /* GUC variables */
 extern int	max_locks_per_xact;
+extern int	find_writer_proc_retry_time;
 
 #ifdef LOCK_DEBUG
 extern int	Trace_lock_oidmin;
