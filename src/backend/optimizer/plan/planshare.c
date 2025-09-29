@@ -52,6 +52,9 @@ make_shareinputscan(PlannerInfo *root, Plan *inputplan)
 	sisc->scan.plan.plan_rows = inputplan->plan_rows;
 	sisc->scan.plan.plan_width = inputplan->plan_width;
 
+	sisc->scan.plan.locustype = inputplan->locustype;
+	sisc->scan.plan.parallel = 0; /* No parallel ShareInputScan */
+
 	return sisc;
 }
 

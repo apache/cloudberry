@@ -1132,7 +1132,20 @@ WHERE e.salary > (
     SELECT AVG(salary)
     FROM employees
     WHERE department_id = e.department_id);
-  
+
+--
+-- Test https://github.com/apache/cloudberry/issues/1376
+--
+create table t1(a int, b int);
+create table t2 (like t1);
+set gp_cte_sharing = on;
+
+explain(locus, costs off) with x as
+  (select a, count(*) as b from t1 group by a union all
+    select a, count(*) as b from t2 group by a)
+  select count(*) from x a join x b on a.a = b.b;
+
+reset gp_cte_sharing;
 reset enable_parallel;
 reset min_parallel_table_scan_size;
 
