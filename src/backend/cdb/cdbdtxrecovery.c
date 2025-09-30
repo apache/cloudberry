@@ -643,11 +643,17 @@ redoDistributedCommitRecord(TMGXACT_LOG *gxact_log)
 	if (i == *shmNumCommittedGxacts)
 	{
 #ifdef FAULT_INJECTOR
+		static int save_max_tm_gxacts = -1;
+		if (save_max_tm_gxacts < 0)
+			save_max_tm_gxacts = max_tm_gxacts;
+
 		if (SIMPLE_FAULT_INJECTOR("standby_gxacts_overflow") == FaultInjectorTypeSkip)
 		{
 			max_tm_gxacts = 1;
 			elog(LOG, "Committed gid array length: %d", *shmNumCommittedGxacts);
 		}
+		else
+			max_tm_gxacts = save_max_tm_gxacts;
 #endif
 
 		/*

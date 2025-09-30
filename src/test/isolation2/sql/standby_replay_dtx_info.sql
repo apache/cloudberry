@@ -72,4 +72,26 @@ select wait_for_standby_replay(1200);
 
 select gp_inject_fault_infinite('standby_gxacts_overflow', 'reset', dbid) from gp_segment_configuration where content = -1 and role = 'm';
 drop table test_dtx_standby_tbl;
+
+-- Verify that max_tm_gxacts is reset from 1. In order to do so,
+-- create 2 distributed transactions that are postponed before the point where
+-- 'distributed forget' is inserted into the WAL, and check that standby can
+-- successfully replay the WAL.
+select gp_inject_fault_infinite('dtm_before_insert_forget_comitted', 'suspend', dbid)
+from gp_segment_configuration where role = 'p' and content = -1;
+
+1&: create table test1(a int) distributed by (a);
+2&: create table test2(a int) distributed by (a);
+
+-- Ensure that replay on standby is ok.
+select wait_for_standby_replay(1200);
+
+select gp_inject_fault_infinite('dtm_before_insert_forget_comitted', 'reset', dbid)
+from gp_segment_configuration where role = 'p' and content = -1;
+
+1<:
+2<:
+
+drop table test1;
+drop table test2;
 drop function wait_for_standby_replay(int);
