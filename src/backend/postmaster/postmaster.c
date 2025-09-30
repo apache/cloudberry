@@ -3738,6 +3738,21 @@ CleanupBackend(int pid,
 
 	if (!EXIT_STATUS_0(exitstatus) && !EXIT_STATUS_1(exitstatus))
 	{
+
+#ifdef FAULT_INJECTOR
+		if (pmState == PM_RUN)
+		{
+			/*
+			 * Code below is for test purposes only. If a fault is set, it
+			 * will formally be completed without doing anything.
+			 *
+			 * Additional note: This check of pmState == PM_RUN is just extra
+			 * safety measurments. If we try to access this code not from
+			 * PM_RUN the behaviour can be unpredictable.
+			 */
+			SIMPLE_FAULT_INJECTOR("backend_abort_handling");
+		}
+#endif
 		HandleChildCrash(pid, exitstatus, _("server process"));
 		return;
 	}
