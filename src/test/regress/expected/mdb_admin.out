@@ -1,7 +1,6 @@
 CREATE ROLE regress_mdb_admin_user1;
 CREATE ROLE regress_mdb_admin_user2;
 CREATE ROLE regress_mdb_admin_user3;
-CREATE ROLE mdb_admin;
 CREATE ROLE regress_superuser WITH SUPERUSER;
 GRANT mdb_admin TO regress_mdb_admin_user1;
 GRANT CREATE ON DATABASE regression TO regress_mdb_admin_user2;
@@ -24,7 +23,7 @@ ALTER VIEW regress_mdb_admin_view OWNER TO regress_mdb_admin_user3;
 ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO regress_mdb_admin_user3;
 ALTER TABLE regress_mdb_admin_table OWNER TO regress_mdb_admin_user3;
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO regress_mdb_admin_user3;
--- mdb admin fails to transfer ownership to superusers and system roles
+-- mdb admin fails to transfer ownership to superusers and particular system roles
 ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO regress_superuser;
 ERROR:  cannot transfer ownership to superuser "regress_superuser"
 ALTER VIEW regress_mdb_admin_view OWNER TO regress_superuser;
@@ -36,35 +35,55 @@ ERROR:  cannot transfer ownership to superuser "regress_superuser"
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO regress_superuser;
 ERROR:  cannot transfer ownership to superuser "regress_superuser"
 ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_execute_server_program;
-ERROR:  cannot transfer ownership to pg_execute_server_program role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER VIEW regress_mdb_admin_view OWNER TO pg_execute_server_program;
-ERROR:  cannot transfer ownership to pg_execute_server_program role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_execute_server_program;
-ERROR:  cannot transfer ownership to pg_execute_server_program role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER TABLE regress_mdb_admin_table OWNER TO pg_execute_server_program;
-ERROR:  cannot transfer ownership to pg_execute_server_program role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_execute_server_program;
-ERROR:  cannot transfer ownership to pg_execute_server_program role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_write_server_files;
-ERROR:  cannot transfer ownership to pg_write_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER VIEW regress_mdb_admin_view OWNER TO pg_write_server_files;
-ERROR:  cannot transfer ownership to pg_write_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_write_server_files;
-ERROR:  cannot transfer ownership to pg_write_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER TABLE regress_mdb_admin_table OWNER TO pg_write_server_files;
-ERROR:  cannot transfer ownership to pg_write_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_write_server_files;
-ERROR:  cannot transfer ownership to pg_write_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_read_server_files;
-ERROR:  cannot transfer ownership to pg_read_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER VIEW regress_mdb_admin_view OWNER TO pg_read_server_files;
-ERROR:  cannot transfer ownership to pg_read_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_read_server_files;
-ERROR:  cannot transfer ownership to pg_read_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER TABLE regress_mdb_admin_table OWNER TO pg_read_server_files;
-ERROR:  cannot transfer ownership to pg_read_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_read_server_files;
-ERROR:  cannot transfer ownership to pg_read_server_files role in Cloud
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_write_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER VIEW regress_mdb_admin_view OWNER TO pg_write_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_write_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER TABLE regress_mdb_admin_table OWNER TO pg_write_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_write_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_read_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER VIEW regress_mdb_admin_view OWNER TO pg_read_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_read_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER TABLE regress_mdb_admin_table OWNER TO pg_read_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
+ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_read_all_data;
+ERROR:  forbidden to transfer ownership to this system role in Cloud
 -- end tests
 RESET SESSION AUTHORIZATION;
 --
@@ -78,4 +97,4 @@ DROP SCHEMA regress_mdb_admin_schema;
 DROP ROLE regress_mdb_admin_user1;
 DROP ROLE regress_mdb_admin_user2;
 DROP ROLE regress_mdb_admin_user3;
-DROP ROLE mdb_admin;
+DROP ROLE regress_superuser;

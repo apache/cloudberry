@@ -7625,6 +7625,7 @@ set_config_option(const char *name, const char *value,
 	void	   *newextra = NULL;
 	bool		prohibitValueChange = false;
 	bool		makeDefault;
+	Oid			role;
 
 	if (elevel == 0)
 	{
@@ -7782,10 +7783,13 @@ set_config_option(const char *name, const char *value,
 		case PGC_SUSET:
 			if (context == PGC_USERSET || context == PGC_BACKEND)
 			{
-				ereport(elevel,
-						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("permission denied to set parameter \"%s\"",
-								name)));
+				role = get_role_oid("mdb_admin", true /*if nodoby created mdb_admin role in this database*/);
+ 				if (!(record->mdb_admin_allowed && is_member_of_role(GetUserId(), role))) {
+					ereport(elevel,
+							(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+							errmsg("permission denied to set parameter \"%s\"",
+									name)));
+				}
 				return 0;
 			}
 			break;
