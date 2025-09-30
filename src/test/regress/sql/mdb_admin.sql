@@ -1,7 +1,6 @@
 CREATE ROLE regress_mdb_admin_user1;
 CREATE ROLE regress_mdb_admin_user2;
 CREATE ROLE regress_mdb_admin_user3;
-CREATE ROLE mdb_admin;
 
 CREATE ROLE regress_superuser WITH SUPERUSER;
 
@@ -32,7 +31,7 @@ ALTER TABLE regress_mdb_admin_table OWNER TO regress_mdb_admin_user3;
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO regress_mdb_admin_user3;
 
 
--- mdb admin fails to transfer ownership to superusers and system roles
+-- mdb admin fails to transfer ownership to superusers and particular system roles
 
 ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO regress_superuser;
 ALTER VIEW regress_mdb_admin_view OWNER TO regress_superuser;
@@ -58,6 +57,17 @@ ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_read_se
 ALTER TABLE regress_mdb_admin_table OWNER TO pg_read_server_files;
 ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_read_server_files;
 
+ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_write_all_data;
+ALTER VIEW regress_mdb_admin_view OWNER TO pg_write_all_data;
+ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_write_all_data;
+ALTER TABLE regress_mdb_admin_table OWNER TO pg_write_all_data;
+ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_write_all_data;
+
+ALTER FUNCTION regress_mdb_admin_add (integer, integer) OWNER TO pg_read_all_data;
+ALTER VIEW regress_mdb_admin_view OWNER TO pg_read_all_data;
+ALTER TABLE regress_mdb_admin_schema.regress_mdb_admin_table OWNER TO pg_read_all_data;
+ALTER TABLE regress_mdb_admin_table OWNER TO pg_read_all_data;
+ALTER SCHEMA regress_mdb_admin_schema OWNER TO pg_read_all_data;
 
 -- end tests
 
@@ -74,4 +84,4 @@ DROP SCHEMA regress_mdb_admin_schema;
 DROP ROLE regress_mdb_admin_user1;
 DROP ROLE regress_mdb_admin_user2;
 DROP ROLE regress_mdb_admin_user3;
-DROP ROLE mdb_admin;
+DROP ROLE regress_superuser;
