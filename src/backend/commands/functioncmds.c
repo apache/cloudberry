@@ -1526,7 +1526,7 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 	 */
 	if (isLeakProof && !superuser())
 	{
-		Oid role = get_role_oid("mdb_admin", true);
+		Oid role = get_role_oid("mdb_admin", true /*if nodoby created mdb_admin role in this database*/);
 		if (!is_member_of_role(GetUserId(), role))
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
@@ -1857,7 +1857,7 @@ AlterFunction(ParseState *pstate, AlterFunctionStmt *stmt)
 		procForm->proleakproof = intVal(leakproof_item->arg);
 		if (procForm->proleakproof && !superuser())
 		{
-			Oid role = get_role_oid("mdb_admin", true);
+			Oid role = get_role_oid("mdb_admin", true /*if nodoby created mdb_admin role in this database*/);
 			if (!is_member_of_role(GetUserId(), role))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
