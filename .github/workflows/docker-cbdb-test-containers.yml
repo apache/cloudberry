@@ -49,6 +49,7 @@ on:
     paths:
       - 'devops/deploy/docker/test/rocky8/**'
       - 'devops/deploy/docker/test/rocky9/**'
+      - 'devops/deploy/docker/test/ubuntu22.04/**'
   workflow_dispatch:  # Manual trigger
 
 # Prevent multiple workflow runs from interfering with each other
@@ -62,8 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Build for both Rocky Linux 8 and 9
-        platform: ['rocky8', 'rocky9']
+        # Build for both Rocky Linux 8 and 9, Ubuntu 22.04
+        platform: ['rocky8', 'rocky9', 'ubuntu22.04']
 
     steps:
       # Checkout repository code
@@ -87,6 +88,8 @@ jobs:
               - 'devops/deploy/docker/test/rocky8/**'
             rocky9:
               - 'devops/deploy/docker/test/rocky9/**'
+            ubuntu22.04:
+              - 'devops/deploy/docker/test/ubuntu22.04/**'
 
       # Skip if no changes for current platform
       - name: Skip if not relevant

@@ -384,7 +384,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	 * PARALLEL RETRIEVE CURSOR is not supported by ORCA yet.
 	 */
 	if (optimizer &&
-		IS_QD_OR_SINGLENODE() &&
+		GP_ROLE_DISPATCH == Gp_role &&
 		IS_QUERY_DISPATCHER() &&
 		(cursorOptions & CURSOR_OPT_SKIP_FOREIGN_PARTITIONS) == 0 &&
 		(cursorOptions & CURSOR_OPT_PARALLEL_RETRIEVE) == 0)

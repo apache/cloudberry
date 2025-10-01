@@ -150,7 +150,6 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 	}
 	else if (IMDRelation::ErelstorageForeign != rel->RetrieveRelStorageType() &&
 			 !optimizer_enable_master_only_queries &&
-			 !GPOS_FTRACE(EopttraceSingleNodeMode) &&
 			 (IMDRelation::EreldistrMasterOnly == distribution_policy))
 	{
 		// fall back to the planner for queries on master-only table if they are disabled with Orca. This is due to

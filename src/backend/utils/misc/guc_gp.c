@@ -324,6 +324,7 @@ char	   *optimizer_search_strategy_path = NULL;
 /* GUCs to tell Optimizer to enable a physical operator */
 bool		optimizer_enable_nljoin;
 bool		optimizer_enable_indexjoin;
+bool		optimizer_enable_motions_masteronly_queries;
 bool		optimizer_enable_motions;
 bool		optimizer_enable_motion_broadcast;
 bool		optimizer_enable_motion_gather;
@@ -559,6 +560,8 @@ static const struct config_enum_entry gp_autostats_modes[] = {
 static const struct config_enum_entry gp_interconnect_fc_methods[] = {
 	{"loss", INTERCONNECT_FC_METHOD_LOSS},
 	{"capacity", INTERCONNECT_FC_METHOD_CAPACITY},
+	{"loss_advance", INTERCONNECT_FC_METHOD_LOSS_ADVANCE},
+	{"loss_timer", INTERCONNECT_FC_METHOD_LOSS_TIMER},
 	{NULL, 0}
 };
 
@@ -2179,6 +2182,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_enable_motions_masteronly_queries", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable plans with Motion operators in the optimizer for queries with no distributed tables."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_motions_masteronly_queries,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_enable_motions", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable plans with Motion operators in the optimizer."),
 			NULL,
@@ -3756,6 +3769,16 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&Gp_interconnect_snd_queue_depth,
 		2, 1, 4096,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_interconnect_mem_size", PGC_USERSET, GP_ARRAY_TUNING,
+			gettext_noop("Sets the maximum size(in MB) of the send/recv queue memory for all connections in the UDP interconnect"),
+			NULL
+		},
+		&Gp_interconnect_mem_size,
+		10, 1, 1024,
 		NULL, NULL, NULL
 	},
 
