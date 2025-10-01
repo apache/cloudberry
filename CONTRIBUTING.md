@@ -1,69 +1,77 @@
 # Contributing
 
-Greengage is maintained by a core team of developers with commit rights to the [main Greengage repository](https://github.com/GreengageDB/greengage) on GitHub. At the same time, we are very eager to receive contributions from anybody in the wider Greengage community. This section covers all you need to know if you want to see your code or documentation changes be added to Greengage and appear in the future releases.
+Greengage was launched and is maintained by a team of independent contributors to Greenplum. Currently, we own the [Greengage DB repository on GitHub](https://github.com/GreengageDB/greengage), appoint the members of the architectural committee and perform other work related to the organizational process in addition to software development. However, great open source projects cannot exist and last long without a strong community, **so community contributions to Greengage DB are very welcome**. In this section, you’ll find initial guidance on how to contribute to Greengage and links to additional resources that will help you get your code released as part of Greengage.
 
 ## Getting started
 
-Greengage is developed on GitHub, and anybody wishing to contribute to it will have to [have a GitHub account](https://github.com/signup) and be familiar with [Git tools and workflow](https://wiki.postgresql.org/wiki/Working_with_Git).
+To contribute to Greengage, you will need a [GitHub account](https://github.com/signup). If you haven’t used Git before, find a time to familiarize yourself with [Git tooling and workflow](https://wiki.postgresql.org/wiki/Working_with_Git) before you start.
 
-Once you have your GitHub account, [fork](https://github.com/GreengageDB/greengage/fork) this repository so that you can have your private copy to start hacking on and to use as source of pull requests.
+A private copy of the Greengage repository is required to introduce changes. To create one, [fork](https://github.com/GreengageDB/greengage/fork) our repository and work on it. Having changed something, you will be able to pull request, and someone from the architectural committee will review your contribution. To get more information on the review process, see the “Patch review” section of this document.
 
-## Licensing of Greengage contributions
+## Contributions licensing
 
-If the contribution you're submitting is original work, you can assume that we will release it as part of an overall Greengage release available to the downstream consumers under the Apache License, Version 2.0. However, in addition to that, we may also decide to release it under a different license (such as PostgreSQL License to the upstream consumers that require it. A typical example here would be we upstreaming your contribution back to PostgreSQL community (which can be done either verbatim or your contribution being upstreamed as part of the larger changeset).
+As the original author of the code, you can expect that your contribution will be released and licensed under Apache License, v. 2.0. Additionally, certain contributions valuable to the broader PostgreSQL community might be released under the PostgreSQL license. If your patch is beneficial for upstream PostgreSQL, we can offer it for review individually or include it with a set of changes.
 
-If the contribution you're submitting is NOT original work you have to indicate the name of the license and also make sure that it is similar in terms to the Apache License 2.0. Apache Software Foundation maintains a list of these licenses under [Category A](https://www.apache.org/legal/resolved.html#category-a). In addition to that, you may be required to make proper attribution in the [NOTICE file](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE) file similar to [these examples](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE#L278).
+If you are NOT the author of the code you are contributing to Greengage, please make sure you take proper licensing into account. Check the third-party license terms for similarity to the Apache License 2.0. Similar licenses are listed on the Apache Software Foundation website under [Category A](https://www.apache.org/legal/resolved.html#category-a). Note that some of these licenses require making proper attribution in the [NOTICE file](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE) (see examples [here](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE#L278)).
 
-Finally, keep in mind that it is NEVER a good idea to remove licensing headers from the work that is not your original one. Even if you are using parts of the file that originally had a licensing header at the top you should err on the side of preserving it. As always, if you are not quite sure about the licensing implications of your contributions, feel free to reach out to us.
+Do NOT remove licensing headers from any piece of work done by a third party. Even partial usage of someone else’s work may assume licensing implications. Please give the original author credit for their work by keeping the licensing headers
 
 ## Coding guidelines
 
-Your chances of getting feedback and seeing your code merged into the project greatly depend on how granular your changes are. If you happen to have a bigger change in mind, we highly recommend creating an issue first and sharing your proposal with us before you spend a lot of time writing code. Even when your proposal gets validated by the community, we still recommend doing the actual work as a series of small, self-contained commits. This makes the reviewer's job much easier and increases the timeliness of feedback.
+Before introducing a major change, it is always good to validate your idea with the architectural committee. [Create an issue on GitHub](https://github.com/GreengageDB/greengage/issues) and explain what’s on your mind before you spend hours writing code. We expect that while explaining your proposal to the committee, you’ll be specific about the approaches you are going to use and reasons behind using them.
 
-When it comes to C and C++ parts of Greengage, we try to follow [PostgreSQL Coding Conventions](https://www.postgresql.org/docs/devel/source.html). In addition to that:
+Submitting changes in small portions is the best strategy, even if you are working on a massive feature. Smaller patches can be reviewed within a week while large changesets require more time for being checked by the committee members. To get timely feedback and see your code merged into the project faster, stick to small, granular pull requests. This is also a way to show the reviewers that their job is valued and respected.
 
-   * For C and perl code, please run pgindent if necessary as specified in [README.gpdb](/src/tools/pgindent/README.gpdb).
-   * All Python code must pass [Pylint](https://www.pylint.org/).
-   * All Go code must be formatted according to [gofmt](https://golang.org/cmd/gofmt/).
+To help you with the process of coding and describing your pull requests for reviewers, we have created a separate [Pull Request Submission Guidelines](https://greengagedb.org/en/blog/contributing.html) document. Please refer to it when in doubt and contact us if the document provides no answer.
 
-We recommend using `git diff --color` when reviewing your changes so that you don't have any spurious whitespace issues in the code that you submit.
+Here we mention just a few best practices we expect you to apply while contributing to Greengage DB. For detailed recommendations, please refer to Greengage DB’s [Pull Request Submission Guidelines](https://greengagedb.org/en/blog/contributing.html).
 
-All new functionality that is contributed to Greengage should be covered by regression tests that are contributed alongside it. If you are uncertain on how to test or document your work, please raise the question in a PR and the developer community will do its best to help you.
+ - Follow [PostgreSQL Coding Conventions](https://www.postgresql.org/docs/devel/source.html) when writing C/C++ code for Greengage.
+ - Run **pgindent** for C and Perl code as per [README.gpdb](https://github.com/GreengageDB/greengage/blob/main/src/tools/pgindent/README.gpdb).
+ - Use [Pylint](https://www.pylint.org/) for all Python code.
+ - Format all Golang code in accordance with [gofmt](https://golang.org/cmd/gofmt/).
 
-At the very minimum you should always be running `make installcheck-world` to make sure that you're not breaking anything.
+Use git `diff --color` as you review your changes to avoid spurious whitespace issues in the submitted code.
 
-## Changes applicable to upstream PostgreSQL
+Regression tests are mandatory for every new feature that you contribute to Greengage. All tests covering new functionality should also be contributed to the project. Check [Pull Request Submission Guidelines](https://greengagedb.org/en/blog/contributing.html) to make sure that all tests are placed in the right folders within the project repository. If you need guidance related to testing or documenting your contributions, please explicitly include your questions in the pull request, and the architectural committee members will address them during patch review.
 
-If the change you're working on touches functionality that is common between PostgreSQL and Greengage, you may be asked to forward-port it to PostgreSQL. This is not only so that we keep reducing the delta between the two projects, but also so that any change that is relevant to PostgreSQL can benefit from a much broader review of the upstream PostgreSQL community. In general, it is a good idea to keep both code bases handy so you can be sure whether your changes may need to be forward-ported.
+At the very minimum you should always make sure that all local test runs are successful before submitting a pull request (PR) to the main repository.
+
+## PostgreSQL-related changes
+
+We prefer to get the changes related to the shared functionality of PostgreSQL and Greengage DB reviewed by the members of both communities. The larger Postgres community has more resources to help improve your patches, that’s why we may request submitting your PostgreSQL-related changes to Postgres upstream to leverage that power and reduce the delta between Greengage DB and PostgreSQL. If your contribution is likely to be forward-ported to PostgreSQL, please refer to PostgreSQL code base where appropriate.
 
 ## Patch submission
 
-Once you are ready to share your work with the Greengage core team and the rest of the Greengage community, you should push all the commits to a branch in your own repository forked from our one and [send us a pull request](https://help.github.com/articles/about-pull-requests/).
+We expect that in the repository you forked from the Greengage DB one you’ll create a branch **other than main** that will contain the changes you prepared to share with us and the rest of the community. Then [send us a pull request](https://help.github.com/articles/about-pull-requests/).
 
-We require all pull requests to be submitted against the main branch (clearly stating if the change needs to be back-ported to STABLE branches). If the change is ONLY applicable to given STABLE branch, you may decide to submit your pull requests against an active STABLE release branch.
-
-Things which slow down patch approval
- - missing to accompany tests (or reproducible steps at minimum)
- - submitting the patch against STABLE branch where the fix also applies to main branch
-
-## Validation checks and CI
-
-Once you submit your pull request, you will immediately see a number of validation checks performed by our automated CI pipelines. If any of these checks fails, you will need to update your pull request to take care of the issue. Pull requests with failed validation checks are very unlikely to receive any further peer review from the community members.
-
-If you cannot figure out why a certain validation check failed, feel free to ask us in the pull request.
+Do keep in mind that your patch review will slow down
+ - if you do not follow [Pull Request Submission Guidelines](https://greengagedb.org/en/blog/contributing.html)
+ - if tests are missing or copied to incorrect folders
 
 ## Patch review
 
-A submitted pull request with passing validation checks is assumed to be available for peer review. Peer review is the process that ensures that contributions to Greengage are of high quality and align well with the road map and community expectations. Every member of the Greengage community is encouraged to review pull requests and provide feedback. Since you don't have to be a core team member to be able to do that, we recommend following a stream of pull reviews to anybody who's interested in becoming a long-term contributor to Greengage. As [Linus would say](https://en.wikipedia.org/wiki/Linus's_Law) "given enough eyeballs, all bugs are shallow".
+All submitted patches are subject to review by the architectural committee members. The time required for review depends of the volume and complexity of the submitted patch:
+ - Up to 1 week for small/easy patches;
+ - Up to 4 weeks for patches of medium complexity
+ - Up to 8 weeks for patches of extra size or complexity.
 
-One outcome of the peer review could be a consensus that you need to modify your pull request in certain ways. GitHub allows you to push additional commits into a branch from which a pull request was sent. Those additional commits will be then visible to all of the reviewers.
+Architectural committee reserves the right to decline patches without review if they introduce no valuable changes and/or contain garbage code.
 
-A peer review converges when it receives at least one +1 and no -1s votes from the participants. At that point you should expect one of the core team members to pull your changes into the project.
+Each contributed patch should get approvals from two architectural committee members before being merged into the project. Both pull request description and code will be thoroughly examined to ensure high quality and security.
 
-Greengage prides itself on being a collaborative, consensus-driven environment. We do not believe in vetoes and any -1 vote casted as part of the peer review has to have a detailed technical explanation of what's wrong with the change.
+The first reviewer might initiate a discussion proposing further improvements / changes to your pull request. You might also be asked to explain certain solutions and approaches applied as part of the proposed changeset. Discussions around pull requests along with any other communication in the Greengage DB project are covered by the Code of Conduct. Once the patch is accepted by the first reviewer, the second reviewer steps up to double-check your contribution and possibly provide a final commentary.
 
-At any time during the patch review, you may experience delays based on the availability of reviewers and core team members. Please be patient. That being said, don't get discouraged either. If you're not getting expected feedback for a few days add a comment asking for updates on the pull request itself.
+Note that the members of committee volunteer to review patches. Therefore, their availability may be limited, and reasonable delays are possible. In many cases, being proactive and asking for feedback may speed up the review process.
+
+After basic review (including feature relevancy, absence of malicious changes, etc.) and approve to run CI pipelines, the processes of patch review begins.
+
+## Validation checks and CI
+
+Your patch will undergo a series of validation checks from our automated CI pipeline. If any of them fails, you will need to change the patch you contributed so as to pass this check next time.
+
+While the process is generally intuitive and enables you understand what exactly was wrong, do not hesitate to ask your reviewers for help if you don’t know why your approved patch was not merged. Use the pull request discussion to contact them.
 
 ## Direct commits to the repository
 
-On occasion you will see core team members committing directly to the repository without going through the pull request workflow. This is reserved for small changes only and the rule of thumb we use is this: if the change touches any functionality that may result in a test failure, then it has to go through a pull request workflow. If, on the other hand, the change is in the non-functional part of the code base (such as fixing a typo inside of a comment block) core team members can decide to just commit to the repository directly.
+Members of the architectural committee may sometimes commit to the repository directly, without submitting pull requests. Usually they do so to introduce minor changes (i.e. typo corrections), all major code contributions need to be submitted as pull requests and go through checks.
