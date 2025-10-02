@@ -89,6 +89,7 @@
 #include <inttypes.h>
 #include "postgres.h"
 
+#include "utils/faultinjector.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
 #include "utils/memaccounting.h"
@@ -1164,6 +1165,16 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 	Size		chunk_size;
 	Size		blksize;
 
+#ifdef FAULT_INJECTOR
+	if (in_oom_error_trouble() &&
+		CurrentMemoryContext != ErrorContext &&
+		SIMPLE_FAULT_INJECTOR("fatal_on_palloc_oom") == FaultInjectorTypeSkip)
+	{
+		ereport(FATAL, (errmsg("memory allocated while handling an OOM error"),
+						errprintstack(true)));
+	}
+#endif
+
 	AssertArg(AllocSetIsValid(set));
 #ifdef USE_ASSERT_CHECKING
 	if (IsUnderPostmaster && context != ErrorContext && mainthread() != 0 && !pthread_equal(main_tid, pthread_self()))
@@ -1617,6 +1628,16 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
 	AllocChunk	chunk = AllocPointerGetChunk(pointer);
 	Size		oldsize = chunk->size;
 
+#ifdef FAULT_INJECTOR
+	if (in_oom_error_trouble() &&
+		CurrentMemoryContext != ErrorContext &&
+		SIMPLE_FAULT_INJECTOR("fatal_on_palloc_oom") == FaultInjectorTypeSkip)
+	{
+		ereport(FATAL,
+				(errmsg("memory reallocated while handling an OOM error"),
+				 errprintstack(true)));
+	}
+#endif
 #ifdef USE_ASSERT_CHECKING
 	if (IsUnderPostmaster  && context != ErrorContext && mainthread() != 0 && !pthread_equal(main_tid, pthread_self()))
 	{

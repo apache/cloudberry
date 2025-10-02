@@ -366,8 +366,7 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	if (!ds)
 		return;
 #ifdef USE_ASSERT_CHECKING
-	/* Disallow reentrance. */
-	Assert (!ds->isGangDestroying);
+	Assert(!ds->isGangDestroying || ds->forceDestroyGang);
 	ds->isGangDestroying = true;
 #endif
 
@@ -523,7 +522,16 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h)
 		return;
 	}
 
-	cdbdisp_cancelDispatch(h->dispatcherState);
+	if (in_oom_error_trouble())
+	{
+		/* We'll reset the session anyway. */
+		h->dispatcherState->forceDestroyGang = true;
+	}
+	else
+	{
+		cdbdisp_cancelDispatch(h->dispatcherState);
+	}
+
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }
 

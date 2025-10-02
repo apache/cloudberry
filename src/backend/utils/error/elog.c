@@ -174,6 +174,15 @@ static bool openlog_done = false;
 static char *syslog_ident = NULL;
 static int	syslog_facility = LOG_LOCAL0;
 
+/* 
+ * GPDB:
+ * Workaround for dispatcher cleanup routines to know whether we should take a
+ * shortcut and avoid allocations.
+ *
+ * Set when OOM error is encountered, reset at the end of AbortTransaction().
+ */
+static bool in_oom_error = false;
+
 static void write_syslog(int level, const char *line);
 #endif
 
@@ -263,6 +272,22 @@ in_error_recursion_trouble(void)
 {
 	/* Pull the plug if recurse more than once */
 	return (recursion_depth > 2);
+}
+
+/* 
+ * GPDB:
+ * Are we currently handling an OOM error? See in_oom_error comments.
+ */
+bool
+in_oom_error_trouble(void)
+{
+	return in_oom_error;
+}
+
+void
+reset_oom_flag(void)
+{
+	in_oom_error = false;
 }
 
 /*
@@ -625,6 +650,12 @@ errfinish(int dummy __attribute__((unused)),...)
 		QueryCancelHoldoffCount = 0;
 
 		CritSectionCount = 0;	/* should be unnecessary, but... */
+
+		if (edata->sqlerrcode == ERRCODE_GP_MEMPROT_KILL ||
+			edata->sqlerrcode == ERRCODE_OUT_OF_MEMORY)
+		{
+			in_oom_error = true;
+		}
 
 		/*
 		 * Note that we leave CurrentMemoryContext set to ErrorContext. The

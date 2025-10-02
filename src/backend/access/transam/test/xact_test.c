@@ -16,6 +16,8 @@ mock_TransactionIdDidAbortForReader(TransactionId xid)
 	return xid > 100;
 }
 
+#define in_oom_error_trouble(...) (false)
+
 #include "../xact.c"
 
 static void

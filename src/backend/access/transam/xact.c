@@ -3423,16 +3423,15 @@ AbortTransaction(void)
 		cdbcomponent_cleanupIdleQEs(false);
 	}
 
-	/*
-	 * If memprot decides to kill process, make sure we destroy all processes
-	 * so that all mem/resource will be freed
-	 */
-	if (elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
+	/* It's an OOM error. Get rid of all gangs and their resources. */
+	if (in_oom_error_trouble())
 		DisconnectAndDestroyAllGangs(true);
 
 	/* Release resource group slot at the end of a transaction */
 	if (ShouldUnassignResGroup())
 		UnassignResGroup();
+
+	reset_oom_flag();
 }
 
 /*
