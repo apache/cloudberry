@@ -304,7 +304,7 @@ EXPLAIN INSERT INTO snackbox SELECT a FROM (SELECT c FROM hottoast LIMIT 3) hott
     <dxl:Plan Id="0" SpaceSize="6">
       <dxl:DMLInsert Columns="8" ActionCol="16" CtidCol="0" SegmentIdCol="0">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.031910" Rows="3.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.032010" Rows="3.000000" Width="4"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList>
@@ -326,7 +326,7 @@ EXPLAIN INSERT INTO snackbox SELECT a FROM (SELECT c FROM hottoast LIMIT 3) hott
         </dxl:TableDescriptor>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000660" Rows="3.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000760" Rows="3.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="8" Alias="a">
@@ -340,7 +340,7 @@ EXPLAIN INSERT INTO snackbox SELECT a FROM (SELECT c FROM hottoast LIMIT 3) hott
           <dxl:OneTimeFilter/>
           <dxl:BroadcastMotion InputSegments="0" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000652" Rows="3.000000" Width="4"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000752" Rows="3.000000" Width="4"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="8" Alias="a">
@@ -351,7 +351,7 @@ EXPLAIN INSERT INTO snackbox SELECT a FROM (SELECT c FROM hottoast LIMIT 3) hott
             <dxl:SortingColumnList/>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000437" Rows="3.000000" Width="4"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000537" Rows="3.000000" Width="4"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="8" Alias="a">

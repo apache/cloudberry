@@ -249,7 +249,7 @@ insert into b select i%7, i%10, i , i || 'SOME NUMBER', i % 4 from generate_seri
 analyze abbp;
 analyze b;
 
-select qx_count_operator('select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k where abbp.t is not null and abbp.p = 6;', 'Hash Right Join', 'Hash Left Join');
+select qx_count_operator('select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k where abbp.t is not null and abbp.p = 6;', 'Hash Right Join', 'Hash Right Join');
 select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k where abbp.t is not null and abbp.p = 6 order by 1, 2 desc limit 10;
 
 select qx_count_operator('select abbp.b, abbp.t from abbp left outer join b on abbp.a = b.k where abbp.t is not null and abbp.a = 6;', 'Hash Right Join', 'Hash Left Join');

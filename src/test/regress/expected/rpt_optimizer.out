@@ -1217,20 +1217,21 @@ select d from rand_tab where d in (select distinct c from rep_tab);
 --
 -- join derives EdtHashed
 explain select c from rep_tab where c in (select distinct a from dist_tab);
-                                    QUERY PLAN                                    
-----------------------------------------------------------------------------------
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=4)
-   ->  Hash Join  (cost=0.00..862.00 rows=1 width=4)
-         Hash Cond: (dist_tab.a = rep_tab.c)
-         ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=4)
-               Group Key: dist_tab.a
-               ->  Sort  (cost=0.00..431.00 rows=2 width=4)
-                     Sort Key: dist_tab.a
-                     ->  Seq Scan on dist_tab  (cost=0.00..431.00 rows=2 width=4)
-         ->  Hash  (cost=431.00..431.00 rows=2 width=4)
+   ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=4)
+         Hash Cond: (rep_tab.c = dist_tab.a)
+         ->  Result  (cost=0.00..431.00 rows=1 width=4)
                ->  Seq Scan on rep_tab  (cost=0.00..431.00 rows=2 width=4)
+         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
+               ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=4)
+                     Group Key: dist_tab.a
+                     ->  Sort  (cost=0.00..431.00 rows=2 width=4)
+                           Sort Key: dist_tab.a
+                           ->  Seq Scan on dist_tab  (cost=0.00..431.00 rows=2 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(12 rows)
 
 select c from rep_tab where c in (select distinct a from dist_tab);
  c 
@@ -1245,22 +1246,19 @@ select c from rep_tab where c in (select distinct a from dist_tab);
 --
 -- join derives EdtHashed
 explain select c from rep_tab where c in (select distinct d from rand_tab);
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..862.00 rows=2 width=4)
-   ->  Hash Join  (cost=0.00..862.00 rows=1 width=4)
-         Hash Cond: (rand_tab.d = rep_tab.c)
-         ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=4)
-               Group Key: rand_tab.d
-               ->  Sort  (cost=0.00..431.00 rows=1 width=4)
-                     Sort Key: rand_tab.d
-                     ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                           Hash Key: rand_tab.d
-                           ->  Seq Scan on rand_tab  (cost=0.00..431.00 rows=1 width=4)
-         ->  Hash  (cost=431.00..431.00 rows=2 width=4)
+   ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=4)
+         Hash Cond: (rep_tab.c = rand_tab.d)
+         ->  Result  (cost=0.00..431.00 rows=1 width=4)
                ->  Seq Scan on rep_tab  (cost=0.00..431.00 rows=2 width=4)
+         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
+                     Hash Key: rand_tab.d
+                     ->  Seq Scan on rand_tab  (cost=0.00..431.00 rows=1 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+(10 rows)
 
 select c from rep_tab where c in (select distinct d from rand_tab);
  c 

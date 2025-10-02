@@ -330,7 +330,7 @@
     <dxl:Plan Id="0" SpaceSize="6">
       <dxl:DMLUpdate Columns="0,1" ActionCol="19" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.690272" Rows="8.000000" Width="1"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.690372" Rows="8.000000" Width="1"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList>
@@ -356,7 +356,7 @@
         </dxl:TableDescriptor>
         <dxl:RedistributeMotion InputSegments="0,1" OutputSegments="0,1">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.002772" Rows="16.000000" Width="22"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.002872" Rows="16.000000" Width="22"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="c">
@@ -384,7 +384,7 @@
           </dxl:HashExprList>
           <dxl:Assert ErrorCode="23502">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.002221" Rows="16.000000" Width="22"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.002321" Rows="16.000000" Width="22"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="c">
@@ -414,7 +414,7 @@
             </dxl:AssertConstraintList>
             <dxl:Split DeleteColumns="0,1" InsertColumns="18,9" ActionCol="19" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.002045" Rows="16.000000" Width="26"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.002145" Rows="16.000000" Width="26"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="c">
@@ -438,7 +438,7 @@
               </dxl:ProjList>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.001837" Rows="8.000000" Width="26"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.001937" Rows="8.000000" Width="26"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="0" Alias="c">
@@ -464,7 +464,7 @@
                 <dxl:OneTimeFilter/>
                 <dxl:HashJoin JoinType="Inner">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.001733" Rows="8.000000" Width="30"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.001833" Rows="8.000000" Width="30"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="0" Alias="c">

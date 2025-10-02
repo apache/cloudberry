@@ -1480,30 +1480,34 @@ EXPLAIN SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
 EXPLAIN SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE
     f2 IN (SELECT f1 FROM SUBSELECT_TBL)) ORDER BY 2;
-                                                             QUERY PLAN                                                              
--------------------------------------------------------------------------------------------------------------------------------------
+                                                                QUERY PLAN                                                                 
+-------------------------------------------------------------------------------------------------------------------------------------------
  Result  (cost=0.00..1293.00 rows=2 width=12)
-   ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1293.00 rows=5 width=4)
+   ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1293.00 rows=4 width=4)
          Merge Key: subselect_tbl.f1
          ->  Sort  (cost=0.00..1293.00 rows=2 width=4)
                Sort Key: subselect_tbl.f1
                ->  Hash Join  (cost=0.00..1293.00 rows=2 width=4)
-                     Hash Cond: subselect_tbl.f1 = subselect_tbl_1.f2
+                     Hash Cond: (subselect_tbl.f1 = subselect_tbl_2.f2)
                      ->  Seq Scan on subselect_tbl  (cost=0.00..431.00 rows=3 width=4)
                      ->  Hash  (cost=862.00..862.00 rows=2 width=4)
-                           ->  GroupAggregate  (cost=0.00..862.00 rows=2 width=4)
-                                 Group Key: subselect_tbl_1.f2
-                                 ->  Sort  (cost=0.00..862.00 rows=3 width=4)
-                                       Sort Key: subselect_tbl_1.f2
-                                       ->  Hash Semi Join  (cost=0.00..862.00 rows=3 width=4)
-                                             Hash Cond: subselect_tbl_1.f2 = subselect_tbl_2.f1
-                                             ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=4)
-                                                   Hash Key: subselect_tbl_1.f2
-                                                   ->  Seq Scan on subselect_tbl subselect_tbl_1  (cost=0.00..431.00 rows=3 width=4)
-                                             ->  Hash  (cost=431.00..431.00 rows=3 width=4)
-                                                   ->  Seq Scan on subselect_tbl subselect_tbl_2  (cost=0.00..431.00 rows=3 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
-(21 rows)
+                           ->  Hash Join  (cost=0.00..862.00 rows=2 width=4)
+                                 Hash Cond: (subselect_tbl_1.f1 = subselect_tbl_2.f2)
+                                 ->  GroupAggregate  (cost=0.00..431.00 rows=3 width=4)
+                                       Group Key: subselect_tbl_1.f1
+                                       ->  Sort  (cost=0.00..431.00 rows=3 width=4)
+                                             Sort Key: subselect_tbl_1.f1
+                                             ->  Seq Scan on subselect_tbl subselect_tbl_1  (cost=0.00..431.00 rows=3 width=4)
+                                 ->  Hash  (cost=431.00..431.00 rows=3 width=4)
+                                       ->  GroupAggregate  (cost=0.00..431.00 rows=3 width=4)
+                                             Group Key: subselect_tbl_2.f2
+                                             ->  Sort  (cost=0.00..431.00 rows=3 width=4)
+                                                   Sort Key: subselect_tbl_2.f2
+                                                   ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=4)
+                                                         Hash Key: subselect_tbl_2.f2
+                                                         ->  Seq Scan on subselect_tbl subselect_tbl_2  (cost=0.00..431.00 rows=3 width=4)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(25 rows)
 
 EXPLAIN SELECT '' AS three, f1, f2
   FROM SUBSELECT_TBL
@@ -3287,20 +3291,23 @@ analyze table_left;
 analyze table_right;
 -- two types of semi join tests
 explain (costs off) select * from table_left where exists (select 1 from table_right where l1 = r1);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (table_left.l1 = table_right.r1)
-         ->  Seq Scan on table_left
-               Filter: (NOT (l1 IS NULL))
+   ->  Hash Join
+         Hash Cond: (table_right.r1 = table_left.l1)
+         ->  HashAggregate
+               Group Key: table_right.r1
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                     Hash Key: table_right.r1
+                     ->  Result
+                           ->  Result
+                                 ->  Seq Scan on table_right
          ->  Hash
-               ->  Result
-                     ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                           Hash Key: table_right.r1
-                           ->  Seq Scan on table_right
+               ->  Seq Scan on table_left
+                     Filter: (NOT (l1 IS NULL))
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(14 rows)
 
 select * from table_left where exists (select 1 from table_right where l1 = r1);
  l1 | l2 
@@ -3312,15 +3319,17 @@ explain (costs off) select * from table_left where l1 in (select r1 from table_r
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (table_left.l1 = table_right.r1)
-         ->  Seq Scan on table_left
-         ->  Hash
+   ->  Hash Join
+         Hash Cond: (table_right.r1 = table_left.l1)
+         ->  HashAggregate
+               Group Key: table_right.r1
                ->  Redistribute Motion 3:3  (slice1; segments: 3)
                      Hash Key: table_right.r1
                      ->  Seq Scan on table_right
+         ->  Hash
+               ->  Seq Scan on table_left
  Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+(11 rows)
 
 select * from table_left where exists (select 1 from table_right where l1 = r1);
  l1 | l2 

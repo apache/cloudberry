@@ -206,7 +206,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
     <dxl:Plan Id="0" SpaceSize="112">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2586.001577" Rows="3.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="2586.001777" Rows="3.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -220,7 +220,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
         <dxl:SortingColumnList/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="2586.001361" Rows="3.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="2586.001561" Rows="3.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -238,7 +238,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
           <dxl:OneTimeFilter/>
           <dxl:Sequence>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2586.001312" Rows="3.000000" Width="16"/>
+              <dxl:Cost StartupCost="0" TotalCost="2586.001512" Rows="3.000000" Width="16"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -325,7 +325,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
             </dxl:CTEProducer>
             <dxl:Sequence>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="2155.001243" Rows="3.000000" Width="16"/>
+                <dxl:Cost StartupCost="0" TotalCost="2155.001443" Rows="3.000000" Width="16"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
@@ -412,7 +412,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
               </dxl:CTEProducer>
               <dxl:Append IsTarget="false" IsZapped="false">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1724.001174" Rows="3.000000" Width="16"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1724.001374" Rows="3.000000" Width="16"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="0" Alias="a">
@@ -425,7 +425,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
                 <dxl:Filter/>
                 <dxl:HashJoin JoinType="Left">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.000611" Rows="2.000000" Width="16"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.000711" Rows="2.000000" Width="16"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="0" Alias="a">
@@ -508,7 +508,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
                 </dxl:HashJoin>
                 <dxl:Result>
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.000539" Rows="1.000000" Width="12"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.000639" Rows="1.000000" Width="12"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="48" Alias="a">
@@ -522,7 +522,7 @@ select * from s full join s s1 on s.a = s1.a where s.a is null;
                   <dxl:OneTimeFilter/>
                   <dxl:HashJoin JoinType="LeftAntiSemiJoin">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="862.000527" Rows="1.000000" Width="8"/>
+                      <dxl:Cost StartupCost="0" TotalCost="862.000627" Rows="1.000000" Width="8"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="40" Alias="a">

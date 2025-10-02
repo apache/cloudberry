@@ -328,7 +328,7 @@ where t.a in (select count(s.i) from s);
     <dxl:Plan Id="0" SpaceSize="18">
       <dxl:HashJoin JoinType="In">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000729" Rows="1.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000829" Rows="1.000000" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">

@@ -444,7 +444,7 @@ insert into b select i%7, i%10, i , i || 'SOME NUMBER', i % 4 from generate_seri
 insert into b select i%7, i%10, i , i || 'SOME NUMBER', i % 4 from generate_series(1, 1000) i;
 analyze abbp;
 analyze b;
-select qx_count_operator('select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k where abbp.t is not null and abbp.p = 6;', 'Hash Right Join', 'Hash Left Join');
+select qx_count_operator('select abbp.k, abbp.t from abbp left outer join b on abbp.k = b.k where abbp.t is not null and abbp.p = 6;', 'Hash Right Join', 'Hash Right Join');
  qx_count_operator 
 -------------------
                  1

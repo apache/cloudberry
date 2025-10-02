@@ -507,20 +507,22 @@ analyze t1;
 -- Function Scan
 explain
 select count(*) from pg_backend_pid() b(a) where b.a % 100000 in (select a from t1);
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..450.95 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..450.95 rows=1 width=1)
-         ->  Hash Semi Join  (cost=0.00..450.95 rows=1 width=1)
-               Hash Cond: ((b % 100000) = a)
-               ->  Result  (cost=0.00..0.00 rows=1 width=4)
-                     ->  Result  (cost=0.00..0.00 rows=1 width=4)
-                           ->  Result  (cost=0.00..0.00 rows=1 width=4)
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..450.99 rows=1 width=8)
+   ->  GroupAggregate  (cost=0.00..450.99 rows=1 width=1)
+         Group Key: 
+         ->  Sort  (cost=0.00..450.99 rows=1 width=1)
+               Sort Key: 
+               ->  Hash Join  (cost=0.00..450.99 rows=1 width=1)
+                     Hash Cond: (a = (b % 100000))
+                     ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..433.36 rows=100000 width=4)
+                           ->  Seq Scan on t1  (cost=0.00..431.62 rows=33334 width=4)
+                     ->  Hash  (cost=0.00..0.00 rows=1 width=5)
+                           ->  Result  (cost=0.00..0.00 rows=1 width=5)
                                  ->  Result  (cost=0.00..0.00 rows=1 width=1)
-               ->  Hash  (cost=431.62..431.62 rows=33334 width=4)
-                     ->  Seq Scan on t1  (cost=0.00..431.62 rows=33334 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(13 rows)
 
 select count(*) from pg_backend_pid() b(a) where b.a % 100000 in (select a from t1);
  count 
@@ -537,10 +539,10 @@ explain
 select count(*) from ( values :lots_of_values ) as b(a) where b.a % 100000 in (select a from t1);
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..443.14 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..443.14 rows=1 width=8)
-         ->  Aggregate  (cost=0.00..443.14 rows=1 width=8)
-               ->  Hash Semi Join  (cost=0.00..443.14 rows=22000 width=1)
+ Aggregate  (cost=0.00..446.47 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..446.47 rows=1 width=8)
+         ->  Aggregate  (cost=0.00..446.47 rows=1 width=8)
+               ->  Hash Semi Join  (cost=0.00..446.47 rows=22000 width=1)
                      Hash Cond: (("Values".column1 % 100000) = t1.a)
                      ->  Result  (cost=0.00..0.95 rows=22000 width=4)
                            ->  Result  (cost=0.00..0.95 rows=22000 width=4)

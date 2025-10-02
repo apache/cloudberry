@@ -511,7 +511,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
     <dxl:Plan Id="0" SpaceSize="426240000">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2586.144662" Rows="134.000000" Width="20"/>
+          <dxl:Cost StartupCost="0" TotalCost="2586.151362" Rows="134.000000" Width="20"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -528,7 +528,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
         <dxl:SortingColumnList/>
         <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="2586.132629" Rows="134.000000" Width="20"/>
+            <dxl:Cost StartupCost="0" TotalCost="2586.139329" Rows="134.000000" Width="20"/>
           </dxl:Properties>
           <dxl:GroupingColumns>
             <dxl:GroupingColumn ColId="0"/>
@@ -549,7 +549,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
           <dxl:Filter/>
           <dxl:Append IsTarget="false" IsZapped="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2586.107307" Rows="134.000000" Width="20"/>
+              <dxl:Cost StartupCost="0" TotalCost="2586.114007" Rows="134.000000" Width="20"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -565,7 +565,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
             <dxl:Filter/>
             <dxl:Sequence>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1293.066792" Rows="111.000000" Width="20"/>
+                <dxl:Cost StartupCost="0" TotalCost="1293.072342" Rows="111.000000" Width="20"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
@@ -662,7 +662,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
               </dxl:CTEProducer>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.060544" Rows="111.000000" Width="20"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.066094" Rows="111.000000" Width="20"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="0" Alias="a">
@@ -918,7 +918,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
             </dxl:Sequence>
             <dxl:Sequence>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1293.039175" Rows="23.000000" Width="20"/>
+                <dxl:Cost StartupCost="0" TotalCost="1293.040325" Rows="23.000000" Width="20"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="12" Alias="b">
@@ -1015,7 +1015,7 @@ select a,count(distinct a), count(distinct b) from t1 group by a
               </dxl:CTEProducer>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.033807" Rows="23.000000" Width="20"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.034957" Rows="23.000000" Width="20"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="12" Alias="b">

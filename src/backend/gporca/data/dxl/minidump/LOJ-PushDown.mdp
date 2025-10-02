@@ -382,7 +382,7 @@ explain select 1 from push_t3 where exists (
     <dxl:Plan Id="0" SpaceSize="116">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1808628562.976093" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="1808628667.833693" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="36" Alias="?column?">
@@ -393,7 +393,7 @@ explain select 1 from push_t3 where exists (
         <dxl:OneTimeFilter/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1808628562.976089" Rows="1.000000" Width="1"/>
+            <dxl:Cost StartupCost="0" TotalCost="1808628667.833689" Rows="1.000000" Width="1"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -408,7 +408,7 @@ explain select 1 from push_t3 where exists (
               </dxl:ParamList>
               <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1765376.830941" Rows="2.000000" Width="4"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1765376.933341" Rows="2.000000" Width="4"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="9" Alias="a">
@@ -424,7 +424,7 @@ explain select 1 from push_t3 where exists (
                 </dxl:JoinFilter>
                 <dxl:Materialize Eager="true">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.000447" Rows="1.000000" Width="4"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.000547" Rows="1.000000" Width="4"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="9" Alias="a">
@@ -434,7 +434,7 @@ explain select 1 from push_t3 where exists (
                   <dxl:Filter/>
                   <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="862.000443" Rows="1.000000" Width="4"/>
+                      <dxl:Cost StartupCost="0" TotalCost="862.000543" Rows="1.000000" Width="4"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="9" Alias="a">
@@ -445,7 +445,7 @@ explain select 1 from push_t3 where exists (
                     <dxl:SortingColumnList/>
                     <dxl:HashJoin JoinType="Inner">
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="862.000428" Rows="1.000000" Width="4"/>
+                        <dxl:Cost StartupCost="0" TotalCost="862.000528" Rows="1.000000" Width="4"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="9" Alias="a">

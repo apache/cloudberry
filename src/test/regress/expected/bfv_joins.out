@@ -4421,6 +4421,26 @@ select from (values ('')) tmp(b) join lateral
 (1 row)
 
 drop table t1;
+-- test that empty table gets hashed instead of a bigger table
+create table big_table(s smallint) distributed replicated;
+create table empty_table(i int) distributed replicated;
+insert into big_table select generate_series(1, 10000);
+analyze big_table;
+analyze empty_table;
+explain select * from big_table, empty_table where s = i;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=1.01..150.65 rows=14 width=6)
+   ->  Hash Join  (cost=1.01..150.65 rows=14 width=6)
+         Hash Cond: (big_table.s = empty_table.i)
+         ->  Seq Scan on big_table  (cost=0.00..112.00 rows=10000 width=2)
+         ->  Hash  (cost=1.00..1.00 rows=1 width=4)
+               ->  Seq Scan on empty_table  (cost=0.00..1.00 rows=1 width=4)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+drop table big_table;
+drop table empty_table;
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

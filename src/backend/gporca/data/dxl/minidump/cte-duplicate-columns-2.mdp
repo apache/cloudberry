@@ -248,7 +248,7 @@ where x1.b = x2.b;
     <dxl:Plan Id="0" SpaceSize="28">
       <dxl:Sequence>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.001043" Rows="1.000000" Width="24"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.001143" Rows="1.000000" Width="24"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="10" Alias="a1">
@@ -403,7 +403,7 @@ where x1.b = x2.b;
         </dxl:CTEProducer>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000827" Rows="1.000000" Width="24"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000927" Rows="1.000000" Width="24"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="10" Alias="a">

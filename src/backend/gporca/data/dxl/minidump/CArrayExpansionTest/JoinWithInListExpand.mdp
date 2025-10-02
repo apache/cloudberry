@@ -558,7 +558,7 @@ select a,b from foo, bar where foo.a in (1,2,3,4,5,6) and foo.a = bar.c;
     <dxl:Plan Id="0" SpaceSize="8">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.004821" Rows="8.166667" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.005054" Rows="8.166667" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -572,7 +572,7 @@ select a,b from foo, bar where foo.a in (1,2,3,4,5,6) and foo.a = bar.c;
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.004577" Rows="8.166667" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.004810" Rows="8.166667" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">

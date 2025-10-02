@@ -740,6 +740,18 @@ select from (values ('')) tmp(b) join lateral
 
 drop table t1;
 
+-- test that empty table gets hashed instead of a bigger table
+create table big_table(s smallint) distributed replicated;
+create table empty_table(i int) distributed replicated;
+insert into big_table select generate_series(1, 10000);
+analyze big_table;
+analyze empty_table;
+
+explain select * from big_table, empty_table where s = i;
+
+drop table big_table;
+drop table empty_table;
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

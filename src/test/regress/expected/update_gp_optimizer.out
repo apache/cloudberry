@@ -227,19 +227,19 @@ INSERT INTO t_strewn SELECT generate_series(1, 16);
 INSERT INTO t_strewn2 SELECT generate_series(2, 17);
 EXPLAIN (costs off)
 UPDATE t1 SET j = t_strewn.i FROM t_strewn WHERE t_strewn.i = t1.i;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Update
    ->  Redistribute Motion 3:3  (slice2; segments: 3)
          Hash Key: t1.i
          ->  Split
                ->  Hash Join
-                     Hash Cond: (t1.i = t_strewn.i)
-                     ->  Seq Scan on t1
+                     Hash Cond: (t_strewn.i = t1.i)
+                     ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                           Hash Key: t_strewn.i
+                           ->  Seq Scan on t_strewn
                      ->  Hash
-                           ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                                 Hash Key: t_strewn.i
-                                 ->  Seq Scan on t_strewn
+                           ->  Seq Scan on t1
  Optimizer: Pivotal Optimizer (GPORCA)
 (12 rows)
 

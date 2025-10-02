@@ -806,7 +806,7 @@ select * from P,X where P.a=X.a  and X.a not in (1,2);
     <dxl:Plan Id="0" SpaceSize="7">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="863.294061" Rows="1.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="863.294161" Rows="1.000000" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -823,7 +823,7 @@ select * from P,X where P.a=X.a  and X.a not in (1,2);
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="863.294007" Rows="1.000000" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="863.294107" Rows="1.000000" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">

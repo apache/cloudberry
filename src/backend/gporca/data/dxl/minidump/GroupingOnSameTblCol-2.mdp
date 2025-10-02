@@ -4117,7 +4117,7 @@
     <dxl:Plan Id="0" SpaceSize="8">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="35621640.727753" Rows="17210680.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="35618586.380489" Rows="17210680.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="43" Alias="?column?">
@@ -4128,21 +4128,21 @@
         <dxl:OneTimeFilter/>
         <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="35621571.885033" Rows="17210680.000000" Width="1"/>
+            <dxl:Cost StartupCost="0" TotalCost="35618517.537769" Rows="17210680.000000" Width="1"/>
           </dxl:Properties>
           <dxl:ProjList/>
           <dxl:Filter/>
           <dxl:SortingColumnList/>
           <dxl:Result>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="35621494.609080" Rows="17210680.000000" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="35618440.261816" Rows="17210680.000000" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList/>
             <dxl:Filter/>
             <dxl:OneTimeFilter/>
             <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="35621494.609080" Rows="17210680.000000" Width="1"/>
+                <dxl:Cost StartupCost="0" TotalCost="35618440.261816" Rows="17210680.000000" Width="1"/>
               </dxl:Properties>
               <dxl:GroupingColumns>
                 <dxl:GroupingColumn ColId="1"/>
@@ -4175,7 +4175,7 @@
               <dxl:Filter/>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="9027013.265374" Rows="73804661527.327255" Width="69"/>
+                  <dxl:Cost StartupCost="0" TotalCost="9023958.918109" Rows="73804661527.327255" Width="69"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="1" Alias="uid">

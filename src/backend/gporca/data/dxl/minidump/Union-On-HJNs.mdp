@@ -509,7 +509,7 @@
     <dxl:Plan Id="0" SpaceSize="0">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="5172.041950" Rows="2.000000" Width="32"/>
+          <dxl:Cost StartupCost="0" TotalCost="5172.043900" Rows="2.000000" Width="32"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -529,7 +529,7 @@
         <dxl:SortingColumnList/>
         <dxl:Append IsTarget="false" IsZapped="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="5172.041663" Rows="2.000000" Width="32"/>
+            <dxl:Cost StartupCost="0" TotalCost="5172.043613" Rows="2.000000" Width="32"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -548,7 +548,7 @@
           <dxl:Filter/>
           <dxl:Sequence>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2586.021121" Rows="1.000000" Width="32"/>
+              <dxl:Cost StartupCost="0" TotalCost="2586.022121" Rows="1.000000" Width="32"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -566,7 +566,7 @@
             </dxl:ProjList>
             <dxl:CTEProducer CTEId="1" Columns="178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1724.020401" Rows="8.000000" Width="1"/>
+                <dxl:Cost StartupCost="0" TotalCost="1724.021301" Rows="8.000000" Width="1"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="178" Alias="a">
@@ -677,7 +677,7 @@
               </dxl:ProjList>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1724.020397" Rows="8.000000" Width="152"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1724.021297" Rows="8.000000" Width="152"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="178" Alias="a">
@@ -796,7 +796,7 @@
                 </dxl:HashCondList>
                 <dxl:HashJoin JoinType="Inner">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="1293.013028" Rows="8.000000" Width="118"/>
+                    <dxl:Cost StartupCost="0" TotalCost="1293.013528" Rows="8.000000" Width="118"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="178" Alias="a">
@@ -891,7 +891,7 @@
                   </dxl:HashCondList>
                   <dxl:HashJoin JoinType="Inner">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="862.005318" Rows="8.000000" Width="84"/>
+                      <dxl:Cost StartupCost="0" TotalCost="862.005418" Rows="8.000000" Width="84"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="178" Alias="a">
@@ -1382,7 +1382,7 @@
             </dxl:CTEProducer>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000704" Rows="1.000000" Width="28"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000804" Rows="1.000000" Width="28"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
@@ -1936,7 +1936,7 @@
           </dxl:Sequence>
           <dxl:Result>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2586.020510" Rows="1.000000" Width="28"/>
+              <dxl:Cost StartupCost="0" TotalCost="2586.021460" Rows="1.000000" Width="28"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="43" Alias="a">
@@ -1956,7 +1956,7 @@
             <dxl:OneTimeFilter/>
             <dxl:Sequence>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="2586.020496" Rows="1.000000" Width="24"/>
+                <dxl:Cost StartupCost="0" TotalCost="2586.021446" Rows="1.000000" Width="24"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="43" Alias="a">
@@ -1971,7 +1971,7 @@
               </dxl:ProjList>
               <dxl:CTEProducer CTEId="0" Columns="87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1724.020044" Rows="8.000000" Width="1"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1724.020944" Rows="8.000000" Width="1"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="87" Alias="a">
@@ -2079,7 +2079,7 @@
                 </dxl:ProjList>
                 <dxl:HashJoin JoinType="Inner">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="1724.020040" Rows="8.000000" Width="148"/>
+                    <dxl:Cost StartupCost="0" TotalCost="1724.020940" Rows="8.000000" Width="148"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="87" Alias="a">
@@ -2195,7 +2195,7 @@
                   </dxl:HashCondList>
                   <dxl:HashJoin JoinType="Inner">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="1293.012736" Rows="8.000000" Width="114"/>
+                      <dxl:Cost StartupCost="0" TotalCost="1293.013236" Rows="8.000000" Width="114"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="87" Alias="a">
@@ -2287,7 +2287,7 @@
                     </dxl:HashCondList>
                     <dxl:HashJoin JoinType="Inner">
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="862.005102" Rows="8.000000" Width="80"/>
+                        <dxl:Cost StartupCost="0" TotalCost="862.005202" Rows="8.000000" Width="80"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="87" Alias="a">
@@ -2766,7 +2766,7 @@
               </dxl:CTEProducer>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.000440" Rows="1.000000" Width="20"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.000490" Rows="1.000000" Width="20"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="43" Alias="a">

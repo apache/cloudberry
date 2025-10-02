@@ -988,7 +988,7 @@ OR
     <dxl:Plan Id="0" SpaceSize="269692">
       <dxl:HashJoin JoinType="Inner">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="9921.832259" Rows="521.833333" Width="246"/>
+          <dxl:Cost StartupCost="0" TotalCost="9922.032259" Rows="521.833333" Width="246"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="rolname">

@@ -369,7 +369,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
     <dxl:Plan Id="0" SpaceSize="130">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000593" Rows="1.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000693" Rows="1.000000" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="11" Alias="b2">
@@ -385,7 +385,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
         </dxl:SortingColumnList>
         <dxl:Sort SortDiscardDuplicates="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000549" Rows="1.000000" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000649" Rows="1.000000" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="11" Alias="b2">
@@ -403,7 +403,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
           <dxl:LimitOffset/>
           <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000549" Rows="1.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000649" Rows="1.000000" Width="12"/>
             </dxl:Properties>
             <dxl:GroupingColumns>
               <dxl:GroupingColumn ColId="11"/>
@@ -426,7 +426,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
             <dxl:Filter/>
             <dxl:Sort SortDiscardDuplicates="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000534" Rows="1.000000" Width="12"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000634" Rows="1.000000" Width="12"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="11" Alias="b2">
@@ -444,7 +444,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
               <dxl:LimitOffset/>
               <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.000534" Rows="1.000000" Width="12"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.000634" Rows="1.000000" Width="12"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="11" Alias="b2">
@@ -463,7 +463,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
                 </dxl:HashExprList>
                 <dxl:Result>
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.000515" Rows="1.000000" Width="12"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.000615" Rows="1.000000" Width="12"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="11" Alias="b2">
@@ -477,7 +477,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
                   <dxl:OneTimeFilter/>
                   <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="862.000515" Rows="1.000000" Width="12"/>
+                      <dxl:Cost StartupCost="0" TotalCost="862.000615" Rows="1.000000" Width="12"/>
                     </dxl:Properties>
                     <dxl:GroupingColumns>
                       <dxl:GroupingColumn ColId="11"/>
@@ -500,7 +500,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
                     <dxl:Filter/>
                     <dxl:Sort SortDiscardDuplicates="false">
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="862.000508" Rows="2.000000" Width="8"/>
+                        <dxl:Cost StartupCost="0" TotalCost="862.000608" Rows="2.000000" Width="8"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="2" Alias="c1">
@@ -518,7 +518,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1 LEFT JOIN t2 ON a1 = b2 GROUP BY b2 ORDER BY 
                       <dxl:LimitOffset/>
                       <dxl:HashJoin JoinType="Left">
                         <dxl:Properties>
-                          <dxl:Cost StartupCost="0" TotalCost="862.000508" Rows="2.000000" Width="8"/>
+                          <dxl:Cost StartupCost="0" TotalCost="862.000608" Rows="2.000000" Width="8"/>
                         </dxl:Properties>
                         <dxl:ProjList>
                           <dxl:ProjElem ColId="2" Alias="c1">

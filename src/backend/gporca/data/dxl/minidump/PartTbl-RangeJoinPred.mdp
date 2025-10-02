@@ -5170,7 +5170,7 @@ where d.msisdn=f.subscriberaddress and f.sessioncreationtimestamp >= d.start_dtm
     <dxl:Plan Id="0" SpaceSize="2">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1999181.471894" Rows="170321006.931670" Width="564"/>
+          <dxl:Cost StartupCost="0" TotalCost="1999185.174911" Rows="170321006.931670" Width="564"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="14" Alias="subscriberaddress">
@@ -5241,7 +5241,7 @@ where d.msisdn=f.subscriberaddress and f.sessioncreationtimestamp >= d.start_dtm
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1567867.366780" Rows="170321006.931670" Width="564"/>
+            <dxl:Cost StartupCost="0" TotalCost="1567871.069797" Rows="170321006.931670" Width="564"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="14" Alias="subscriberaddress">

@@ -413,7 +413,7 @@ with v as (select * from t1) select * from v v1, v v2 where v1.b=v2.b;
     <dxl:Plan Id="0" SpaceSize="20">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.388166" Rows="1000.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.438166" Rows="1000.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="9" Alias="a">
@@ -433,7 +433,7 @@ with v as (select * from t1) select * from v v1, v v2 where v1.b=v2.b;
         <dxl:SortingColumnList/>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.316326" Rows="1000.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.366326" Rows="1000.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="9" Alias="a">
@@ -511,7 +511,7 @@ with v as (select * from t1) select * from v v1, v v2 where v1.b=v2.b;
           </dxl:CTEProducer>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.277416" Rows="1000.000000" Width="16"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.327416" Rows="1000.000000" Width="16"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="9" Alias="a">

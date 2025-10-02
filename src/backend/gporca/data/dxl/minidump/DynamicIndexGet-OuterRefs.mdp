@@ -1301,7 +1301,7 @@
     <dxl:Plan Id="0" SpaceSize="456186">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1357145192.514491" Rows="1.000000" Width="1"/>
+          <dxl:Cost StartupCost="0" TotalCost="1357145192.719291" Rows="1.000000" Width="1"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="26" Alias="cd_gender">
@@ -1312,7 +1312,7 @@
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1357145192.514488" Rows="1.000000" Width="1"/>
+            <dxl:Cost StartupCost="0" TotalCost="1357145192.719288" Rows="1.000000" Width="1"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="26" Alias="cd_gender">
@@ -1361,7 +1361,7 @@
           </dxl:BroadcastMotion>
           <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1324475.102029" Rows="1.000000" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="1324475.102229" Rows="1.000000" Width="1"/>
             </dxl:Properties>
             <dxl:GroupingColumns>
               <dxl:GroupingColumn ColId="0"/>
@@ -1382,7 +1382,7 @@
             <dxl:Filter/>
             <dxl:Sort SortDiscardDuplicates="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1324475.102027" Rows="1.000000" Width="6"/>
+                <dxl:Cost StartupCost="0" TotalCost="1324475.102227" Rows="1.000000" Width="6"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="c_customer_sk">
@@ -1405,7 +1405,7 @@
               <dxl:LimitOffset/>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1324475.102027" Rows="1.000000" Width="6"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1324475.102227" Rows="1.000000" Width="6"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="0" Alias="c_customer_sk">
@@ -1443,7 +1443,7 @@
                 <dxl:OneTimeFilter/>
                 <dxl:HashJoin JoinType="Left">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="1324475.101983" Rows="2.000000" Width="6"/>
+                    <dxl:Cost StartupCost="0" TotalCost="1324475.102183" Rows="2.000000" Width="6"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="0" Alias="c_customer_sk">
@@ -1466,7 +1466,7 @@
                   </dxl:HashCondList>
                   <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="443.002121" Rows="1.000000" Width="5"/>
+                      <dxl:Cost StartupCost="0" TotalCost="443.002221" Rows="1.000000" Width="5"/>
                     </dxl:Properties>
                     <dxl:GroupingColumns>
                       <dxl:GroupingColumn ColId="0"/>
@@ -1483,7 +1483,7 @@
                     <dxl:Filter/>
                     <dxl:Sort SortDiscardDuplicates="false">
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="443.002117" Rows="2.000000" Width="5"/>
+                        <dxl:Cost StartupCost="0" TotalCost="443.002217" Rows="2.000000" Width="5"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="0" Alias="c_customer_sk">
@@ -1502,7 +1502,7 @@
                       <dxl:LimitOffset/>
                       <dxl:HashJoin JoinType="Left">
                         <dxl:Properties>
-                          <dxl:Cost StartupCost="0" TotalCost="443.002117" Rows="2.000000" Width="5"/>
+                          <dxl:Cost StartupCost="0" TotalCost="443.002217" Rows="2.000000" Width="5"/>
                         </dxl:Properties>
                         <dxl:ProjList>
                           <dxl:ProjElem ColId="0" Alias="c_customer_sk">

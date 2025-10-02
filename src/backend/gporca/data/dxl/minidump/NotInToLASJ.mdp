@@ -333,7 +333,7 @@
     <dxl:Plan Id="0" SpaceSize="1">
       <dxl:HashJoin JoinType="LeftAntiSemiJoinNotIn">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="883119.022535" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="883119.022735" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">

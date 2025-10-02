@@ -473,7 +473,7 @@ SELECT * FROM foo,bar WHERE a=(VALUES (1));
     <dxl:Plan Id="0" SpaceSize="27">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1377.995318" Rows="1000000.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="1378.028651" Rows="1000000.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -493,7 +493,7 @@ SELECT * FROM foo,bar WHERE a=(VALUES (1));
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1318.368651" Rows="1000000.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="1318.401985" Rows="1000000.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -515,7 +515,7 @@ SELECT * FROM foo,bar WHERE a=(VALUES (1));
           </dxl:JoinFilter>
           <dxl:BroadcastMotion InputSegments="0,1,2" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.258519" Rows="3000.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.291853" Rows="3000.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -529,7 +529,7 @@ SELECT * FROM foo,bar WHERE a=(VALUES (1));
             <dxl:SortingColumnList/>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="431.115319" Rows="1000.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="431.148653" Rows="1000.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
