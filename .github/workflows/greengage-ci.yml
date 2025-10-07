@@ -18,12 +18,12 @@ jobs:
     strategy:
       fail-fast: true  # Stop on any failure in the matrix
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v1
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v3
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -72,7 +72,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -90,7 +90,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -121,3 +121,22 @@ jobs:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+  # Rebuild prod-redy version without debug extensions and pack it to deb
+  package:
+    needs: build  # For push (main or tags)
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions: write  # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v7
+    with:
+      version: 6
+      target_os: ${{ matrix.target_os }}
+      test_docker: ubuntu:22.04 # Docker Image  (e.g., ubuntu:22.04, ubuntu:noble) for deploy test. Skip if empty
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}

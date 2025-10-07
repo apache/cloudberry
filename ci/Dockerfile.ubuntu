@@ -48,6 +48,7 @@ RUN rm -rf gpdb_src/.git/
 FROM base as test
 COPY --from=code /home/gpadmin/gpdb_src gpdb_src
 COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb
+COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 
 # Install entab used by pgindent utility.
 # This should be done using gpdb sources.

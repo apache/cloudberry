@@ -170,34 +170,34 @@ RECONFIG :
 	rm -f $(GPPGDIR)/GNUmakefile
 
 $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(DESTDIR)$(INSTLOC)
+	rm -rf $(INSTLOC)
 	mkdir -p $(GPPGDIR)
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd $(GPPGDIR) && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"    \
                      CFLAGS=$(INSTCFLAGS) 					  \
                      ./configure $(CONFIGFLAGS)               \
-                         --prefix=$(INSTLOC)                  \
-                         --mandir=$(INSTLOC)/man
+                         --prefix=$(DISTPATH)                  \
+                         --mandir=$(DISTPATH)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(DESTDIR)$(INSTLOC)
+	rm -rf $(INSTLOC)
 	mkdir -p Debug
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd Debug && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"        \
                 CFLAGS=$(INSTCFLAGS)					     \
                 ./configure $(CONFIGFLAGS)                   \
-                    --prefix=$(INSTLOC)                      \
-                    --mandir=$(INSTLOC)/man
+                    --prefix=$(DISTPATH)                      \
+                    --mandir=$(DISTPATH)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(DESTDIR)$(INSTLOC)
+	rm -rf $(INSTLOC)
 	mkdir -p Release
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd Release && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"     \
                   CFLAGS=$(INSTCFLAGS) 	                    \
                   ./configure $(CONFIGFLAGS)                \
-                      --prefix=$(INSTLOC)                   \
-                      --mandir=$(INSTLOC)/man
+                      --prefix=$(DISTPATH)                   \
+                      --mandir=$(DISTPATH)/man
 
 #---------------------------------------------------------------------
 # autoconf
@@ -224,7 +224,7 @@ perl_archlibexp:=$(shell perl -MConfig -e 'print $$Config{archlibexp}')
 
 # set default build steps
 define BUILD_STEPS
-	@rm -rf $(DESTDIR)$(INSTLOC)
+	@rm -rf $(INSTLOC)
 	cd $(BUILDDIR) && PYGRESQL_LDFLAGS='-Wl,-rpath,\$$$$ORIGIN/../../../lib -Wl,--enable-new-dtags' $(MAKE) $(PARALLEL_MAKE_OPTS) install
 	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	cd $(BUILDDIR)/src/pl/plperl && $(MAKE) clean && echo "LDFLAGS += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && echo "LDFLAGS_SL += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
@@ -241,7 +241,7 @@ endef
 
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
-	rm -rf $(DESTDIR)$(INSTLOC)
+	rm -rf $(INSTLOC)
 	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greengage_path_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
@@ -290,8 +290,8 @@ endif
 #---------------------------------------------------------------------
 
 devel : INSTCFLAGS=$(DEBUGFLAGS)
-devel : INSTLOC=$(DEVPATH)
-devel : CLIENTSINSTLOC=$(CLIENTSDEVPATH)
+devel : INSTLOC=$(DESTDIR)$(DEVPATH)
+devel : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDEVPATH)
 devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-depend
 ifdef ENABLE_VPATH_BUILD
 devel : BUILDDIR=Debug
@@ -307,8 +307,8 @@ endif
 #---------------------------------------------------------------------
 
 dist : INSTCFLAGS=$(OPTFLAGS)
-dist : INSTLOC=$(DISTPATH)
-dist : CLIENTSINSTLOC=$(CLIENTSDISTPATH)
+dist : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist : BUILDDIR=Release
 dist : ISCONFIG=$(BUILDDIR)/GNUmakefile
@@ -319,8 +319,8 @@ endif
 	$(BUILD_STEPS)
 
 dist_prof : INSTCFLAGS=$(PROFFLAGS)
-dist_prof : INSTLOC=$(DISTPATH)
-dist_prof : CLIENTSINSTLOC=$(CLIENTSDISTPATH)
+dist_prof : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist_prof : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_prof : BUILDDIR=Release
 dist_prof : ISCONFIG=$(BUILDDIR)/GNUmakefile
@@ -331,7 +331,7 @@ dist_prof : gccVersionCheck GPROOTDEP RECONFIG $(ISCONFIG)
 endif
 	$(BUILD_STEPS)
 
-dist_faultinj : CLIENTSINSTLOC=$(CLIENTSDISTPATH)
+dist_faultinj : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_faultinj : BUILDDIR=Release
 dist_faultinj : ISCONFIG=$(BUILDDIR)/GNUmakefile
@@ -341,6 +341,67 @@ dist_faultinj : ISCONFIG=../GNUmakefile
 dist_faultinj : gccVersionCheck GPROOTDEP RECONFIG $(ISCONFIG)
 endif
 	$(BUILD_STEPS)
+
+#---------------------------------------------------------------------
+# Packaging targets with changelog options
+#---------------------------------------------------------------------
+
+# Metadata vars
+PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
+MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
+DATE_RFC := $(shell date -R)
+ARTIFACTS_DIR := $(CURDIR)/../Package
+
+../VERSION :
+	@echo "Update $@"
+	../getversion > $@
+	@cat $@
+
+version-vars : ../VERSION
+	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
+	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
+	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
+	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
+
+version-info : version-vars
+	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
+	@echo "FULL_VERSION: $(FULL_VERSION)"
+	@echo "IS_RELEASE: $(IS_RELEASE)"
+	@echo "STABILITY: $(STABILITY)"
+	@echo "BUILD_TYPE: $(BUILD_TYPE)"
+
+# Generate package control files
+changelog : debian/changelog
+debian/changelog : version-vars
+	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(STABILITY); urgency=low" > $@
+	@echo "" >> $@
+	@echo "  * $(BUILD_TYPE)" >> $@
+	@echo "" >> $@
+	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> $@
+
+debian/install:
+	@echo "$(PACKAGE_NAME)/* /" > $@
+
+
+# Default packaging target
+pkg : pkg-deb
+
+# Build Debian package
+pkg-deb : GPROOT = /opt/greengagedb
+pkg-deb : GPDIR  = $(PACKAGE_NAME)
+pkg-deb : debian/changelog debian/install
+	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
+	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
+	@mkdir -p $(ARTIFACTS_DIR)
+	@find $(CURDIR)/../ -maxdepth 1 -type f \( -name "*.deb" \
+											-o -name "*.ddeb" \
+											-o -name "*.build" \
+											-o -name "*.buildinfo" \
+											-o -name "*.changes" \) \
+											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+
+.PHONY: pkg pkg-deb changelog version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools
@@ -412,7 +473,7 @@ endif
 endif
 
 ifeq "$(INSTLOC)" ""
-INSTLOC=$(GPDIR)
+INSTLOC=$(DESTDIR)$(GPDIR)
 endif
 
 VERSION:=$(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION)
@@ -473,7 +534,7 @@ PVK_FILESET = \
 	$(NULL)
 
 pvk : INSTCFLAGS=$(OPTFLAGS)
-pvk : INSTLOC=$(DISTPATH)
+pvk : INSTLOC=$(DESTDIR)$(DISTPATH)
 pvk : gccVersionCheck version GPROOTDEP
 	cd $(GPMGMT)/bin && $(MAKE) stream
 	mkdir -p $(INSTLOC)/bin/lib
@@ -539,7 +600,7 @@ ifeq "$(shell uname -s)" "Darwin"
 	echo "pgbouncer can't build on Mac"
 else
 	@if [ ! -f extensions/pgbouncer/source/configure ]; then cd extensions/pgbouncer/source && ./autogen.sh ;fi
-	@cd extensions/pgbouncer/source && ./configure --with-libevent=$(BLD_TOP)/ext/$(BLD_ARCH) --prefix=$(INSTLOC) --enable-evdns --with-pam --with-ldap
+	@cd extensions/pgbouncer/source && ./configure --with-libevent=$(BLD_TOP)/ext/$(BLD_ARCH) --prefix=$(DISTPATH) --enable-evdns --with-pam --with-ldap
 	$(MAKE) -C extensions/pgbouncer/source install
 endif
 
@@ -618,8 +679,8 @@ copylibs :
 	mkdir -p $(INSTLOC)/include
 
 greengage_path:
-	mkdir -p $(DESTDIR)$(INSTLOC)
-	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(DESTDIR)$(INSTLOC)/greengage_path.sh
+	mkdir -p $(INSTLOC)
+	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(INSTLOC)/greengage_path.sh
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \
@@ -669,7 +730,7 @@ distclean :
 	@if [ -d Release -a -f Release/GNUmakefile ]; then cd Release; $(MAKE) distclean; fi
 	@if [ -d $(GPPGDIR) -a -f $(GPPGDIR)/GNUmakefile ]; then cd $(GPPGDIR); $(MAKE) distclean; fi
 	@if [ -d $(GPMGMT)/bin ]; then cd $(GPMGMT)/bin; $(MAKE) distclean; fi
-	@rm -f VERSION
+	@if [ -d .git ] ; then rm -f VERSION; fi
 	@rm -f env.sh
 
 distprep : $(ISCONFIG)

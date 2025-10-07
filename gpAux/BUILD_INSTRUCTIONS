@@ -23,6 +23,13 @@ You will need the following tools:
   perl        5.8.8
   tar (GNU)   1.14
 
+To build a Debian package, you will also need the following tools:
+
+  build-essential  Debian/Ubuntu package for essential build tools
+  devscripts  Debian/Ubuntu package for Debian packaging scripts
+  debhelper   Debian/Ubuntu package for Debian package helper scripts
+  dh-python   Debian/Ubuntu package for Python-specific Debian packaging
+
 To build the Greengage Database, run GNU make with the following options:
 
 ## --------------------
@@ -43,5 +50,16 @@ To build the Greengage Database, run GNU make with the following options:
 ## ----------------------------------------------------------------------
 
   > make GPROOT=`pwd` BLD_TARGETS="clients loaders connectivity gppkg" dist
+
+## ----------------------------------------------------------------------
+## To build a Debian package:
+## ----------------------------------------------------------------------
+
+  > make pkg-deb
+
+This will generate a changelog, build the Debian package using `debuild`,
+and place the resulting `.deb` packages in the parent directory.
+
+See [README.package.md](README.package.md)
 
 ## ----------------------------------------------------------------------
