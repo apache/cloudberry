@@ -15,6 +15,16 @@
 #   hitting max_connections limit on segments.
 #
 
+# Run disk-intensive tests early when maximum disk space is available.
+# These tests consume significant disk space through WAL generation, XID consumption,
+# and autovacuum operations. Running them early helps avoid disk exhaustion issues.
+test: autovacuum
+test: autovacuum-segment
+test: autovacuum-template0-segment
+
+# check profile feature
+test: profile
+
 # test for builtin namespace pg_ext_aux
 test: pg_ext_aux
 
@@ -321,9 +331,6 @@ test: oid_wraparound
 # hence it should be run in isolation.
 test: fts_recovery_in_progress
 ignore: mirror_replay
-test: autovacuum
-test: autovacuum-segment
-test: autovacuum-template0-segment
 
 # gpexpand introduce the partial tables, check them if they can run correctly
 test: gangsize gang_reuse
@@ -333,9 +340,6 @@ test: run_utility_gpexpand_phase1
 
 # check correct error message when create extension error on segment
 test: create_extension_fail
-
-# check profile feature
-test: profile
 
 # check offload entry root slice to QE feature
 test: offload_entry_to_qe
