@@ -1,0 +1,84 @@
+name: Bug Report
+description: Create a report to help us improve GreengageDB
+title: "[Bug] "
+labels: ["bug"]
+assignees: []
+
+body:
+ - type: textarea
+   id: problem_description
+   attributes:
+    label: "Describe the problem"
+    description: "Please describe the issue you observed, and any steps we can take to reproduce it"
+    placeholder: "Describe the problem you encountered..."
+   validations:
+    required: true
+
+ - type: textarea
+   id: reproduction_steps
+   attributes:
+    label: "How to reproduce"
+    description: "Steps to reproduce the behavior"
+    placeholder: |
+     1. 
+     2. 
+     3. 
+     ...
+   validations:
+    required: true
+
+ - type: textarea
+   id: expected_behavior
+   attributes:
+    label: "Expected behavior"
+    description: "A clear and concise description of what you expected to happen"
+    placeholder: "Describe what you expected to happen..."
+   validations:
+    required: true
+
+ - type: textarea
+   id: additional_data
+   attributes:
+    label: "Additional data"
+    description: |
+     If the problem is SQL-related, include a copy of the SQL query and the schema.
+     
+     If a segment in your cluster encountered a fatal error, supply the contents of the log directory (at minimum of the affected segment(s), but preferably all segments).
+     
+     Note that log files can contain confidential information.
+    placeholder: |
+     SQL Query:
+     Schema:
+     Log files:
+     ...
+
+ - type: input
+   id: environment_greengagedb
+   attributes:
+    label: "GreengageDB version"
+    description: "What version of GreengageDB are you using?"
+   validations:
+    required: true
+
+ - type: input
+   id: environment_os
+   attributes:
+    label: "Server OS"
+    description: "What operating system is the server running on?"
+    placeholder: "e.g. Linux/Distrib version"
+   validations:
+    required: true
+
+ - type: input
+   id: environment_client
+   attributes:
+    label: "Client application"
+    description: "What client application are you using?"
+    placeholder: "e.g. psql, JDBC, pxf, ..."
+
+ - type: textarea
+   id: additional_context
+   attributes:
+    label: "Additional context"
+    description: "What was the impact? Add any other context about the problem here"
+    placeholder: "Add any other relevant context about the problem..."
